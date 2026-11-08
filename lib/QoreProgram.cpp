@@ -5144,10 +5144,19 @@ namespace {
 struct QoreExitHook {
     //! the hook's ID, which also orders the hooks: they run in the reverse order of their registration
     int64 id;
-    //! the Program whose code registered the hook; not referenced: its deletion runs or drops the hook first
+    //! the Program whose code registered the hook, with a dependency reference (QoreProgram::depRef())
+    /** The reference keeps the Program's memory while the hook is taken out of the registry to run; it does not keep
+        the Program from being deleted, which runs the Program's hooks that are still registered
+    */
     QoreProgram* pgm;
     //! the hook; referenced
     ResolvedCallReferenceNode* code;
+
+    //! Releases the hook's references; called without the registry lock
+    DLLLOCAL void release(ExceptionSink* xsink) {
+        code->deref(xsink);
+        pgm->depDeref();
+    }
 };
 
 //! guards the hooks; never held while a hook runs or a reference is released
@@ -5156,43 +5165,42 @@ std::mutex exit_hook_lock;
 std::vector<QoreExitHook> exit_hooks;
 //! the last hook ID assigned
 int64 exit_hook_seq = 0;
-//! set when the hooks of the process have run: no hook can be registered afterwards
+//! set when the hooks of the process have started to run: no hook can be registered afterwards
 bool exit_hooks_closed = false;
 
-//! Runs hooks taken from the registry, in the reverse order of their registration, and releases them
-void qore_run_exit_hook_list(std::vector<QoreExitHook>& run) {
-    for (auto i = run.rbegin(), e = run.rend(); i != e; ++i) {
-        ExceptionSink xsink;
-        {
-            // the hook runs in its Program, without the policy of a sandboxed caller that deletes a Program
-            ProgramThreadCountContextHelper tch(&xsink, i->pgm, true);
-            if (!xsink) {
-                QoreSandboxPolicyBarrierHelper barrier;
-                i->code->invoke(nullptr, &xsink).discard(&xsink);
-            }
-        }
-        i->code->deref(&xsink);
-        // an exception is reported, and the next hook runs
-        xsink.handleExceptions();
-    }
-}
-
-//! Takes the hooks of a Program, or all hooks, out of the registry
-void qore_take_exit_hooks(QoreProgram* pgm, std::vector<QoreExitHook>& run) {
+//! Takes the last hook registered of a Program, or of any Program, out of the registry
+/** @return true if a hook was taken
+*/
+bool qore_take_last_exit_hook(QoreProgram* pgm, QoreExitHook& hook) {
     std::lock_guard<std::mutex> l(exit_hook_lock);
     if (!pgm) {
         exit_hooks_closed = true;
-        run.swap(exit_hooks);
-        return;
     }
-    for (auto i = exit_hooks.begin(); i != exit_hooks.end();) {
-        if (i->pgm == pgm) {
-            run.push_back(*i);
-            i = exit_hooks.erase(i);
-        } else {
-            ++i;
+    for (auto i = exit_hooks.rbegin(), e = exit_hooks.rend(); i != e; ++i) {
+        if (!pgm || i->pgm == pgm) {
+            hook = *i;
+            exit_hooks.erase(std::next(i).base());
+            return true;
         }
     }
+    return false;
+}
+
+//! Runs a hook taken from the registry and releases it
+void qore_run_exit_hook(QoreExitHook& hook) {
+    ExceptionSink xsink;
+    {
+        // the hook runs in its Program, without the policy of a sandboxed caller that deletes a Program; a Program
+        // that is being deleted meanwhile refuses it with an exception
+        ProgramThreadCountContextHelper tch(&xsink, hook.pgm, true);
+        if (!xsink) {
+            QoreSandboxPolicyBarrierHelper barrier;
+            hook.code->invoke(nullptr, &xsink).discard(&xsink);
+        }
+    }
+    hook.release(&xsink);
+    // an exception is reported, and the next hook runs
+    xsink.handleExceptions();
 }
 }
 
@@ -5215,45 +5223,64 @@ int64 qore_register_exit_hook(const ResolvedCallReferenceNode* code, ExceptionSi
         return -1;
     }
     int64 id = ++exit_hook_seq;
+    // taking the references cannot fail, and releasing them takes no lock
+    pgm->depRef();
     exit_hooks.push_back({id, pgm, code->refRefSelf()});
     return id;
 }
 
 bool qore_deregister_exit_hook(int64 id, ExceptionSink* xsink) {
     QoreProgram* pgm = getProgram();
-    ResolvedCallReferenceNode* code = nullptr;
+    QoreExitHook hook;
+    bool found = false;
     {
         std::lock_guard<std::mutex> l(exit_hook_lock);
         for (auto i = exit_hooks.begin(), e = exit_hooks.end(); i != e; ++i) {
             // a Program removes only its own hooks
             if (i->id == id && i->pgm == pgm) {
-                code = i->code;
+                hook = *i;
                 exit_hooks.erase(i);
+                found = true;
                 break;
             }
         }
     }
-    if (!code) {
+    if (!found) {
         return false;
     }
-    code->deref(xsink);
+    hook.release(xsink);
     return true;
 }
 
 void qore_run_exit_hooks(QoreProgram* pgm) {
-    std::vector<QoreExitHook> run;
-    qore_take_exit_hooks(pgm, run);
-    if (run.empty()) {
+    // the hooks are taken one at a time, so that a hook that deletes a Program, or a Program deleted meanwhile by
+    // another thread, runs that Program's hooks still registered when it is deleted, and none is run after it
+    QoreExitHook hook;
+    if (!qore_take_last_exit_hook(pgm, hook)) {
         return;
     }
     // a hook runs in a Qore thread
     QoreForeignThreadHelper qfth;
-    qore_run_exit_hook_list(run);
+    do {
+        qore_run_exit_hook(hook);
+    } while (qore_take_last_exit_hook(pgm, hook));
 }
 
 void qore_drop_exit_hooks(QoreProgram* pgm) {
+    // the Program is destroyed: its hooks are released without their dependency references, which belong to the
+    // destruction already
     std::vector<QoreExitHook> drop;
-    qore_take_exit_hooks(pgm, drop);
+    {
+        std::lock_guard<std::mutex> l(exit_hook_lock);
+        for (auto i = exit_hooks.begin(); i != exit_hooks.end();) {
+            if (i->pgm == pgm) {
+                drop.push_back(*i);
+                i = exit_hooks.erase(i);
+            } else {
+                ++i;
+            }
+        }
+    }
     if (drop.empty()) {
         return;
     }

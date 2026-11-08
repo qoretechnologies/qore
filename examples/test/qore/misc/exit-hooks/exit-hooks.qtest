@@ -32,6 +32,7 @@ class ExitHooksTest inherits QUnit::Test {
         addTestCase("no hook can be registered after the hooks have run", \lateRegistrationTest());
         addTestCase("a deleted Program runs the hooks its code registered", \programDeletionTest());
         addTestCase("sandboxed or restricted code cannot register a hook", \restrictedTest());
+        addTestCase("a Program that an earlier hook deletes runs its own hook then", \deletedByHookTest());
         set_return_value(main());
     }
 
@@ -105,6 +106,18 @@ class ExitHooksTest inherits QUnit::Test {
         Program restricted(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL, True);
         assertThrows("PARSE-EXCEPTION", \restricted.parse(), ("sub reg() { register_exit_hook(sub () {}); }\n",
             "restricted"));
+    }
+
+    deletedByHookTest() {
+        # the hook of b is registered by b's code; the main Program's hook, which runs first, deletes b
+        hash<auto> r = runChild("Program b(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);\n"
+            "b.parse(\"sub reg(code c) { register_exit_hook(c); }\", \"b\");\n"
+            "b.callFunction(\"reg\", sub () { printf(\"hook of b ran\\n\"); });\n"
+            "our *Program bb = b;\n"
+            "remove b;\n"
+            "register_exit_hook(sub () { printf(\"deleting b\\n\"); delete bb; printf(\"deleted b\\n\"); });\n");
+        assertEq(0, r.rc, r.output);
+        assertEq(("deleting b", "hook of b ran", "deleted b"), r.lines);
     }
 
     #! Deletes a Program in a thread of the test

@@ -4711,12 +4711,16 @@ DLLLOCAL bool qore_deregister_exit_hook(int64 id, ExceptionSink* xsink);
 
 //! Runs the exit hooks of a Program, or all exit hooks if pgm is null, in the reverse order of their registration
 /** Called before the library waits for the threads of the process (pgm is null; no hook can be registered
-    afterwards), or for the threads of a Program being deleted.  Each hook runs once; an exception it raises is
-    reported, and the next hook runs.
+    afterwards), or for the threads of a Program being deleted.  The hooks are taken out of the registry one at a time,
+    so that a Program deleted by a hook, or by another thread meanwhile, runs its own hooks then.  Each hook runs once;
+    an exception it raises is reported, and the next hook runs.
 */
 DLLLOCAL void qore_run_exit_hooks(QoreProgram* pgm);
 
 //! Releases the exit hooks of a Program without running them; called when the Program is destroyed
+/** A Program that is cleared runs its hooks first (see qore_run_exit_hooks()), so this releases only the hooks of a
+    Program destroyed without being cleared
+*/
 DLLLOCAL void qore_drop_exit_hooks(QoreProgram* pgm);
 
 #endif
