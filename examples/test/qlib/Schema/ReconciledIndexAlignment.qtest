@@ -2,7 +2,6 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #
 # Copyright 2026 Qore Technologies, s.r.o.
-# test-parallel: serial - it creates fixed-name objects in the shared SQL Server/Sybase (FreeTDS) test database
 
 %modern
 
@@ -12,6 +11,7 @@
 %requires Schema
 %requires ../SqlUtil/PgsqlTestIsolation.qm
 %requires ../SqlUtil/MysqlTestIsolation.qm
+%requires ../SqlUtil/MssqlTestIsolation.qm
 
 %try-module pgsql
 %define NO_PGSQL
@@ -114,7 +114,9 @@ class ReconciledIndexAlignmentTest inherits QUnit::Test {
             testSkip("QORE_DB_CONNSTR_FREETDS is not set");
         }
         skipIfNoConnection(ENV.QORE_DB_CONNSTR_FREETDS);
-        checkDatabase(ENV.QORE_DB_CONNSTR_FREETDS);
+        # the run's own database: tests that run at the same time do not share the objects of this one
+        string connstr = MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS, "ReconciledIndexAlignment");
+        checkDatabase(connstr);
     }
 
     #! Returns the contract of the reconciliation of the payments table: a canonical key mapped from the legacy key,

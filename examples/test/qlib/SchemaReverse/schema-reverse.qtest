@@ -1,6 +1,5 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-parallel: serial - it reverses the whole shared SQL Server/Sybase (FreeTDS) test database
 
 %modern
 

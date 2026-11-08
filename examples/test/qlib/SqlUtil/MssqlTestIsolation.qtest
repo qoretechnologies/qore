@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./MssqlTestIsolation.qm
+
+%try-module freetds
+%define NoFreetds
+%endtry
+
+%exec-class MssqlTestIsolationTest
+
+#! The database that MssqlTestIsolation gives a run of a SQL Server test
+class MssqlTestIsolationTest inherits QUnit::Test {
+    private {
+        *string connstr;
+        *string skip_reason;
+        # databases made for the leftover test, dropped at the end
+        list<string> made;
+    }
+
+    constructor() : Test("MssqlTestIsolationTest", "1.0", \ARGV) {
+%ifdef NoFreetds
+        skip_reason = "freetds module unavailable";
+%endif
+        connstr = ENV.QORE_DB_CONNSTR_FREETDS;
+        if (!connstr) {
+            skip_reason = "QORE_DB_CONNSTR_FREETDS is not configured";
+        }
+        addTestCase("a non-SQL Server connection has no run database", \notMssql());
+        # the leftover databases are made before the run's database, whose setup drops the ones that may be dropped
+        addTestCase("the setup drops only the databases of gone runs", \leftovers());
+        addTestCase("the run's connections use the run's database", \runDatabase());
+        addTestCase("the teardown drops the run's database", \teardown());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (connstr && made) {
+            Datasource ds(connstr);
+            ds.setAutoCommit(True);
+            ds.open();
+            map MssqlRunDatabase::dropDatabase(ds, $1), made;
+        }
+    }
+
+    private checkSkip() {
+        if (skip_reason) {
+            testSkip(skip_reason);
+        }
+    }
+
+    private notMssql() {
+        assertNothing(MssqlRunDatabase::getConnectionString(NOTHING, "x"));
+        assertEq("sqlite3:@:memory:", MssqlRunDatabase::getConnectionString("sqlite3:@:memory:", "x"));
+        assertNothing(MssqlRunDatabase::getName());
+    }
+
+    private leftovers() {
+        checkSkip();
+        Datasource ds(connstr);
+        ds.setAutoCommit(True);
+        ds.open();
+        string host = getHost();
+        int now = now_us().getEpochSeconds();
+        int old = now - MssqlRunDatabase::LeftoverAge.durationSeconds() - 60;
+        int gone = getGonePid();
+        hash<string, bool> expected = {
+            # a gone run, old enough: dropped
+            sprintf("qtest_leftover_%s_%d_%d", host, gone, old): False,
+            # a gone run, too recent: kept, as its process id may have been reused
+            sprintf("qtest_recent_%s_%d_%d", host, gone, now): True,
+            # a live run (this process), old: kept
+            sprintf("qtest_live_%s_%d_%d", host, getpid(), old): True,
+            # another host: kept
+            sprintf("qtest_otherhost_%s_%d_%d", host + "x", gone, old): True,
+        };
+        foreach string db in (keys expected) {
+            ds.execRaw(MssqlRunDatabase::outsideTransaction("create database [" + db + "]"));
+            push made, db;
+        }
+
+        string run_connstr = MssqlRunDatabase::getConnectionString(connstr, "MssqlTestIsolation");
+        *string run = MssqlRunDatabase::getName();
+        assertRegex(sprintf("^qtest_mssqltestiso_%s_%d_[0-9]+$", host, getpid()), run);
+        assertEq(run, parse_datasource(run_connstr).db);
+
+        hash<string, bool> present = map {$1: True}, ds.select("select name from sys.databases where name like %v",
+            "qtest%").name;
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, present{i.key} ?? False, i.key);
+        }
+        # a second call, with the same datasource string or with the one returned, gives the same database
+        assertEq(run_connstr, MssqlRunDatabase::getConnectionString(connstr, "MssqlTestIsolation"));
+        assertEq(run_connstr, MssqlRunDatabase::getConnectionString(run_connstr, "MssqlTestIsolation"));
+        assertEq(run, MssqlRunDatabase::getName());
+    }
+
+    private runDatabase() {
+        checkSkip();
+        string run_connstr = MssqlRunDatabase::getConnectionString(connstr, "MssqlTestIsolation");
+        Datasource ds(run_connstr);
+        assertEq(MssqlRunDatabase::getName(), ds.selectRow("select db_name() as db").db);
+        # a table created without a database name is in the run's database, not in the test's
+        ds.exec("create table isolation_t (id int)");
+        ds.commit();
+        assertEq(1, ds.selectRow("select count(*) as c from sys.tables where name = 'isolation_t'").c);
+        Datasource shared(connstr);
+        assertEq(0, shared.selectRow("select count(*) as c from sys.tables where name = 'isolation_t'").c);
+        # closed, so the teardown does not wait for their locks
+        ds.rollback();
+        shared.rollback();
+        ds.close();
+        shared.close();
+    }
+
+    private teardown() {
+        checkSkip();
+        string run = MssqlRunDatabase::getName();
+        MssqlRunDatabase::teardown();
+        assertNothing(MssqlRunDatabase::getName());
+        Datasource ds(connstr);
+        assertEq(0, ds.selectRow("select count(*) as c from sys.databases where name = %v", run).c);
+        # nothing is done once it is dropped
+        MssqlRunDatabase::teardown();
+    }
+
+    private static string getHost() {
+        string host = (gethostname() =~ x/^([^.]+)/)[0] ?? gethostname();
+        host = host.lwr();
+        host =~ s/[^a-z0-9]//g;
+        return host.substr(0, 12);
+    }
+
+    private static int getGonePid() {
+        for (int pid = 99999; pid > 1000; --pid) {
+            if (kill(pid, 0) == -1 && errno() == ESRCH) {
+                return pid;
+            }
+        }
+        throw "TEST-ERROR", "no free process id found";
+    }
+}

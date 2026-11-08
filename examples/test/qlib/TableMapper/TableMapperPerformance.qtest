@@ -1,6 +1,5 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-parallel: serial - it creates fixed-name objects in the shared SQL Server/Sybase (FreeTDS) test database
 
 %modern
 
@@ -24,6 +23,7 @@
 %requires ../../DbTestConnections.qm
 %requires ../SqlUtil/MysqlTestIsolation.qm
 %requires ../SqlUtil/OracleTestIsolation.qm
+%requires ../SqlUtil/MssqlTestIsolation.qm
 
 #! a connection of the test, and its schema and table
 class TableMapperPerformanceContext {
@@ -219,10 +219,11 @@ public class TableMapperPerformanceTest inherits QUnit::Test {
         # on PostgreSQL, every connection of the run uses the run's own schema; this is set up before any
         # connection is opened
         map PgsqlRunSchema::setup($1.conn.connstr, "TableMapperPerf"), contexts;
-        # on MySQL and Oracle, the run's own database or schema
+        # on MySQL, Oracle and SQL Server, the run's own database or schema
         foreach TableMapperPerformanceContext ctx in (contexts) {
             ctx.conn.connstr = MysqlRunDatabase::getConnectionString(ctx.conn.connstr, "TableMapperPerf");
             ctx.conn.connstr = OracleRunSchema::getConnectionString(ctx.conn.connstr, "TableMapperPerf");
+            ctx.conn.connstr = MssqlRunDatabase::getConnectionString(ctx.conn.connstr, "TableMapperPerf");
         }
         map setUpContext($1), contexts;
 
@@ -282,6 +283,7 @@ public class TableMapperPerformanceTest inherits QUnit::Test {
         PgsqlRunSchema::teardown();
         MysqlRunDatabase::teardown();
         OracleRunSchema::teardown();
+        MssqlRunDatabase::teardown();
     }
 
     private usageIntern() {

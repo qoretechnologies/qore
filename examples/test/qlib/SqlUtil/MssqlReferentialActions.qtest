@@ -2,7 +2,6 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #
 # Copyright 2026 Qore Technologies, s.r.o.
-# test-parallel: serial - it creates fixed-name objects in the shared SQL Server/Sybase (FreeTDS) test database
 
 %modern
 
@@ -11,6 +10,7 @@
 %requires SqlUtil
 %requires MssqlSqlUtilBase
 %requires FreetdsSqlUtil
+%requires ./MssqlTestIsolation.qm
 
 %try-module freetds
 %define NO_FREETDS
@@ -408,7 +408,9 @@ class MssqlReferentialActionsTest inherits QUnit::Test {
         if (!ENV.QORE_DB_CONNSTR_FREETDS) {
             testSkip("QORE_DB_CONNSTR_FREETDS is not set");
         }
-        Datasource ds(ENV.QORE_DB_CONNSTR_FREETDS);
+        # the run's own database: tests that run at the same time do not share the objects of this one
+        string connstr = MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS, "MssqlRefActions");
+        Datasource ds(connstr);
         try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
