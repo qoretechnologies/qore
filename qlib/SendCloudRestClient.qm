@@ -259,7 +259,7 @@ public class SendCloudRestClientBase {
     }
 
     #! Computes the retry delay for a 429 response based on headers or a default
-    /** @param info the response info hash returned by @ref RestClient::RestClient::doRequest()
+    /** @param info a hash with the response headers, with lower-case names, in the \c headers key
         @param default_delay the default delay to fall back on when no header is supplied
 
         @return the delay before the next retry attempt
@@ -359,7 +359,8 @@ SendCloudRestClient sendcloud({"public_key": "pub-key", "secret_key": "sec-key"}
 
         The method honors the \c Retry-After header when present and otherwise backs off
         exponentially (1s, 2s, 4s, …, capped at 30s per attempt) with a small jitter,
-        for up to 75 seconds total before giving up and returning the 429 response.
+        for up to 75 seconds total before giving up and raising the 429 error (or returning the 429 response, if
+        error responses are passed through).
     */
     hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info, softbool decode_errors = True,
             *hash<auto> hdr) {
@@ -367,26 +368,42 @@ SendCloudRestClient sendcloud({"public_key": "pub-key", "secret_key": "sec-key"}
         date current_delay = InitialRetryDelay;
 
         while (True) {
-            hash<auto> response = RestClient::doRequest(m, path, body, \info, decode_errors, hdr);
-
-            if (info.response_code != 429) {
+            # a 429 response is raised as an error, or returned if errors are passed through
+            *hash<auto> response;
+            *hash<ExceptionInfo> error;
+            # the status code and headers of the response
+            *int status;
+            *hash<auto> response_headers;
+            try {
+                response = RestClient::doRequest(m, path, body, \info, decode_errors, hdr);
+                status = info."response-code";
+                response_headers = info."response-headers";
+            } catch (hash<ExceptionInfo> ex) {
+                # the synchronous client raises an error status as HTTP-CLIENT-RECEIVE-ERROR, with the status code
+                # and the response headers in the exception argument
+                status = info."response-code" ?? ex.arg.status_code;
+                if ((ex.err != "REST-RESPONSE-ERROR" && ex.err != "HTTP-CLIENT-RECEIVE-ERROR") || status != 429) {
+                    rethrow;
+                }
+                response_headers = info."response-headers" ?? ex.arg;
+                error = ex;
+            }
+            if (status != 429) {
                 return response;
             }
 
             date elapsed = now_us() - start_time;
-            if (elapsed >= MaxRetryTime) {
-                # Max retry time exceeded, return the 429 error
-                return response;
-            }
-
-            date retry_delay = SendCloudRestClientBase::getRetryDelay(info, current_delay);
-
+            date retry_delay = SendCloudRestClientBase::getRetryDelay({"headers": response_headers}, current_delay);
             # Cap the wait so we do not exceed the total retry budget
             if (elapsed + retry_delay > MaxRetryTime) {
                 retry_delay = MaxRetryTime - elapsed;
-                if (retry_delay <= 0s) {
-                    return response;
+            }
+            if (retry_delay <= 0s) {
+                # the maximum retry time has been exceeded; the 429 error is returned or raised
+                if (error) {
+                    throw error.err, error.desc, error.arg;
                 }
+                return response;
             }
 
             sleep(retry_delay);
