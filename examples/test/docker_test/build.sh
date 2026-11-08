@@ -102,8 +102,13 @@ echo && echo "-- building Qore --"
 cd ${QORE_SRC_DIR}
 mkdir -p build
 cd build
-cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-debug} -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+# the qmod build cache, when the job has one (see qmod-cache.sh)
+. "${QORE_SRC_DIR}/test/docker_test/qmod-cache.sh"
+qore_qmod_cache_setup "${QORE_SRC_DIR}"
+cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-debug} -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+    ${QMOD_CACHE_ARG:+"${QMOD_CACHE_ARG}"}
 make -j${MAKE_JOBS}
+qore_qmod_cache_finish "${QORE_SRC_DIR}" "${QORE_SRC_DIR}/build"
 
 # Remove intermediate object files to reduce artifact size
 find . -name "*.o" -delete 2>/dev/null || true

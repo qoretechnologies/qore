@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+
+%exec-class AOTArtifactReproducibleTest
+
+#! An AOT artifact depends only on what it was compiled from
+/** Compiling the same sources with the same compiler gives the same bytes, and nothing in an artifact depends on the
+    git revision of the Qore that compiled it: a commit that changes nothing qcc compiles with must give the same
+    artifacts, or a build cache could never reuse one (see design/qmod-build-cache.md).  The build information of an
+    artifact names the compiler by its version and AOT runtime identity.
+*/
+class AOTArtifactReproducibleTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTArtifactReproducibleTest", "1.0", \ARGV) {
+        qore_bin = AOTArtifactReproducibleTest::absolutePath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]
+            ?? "qore");
+        libqore_dir = normalize_dir(ENV.QORE_LIBDIR ?? dirname(qore_bin));
+        qcc_bin = AOTArtifactReproducibleTest::absolutePath(ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc"));
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+
+        addTestCase("a module records no git revision and compiles to the same bytes", \moduleTest());
+        set_return_value(main());
+    }
+
+    private static string absolutePath(string path) {
+        return path =~ /\// ? normalize_dir(path) : path;
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    moduleTest() {
+        TmpDir tmp("qore-aot-reproducible-");
+        string src = tmp.path + "/Repro.qm";
+        File f();
+        f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern\nmodule Repro { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n"
+            "public namespace Repro { public string sub value() { return \"v\"; } }\n");
+        f.close();
+        list<string> qmods;
+        foreach string dir in ("a", "b") {
+            mkdir(tmp.path + "/" + dir);
+            string qmod = sprintf("%s/%s/Repro.qmod", tmp.path, dir);
+            string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m -o %s %s", env, tmp.path, qcc_bin, qmod, src));
+            assertTrue(is_file(qmod), out);
+            qmods += qmod;
+        }
+        # the same bytes, whatever the output path
+        assertEq(ReadOnlyFile::readBinaryFile(qmods[0]), ReadOnlyFile::readBinaryFile(qmods[1]));
+
+        string info = run(sprintf("%s %s --dump-info %s", env, qcc_bin, qmods[0]));
+        assertRegex("aot-runtime-identity: [0-9a-f]{64}", info, info);
+        assertRegex("qore-version: ", info, info);
+        assertFalse(info =~ /git-hash/, info);
+    }
+}
