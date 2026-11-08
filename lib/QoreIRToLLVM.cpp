@@ -32779,7 +32779,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (local_key && !direct_self_mutation) {
                 clearLocalCachedValue(local_key, module, llvm_func,
                     LocalCacheClearMode::DuplicateRefsOnly);
-                clearLocalReloadTracker(local_key, module, llvm_func);
+                // with the eligibility of the reload after the operation (below), which creates the tracker for a
+                // reload-exempt local too: otherwise an operation executed again (in a loop) found the tracker
+                // holding the container it reloaded the last time, which made the container look shared (a copy for
+                // every change) and kept the value it replaced until the next reload (see StoreLocal)
+                clearLocalReloadTracker(local_key, module, llvm_func, false);
             }
             // Clearing the root's own cache is not enough when the root is a reference.
             // Reading a local that holds a reference yields the *referenced* value, so the

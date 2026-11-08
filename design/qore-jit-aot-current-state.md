@@ -614,7 +614,10 @@ the value replaced is destroyed by the assignment, as with the AST interpreter. 
 created by the first store lowered when it does not exist yet, also for a reload-exempt local
 (`clearLocalReloadTracker(..., honor_reload_exempt = false)`, as the retain after the store
 creates it): a store executed again in a loop otherwise left the value it replaced in the tracker
-until the next store or the function's exit (`ObjectLocalLifetime.qtest`, `reassign_loop`).
+until the next store or the function's exit (`ObjectLocalLifetime.qtest`, `reassign_loop`). An lvalue
+path operation on a local clears the tracker with the eligibility of the reload that follows it in the
+same way, or an operation executed again found the tracker holding the container it reloaded the last
+time, which made the container look shared to the next change.
 
 `benchmark_exec_modes.qr` (object_local, object_list_index, new_object_member, builtin_method,
 queue_cycle) measures these patterns in every mode.
