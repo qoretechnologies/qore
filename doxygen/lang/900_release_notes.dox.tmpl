@@ -1480,6 +1480,8 @@
       <tt>s += v</tt> on an \c int local read the element as \c 0 in AOT-compiled code; and held by a global
       variable, which read as the reference itself in the IR execution mode and which an assignment replaced instead
       of assigning the referenced lvalue
+    - the IR execution mode runs <tt>i += v</tt> on an \c int local with an \c auto local \c v as fast as with an
+      \c int local again
     - in the IR execution mode and wherever the JIT and tiered execution modes run a function with the IR
       interpreter, the first call of a large function in a thread with a pending cancellation (ex: in code that
       caught a \c THREAD-CANCELLED exception) raised the exception before the function ran; it is now raised at the

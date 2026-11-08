@@ -775,9 +775,13 @@ private:
             llvm::Function* llvm_func);
 
     //! Emits the reference flag of a value (an i8, non-zero if the value is a reference) at the builder's position
-    /** Only a node can be a reference: qore_rt_value_is_reference() is called for a node only
+    /** Only a node can be a reference: qore_rt_value_is_reference() is called for a node only, and not at all for
+        a value that the IR knows is never a reference (QoreIRFunction::valueNeverReference(), ex: a string constant)
+
+        @param value_id the IR value of \a value
     */
-    llvm::Value* emitValueIsReference(llvm::Value* value, llvm::Module& module, llvm::Function* llvm_func);
+    llvm::Value* emitValueIsReference(llvm::Value* value, QoreIRValue value_id, llvm::Module& module,
+            llvm::Function* llvm_func);
     //! IR-only variables of foreach loops (AssignmentMode::Element): their caches can hold weak references, which
     //! read as their targets (see loadLocalCacheValue())
     std::unordered_set<const void*> ir_only_element_locals;

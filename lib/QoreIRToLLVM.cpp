@@ -4759,8 +4759,12 @@ llvm::Value* QoreIRToLLVM::emitLocalCacheLoad(const void* key, llvm::IRBuilder<>
 }
 
 // documented in QoreIRToLLVM.h
-llvm::Value* QoreIRToLLVM::emitValueIsReference(llvm::Value* value, llvm::Module& module, llvm::Function* llvm_func) {
+llvm::Value* QoreIRToLLVM::emitValueIsReference(llvm::Value* value, QoreIRValue value_id, llvm::Module& module,
+        llvm::Function* llvm_func) {
     llvm::Type* i8_type = llvm::Type::getInt8Ty(ctx);
+    if (current_ir_func && current_ir_func->valueNeverReference(value_id)) {
+        return llvm::ConstantInt::get(i8_type, 0);
+    }
     llvm::BasicBlock* from_bb = builder->GetInsertBlock();
     llvm::BasicBlock* node_bb = llvm::BasicBlock::Create(ctx, "value_node", llvm_func);
     llvm::BasicBlock* done_bb = llvm::BasicBlock::Create(ctx, "value_is_reference", llvm_func);
@@ -4809,7 +4813,14 @@ llvm::Value* QoreIRToLLVM::emitReferenceLocalRead(const void* key, llvm::Value* 
     llvm::Value* old_previous = builder->CreateLoad(i64_type, previous);
     builder->CreateStore(builder->CreateLoad(i64_type, current), previous);
     builder->CreateStore(read, current);
+    // the value released is often not a node (an int read through the reference), which is checked inline
+    llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "reference_local_release", llvm_func);
+    llvm::BasicBlock* released_bb = llvm::BasicBlock::Create(ctx, "reference_local_released", llvm_func);
+    builder->CreateCondBr(hasNodeInline(old_previous), release_bb, released_bb);
+    builder->SetInsertPoint(release_bb);
     builder->CreateCall(decref_fn, {old_previous, xsink_arg});
+    builder->CreateBr(released_bb);
+    builder->SetInsertPoint(released_bb);
     llvm::BasicBlock* read_end_bb = builder->GetInsertBlock();
     builder->CreateBr(done_bb);
     builder->SetInsertPoint(done_bb);
@@ -13234,15 +13245,68 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return rv;
         }
 
+        // the variable of a foreach loop on the runtime stack can hold a weak reference or a reference, which the
+        // cache holds as it is: it is read as LoadLocal reads it (qore_rt_load_local_weak()), and the value read is
+        // released if it is owned
+        if (local && !QoreTypeInfo::hasType(local->getTypeInfo()) && weak_assigned_locals.count(key)) {
+            llvm::Type* i8_type = llvm::Type::getInt8Ty(ctx);
+            llvm::IRBuilder<> alloca_builder(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+            llvm::AllocaInst* owned_flag = alloca_builder.CreateAlloca(i8_type, nullptr, "fused_weak_load_owned");
+            alloca_builder.CreateStore(llvm::ConstantInt::get(i8_type, 0), owned_flag);
+            llvm::Value* loaded;
+            if (aot_mode) {
+                auto load_fn = module.getOrInsertFunction("qore_rt_load_local_weak_aot",
+                    llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type, ptr_type}, false));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                loaded = builder->CreateCall(load_fn,
+                    {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), owned_flag, xsink_arg});
+            } else {
+                auto load_fn = module.getOrInsertFunction("qore_rt_load_local_weak",
+                    llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
+                llvm::Value* var_as_ptr = builder->CreateIntToPtr(
+                    llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(local)), ptr_type);
+                loaded = builder->CreateCall(load_fn, {var_as_ptr, owned_flag, xsink_arg});
+            }
+            auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* rv = builder->CreateCall(to_int, {loaded});
+            llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "fused_weak_release", llvm_func);
+            llvm::BasicBlock* done_bb = llvm::BasicBlock::Create(ctx, "fused_weak_done", llvm_func);
+            builder->CreateCondBr(builder->CreateICmpNE(builder->CreateLoad(i8_type, owned_flag),
+                llvm::ConstantInt::get(i8_type, 0)), release_bb, done_bb);
+            builder->SetInsertPoint(release_bb);
+            auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                    llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+            builder->CreateCall(decref_fn, {loaded, xsink_arg});
+            builder->CreateBr(done_bb);
+            builder->SetInsertPoint(done_bb);
+            return rv;
+        }
+
         bool is_native = native_int_locals.count(key) > 0;
         if (alloca_it != local_allocas.end()) {
             ensureLocalCacheFresh(key, module, llvm_func);
+            // a native float or bool is never a reference; it is converted as getAsBigInt() converts it
+            if (native_float_locals.count(key)) {
+                // raw local cache: a native double
+                return builder->CreateFPToSI(builder->CreateLoad(double_type, alloca_it->second.storage(), name),
+                    i64_type);
+            }
+            if (native_bool_locals.count(key)) {
+                // raw local cache: a native bool
+                return builder->CreateZExt(builder->CreateLoad(i1_type, alloca_it->second.storage(), name),
+                    i64_type);
+            }
             llvm::Value* raw = is_native
                 // raw local cache: a native int is never a weak reference
                 ? builder->CreateLoad(i64_type, alloca_it->second.storage(), name)
                 : loadLocalCacheValue(key, alloca_it->second, module, nullptr, name);
             if (is_native) {
                 return raw;
+            }
+            // a local of no type holding a reference reads as the referenced lvalue, as LoadLocal reads it
+            if (localReferenceFlag(key, llvm_func)) {
+                raw = emitReferenceLocalRead(key, raw, module, llvm_func);
             }
             // an integer in the boxed value is converted inline, without the runtime call
             return emitBoxedToIntInline(raw);
@@ -15312,7 +15376,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
                     builder->SetInsertPoint(store_bb);
                     builder->CreateCall(decref_fn, {old_val, xsink_arg});
-                    builder->CreateStore(emitValueIsReference(owned_boxed, module, llvm_func), ref_flag);
+                    builder->CreateStore(emitValueIsReference(owned_boxed, inst->operands[0], module, llvm_func), ref_flag);
                     llvm::BasicBlock* store_end_bb = builder->GetInsertBlock();
                     builder->CreateBr(done_bb);
 
@@ -15542,7 +15606,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         builder->CreateBr(done_bb);
                         builder->SetInsertPoint(retain_bb);
                         retainLocalCacheValue(key, boxed, module, llvm_func, false);
-                        builder->CreateStore(emitValueIsReference(boxed, module, llvm_func), ref_flag);
+                        builder->CreateStore(emitValueIsReference(boxed, inst->operands[0], module, llvm_func), ref_flag);
                         builder->CreateBr(done_bb);
                         builder->SetInsertPoint(done_bb);
                     } else {

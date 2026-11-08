@@ -9788,7 +9788,25 @@ load_local_done:
                 // weak reference, which is read as its target
                 QoreValue source_cached = fused_inst->source_slot_id < locals_slot_cache.size()
                     ? locals_slot_cache.read(fused_inst->source_slot_id) : QoreValue();
-                if (!source_cached.isNothing()) {
+                if (qore_ir_value_node_type(source_cached) == NT_REFERENCE) {
+                    // a local of no type holding a reference reads as the referenced lvalue, as LoadLocal reads it
+                    bool ref_needs_deref = true;
+                    QoreValue rv = qore_local_reference_eval(
+                        *reinterpret_cast<const ReferenceNode*>(source_cached.getInternalNode()), ref_needs_deref,
+                        xsink);
+                    if (xsink && *xsink) {
+                        if (ref_needs_deref) {
+                            rv.discard(xsink);
+                        }
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    source_val = rv.getAsBigInt();
+                    if (ref_needs_deref) {
+                        rv.discard(xsink);
+                    }
+                } else if (!source_cached.isNothing()) {
                     source_val = source_cached.getAsBigInt();
                 } else {
                     ensureLocalInstantiated(fused_inst->source, instantiated_locals, instantiated_locals_ordered,
@@ -9814,8 +9832,19 @@ load_local_done:
                         weak_source = lvv && isWeakReferenceType(lvv->val.getType());
                     }
                     if (!weak_source && fused_inst->source_slot_id < locals_slot_cache.size()) {
+                        // a reference that a local of no type holds is cached as the reference itself, as LoadLocal
+                        // caches it, so that every read reads the referenced lvalue
+                        ReferenceNode* reference_value = nullptr;
+                        if (qore_ir_type_may_hold_reference(fused_inst->source->getTypeInfo())) {
+                            LocalVarValue* lvv = thread_try_find_lvar(fused_inst->source);
+                            if (lvv && lvv->val.getType() == NT_REFERENCE) {
+                                reference_value = reinterpret_cast<ReferenceNode*>(lvv->val.v.n);
+                            }
+                        }
                         locals_slot_cache.storage(fused_inst->source_slot_id).discard(xsink);
-                        locals_slot_cache.storage(fused_inst->source_slot_id) = sv.needsRef() ? sv.refSelf() : sv;
+                        locals_slot_cache.storage(fused_inst->source_slot_id) = reference_value
+                            ? QoreValue(reference_value->refRefSelf())
+                            : (sv.needsRef() ? sv.refSelf() : sv);
                     }
                     if (nd && sv.needsRef()) {
                         sv.discard(xsink);

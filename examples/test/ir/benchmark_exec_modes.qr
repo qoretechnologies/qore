@@ -687,8 +687,25 @@ Queue q();
 printf(\"%%d\\n\", run(%d, q));
 ", iterations / 20);
 
+    # an auto local added to an int local (s += v), and a foreach variable added the same way
+    string int_add_auto_local_code = sprintf("%%modern
+int sub run(int iterations, list<auto> values) {
+    int s = 0;
+    auto v = 3;
+    for (int i = 0; i < iterations; ++i) {
+        s += v;
+    }
+    foreach auto e in (values) {
+        s += e;
+    }
+    return s;
+}
+printf(\"%%d\\n\", run(%d, (1, 2, 3)));
+", iterations);
+
     hash<string, string> tests = {
         "loop": loop_code,
+        "int_add_auto_local": int_add_auto_local_code,
         "object_local": object_local_code,
         "object_list_index": object_list_index_code,
         "new_object_member": new_object_member_code,
