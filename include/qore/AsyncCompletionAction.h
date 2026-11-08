@@ -70,20 +70,6 @@ public:
     DLLEXPORT virtual void executeError(const char* err, const char* desc,
         ExceptionSink* xsink) = 0;
 
-    //! Called on the I/O thread when the operation fails with an exception argument
-    /** The default implementation discards the argument and calls executeError()
-
-        @param err error string
-        @param desc error description
-        @param arg the exception argument; the action takes ownership of the reference
-        @param xsink exception sink
-    */
-    DLLEXPORT virtual void executeErrorArg(const char* err, const char* desc, QoreValue arg,
-            ExceptionSink* xsink) {
-        arg.discard(xsink);
-        executeError(err, desc, xsink);
-    }
-
     //! Release all held references
     DLLEXPORT virtual void cleanup(ExceptionSink* xsink) = 0;
 
@@ -98,6 +84,21 @@ public:
         Default is a no-op for non-streaming actions (e.g., PromiseAction).
     */
     DLLEXPORT virtual void complete(ExceptionSink* xsink) {}
+
+    //! Called on the I/O thread when the operation fails with an exception argument
+    /** The default implementation discards the argument and calls executeError(); it is the last virtual method,
+        after those of earlier versions, so that the virtual table of an action built with them keeps its layout
+
+        @param err error string
+        @param desc error description
+        @param arg the exception argument; the action takes ownership of the reference
+        @param xsink exception sink
+    */
+    DLLEXPORT virtual void executeErrorArg(const char* err, const char* desc, QoreValue arg,
+            ExceptionSink* xsink) {
+        arg.discard(xsink);
+        executeError(err, desc, xsink);
+    }
 
     //! Sets the HTTP client event sink of the request that this action completes
     /** The sink reports the protocol events of one request to the event queue configured on the
