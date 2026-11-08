@@ -1558,10 +1558,13 @@ public:
 
     DLLLOCAL void startThread(ExceptionSink& xsink) {
         // register the new tid
-        qore_program_private::registerNewThread(*pgm, tid);
+        bool cancel = qore_program_private::registerNewThread(*pgm, tid);
         started = true;
         //printd(5, "BGThreadParams::startThread() this: %p pgm: %p\n", this, pgm);
         pgm->depRef();
+        if (cancel) {
+            thread_list.cancelThread(tid, "Program thread cancellation requested", pgm->getProgramId());
+        }
     }
 
     /*
