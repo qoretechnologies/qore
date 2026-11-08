@@ -169,6 +169,9 @@ public class DataProviderRetryUtilTest inherits QUnit::Test {
             checkClientErrors("http://nx.retry-util-test.", True, "ENOTFOUND");
             # a DNS server that failed can answer the next query: the failure is retried
             checkClientErrors("http://servfail.retry-util-test.", False, "ESERVFAIL");
+            # a failure for one address family is not hidden by a definite answer for the other: a SERVFAIL answer
+            # for A and a NODATA answer for AAAA, given last, made the lookup fail with ENODATA, which was not retried
+            checkClientErrors("http://mixed.retry-util-test.", False, "ESERVFAIL");
             assertGt(0, dns.getQueries("nx"), "the names were looked up with the DNS server");
             checkClientErrors(MalformedNameUrl, True, "EBADNAME");
             # the resolver refused the malformed name without a query, so its lookup needs no DNS server in a build
