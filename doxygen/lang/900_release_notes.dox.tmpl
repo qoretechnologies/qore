@@ -1510,6 +1510,8 @@
       destroyed first argument first in calls of closures, of static methods and from top-level code, and of
       constructors in the IR execution mode), also when an argument is given by an expression such as
       <tt>c ? new T() : new T()</tt>
+    - in AOT-compiled code, an object that a local variable held when it was assigned another value in a loop was
+      destroyed only at the next assignment or when the function returned instead of at the assignment
     - in the IR execution mode and wherever the JIT and tiered execution modes run a function with the IR
       interpreter, the first call of a large function in a thread with a pending cancellation (ex: in code that
       caught a \c THREAD-CANCELLED exception) raised the exception before the function ran; it is now raised at the

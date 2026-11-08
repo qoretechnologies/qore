@@ -5157,7 +5157,7 @@ void QoreIRToLLVM::ensureLocalReloadDeferred(const void* key, llvm::Function* ll
 }
 
 void QoreIRToLLVM::clearLocalReloadTracker(const void* key, llvm::Module& module,
-        llvm::Function* llvm_func) {
+        llvm::Function* llvm_func, bool honor_reload_exempt) {
     const LocalVar* var_ptr = reinterpret_cast<const LocalVar*>(key);
     if (var_ptr && (var_ptr->isSelf() || var_ptr->closureUse())) {
         return;
@@ -5172,7 +5172,7 @@ void QoreIRToLLVM::clearLocalReloadTracker(const void* key, llvm::Module& module
         // causing refcount inflation → copy-on-write → O(n²) for container ops.
         //
         // Apply the same eligibility checks as reloadLocalFromRuntime().
-        if (!canReloadLocalFromRuntime(key)) {
+        if (!canReloadLocalFromRuntime(key, honor_reload_exempt)) {
             return;
         }
 
@@ -15765,7 +15765,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!is_ir_only) {
                 clearLocalCachedValue(key, module, llvm_func,
                     LocalCacheClearMode::IncludeFastEntryOwner);
-                clearLocalReloadTracker(key, module, llvm_func);
+                // the value the tracker retains is released before the assignment releases the variable's, so that
+                // the value replaced is released by the assignment, as in the AST interpreter; the tracker is
+                // created here, as the reload or retain after the assignment would create it (for a reload-exempt
+                // local too), or a store executed again (in a loop) left the value it replaced in the tracker until
+                // the next store or the function's exit
+                clearLocalReloadTracker(key, module, llvm_func, false);
             }
             builder->CreateStore(boxed, it->second.storage());
             // the flag that the reads of a typed variable of a foreach loop check (see element_local_read_flags),

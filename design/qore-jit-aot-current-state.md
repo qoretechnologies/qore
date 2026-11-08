@@ -590,6 +590,14 @@ their references over, so that it is a temporary the call consumes too
 (`interpreter_phi_takes_incoming`; native code: `consumable_phis`, whose cleanup slot takes the
 incoming temporary's slot over at the end of each predecessor). `CallArgumentReleaseOrder.qtest`.
 
+The native cache of a local on the runtime stack is retained by the local's reload tracker. A
+store releases the tracker's reference before the runtime assignment releases the variable's, so
+the value replaced is destroyed by the assignment, as with the AST interpreter. The tracker is
+created by the first store lowered when it does not exist yet, also for a reload-exempt local
+(`clearLocalReloadTracker(..., honor_reload_exempt = false)`, as the retain after the store
+creates it): a store executed again in a loop otherwise left the value it replaced in the tracker
+until the next store or the function's exit (`ObjectLocalLifetime.qtest`, `reassign_loop`).
+
 `benchmark_exec_modes.qr` (object_local, object_list_index, new_object_member, builtin_method,
 queue_cycle) measures these patterns in every mode.
 

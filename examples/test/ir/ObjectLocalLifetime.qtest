@@ -20,9 +20,11 @@
     declared in an inner block.  They are now released last local first, as the AST interpreter releases the
     variables of a frame.  The script also checks the other points where an object held in a typed or an untyped
     local is destroyed: when its scope ends, in a loop body at the end of each iteration, in reverse declaration
-    order when a function returns, before a catch block of the same function runs, when the local is reassigned,
-    when an AutoLock in a block unlocks its Mutex, and when the object leaves a recursive graph; a temporary holding
-    the object (the value of an expression) does not keep it past the end of the scope.
+    order when a function returns, before a catch block of the same function runs, when the local is reassigned
+    (also in a loop: a qcc executable released the object that a store in a loop replaced only at the next store or
+    when the function returned), when an AutoLock in a block unlocks its Mutex, and when the object leaves a
+    recursive graph; a temporary holding the object (the value of an expression) does not keep it past the end of
+    the scope.
 
     Each case runs twice, in every execution mode, on the IR tier of tiered execution and as a qcc executable (see
     ExecModeOutputTest).
@@ -161,6 +163,16 @@ sub reassign() {
     a = new T("s3");
     log += "end reassign";
 }
+sub reassign_loop() {
+    *T a;
+    auto b;
+    for (int i = 0; i < 3; ++i) {
+        a = new T("ra" + i);
+        b = new T("rb" + i);
+        log += "iteration " + i;
+    }
+    log += "end reassign loop";
+}
 sub holder_member() {
     {
         Holder h(new T("h1"));
@@ -189,7 +201,8 @@ sub cycle() {
 }
 list<code> cases = (\block_exit(), \loop_locals(), \reverse_order(), sub () { return_mid(True); },
     sub () { return_mid(False); }, \with_exception(), \with_exception_untyped(), \reverse_order_untyped(),
-    \try_local(), \loop_throw(), \autolock(), \temp_ref(), \reassign(), \holder_member(), \returned(), \cycle());
+    \try_local(), \loop_throw(), \autolock(), \temp_ref(), \reassign(), \reassign_loop(), \holder_member(),
+    \returned(), \cycle());
 foreach code c in (cases) {
     for (int r = 0; r < 2; ++r) {
         log = ();
@@ -227,6 +240,8 @@ foreach code c in (cases) {
             "ctor t1, assigned t1, dtor t1, after temp",
             "ctor s1, ctor s2, dtor s1, reassigned, ctor s3, dtor s2, end reassign, dtor s3",
             "ctor s1, ctor s2, dtor s1, reassigned, ctor s3, dtor s2, end reassign, dtor s3",
+            "ctor ra0, ctor rb0, iteration 0, ctor ra1, dtor ra0, ctor rb1, dtor rb0, iteration 1, ctor ra2, dtor ra1, ctor rb2, dtor rb1, iteration 2, end reassign loop, dtor rb2, dtor ra2",
+            "ctor ra0, ctor rb0, iteration 0, ctor ra1, dtor ra0, ctor rb1, dtor rb0, iteration 1, ctor ra2, dtor ra1, ctor rb2, dtor rb1, iteration 2, end reassign loop, dtor rb2, dtor ra2",
             "ctor h1, holder h1, dtor holder, dtor h1, after holder",
             "ctor h1, holder h1, dtor holder, dtor h1, after holder",
             "ctor ret, got ret, dtor ret, after returned",

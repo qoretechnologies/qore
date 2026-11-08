@@ -1748,8 +1748,11 @@ private:
     // Clear the reload tracker for a specific local, releasing the +1 reference
     // held from a previous reloadLocalFromRuntime() call.  Called before lvalue
     // compound operations (+=, -=, etc.) so that the container's refcount drops to 1,
-    // enabling copy-on-write to skip the copy (in-place modification).
-    void clearLocalReloadTracker(const void* key, llvm::Module& module, llvm::Function* llvm_func);
+    // enabling copy-on-write to skip the copy (in-place modification).  The tracker is created when it does not
+    // exist yet and the local can be reloaded (see canReloadLocalFromRuntime() for honor_reload_exempt), so that the
+    // clear is emitted for a later execution of the same code (a loop) as well.
+    void clearLocalReloadTracker(const void* key, llvm::Module& module, llvm::Function* llvm_func,
+            bool honor_reload_exempt = true);
 
     enum class LocalCacheClearMode {
         DuplicateRefsOnly,
