@@ -2965,14 +2965,15 @@ std::vector<QoreIRToLLVM::ExitReleaseEntry> QoreIRToLLVM::getExitReleaseSequence
     for (llvm::AllocaInst* alloca : fast_entry_param_allocas) {
         seq.push_back({alloca, nullptr});
     }
-    if (!runtime_locals || aot_mode || !current_ir_func) {
+    if (!runtime_locals || !current_ir_func) {
         for (llvm::AllocaInst* alloca : owned_ir_local_allocas) {
             seq.push_back({alloca, nullptr});
         }
         return seq;
     }
-    // the body locals in declaration order: the IR-only locals' caches and the variables on the runtime stack that the
-    // frame instantiated, interleaved
+    // the body locals in declaration order: the IR-only locals' caches, the variables on the runtime stack that the
+    // frame instantiated (not in AOT code, whose runtime-stack locals are released by the runtime stack in that
+    // order) and the closure-bound variables of the frame, interleaved
     std::vector<ExitReleaseEntry> body;
     std::unordered_set<const llvm::AllocaInst*> placed;
     for (LocalVar* var : current_ir_func->all_body_locals) {
@@ -2991,7 +2992,36 @@ std::vector<QoreIRToLLVM::ExitReleaseEntry> QoreIRToLLVM::getExitReleaseSequence
             }
             continue;
         }
-        if (var->closureUse() || (ir_only_locals_set && ir_only_locals_set->count(key))) {
+        if (ir_only_locals_set && ir_only_locals_set->count(key)) {
+            continue;
+        }
+        if (var->closureUse()) {
+            // a closure-bound variable that the frame has on the closure stack is given up at its place, as the AST
+            // interpreter gives up the variables of a block: it is popped (qore_rt_pop_closure_var(), which looks it
+            // up in the current frame only), so that a closure that still holds it keeps it and releases its value
+            // with an exception sink when the closure is released.  A variable that the code calling the function
+            // instantiated (pre_instantiated_locals of a JIT function entered by evalTiered()) is popped by that
+            // code: it only loses its value here if no closure holds it.  Left to the frame boundary, such
+            // variables were released after the frame's other locals and without an exception sink, so that an
+            // exception raised by a destructor was lost (and a debug build aborted).  A capture given to a direct
+            // fast entry as a parameter is not a variable of the frame
+            if (!(fast_entry_args && fast_entry_args->count(key))) {
+                ExitReleaseEntry entry{nullptr, var};
+                if (aot_mode) {
+                    // a variable the code never accesses has no slot (and no value)
+                    if (!aot_slots || !aot_slots->hasLocalSlot(key)) {
+                        continue;
+                    }
+                    entry.aot_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    entry.pop_closure = true;
+                } else {
+                    entry.pop_closure = !(pre_instantiated_locals && pre_instantiated_locals->count(key));
+                }
+                body.push_back(entry);
+            }
+            continue;
+        }
+        if (aot_mode) {
             continue;
         }
         if ((pre_instantiated_locals && pre_instantiated_locals->count(key)) || entry_locals_set.count(key)) {
@@ -3084,9 +3114,19 @@ bool QoreIRToLLVM::prepareBoxedExitCleanupArray(llvm::Function* llvm_func,
                 llvm::ConstantInt::get(i32_type, static_cast<unsigned>(i)),
                 "local_cleanup_slot_ptr");
         llvm::Value* entry_ptr;
-        if (slots[i].var) {
+        // a closure-bound variable that is popped is tagged in bits 0 and 1 (see qore_rt_cleanup_run_allocas())
+        const uint64_t var_tag = slots[i].pop_closure ? 3 : 2;
+        if (slots[i].var && slots[i].aot_slot >= 0) {
+            // AOT code knows the variable only at runtime: it is read from the context, at the function's entry
+            auto var_fn = llvm_func->getParent()->getOrInsertFunction("qore_rt_aot_local_var",
+                    llvm::FunctionType::get(ptr_type, {ptr_type, i32_type}, false));
+            llvm::Value* var_ptr = ab.CreateCall(var_fn, {aot_ctx_arg,
+                llvm::ConstantInt::get(i32_type, static_cast<unsigned>(slots[i].aot_slot))});
+            entry_ptr = ab.CreateIntToPtr(ab.CreateOr(ab.CreatePtrToInt(var_ptr, i64_type),
+                llvm::ConstantInt::get(i64_type, var_tag)), ptr_type, "runtime_local_entry");
+        } else if (slots[i].var) {
             entry_ptr = ab.CreateIntToPtr(llvm::ConstantInt::get(i64_type,
-                reinterpret_cast<uint64_t>(slots[i].var) | 2), ptr_type, "runtime_local_entry");
+                reinterpret_cast<uint64_t>(slots[i].var) | var_tag), ptr_type, "runtime_local_entry");
         } else {
             entry_ptr = slots[i].alloca;
         }
@@ -3359,6 +3399,23 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module, bool excepti
     // afterwards
     const std::vector<ExitReleaseEntry> slots = getExitReleaseSequence(exception_exit, false);
     for (auto it = slots.rbegin(); it != slots.rend(); ++it) {
+        if (it->var && it->aot_slot >= 0) {
+            // a closure-bound variable of AOT code (see getExitReleaseSequence())
+            assert(it->pop_closure);
+            auto pop_fn = module.getOrInsertFunction("qore_rt_pop_closure_var_aot",
+                llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+            builder->CreateCall(pop_fn, {aot_ctx_arg,
+                llvm::ConstantInt::get(i32_type, static_cast<unsigned>(it->aot_slot)), xsink_arg});
+            continue;
+        }
+        if (it->var && it->pop_closure) {
+            // a closure-bound variable that the frame instantiated (see getExitReleaseSequence())
+            auto pop_fn = module.getOrInsertFunction("qore_rt_pop_closure_var",
+                llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+            builder->CreateCall(pop_fn, {builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                reinterpret_cast<uint64_t>(it->var)), ptr_type), xsink_arg});
+            continue;
+        }
         if (it->var) {
             // the references that the local's native cache holds are released before the variable's value, as
             // UninstantiateLocal releases them, so that releasing the value runs the destructor of an object it holds

@@ -1238,14 +1238,20 @@ private:
     struct ExitReleaseEntry {
         llvm::AllocaInst* alloca = nullptr;
         LocalVar* var = nullptr;
+        //! the AOT slot of \a var in AOT code, whose LocalVar is known only at runtime (-1: none)
+        int32_t aot_slot = -1;
+        //! true if \a var is a closure-bound variable that the frame instantiated, which is popped from the closure
+        //! stack; false for one the caller instantiated, which only loses its value, and for a runtime-stack local
+        bool pop_closure = false;
     };
 
     //! The locals released at the exit of the function, in declaration order (they are released last first)
-    /** The boxed slots of getBoxedExitCleanupSlots(), and, unless \a runtime_locals is false or the code is AOT
-        code, the body locals on the runtime stack that the frame instantiated, between the IR-only locals declared
-        before and after them, so that a function left by an exception releases all of its locals last declared first,
-        as the AST interpreter does, whichever storage they have; with \a cache_allocas, a runtime local is followed by
-        the allocas of its native cache that hold references (released before the variable's value)
+    /** The boxed slots of getBoxedExitCleanupSlots(), and, unless \a runtime_locals is false, the closure-bound body
+        locals and (except in AOT code) the body locals on the runtime stack that the frame instantiated, between the
+        IR-only locals declared before and after them, so that a function left by an exception releases all of its
+        locals last declared first, as the AST interpreter does, whichever storage they have; with \a cache_allocas, a
+        runtime local is followed by the allocas of its native cache that hold references (released before the
+        variable's value)
     */
     std::vector<ExitReleaseEntry> getExitReleaseSequence(bool runtime_locals, bool cache_allocas) const;
 

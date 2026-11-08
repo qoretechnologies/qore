@@ -1451,6 +1451,8 @@ uint8_t qore_rt_reload_local_if_stale_raw_aot(QoreAOTContext* ctx, int32_t idx, 
 //! Assign to a local variable via AOT context slot
 void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 void qore_rt_assign_local_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+//! Returns the variable of an AOT local slot
+LocalVar* qore_rt_aot_local_var(QoreAOTContext* ctx, int32_t idx);
 
 //! Assign to a local variable via AOT context slot without type coercion.
 //! Used when coercion has already been applied.

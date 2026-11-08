@@ -526,8 +526,20 @@ declaration order, an owned IR-only cache as an alloca and a runtime-stack local
 with a runtime-stack local tagged with bit 1 and releases it last entry first. The inline form
 includes runtime-stack locals only at an exception exit; the array form, shared by every exit,
 includes them always, and a local already released at a normal exit is released again as no value.
-AOT code keeps the earlier sequence of IR-only locals only; `ExceptionExitLocalOrder.qtest` checks
-the AST order in every mode, a qcc executable included.
+AOT code includes no runtime-stack locals (the runtime stack releases them in that order).
+Closure-bound body locals are in the sequence too, in JIT and AOT code: one that the frame
+instantiated is popped from the closure stack at its place (`qore_rt_pop_closure_var()`, tag 3 in
+the array form, which looks it up in the current frame only), so that a closure still holding it
+keeps it and releases its value with an exception sink when the closure is released; one that the
+caller instantiated (`pre_instantiated_locals` of a function entered by `evalTiered()`) only loses
+its value if no closure holds it (`qore_rt_clear_local()`), as the caller pops it. AOT code knows a
+closure-bound variable only at runtime: the array form reads it from the context at the function's
+entry (`qore_rt_aot_local_var()`). Left to the frame boundary, such a variable was released after
+the frame's other locals and without an exception sink, which lost an exception raised by a
+destructor (a debug build aborted). The IR interpreter clears a closure-bound slot's variable at its
+place when no closure holds it; its frame instantiation cleanup pops it afterwards.
+`ExceptionExitLocalOrder.qtest` and `ClosureLocalExitRelease.qtest` check the AST order in every
+mode, a qcc executable included.
 `IRBlockScopedObjectLifetime.qtest` and `ObjectLocalLifetime.qtest` check exact
 constructor/destructor order for these shapes in every tier and in AOT (block exits, loops,
 returns, exceptions within and across functions, reassignment, `AutoLock`, recursive graphs).

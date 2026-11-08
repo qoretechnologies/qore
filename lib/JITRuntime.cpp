@@ -403,6 +403,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_reload_local_if_stale_raw_aot",
         reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_raw_aot) },
     { "qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot) },
+    { "qore_rt_aot_local_var", reinterpret_cast<void*>(&qore_rt_aot_local_var) },
     { "qore_rt_assign_local_no_coerce_aot", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot) },
     { "qore_rt_assign_local_aot_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_aot_throwing) },
     { "qore_rt_assign_local_no_coerce_aot_throwing",
@@ -1041,8 +1042,14 @@ extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, in
     // before the values they reference.
     for (int32_t i = count - 1; i >= 0; --i) {
         // a local on the runtime stack whose value is released is given by its LocalVar tagged in bit 1 (see
-        // QoreIRToLLVM::getExitReleaseSequence())
+        // QoreIRToLLVM::getExitReleaseSequence()); a closure-bound variable that the frame instantiated is tagged in
+        // bits 0 and 1 and popped from the closure stack
+        static_assert(alignof(LocalVar) >= 4, "the exit release array tags LocalVar addresses in bits 0 and 1");
         uintptr_t tagged = reinterpret_cast<uintptr_t>(alloca_ptrs[i]);
+        if ((tagged & 3) == 3) {
+            qore_rt_pop_closure_var(reinterpret_cast<LocalVar*>(tagged & ~static_cast<uintptr_t>(3)), xsink);
+            continue;
+        }
         if (tagged & 2) {
             qore_rt_clear_local(reinterpret_cast<LocalVar*>(tagged & ~static_cast<uintptr_t>(2)), xsink);
             continue;
@@ -2202,9 +2209,10 @@ extern "C" DLLEXPORT void qore_rt_clear_local(LocalVar* var, ExceptionSink* xsin
         // (e.g., closures submitted to a thread pool that haven't executed
         // yet).  When references == 1, only the cvstack entry remains, so
         // it's safe to trigger timely destruction at block scope exit.
-        // NOTE: Use thread_try_find_closure_var() to avoid asserting when the
-        // variable is not on the cvstack (e.g., in closure contexts on background threads).
-        ClosureVarValue* cvv = thread_try_find_closure_var(var->getName());
+        // The variable is looked up in the current frame only: a frame never clears a variable of another frame (ex:
+        // a recursive call's, or the caller's when this frame has not instantiated its own), and a variable that is
+        // not on the cvstack (e.g., in closure contexts on background threads) is left alone
+        ClosureVarValue* cvv = thread_try_find_closure_var_in_current_frame(var->getName());
         if (cvv && cvv->references.load(std::memory_order_acquire) == 1) {
             cvv->clearValue(xsink);
         }
@@ -12480,6 +12488,12 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_cast_by_type_pat
 extern "C" DLLEXPORT void qore_rt_instantiate_local_aot(QoreAOTContext* ctx, int32_t idx) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_instantiate_local(ctx->locals[idx]);
+}
+
+//! Returns the variable of an AOT local slot (see QoreIRToLLVM::prepareBoxedExitCleanupArray())
+extern "C" DLLEXPORT LocalVar* qore_rt_aot_local_var(QoreAOTContext* ctx, int32_t idx) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return ctx->locals[idx];
 }
 
 extern "C" DLLEXPORT void qore_rt_clear_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {

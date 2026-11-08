@@ -1720,13 +1720,26 @@ static void ensureLocalInstantiated(LocalVar* var, IRLocalVarSet& locals,
 //! Releases the value of a local on the runtime stack that the frame instantiated, at the exit of the function
 /** The variable is removed from the stack afterwards (cleanupInstantiatedLocals(), or the caller for a pre-instantiated
     local); its value is released here, at its slot's place among the IR-only locals, so that a function left by an
-    exception releases all of its locals last declared first, as the AST interpreter does.  A closure-bound local and
-    a local that the frame has not instantiated (or has uninstantiated) are left alone.
+    exception releases all of its locals last declared first, as the AST interpreter does.  A closure-bound local of
+    the frame loses its value only if no closure holds it any longer (it stays on the closure stack); a local that the
+    frame has not instantiated (or has uninstantiated) is left alone.
 */
 static void releaseFrameRuntimeLocal(const LocalVar* lv, const IRLocalVarSet& instantiated,
         const std::unordered_set<const LocalVar*>* pre_instantiated, ExceptionSink* xsink) {
-    if (!lv || lv->closureUse()
-            || (!instantiated.count(lv) && !(pre_instantiated && pre_instantiated->count(lv)))) {
+    if (!lv) {
+        return;
+    }
+    if (lv->closureUse()) {
+        // a closure-bound variable of this frame loses its value at its place if no closure holds it any longer, as
+        // qore_rt_clear_local() releases it; left to the frame boundary, it was released after the frame's other
+        // locals
+        ClosureVarValue* cvv = thread_try_find_closure_var_in_current_frame(lv->getName());
+        if (cvv && cvv->references.load(std::memory_order_acquire) == 1) {
+            cvv->clearValue(xsink);
+        }
+        return;
+    }
+    if (!instantiated.count(lv) && !(pre_instantiated && pre_instantiated->count(lv))) {
         return;
     }
     if (LocalVarValue* lvv = thread_try_find_lvar(lv)) {

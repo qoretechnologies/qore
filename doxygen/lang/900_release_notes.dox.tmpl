@@ -1484,7 +1484,9 @@
       objects held by its local variables could be destroyed in another order than with the AST interpreter (ex: the
       destructor of an object held by an \c auto local declared before an \c AutoLock ran while the lock was still
       held, or the locals of a block whose inner block's \c on_error handler rethrew the exception were destroyed
-      first declared first); local variables are now released last declared first, as with the AST interpreter
+      first declared first, or a local variable bound by a closure was destroyed after the other local variables of
+      the function, and an exception raised by its destructor was lost); local variables are now released last
+      declared first, as with the AST interpreter
     - in the JIT and tiered execution modes, an exception raised by the destructor of the value that the loop
       variable of \c foreach held when an iterator's next element was assigned could crash the program
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, a type error assigning an element to the
