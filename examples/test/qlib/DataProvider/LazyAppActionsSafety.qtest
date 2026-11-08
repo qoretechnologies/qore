@@ -166,6 +166,8 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("a listener runs under no tenant's policy", \listenerPolicyTest());
         addTestCase("the changes made on a sandboxed thread are delivered by a worker", \governedChangeDeliveryTest());
         addTestCase("a worker's change is delivered when the reader stopped waiting", \interruptedReaderDeliveryTest());
+        addTestCase("a sandboxed thread interrupted when it requests a delivery does not lose it",
+            \interruptedDeliveryRequestTest());
         addTestCase("only a thread that the catalog started runs as a worker", \untrackedWorkerTest());
         addTestCase("without a worker, every deferred registration runs when it is made, from source and AOT",
             \noWorkerTest());
@@ -1220,6 +1222,49 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
             }
         }
         assertEq(("lazy-b",), map $1.action, DataProviderActionCatalog::getActionsNoInit(app));
+    }
+
+    interruptedDeliveryRequestTest() {
+%ifdef QoreDebug
+        QueueListener listener(get_script_path());
+        int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
+        SandboxManager sm();
+        on_exit sm.clearInterrupt();
+        # the tenant's sandbox is interrupted when it requests the delivery of its change
+        DataProviderActionCatalog::setDeliveryTestHook(sub () { sm.requestInterrupt(); });
+        on_exit DataProviderActionCatalog::setDeliveryTestHook();
+        Program tenant(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        tenant.parse("%requires DataProvider\n"
+            "sub reg(string app) {\n"
+            "    DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app, \"display_name\": app,\n"
+            "        \"short_desc\": app, \"desc\": app, \"groups\": (AppGroup::DataTransformation,),\n"
+            "        \"logo\": \"data\", \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\",\n"
+            "        \"dynamic\": True});\n"
+            "}\n", "tenant-interrupted-delivery");
+        tenant.setSandboxManager(sm);
+        string app = "SafeInterruptedRequest_" + get_random_string(8);
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        int revision = DataProviderActionCatalog::getCatalogRevision();
+        try {
+            tenant.callFunction("reg", app);
+        } catch (hash<ExceptionInfo> ex) {
+            # the interrupt can end the tenant's call after its change
+            assertEq("PROGRAM-INTERRUPTED", ex.err);
+        }
+        # a worker delivers the change, though the tenant's thread was interrupted when it requested the delivery; no
+        # catalog call is made on this thread before, which would deliver it here
+        hash<auto> call;
+        while (True) {
+            call = listener.calls.get(Deadline);
+            if (call.revision > revision) {
+                break;
+            }
+        }
+        assertTrue(call.tid != gettid(), "a worker delivered the change");
+%else
+        testSkip("the test needs the catalog's test hooks, which only debug builds have");
+%endif
     }
 
     untrackedWorkerTest() {

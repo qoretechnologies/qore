@@ -1372,16 +1372,20 @@ public class DataProviderActionCatalog {
         */
         static int lazy_pending = 0;
 
-        #! @ref True while a delivery of catalog changes is queued for a worker; set under @ref lazy_worker_lck
-        /** See queueDelivery()
+        #! The deliveries of catalog changes requested since a worker last started one; see queueDelivery()
+        /** Changed with atomic operations only, without a lock, which a thread whose sandbox is interrupted cannot take
         */
-        static bool lazy_delivery_queued = False;
+        static int lazy_delivery_requests = 0;
+%ifdef QoreDebug
+        #! Called when a thread that a sandbox governs requests a delivery, before it is queued (debug builds only)
+        static *code delivery_test_hook;
+%endif
 
         #! The jobs that catalog workers run: job ID -> the TID of the worker; set under @ref init_lck
         static hash<string, int> lazy_job_running = {};
 
         #! The process that the catalog workers run in
-        static int lazy_worker_pid = 0;
+        static int lazy_worker_pid = getpid();
 
         #! Set by the exit hook: no worker is started afterwards, and a running one ends
         static bool lazy_worker_shutdown = False;
@@ -2049,6 +2053,16 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
         if (lck.lockOwner()) {
             return;
         }
+        # a thread that a sandbox governs leaves the delivery to a worker, and takes no lock to request it, as it
+        # cannot take one when its sandbox is interrupted; without a worker (see initLazyWorker()), there is no
+        # listener that code a sandbox does not govern added, as no such code loaded the module
+        if (lazy_worker_start && DataProviderActionCatalog::isGoverned()) {
+            # read without the lock: a listener added meanwhile is not told of the changes made before it was added
+            if (listeners && catalog_revision != notified_revision) {
+                DataProviderActionCatalog::queueDelivery();
+            }
+            return;
+        }
         int revision;
         list<hash<auto>> targets = ();
         {
@@ -2060,13 +2074,6 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
             }
             if (!listeners) {
                 notified_revision = revision;
-                return;
-            }
-            # a thread that a sandbox governs leaves the delivery to a worker; without a worker (see initLazyWorker()),
-            # there is no listener that code a sandbox does not govern added, as no such code loaded the module
-            if (lazy_worker_start && DataProviderActionCatalog::isGoverned()) {
-                al.unlock();
-                DataProviderActionCatalog::queueDelivery();
                 return;
             }
             notified_revision = revision;
@@ -2103,27 +2110,69 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
     }
 
     #! Queues a delivery of the catalog changes for a catalog worker, unless one is queued already; never throws
-    /** For a thread that a sandbox governs (see deliverCatalogChanges()); it does not wait for the delivery.  At the
-        end of the process, when no worker can be started, the changes are not delivered.
+    /** For a thread that a sandbox governs (see deliverCatalogChanges()); it does not wait for the delivery.
+
+        Nothing here can be interrupted: a thread whose sandbox is interrupted cannot take a lock (a lock is a
+        cancellation point), and the delivery would be lost until the next change.  The request is counted and the job
+        queued with atomic operations and a queue push, which are no cancellation points, and a worker is started if
+        none runs or is starting, with the start reserved in the same way; a start reserved past the pool's maximum
+        ends at once (see lazyWorkerMain()).  At the end of the process, when no worker runs or can start, the changes
+        are not delivered.
     */
     private:internal static queueDelivery() {
-        try {
-            AutoLock al(lazy_worker_lck);
-            if (lazy_delivery_queued || !DataProviderActionCatalog::startLazyWorker(True)) {
+%ifdef QoreDebug
+        if (*code hook = delivery_test_hook) {
+            try {
+                hook();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+%endif
+        # one job for the requests made until a worker starts it, which resets the count first
+        if (++lazy_delivery_requests != 1) {
+            return;
+        }
+        if (lazy_worker_pid != getpid()) {
+            # the child of a fork(): the worker state of the parent is reset under the lock (see startLazyWorker())
+            try {
+                AutoLock al(lazy_worker_lck);
+                DataProviderActionCatalog::startLazyWorker(True);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            if (lazy_worker_pid != getpid()) {
+                # interrupted: the next request queues the delivery
+                lazy_delivery_requests = 0;
                 return;
             }
-            lazy_delivery_queued = True;
-            lazy_jobs.push({"id": (++lazy_job_seq).toString(), "deliver": True});
-            ++lazy_pending;
-            DataProviderActionCatalog::startLazyWorker(False);
-%ifdef QoreDebug
-            ++lazy_jobs_submitted;
-            lazy_queue_cond.broadcast();
-%endif
+        }
+        lazy_jobs.push({"deliver": True});
+        if (lazy_workers || lazy_workers_starting || lazy_worker_shutdown) {
+            return;
+        }
+        ++lazy_workers_starting;
+        try {
+            code start = lazy_worker_start;
+            start();
         } catch (hash<ExceptionInfo> ex) {
-            # the listeners are told of these changes with the next delivery
+            # the exit hooks have started: the process is ending
+            --lazy_workers_starting;
         }
     }
+
+%ifdef QoreDebug
+    #! Sets code that runs when a thread that a sandbox governs requests a delivery, before it is queued
+    /** For tests (debug builds only): the code can interrupt the thread's sandbox at that point
+
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+    */
+    static setDeliveryTestHook(*code hook) {
+        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+            throw "PERMISSION-DENIED", "cannot set a catalog test hook from a context with restricted process control";
+        }
+        delivery_test_hook = hook;
+    }
+
+%endif
 
     #! Records the start of a listener call unless the listener was removed; never throws
     private:internal static bool beginListenerCall(string id, int tid) {
@@ -5610,7 +5659,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             lazy_workers_starting = 0;
             lazy_pending = 0;
             lazy_jobs.clear();
-            lazy_delivery_queued = False;
+            lazy_delivery_requests = 0;
             lazy_worker_pid = pid;
         }
         int count = lazy_workers.size() + lazy_workers_starting;
@@ -5658,6 +5707,14 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             DataProviderActionCatalog::endLazyWorker(tid);
         }
         while (*hash<auto> job = lazy_jobs.get()) {
+            # a delivery has no reader; the requests made from now on queue another one
+            if (job.deliver) {
+                lazy_delivery_requests = 0;
+                if (!lazy_worker_shutdown) {
+                    DataProviderActionCatalog::deliverCatalogChanges();
+                }
+                continue;
+            }
             {
                 AutoLock al(init_lck);
                 lazy_job_running{job.id} = tid;
@@ -5672,14 +5729,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 continue;
             }
             try {
-                if (job.deliver) {
-                    {
-                        AutoLock al(lazy_worker_lck);
-                        lazy_delivery_queued = False;
-                    }
-                    DataProviderActionCatalog::deliverCatalogChanges();
-                    result = {};
-                } else if (exists job.app) {
+                if (exists job.app) {
                     DataProviderActionCatalog::runPending(job.app, job.what, job.action, RunTrusted);
                     result = {};
                 } else {
@@ -5723,20 +5773,27 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         if (lazy_workers || lazy_workers_starting) {
             return;
         }
+        bool deliver;
         while (lazy_jobs.size()) {
             *hash<auto> job = lazy_jobs.get();
             if (!job) {
                 continue;
             }
-            --lazy_pending;
             if (job.deliver) {
-                # the listeners are told of the changes with the next delivery
-                lazy_delivery_queued = False;
-            } else if (lazy_job_waiting{job.id}) {
+                deliver = True;
+                continue;
+            }
+            --lazy_pending;
+            if (lazy_job_waiting{job.id}) {
                 lazy_job_results{job.id} = {"error": DataProviderActionCatalog::stoppedError(job)};
             }
         }
         lazy_job_cond.broadcast();
+        # a delivery requested is not dropped with the worker: another worker delivers it
+        if (deliver && !lazy_worker_shutdown) {
+            lazy_jobs.push({"deliver": True});
+            DataProviderActionCatalog::startLazyWorker(True);
+        }
     }
 
     #! Stops the catalog worker for good; the exit hook created when the module was loaded
