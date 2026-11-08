@@ -366,10 +366,10 @@ kill -9 $shells
         self.assertTrue(valid_lane_declaration("# test-parallel: serial - it uses the server-wide settings"))
 
     def test_database_tests_isolate_their_objects(self):
-        # A test that runs beside others (no lane) and uses the shared PostgreSQL or MySQL test database works in a
-        # schema or database of its own (PgsqlTestIsolation.qm, MysqlTestIsolation.qm), so that it neither shares an
-        # object with another test nor sees another test's objects in a listing; a test that does not need one says
-        # why here
+        # A test that runs beside others (no lane) and uses the shared PostgreSQL, MySQL or Oracle test database works
+        # in a schema or database of its own (PgsqlTestIsolation.qm, MysqlTestIsolation.qm, OracleTestIsolation.qm),
+        # so that it neither shares an object with another test nor sees another test's objects in a listing; a test
+        # that does not need one says why here
         no_objects = "it creates no database object"
         unique = "every object it creates has a name of its own run (a random part or the process id)"
         exempt = {
@@ -399,16 +399,24 @@ kill -9 $shells
                 "modules/dataframe/test/dataframe-dbi.qtest": unique,
             },
         }
-        module = {"PGSQL": "PgsqlTestIsolation.qm", "MYSQL": "MysqlTestIsolation.qm"}
+        exempt["ORACLE"] = {
+            "examples/test/misc/DbTestConnections.qtest": "it only parses datasource strings",
+            "examples/test/bin/run_tests/run-tests-credentials.qtest": "it only prints datasource strings",
+            "examples/test/qlib/DbDataProvider/DbSqlUtilWhereOperators.qtest": unique,
+            "examples/test/qore/classes/Datasource/Datasource.qtest": no_objects,
+            "examples/test/qore/classes/DatasourcePool/DatasourcePool.qtest": no_objects,
+            "modules/dataframe/test/dataframe-dbi.qtest": unique,
+        }
+        module = {"PGSQL": "PgsqlTestIsolation.qm", "MYSQL": "MysqlTestIsolation.qm", "ORACLE": "OracleTestIsolation.qm"}
         lane = re.compile(r"(?m)^# test-parallel: ")
-        checked = {"PGSQL": 0, "MYSQL": 0}
+        checked = {"PGSQL": 0, "MYSQL": 0, "ORACLE": 0}
         for test in sorted((ROOT / "examples/test").rglob("*.qtest")) + sorted((ROOT / "modules").glob(
                 "*/test/**/*.qtest")):
             source = test.read_text(errors="replace")
             if lane.search(source):
                 continue
             name = str(test.relative_to(ROOT))
-            for db in ("PGSQL", "MYSQL"):
+            for db in ("PGSQL", "MYSQL", "ORACLE"):
                 if "QORE_DB_CONNSTR_" + db not in source and "DbTestConnections::get" not in source:
                     continue
                 checked[db] += 1
@@ -423,6 +431,7 @@ kill -9 $shells
                 self.assertTrue((ROOT / name).is_file(), name)
         self.assertGreater(checked["PGSQL"], 20)
         self.assertGreater(checked["MYSQL"], 5)
+        self.assertGreater(checked["ORACLE"], 5)
 
     def test_process_limit_tests_are_exclusive(self):
         # A test that reads the process or thread limit of the machine does so to reach it: while it holds every
