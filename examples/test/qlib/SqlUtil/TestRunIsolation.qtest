@@ -49,8 +49,12 @@ class TestRunIsolationTest inherits QUnit::Test {
         assertTrue(TestRun::isLeftover(sprintf("qtest_suite_otherhost_1_%d_abc123", t - age), now));
         assertTrue(TestRun::isLeftover(sprintf("QTEST_SUITE_OTHERHOST_1_%d_ABC123_OTHER", t - age - 1), now));
         assertFalse(TestRun::isLeftover(sprintf("qtest_suite_host_1_%d_abc123", t - age + 60), now));
+        # the names of runs before the random part was added
+        assertTrue(TestRun::isLeftover(sprintf("qtest_suite_host_1_%d", t - age - 1), now));
+        assertTrue(TestRun::isLeftover(sprintf("QTEST_SUITE_HOST_1_%d_OTHER", t - age - 1), now));
+        assertFalse(TestRun::isLeftover(sprintf("qtest_suite_host_1_%d", t), now));
         # names that are not a run's
-        assertFalse(TestRun::isLeftover(sprintf("qtest_suite_host_1_%d", t - age - 1), now));
+        assertFalse(TestRun::isLeftover(sprintf("qtest_suite_host_%d", t - age - 1), now));
         assertFalse(TestRun::isLeftover("qtest_123", now));
         assertFalse(TestRun::isLeftover("other", now));
     }

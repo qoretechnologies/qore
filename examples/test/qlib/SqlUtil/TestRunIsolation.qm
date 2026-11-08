@@ -86,11 +86,13 @@ public class TestRun {
     /** @param name a name, in any case
         @param now the current time; the time is taken if not given
 
-        @return True if the name is a run's (see makeName()), optionally followed by \c "_" and a tag, and its time
-        is at least LeftoverAge before \a now
+        @return True if the name is a run's (see makeName(), or the same without its random part, as runs before it
+        named their objects), optionally followed by \c "_" and a tag, and its time is at least LeftoverAge before
+        \a now
     */
     static bool isLeftover(string name, *date now) {
-        *string epoch = (name =~ x/^qtest_[a-z0-9]+_[a-z0-9]+_[0-9]+_([0-9]+)_[a-z0-9]+(?:_[a-z0-9]+)?$/i)[0];
+        # the random part is optional: runs before it was added named their objects without it
+        *string epoch = (name =~ x/^qtest_[a-z0-9]+_[a-z0-9]+_[0-9]+_([0-9]+)(?:_[a-z0-9]+){0,2}$/i)[0];
         if (!epoch) {
             return False;
         }
