@@ -27,6 +27,8 @@ class SystemThreadCallTest inherits QUnit::Test {
         addTestCase("a sandbox's policy, interrupts and limits do not reach the thread", \sandboxTest());
         addTestCase("the threads stop at the end of the process; none starts after the exit hooks", \exitTest());
         addTestCase("no thread starts in a Program whose exit hooks have started", \deletedProgramTest());
+        addTestCase("a system thread is one of its Program's threads for waits and cancellation",
+            \threadControlTest());
         set_return_value(main());
     }
 
@@ -97,6 +99,27 @@ class SystemThreadCallTest inherits QUnit::Test {
     deletedProgramTest() {
         # a Program created during the module's initialization created the capability and was deleted then
         assertThrows("SANDBOX-CAPABILITY-ERROR", "its Program", SystemThreadWorker::Worker::deleted_program_cap);
+    }
+
+    threadControlTest() {
+        Program p = SystemThreadWorker::Worker::control;
+        int tid = p.callFunction("start");
+        assertEq(1, p.callFunction("running"));
+        # the Program is not idle while the system thread runs
+        assertFalse(p.waitForThreads(-1));
+        assertFalse(p.waitForThread(tid, -1));
+        # a cancellation of the Program's threads reaches it, and the Program becomes idle when it has ended
+        assertEq(1, p.cancelThreads("thread control test"));
+        assertTrue(p.waitForThreads(SystemThreadWorker::Worker::Deadline));
+        assertEq(0, p.callFunction("running"));
+        # the capability starts threads again once the cancellation wave has ended with the Program idle
+        tid = p.callFunction("start");
+        assertTrue(p.cancelThread(tid, "thread control test"));
+        assertTrue(p.waitForThread(tid, SystemThreadWorker::Worker::Deadline));
+        assertEq(0, p.callFunction("running"));
+        # a thread left running is released by the Program's exit hook at the end of the process
+        p.callFunction("start");
+        assertEq(1, p.callFunction("running"));
     }
 
     #! Runs a child process with the test module and the code given; returns its exit code, output and lines

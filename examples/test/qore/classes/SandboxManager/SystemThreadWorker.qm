@@ -27,6 +27,12 @@ public class Worker {
 
         #! a capability created by a Program that was deleted afterwards
         static code deleted_program_cap;
+
+        #! a Program that created a capability during the module's initialization, for the thread control test
+        /** Its threads wait on a queue of the Program until they are cancelled or the exit hook releases them; its
+            functions: \c start() starts one and waits until it runs, \c running() returns the number running
+        */
+        static Program control;
     }
 
     private:internal {
@@ -58,6 +64,7 @@ public class Worker {
             "governed": Worker::createGoverned(),
         };
         deleted_program_cap = Worker::createInDeletedProgram();
+        control = Worker::createControl();
     }
 
     #! Starts a worker, also for a sandboxed caller; returns its TID
@@ -154,6 +161,33 @@ public class Worker {
         code cap = p.callFunction("create");
         delete p;
         return cap;
+    }
+
+    #! Returns a Program whose capability starts threads that wait until they are cancelled or released
+    private:internal static Program createControl() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse("our Queue q();\n"
+            "our Counter running();\n"
+            "our Queue started();\n"
+            "our code cap = SandboxManager::createSystemThreadCall(sub () {\n"
+            "    running.inc();\n"
+            "    on_exit running.dec();\n"
+            "    started.push(True);\n"
+            "    # ended by a cancellation of the Program's threads, or by the exit hook\n"
+            "    try {\n"
+            "        q.get();\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        if (ex.err != 'THREAD-CANCELLED') {\n"
+            "            rethrow;\n"
+            "        }\n"
+            "    }\n"
+            "});\n"
+            "# the exit hook releases the threads still waiting\n"
+            "register_exit_hook(sub () { map q.push(NOTHING), xrange(running.getCount()); });\n"
+            "int sub start() { int tid = cap(); started.get(); return tid; }\n"
+            "int sub running() { return running.getCount(); }\n", "control");
+        p.run();
+        return p;
     }
 
     #! Returns what sandboxed code gets when it creates a capability
