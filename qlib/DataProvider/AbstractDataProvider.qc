@@ -6174,6 +6174,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         @note after this call, callbacks cannot be changed
     */
     static bool setDynamicValueCallbacks() {
+        AbstractDataProvider::checkNotSandboxed("lock the dynamic value callbacks");
         if (!AbstractDataProvider::checkCallbacks()) {
             return !exists cb_resolve_value;
         }
@@ -6767,6 +6768,8 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
         @note after this call, callbacks cannot be changed
     */
     static bool setDynamicValueCallbacks(code value_needs_resolution, code resolve_value) {
+        # process-wide callbacks run on the threads of every caller, of other tenants and of trusted code
+        AbstractDataProvider::checkNotSandboxed("set the dynamic value callbacks");
         if (!AbstractDataProvider::checkCallbacks()) {
             return value_needs_resolution == cb_value_needs_resolution && resolve_value == cb_resolve_value;
         }
@@ -6800,6 +6803,8 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
             *code<*AbstractDataProviderType(string, string, *hash<auto>)> resolve_type,
             *code<auto(*hash<auto>)> list_contexts,
             *code<auto(string, string, *hash<auto>)> list_values) {
+        # process-wide callbacks run on the threads of every caller, of other tenants and of trusted code
+        AbstractDataProvider::checkNotSandboxed("set the template callbacks");
         if (template_callbacks_locked) {
             return expand == cb_expand_template && resolve_type == cb_resolve_template_type
                 && list_contexts == cb_list_template_contexts && list_values == cb_list_template_values;
@@ -6818,6 +6823,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
         @since DataProvider 3.3
     */
     static clearTemplateCallbacks() {
+        AbstractDataProvider::checkNotSandboxed("clear the template callbacks");
         template_callbacks_locked = False;
         delete cb_expand_template;
         delete cb_resolve_template_type;

@@ -488,9 +488,14 @@ public class DataProvider {
     #! Sets or clears the global logger
     /** @param logger the global data provider logger
 
+        @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller: it would change what the module does for other
+        tenants and for trusted code
+
         @since DataProvider 3.0
     */
     static setGlobalLogger(*LoggerInterface logger) {
+        # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
+        DataProvider::checkNotSandboxed("set the global logger");
         DataProvider::logger = logger;
     }
 
@@ -511,6 +516,8 @@ public class DataProvider {
         @since DataProvider 3.0
     */
     static addOptions(int options) {
+        # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
+        DataProvider::checkNotSandboxed("change the global options");
         DataProvider::checkOptions(options);
         DataProvider::options |= options;
     }
@@ -523,6 +530,8 @@ public class DataProvider {
         @since DataProvider 3.0
     */
     static removeOptions(int options) {
+        # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
+        DataProvider::checkNotSandboxed("change the global options");
         DataProvider::checkOptions(options);
         DataProvider::options &= ~options;
     }
@@ -544,6 +553,8 @@ public class DataProvider {
         @since DataProvider 3.0
     */
     static setOptions(int options) {
+        # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
+        DataProvider::checkNotSandboxed("change the global options");
         DataProvider::checkOptions(options);
         DataProvider::options = options;
     }
@@ -1025,7 +1036,11 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
     }
 
     #! Locks all types
+    /** @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller
+    */
     static lockAllTypes() {
+        # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
+        DataProvider::checkNotSandboxed("lock all types");
         type_cache.lockAll();
     }
 
@@ -1531,6 +1546,8 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
             *code<*AbstractDataProviderType(string, string, *hash<auto>)> resolve_type,
             *code<auto(*hash<auto>)> list_contexts,
             *code<auto(string, string, *hash<auto>)> list_values) {
+        # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
+        DataProvider::checkNotSandboxed("set the template callbacks");
         return AbstractDataProvider::setTemplateCallbacks(expand, resolve_type, list_contexts, list_values);
     }
 
@@ -1542,6 +1559,8 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
         @since DataProvider 3.3
     */
     static clearTemplateCallbacks() {
+        # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
+        DataProvider::checkNotSandboxed("clear the template callbacks");
         AbstractDataProvider::clearTemplateCallbacks();
     }
 
@@ -1852,6 +1871,8 @@ if (action.data_provider_info) {
         @throw DATA-PROVIDER-ERROR cannot call this method after requests for types or factories are made
     */
     static setAutoConfig() {
+        # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
+        DataProvider::checkNotSandboxed("allow automatic configuration");
         if (env_config_locked) {
             throw "DATA-PROVIDER-ERROR", "cannot call DataProvider::setAutoConfigFromEnvironment() after type or "
                 "factories have been loaded";
@@ -1881,9 +1902,16 @@ if (action.data_provider_info) {
     }
 
     #! Registers a static initializer
-    /** @since DataProvider 3.0
+    /** Called by code that a sandbox governs, \a init runs at once, on the calling thread: no code registered under
+        a sandbox runs later on another thread
+
+        @since DataProvider 3.0
     */
     static registerStaticInitializer(code init) {
+        if (SandboxManager::isSandboxed()) {
+            init();
+            return;
+        }
         ilist += init;
     }
 
@@ -1900,6 +1928,8 @@ if (action.data_provider_info) {
     /** @since DataProvider 3.0
     */
     static deferStaticInitialization() {
+        # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
+        DataProvider::checkNotSandboxed("defer static initialization");
         push ilist_save, remove ilist;
     }
 
@@ -1907,6 +1937,8 @@ if (action.data_provider_info) {
     /** @since DataProvider 3.0
     */
     static restoreStaticInitialization() {
+        # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
+        DataProvider::checkNotSandboxed("restore static initialization");
         if (*list<code> l = pop ilist_save) {
             ilist += l;
         }
@@ -1951,6 +1983,8 @@ if (action.data_provider_info) {
         @since DataProvider 3.0
     */
     static registerShutdownHandler(string key, code handler) {
+        # the handler would run later, on the thread that shuts the module down
+        DataProvider::checkNotSandboxed("register a shutdown handler");
         if (smap{key}) {
             throw "SHUTDOWN-HANDLER-ERROR", sprintf("A shutdown handler with key %y has already been registered",
                 key);
@@ -1966,7 +2000,21 @@ if (action.data_provider_info) {
         @since DataProvider 3.0
     */
     static bool deregisterShutdownHandler(string key) {
+        # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
+        DataProvider::checkNotSandboxed("deregister a shutdown handler");
         return exists (remove smap{key});
+    }
+
+    #! Throws \c DATA-PROVIDER-CALLBACK-ERROR if a sandbox governs the caller, who cannot change process-wide state
+    /** Process-wide state changes what the module does for every caller, of other tenants and of trusted code, and
+        process-wide code runs on their threads; Qore::SandboxManager::isSandboxed() also sees a sandbox under a
+        policy barrier
+    */
+    private:internal static checkNotSandboxed(string what) {
+        if (SandboxManager::isSandboxed()) {
+            throw "DATA-PROVIDER-CALLBACK-ERROR", sprintf("code that a sandbox governs cannot %s: it would change "
+                "what the module does for other tenants and for trusted code", what);
+        }
     }
 
     #! Sets the \a env_config_locked variable if not already set
