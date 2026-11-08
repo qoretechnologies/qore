@@ -460,6 +460,75 @@ static constinit QoreEnvFlag ir_trace_bg_fallback_env("QORE_IR_TRACE_BG_FALLBACK
 static constinit QoreEnvFlag ir_trace_debug_env("QORE_IR_TRACE_DEBUG");
 static constinit QoreEnvFlag ir_trace_exceptions_env("QORE_IR_TRACE_EXCEPTIONS");
 
+//! The operand of an AST operator node built from an IR value that is a reference (as <tt>\\x</tt> creates)
+/** An operator of the AST interpreter evaluates its operand expressions and takes the values they give as they are:
+    an expression giving a reference (ex: an element h.r holding <tt>\\x</tt>) gives the reference itself, which the
+    operator does not read (ex: <tt>NOTHING + h.r</tt> is \c NOTHING, <tt>h.r + 1</tt> is \c 1).  An IR value is the
+    value of such an expression already, and a reference given to an operator node as its operand would be evaluated
+    by the node, which reads the referenced lvalue.  This node evaluates to the reference itself instead.
+*/
+class IRReferenceOperandNode : public ParseNode {
+public:
+    //! takes a new reference to the reference given
+    DLLLOCAL IRReferenceOperandNode(const QoreValue& ref) : ParseNode(get_runtime_location(), getNodeType()),
+            ref(ref.refSelf()) {
+        assert(ref.getType() == NT_REFERENCE);
+    }
+
+    DLLLOCAL virtual ~IRReferenceOperandNode() {
+        ref.discard(nullptr);
+    }
+
+    DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
+        str.concat("reference operand");
+        return 0;
+    }
+
+    DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const {
+        del = true;
+        return new QoreString("reference operand");
+    }
+
+    DLLLOCAL virtual const char* getTypeName() const {
+        return "reference operand";
+    }
+
+    //! the node type of these nodes, which no other node has
+    DLLLOCAL static qore_type_t getNodeType() {
+        static const qore_type_t type = get_next_type_id();
+        return type;
+    }
+
+protected:
+    QoreValue ref;
+
+    //! the reference itself, borrowed from the node
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+        needs_deref = false;
+        return ref;
+    }
+
+    DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+        assert(false);
+        return 0;
+    }
+
+    DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
+        return nullptr;
+    }
+};
+
+//! Returns the operand of an AST operator node for an IR value, with a reference of its own
+/** A reference is given to the node as an IRReferenceOperandNode, which evaluates to the reference itself, as the
+    operand expression gave it in the AST interpreter
+*/
+static QoreValue ir_operator_operand(const QoreValue& value) {
+    if (value.getType() == NT_REFERENCE) {
+        return new IRReferenceOperandNode(value);
+    }
+    return value.refSelf();
+}
+
 // Helper: evaluate a node and ensure the caller owns a reference to the result.
 // Some operator eval() implementations return with needs_deref=false (borrowed reference).
 // This function ensures we always return an owned reference.
@@ -9147,7 +9216,7 @@ load_local_done:
                 auto* hka_inst = static_cast<QoreIRHashKeyAccessInstruction*>(inst);
                 bool preserve_weak_result = isDotEvalOnlyBase(inst);
                 QoreValue raw_base = getIRValue(values, hka_inst->operands[0]);
-                ValueEvalOptimizedRefHolder base_holder(raw_base, xsink);
+                QoreIROperandHolder base_holder(raw_base, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
@@ -9217,7 +9286,7 @@ load_local_done:
             case QoreIROpcode::HashKeyAccessInt: {
                 auto* hka_inst = static_cast<QoreIRHashKeyAccessInstruction*>(inst);
                 QoreValue raw_base = getIRValue(values, hka_inst->operands[0]);
-                ValueEvalOptimizedRefHolder base_holder(raw_base, xsink);
+                QoreIROperandHolder base_holder(raw_base, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
@@ -9524,7 +9593,7 @@ load_local_done:
             }
             case QoreIROpcode::ListIndexAccess: {
                 QoreValue raw_list_val = getIRValue(values, inst->operands[0]);
-                ValueEvalOptimizedRefHolder list_holder(raw_list_val, xsink);
+                QoreIROperandHolder list_holder(raw_list_val, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
@@ -10984,7 +11053,7 @@ load_local_done:
             case QoreIROpcode::IteratorCreateReverse: {
                 QoreValue iterable = getIRValue(values, inst->operands[0]);
                 FunctionalOperator::FunctionalValueType value_type;
-                FunctionalOperatorInterface* iter = FunctionalOperatorInterface::getFunctionalIterator(
+                FunctionalOperatorInterface* iter = FunctionalOperatorInterface::getFunctionalIteratorForValue(
                     value_type, iterable, false, "foldr operator", xsink);
                 if (xsink && *xsink) {
                     delete iter;
@@ -12372,7 +12441,7 @@ load_local_done:
                     iter = QoreIterateOperatorNode::getFunctionalIterator(value_type, iterable, nullptr,
                         "streaming operator expression", xsink);
                 } else {
-                    iter = FunctionalOperatorInterface::getFunctionalIterator(value_type, iterable, true,
+                    iter = FunctionalOperatorInterface::getFunctionalIteratorForValue(value_type, iterable, true,
                         "foreach statement", xsink);
                 }
                 if (xsink && *xsink) {
@@ -16906,7 +16975,7 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
             // results), causing a UAF when cache/values later deref.  Binary
             // ops in evalBinary already refSelf for the same reason.
             QoreUnaryPlusOperatorNode node(nullptr,
-                value.needsRef() ? value.refSelf() : value);
+                ir_operator_operand(value));
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::UnaryMinusInt:
@@ -16916,7 +16985,7 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
         case QoreIROpcode::UnaryMinusAny: {
             // See UnaryPlusAny — refSelf balances the operator node's dtor.
             QoreUnaryMinusOperatorNode node(nullptr,
-                value.needsRef() ? value.refSelf() : value);
+                ir_operator_operand(value));
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::ExistsAny:
@@ -16992,7 +17061,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue(left.getAsFloat() + right.getAsFloat());
         case QoreIROpcode::AddAny: {
             bool needs_deref = true;
-            QorePlusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
+            QorePlusOperatorNode node(nullptr, ir_operator_operand(left), ir_operator_operand(right));
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::AddTimeout: {
@@ -17018,7 +17087,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             }
             // Fallback for non-timeout cases
             bool needs_deref = true;
-            QorePlusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
+            QorePlusOperatorNode node(nullptr, ir_operator_operand(left), ir_operator_operand(right));
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::AddString: {
@@ -17054,7 +17123,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue(left.getAsFloat() - right.getAsFloat());
         case QoreIROpcode::SubAny: {
             bool needs_deref = true;
-            QoreMinusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
+            QoreMinusOperatorNode node(nullptr, ir_operator_operand(left), ir_operator_operand(right));
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::SubTimeout: {
@@ -17078,7 +17147,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             }
             // Fallback
             bool needs_deref = true;
-            QoreMinusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
+            QoreMinusOperatorNode node(nullptr, ir_operator_operand(left), ir_operator_operand(right));
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::MulInt:
@@ -17087,7 +17156,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue(left.getAsFloat() * right.getAsFloat());
         case QoreIROpcode::MulAny: {
             bool needs_deref = true;
-            QoreMultiplicationOperatorNode node(nullptr, left.refSelf(), right.refSelf());
+            QoreMultiplicationOperatorNode node(nullptr, ir_operator_operand(left), ir_operator_operand(right));
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::DivInt: {
@@ -17147,21 +17216,24 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue(left.getAsBigInt() & right.getAsBigInt());
         case QoreIROpcode::AndAny: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreBinaryAndOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreBinaryAndOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::OrInt:
             return QoreValue(left.getAsBigInt() | right.getAsBigInt());
         case QoreIROpcode::OrAny: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreBinaryOrOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreBinaryOrOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::XorInt:
             return QoreValue(left.getAsBigInt() ^ right.getAsBigInt());
         case QoreIROpcode::XorAny: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreBinaryXorOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreBinaryXorOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::AddAssignInt:
@@ -17229,14 +17301,16 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue(left.getAsBigInt() << right.getAsBigInt());
         case QoreIROpcode::ShlAny: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreShiftLeftOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreShiftLeftOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::ShrInt:
             return QoreValue(left.getAsBigInt() >> right.getAsBigInt());
         case QoreIROpcode::ShrAny: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreShiftRightOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreShiftRightOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::ShlAssignInt:
@@ -17251,7 +17325,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::FoldlInt:
         case QoreIROpcode::FoldlFloat: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreFoldlOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreFoldlOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         // Optimized fold operations with native loops
@@ -17689,14 +17764,16 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::FoldrInt:
         case QoreIROpcode::FoldrFloat: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreFoldrOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreFoldrOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::MapAny:
         case QoreIROpcode::MapInt:
         case QoreIROpcode::MapFloat: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreMapOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreMapOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         // Optimized map operations with native loops
@@ -17939,7 +18016,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::SelectInt:
         case QoreIROpcode::SelectFloat: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreSelectOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreSelectOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         // Optimized select operations with native loops
@@ -18286,14 +18364,16 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 toBits(left), toBits(right), xsink));
         case QoreIROpcode::RangeAny: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreRangeOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreRangeOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat:
         case QoreIROpcode::RangeDate: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreRangeOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreRangeOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::EqInt:
@@ -18412,21 +18492,21 @@ QoreValue QoreIRInterpreter::evalTernary(QoreIROpcode op, const QoreValue& first
         case QoreIROpcode::RangeSliceFloat: {
             bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreSquareBracketsRangeOperatorNode(get_runtime_location(),
-                first.refSelf(), second.refSelf(), third.refSelf())), xsink);
+                ir_operator_operand(first), ir_operator_operand(second), ir_operator_operand(third))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::MapSelectAny:
         case QoreIROpcode::MapSelectList: {
             bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreMapSelectOperatorNode(get_runtime_location(),
-                first.refSelf(), second.refSelf(), third.refSelf())), xsink);
+                ir_operator_operand(first), ir_operator_operand(second), ir_operator_operand(third))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::HashMapAny:
         case QoreIROpcode::HashMap: {
             bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreHashMapOperatorNode(get_runtime_location(),
-                first.refSelf(), second.refSelf(), third.refSelf())), xsink);
+                ir_operator_operand(first), ir_operator_operand(second), ir_operator_operand(third))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::StringJoinStart:
@@ -18454,7 +18534,8 @@ QoreValue QoreIRInterpreter::evalQuaternary(QoreIROpcode op, const QoreValue& fi
         case QoreIROpcode::HashMapSelect: {
             bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreHashMapSelectOperatorNode(get_runtime_location(),
-                first.refSelf(), second.refSelf(), third.refSelf(), fourth.refSelf())), xsink);
+                ir_operator_operand(first), ir_operator_operand(second), ir_operator_operand(third),
+                ir_operator_operand(fourth))), xsink);
             return evalAndRef(*node, xsink);
         }
         default:

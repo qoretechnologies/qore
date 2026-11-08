@@ -178,4 +178,22 @@ DLLLOCAL bool qore_ir_is_native_leaf(const QoreIRFunction* ir,
 DLLLOCAL bool qore_ir_get_aot_scalar_leaf(const QoreIRFunction* ir,
         const UserVariantBase* uvb, int nargs, AOTScalarLeafInfo& result);
 
+//! Holds an IR value that an operation reads, evaluating a value that needs evaluation except a reference
+/** The AST interpreter gives an operation the value of its operand expression as it is: an expression giving a
+    reference (ex: an element <tt>h.r</tt> holding <tt>\x</tt>) gives the reference itself, which a container access
+    or an operator does not read (ex: <tt>h.r[0]</tt> and <tt>h.r.a</tt> are \c NOTHING).  An IR value is the value
+    of such an expression already, so a reference is held as it is instead of being evaluated, which would read the
+    referenced lvalue.
+*/
+class QoreIROperandHolder : public ValueEvalOptimizedRefHolder {
+public:
+    DLLLOCAL QoreIROperandHolder(const QoreValue& value, ExceptionSink* xs) : ValueEvalOptimizedRefHolder(xs) {
+        if (value.getType() == NT_REFERENCE) {
+            setValue(value, false);
+        } else {
+            eval(value);
+        }
+    }
+};
+
 #endif

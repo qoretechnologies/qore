@@ -37,6 +37,16 @@ bool FunctionalOperatorInterface::getNext(ValueOptionalRefHolder& val, Exception
     return getNextImpl(val, xsink);
 }
 
+FunctionalOperatorInterface* FunctionalOperatorInterface::getFunctionalIteratorForValue(
+            FunctionalOperator::FunctionalValueType& value_type, QoreValue value, bool fwd, const char* who,
+            ExceptionSink* xsink) {
+    if (value.getType() == NT_REFERENCE) {
+        value_type = FunctionalOperator::single;
+        return new QoreFunctionalSingleValueOperator(value.refSelf(), xsink);
+    }
+    return getFunctionalIterator(value_type, value, fwd, who, xsink);
+}
+
 FunctionalOperatorInterface* FunctionalOperatorInterface::getFunctionalIterator(
             FunctionalOperator::FunctionalValueType& value_type, QoreValue exp, bool fwd, const char* who,
             ExceptionSink* xsink) {

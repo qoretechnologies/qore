@@ -2244,12 +2244,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_binary_op(int opcode, uint64_t left, uint6
         return toBits(QoreIRInterpreter::evalBinary(op, fromBits(left), fromBits(right), xsink));
     }
 
-    ValueEvalOptimizedRefHolder lv(fromBits(left), xsink);
+    // a reference is an operand as it is, as the AST interpreter gives it to an operator (see evalBinary())
+    QoreIROperandHolder lv(fromBits(left), xsink);
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }
 
-    ValueEvalOptimizedRefHolder rv(fromBits(right), xsink);
+    QoreIROperandHolder rv(fromBits(right), xsink);
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }
@@ -2260,12 +2261,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_binary_op(int opcode, uint64_t left, uint6
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_index_dynamic(uint64_t left, uint64_t right,
         int32_t string_index_char, ExceptionSink* xsink) {
-    ValueEvalOptimizedRefHolder lv(fromBits(left), xsink);
+    QoreIROperandHolder lv(fromBits(left), xsink);
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }
 
-    ValueEvalOptimizedRefHolder rv(fromBits(right), xsink);
+    QoreIROperandHolder rv(fromBits(right), xsink);
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }
@@ -3942,7 +3943,7 @@ extern "C" DLLEXPORT void qore_rt_hash_reserve(uint64_t hash_bits, int64_t capac
 extern "C" DLLEXPORT void* qore_rt_iterator_create_reverse(uint64_t iterable_bits, ExceptionSink* xsink) {
     QoreValue iterable = fromBits(iterable_bits);
     FunctionalOperator::FunctionalValueType value_type;
-    FunctionalOperatorInterface* iter = FunctionalOperatorInterface::getFunctionalIterator(
+    FunctionalOperatorInterface* iter = FunctionalOperatorInterface::getFunctionalIteratorForValue(
         value_type, iterable, false, "foldr operator", xsink);
     if (*xsink || value_type == FunctionalOperator::nothing) {
         delete iter;
@@ -5526,7 +5527,7 @@ static uint64_t qore_rt_hash_key_access_hash_impl(uint64_t hash_val, const char*
 static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
         size_t key_hash, bool prehashed, ExceptionSink* xsink, bool preserve_weak_result) {
     QoreValue raw_v = fromBits(hash_val);
-    ValueEvalOptimizedRefHolder vh(raw_v, xsink);
+    QoreIROperandHolder vh(raw_v, xsink);
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }
@@ -5829,7 +5830,7 @@ qore_rt_fixed_hash_remap2_aot_throwing(QoreAOTContext* ctx, int32_t slot,
 extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, const char* key) {
     ExceptionSink xsink;
     QoreValue raw_v = fromBits(hash_val);
-    ValueEvalOptimizedRefHolder vh(raw_v, &xsink);
+    QoreIROperandHolder vh(raw_v, &xsink);
     if (xsink) {
         return toBits(QoreValue());
     }
@@ -5850,7 +5851,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int_prehashed(uint64_t has
         const char* key, uint64_t hash64, uint32_t hash32) {
     ExceptionSink xsink;
     QoreValue raw_v = fromBits(hash_val);
-    ValueEvalOptimizedRefHolder vh(raw_v, &xsink);
+    QoreIROperandHolder vh(raw_v, &xsink);
     if (xsink) {
         return toBits(QoreValue());
     }
@@ -5892,7 +5893,7 @@ extern "C" DLLEXPORT int64_t qore_rt_hash_keys_int_prehashed(
         return 0;
     }
     ExceptionSink xsink;
-    ValueEvalOptimizedRefHolder vh(fromBits(hash_val), &xsink);
+    QoreIROperandHolder vh(fromBits(hash_val), &xsink);
     if (xsink || vh->getType() != NT_HASH) {
         return 0;
     }
@@ -5918,7 +5919,7 @@ extern "C" DLLEXPORT int64_t qore_rt_hash_keys_float_prehashed(
         return 0;
     }
     ExceptionSink xsink;
-    ValueEvalOptimizedRefHolder vh(fromBits(hash_val), &xsink);
+    QoreIROperandHolder vh(fromBits(hash_val), &xsink);
     if (xsink || vh->getType() != NT_HASH) {
         return 0;
     }
@@ -5945,7 +5946,7 @@ extern "C" DLLEXPORT int64_t qore_rt_hash_keys_string_measure_prehashed(
         return 0;
     }
     ExceptionSink xsink;
-    ValueEvalOptimizedRefHolder vh(fromBits(hash_val), &xsink);
+    QoreIROperandHolder vh(fromBits(hash_val), &xsink);
     if (xsink || vh->getType() != NT_HASH) {
         return 0;
     }
@@ -5974,7 +5975,7 @@ extern "C" DLLEXPORT int64_t qore_rt_hash_keys_string_prehashed(
         return 0;
     }
     ExceptionSink xsink;
-    ValueEvalOptimizedRefHolder vh(fromBits(hash_val), &xsink);
+    QoreIROperandHolder vh(fromBits(hash_val), &xsink);
     if (xsink || vh->getType() != NT_HASH) {
         return 0;
     }
@@ -6004,7 +6005,7 @@ extern "C" DLLEXPORT int64_t qore_rt_hash_keys_string_borrowed_prehashed(
         return 0;
     }
     ExceptionSink xsink;
-    ValueEvalOptimizedRefHolder vh(fromBits(hash_val), &xsink);
+    QoreIROperandHolder vh(fromBits(hash_val), &xsink);
     if (xsink || vh->getType() != NT_HASH) {
         return 0;
     }
@@ -6409,7 +6410,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
 extern "C" DLLEXPORT uint64_t qore_rt_list_index_access_compat(uint64_t list_val, int64_t index,
         int32_t string_index_char, ExceptionSink* xsink) {
     QoreValue raw_v = fromBits(list_val);
-    ValueEvalOptimizedRefHolder vh(raw_v, xsink);
+    QoreIROperandHolder vh(raw_v, xsink);
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }
@@ -16496,7 +16497,7 @@ extern "C" DLLEXPORT void* qore_rt_iterator_create(uint64_t iterable_bits, void*
         FunctionalOperator* func_op = reinterpret_cast<FunctionalOperator*>(iterator_func);
         iter = func_op->getFunctionalIterator(value_type, xsink);
     } else {
-        iter = FunctionalOperatorInterface::getFunctionalIterator(value_type, iterable, true,
+        iter = FunctionalOperatorInterface::getFunctionalIteratorForValue(value_type, iterable, true,
             "foreach statement", xsink);
     }
 
