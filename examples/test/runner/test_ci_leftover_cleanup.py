@@ -11,6 +11,7 @@ Copyright (C) 2026 Qore Technologies, s.r.o.
 """
 
 from pathlib import Path
+import re
 import unittest
 
 
@@ -34,8 +35,11 @@ class CiLeftoverCleanupTest(unittest.TestCase):
         for call in ("MysqlRunDatabase::dropLeftovers", "OracleRunSchema::dropLeftovers",
                      "MssqlRunDatabase::dropLeftovers", "FirebirdRunDatabase::removeLeftoverFiles"):
             self.assertIn(call, source)
-        # the datasource strings, which have passwords, are not printed
-        self.assertNotRegex(source, r'printf\([^;]*connstr')
+        # the datasource strings, which have passwords, are printed only masked (TestRunIsolation.qtest checks the
+        # output of the script with a datasource string that cannot be parsed)
+        for call in re.findall(r'printf\([^;]*;', source):
+            if "connstr" in call or "ex.desc" in call:
+                self.assertIn("TestRun::maskSecrets(", call)
 
 
 if __name__ == "__main__":
