@@ -87,6 +87,8 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("a worker whose thread a registration ends releases its readers and is started again",
             \workerEndTest());
         addTestCase("the child of a fork() runs the initializations that the parent's threads ran", \forkTest());
+        addTestCase("a Program that may not use the sandbox APIs loads the module; registrations run at once",
+            \restrictedLoaderTest());
         set_return_value(main());
     }
 
@@ -624,6 +626,48 @@ DataProviderActionCatalog::waitForLazyInitsQueued(queued + 1, 60s);
         # the child's sandboxed reader starts a worker of its own, which runs the registration that a thread of the
         # parent was running
         assertEq("not refused; [\"eager-a\", \"lazy-b\", \"lazy-c\"]", result);
+    }
+
+    restrictedLoaderTest() {
+        # the first Program that loads the module may not use the sandbox APIs, which the module then may not use
+        # either: it loads, and runs lazy registrations and builds lazy values when they are registered
+        string dir = make_tmp_dir("lazy-safety-");
+        on_exit remove_tree(dir);
+        LazyAppActionsSafetyTest::writeFile(dir + "/restricted-code.q", "%requires DataProvider
+sub reg(string app, string action) {
+    DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app, \"action\": action,
+        \"path\": \"/\" + action, \"display_name\": action, \"short_desc\": action, \"desc\": action,
+        \"action_code\": DPAT_API});
+}
+string sub test() {
+    DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": \"RestrictedApp\",
+        \"display_name\": \"x\", \"short_desc\": \"x\", \"desc\": \"x\", \"groups\": (AppGroup::DataTransformation,),
+        \"logo\": \"data\", \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\", \"dynamic\": True});
+    DataProviderActionCatalog::registerLazyAppActions(\"RestrictedApp\", sub () { reg(\"RestrictedApp\", \"lazy-a\"); });
+    int id = DataProviderActionCatalog::registerLazyValue(auto sub () { return \"built\"; });
+    return sprintf(\"%y %y %y\", (map $1.action, DataProviderActionCatalog::getActionsNoInit(\"RestrictedApp\")),
+        DataProviderActionCatalog::hasLazyAppActions(\"RestrictedApp\"), DataProviderActionCatalog::getLazyValue(id));
+}
+");
+        string script = dir + "/restricted.q";
+        LazyAppActionsSafetyTest::writeFile(script, "%modern
+Program p(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS, True);
+try {
+    p.loadModule(\"DataProvider\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"load: %s\\n\", ex.err);
+    exit(1);
+}
+p.parse(ReadOnlyFile::readTextFile(get_script_dir() + \"/restricted-code.q\"), \"restricted\");
+printf(\"%s\\n\", p.callFunction(\"test\"));
+");
+        string output = dir + "/output.txt";
+        int rc = system(sprintf("QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1",
+            get_script_dir() + "/../../../../qlib" + PathSep + (ENV.QORE_MODULE_DIR ?? ""), QORE_ARGV[0], script,
+            output));
+        string out = ReadOnlyFile::readTextFile(output);
+        assertEq(0, rc, out);
+        assertLines(("[\"lazy-a\"] False \"built\"",), out);
     }
 
     #! Runs a child process with the test's lazy app helpers, and returns its exit code and output

@@ -1047,7 +1047,9 @@ AbstractDataProviderType output_type = action.output_type;
     module, which another thread cannot load until this thread has loaded its own, so it cannot wait for the worker.
     A registration made under a sandbox, as by a module that sandboxed code loads, runs under that sandbox on the
     reading thread, as when the module registered its actions while it was loaded.  registerLazyValue() builds other
-    shared values, such as types built from a vendored API description, the same way.
+    shared values, such as types built from a vendored API description, the same way.  When the Program that loaded
+    the module first may not use the sandbox APIs (@ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"),
+    nor may the module: lazy registrations then run, and lazy values are built, when they are registered.
 
     The deferred initialization of an application, pending or lazy, runs on one thread at a time: a thread that
     uses the application while another thread initializes it waits until the initialization has ended.  A thread
@@ -1355,6 +1357,14 @@ public class DataProviderActionCatalog {
         #! Set by the exit hook: no worker is started afterwards, and a running one ends
         static bool lazy_worker_shutdown = False;
 
+        #! @ref True if the module can use the sandbox APIs that deferred registration needs
+        /** They are in the \c UNCONTROLLED_API domain: when the Program that loaded the module first may not use them
+            (@ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"), neither may the module, which then runs
+            lazy registrations and builds lazy values when they are registered, as modules did before they were lazy;
+            the module calls them by name, so that it can be loaded by such a Program at all
+        */
+        static bool sandbox_apis = DataProviderActionCatalog::checkSandboxApis();
+
         #! The capability that starts the catalog worker in a thread that no sandbox governs, or @ref NOTHING
         /** Created when the module is loaded, with the exit hook that stops the worker; see initLazyWorker()
         */
@@ -1574,6 +1584,23 @@ DataProviderActionCatalog::registerLazyAppActions(AppName, sub () {
         @since %DataProvider 3.11
     */
     static registerLazyAppActions(string app, code init) {
+        # without the sandbox APIs, the registration runs now, as it did when it was not lazy; it registers through
+        # the catalog, so it runs without the catalog lock
+        if (!sandbox_apis) {
+            if (!appcache{app}) {
+                throw "APP-ERROR", sprintf("cannot register lazy actions for application %y, which is not "
+                    "registered", app);
+            }
+            DataProviderActionCatalog::doInitIntern({
+                "init": init,
+                "kind": "app",
+                "app": app,
+                "module_context": DataProviderActionCatalog::registrationModulePath(),
+                "module_name": DataProviderActionCatalog::registrationModuleName(),
+            });
+            return;
+        }
+
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -1594,7 +1621,7 @@ DataProviderActionCatalog::registerLazyAppActions(AppName, sub () {
             "module_context": DataProviderActionCatalog::registrationModulePath(),
             "module_name": DataProviderActionCatalog::registrationModuleName(),
             "serial": app_serials{app},
-            "governed": SandboxManager::isGoverned(),
+            "governed": DataProviderActionCatalog::isGoverned(),
             "reg_id": ++lazy_reg_seq,
         };
         if (lazyactionmap{app}) {
@@ -1643,12 +1670,18 @@ class MyProvider {
         @since %DataProvider 3.11
     */
     static int registerLazyValue(code builder) {
-        bool governed = SandboxManager::isGoverned();
-        hash<auto> v = {
-            "builder": governed ? SandboxManager::bindCall(builder) : builder,
-            "governed": governed,
-            "lock": new Mutex(),
-        };
+        bool governed = DataProviderActionCatalog::isGoverned();
+        hash<auto> v;
+        # without the sandbox APIs, the value is built now, as it was when it was not lazy
+        if (!sandbox_apis) {
+            v = {"value": builder(), "built": True};
+        } else {
+            v = {
+                "builder": governed ? SandboxManager::bindCall(builder) : builder,
+                "governed": governed,
+                "lock": new Mutex(),
+            };
+        }
         AutoLock al(lazy_worker_lck);
         int id = ++lazy_value_seq;
         lazy_values{id.toString()} = v;
@@ -1674,7 +1707,7 @@ class MyProvider {
         if (v.built) {
             return v.value;
         }
-        if (v.governed || !SandboxManager::isGoverned() || DataProviderActionCatalog::isLazyWorker()) {
+        if (v.governed || !DataProviderActionCatalog::isGoverned() || DataProviderActionCatalog::isLazyWorker()) {
             DataProviderActionCatalog::buildLazyValue(key);
         } else {
             DataProviderActionCatalog::runOnWorker({"value": id});
@@ -5068,7 +5101,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         if (!exists lazyactionmap{app} && !exists init_owners{app}) {
             return;
         }
-        if (!SandboxManager::isGoverned() || DataProviderActionCatalog::isLazyWorker()) {
+        if (!DataProviderActionCatalog::isGoverned() || DataProviderActionCatalog::isLazyWorker()) {
             DataProviderActionCatalog::runGated(app, InitLazyActions);
             return;
         }
@@ -5205,13 +5238,34 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @return the capability, or @ref NOTHING if there is no worker
     */
     private static *code initLazyWorker() {
+        if (!sandbox_apis) {
+            return;
+        }
         try {
-            code start = SandboxManager::createSystemThreadCall(\DataProviderActionCatalog::lazyWorkerMain());
+            code start = call_static_method("SandboxManager", "createSystemThreadCall",
+                \DataProviderActionCatalog::lazyWorkerMain());
             register_exit_hook(\DataProviderActionCatalog::stopLazyWorker());
             return start;
         } catch (hash<ExceptionInfo> ex) {
             # no worker: sandboxed readers are refused trusted registrations
         }
+    }
+
+    #! Returns @ref True if the module can use the sandbox APIs; see @ref sandbox_apis
+    private static bool checkSandboxApis() {
+        try {
+            call_static_method("SandboxManager", "isGoverned");
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+
+    #! Returns @ref True if a sandbox governs the current thread's code (Qore::SandboxManager::isGoverned())
+    /** @ref False when the module cannot use the sandbox APIs; see @ref sandbox_apis
+    */
+    private static bool isGoverned() {
+        return sandbox_apis && call_static_method("SandboxManager", "isGoverned");
     }
 
     #! Starts the catalog worker unless it runs; lazy_worker_lck is held
@@ -5457,7 +5511,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         that no sandbox governs; see runLazy()
     */
     private static code makeLazyCall(code init) {
-        return SandboxManager::isGoverned() ? SandboxManager::bindCall(init) : init;
+        return DataProviderActionCatalog::isGoverned() ? SandboxManager::bindCall(init) : init;
     }
 
     #! Returns @ref True if an exception ended a lazy registration because its thread was stopped
