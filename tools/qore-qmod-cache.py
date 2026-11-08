@@ -1125,6 +1125,7 @@ def contains_identity(path, identity):
 # the cache directory
 
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
+HEX32 = re.compile(r"^[0-9a-f]{32}$")
 
 
 def _is_str_list(v):
@@ -1177,6 +1178,8 @@ def entry_problem(entry, key):
         return "the entry has no file mode"
     if "signature" in entry and not isinstance(entry["signature"], str):
         return "the entry has an invalid signature"
+    if not isinstance(entry.get("epoch"), str) or not HEX32.match(entry["epoch"]):
+        return "the entry has no epoch"
     return None
 
 
@@ -1250,6 +1253,11 @@ class Cache:
     Only one job prunes at a time (prune.lock, taken without waiting: a job finding another job pruning skips its
     own prune).
 
+    The cache has an epoch, <root>/epoch: a random value made when the first entry is stored, which every entry
+    carries (and its signature covers).  An entry of another epoch is invalid.  A quarantine moves the directory, and
+    its epoch with it, so the cache that replaces it gets a new one: an entry of the quarantined cache that is put
+    back (replayed, with its valid signature) is refused.
+
     No symbolic link below <dir> is followed: every directory below it is opened with O_NOFOLLOW from its parent's
     descriptor and every file with O_NOFOLLOW, so a link in the cache (an entry, a base key directory, an object or
     one of its files) is an invalid entry, never what it points to; removing one removes the link only.
@@ -1261,6 +1269,50 @@ class Cache:
         self.entries = os.path.join(self.root, "entries")
         self.objects = os.path.join(self.root, "objects")
         self.trash = os.path.join(self.root, "trash")
+        self._epoch = None
+        #: why the last entry that candidates() left out was invalid
+        self.last_problem = None
+
+    def epoch(self, create=False):
+        """The epoch of the cache (32 hex digits), or None when it has none yet; with @p create, a cache without one
+        gets one (the first job to link its file into place wins)"""
+        if self._epoch:
+            return self._epoch
+        try:
+            value = self.read_file("epoch", limit=64).decode("ascii").strip()
+        except FileNotFoundError:
+            value = None
+        except (OSError, CacheError, UnicodeDecodeError):
+            # a link or a damaged file: no entry of this cache can be valid until a writer replaces it
+            value = None
+            if create:
+                remove_path(os.path.join(self.root, "epoch"))
+        if value is None and create:
+            self.make_dirs()
+            dfd = self.open_dir()
+            try:
+                tmp = ".epoch.%d.%s" % (os.getpid(), os.urandom(8).hex())
+                fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | O_CLOEXEC, 0o644,
+                             dir_fd=dfd)
+                try:
+                    try:
+                        os.write(fd, (os.urandom(16).hex() + "\n").encode("ascii"))
+                    finally:
+                        os.close(fd)
+                    try:
+                        os.link(tmp, "epoch", src_dir_fd=dfd, dst_dir_fd=dfd)
+                    except FileExistsError:
+                        # another job made it first
+                        pass
+                finally:
+                    os.unlink(tmp, dir_fd=dfd)
+            finally:
+                os.close(dfd)
+            value = self.read_file("epoch", limit=64).decode("ascii").strip()
+        if value is not None and not HEX32.match(value):
+            value = None
+        self._epoch = value
+        return value
 
     # access without following symbolic links
 
@@ -1412,7 +1464,9 @@ class Cache:
                         entry = json.loads(read_fd(fd, MAX_ENTRY_SIZE).decode("utf-8"))
                     finally:
                         os.close(fd)
-                    problem = entry_problem(entry, key) or (entry.get("base_key") != base and "another base key")
+                    problem = entry_problem(entry, key) or (entry.get("base_key") != base and "another base key") \
+                        or (entry["epoch"] != self.epoch() and "the entry is of another epoch of the cache (replayed "
+                            "from a quarantined cache, or the cache has no epoch)")
                 except FileNotFoundError:
                     # removed since it was listed
                     continue
@@ -1420,6 +1474,7 @@ class Cache:
                     # whatever an entry holds, reading it never fails the build
                     problem = "the entry cannot be read: %s" % e.__class__.__name__
                 if problem:
+                    self.last_problem = problem
                     if remove_invalid:
                         self.remove(p, key)
                     continue
@@ -1511,7 +1566,7 @@ class Cache:
         its build, is valid too, but not one with another signature) and has the digests of the object's files"""
         try:
             entry = self.read_entry(base, key)
-            if entry_problem(entry, key):
+            if entry_problem(entry, key) or entry["epoch"] != self.epoch():
                 return False
             if (not allow_unsigned or "signature" in entry) and check_signature(entry, signer):
                 return False
@@ -1528,6 +1583,12 @@ class Cache:
         a valid entry exists already (another job stored the key first), the files must be the same: KeyCollision is
         raised otherwise, as the key then misses an input.
         """
+        # the entry carries the cache's epoch; a signed one must have been signed for it
+        epoch = self.epoch(create=True)
+        if "epoch" not in entry:
+            entry["epoch"] = epoch
+        elif entry["epoch"] != epoch:
+            raise CacheError("the entry is of another epoch of the cache")
         obj = self.object_dir(key)
         entry_path = os.path.join(self.entries, base, key + ".json")
         if os.path.lexists(obj) and not self.valid_object(base, key, signer, allow_unsigned):
@@ -1669,7 +1730,7 @@ class Module:
             readonly = self.readonly
         cands = cache.candidates(self.base, remove_invalid=not readonly)
         if not cands:
-            return None, "no entry"
+            return None, cache.last_problem or "no entry"
         reason = None
         for path, entry in cands:
             key = entry["key"]
@@ -2388,6 +2449,8 @@ def cmd_sign(args):
                     entry = cache.read_entry(base, key)
                     if entry_problem(entry, key) or comparable_entry(entry) != comparable_entry(ours):
                         raise CacheError("the cache does not have the entry this build stored")
+                    if entry["epoch"] != cache.epoch():
+                        raise CacheError("the entry is of another epoch of the cache (it was quarantined)")
                     for suffix in STORED_SUFFIXES:
                         if cache.file_sha256("objects", key, "qmod" + suffix) != entry["files"][suffix or "qmod"]:
                             raise CacheError("stored file 'qmod%s' is not the one this build stored" % suffix)

@@ -203,6 +203,13 @@ once, so that no later job reuses an entry of it (the next build is cold), and a
 no job can still be reading it.  Removing only the entry that was audited would leave the others that the same hole
 let in.  A cache of another trust level that the job only reads is left to its own jobs, whose audits find the same.
 
+A quarantined entry cannot be replayed: the cache has an epoch (`<root>/epoch`, a random value made when its first
+entry is stored), every entry carries it and its signature covers it, and an entry of another epoch is invalid.  The
+quarantine moves the epoch with the directory, so the cache that replaces it gets a new one, and an entry of the
+quarantined cache that is put back with its valid signature (from the quarantined directory before prune deletes it,
+or from a backup) is a miss.  What this does not stop is someone who can write the cache putting back the whole
+directory, epoch and all: only the jobs of protected refs can (see "Trust levels").
+
 An object that no valid entry backs (damaged, forged, or left by an interrupted store) is replaced when its key is
 stored again; that is no collision.
 

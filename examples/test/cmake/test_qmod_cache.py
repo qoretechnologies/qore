@@ -271,7 +271,8 @@ class EntryProblemTest(unittest.TestCase):
                           "module_key": "e"}],
                 "optional": [{"spec": "xml", "name": "xml", "candidates": [["/m/x", "f"]]}],
                 "resolution": [{"name": "U", "candidates": [["/s/U.qm", "/s/U.qm"]]}],
-                "files": {"qmod": "1" * 64, ".d": "2" * 64, ".d.fingerprints": "3" * 64}, "mode": 0o755}
+                "files": {"qmod": "1" * 64, ".d": "2" * 64, ".d.fingerprints": "3" * 64}, "mode": 0o755,
+                "epoch": "4" * 32}
 
     def test_entry_problem(self):
         self.assertIsNone(qc.entry_problem(self.valid(), "a" * 64))
@@ -282,7 +283,8 @@ class EntryProblemTest(unittest.TestCase):
                              ("optional", [{"spec": "x"}]), ("resolution", {"a": 1}),
                              ("resolution", [{"name": "U", "candidates": [["a"]]}]), ("files", []),
                              ("files", {"qmod": "x"}), ("mode", "755"), ("mode", True), ("signature", 1),
-                             ("base_key", None), ("schema", "other")):
+                             ("base_key", None), ("schema", "other"), ("epoch", None), ("epoch", "x"),
+                             ("epoch", 1)):
             e = self.valid()
             e[field] = value
             self.assertIsNotNone(qc.entry_problem(e, "a" * 64), (field, value))
@@ -337,6 +339,7 @@ class CacheStoreTest(unittest.TestCase):
         self.addCleanup(signer.close)
         f3 = self.files(b"three")
         e3 = self.entry("c" * 64, f3)
+        e3["epoch"] = self.cache.epoch(create=True)
         e3["signature"] = qc.sign_entry(signer.openssl, keys[0], e3, {}, str(self.root))
         self.cache.store("b" * 64, "c" * 64, e3, f3, signer)
         self.assertEqual(b"three", (Path(self.cache.object_dir("c" * 64)) / "qmod").read_bytes())
@@ -344,6 +347,7 @@ class CacheStoreTest(unittest.TestCase):
         # an unsigned entry, stored to be signed after the build, is valid for a job that signs after its build, but
         # not one with another signature
         e4 = self.entry("c" * 64, f3)
+        e4["epoch"] = e3["epoch"]
         (Path(self.cache.entries) / ("b" * 64) / ("c" * 64 + ".json")).write_text(json.dumps(e4))
         self.assertFalse(self.cache.valid_object("b" * 64, "c" * 64, signer))
         self.assertTrue(self.cache.valid_object("b" * 64, "c" * 64, signer, allow_unsigned=True))
@@ -371,6 +375,40 @@ class CacheStoreTest(unittest.TestCase):
         self.cache.store(base, "c" * 64, self.entry("c" * 64, f1), f1)
         self.assertEqual(["c" * 64], [e["key"] for _, e in self.cache.candidates(base, remove_invalid=True)])
         self.assertFalse(nested.exists())
+
+    def test_epoch(self):
+        """Every entry carries the epoch of its cache, which a quarantine renews: an entry of another epoch is invalid"""
+        self.assertIsNone(self.cache.epoch())
+        f1 = self.files(b"one")
+        base = "b" * 64
+        self.cache.store(base, "c" * 64, self.entry("c" * 64, f1), f1)
+        epoch = self.cache.epoch()
+        self.assertRegex(epoch, r"^[0-9a-f]{32}$")
+        self.assertEqual(epoch, qc.Cache(str(self.root / "cache")).epoch())
+        entry_path = Path(self.cache.entries) / base / ("c" * 64 + ".json")
+        self.assertEqual(epoch, json.loads(entry_path.read_text())["epoch"])
+        old_entry = entry_path.read_text()
+        old_object = Path(self.cache.object_dir("c" * 64))
+        moved = self.cache.quarantine()
+        self.assertTrue(moved)
+        cache = qc.Cache(str(self.root / "cache"))
+        self.assertIsNone(cache.epoch())
+        cache.store(base, "c" * 64, self.entry("c" * 64, f1), f1)
+        self.assertNotEqual(epoch, cache.epoch())
+        # the entry of the quarantined cache, put back: invalid
+        entry_path.write_text(old_entry)
+        self.assertEqual([], cache.candidates(base))
+        self.assertFalse(cache.valid_object(base, "c" * 64))
+        self.assertIn("another epoch", cache.last_problem)
+        # and removed from a cache that the job writes
+        self.assertEqual([], cache.candidates(base, remove_invalid=True))
+        self.assertFalse(entry_path.exists())
+        self.assertFalse(old_object.exists())
+        # an entry of another epoch is not stored
+        e = self.entry("c" * 64, f1)
+        e["epoch"] = epoch
+        with self.assertRaises(qc.CacheError):
+            cache.store(base, "c" * 64, e, f1)
 
     def test_least_recently_used_entries_of_a_base_go(self):
         base = "b" * 64
@@ -1320,6 +1358,41 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.build_all(cache=unsigned)
         self.assertEqual(["Base", "Mid", "Other", "Top"],
                          self.build_all(cache=unsigned, env={"QORE_QMOD_CACHE_VERIFY_KEY": pub1}))
+
+    def test_quarantined_entries_cannot_be_replayed(self):
+        """A signed entry of a quarantined cache, put back into the cache that replaced it, is not used: the signature
+        covers the cache's epoch, which the quarantine renewed"""
+        priv, pub = self.key_pair("k")
+        writer = {"QORE_QMOD_CACHE_VERIFY_KEY": pub, "QORE_QMOD_CACHE_SIGN_AFTER_BUILD": "1"}
+        reader = {"QORE_QMOD_CACHE_VERIFY_KEY": pub}
+        # a qcc that writes another module every time: the audit of the next build fails and quarantines the cache
+        (self.source / "nondeterministic.txt").write_text("1")
+        self.build_all(env=writer)
+        self.assertEqual(0, sign_build(self.cache, self.build, priv).returncode)
+        bad = self.qmod("Mid").read_bytes()
+        keys = self.keys()
+        self.build_all(env=dict(writer, QORE_QMOD_CACHE_AUDIT="1"), expect_rc=None)
+        self.assertIn("AUDIT FAILED", self.output)
+        quarantined = list(self.cache.glob(qc.SCHEMA + ".quarantine.*"))
+        self.assertEqual(1, len(quarantined))
+        (self.source / "nondeterministic.txt").unlink()
+        self.build_all(env=writer)
+        self.assertEqual(0, sign_build(self.cache, self.build, priv).returncode)
+        self.assertEqual([], self.build_all(env=reader))
+        # Mid's signed entry and object of the quarantined cache, put back
+        old = qc.Cache(str(self.cache))
+        old.root = str(quarantined[0])
+        old.entries = os.path.join(old.root, "entries")
+        old.objects = os.path.join(old.root, "objects")
+        old_entry = [p for p in Path(old.entries).glob("*/*.json") if p.stem == keys["Mid"]][0]
+        new_entry = [p for p in self.entries() if p.stem == keys["Mid"]][0]
+        shutil.copy(str(old_entry), str(new_entry))
+        new_obj = Path(qc.Cache(str(self.cache)).object_dir(keys["Mid"]))
+        shutil.rmtree(str(new_obj))
+        shutil.copytree(old.object_dir(keys["Mid"]), str(new_obj))
+        self.assertEqual(["Mid"], self.build_all(env=reader))
+        self.assertIn("another epoch", self.output)
+        self.assertNotEqual(bad, self.qmod("Mid").read_bytes())
 
     def test_keys_without_openssl(self):
         _, pub = self.key_pair("k")
