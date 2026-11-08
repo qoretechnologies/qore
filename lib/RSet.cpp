@@ -959,6 +959,7 @@ std::atomic<RObject::dbg_deref_decides_t> RObject::dbg_deref_decides{nullptr};
 std::atomic<RObject::dbg_before_fast_release_t> RObject::dbg_before_fast_release{nullptr};
 std::atomic<RObject::dbg_hazard_wait_t> RObject::dbg_hazard_wait{nullptr};
 std::atomic<RSetHelper::dbg_root_locked_t> RSetHelper::dbg_root_locked{nullptr};
+std::atomic<RSetHelper::dbg_root_locked_t> RSetHelper::dbg_scan_walked{nullptr};
 #endif
 
 namespace {
@@ -1742,11 +1743,11 @@ int RSet::canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator
         if (!valid)
             return -1;
 
-        // Invariant: rcount <= refs for every rset member. This is enforced at
-        // scan time by RSetHelper. A post-scan violation means an intra-rset
-        // edge was removed (e.g., a hash or data-member cleared) without
-        // decrementing the target's rcount — rcount is now stale and the rset
-        // must be rescanned before any collection decision can be made.
+        // rcount > refs means a reference that the scan counted as internal has been released: an intra-rset
+        // edge was removed (e.g., a hash or data-member cleared) without decrementing the target's rcount, or a
+        // container of a member gave up a value after the scan read it, which the scan records as it found it
+        // (RSetHelper::countInternalReferences()).  rcount is stale and the rset must be rescanned before any
+        // collection decision can be made.
         // Without this rescan, a genuinely collectable cycle can be silently
         // stranded forever once any in-cycle ref drops.
         if (ref_copy < rcount) {
@@ -2225,6 +2226,12 @@ bool RSetHelper::scan(RObject& root) {
     }
     assert(stack.empty());
 
+#ifdef DEBUG
+    if (dbg_root_locked_t hook = dbg_scan_walked.load(std::memory_order_acquire)) {
+        hook(root);
+    }
+#endif
+
     countInternalReferences();
     findClosedComponents();
     findUnchangedComponents();
@@ -2261,9 +2268,20 @@ void RSetHelper::countInternalReferences() {
         }
     }
 
-    // Every internal reference is a reference held by a node of the component, so a component with more internal
-    // references to a node than the node has in total was scanned inconsistently; it is not made a recursive set,
-    // which would allow its collection
+    // Every internal reference is held by a node of the component, but a node can have fewer references than the
+    // scan counted as internal when a container in the private data of a member gave a value up after the scan had
+    // read the container's values: the scan reads them under the container's lock and follows them after releasing
+    // it, and another thread can take the value or have the container release it meanwhile, which can also leave the
+    // value with no reference at all while it is being deleted.  The container marks its object before the value can
+    // be released (RObject::edgesRemoved()), so that member's removal generation is no longer the one this scan read
+    // before following its edges (ScanNode::remove_gen); the count is read first, so a released value is always seen
+    // with its mark.  The component is still made a recursive set: the commit records the removal generation this
+    // scan read, so RSet::canDelete() never collects the set with these counts - it finds a count above the
+    // references or a member that gave up a value since the scan (RSet::removalsUnchangedSinceScan()), and rescans.
+    // Making no set instead left the objects of the component, which are still a cycle when the container keeps
+    // other values that reference it, in no recursive set, so they were not collected until a later write scanned
+    // them again.  See design/dgc.md, "Values handed out by a container".
+    std::vector<char> removed_checked, removed_since_scan;
     for (const ScanNode& n : nodes) {
         if (n.component < 0 || !component_cyclic[n.component]) {
             continue;
@@ -2271,11 +2289,38 @@ void RSetHelper::countInternalReferences() {
         int refs = n.kind == NodeKind::Object
             ? static_cast<RObject*>(n.ptr)->refs()
             : static_cast<AbstractQoreNode*>(n.ptr)->reference_count();
-        if (n.internal > refs) {
-            printd(5, "RSetHelper::countInternalReferences() node %p kind %d has %d internal references and %d "
-                "references; not making a recursive set\n", n.ptr, static_cast<int>(n.kind), n.internal, refs);
-            component_cyclic[n.component] = false;
+        if (n.internal <= refs) {
+            continue;
         }
+        if (removed_checked.empty()) {
+            removed_checked.assign(component_size.size(), 0);
+            removed_since_scan.assign(component_size.size(), 0);
+        }
+        if (!removed_checked[n.component]) {
+            removed_checked[n.component] = 1;
+            for (const ScanNode& m : nodes) {
+                if (m.kind == NodeKind::Object && m.component == n.component
+                    && static_cast<RObject*>(m.ptr)->remove_gen.load(std::memory_order_seq_cst) != m.remove_gen) {
+                    removed_since_scan[n.component] = 1;
+                    break;
+                }
+            }
+        }
+        if (removed_since_scan[n.component]) {
+            printd(5, "RSetHelper::countInternalReferences() node %p kind %d has %d internal references and %d "
+                "references; a member gave up a value since the scan read it\n", n.ptr, static_cast<int>(n.kind),
+                n.internal, refs);
+            continue;
+        }
+        // Every other reference counted as internal is held by a node that cannot release it while the scan holds
+        // the rsections of the component's objects, as the commit asserts for the sets it makes; a count that no
+        // removal explains is a defect of the scan, and the component is not made a set, which could be collected
+        // while its nodes are in use
+        printd(5, "RSetHelper::countInternalReferences() node %p kind %d has %d internal references and %d references "
+            "with no value given up since the scan; not making a recursive set\n", n.ptr, static_cast<int>(n.kind),
+            n.internal, refs);
+        assert(false);
+        component_cyclic[n.component] = false;
     }
 }
 

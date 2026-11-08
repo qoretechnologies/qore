@@ -1124,6 +1124,13 @@ public:
     */
     typedef void (*dbg_root_locked_t)(RObject& root);
     DLLLOCAL static std::atomic<dbg_root_locked_t> dbg_root_locked;
+
+    //! Test hook run by scan() in every pass that has walked the graph, before it counts the internal references
+    /** The pass holds the rsection of every object it entered; the values of containers in their private data can
+        still be given up meanwhile.  Tests hold a scan here to release such a value deterministically after the scan
+        has read it; see dbg_hold_scan_walked().
+    */
+    DLLLOCAL static std::atomic<dbg_root_locked_t> dbg_scan_walked;
 #endif
 
 private:

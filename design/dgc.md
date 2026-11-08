@@ -644,8 +644,8 @@ with nothing running, which reads like a deadlock but is the restart loop failin
 ### A container that a scan finds locked
 
 A Pattern B container reports its values to a scan under its own lock, and the scan only tries that lock: blocking
-could deadlock, as the lock can be held by a thread that waits for something the scan holds (a `Queue` releases
-the values it clears under its lock, which can run any destructor). A scan that finds the lock held cannot read the
+could deadlock, as the lock can be held by a thread that waits for something the scan holds (a module's container
+can run Qore code under its lock, and a scan on the same thread can try a lock that the thread holds). A scan that finds the lock held cannot read the
 values, so it does not see the edges they make, and the dereference that made the scan has already taken the scan
 due at the object (`deferred_scan`). Skipping the values used to be all there was to it, on the assumption that a
 later scan would read them; but nothing made one due, and a cycle that only the container's values closed was never
@@ -1167,7 +1167,12 @@ The rules for `scanValues()` are the scanner rules: it tries the container's loc
 exception and calls no Qore or foreign-language code, and it releases no reference. A container
 lock that is held while the module releases values or runs Qore code can be tried by a scan on the same thread, so
 the lock that `scanValues()` tries should only be held while the container itself is changed, with the values it
-gives up released after the lock.
+gives up released after the lock. libqore's `TreeMap` and `Queue` follow the same rule (`TreeMapData::put()` and
+`TreeMapData::destructor()`; `Queue::clear()`, `Queue::setError()` and the queue's destruction take the nodes under
+the lock and release them after it with `qore_queue_private::NodeListRelease`). `TreeMap`'s scanner tries a
+`QoreRWLock`, which asserts when its own writer tries it, and `TreeMap::put()` replacing a value that the map held
+twice in a cycle released it under the lock, so the dereference's rescan on the same thread aborted debug builds; a
+destructor of a released value that used its own `TreeMap` or `Queue` blocked forever on the lock.
 
 **The virtual is on a subclass, not on `AbstractPrivateData`.** A new virtual function on `AbstractPrivateData`
 would move the vtable slots of every public subclass that has virtual functions of its own (`InputStream::read()`,
@@ -1209,8 +1214,8 @@ scan commits, and the scan then records an `rcount` above the value's references
 Each object therefore carries a removal generation besides its edge generation:
 
 - `RObject::edgesRemoved()` advances `RObject::remove_gen`; a container calls it on the holder under its lock for
-  every value it gives up that needs a scan, before the value can be released: a value released under the
-  container's lock needs the mark as much as one handed out, for the scan race above.
+  every value it gives up that needs a scan, before the value can be released: a value that the container releases
+  after its lock needs the mark as much as one handed out, for the scan race above.
 - A scan reads each object's removal generation before it follows the object's edges (`RSetHelper::startNode()`), and
   the commit records it as `scan_remove_gen` whether it assigns a new set or confirms the one in place.
 - `RSet::canDelete()` collects a set only when `RSet::removalsUnchangedSinceScan()` is true; otherwise it asks for
@@ -1220,6 +1225,14 @@ Each object therefore carries a removal generation besides its edge generation:
 - The debug check that a committed set has no `rcount` above an object's references allows the excess only when a
   member has given up a value since the scan: the count is read first, and the mark is made before the value can
   be released, so a released value is always seen with its mark.
+- The scan makes the set even when a node already has fewer references than it counted as internal before the
+  commit (`RSetHelper::countInternalReferences()`), as long as a member of the component has given up a value since
+  the scan read its removal generation; the value released can be one with no reference left, being deleted. The
+  set is never collected with those counts, and the release rescans it. Making no set instead left the container
+  and the values it still holds, which are still a cycle, in no set, so they were not collected until a later write
+  scanned them; `releasedDuringScanTest` in `dgc-handed-out-values` holds a scan with `dbg_hold_scan_walked()`
+  while a TreeMap releases a value the scan read. An excess that no removal explains is a defect of the scan: debug
+  builds assert, and release builds make no set for the component.
 
 A queue reports its values only while it counts values pushed through its object (`qore_queue_private::scan_count`)
 and keeps that object (`scan_holder`, with a weak reference) for as long, so a value taken through the C++ API,

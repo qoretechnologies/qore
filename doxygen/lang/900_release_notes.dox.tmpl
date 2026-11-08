@@ -1480,6 +1480,9 @@
     - a @ref cast "cast" as the lvalue of @ref remove "remove" or @ref delete "delete" (ex: <tt>remove cast<int>(x)</tt>)
       or in the lvalue of a @ref lvalue_references "reference" aborted debug builds or gave wrong results; it is now a
       parse error, as a cast is not storage that can be removed or referred to
+    - @ref Qore::Thread::Queue::clear() "Queue::clear()", @ref Qore::Thread::Queue::setError() "Queue::setError()" and
+      @ref Qore::TreeMap::put() "TreeMap::put()" released values while holding the container's lock, so a destructor of
+      a released value that used the same container could deadlock or break the lock; values are now released after it
     - a separated module required by the path of its <tt>.qm</tt> file
       (<tt>%requires ../lib/ModuleName/ModuleName.qm</tt>) was loaded without its other files, so its classes and
       functions were missing; the whole module is loaded, as with the path of its directory (see
