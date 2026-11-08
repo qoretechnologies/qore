@@ -877,13 +877,41 @@ def check_optional(records, dirs):
     return None
 
 
+def required_module_names(required, deps, source_root, own_name):
+    """The names of the modules a module requires: those of its metadata's dependencies, and those the files of its
+    depfile belong to
+
+    The metadata names only the hard dependencies of the module descriptor: qcc leaves the modules required with
+    %requires(reexport) out of it (to avoid load cycles), so they come from the depfile, which lists every module
+    the module requires directly (and, with a qcc that lists the closure, indirectly): a <dir>/<Name>.qm or a module
+    directory's <dir>/<Name>/<Name>.qm is module Name, a binary module <name>-api-<x>.<y>.qmod is module name, an AOT
+    module <Name>.qmod is module Name; class files, include files and the module's own sources name no module.
+    """
+    names = set(module_spec_name(r) for r in required)
+    own_root = os.path.realpath(source_root)
+    own_is_dir = os.path.isdir(source_root)
+    for dep in deps:
+        real = os.path.realpath(dep)
+        if real == own_root or (own_is_dir and real.startswith(own_root + os.sep)):
+            continue
+        base = os.path.basename(dep)
+        if base.endswith(".qm"):
+            names.add(base[:-3])
+        elif base.endswith(".qmod"):
+            stem = base[:-5]
+            api = stem.find("-api-")
+            names.add(stem[:api] if api > 0 else stem)
+    names.discard(own_name)
+    names.discard("")
+    return sorted(names)
+
+
 def resolution_records(names, dirs):
-    """The candidate files in the module path of each module a module requires (its metadata's dependencies), by
+    """The candidate files in the module path of each module a module requires (see required_module_names()), by
     path: a file that appears for one of them, as one in a directory searched earlier, would make qcc load another
     module (the content of the files it loaded is in the dependency records)"""
     rv = []
-    for spec in names:
-        name = module_spec_name(spec)
+    for name in names:
         rv.append({"name": name, "candidates": module_candidates(name, dirs, content=False)})
     return rv
 
@@ -1231,7 +1259,7 @@ class Module:
 
     def sidecar(self, origin, key, entry=None):
         rec = {"schema": SCHEMA, "name": self.name, "origin": origin, "base_key": self.base, "key": key,
-               "context": self.context["digest"], "identity": self.identity}
+               "context": self.context["digest"], "identity": self.identity, "source_root": self.source_root}
         if os.path.isfile(self.out):
             rec["qmod_sha256"] = sha256_file(self.out)
         if entry is not None:
@@ -1353,7 +1381,7 @@ class Module:
         for spec in optional_specs:
             name = module_spec_name(spec)
             optional.append({"spec": spec, "name": name, "candidates": module_candidates(name, dirs)})
-        resolution = resolution_records(required, dirs)
+        resolution = resolution_records(required_module_names(required, deps, self.source_root, self.name), dirs)
         key = result_key(self.base, records, optional, resolution)
         entry = {
             "schema": SCHEMA,
@@ -1578,7 +1606,8 @@ def cmd_verify(args):
             required, optional = read_module_info(qmod, rec["name"])
             if optional != [o["spec"] for o in entry["optional"]]:
                 raise CacheError("its unavailable optional modules differ from the cache entry")
-            if [module_spec_name(r) for r in required] != [r["name"] for r in entry["resolution"]]:
+            names = required_module_names(required, deps, rec.get("source_root") or "", rec["name"])
+            if names != [r["name"] for r in entry["resolution"]]:
                 raise CacheError("the modules it requires differ from the cache entry")
         except (OSError, ValueError, KeyError, CacheError) as e:
             failures.append("%s: %s" % (qmod, e))

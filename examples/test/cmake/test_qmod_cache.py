@@ -164,6 +164,20 @@ class IncludeTest(unittest.TestCase):
             qc.check_includes_listed(str(mod), [str(mod), str(part)])
 
 
+class RequiredModuleNamesTest(unittest.TestCase):
+    def test_names(self):
+        d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-")
+        self.addCleanup(d.cleanup)
+        root = Path(d.name)
+        (root / "qlib" / "Top").mkdir(parents=True)
+        own = root / "qlib" / "Top"
+        deps = [str(own / "Top.qm"), str(own / "Part.qc"), str(root / "qlib" / "Base.qm"),
+                str(root / "qlib" / "Split" / "Split.qm"), str(root / "qlib" / "Split" / "A.qc"),
+                str(root / "build" / "json-api-2.0.qmod"), str(root / "inst" / "Aot.qmod"), str(root / "inc.ql")]
+        self.assertEqual(["Aot", "Base", "Mid", "Split", "json"],
+                         qc.required_module_names(["Mid >= 1.0"], deps, str(own), "Top"))
+
+
 class EntryProblemTest(unittest.TestCase):
     def valid(self):
         return {"schema": qc.SCHEMA, "key": "a" * 64, "base_key": "b" * 64,
@@ -491,7 +505,8 @@ if (here / "list-includes.txt").exists():
             includes.append(p.parent / name)
             text += (p.parent / name).read_text()
 deps, optional, required = [], [], []
-for kind, name in re.findall(r"^%(requires|try-module) (\w+)", text, re.M):
+# as qcc: a module required with %requires(reexport) is not a dependency of the module descriptor (metadata)
+for kind, reexport, name in re.findall(r"^%(requires|try-module)(\(reexport\))? (\w+)", text, re.M):
     p = module_path(name)
     if p is None:
         if kind == "requires":
@@ -499,7 +514,8 @@ for kind, name in re.findall(r"^%(requires|try-module) (\w+)", text, re.M):
         optional.append(name)
     else:
         deps += sources(p)
-        required.append(name)
+        if not reexport:
+            required.append(name)
 all_deps = own + includes + deps
 lines = ["# qore AOT module source fingerprints 1"]
 for p in all_deps + ([Path((here / "extra-dep.txt").read_text().strip())] if (here / "extra-dep.txt").exists() else []):
@@ -746,6 +762,23 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertEqual([], self.build_all())
         part.write_text("# part changed\n")
         self.assertEqual(["Base", "Mid", "Top"], self.build_all())
+
+    def test_reexported_module_shadowed_in_module_path(self):
+        """A module required with %requires(reexport) is no dependency in the module metadata, but a module that
+        appears for it earlier in the module path makes the modules requiring it, directly or not, misses too"""
+        mid = self.source / "qlib" / "Mid.qm"
+        mid.write_text("%requires(reexport) Base\nmodule Mid {}\n")
+        self.build_all()
+        self.assertEqual([], self.build_all())
+        res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build), "--qcc",
+                              str(self.source / "qcc"), "--require-sidecars"], capture_output=True, text=True,
+                             timeout=60)
+        self.assertEqual(0, res.returncode, res.stderr)
+        (self.extra_dir / "Base.qm").write_text("module Base { # another one\n}\n")
+        self.assertEqual(["Mid", "Top"], self.build_all())
+        self.assertIn("module 'Base' has other candidate files now", self.output)
+        (self.extra_dir / "Base.qm").unlink()
+        self.assertEqual([], self.build_all())
 
     def test_source_changed_during_compile_is_not_stored(self):
         (self.source / "slow.txt").write_text("1")

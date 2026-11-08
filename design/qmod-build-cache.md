@@ -96,9 +96,17 @@ module that is not one of the tree's.  A binary (C++) module is covered by its c
 The depfile names the files qcc loaded, not why it found them: a module file that appears in a directory searched
 before the one qcc loaded a module from (a module installed in an earlier directory of `QORE_MODULE_DIR`, a binary
 module built in the tree where an installed one was found before) would be loaded instead by a new compile, while
-the files the entry names are unchanged.  The module loader does not check this either.  So the entry records, for
-each module named in the module's metadata record, the files in the module path that are candidates for it, and a
-hit needs the same list.
+the files the entry names are unchanged.  So the entry records, for each module the module requires, the files in
+the module path that are candidates for it, and a hit needs the same list.
+
+The modules a module requires are those of its metadata record and those its depfile's files belong to
+(`required_module_names()`): qcc leaves the modules required with `%requires(reexport)` out of the metadata (the
+module descriptor's hard dependencies, which the loader loads before it maps the module, so a re-exported module that
+requires the module back would make a cycle), and a module sees the declarations of what it re-exports, so a module
+that appears for a re-exported module must make it a miss as well.  Every module required directly is in the depfile
+(with a qcc that lists the closure, every module required indirectly too): `<dir>/<Name>.qm` and a module directory's
+`<dir>/<Name>/<Name>.qm` are module `Name`, `<name>-api-<x>.<y>.qmod` is the binary module `name`, `<Name>.qmod` the
+AOT module `Name`.  The guard checks the same list.
 
 ### Why absolute paths
 
