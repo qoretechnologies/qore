@@ -61,6 +61,14 @@ sub single() {
     auto it = new It();
     printf("%y\n", (map $1.n, it));
     printf("%y\n", (map $1.n + "?", new It()));
+    # a source of a class type that is not an iterator, and one that is
+    printf("%s\n", (select new T("ts"), True).type());
+    printf("%s\n", (select new T("tt"), $1.n == "tt").n);
+    T t1("tu");
+    printf("%s %s\n", (map $1, t1).type(), (map $1.n, t1));
+    printf("%s\n", (map $1.n, new T("tv"), True));
+    It it2();
+    printf("%y\n", (select it2, True).size());
 }
 for (int i = 0; i < 2; ++i) {
     members();
@@ -81,6 +89,11 @@ for (int i = 0; i < 2; ++i) {
             "6",
             "[\"it1\", \"it2\"]",
             "[\"it1?\", \"it2?\"]",
+            "object",
+            "tt",
+            "object tu",
+            "tv",
+            "2",
             "[\"a\", \"h\", null, null, \"hd\", \"b\"]",
             "[\"a\", \"h\"]",
             "[\"gate x\", null, null, null]",
@@ -92,6 +105,11 @@ for (int i = 0; i < 2; ++i) {
             "6",
             "[\"it1\", \"it2\"]",
             "[\"it1?\", \"it2?\"]",
+            "object",
+            "tt",
+            "object tu",
+            "tv",
+            "2",
         );
     }
 

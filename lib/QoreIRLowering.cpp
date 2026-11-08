@@ -261,6 +261,17 @@ static const QoreTypeInfo* getExprTypeInfo(const QoreValue& val) {
     return val.getTypeInfo();
 }
 
+//! Returns true if a value of the type is an object of a class that is an AbstractIterator
+/** A functional operator (map, select, map-select) iterates a list or an AbstractIterator object and gives any other
+    value as a single value, as the AST interpreter does (QoreMapOperatorNode::parseInitImpl()); an object of another
+    class is a single value
+*/
+static bool qore_ir_type_is_iterator_class(const QoreTypeInfo* ti) {
+    const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(ti);
+    return qc && qore_class_private::parseCheckCompatibleClass(qc, QC_ABSTRACTITERATOR);
+}
+
+
 static bool isImmediateCleanupFreeType(const QoreTypeInfo* type_info) {
     return QoreTypeInfo::isType(type_info, NT_BOOLEAN)
         || QoreTypeInfo::isType(type_info, NT_INT)
@@ -15720,7 +15731,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     // not a single-element list. Lists and iterator objects still return lists.
     bool is_known_collection = list_type
         && (QoreTypeInfo::isListType(list_type)
-            || QoreTypeInfo::getUniqueReturnClass(list_type) != nullptr);
+            || qore_ir_type_is_iterator_class(list_type));
     bool needs_runtime_unwrap_check = need_result && !is_known_collection;
 
     QoreIRValue is_collection_val;
@@ -16189,7 +16200,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     // or a scalar.  For unknown (auto) types, we need a runtime check.
     bool is_known_collection = list_type
         && (QoreTypeInfo::isListType(list_type)
-            || QoreTypeInfo::getUniqueReturnClass(list_type) != nullptr);
+            || qore_ir_type_is_iterator_class(list_type));
     bool needs_runtime_unwrap_check = !is_known_collection;
 
     // For runtime unwrap check: determine if input is a collection before creating
@@ -17185,7 +17196,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     // NOTHING when filtered out. Collections still return lists.
     bool is_known_collection = list_type
         && (QoreTypeInfo::isListType(list_type)
-            || QoreTypeInfo::getUniqueReturnClass(list_type) != nullptr);
+            || qore_ir_type_is_iterator_class(list_type));
     bool needs_runtime_unwrap_check = need_result && !is_known_collection;
 
     QoreIRValue is_collection_val;
@@ -18338,7 +18349,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     const QoreTypeInfo* base_source_type = getExprTypeInfo(base_source);
     bool base_source_known_collection = base_source_type
         && (QoreTypeInfo::isListType(base_source_type)
-            || QoreTypeInfo::getUniqueReturnClass(base_source_type) != nullptr);
+            || qore_ir_type_is_iterator_class(base_source_type));
     bool functional_stages_only = true;
     for (size_t i = 0; i < stages.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "typed pipeline sink analysis")) {
