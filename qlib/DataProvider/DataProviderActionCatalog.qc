@@ -1045,8 +1045,11 @@ AbstractDataProviderType output_type = action.output_type;
     and the registration stays pending, when there is no worker (after it was stopped, or when the module was
     loaded by code that may not create the capability) and when it is loading a module: a registration can load a
     module, which another thread cannot load until this thread has loaded its own, so it cannot wait for the worker.
-    A registration made by code that a sandbox governs (as by a module that sandboxed code loads, also under a policy
-    barrier), lazy or pending, runs when it is made, on the registering thread, as before registrations were
+    A module from the module path is library code: its initialization belongs to no sandbox, also when sandboxed code
+    loads it first, so its registrations are trusted ones, and what they create belongs to no tenant (see Qore's
+    module initialization in the sandboxing guide).  A registration made by code that a sandbox governs (the
+    sandboxed code itself, or a module that it loaded by path, also under a policy barrier), lazy or pending, runs
+    when it is made, on the registering thread, as before registrations were
     deferred, and so do the callbacks of an action that it registers (\c get_output_type, \c get_dynamic_options):
     no code registered under a sandbox runs later on another thread, where it could block other tenants or trusted
     code.  For the same reason, sandboxed code cannot add a catalog change listener or set a process-wide callback
@@ -1056,9 +1059,9 @@ AbstractDataProviderType output_type = action.output_type;
     registerLazyValue() builds other shared values, such as types built from a vendored API description, the same
     way.  Every such decision uses Qore::SandboxManager::isSandboxed(), so it is the same for callers restricted with
     @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS".  There is no worker when the module was loaded first
-    by sandboxed code, or by code that may not create the worker's capability (also under a policy barrier, or
-    restricted with \c PO_NO_UNCONTROLLED_APIS): then every deferred registration runs, and every lazy value is
-    built, when it is registered.
+    by code that may not create the worker's capability (restricted with \c PO_NO_UNCONTROLLED_APIS, or sandboxed code
+    loading the module by path): then every deferred registration runs, and every lazy value is built, when it is
+    registered.
 
     The deferred initialization of an application, pending or lazy, runs on one thread at a time: a thread that
     uses the application while another thread initializes it waits until the initialization has ended.  A thread
@@ -1723,8 +1726,9 @@ DataProviderActionCatalog::registerLazyAppActions(AppName, sub () {
         thread for a reader that no sandbox governs, and on the catalog worker for a sandboxed reader, so that what
         the builder creates, which every reader shares afterwards, does not keep the reader's sandbox, including its
         interrupts, and the module's own resources are not denied to it (see @ref dataprovider_lazy_actions).  A
-        module that sandboxed code loads, whose initialization a sandbox governs, gets its value built at once, as
-        before values were lazy: no code registered under a sandbox runs later on another thread.
+        module whose initialization a sandbox governs (one that sandboxed code loaded by path; a module from the
+        module path is initialized with no sandbox provenance) gets its value built at once, as before values were
+        lazy: no code registered under a sandbox runs later on another thread.
 
         The API is for modules: a value can only be registered while a module is being loaded, and lives until the
         end of the process, as the module's Program does.
@@ -1765,7 +1769,7 @@ class MyProvider {
         }
         # a hash of any values: the value replaces the builder's entry when it is built
         hash<auto> v;
-        # without a catalog worker, and for a module that sandboxed code loads, the value is built now, as it was when
+        # without a catalog worker, and for a module that sandboxed code loaded by path, the value is built now, as it was when
         # it was not lazy: no code registered under a sandbox runs later, on another thread
         if (!lazy_worker_start || DataProviderActionCatalog::isGoverned()) {
             v.value = builder();
@@ -2015,6 +2019,10 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
         if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
             throw "PERMISSION-DENIED", "cannot hold the catalog lock from a context with restricted process control";
         }
+        # test hooks are for trusted test code only
+        if (SandboxManager::isSandboxed()) {
+            throw "PERMISSION-DENIED", "code that a sandbox governs cannot use the catalog's test hooks";
+        }
         lck.lock();
         on_exit DataProviderActionCatalog::unlockCatalog();
         return c();
@@ -2184,6 +2192,10 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
     static setDeliveryTestHook(*code hook) {
         if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
             throw "PERMISSION-DENIED", "cannot set a catalog test hook from a context with restricted process control";
+        }
+        # test hooks are for trusted test code only
+        if (SandboxManager::isSandboxed()) {
+            throw "PERMISSION-DENIED", "code that a sandbox governs cannot use the catalog's test hooks";
         }
         delivery_test_hook = hook;
     }
@@ -3416,7 +3428,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
     #! Throws \c DATA-PROVIDER-CALLBACK-ERROR if a sandbox governs the caller, who cannot change a process-wide callback
     /** Such a callback runs on the threads of every caller of the catalog, of other tenants and of trusted code; a
-        module that sandboxed code loads first cannot set it either
+        module that sandboxed code loads by path cannot set it either (a module from the module path is initialized
+        with no sandbox provenance, and can)
     */
     private:internal static checkNotGoverned(string what) {
         if (DataProviderActionCatalog::isGoverned()) {
@@ -5602,6 +5615,10 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             throw "PERMISSION-DENIED", "cannot wait for the catalog worker from a context with restricted process "
                 "control";
         }
+        # test hooks are for trusted test code only
+        if (SandboxManager::isSandboxed()) {
+            throw "PERMISSION-DENIED", "code that a sandbox governs cannot use the catalog's test hooks";
+        }
         AutoLock al(lazy_worker_lck);
         while (lazy_jobs_submitted < count) {
             if (lazy_queue_cond.wait(lazy_worker_lck, timeout_ms)) {
@@ -5628,10 +5645,11 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         thread that no sandbox governs, also when a sandboxed reader needs it first, and no worker runs until one
         does.  The capability can only be created by code that no sandbox governs, also through a policy barrier, and
         that may use the \c UNCONTROLLED_API domain (the module calls the method by name, so that it can be loaded by
-        any Program): when the module is loaded first by sandboxed code, under a policy barrier, or by code restricted
-        with @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", there is no worker, and every deferred
-        registration runs, and every lazy value is built, when it is registered, as before registrations were
-        deferred.
+        any Program): from the module path, the module is initialized with no sandbox provenance, also when sandboxed
+        code loads it first, and has a worker; when it is loaded first by code restricted with
+        @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", or by sandboxed code by path, there is no worker,
+        and every deferred registration runs, and every lazy value is built, when it is registered, as before
+        registrations were deferred.
 
         @return the capability, or @ref NOTHING if there is no worker
     */

@@ -170,12 +170,12 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
             \interruptedDeliveryRequestTest());
         addTestCase("a registration made at once by a thread that holds the catalog lock", \lockOwnerRegistrationTest());
         addTestCase("only a thread that the catalog started runs as a worker", \untrackedWorkerTest());
-        addTestCase("without a worker, every deferred registration runs when it is made, from source and AOT",
+        addTestCase("a first load from the module path has a worker, unless restricted; from source and AOT",
             \noWorkerTest());
         addTestCase("sandboxed code cannot set or clear a process-wide callback", \callbackSetterTest());
         addTestCase("the callbacks of an action registered under a sandbox run when it is registered",
             \governedActionCallbacksTest());
-        addTestCase("a module that sandboxed code loads first sets no process-wide callback",
+        addTestCase("a module that sandboxed code loads first sets its callbacks only from the module path",
             \sandboxedCallbackModuleLoadTest());
         addTestCase("a module whose load fails removes its lazy values", \failedLoadValueTest());
         addTestCase("a Program that may not use the sandbox APIs loads the module; registrations run at once",
@@ -1328,17 +1328,22 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
     }
 
     noWorkerTest() {
-        # the first load: by sandboxed code, and by trusted code serving sandboxed code under a policy barrier
-        hash<string, string> loaders = {
-            "sandboxed": "Program loader(PO_NEW_STYLE, True);\n"
+        # the first load from the module path: by sandboxed code, and by trusted code serving sandboxed code under a
+        # policy barrier, initialize the module as library code, with a catalog worker; by code restricted with
+        # PO_NO_UNCONTROLLED_APIS, which may not create the worker's capability, without one
+        hash<string, hash<auto>> loaders = {
+            "sandboxed": {"worker": True, "code": "Program loader(PO_NEW_STYLE, True);\n"
                 "loader.parse(\"sub load() { load_module('DataProvider'); }\", \"loader\");\n"
                 "loader.setSandboxManager(new SandboxManager());\n"
-                "loader.callFunction(\"load\");\n",
-            "barrier": "code cap = SandboxManager::createSystemPolicyCall(sub () { load_module('DataProvider'); });\n"
+                "loader.callFunction(\"load\");\n"},
+            "barrier": {"worker": True, "code": "code cap = SandboxManager::createSystemPolicyCall(sub () { load_module('DataProvider'); });\n"
                 "Program loader(PO_NEW_STYLE, True);\n"
                 "loader.parse(\"sub load(code cap) { cap(); }\", \"loader\");\n"
                 "loader.setSandboxManager(new SandboxManager());\n"
-                "loader.callFunction(\"load\", cap);\n",
+                "loader.callFunction(\"load\", cap);\n"},
+            "restricted": {"worker": False, "code": "Program loader(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS, True);\n"
+                "loader.parse(\"sub load() { load_module('DataProvider'); }\", \"loader\");\n"
+                "loader.callFunction(\"load\");\n"},
         };
         string body = "Program trusted(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);\n"
             "trusted.parse(ReadOnlyFile::readTextFile(get_script_dir() + \"/trusted.q\"), \"trusted\");\n"
@@ -1356,11 +1361,9 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
             "}\n"
             "string sub test() {\n"
             "    string app = \"NoWorkerApp\";\n"
-            "    DataProviderActionCatalog::registerPendingApp(app, sub () {\n"
-            "        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app, \"display_name\": app,\n"
-            "            \"short_desc\": app, \"desc\": app, \"groups\": (AppGroup::DataTransformation,), \"logo\": \"data\",\n"
-            "            \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\", \"dynamic\": True});\n"
-            "    });\n"
+            "    DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app, \"display_name\": app,\n"
+            "        \"short_desc\": app, \"desc\": app, \"groups\": (AppGroup::DataTransformation,), \"logo\": \"data\",\n"
+            "        \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\", \"dynamic\": True});\n"
             "    DataProviderActionCatalog::registerLazyAppActions(app, sub () { reg(app, \"lazy-a\"); });\n"
             "    DataProviderActionCatalog::registerPendingAppAction(app, \"pend\", sub () { reg(app, \"pend\"); });\n"
             "    return sprintf(\"trusted: %y %y\", DataProviderActionCatalog::hasLazyAppActions(app),\n"
@@ -1376,7 +1379,7 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
                 on_exit remove_tree(dir);
                 LazyAppActionsSafetyTest::writeFile(dir + "/trusted.q", trusted);
                 LazyAppActionsSafetyTest::writeFile(dir + "/no-worker.q", "%modern\n%no-child-restrictions\n"
-                    + loader.value + body);
+                    + loader.value.code + body);
                 string output = dir + "/output.txt";
                 int rc = system(sprintf("QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1",
                     form.dir + PathSep + get_script_dir() + "/../../../../qlib" + PathSep
@@ -1384,8 +1387,11 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
                 string out = ReadOnlyFile::readTextFile(output);
                 string what = form.name + ", " + loader.key;
                 assertEq(0, rc, what + ": " + out);
-                # nothing is deferred: a sandboxed reader, which has no worker, needs none
-                assertLines(("trusted: False [\"lazy-a\", \"pend\"]", "reader: [\"lazy-a\", \"pend\"]"), out);
+                # with a worker, the trusted registrations are deferred, and the worker runs them for the sandboxed
+                # reader; without one, nothing is deferred, and the sandboxed reader needs none
+                string deferred = loader.value.worker ? "trusted: True []" : "trusted: False [\"lazy-a\", \"pend\"]";
+                assertEq(2, LazyAppActionsSafetyTest::countLines((deferred, "reader: [\"lazy-a\", \"pend\"]"), out),
+                    what + ": " + out);
             }
         }
         if (forms.size() == 1) {
@@ -1422,8 +1428,20 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         assertEq(child, AbstractDataProvider::hasGenericApiCallChildBuilder());
     }
 
+    #! Returns the number of the lines given that are lines of the output, in that order
+    private static int countLines(list<string> expected, string output) {
+        int i = 0;
+        foreach string line in (map trim($1), output.split("\n")) {
+            if (i < expected.size() && line == expected[i]) {
+                ++i;
+            }
+        }
+        return i;
+    }
+
     sandboxedCallbackModuleLoadTest() {
         # the modules that set the catalog's process-wide callbacks when they are loaded, loaded first by sandboxed code
+        # by name
         hash<auto> r = runChild("sandboxed-callback-modules", "Program loader(PO_NEW_STYLE, True);\n"
             "loader.parse(\"sub load() { load_module('ConnectionProvider'); load_module('RestClientDataProvider'); }\",\n"
             "    \"loader\");\n"
@@ -1433,7 +1451,19 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
             "    DataProviderActionCatalog::hasGenericApiCallActionBuilder(),\n"
             "    AbstractDataProvider::hasGenericApiCallChildBuilder());\n");
         assertEq(0, r.rc, r.output);
-        assertLines(("callbacks: False False False",), r.output);
+        # from the module path: library code, initialized with no sandbox provenance, which sets them
+        assertLines(("callbacks: True True True",), r.output);
+        # a copy that sandboxed code loads by path from elsewhere is governed by its sandbox, and sets none
+        string dir = make_tmp_dir("lazy-safety-copy-");
+        on_exit remove_tree(dir);
+        assertEq(0, system(sprintf("cp -R '%s' '%s'", get_script_dir() + "/../../../../qlib/ConnectionProvider", dir)));
+        r = runChild("sandboxed-callback-copy", "Program loader(PO_NEW_STYLE, True);\n"
+            "loader.parse(\"sub load(string path) { load_module(path); }\", \"loader\");\n"
+            "loader.setSandboxManager(new SandboxManager());\n"
+            "loader.callFunction(\"load\", " + sprintf("%y", dir + "/ConnectionProvider") + ");\n"
+            "printf(\"callbacks: %y\\n\", DataProviderActionCatalog::hasSchemeLookupCallback());\n");
+        assertEq(0, r.rc, r.output);
+        assertLines(("callbacks: False",), r.output);
     }
 
     governedActionCallbacksTest() {

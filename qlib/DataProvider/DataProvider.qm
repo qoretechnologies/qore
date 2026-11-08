@@ -1642,8 +1642,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       "DataProviderActionCatalog::registerLazyValue()" and
       @ref DataProvider::DataProviderActionCatalog::getLazyValue() "DataProviderActionCatalog::getLazyValue()" to
       build shared values, such as types built from a vendored API description, on first use in the same way
-    - the module needs a %Qore with \c register_exit_hook(), \c SandboxManager::createSystemThreadCall() and
-      \c SandboxManager::isSandboxed(); when the @ref Qore::Program "Program" that loads it first is sandboxed or
+    - the module needs a %Qore with \c register_exit_hook(), \c SandboxManager::createSystemThreadCall(),
+      \c SandboxManager::isSandboxed() and module initialization with no sandbox provenance (a module from the module
+      path is initialized as library code, also when sandboxed code loads it first, so its registrations and what
+      they create belong to no tenant); when the @ref Qore::Program "Program" that loads it first
       may not create the worker's capability (@ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"), every
       deferred registration runs and every lazy value is built when it is registered, as before they were deferred;
       code restricted with \c PO_NO_UNCONTROLLED_APIS uses the catalog as any other code after a trusted load

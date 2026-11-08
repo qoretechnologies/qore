@@ -53,8 +53,9 @@ module RestClientDataProvider {
         # register the data provider factory
         DataProvider::registerFactory(new RestClientDataProviderFactory());
 
-        # the process-wide builders below run on the threads of every caller: when sandboxed code loads this module
-        # first, they are not registered, as the module's code is governed by its sandbox, and REST apps then have no
+        # the process-wide builders below run on the threads of every caller: from the module path, this module is
+        # initialized with no sandbox provenance and registers them; when sandboxed code loads a copy of it by path,
+        # its initialization is governed by that sandbox, and they are not registered: REST apps then have no
         # framework-injected generic API call child or action
         if (SandboxManager::isSandboxed()) {
             return;

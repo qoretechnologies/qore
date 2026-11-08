@@ -361,12 +361,17 @@ provider, or only needs the connection, never registers the actions at all.
   over a limit, or exited: then the next reader runs it again, and the actions it registers replace those that the
   stopped run registered, which differ from them in the objects that each run builds.
 - **No code that a tenant registers runs on another tenant's or trusted code's thread, and no trusted listener runs
-  under a tenant's sandbox.** A registration made under a sandbox (a module that sandboxed code loads, also under a
-  policy barrier), lazy or pending, runs when it is made, on the registering thread, as before registrations were
+  under a tenant's sandbox.** A module from the module path is initialized with no sandbox provenance, also when
+  sandboxed code loads it first (Qore's module initialization barrier, `design/module-sandboxing-audit-guide.md`), so
+  its registrations are trusted and what they create belongs to no tenant; this replaces the earlier rule that a
+  module loaded first by sandboxed code made its registrations under that sandbox. A registration made under a
+  sandbox (sandboxed code itself, or a module that it loaded by path, also under a policy barrier), lazy or pending,
+  runs when it is made, on the registering thread, as before registrations were
   deferred, and so do the `get_output_type` and `get_dynamic_options` callbacks of the actions it registers.
   Sandboxed code cannot add a catalog change listener or set or clear a process-wide callback (the scheme lookup
   callback, the generic API call action builder and `AbstractDataProvider`'s generic API call child builder):
-  `ConnectionProvider` and `RestClientDataProvider` do not set theirs when sandboxed code loads them first. The
+  `ConnectionProvider` and `RestClientDataProvider` set theirs as library code from the module path, and not when
+  sandboxed code loads a copy of them by path. The
   listeners run on the threads that change the catalog, except a sandboxed one: a worker delivers the changes that it
   makes itself (also when its reader stopped waiting), and those made on a sandboxed thread (`queueDelivery()`). The
   workers are a pool of at most four threads, so one slow trusted closure delays no other sandboxed reader; a reader
@@ -379,8 +384,8 @@ provider, or only needs the connection, never registers the actions at all.
 - **Every decision on where code runs uses `SandboxManager::isSandboxed()`**, which sees a sandbox through a policy
   barrier and is not restricted, so code restricted with `PO_NO_UNCONTROLLED_APIS` uses the catalog after a trusted
   load as any other code. The module creates the worker's capability by name (`call_static_method()`), so that its
-  code parses in any Program; when the module is loaded first by sandboxed code, or by code that may not create the
-  capability, there is no worker, and every deferred registration runs, and every lazy value is built, when it is
+  code parses in any Program; when the module is loaded first by code that may not create the capability
+  (`PO_NO_UNCONTROLLED_APIS`, or sandboxed code loading it by path), there is no worker, and every deferred registration runs, and every lazy value is built, when it is
   registered, in source and AOT form alike.
 - **A lazy value registered by a module whose load fails is removed** with the module's other registrations when the
   load is rolled back (`ImplicitModuleTransaction`); a build running then does not store its value.
