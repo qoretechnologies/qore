@@ -130,6 +130,8 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("a slow trusted registration does not delay another sandboxed reader", \workerPoolTest());
         addTestCase("four blocked sandboxed readers' jobs run at once, on four workers", \workerPoolGrowthTest());
         addTestCase("listeners are not called on a catalog worker", \listenerThreadTest());
+        addTestCase("without a worker, every deferred registration runs when it is made, from source and AOT",
+            \noWorkerTest());
         addTestCase("a Program that may not use the sandbox APIs loads the module; registrations run at once",
             \restrictedLoaderTest());
         set_return_value(main());
@@ -1053,6 +1055,71 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
 %else
         testSkip("the test needs the catalog worker's test hooks, which only debug builds have");
 %endif
+    }
+
+    noWorkerTest() {
+        string body = "Program loader(PO_NEW_STYLE, True);\n"
+            "loader.parse(\"sub load() { load_module('DataProvider'); }\", \"loader\");\n"
+            "loader.setSandboxManager(new SandboxManager());\n"
+            "loader.callFunction(\"load\");\n"
+            "Program trusted(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);\n"
+            "trusted.parse(ReadOnlyFile::readTextFile(get_script_dir() + \"/trusted.q\"), \"trusted\");\n"
+            "printf(\"%s\\n\", trusted.callFunction(\"test\"));\n"
+            "Program reader(PO_NEW_STYLE, True);\n"
+            "reader.parse(\"%requires DataProvider\\nstring sub read(string app) { return sprintf('%y', map $1.action, "
+            "DataProviderActionCatalog::getActions(app, False)); }\\n\", \"reader\");\n"
+            "reader.setSandboxManager(new SandboxManager());\n"
+            "printf(\"reader: %s\\n\", reader.callFunction(\"read\", \"NoWorkerApp\"));\n";
+        string trusted = "%requires DataProvider\n"
+            "sub reg(string app, string action) {\n"
+            "    DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app, \"action\": action,\n"
+            "        \"path\": \"/\" + action, \"display_name\": action, \"short_desc\": action, \"desc\": action,\n"
+            "        \"action_code\": DPAT_API});\n"
+            "}\n"
+            "string sub test() {\n"
+            "    string app = \"NoWorkerApp\";\n"
+            "    DataProviderActionCatalog::registerPendingApp(app, sub () {\n"
+            "        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app, \"display_name\": app,\n"
+            "            \"short_desc\": app, \"desc\": app, \"groups\": (AppGroup::DataTransformation,), \"logo\": \"data\",\n"
+            "            \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\", \"dynamic\": True});\n"
+            "    });\n"
+            "    DataProviderActionCatalog::registerLazyAppActions(app, sub () { reg(app, \"lazy-a\"); });\n"
+            "    DataProviderActionCatalog::registerPendingAppAction(app, \"pend\", sub () { reg(app, \"pend\"); });\n"
+            "    return sprintf(\"trusted: %y %y\", DataProviderActionCatalog::hasLazyAppActions(app),\n"
+            "        sort(map $1.action, DataProviderActionCatalog::getActionsNoInit(app)));\n"
+            "}\n";
+        list<hash<auto>> forms = ({"name": "source", "dir": get_script_dir() + "/../../../../qlib"},);
+        if (*string qmod_dir = LazyAppActionsSafetyTest::findQmodDir()) {
+            forms += {"name": "AOT", "dir": qmod_dir};
+        }
+        foreach hash<auto> form in (forms) {
+            string dir = make_tmp_dir("lazy-safety-");
+            on_exit remove_tree(dir);
+            LazyAppActionsSafetyTest::writeFile(dir + "/trusted.q", trusted);
+            LazyAppActionsSafetyTest::writeFile(dir + "/no-worker.q", "%modern\n%no-child-restrictions\n" + body);
+            string output = dir + "/output.txt";
+            int rc = system(sprintf("QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1",
+                form.dir + PathSep + get_script_dir() + "/../../../../qlib" + PathSep + (ENV.QORE_MODULE_DIR ?? ""),
+                QORE_ARGV[0], dir + "/no-worker.q", output));
+            string out = ReadOnlyFile::readTextFile(output);
+            assertEq(0, rc, form.name + ": " + out);
+            # nothing is deferred: a sandboxed reader, which has no worker, needs none
+            assertLines(("trusted: False [\"lazy-a\", \"pend\"]", "reader: [\"lazy-a\", \"pend\"]"), out);
+        }
+        if (forms.size() == 1) {
+            testSkip("no AOT DataProvider.qmod was found; only the source form was tested");
+        }
+    }
+
+    #! Returns the directory of the AOT library modules of the build that runs the test, if any
+    private static *string findQmodDir() {
+        list<string> dirs = (ENV.QORE_MODULE_DIR ?? "").split(PathSep);
+        dirs += dirname(QORE_ARGV[0]) + "/qlib-qmod";
+        foreach string dir in (dirs) {
+            if (dir && is_file(dir + "/DataProvider/DataProvider.qmod")) {
+                return dir;
+            }
+        }
     }
 
     #! Reads an app and a lazy value for a sandboxed caller under a policy barrier; returns the thread's TID

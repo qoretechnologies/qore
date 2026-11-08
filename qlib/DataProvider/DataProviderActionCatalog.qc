@@ -1504,18 +1504,11 @@ public class DataProviderActionCatalog {
         @since DataProvider 3.0
     */
     static registerPendingApp(string app, code init, *string module_context) {
-        # code that a sandbox governs: the registration runs now, on this thread, so that no code registered under a
-        # sandbox runs later on another thread, where it could block other tenants or trusted code
-        if (DataProviderActionCatalog::isGoverned()) {
-            {
-                DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
-                if (appcache{app}) {
-                    throw "APP-ERROR", sprintf("Application %y is already registered", app);
-                }
-                if (initmap{app}) {
-                    throw "APP-ERROR", sprintf("Application %y is already pending", app);
-                }
-            }
+        # without a catalog worker (see initLazyWorker()), and for code that a sandbox governs, the registration runs
+        # now, on this thread, so that no code registered under a sandbox runs later on another thread, where it could
+        # block other tenants or trusted code
+        if (!lazy_worker_start || DataProviderActionCatalog::isGoverned()) {
+            DataProviderActionCatalog::checkNotPending(app);
             DataProviderActionCatalog::doInit({
                 "init": init,
                 "kind": "app",
@@ -1563,17 +1556,10 @@ public class DataProviderActionCatalog {
         @since DataProvider 3.0
     */
     static registerPendingAppAction(string app, string action, code init) {
-        # code that a sandbox governs: the registration runs now, on this thread (see registerPendingApp())
-        if (DataProviderActionCatalog::isGoverned()) {
-            {
-                DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
-                if (app_actionmap{app}{action}) {
-                    throw "APP-ERROR", sprintf("Application %y action %y is already registered", app, action);
-                }
-                if (initactionmap{app}{action}) {
-                    throw "APP-ERROR", sprintf("Application %y action %y is already pending", app, action);
-                }
-            }
+        # without a catalog worker, and for code that a sandbox governs, the registration runs now, on this thread
+        # (see registerPendingApp())
+        if (!lazy_worker_start || DataProviderActionCatalog::isGoverned()) {
+            DataProviderActionCatalog::checkNotPending(app, action);
             DataProviderActionCatalog::doInit({
                 "init": init,
                 "kind": "action",
@@ -1983,6 +1969,35 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
         return exists listener_id
             ? (select listener_failures, $1.listener_id == listener_id)
             : listener_failures;
+    }
+
+    #! Throws \c APP-ERROR if an app, or an action of it, is registered or pending already
+    /** Takes the catalog lock unless this thread holds it already: a registration that runs at once can be made by
+        code that the catalog runs under its lock
+    */
+    private:internal static checkNotPending(string app, *string action) {
+        bool needs_lock = !lck.lockOwner();
+        if (needs_lock) {
+            lck.lock();
+        }
+        on_exit if (needs_lock) {
+            DataProviderActionCatalog::unlockCatalog();
+        }
+        if (exists action) {
+            if (app_actionmap{app}{action}) {
+                throw "APP-ERROR", sprintf("Application %y action %y is already registered", app, action);
+            }
+            if (initactionmap{app}{action}) {
+                throw "APP-ERROR", sprintf("Application %y action %y is already pending", app, action);
+            }
+            return;
+        }
+        if (appcache{app}) {
+            throw "APP-ERROR", sprintf("Application %y is already registered", app);
+        }
+        if (initmap{app}) {
+            throw "APP-ERROR", sprintf("Application %y is already pending", app);
+        }
     }
 
     #! Releases the catalog lock and delivers the changes made while it was held to the catalog change listeners
