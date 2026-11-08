@@ -592,7 +592,11 @@ and `cleanupLocalCaches(false)` release an iterator after the slots from that bo
 Native code places the iterator's cleanup alloca in the exit sequence before the first body local
 whose slot is from the boundary on (`positioned_iterator_allocas`, tag 4 in the array form, released
 with `qore_rt_iterator_cleanup()`); an exception exit's statement cleanup then leaves it
-(`emitExitStatementCleanup(..., exception_exit)`), unless the iterators use their own array form.
+(`emitExitStatementCleanup(..., exception_exit)`). The array form of the iterator release
+(`prepareIteratorCleanupArray()`) has a second array of the iterators without a place
+(`iterator_cleanup_unpositioned_array`), which an exception exit uses, so that an exit emitted after
+the array was prepared (an exception raised by a call or a runtime error in the loop body) places
+the iterators as the others do.
 `ExceptionExitLocalOrder.qtest`, `ClosureLocalExitRelease.qtest` and
 `ForeachExitIteratorOrder.qtest` check the AST order in every mode, a qcc executable included.
 `IRBlockScopedObjectLifetime.qtest` and `ObjectLocalLifetime.qtest` check exact

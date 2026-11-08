@@ -579,6 +579,10 @@ private:
     // (iterators x exits) PHI operands.  Prepared at function finalization.
     llvm::AllocaInst* iterator_cleanup_array = nullptr;
     unsigned iterator_cleanup_array_count = 0;
+    //! The array form of the iterators that an exception exit releases with the statement temporaries: those without
+    //! a place among the locals (see positioned_iterator_allocas), which the release of the locals releases instead
+    llvm::AllocaInst* iterator_cleanup_unpositioned_array = nullptr;
+    unsigned iterator_cleanup_unpositioned_count = 0;
 
     // Allocas for Invoke/ConstString results that need cleanup at function exit.
     // qore_rt_invoke_expr returns +1 ref; these allocas track the results so they
@@ -789,8 +793,8 @@ private:
 
     //! Emits the read of a local with a reference flag: the cached value, or the referenced value if it is a reference
     /** The referenced value is read only when the flag is set (qore_rt_read_reference_local()); it is owned and kept,
-        for the consumers of the value returned, until the read after the next one at this site or the exit of the
-        function, as a reload of a local's cache keeps the value it replaces
+        for the consumers of the value returned, until the end of the statement (the read after the next one at this
+        site releases it earlier); the AST interpreter releases it when the expression using it completes
 
         @param cached the value in the local's cache
     */
@@ -1397,19 +1401,19 @@ private:
         restored from an AOT binary written before that test compared variants. */
     bool isSelfRecursiveVariant(const AbstractQoreFunctionVariant* variant) const;
 
-    // Emit qore_rt_iterator_cleanup calls for active iterators
+    //! Emits the release of the active iterators (qore_rt_iterator_cleanup())
     //! @param skip_positioned true to leave the iterators that the release of the locals releases at their places
-    //! (see positionIterators())
+    //! (see positionIterators()); the array form then releases those of iterator_cleanup_unpositioned_array
     void emitIteratorCleanup(llvm::Module& module, bool skip_positioned = false);
 
-    //! Returns true if an exception exit releases the iterators of positioned_iterator_allocas at their places among
-    //! the locals: not when the iterators are released by the array form (iterator_cleanup_array)
     //! Registers the cleanup alloca of the iterator that \a inst creates in positioned_iterator_allocas if the IR
     //! gives it a place among the local slots
     void registerPositionedIterator(const QoreIRInstruction* inst, llvm::Value* iter_alloca);
 
+    //! Returns true if an exception exit releases the iterators of positioned_iterator_allocas at their places among
+    //! the locals, in the inline form and in the array forms of the exit release and of the iterator release alike
     bool positionIterators() const {
-        return !iterator_cleanup_array && !positioned_iterator_allocas.empty();
+        return !positioned_iterator_allocas.empty();
     }
 
     // Emit llvm.lifetime.start after each entry-block alloca and

@@ -1,0 +1,254 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ForeachExitIteratorOrderArrayTest
+
+#! Regression test: as ForeachExitIteratorOrder.qtest, with the array forms of native code's exit release
+/** QORE_JIT_CLEANUP_PHI_BUDGET=1 makes native code release the locals and the iterators of a function at its exits
+    with arrays (qore_rt_cleanup_run_allocas(), qore_rt_iterator_cleanup_allocas()); an exit emitted after the iterator
+    array was prepared released a running iterator with the statement temporaries, before the locals of the loop
+    body.  The iterators placed among the locals are left out of the iterator array of an exception exit and released
+    with the locals (see ForeachExitIteratorOrder.qtest)
+*/
+class ForeachExitIteratorOrderArrayTest inherits ExecModeOutputTest {
+    private {
+        #! the array forms of the exit release of native code (see QoreIRToLLVM::prepareBoxedExitCleanupArray() and
+        #! prepareIteratorCleanupArray()), for the processes that the test runs
+        static int phi_budget_env = setenv("QORE_JIT_CLEANUP_PHI_BUDGET", "1");
+    }
+
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# a function left by an exception while foreach statements run: the values they iterate are released as the AST
+# interpreter releases them, after the locals of the loop body and before the loop variable and the locals
+# declared before the statement
+class E {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+sub k() {
+    E e("ke");
+    foreach auto v in ((new E("k3"),)) {
+        E f("kf");
+        throw "K";
+    }
+}
+# the loop variable holds another object than the iterated value: the element dies when the statement ends
+sub k2() {
+    E e("k2e");
+    foreach auto v in ((new E("k2l"), 1)) {
+        v = new E("k2v");
+        E f("k2f");
+        throw "K2";
+    }
+}
+# a loop left by break after its variable was reassigned: the iterated list is released before the variable
+sub b() {
+    E e("be");
+    foreach auto v in ((new E("bl"), 1)) {
+        v = new E("bv");
+        printf("b: after assign\n");
+        break;
+    }
+    printf("b: after loop\n");
+}
+sub c() {
+    foreach auto v in (list(new E("cl"), 1)) {
+        v = new E("cv");
+        printf("c: after assign\n");
+        break;
+    }
+    printf("c: after loop\n");
+}
+# an exception raised by a function that the loop body calls
+sub die() {
+    throw "DIE";
+}
+sub d1() {
+    E e("d1e");
+    foreach auto v in ((new E("d1l"), 1)) {
+        v = new E("d1v");
+        E f("d1f");
+        die();
+    }
+}
+list<E> sub mk(string p) {
+    return (new E(p + "1"), new E(p + "2"));
+}
+sub d2() {
+    E e("d2e");
+    foreach E v in (mk("d2l")) {
+        v = new E("d2v");
+        E f("d2f");
+        die();
+    }
+}
+sub d3() {
+    E e("d3e");
+    foreach hash<auto> v in ({"a": new E("d3l")}.pairIterator()) {
+        v = {};
+        E f("d3f");
+        die();
+    }
+}
+# nested loops
+sub n() {
+    E e("ne");
+    foreach auto a in ((new E("na"),)) {
+        E f("nf");
+        foreach auto b in ((new E("nb"),)) {
+            E g("ng");
+            throw "N";
+        }
+    }
+}
+# a typed loop variable and a local declared after the loop in the same block
+sub t() {
+    E e("te");
+    {
+        foreach E v in ((new E("tl"),)) {
+            E f("tf");
+            throw "T";
+        }
+        E after("tafter");
+    }
+}
+# a loop left by return keeps the release at the end of the statement
+sub r() {
+    E e("re");
+    foreach auto v in ((new E("rl"),)) {
+        E f("rf");
+        return;
+    }
+}
+foreach string fn in (("k", "k2", "b", "c", "d1", "d2", "d3", "n", "t", "r")) {
+    for (int i = 0; i < 2; ++i) {
+        try {
+            call_function(fn);
+            printf("%s: returned\n", fn);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s: %s\n", fn, ex.err);
+        }
+    }
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "dtor kf",
+            "dtor k3",
+            "dtor ke",
+            "k: K",
+            "dtor kf",
+            "dtor k3",
+            "dtor ke",
+            "k: K",
+            "dtor k2f",
+            "dtor k2l",
+            "dtor k2v",
+            "dtor k2e",
+            "k2: K2",
+            "dtor k2f",
+            "dtor k2l",
+            "dtor k2v",
+            "dtor k2e",
+            "k2: K2",
+            "b: after assign",
+            "dtor bl",
+            "dtor bv",
+            "b: after loop",
+            "dtor be",
+            "b: returned",
+            "b: after assign",
+            "dtor bl",
+            "dtor bv",
+            "b: after loop",
+            "dtor be",
+            "b: returned",
+            "c: after assign",
+            "dtor cl",
+            "dtor cv",
+            "c: after loop",
+            "c: returned",
+            "c: after assign",
+            "dtor cl",
+            "dtor cv",
+            "c: after loop",
+            "c: returned",
+            "dtor d1f",
+            "dtor d1l",
+            "dtor d1v",
+            "dtor d1e",
+            "d1: DIE",
+            "dtor d1f",
+            "dtor d1l",
+            "dtor d1v",
+            "dtor d1e",
+            "d1: DIE",
+            "dtor d2f",
+            "dtor d2l1",
+            "dtor d2l2",
+            "dtor d2v",
+            "dtor d2e",
+            "d2: DIE",
+            "dtor d2f",
+            "dtor d2l1",
+            "dtor d2l2",
+            "dtor d2v",
+            "dtor d2e",
+            "d2: DIE",
+            "dtor d3f",
+            "dtor d3l",
+            "dtor d3e",
+            "d3: DIE",
+            "dtor d3f",
+            "dtor d3l",
+            "dtor d3e",
+            "d3: DIE",
+            "dtor ng",
+            "dtor nb",
+            "dtor nf",
+            "dtor na",
+            "dtor ne",
+            "n: N",
+            "dtor ng",
+            "dtor nb",
+            "dtor nf",
+            "dtor na",
+            "dtor ne",
+            "n: N",
+            "dtor tf",
+            "dtor tl",
+            "dtor te",
+            "t: T",
+            "dtor tf",
+            "dtor tl",
+            "dtor te",
+            "t: T",
+            "dtor rf",
+            "dtor rl",
+            "dtor re",
+            "r: returned",
+            "dtor rf",
+            "dtor rl",
+            "dtor re",
+            "r: returned",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ForeachExitIteratorOrderArray", Script, (map $1 + "\n", Expected).join(""),
+            "releases the value a foreach statement iterates in the order of the AST interpreter with the array forms of the exit release") {
+    }
+}

@@ -114,7 +114,10 @@ string sub semanticCases() {
 # debugging, dbg_get_container_copy_count(), which the call before the loop
 # reads): a loop that changes the container in place copies none, a loop that
 # copies it on every iteration copies one per element, so 4x the input must not
-# copy more.  Without library debugging nothing is counted, and the check passes.
+# copy more.  Without library debugging nothing is counted, and the check passes:
+# the Linux CI jobs build libqore with CMAKE_BUILD_TYPE=debug
+# (test/docker_test/build.sh), so they count the copies; the macOS CI job builds a
+# release library, where the check has nothing to count.
 int sub copies() {
     if (!Option::HAVE_LIBRARY_DEBUGGING) {
         return -1;
