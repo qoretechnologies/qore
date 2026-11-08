@@ -3429,11 +3429,25 @@ void QoreProgram::waitForTermination() {
 void qore_program_private::decThreadCount(QoreProgram& pgm, int tid, ExceptionSink* xsink) {
     bool clear = false;
     unsigned derefs = pgm.priv->decThreadCount(tid, clear);
-    if (!derefs) {
-        return;
+    if (derefs) {
+        releaseDeferredDerefs(pgm, derefs, clear, xsink);
     }
-    // the thread deleted the Program while running its code, and has left it now: clear and dereference it as the
-    // deletion would have (see QoreProgram::waitForTerminationAndDeref())
+}
+
+void qore_program_private::unlockParsing(QoreProgram& pgm, ExceptionSink* xsink) {
+    bool clear = false;
+    unsigned derefs = pgm.priv->unlockParsing(clear);
+    if (derefs) {
+        releaseDeferredDerefs(pgm, derefs, clear, xsink);
+    }
+}
+
+void qore_program_private::releaseDeferredDerefs(QoreProgram& pgm, unsigned derefs, bool clear,
+        ExceptionSink* xsink) {
+    assert(derefs);
+    // the thread deleted the Program while running its code or holding its parse lock, and has left the code and
+    // released the lock now: clear and dereference it as the deletion would have (see
+    // QoreProgram::waitForTerminationAndDeref())
     ExceptionSink local_xsink;
     if (clear) {
         pgm.priv->waitForTerminationAndClear(&local_xsink);
