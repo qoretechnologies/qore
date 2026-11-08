@@ -41,6 +41,7 @@ class MssqlTestIsolationTest inherits QUnit::Test {
         addTestCase("the setup drops only the databases of gone runs", \leftovers());
         addTestCase("the run's connections use the run's database", \runDatabase());
         addTestCase("another driver's connection to the same server uses the run's database", \otherDriver());
+        addTestCase("the lock of the leftovers is one lock of the server", \leftoverLock());
         addTestCase("the teardown drops the run's database", \teardown());
         addTestCase("a leftover with sessions is left for a later run", \liveLeftover());
         set_return_value(main());
@@ -171,6 +172,27 @@ class MssqlTestIsolationTest inherits QUnit::Test {
         assertEq(1, session.selectRow("select 1 as v").v);
         assertEq(1, ds.selectRow("select count(*) as c from sys.databases where name = %v", db).c);
         session.close();
+    }
+
+    #! the lock of the leftover databases is taken in master: an application lock is a lock of the database of its
+    #! call, so the connections to other databases, such as a run's database, did not wait for it
+    private leftoverLock() {
+        checkSkip();
+        Datasource ds(MssqlRunDatabase::getConnectionString(connstr, "MssqlTestIsolation"));
+        ds.setAutoCommit(True);
+        ds.open();
+        on_exit ds.close();
+        assertEq(MssqlRunDatabase::getName(), ds.selectRow("select db_name() as db").db);
+        int spid = ds.selectRow("select @@spid as id").id;
+        code count = int sub () {
+            return ds.selectRow("select count(*) as c from sys.dm_tran_locks where resource_type = 'APPLICATION' "
+                "and resource_database_id = db_id('master') and request_session_id = %v", spid).c;
+        };
+        assertEq(0, count());
+        MssqlRunDatabase::lockLeftovers(ds);
+        assertEq(1, count());
+        MssqlRunDatabase::unlockLeftovers(ds);
+        assertEq(0, count());
     }
 
     private teardown() {

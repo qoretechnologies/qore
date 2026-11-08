@@ -132,12 +132,16 @@ class MssqlTriggersTest inherits QUnit::Test {
         assertEq(("drop trigger trg_a",), t.getDropSql("t"));
         # a name that cannot be an SQL identifier is given in a string literal
         MssqlTrigger o("trg%a'b", "ON t AFTER INSERT AS BEGIN SET NOCOUNT ON; END");
-        assertEq(("declare @qore_drop_trigger nvarchar(max) = N'drop trigger ' + quotename(N's1') + N'.' + "
-            "quotename(N'trg%a''b'); exec sp_executesql @qore_drop_trigger",), o.getDropSql("s1.t"));
-        assertEq(("declare @qore_drop_trigger nvarchar(max) = N'drop trigger ' + quotename(N'my schema') + N'.' + "
-            "quotename(N'trg%a''b'); exec sp_executesql @qore_drop_trigger",), o.getDropSql("[my schema].t"));
-        # an unreadable trigger is never equal to another
+        assertEq(("exec sp_executesql N'drop trigger [s1].[trg%a''b]'",), o.getDropSql("s1.t"));
+        assertEq(("exec sp_executesql N'drop trigger [my schema].[trg%a''b]'",), o.getDropSql("[my schema].t"));
+        # brackets in the name are doubled; a long name is given whole (QUOTENAME() gives NULL for more than 128
+        # characters)
+        string long_name = "trg%]" + strmul("x", 130);
+        MssqlTrigger lt(long_name, "ON t AFTER INSERT AS BEGIN SET NOCOUNT ON; END");
+        assertEq(("exec sp_executesql N'drop trigger [s1].[trg%]]" + strmul("x", 130) + "]'",), lt.getDropSql("s1.t"));
+        # an unreadable trigger is never equal to another, and cannot be created
         MssqlTrigger u("trg_a", "", True);
+        assertThrows("TRIGGER-ERROR", "trg_a.*cannot be read", \u.getCreateSql(), "dbo.t");
         assertFalse(u.equal(new MssqlTrigger("trg_a", "")));
         assertFalse((new MssqlTrigger("trg_a", "")).equal(u));
         assertTrue(t.equal(new MssqlTrigger("trg_a", "ON t AFTER INSERT AS BEGIN SET NOCOUNT ON; END")));

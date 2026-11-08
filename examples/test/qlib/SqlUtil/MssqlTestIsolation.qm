@@ -116,6 +116,11 @@ public class MssqlRunDatabase {
         static Mutex lck();
     }
 
+    public {
+        #! The most milliseconds that lockLeftovers() waits for the lock of the leftover databases
+        const LeftoverLockTimeout = 120000;
+    }
+
     #! Returns the datasource string of the run's database on the server of the given datasource string
     /** The first call for a server creates the run's database there; a later call returns the same datasource
         string.
@@ -292,14 +297,17 @@ public class MssqlRunDatabase {
         the database has a session, so that no run drops it in between
     */
     static lockLeftovers(Datasource ds) {
-        ds.execRaw("declare @qore_rc int; exec @qore_rc = sp_getapplock @Resource = 'qtest-mssql-leftovers', "
-            "@LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = -1; if @qore_rc < 0 "
-            "raiserror('cannot take the lock of the leftover test databases: %d', 16, 1, @qore_rc)");
+        # in master: an application lock is a lock of the database of the call
+        ds.execRaw("declare @qore_rc int; exec @qore_rc = master.sys.sp_getapplock @Resource = "
+            "'qtest-mssql-leftovers', @LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = "
+            + MssqlRunDatabase::LeftoverLockTimeout + "; if @qore_rc < 0 raiserror('cannot take the lock of the leftover "
+            "test databases in %d ms (sp_getapplock: %d)', 16, 1, " + MssqlRunDatabase::LeftoverLockTimeout
+            + ", @qore_rc)");
     }
 
     #! Releases the server-wide lock of the leftover databases that lockLeftovers() took for the session
     static unlockLeftovers(Datasource ds) {
-        ds.execRaw("exec sp_releaseapplock @Resource = 'qtest-mssql-leftovers', @LockOwner = 'Session'");
+        ds.execRaw("exec master.sys.sp_releaseapplock @Resource = 'qtest-mssql-leftovers', @LockOwner = 'Session'");
     }
 
     #! Drops the databases left by test runs that are at least TestRun::LeftoverAge old, whatever their host

@@ -369,6 +369,11 @@ string sub mssql_get_unicode_string_literal(string str) {
     return "N'" + replace(str, "'", "''") + "'";
 }
 
+# returns a name in brackets, with each "]" doubled, without any other check of the name
+string sub mssql_bracket_identifier(string name) {
+    return "[" + replace(name, "]", "]]") + "]";
+}
+
 # returns the name that an SQL identifier gives: a bracketed identifier without its brackets and with each "]]" as
 # "]", a double-quoted one without its quotes and with each doubled quote as one, and any other as it is
 string sub mssql_unquote_identifier(string id) {
@@ -1353,7 +1358,13 @@ public class MssqlTrigger inherits SqlUtil::AbstractTrigger {
     }
 
     #! returns a string that can be used to create the trigger in the database
+    /** @throw TRIGGER-ERROR the definition of the trigger could not be read from the database
+    */
     softlist getCreateSql(string table_name, *hash opt) {
+        if (unreadable) {
+            throw "TRIGGER-ERROR", sprintf("the definition of trigger %y of table %y cannot be read (an encrypted "
+                "trigger), so it cannot be created", name, table_name);
+        }
         return sprintf("create trigger %s %s", mssql_get_sql_identifier(name), src);
     }
 
@@ -1373,12 +1384,10 @@ public class MssqlTrigger inherits SqlUtil::AbstractTrigger {
             if (ex.err != "IDENTIFIER-ERROR") {
                 rethrow;
             }
-            # the statement is made by the server from the names in string literals, with QUOTENAME()
-            string schema_exp = schema
-                ? sprintf("quotename(%s) + N'.' + ", mssql_get_unicode_string_literal(mssql_unquote_identifier(schema)))
-                : "";
-            return sprintf("declare @qore_drop_trigger nvarchar(max) = N'drop trigger ' + %squotename(%s); "
-                "exec sp_executesql @qore_drop_trigger", schema_exp, mssql_get_unicode_string_literal(name));
+            # the statement is run by the server from a string literal, in which the names are bracketed
+            string sql = "drop trigger " + (schema ? mssql_bracket_identifier(mssql_unquote_identifier(schema)) + "."
+                : "") + mssql_bracket_identifier(name);
+            return sprintf("exec sp_executesql %s", mssql_get_unicode_string_literal(sql));
         }
         return sprintf("drop trigger %s%s", schema ? schema + "." : "", id);
     }
