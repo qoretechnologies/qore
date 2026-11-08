@@ -66,6 +66,60 @@ class RetryRecordingProvider inherits AbstractDataProvider {
     }
 }
 
+#! A server that accepts each connection and closes it at once
+/** An HTTPS request to it fails in the TLS handshake, which the server ends, with a transport error that is retried
+    (\c HTTPCLIENT-CONNECT-ERROR from an asynchronous client), at once and the same way every time.  Its port is held
+    by its listener while it runs, so no other program can listen on it meanwhile (a port that is free when a test
+    reads it can be taken by another test run at the same time before it is used, and a port that is bound but does
+    not listen refuses a connection on Linux but makes it wait for its timeout on macOS).  The client uses HTTP/1.1
+    only (\c "protocol": \c "h1"), so that it does not race HTTP/3 against the port
+*/
+class ClosingServer {
+    private {
+        Socket listener();
+        int port;
+        Counter done(1);
+        bool stopping;
+    }
+
+    constructor() {
+        listener.bindINET("127.0.0.1", "0", False, AF_INET);
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background run();
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    #! Stops the server and waits for its thread to end
+    stop() {
+        stopping = True;
+        # the thread is woken by a connection of its own
+        Socket s();
+        on_exit s.close();
+        try {
+            s.connect(sprintf("127.0.0.1:%d", port), 10s);
+        } catch (hash<ExceptionInfo> ex) {
+            # the thread ends when its accept() fails as well
+        }
+        done.waitForZero();
+        listener.close();
+    }
+
+    private run() {
+        on_exit done.dec();
+        while (True) {
+            Socket s = listener.accept();
+            s.close();
+            if (stopping) {
+                return;
+            }
+        }
+    }
+}
+
 public class DataProviderRetryUtilTest inherits QUnit::Test {
     private {
         #! A name that is never resolved (RFC 6761 section 6.4)
@@ -149,10 +203,12 @@ public class DataProviderRetryUtilTest inherits QUnit::Test {
         assertTrue(DataProviderRetryUtil::isNameResolutionError(ex));
         assertFalse(DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet));
 
-        # a refused connection is not a name resolution failure and is retried
-        string url = sprintf("http://127.0.0.1:%d", getUnusedPort());
+        # a failed connection is not a name resolution failure and is retried
+        ClosingServer server();
+        on_exit server.stop();
+        string url = sprintf("https://127.0.0.1:%d", server.getPort());
         ex = getError(sub () {
-            RestClientIo rest({"url": url});
+            RestClientIo rest({"url": url, "protocol": "h1"});
             rest.restDoRequest("GET", "/");
         });
         assertTrue(RetrySet{ex.err}, ex.err);
@@ -274,18 +330,6 @@ public class DataProviderRetryUtilTest inherits QUnit::Test {
         # a search for records is retried
         assertEq({"id": 1}, prov.searchFirstRecord({}));
         assertEq((True, False), prov.suppressed);
-    }
-
-    #! returns a port on 127.0.0.1 that no socket is bound to at the time of the call
-    /** binds a socket to port 0, so that the system assigns a free port, and closes it again; a fixed port can be in
-        use on the host, for example by a listener of another test run at the same time
-    */
-    private static int getUnusedPort() {
-        Socket s();
-        s.bindINET("127.0.0.1", "0", False, AF_INET);
-        int port = s.getSocketInfo().port;
-        s.close();
-        return port;
     }
 
     #! Returns the exception raised by the given code
