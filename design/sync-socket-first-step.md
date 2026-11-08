@@ -86,14 +86,35 @@ send, receive, accept, connect, the HTTP header and body reads, the TLS upgrades
 The first step is skipped:
 
 - on an async I/O execution path (`onIoExecutionPath()`), where `exec()` is already refused;
-- for a bare `QoreSocket` (`qore_socket_exec_poll()`): it has no socket mutex (`design/async-socket-io.md`, "Bare
-  QoreSocket instances"), so its operations stay on the I/O thread until their serialization is shown to hold
-  without it;
+- for a bare `QoreSocket` (`qore_socket_exec_poll()`) with a TLS connection; see "Bare QoreSocket" below;
 - when the socket has an operation in the same direction on the controller (the claim fails as today, with the
   same error);
 - when cancellation is pending (`qore_check_cancel()`): the call raises `THREAD-CANCELLED` without I/O, which is the
   error it raises today, minus the I/O that today still happens on the I/O thread after the caller has given up (see
-  "Problems found", 1).
+  "Problems found", 1).  Decided: a pending cancellation raises the exception and skips the I/O, also when the I/O
+  would complete at once.
+
+#### Bare QoreSocket
+
+A bare `QoreSocket` (the C++ API, without a `QoreSocketObject`) has no socket mutex, and the `continuePoll()` of its
+controller operations (`QoreSocketControllerDeferredPollOperation` and the others in `lib/QoreSocket.cpp`) takes none:
+its private data (`qore_socket_private`) has many mutexes, each for one piece of state (`close_m` for the release of
+the descriptor and the references to the TLS connection, `async_sequence_m` for the directional claims, the HTTP/2
+and QUIC session locks, the event and warning queues, ...), but none that every operation holds for its step.  Its
+operations are serialized today by running on one I/O thread, and by the directional claims, which exclude a second
+operation in the same direction (a TLS upgrade claims every direction).
+
+- **Without TLS:** a step on the calling thread can run while an operation of the other direction runs on the I/O
+  thread: a `recv()` and a `send()` of one descriptor at the same time are full duplex for the system; the claim
+  excludes an operation of the same direction and an upgrade; `IoUseHelper` holds the descriptor (`shared_fd`), so a
+  close cannot release its number under the step.  No lock is needed, so the I/O thread never waits for the step and
+  no deferral is needed.  The precondition is an audit, like the one above, that a receive and a send step of a bare
+  socket share no state of `qore_socket_private` that is not atomic or not locked (the receive buffer is the receive
+  direction's; the throughput and warning counters, the event queue and the TLS state cache are to be checked).
+- **With TLS:** a step on the calling thread could call `SSL_write()` while the I/O thread calls `SSL_read()` on the
+  same connection, which OpenSSL does not allow.  These need a lock that both take for the TLS calls: `close_m` is
+  documented as held only for reference counts and the release of the descriptor, without I/O, and stays so, so it
+  would be a new lock.  A bare TLS socket does not get the first step until a measurement shows that it matters.
 
 #### An I/O thread never waits for a step
 
@@ -298,11 +319,9 @@ fewer microseconds per request than Python on the same host.
   - problems 1 to 3, each failing before its fix;
   - the soak of `design/benchmarks/5587` (shutdown under load) for each phase, also under TSan.
 
-## Open questions
+## Decisions
 
-- Should a call made while a cancellation is pending, which today raises `THREAD-CANCELLED`, still raise it when
-  the I/O would complete at once?  This design keeps the error and drops the I/O; the rule for `File`
-  (`nonblocking-descriptor-io.md`: only the wait is a cancellation point) would do the opposite.
-- Bare `QoreSocket`: the first step needs a serialization that does not depend on the `QoreSocketObject` mutex;
-  is the controller ownership of `qore_socket_private` (`async_sequence_m` and the directional claims) enough, or
-  does it need the mutex first?
+- A call made while a cancellation is pending raises `THREAD-CANCELLED` and skips the I/O, also when the I/O would
+  complete at once (decided 2026-11-08).
+- A bare `QoreSocket` gets the first step without TLS, after the audit of its shared state; with TLS only with a new
+  lock, if measurements show the need (see "Bare QoreSocket").
