@@ -678,14 +678,21 @@ if (qore_check_cancel(xsink, "while loop")) {
 
 The check is at the start of every iteration, before the condition of a `while` or `for` statement and before the
 body of a `do-while` statement, and the operation it names is the statement's: `"while loop"`, `"do-while loop"`,
-`"for loop"` or `"foreach loop"`.  The loops of expressions (`map`, `select`, `foldl`, `foldr`, hash `map`, the lazy
-pipelines and streaming operators) and the `context` statement are not cancellation points.
+`"for loop"` or `"foreach loop"`.  The iterations of expressions (`map`, `select`, `foldl`, `foldr`, hash `map`, the
+lazy pipelines) and of the `context` statement are not cancellation points.  The C++ code that implements an
+operator can still check every 100 elements, with a label of its own: the AST streaming operators do
+(`QoreStreamingOperatorNode`), and so do some IR and JIT runtime helpers (fused list operations, sized list
+construction), which the AST interpreter's code for the same expressions does not.
 
 The IR interpreter, native (JIT and tiered) code and AOT code follow the same rule (issue #5641): the IR lowering
 sets `QoreIRBasicBlock::loop_cancel` on the block that starts an iteration of a loop statement, and the IR interpreter
 (`QoreIROpcode::Br`) and the native code (`QoreIRToLLVM`) call `qore_check_cancel()` with the statement's label on
 every unconditional branch into such a block.  Only unconditional branches may enter one (`QoreIRVerifier` rejects
-any other), which is why a `do-while` statement takes the next iteration through a latch block (`do.latch`).
+any other), which is why a `do-while` statement takes the next iteration through a latch block (`do.latch`).  The
+check raises the exception in the scope of the loop: the loop's own branches, and a `continue` or `break` statement
+inside a `try` block in the loop, take the exception target in force where the loop starts
+(`FlowTarget::loop_exception_target`).  An AOT helper outlined from a region that starts an iteration
+(`QoreAOT.cpp`) has its call block checked instead, as the helper enters the region without a branch.
 `is_loop_header`, which also marks the headers of expression loops, only counts iterations for on-stack replacement.
 The kind is serialized in AOT code with the block's loop-header flag.
 

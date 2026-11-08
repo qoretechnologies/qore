@@ -3152,6 +3152,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         size_t target_cleanup_depth = 0;
         size_t target_temp_depth = 0;
         int target_catch_depth = 0;
+        QoreIRBasicBlock* target_exception_target = nullptr;
         QoreIRValue old_elem;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
             if (it->break_target) {
@@ -3159,6 +3160,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 target_cleanup_depth = it->cleanup_stack_depth;
                 target_temp_depth = it->temp_scope_depth;
                 target_catch_depth = it->catch_cleanup_depth;
+                target_exception_target = it->loop_exception_target;
                 old_elem = it->old_implicit_element;
                 break;
             }
@@ -3183,7 +3185,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         {
             auto* br = builder.createBranch(target);
-            setLoopCheckpointExceptionTarget(br, target);
+            // a cancellation raised on entering the next iteration is raised in the scope of the loop
+            if (target->loop_cancel != QoreIRLoopCancel::None) {
+                br->exception_target = target_exception_target;
+            }
         }
         return true;
     }
@@ -3192,12 +3197,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         size_t target_cleanup_depth = 0;
         size_t target_temp_depth = 0;
         int target_catch_depth = 0;
+        QoreIRBasicBlock* target_exception_target = nullptr;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
             if (it->continue_target) {
                 target = it->continue_target;
                 target_cleanup_depth = it->cleanup_stack_depth;
                 target_temp_depth = it->temp_scope_depth;
                 target_catch_depth = it->catch_cleanup_depth;
+                target_exception_target = it->loop_exception_target;
                 break;
             }
         }
@@ -3220,7 +3227,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // index and branching back to the header.
         {
             auto* br = builder.createBranch(target);
-            setLoopCheckpointExceptionTarget(br, target);
+            // a cancellation raised on entering the next iteration is raised in the scope of the loop
+            if (target->loop_cancel != QoreIRLoopCancel::None) {
+                br->exception_target = target_exception_target;
+            }
         }
         return true;
     }
@@ -4185,6 +4195,7 @@ void QoreIRLowering::pushBlockCleanup(BlockCleanupEntry entry) {
 
 void QoreIRLowering::pushFlowTarget(FlowTarget target) {
     target.temp_scope_depth = builder.getTempScopeDepth();
+    target.loop_exception_target = getCurrentExceptionTarget();
     flow_stack.push_back(target);
 }
 
