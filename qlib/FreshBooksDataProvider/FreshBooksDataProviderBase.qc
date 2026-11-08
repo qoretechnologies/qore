@@ -287,7 +287,7 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
                         int reset_secs = reset.toInt();
                         if (reset_secs > 0 && reset_secs <= 60) {
                             # Wait for rate limit reset (up to 60 seconds)
-                            sleep(reset_secs * 1000ms);
+                            waitForRateLimit(seconds(reset_secs));
                         }
                     }
                 }
@@ -312,6 +312,18 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
                 rethrow;
             }
         }
+    }
+
+    #! Waits before a request is made again or its response is returned because of the rate limit of the API
+    /** Called after a rate-limited response (HTTP 429) before the request is made again, and after a response that
+        reports the rate limit exhausted before the response is returned; not called while retries are suppressed
+        (see @ref DataProvider::DataProviderRetryUtil::runWithoutRetries() "runWithoutRetries()").
+        A subclass can override it, for example a test that records the waits instead of waiting.
+
+        @param delay the time to wait
+    */
+    private waitForRateLimit(date delay) {
+        usleep(delay);
     }
 
     #! Checks if a request should be retried
@@ -339,7 +351,7 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
             if (wait_secs < 1 || wait_secs > 60) {
                 wait_secs = 5;
             }
-            sleep(wait_secs * 1000ms);
+            waitForRateLimit(seconds(wait_secs));
             return True;
         }
         return False;

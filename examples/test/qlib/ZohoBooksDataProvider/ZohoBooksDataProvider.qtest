@@ -122,6 +122,26 @@ class ZohoEchoHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! A watch provider that records its waits for the rate limit instead of waiting
+class RecordingZohoBooksNewInvoiceWatchDataProvider inherits ZohoBooksDataProvider::ZohoBooksNewInvoiceWatchDataProvider {
+    public {
+        #! the waits for the rate limit, in order
+        list<date> waits = ();
+    }
+
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest, *hash<auto> options) : ZohoBooksNewInvoiceWatchDataProvider(rest, options) {
+    }
+
+    #! Requests the watched resource
+    hash<auto> requestResource() {
+        return doGet(getResourcePath(), {});
+    }
+
+    private waitForRateLimit(date delay) {
+        waits += delay;
+    }
+}
+
 public class ZohoBooksDataProviderTest inherits QUnit::Test {
     private {
         #! Zoho Books REST client for integration tests
@@ -935,16 +955,19 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
             "token": "test-token",
             "organization_id": "org1",
         });
-        ZohoBooksDataProvider::ZohoBooksNewInvoiceWatchDataProvider watch(rest, {"poll_interval": 60});
+        RecordingZohoBooksNewInvoiceWatchDataProvider watch(rest, {"poll_interval": 60});
         # the server reports the rate limit exhausted until the longest reset time that the provider waits for;
         # the example data does not wait for it
         handler.rate_limit_hdr = {"X-Rate-Limit-Remaining": "0", "X-Rate-Limit-Reset": "60"};
-        date start = now_us();
         auto example = watch.getExampleEventData("new-invoice");
-        assertLt(30s, now_us() - start);
+        assertEq((), watch.waits, "the example data did not wait for the rate limit");
         assertEq("v1", example.invoice_id);
         assertEq(1, handler.requests.size());
         assertRegex("^books/v3/invoices\\?", handler.requests[0].path);
+        # a request that is not for example data waits for the reset, as the server asks
+        watch.requestResource();
+        assertEq((60s,), watch.waits, "a request outside of example data waits for the rate limit");
+        assertEq(2, handler.requests.size());
     }
 
     #! Connection tests - verify connection scheme registration

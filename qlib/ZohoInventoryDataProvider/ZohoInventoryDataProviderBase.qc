@@ -284,7 +284,7 @@ public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataPr
                         int reset_secs = reset.toInt();
                         if (reset_secs > 0 && reset_secs <= 60) {
                             # Wait for rate limit reset (up to 60 seconds)
-                            sleep(reset_secs * 1000ms);
+                            waitForRateLimit(seconds(reset_secs));
                         }
                     }
                 }
@@ -298,6 +298,18 @@ public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataPr
                 rethrow;
             }
         }
+    }
+
+    #! Waits before a request is made again or its response is returned because of the rate limit of the API
+    /** Called after a rate-limited response (HTTP 429) before the request is made again, and after a response that
+        reports the rate limit exhausted before the response is returned; not called while retries are suppressed
+        (see @ref DataProvider::DataProviderRetryUtil::runWithoutRetries() "runWithoutRetries()").
+        A subclass can override it, for example a test that records the waits instead of waiting.
+
+        @param delay the time to wait
+    */
+    private waitForRateLimit(date delay) {
+        usleep(delay);
     }
 
     #! Checks if a request should be retried
@@ -320,7 +332,7 @@ public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataPr
         if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 429) {
             ++retries;
             # Wait before retrying rate-limited requests
-            sleep(5000ms);
+            waitForRateLimit(5s);
             return True;
         }
         return False;
