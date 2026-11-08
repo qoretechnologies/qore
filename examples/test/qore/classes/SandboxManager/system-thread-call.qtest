@@ -1,0 +1,179 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires FsUtil
+%requires SystemThreadWorker
+
+%exec-class SystemThreadCallTest
+
+#! Verifies SandboxManager::createSystemThreadCall()
+/** The test module creates the capability in its initialization and starts workers with it, also for sandboxed
+    callers; a worker reads its work from the module's queue.  The waits are bounded by limits reached only when a
+    worker does not answer.
+*/
+class SystemThreadCallTest inherits QUnit::Test {
+    constructor() : Test("SandboxManager::createSystemThreadCall()", "1.0", \ARGV) {
+        addTestCase("the creation is refused for sandboxed or bound callbacks and sandboxed code", \refusalTest());
+        addTestCase("the creation is refused outside a module's initialization", \outsideInitTest());
+        addTestCase("the capability takes no arguments", \argumentsTest());
+        addTestCase("a sandbox's policy, interrupts and limits do not reach the thread", \sandboxTest());
+        addTestCase("the threads stop at the end of the process; none starts after the exit hooks", \exitTest());
+        addTestCase("no thread starts in a Program whose exit hooks have started", \deletedProgramTest());
+        addTestCase("a system thread is one of its Program's threads for waits and cancellation",
+            \threadControlTest());
+        addTestCase("a system thread started during a cancellation of its Program's threads is cancelled",
+            \cancellationWaveTest());
+        addTestCase("a failed start releases its reservation", \startFailureTest());
+        set_return_value(main());
+    }
+
+    refusalTest() {
+        hash<string, string> refusals = SystemThreadWorker::Worker::refusals;
+        assertRegex("^SANDBOX-CAPABILITY-ERROR: .*sandbox provenance", refusals.provenance);
+        assertRegex("^SANDBOX-CAPABILITY-ERROR: .*must be a plain callback", refusals.bound);
+        assertRegex("^SANDBOX-CAPABILITY-ERROR: .*must be a plain callback", refusals.capability);
+        assertRegex("^SANDBOX-CAPABILITY-ERROR: .*a sandbox governs", refusals.governed);
+    }
+
+    outsideInitTest() {
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "while a module is being loaded",
+            \SandboxManager::createSystemThreadCall(), (sub () {},));
+        # restricted code cannot call it at all
+        Program restricted(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS, True);
+        assertThrows("PARSE-EXCEPTION", \restricted.parse(),
+            ("sub f() { SandboxManager::createSystemThreadCall(sub () {}); }", "restricted"));
+    }
+
+    argumentsTest() {
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "takes no arguments", \SystemThreadWorker::Worker::startWith(),
+            (1,));
+    }
+
+    sandboxTest() {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        # one thread: the worker must not take it
+        sm.setMaxThreads(1);
+        on_exit sm.clearInterrupt();
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.loadModule("SystemThreadWorker");
+        p.parse("int sub start() { return SystemThreadWorker::Worker::start(); }\n"
+            "string sub own_thread() {\n"
+            "    Counter c(1);\n"
+            "    try { background sub () { c.dec(); }(); } catch (hash<ExceptionInfo> ex) { return ex.err; }\n"
+            "    c.waitForZero();\n"
+            "    return \"started\";\n"
+            "}\n", "sandboxed-caller");
+        p.setSandboxManager(sm);
+        assertGt(0, p.callFunction("start"), "a sandboxed caller starts a worker");
+        assertEq("started", p.callFunction("own_thread"), "the worker does not count against the sandbox's limit");
+        # the sandbox's filesystem policy does not reach the worker
+        SystemThreadWorker::Worker::submit("probe");
+        assertEq({"governed": False, "fs": "read"}, SystemThreadWorker::Worker::result());
+        # nor do its interrupts
+        SystemThreadWorker::Worker::submit("wait");
+        sm.requestInterrupt();
+        SystemThreadWorker::Worker::release();
+        assertEq("waited", SystemThreadWorker::Worker::result());
+    }
+
+    exitTest() {
+        hash<auto> r = runChild("SystemThreadWorker::Worker::start();\n"
+            # runs before the module's hook, which was registered when the module was loaded
+            "register_exit_hook(sub () {\n"
+            "    try { SystemThreadWorker::Worker::start(); printf(\"started\\n\"); }\n"
+            "    catch (hash<ExceptionInfo> ex) { printf(\"start: %s\\n\", ex.err); }\n"
+            "    try { code c = SandboxManager::createSystemThreadCall(sub () {}); printf(\"created %y\\n\", exists c); }\n"
+            "    catch (hash<ExceptionInfo> ex) { printf(\"create: %s: %s\\n\", ex.err, ex.desc =~ /exit hooks/ ? \"exit hooks\" : ex.desc); }\n"
+            "});\n");
+        assertEq(0, r.rc, r.output);
+        assertEq(("start: SANDBOX-CAPABILITY-ERROR", "create: SANDBOX-CAPABILITY-ERROR: exit hooks", "worker stopped"),
+            r.lines, r.output);
+    }
+
+    deletedProgramTest() {
+        # a Program created during the module's initialization created the capability and was deleted then
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "its Program", SystemThreadWorker::Worker::deleted_program_cap);
+    }
+
+    threadControlTest() {
+        Program p = SystemThreadWorker::Worker::control;
+        int tid = p.callFunction("start");
+        assertEq(1, p.callFunction("running"));
+        # the Program is not idle while the system thread runs
+        assertFalse(p.waitForThreads(-1));
+        assertFalse(p.waitForThread(tid, -1));
+        # a cancellation of the Program's threads reaches it, and the Program becomes idle when it has ended
+        assertEq(1, p.cancelThreads("thread control test"));
+        assertTrue(p.waitForThreads(SystemThreadWorker::Worker::Deadline));
+        assertEq(0, p.callFunction("running"));
+        # the capability starts threads again once the cancellation wave has ended with the Program idle
+        tid = p.callFunction("start");
+        assertTrue(p.cancelThread(tid, "thread control test"));
+        assertTrue(p.waitForThread(tid, SystemThreadWorker::Worker::Deadline));
+        assertEq(0, p.callFunction("running"));
+    }
+
+    cancellationWaveTest() {
+        Program p = SystemThreadWorker::Worker::control;
+        # a thread of the Program that a cancellation does not end keeps the cancellation in progress
+        p.callFunction("hold");
+        on_exit p.callFunction("release_hold");
+        assertEq(1, p.cancelThreads("cancellation wave test"));
+        assertEq("THREAD-CANCELLED", p.callFunction("hold_cancelled"));
+        # a system thread started now is part of the cancellation
+        int tid = p.callFunction("start");
+        assertTrue(p.waitForThread(tid, SystemThreadWorker::Worker::Deadline), "the cancellation ended the thread");
+        assertEq(0, p.callFunction("running"));
+        # once the Program is idle, the cancellation has ended: a thread started then runs
+        p.callFunction("release_hold");
+        assertTrue(p.waitForThreads(SystemThreadWorker::Worker::Deadline));
+        tid = p.callFunction("start");
+        assertFalse(p.waitForThread(tid, -1), "the thread runs");
+        assertTrue(p.cancelThread(tid, "cancellation wave test"));
+        assertTrue(p.waitForThread(tid, SystemThreadWorker::Worker::Deadline));
+    }
+
+    startFailureTest() {
+%ifdef QoreDebug
+        Program p = SystemThreadWorker::Worker::control;
+        dbg_fail_next_system_thread_starts(1);
+        on_exit dbg_fail_next_system_thread_starts(0);
+        assertThrows("THREAD-CREATION-FAILURE", \p.callFunction(), ("start",));
+        # the reservation was released: the exit hooks would otherwise wait for it at the end of the process
+        assertEq(0, dbg_system_threads_starting());
+        # the next start succeeds; the thread is left running: the Program's exit hook releases it at the end of the
+        # process, which would otherwise wait for it for ever
+        p.callFunction("start");
+        assertEq(1, p.callFunction("running"));
+%else
+        testSkip("the fault injection needs a debug build");
+%endif
+    }
+
+    #! Runs a child process with the test module and the code given; returns its exit code, output and lines
+    private hash<auto> runChild(string code) {
+        string dir = make_tmp_dir("system-thread-");
+        on_exit remove_tree(dir);
+        string script = dir + "/child.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n%requires SystemThreadWorker\n" + code);
+        f.close();
+        string output = dir + "/output.txt";
+        string command = sprintf("QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1",
+            get_script_dir() + PathSep + get_script_dir() + "/../../../../../qlib" + PathSep
+                + (ENV.QORE_MODULE_DIR ?? ""), QORE_ARGV[0], script, output);
+        int rc = system(command);
+        string out = ReadOnlyFile::readTextFile(output);
+        return {"rc": rc, "output": out, "lines": (map $1, trim(out).split("\n"), $1 !~ /^\s/)};
+    }
+}

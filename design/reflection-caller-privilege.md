@@ -57,6 +57,33 @@ The class's functional domain is checked the same way (caller and target Program
 `reflection_check_class_value_access()`. For a normal member, the object's own Program is also checked for navigation
 access (below), because the value belongs to that object.
 
+### 2a. Member access of sandboxed and restricted callers
+
+The language's member access applies to reflection used by code that a sandbox governs (resolved as
+`QoreSandboxManagerHelper::All`, so a policy barrier or a system-policy capability does not hide the sandbox) or whose
+runtime parse options restrict a functional domain (other than the in-module domain that every module Program
+carries): `QoreReflectionCaller::appliesMemberAccess()`. For such callers, `QoreReflectionCaller::checkClassElementAccess()`
+allows a `private` element from the class context of the caller when the declaring class and that context are in one
+hierarchy, either way (`qore_class_private::runtimeCheckPrivateClassAccess()`, as in the language, so a base class
+reads a member that a subclass declares `private`, as `AbstractDataProvider::getRestClientForGenericCallImpl()` does),
+and a `private:internal` element only from the declaring class itself.
+
+The class context is the one of the code that called the reflection API. A builtin method runs with its own class
+as the thread's class context, so `CodeContextHelperBase` records the class context it replaces as the caller's
+(`runtime_get_caller_class()`), and `QoreReflectionCaller` captures it when it is constructed at the top of the entry
+point.
+
+Every value and call entry point checks the element it uses: `NormalMember`/`StaticMember` `getValue()`/`setValue()`,
+`AbstractMember::getDefaultValue()` for a class member, `AbstractConstant::getValue()` for a class constant, every
+method variant call (in `reflection_check_variant_call()`), and the method-level calls (`NormalMethod`,
+`StaticMethod`, `ConstructorMethod`, `CopyMethod`, `DestructorMethod`, `PseudoMethod`, and `Class::newObject()`,
+`newObjectArgs()` and `callConstructor()`), which select a variant for the arguments at run time and so require every
+variant of the method to be accessible (`reflection_check_method_access()`). Declaration inspection is unchanged.
+
+Other callers keep full access to every element through reflection, as debuggers (`DebugUtil`), serializers and
+tests rely on (D2, David 2026-11-08). Capabilities therefore cannot rely on `private:internal` alone against trusted
+code; see the storage rule in [module-sandboxing-audit-guide.md](module-sandboxing-audit-guide.md).
+
 ### 3. Access is classified per operation
 
 `QoreReflectionCaller::Access` distinguishes structural navigation, value access and member-default evaluation.

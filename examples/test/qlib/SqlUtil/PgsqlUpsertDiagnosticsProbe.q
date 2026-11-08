@@ -18,13 +18,20 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+# the probe tests the SqlUtil modules in both forms, so each form is required by its path
 %ifdef SourceModules
+# qlib-requires-by-path: the module source
 %requires ../../../../qlib/SqlUtil
+# qlib-requires-by-path: the module source
 %requires ../../../../qlib/PgsqlSqlUtilBase.qm
+# qlib-requires-by-path: the module source
 %requires ../../../../qlib/PgsqlSqlUtil.qm
 %else
+# qlib-requires-by-path: the AOT-compiled module
 %requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+# qlib-requires-by-path: the AOT-compiled module
 %requires ../../../../qlib/PgsqlSqlUtilBase.qmod
+# qlib-requires-by-path: the AOT-compiled module
 %requires ../../../../qlib/PgsqlSqlUtil.qmod
 %endif
 

@@ -1,0 +1,86 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# LazyAppActionsValues.qm - test module that registers lazy values for the lazy registration safety tests
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+
+module LazyAppActionsValues {
+    version = "1.0";
+    desc = "test module with lazy values";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! The test module's lazy values; each is built at most once per process
+public namespace LazyAppActionsValues {
+public class Values {
+    public {
+        #! counts its builds
+        static int counted = DataProviderActionCatalog::registerLazyValue(\Values::buildCounted());
+        #! the builds of counted
+        static int runs = 0;
+
+        #! records the thread that builds it
+        static int thread = DataProviderActionCatalog::registerLazyValue(\Values::buildThread());
+        #! the thread that built thread
+        static int built_in;
+        #! a value for code restricted with PO_NO_UNCONTROLLED_APIS
+        static int for_restricted = DataProviderActionCatalog::registerLazyValue(\Values::buildForRestricted());
+
+        #! two values whose builders get each other
+        static int cycle_a = DataProviderActionCatalog::registerLazyValue(\Values::buildCycleA());
+        static int cycle_b = DataProviderActionCatalog::registerLazyValue(\Values::buildCycleB());
+        #! decremented when the builder of cycle_a, or of cycle_b, starts the first time
+        static Counter a_started(1);
+        static Counter b_started(1);
+    }
+
+    private:internal {
+        static Mutex m();
+    }
+
+    #! Reads an app's actions; restricted code calls the catalog through this trusted module
+    static list<string> readApp(string app) {
+        return map $1.action, DataProviderActionCatalog::getActions(app, False);
+    }
+
+    static string buildCounted() {
+        AutoLock al(m);
+        ++runs;
+        return "counted";
+    }
+
+    static string buildForRestricted() {
+        return "for restricted";
+    }
+
+    static string buildThread() {
+        built_in = gettid();
+        return "thread";
+    }
+
+    static string buildCycleA() {
+        Values::startOnce(a_started, b_started);
+        return "a+" + DataProviderActionCatalog::getLazyValue(cycle_b);
+    }
+
+    static string buildCycleB() {
+        Values::startOnce(b_started, a_started);
+        return "b+" + DataProviderActionCatalog::getLazyValue(cycle_a);
+    }
+
+    #! Signals that a builder started, and waits for the other one to start, the first time only
+    private:internal static startOnce(Counter mine, Counter other) {
+        AutoLock al(m);
+        if (!mine.getCount()) {
+            return;
+        }
+        mine.dec();
+        al.unlock();
+        other.waitForZero();
+    }
+}
+}

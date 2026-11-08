@@ -1,0 +1,62 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# ExitHookWorker.qm - test module with a worker thread that runs until it is told to stop
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module ExitHookWorker {
+    version = "1.0";
+    desc = "test module with a worker thread stopped by an exit hook";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        ExitHookWorker::Worker::start();
+    };
+    del = sub () {
+        ExitHookWorker::Worker::deleted();
+    };
+}
+
+#! The test module's worker
+public namespace ExitHookWorker {
+public class Worker {
+    public {
+        #! the limit of the worker's wait, reached only when nothing stops it
+        const Limit = 10s;
+    }
+
+    private {
+        static Queue jobs();
+    }
+
+    #! Starts the worker; with EXIT_HOOK_TEST=hook, registers the exit hook that stops it
+    static start() {
+        background Worker::run();
+        if (ENV.EXIT_HOOK_TEST == "hook") {
+            register_exit_hook(\Worker::stop());
+        }
+    }
+
+    #! Reports that the module is deleted, which happens only after the process has waited for its threads
+    static deleted() {
+        printf("del\n");
+    }
+
+    #! Tells the worker to stop
+    static stop() {
+        printf("hook\n");
+        jobs.push(NOTHING);
+    }
+
+    #! The worker: without the hook, it gives up after a time, which is reached only when nothing stops it
+    private static run() {
+        try {
+            jobs.get(Limit);
+            printf("stopped\n");
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s\n", ex.err);
+        }
+    }
+}
+}

@@ -6,11 +6,11 @@
 %allow-injection
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/DataProvider
+%requires Util
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires DataProvider
 
 %requires reflection
 

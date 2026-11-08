@@ -38,16 +38,51 @@ public class MistralOcrDataProvider inherits MistralDataProviderCommon {
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
-        static MistralOcrRequestDataType RequestType = new MistralOcrRequestDataType();
-        static MistralOcrResponseDataType ResponseType = new MistralOcrResponseDataType();
+    }
+
+    private {
+        #! The request type, built on first use; see requestType()
+        static *MistralOcrRequestDataType request_type;
+        #! The ID of the request type's builder; see requestType()
+        static int request_type_id = DataProviderActionCatalog::registerLazyValue(
+            \MistralOcrDataProvider::buildRequestType());
+        #! The response type, built on first use; see responseType()
+        static *MistralOcrResponseDataType response_type;
+        #! The ID of the response type's builder; see responseType()
+        static int response_type_id = DataProviderActionCatalog::registerLazyValue(
+            \MistralOcrDataProvider::buildResponseType());
+    }
+
+    #! Returns the request type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static MistralOcrRequestDataType requestType() {
+        return request_type ?? (request_type = DataProviderActionCatalog::getLazyValue(request_type_id));
+    }
+
+    #! Builds the request type; see requestType()
+    private static MistralOcrRequestDataType buildRequestType() {
+        return new MistralOcrRequestDataType();
+    }
+
+    #! Returns the response type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static MistralOcrResponseDataType responseType() {
+        return response_type ?? (response_type = DataProviderActionCatalog::getLazyValue(response_type_id));
+    }
+
+    #! Builds the response type; see responseType()
+    private static MistralOcrResponseDataType buildResponseType() {
+        return new MistralOcrResponseDataType();
     }
 
     constructor(RestClientIo::RestClientIo rest) : MistralDataProviderCommon(rest) {}
     constructor(*hash<auto> options) : MistralDataProviderCommon(options) {}
 
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
-    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return requestType(); }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return responseType(); }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {

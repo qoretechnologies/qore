@@ -27,11 +27,11 @@
 %enable-all-warnings
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/SqlUtil
-%requires ../../../../qlib/Sqlite3SqlUtil.qm
-%requires ../../../../qlib/DbDataProvider
+%requires QUnit
+%requires DataProvider
+%requires SqlUtil
+%requires Sqlite3SqlUtil
+%requires DbDataProvider
 
 %try-module sqlite3
 %define NoSqlite3

@@ -64,7 +64,7 @@ module QUnit {
 
 %modern
 
-%requires ../../qlib/QUnit.qm
+%requires QUnit
 
 # Example module dependency:
 #%requires _some_module_to_test
@@ -100,7 +100,7 @@ public class QUnitTest inherits QUnit::Test {
 
 %modern
 
-%requires ../../qlib/QUnit.qm
+%requires QUnit
 
 # Example module dependency:
 #%requires _MODULE_TO_TEST_

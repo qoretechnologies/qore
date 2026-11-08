@@ -3,11 +3,12 @@
 
 /* Copyright (C) 2026 Qore Technologies, s.r.o. */
 
-%requires ../../../qlib/Util.qm
-%requires ../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires Util
+%requires QUnit
 %requires krb5
-%requires ../../../qlib/Krb5Util/Krb5Util.qm
-%requires ../../../qlib/Logger.qm
+%requires Krb5Util
+%requires Logger
 
 %exec-class Krb5ModuleTest
 

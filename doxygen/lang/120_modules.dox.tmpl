@@ -1581,6 +1581,31 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
       @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN" permissions except that
       @ref Qore::PO_NO_REFLECTION "PO_NO_REFLECTION" is not set
 
+    @anchor user_module_exit_hooks
+    A module's \c del closure runs after the library has waited for every background thread of the process to end, so a
+    thread that a module starts and that runs until it is told to stop, such as a worker waiting on a queue, would keep
+    the process from ending.  The module's \c init closure registers an exit hook with register_exit_hook() that tells
+    the thread to stop: the hooks run before the library waits for the threads, and the \c del closure then releases
+    what is left:
+    @code{.py}
+module MyWorkerModule {
+    version = "1.0";
+    desc = "a module with a worker thread";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        MyWorkerModule::Worker::start();
+        register_exit_hook(\MyWorkerModule::Worker::stop());
+    };
+    del = sub () {
+        MyWorkerModule::Worker::release();
+    };
+}
+    @endcode
+    Exit hooks run in the reverse order of their registration, each in the Program of the code that registered it; a
+    Program that is deleted runs the hooks that its code registered before it waits for its own threads.  Sandboxed
+    code cannot register an exit hook.
+
     @anchor module_deletion_order
     When the process exits, the objects that the Programs of user and AOT-compiled modules hold through opaque
     references (\c \@=) are released first, while all module Programs still exist.  Then a module is deleted only

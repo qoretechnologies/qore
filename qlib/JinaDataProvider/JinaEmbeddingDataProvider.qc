@@ -36,10 +36,44 @@ public class JinaEmbeddingDataProvider inherits JinaDataProviderCommon {
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
-        static JinaEmbeddingRequestDataType RequestType = new JinaEmbeddingRequestDataType();
 
-        static JinaEmbeddingResponseDataType ResponseType =
-            new JinaEmbeddingResponseDataType();
+    }
+
+    private {
+        #! The request type, built on first use; see requestType()
+        static *JinaEmbeddingRequestDataType request_type;
+        #! The ID of the request type's builder; see requestType()
+        static int request_type_id = DataProviderActionCatalog::registerLazyValue(
+            \JinaEmbeddingDataProvider::buildRequestType());
+        #! The response type, built on first use; see responseType()
+        static *JinaEmbeddingResponseDataType response_type;
+        #! The ID of the response type's builder; see responseType()
+        static int response_type_id = DataProviderActionCatalog::registerLazyValue(
+            \JinaEmbeddingDataProvider::buildResponseType());
+    }
+
+    #! Returns the request type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static JinaEmbeddingRequestDataType requestType() {
+        return request_type ?? (request_type = DataProviderActionCatalog::getLazyValue(request_type_id));
+    }
+
+    #! Builds the request type; see requestType()
+    private static JinaEmbeddingRequestDataType buildRequestType() {
+        return new JinaEmbeddingRequestDataType();
+    }
+
+    #! Returns the response type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static JinaEmbeddingResponseDataType responseType() {
+        return response_type ?? (response_type = DataProviderActionCatalog::getLazyValue(response_type_id));
+    }
+
+    #! Builds the response type; see responseType()
+    private static JinaEmbeddingResponseDataType buildResponseType() {
+        return new JinaEmbeddingResponseDataType();
     }
 
     constructor(RestClientIo::RestClientIo rest) : JinaDataProviderCommon(rest) {

@@ -1,0 +1,233 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires reflection
+%requires DebugUtil
+
+%exec-class ReflectionMemberAccessTest
+
+#! The classes and code that the test runs in each kind of caller
+/** \c Base declares an element of each kind with each access, and \c Sub inherits it; \c OP_BODY is replaced by the
+    code that runs one reflection operation by name (Switch), so that it runs in the class context of each function
+*/
+const Classes = "
+class Base {
+    public {
+        int pub = 1;
+        static int spub = 2;
+        const CPub = 3;
+    }
+
+    private {
+        int priv = 4;
+        static int spriv = 5;
+        const CPriv = 6;
+    }
+
+    private:internal {
+        int internal = 7;
+        static int sinternal = 8;
+        const CInternal = 9;
+    }
+
+    int pubMethod() { return 10; }
+    private int privMethod() { return 11; }
+    private:internal int internalMethod() { return 12; }
+    static int sPubMethod() { return 13; }
+    private static int sPrivMethod() { return 14; }
+    private:internal static int sInternalMethod() { return 15; }
+
+    static auto fromBase(string op) { OP_BODY }
+
+    #! Reads a private member that a subclass declares, as AbstractDataProvider reads the 'rest' member
+    static auto fromBaseIntoSub() {
+        return cast<NormalMember>(Class::forName('Sub').getMember('subpriv')).getValue(new Sub());
+    }
+}
+
+class Sub inherits Base {
+    private {
+        int subpriv = 16;
+    }
+
+    static auto fromSub(string op) { OP_BODY }
+}
+
+auto sub outside(string op) { OP_BODY }
+";
+
+#! The operations, with the access of the element that each uses
+const Ops = {
+    "member-get-pub": "public",
+    "member-get-priv": "private",
+    "member-get-internal": "internal",
+    "member-set-priv": "private",
+    "member-set-internal": "internal",
+    "member-default-internal": "internal",
+    "static-get-pub": "public",
+    "static-get-priv": "private",
+    "static-get-internal": "internal",
+    "static-set-internal": "internal",
+    "const-pub": "public",
+    "const-priv": "private",
+    "const-internal": "internal",
+    "method-pub": "public",
+    "method-priv": "private",
+    "method-internal": "internal",
+    "method-args-internal": "internal",
+    "variant-priv": "private",
+    "variant-internal": "internal",
+    "static-method-pub": "public",
+    "static-method-priv": "private",
+    "static-method-internal": "internal",
+    "static-variant-internal": "internal",
+};
+
+#! The switch that runs an operation; it is inlined in each class context, as the class context is the caller's
+const Switch = "
+    switch (op) {
+        case 'member-get-pub': return cast<NormalMember>(cls.getMember('pub')).getValue(obj);
+        case 'member-get-priv': return cast<NormalMember>(cls.getMember('priv')).getValue(obj);
+        case 'member-get-internal': return cast<NormalMember>(cls.getMember('internal')).getValue(obj);
+        case 'member-set-priv': cast<NormalMember>(cls.getMember('priv')).setValue(obj, 100); return cast<NormalMember>(cls.getMember('priv')).getValue(obj);
+        case 'member-set-internal': cast<NormalMember>(cls.getMember('internal')).setValue(obj, 100); return 100;
+        case 'member-default-internal': return cast<NormalMember>(cls.getMember('internal')).getDefaultValue();
+        case 'static-get-pub': return cls.getStaticMember('spub').getValue();
+        case 'static-get-priv': return cls.getStaticMember('spriv').getValue();
+        case 'static-get-internal': return cls.getStaticMember('sinternal').getValue();
+        case 'static-set-internal': cls.getStaticMember('sinternal').setValue(8); return 8;
+        case 'const-pub': return cls.getConstant('CPub').getValue();
+        case 'const-priv': return cls.getConstant('CPriv').getValue();
+        case 'const-internal': return cls.getConstant('CInternal').getValue();
+        case 'method-pub': return cls.getNormalMethod('pubMethod').call(obj);
+        case 'method-priv': return cls.getNormalMethod('privMethod').call(obj);
+        case 'method-internal': return cls.getNormalMethod('internalMethod').call(obj);
+        case 'method-args-internal': return cls.getNormalMethod('internalMethod').callArgs(obj);
+        case 'variant-priv': return cls.getNormalVariant('privMethod').call(obj);
+        case 'variant-internal': return cls.getNormalVariant('internalMethod').call(obj);
+        case 'static-method-pub': return cls.getStaticMethod('sPubMethod').call();
+        case 'static-method-priv': return cls.getStaticMethod('sPrivMethod').call();
+        case 'static-method-internal': return cls.getStaticMethod('sInternalMethod').call();
+        case 'static-variant-internal': return cls.getStaticVariant('sInternalMethod').call();
+    }
+    throw 'TEST-ERROR', op;
+";
+
+#! A trusted object whose private:internal member a capability reads for sandboxed callers
+class Holder {
+    private:internal {
+        string secret = "secret";
+    }
+}
+
+#! Verifies that reflection applies the language's member access to sandboxed and restricted callers only
+class ReflectionMemberAccessTest inherits QUnit::Test {
+    constructor() : Test("Reflection member access", "1.0", \ARGV) {
+        addTestCase("trusted code uses every element, whatever its access", \trustedTest());
+        addTestCase("code restricted with a functional domain gets the language's member access",
+            \restrictedTest());
+        addTestCase("sandboxed code gets the language's member access", \sandboxedTest());
+        addTestCase("a sandboxed caller under a policy barrier gets the language's member access", \barrierTest());
+        addTestCase("a base class reads a private member of a subclass", \baseIntoSubTest());
+        addTestCase("the debugger shows and sets private members", \debuggerTest());
+        set_return_value(main());
+    }
+
+    trustedTest() {
+        Program p = makeProgram(PO_NEW_STYLE);
+        foreach string op in (keys Ops) {
+            assertEq(NOTHING, tryOp(p, "outside", op), op);
+        }
+    }
+
+    restrictedTest() {
+        checkRules(makeProgram(PO_NEW_STYLE | PO_NO_FILESYSTEM));
+    }
+
+    sandboxedTest() {
+        Program p = makeProgram(PO_NEW_STYLE);
+        p.setSandboxManager(new SandboxManager());
+        checkRules(p);
+    }
+
+    barrierTest() {
+        # trusted infrastructure that reads a private:internal member for its callers, under a policy barrier
+        code cap = SandboxManager::createSystemPolicyCall(auto sub () {
+            return cast<NormalMember>(Class::forName("Holder").getMember("secret")).getValue(new Holder());
+        });
+        # trusted callers read it
+        assertEq("secret", cap());
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse("auto sub run(code c) { return c(); }\n", "barrier-caller");
+        p.setSandboxManager(new SandboxManager());
+        assertThrows("REFLECTION-ACCESS-ERROR", "private:internal", \p.callFunction(), ("run", cap));
+    }
+
+    baseIntoSubTest() {
+        Program p = makeProgram(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        assertEq(16, p.callFunction("base_into_sub"));
+        p = makeProgram(PO_NEW_STYLE);
+        p.setSandboxManager(new SandboxManager());
+        assertEq(16, p.callFunction("base_into_sub"));
+    }
+
+    debuggerTest() {
+        # trusted debugger code shows and changes private:internal members, as before
+        Holder h();
+        assertEq("secret", AbstractDebugControl::getChild(h, "secret"));
+        AbstractDebugControl::setPath(h, ("secret",), "changed");
+        assertEq("changed", AbstractDebugControl::getChild(h, "secret"));
+        assertTrue(inlist("secret", AbstractDebugControl::getMemberNames(h)));
+    }
+
+    #! Checks every operation in each class context of a restricted or sandboxed Program
+    private checkRules(Program p) {
+        foreach hash<auto> i in (Ops.pairIterator()) {
+            # outside any class: only public elements
+            assertEq(i.value == "public" ? NOTHING : "REFLECTION-ACCESS-ERROR", tryOp(p, "outside", i.key),
+                "outside: " + i.key);
+            # the declaring class: every element
+            assertEq(NOTHING, tryOp(p, "Base::fromBase", i.key), "Base: " + i.key);
+            # a subclass: public and private elements, not private:internal ones
+            assertEq(i.value == "internal" ? "REFLECTION-ACCESS-ERROR" : NOTHING, tryOp(p, "Sub::fromSub", i.key),
+                "Sub: " + i.key);
+        }
+    }
+
+    #! Runs an operation, and returns the error raised, or NOTHING
+    private *string tryOp(Program p, string func, string op) {
+        try {
+            if (func =~ /::/) {
+                (*string cname, *string mname) = (func =~ x/(.*)::(.*)/);
+                p.callFunction("call_static", cname, mname, op);
+            } else {
+                p.callFunction(func, op);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "REFLECTION-ACCESS-ERROR") {
+                return sprintf("%s: %s", ex.err, ex.desc);
+            }
+            return ex.err;
+        }
+    }
+
+    #! Creates a Program with the parse options given that defines the classes and functions of the test
+    private Program makeProgram(int opts) {
+        Program p(opts | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse("%requires reflection\n"
+            + replace(Classes, "OP_BODY", "Class cls = Class::forName('Base'); Base obj();\n" + Switch)
+            + "auto sub base_into_sub() { return Base::fromBaseIntoSub(); }\n"
+            + "auto sub call_static(string cname, string mname, string op) {\n"
+            + "    if (cname == 'Base') { return Base::fromBase(op); }\n"
+            + "    return Sub::fromSub(op);\n"
+            + "}\n", "member-access");
+        return p;
+    }
+}

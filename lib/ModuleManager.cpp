@@ -1506,9 +1506,16 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
     QoreNamespace* qns = tpgm->getQoreNS();
 
     if (is_aot_user) {
-        // an AOT module merges its namespace under its own fence and must not hold the write lock
-        // across the deferred initialization that follows the merge; see qore_aot_module_ns_init_impl()
-        module_ns_init(rns, qns, xsink);
+        // an AOT module from the process-wide module path is library code: its initialization, which runs when it is
+        // first applied to a Program, belongs to no sandbox (see QoreModuleInitSandboxBarrierHelper)
+        QoreModuleInitSandboxBarrierHelper init_barrier(isTrusted());
+        if (init_barrier.failed()) {
+            xsink.outOfMemory();
+        } else {
+            // an AOT module merges its namespace under its own fence and must not hold the write lock
+            // across the deferred initialization that follows the merge; see qore_aot_module_ns_init_impl()
+            module_ns_init(rns, qns, xsink);
+        }
     } else {
         // a binary module's namespace initialization writes directly into the target's committed
         // namespace (addSystemClass(), addConstant() and so on), which runtime lookups in the target
@@ -1557,8 +1564,79 @@ QoreHashNode* QoreBuiltinModule::getHash(bool with_filename) const {
     return h;
 }
 
+namespace {
+//! What was decided when a module was loaded, until the module is registered
+struct QoreModuleLoadFrame {
+    //! the module's feature name
+    const char* feature;
+    //! true if the module is library code (see QoreModuleManager::isTrustedModulePath())
+    bool trusted;
+    //! true if code that is not trusted chose the module (see QoreModuleManager::checkShadowingLoad())
+    bool tenant_chosen;
+    //! the sandbox of that code, if any; a reference owned by the helper
+    QoreSandboxManager* owner;
+    //! the ID of the Program of that code if it has no sandbox
+    qore_program_id_t owner_pgm_id;
+    //! the frame of the enclosing load in this thread, if any
+    QoreModuleLoadFrame* prev;
+};
+
+//! the innermost module load in progress in this thread
+thread_local QoreModuleLoadFrame* module_load_frame = nullptr;
+
+//! Records what was decided when a module is loaded, so that QoreModuleManager::addModule() records it on the module
+class QoreModuleLoadFrameHelper {
+public:
+    //! takes over the reference of \a owner
+    QoreModuleLoadFrameHelper(const char* feature, bool trusted, bool tenant_chosen = false,
+            QoreSandboxManager* owner = nullptr, qore_program_id_t owner_pgm_id = QORE_NO_PROGRAM_ID)
+            : frame{feature, trusted, tenant_chosen, owner, owner_pgm_id, module_load_frame} {
+        module_load_frame = &frame;
+    }
+
+    ~QoreModuleLoadFrameHelper() {
+        assert(module_load_frame == &frame);
+        module_load_frame = frame.prev;
+        if (frame.owner) {
+            frame.owner->deref(nullptr);
+        }
+    }
+
+private:
+    QoreModuleLoadFrame frame;
+};
+}
+
+void QoreModuleManager::addModule(QoreAbstractModule* m) {
+    assert(map.find(m->getName()) == map.end());
+    if (!m->load_recorded) {
+        m->load_recorded = true;
+        // the innermost load in this thread is the module's own, under its feature name; a private module was
+        // renamed, and a module registered with no load in progress was not loaded from a file by this manager
+        const QoreModuleLoadFrame* f = module_load_frame;
+        if (f && (!strcmp(m->getName(), f->feature) || (m->getOrigName() && !strcmp(m->getOrigName(), f->feature)))) {
+            m->trusted = f->trusted;
+            if (f->tenant_chosen) {
+                m->tenant_chosen = true;
+                m->tenant_owner = f->owner;
+                if (m->tenant_owner) {
+                    m->tenant_owner->ref();
+                }
+                m->tenant_owner_pgm_id = f->owner_pgm_id;
+            }
+        } else {
+            m->trusted = isTrustedModulePath(m->getFileName());
+        }
+    }
+    map.insert(module_map_t::value_type(m->getName(), m));
+    //printd(5, "QoreModuleManager::addModule() m: %p '%s'\n", m, m->getName());
+}
+
 QoreAbstractModule::~QoreAbstractModule() {
     //printd(5, "QoreAbstractModule::~QoreAbstractModule() this: %p name: %s\n", this, name.c_str());
+    if (tenant_owner) {
+        tenant_owner->deref(nullptr);
+    }
     if (next) {
         assert(next->prev == this);
         next->prev = prev;
@@ -1689,7 +1767,8 @@ void QoreBuiltinModule::issueModuleCmd(const QoreProgramLocation* loc, const Qor
 ModuleManager::ModuleManager() {
 }
 
-// to add a directory to the module directory search list, can only be called before init()
+// to add a directory to the module directory search list; a directory added after init() is searched but does not
+// hold library code; ignored for code that is not trusted
 void ModuleManager::addModuleDir(const char* dir) {
     QMM.addModuleDir(dir);
 }
@@ -1700,7 +1779,7 @@ void ModuleManager::addAutoModuleDir(const char* dir) {
     assert(false);
 }
 
-// to add a list of directories to the module directory search list, can only be called before init()
+// to add a list of directories to the module directory search list; see addModuleDir()
 void ModuleManager::addModuleDirList(const char* strlist) {
     QMM.addModuleDirList(strlist);
 }
@@ -1729,6 +1808,79 @@ void QoreModuleManager::init(bool se) {
             QoreModuleManager::addStandardModulePaths();
         }
     }
+
+    setTrustedModuleDirs();
+}
+
+void QoreModuleManager::setTrustedModuleDirs() {
+    assert(trusted_module_dirs.empty());
+    for (const std::string& dir : moduleDirList) {
+        TrustedModuleDir td;
+        if (dir[0] == '/' && !strstr(dir.c_str(), "/../") && !strstr(dir.c_str(), "/./")) {
+            size_t len = dir.size();
+            while (len > 1 && dir[len - 1] == '/') {
+                --len;
+            }
+            // a name that ends with a "." or ".." component is not used as configured
+            if (!(len >= 2 && !dir.compare(len - 2, 2, "/."))
+                && !(len >= 3 && !dir.compare(len - 3, 3, "/.."))) {
+                td.named = dir.substr(0, len);
+            }
+        }
+        // a relative directory is resolved now, against the current directory of the process when the library is
+        // initialized
+        std::unique_ptr<char, decltype(&free)> real(realpath(dir.c_str(), nullptr), &free);
+        if (real) {
+            td.real = real.get();
+        }
+        if (!td.named.empty() || !td.real.empty()) {
+            trusted_module_dirs.push_back(std::move(td));
+        }
+    }
+}
+
+void QoreModuleManager::addModuleDir(const char* dir) {
+    if (qore_caller_is_untrusted()) {
+        printd(0, "QoreModuleManager::addModuleDir() '%s': ignored: the caller is sandboxed or restricted\n", dir);
+        return;
+    }
+    AutoLocker al(mutex);
+    moduleDirList.push_back(dir);
+}
+
+void QoreModuleManager::addModuleDirList(const char* strlist) {
+    if (qore_caller_is_untrusted()) {
+        printd(0, "QoreModuleManager::addModuleDirList() '%s': ignored: the caller is sandboxed or restricted\n",
+            strlist);
+        return;
+    }
+    AutoLocker al(mutex);
+    moduleDirList.addDirList(strlist);
+}
+
+bool QoreModuleManager::mayChangeModulePath(const QoreProgram* pgm) {
+    // the source of a library module, whoever loads it first: the directory it adds is searched but holds no library
+    // code (see isTrustedModulePath())
+    if (pgm && qore_program_private::get(*const_cast<QoreProgram*>(pgm))->library_module) {
+        return true;
+    }
+    if (qore_caller_is_untrusted()) {
+        return false;
+    }
+    if (!pgm) {
+        return true;
+    }
+    static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
+        & ~QoreParseOptions(QDOM_IN_MODULE);
+    if (!!(pgm->getParseOptions() & restricting)) {
+        return false;
+    }
+    QoreSandboxManager* sm = qore_program_private::get(*const_cast<QoreProgram*>(pgm))->getSandboxManagerRef();
+    if (sm) {
+        sm->deref(nullptr);
+        return false;
+    }
+    return true;
 }
 
 /* this internal helper function solves an issue with modules
@@ -1845,8 +1997,11 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
     // lock-free fast path: check committedFeatureList using only featureLock(read); this allows full
     // concurrency for the common case where the module is already loaded — no serialization on plock.
     // committedFeatureList is only populated AFTER namespace changes are committed in addToProgramImpl(),
-    // so a hit here guarantees the module's types are fully available in this program.
-    if (pgm && !load_opt) {
+    // so a hit here guarantees the module's types are fully available in this program.  Not for the Program of a
+    // library module: whether a module that it has may be used is decided under the module manager mutex (see
+    // mayUseTenantModule()), whoever calls
+    const bool library_target = pgm && qore_program_private::get(*pgm)->library_module;
+    if (pgm && !load_opt && !library_target) {
         QoreString tmp;
         const char* feat_name = name;
         if (strchrs(name, "./\\")) {
@@ -1875,7 +2030,7 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
     // double-check under parse lock using hasFeature() (which includes not-yet-committed features);
     // this catches the case where another thread is in the middle of addToProgramImpl() — the feature
     // is registered (for duplicate detection per issue #3592) but namespace changes aren't committed yet
-    if (pgm && !load_opt) {
+    if (pgm && !load_opt && !library_target) {
         QoreString tmp;
         const char* feat_name = name;
         if (strchrs(name, "./\\")) {
@@ -2248,6 +2403,16 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     assert(mmi == map.end() || !strcmp(mmi->second->getName(), name));
 
     QoreAbstractModule* mi = (mmi == map.end() ? nullptr : mmi->second);
+
+    // a module that code that is not trusted loaded from outside the module path does not satisfy, and cannot be
+    // reloaded by, other code, nor code with another sandbox: its file and its state are the choice of that code
+    if (mi && mi->isTenantChosen() && !mayUseTenantModule(*mi, pgm)) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "cannot use module '%s' (%s): it was "
+            "loaded from outside the module path by code that a sandbox governs or whose functional domains are "
+            "restricted, and cannot be used by other code, nor by code with another sandbox", name,
+            mi->getFileName());
+        return nullptr;
+    }
 
     // handle module reloads
     if (load_opt & QMLO_RELOAD) {
@@ -2785,12 +2950,167 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     return nullptr;
 }
 
-//! Makes a source module Program subject to the importing Program's sandbox during initialization
-static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram* parent_pgm) {
-    if (!parent_pgm || &module_pgm == parent_pgm) {
+
+bool QoreModuleManager::isTrustedModulePath(const char* path, std::string* load_path) const {
+    if (!path || !*path) {
+        return false;
+    }
+    auto within = [] (const char* name, size_t nlen, const std::string& dir) -> bool {
+        return !dir.empty() && nlen > dir.size() + 1 && !strncmp(name, dir.c_str(), dir.size())
+            && name[dir.size()] == '/';
+    };
+    // the file as named, under a directory as configured: a module directory can hold links to the files of a
+    // build; a name that is relative or has a "." or ".." component is not used
+    size_t plen = strlen(path);
+    if (path[0] == '/' && !strstr(path, "/../") && !strstr(path, "/./")) {
+        for (const TrustedModuleDir& dir : trusted_module_dirs) {
+            if (within(path, plen, dir.named)) {
+                if (load_path) {
+                    *load_path = path;
+                }
+                return true;
+            }
+        }
+    }
+    // the file it is, under a directory's canonical path
+    std::unique_ptr<char, decltype(&free)> real(realpath(path, nullptr), &free);
+    if (!real) {
+        return false;
+    }
+    size_t rlen = strlen(real.get());
+    for (const TrustedModuleDir& dir : trusted_module_dirs) {
+        if (within(real.get(), rlen, dir.real) || within(real.get(), rlen, dir.named)) {
+            if (load_path) {
+                *load_path = real.get();
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+//! Returns the file or directory in a module directory that a module with the name given is loaded from, or ""
+/** The forms and their order are those of the module search in QoreModuleManager::loadModuleIntern(): a binary
+    module for each active API version and an AOT module, flat (\c dir/name...) and then split
+    (\c dir/name/name...), the source module \c dir/name.qm, and a separated module directory \c dir/name with
+    \c name.qm in it.  The name is used as is: no pattern matching takes place.
+*/
+static std::string qore_find_module_in_dir(const std::string& dir, const char* name) {
+    struct stat sb;
+    for (bool split : {false, true}) {
+        QoreString base(dir.c_str());
+        base.sprintf(QORE_DIR_SEP_STR "%s", name);
+        if (split) {
+            base.sprintf(QORE_DIR_SEP_STR "%s", name);
+        }
+        for (unsigned ai = 0; ai <= qore_mod_api_list_len; ++ai) {
+            QoreString path(base);
+            if (ai < qore_mod_api_list_len) {
+                path.sprintf("-api-%d.%d.qmod", qore_mod_api_list[ai].major, qore_mod_api_list[ai].minor);
+            } else {
+                path.concat(".qmod");
+            }
+            if (!stat(path.c_str(), &sb)) {
+                return path.c_str();
+            }
+        }
+    }
+    QoreString path(dir.c_str());
+    path.sprintf(QORE_DIR_SEP_STR "%s.qm", name);
+    if (!stat(path.c_str(), &sb)) {
+        return path.c_str();
+    }
+    path = dir.c_str();
+    path.sprintf(QORE_DIR_SEP_STR "%s", name);
+    if (!stat(path.c_str(), &sb) && S_ISDIR(sb.st_mode) && has_separated_module_main(path.c_str(), name)) {
+        return path.c_str();
+    }
+    return std::string();
+}
+
+std::string QoreModuleManager::findTrustedModule(const char* name) const {
+    // a feature name has no directory separator; one that has one names no module in a module directory
+    if (!name || !*name || strchr(name, '/') || strchr(name, '\\')) {
+        return std::string();
+    }
+    for (const TrustedModuleDir& td : trusted_module_dirs) {
+        for (const std::string* dir : {&td.named, &td.real}) {
+            if (dir->empty() || (dir == &td.real && td.real == td.named)) {
+                continue;
+            }
+            std::string found = qore_find_module_in_dir(*dir, name);
+            if (!found.empty()) {
+                return found;
+            }
+        }
+    }
+    return std::string();
+}
+
+int QoreModuleManager::checkShadowingLoad(ExceptionSink& xsink, const char* path, const char* feature,
+        bool trusted, bool& tenant_chosen, QoreSandboxManager*& owner, qore_program_id_t& owner_pgm_id,
+        qore_shadow_load_e kind) const {
+    tenant_chosen = false;
+    owner = nullptr;
+    owner_pgm_id = QORE_NO_PROGRAM_ID;
+    if (trusted || !qore_caller_is_untrusted()) {
+        return 0;
+    }
+    // a private module is registered under a name of its own, which no other code requests
+    std::string library = kind == QSL_PRIVATE_CONTAINER ? std::string() : findTrustedModule(feature);
+    if (!library.empty() && kind == QSL_CONTAINER) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(feature), "cannot load module '%s' into a "
+            "Program container: code that a sandbox governs or whose functional domains are restricted cannot load "
+            "a module into a Program container of its own under the name of module '%s' in the module path, which it "
+            "would replace for every later user; load it into a private container instead", feature,
+            library.c_str());
+        return -1;
+    }
+    if (!library.empty()) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(feature), "cannot load module '%s' from "
+            "path '%s': code that a sandbox governs or whose functional domains are restricted cannot load a module "
+            "outside the module path under the name of module '%s' in the module path, which it would replace for "
+            "every later user", feature, path, library.c_str());
+        return -1;
+    }
+    tenant_chosen = true;
+    owner = qore_caller_sandbox_ref();
+    // code with no sandbox is told apart by its Program
+    if (!owner) {
+        owner_pgm_id = qore_caller_owner_program_id();
+    }
+    return 0;
+}
+
+bool QoreModuleManager::mayUseTenantModule(const QoreAbstractModule& mi, const QoreProgram* pgm) {
+    assert(mi.isTenantChosen());
+    // library code does not bind to a module that a tenant chose, whoever loaded it, when it is initialized or later
+    // (a module loaded into a library module's Program at run time is used by every caller)
+    if (!qore_caller_is_untrusted() || qore_module_init_library()
+        || (pgm && qore_program_private::get(*const_cast<QoreProgram*>(pgm))->library_module)) {
+        return false;
+    }
+    ReferenceHolder<QoreSandboxManager> sm(qore_caller_sandbox_ref(), nullptr);
+    if (sm.operator->() != mi.tenantOwner()) {
+        return false;
+    }
+    return sm || qore_caller_owner_program_id() == mi.tenantOwnerProgramId();
+}
+
+//! Gives a source module's Program the sandbox manager of the Program loading it, unless the module is library code
+/** A module from a trusted module directory (see QoreModuleManager::isTrustedModulePath()) is initialized with no
+    sandbox provenance, and every later call into it is governed by its caller; any other module, which a caller chose
+    by path or through its own module paths, is governed by the sandbox of the Program that loads it first
+*/
+static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram* parent_pgm, bool trusted) {
+    if (trusted || !parent_pgm || &module_pgm == parent_pgm) {
         return;
     }
     QoreSandboxManager* sm = qore_program_private::get(*parent_pgm)->getSandboxManagerRef();
+    // loaded by library code for code that is not trusted: governed by the sandbox of that code
+    if (!sm) {
+        sm = qore_module_init_lift_manager_ref();
+    }
     module_pgm.setSandboxManager(sm);
     if (sm) {
         sm->deref(nullptr);
@@ -2858,6 +3178,36 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     }
     ON_BLOCK_EXIT(module_load_clear, feature);
 
+    // a library module that code that is not trusted loads into a Program container of its own is parsed and
+    // initialized with the container's code and parse defines: it is not library code
+    const bool untrusted_container = mpgm && qore_caller_is_untrusted();
+    // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
+    std::string trusted_path;
+    const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path);
+    if (trusted) {
+        // the file that was found to be library code is the file that is loaded
+        path = trusted_path.c_str();
+    }
+    // code that is not trusted cannot replace a library module with a module from elsewhere, nor with one in a
+    // container of its own; a private module has a name of its own
+    bool tenant_chosen;
+    QoreSandboxManager* owner;
+    qore_program_id_t owner_pgm_id;
+    if (checkShadowingLoad(xsink, path, feature, trusted, tenant_chosen, owner, owner_pgm_id,
+            untrusted_container ? ((load_opt & QMLO_PRIVATE) ? QSL_PRIVATE_CONTAINER : QSL_CONTAINER) : QSL_LOAD)) {
+        return nullptr;
+    }
+    // recorded on the module when it is registered
+    QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner, owner_pgm_id);
+    // library code loaded by code that is not trusted does not take what that code chose (see below); checked before
+    // the barrier is set
+    const bool untrusted_loader = trusted && qore_caller_is_untrusted();
+    QoreModuleInitSandboxBarrierHelper init_barrier(trusted);
+    if (init_barrier.failed()) {
+        xsink.outOfMemory();
+        return nullptr;
+    }
+
     QoreParseCountContextHelper pcch;
 
     // Find the best program to inherit options from
@@ -2895,17 +3245,27 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         // qore_program_private::inheritModulePathLists), so the module's own
         // nested %requires(reexport) dependencies resolve against the same
         // module search surface the importer established.
+        if (trusted) {
+            qore_program_private::get(*mpgm)->library_module = true;
+        }
         if (p) {
-            qore_program_private::inheritParseDefines(*mpgm, *p);
+            // library code loaded by code that is not trusted takes only the defines that that code's host set, and
+            // does not resolve its own dependencies, optional dependencies and child modules through that code's
+            // module paths; a library module's own Program has only library code's own
+            const bool from_untrusted = untrusted_loader && !qore_program_private::get(*p)->library_module;
+            qore_program_private::inheritParseDefines(*mpgm, *p, from_untrusted);
+            // only trusted code can mark imports for re-export (see Program::importClass())
             qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
-            qore_program_private::inheritModulePathLists(*mpgm, *p);
+            if (!from_untrusted) {
+                qore_program_private::inheritModulePathLists(*mpgm, *p);
+            }
         }
     }
     // A source module has its own Program, so inherit the caller's sandbox manager explicitly.  This makes module
     // constant initialization subject to the caller's sandbox even though it does not execute through a normal
     // caller Program frame.  A narrowly-scoped exception in QoreSandboxManager permits read-only access to the
     // module's own resources while its module context is active.
-    inherit_module_sandbox_manager(*mpgm, p);
+    inherit_module_sandbox_manager(*mpgm, p, trusted);
     // inherit execution mode from parent program
     if (p) {
         qore_program_private* ppriv = qore_program_private::get(*p);
@@ -3276,6 +3636,10 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
     }
 
     ChildAttachHelper cah(mi, mname);
+
+    // the children of a library module are attached as library code: a module that a tenant chose is not one of
+    // them, and a child that is not library code is governed by the sandbox of the code that loaded the parent
+    QoreModuleInitSandboxBarrierHelper library_attach(mi.isTrusted());
 
     // parse options and module search paths for child loads come from the parent module's Program, so that
     // child resolution does not depend on which Program triggered the parent's load; AOT-compiled user
@@ -3814,6 +4178,36 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         return nullptr;
     }
 
+    // a library module that code that is not trusted loads into a Program container of its own is parsed and
+    // initialized with the container's code and parse defines: it is not library code
+    const bool untrusted_container = mpgm && qore_caller_is_untrusted();
+    // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
+    std::string trusted_path;
+    const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path);
+    if (trusted) {
+        // the file that was found to be library code is the file that is loaded
+        path = trusted_path.c_str();
+    }
+    // code that is not trusted cannot replace a library module with a module from elsewhere, nor with one in a
+    // container of its own; a private module has a name of its own
+    bool tenant_chosen;
+    QoreSandboxManager* owner;
+    qore_program_id_t owner_pgm_id;
+    if (checkShadowingLoad(xsink, path, feature, trusted, tenant_chosen, owner, owner_pgm_id,
+            untrusted_container ? ((load_opt & QMLO_PRIVATE) ? QSL_PRIVATE_CONTAINER : QSL_CONTAINER) : QSL_LOAD)) {
+        return nullptr;
+    }
+    // recorded on the module when it is registered
+    QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner, owner_pgm_id);
+    // library code loaded by code that is not trusted does not take what that code chose (see below); checked before
+    // the barrier is set
+    const bool untrusted_loader = trusted && qore_caller_is_untrusted();
+    QoreModuleInitSandboxBarrierHelper init_barrier(trusted);
+    if (init_barrier.failed()) {
+        xsink.outOfMemory();
+        return nullptr;
+    }
+
     QoreParseCountContextHelper pcch;
 
     // Find the best program to inherit options from
@@ -3846,14 +4240,24 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         // qore_program_private::inheritModulePathLists), so the module's own
         // nested %requires(reexport) dependencies resolve against the same
         // module search surface the importer established.
+        if (trusted) {
+            qore_program_private::get(*mpgm)->library_module = true;
+        }
         if (p) {
-            qore_program_private::inheritParseDefines(*mpgm, *p);
+            // library code loaded by code that is not trusted takes only the defines that that code's host set, and
+            // does not resolve its own dependencies, optional dependencies and child modules through that code's
+            // module paths; a library module's own Program has only library code's own
+            const bool from_untrusted = untrusted_loader && !qore_program_private::get(*p)->library_module;
+            qore_program_private::inheritParseDefines(*mpgm, *p, from_untrusted);
+            // only trusted code can mark imports for re-export (see Program::importClass())
             qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
-            qore_program_private::inheritModulePathLists(*mpgm, *p);
+            if (!from_untrusted) {
+                qore_program_private::inheritModulePathLists(*mpgm, *p);
+            }
         }
     }
     // See loadSeparatedModule(): source-module constant initialization must inherit the caller's sandbox.
-    inherit_module_sandbox_manager(*mpgm, p);
+    inherit_module_sandbox_manager(*mpgm, p, trusted);
     // inherit execution mode from parent program
     if (p) {
         qore_program_private* ppriv = qore_program_private::get(*p);
@@ -3923,6 +4327,23 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     if (checkBlacklist(xsink, feature)) {
         return nullptr;
     }
+
+    // source text is never library code; loaded while library code is initialized, it is governed by the sandbox of
+    // the code that loaded that, if it is not trusted
+    QoreModuleInitSandboxBarrierHelper init_barrier(false);
+    if (init_barrier.failed()) {
+        xsink.outOfMemory();
+        return nullptr;
+    }
+    // code that is not trusted cannot use source text to replace a library module
+    bool tenant_chosen;
+    QoreSandboxManager* owner;
+    qore_program_id_t owner_pgm_id;
+    if (checkShadowingLoad(xsink, path, feature, false, tenant_chosen, owner, owner_pgm_id)) {
+        return nullptr;
+    }
+    // recorded on the module when it is registered
+    QoreModuleLoadFrameHelper load_frame(feature, false, tenant_chosen, owner, owner_pgm_id);
 
     QoreParseCountContextHelper pcch;
 
@@ -4116,6 +4537,33 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     }
 
     if (checkBlacklist(xsink, feature)) {
+        return nullptr;
+    }
+
+    // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
+    std::string trusted_path;
+    const bool trusted = isTrustedModulePath(path, &trusted_path);
+    if (trusted) {
+        // the file that was found to be library code is the file that is loaded
+        path = trusted_path.c_str();
+    }
+    // code that is not trusted cannot replace a library module with a module from elsewhere
+    bool tenant_chosen;
+    QoreSandboxManager* owner;
+    qore_program_id_t owner_pgm_id;
+    if (checkShadowingLoad(xsink, path, feature, trusted, tenant_chosen, owner, owner_pgm_id)) {
+        return nullptr;
+    }
+    // recorded on the module when it is registered
+    QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner, owner_pgm_id);
+    // library code loaded by code that is not trusted does not resolve its dependencies through the module paths of
+    // that code; checked before the barrier is set
+    if (trusted && path_pgm && !qore_program_private::get(*path_pgm)->library_module && qore_caller_is_untrusted()) {
+        path_pgm = nullptr;
+    }
+    QoreModuleInitSandboxBarrierHelper init_barrier(trusted);
+    if (init_barrier.failed()) {
+        xsink.outOfMemory();
         return nullptr;
     }
 

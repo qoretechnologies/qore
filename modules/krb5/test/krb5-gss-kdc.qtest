@@ -3,19 +3,20 @@
 
 /* Copyright (C) 2026 Qore Technologies, s.r.o. */
 
-%requires ../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
 %requires krb5
-%requires ../../../qlib/Krb5Util/Krb5Util.qm
-%requires ../../../qlib/HttpServer.qm
-%requires ../../../qlib/ConnectionProvider
-%requires ../../../qlib/RestSchemaValidator.qm
-%requires ../../../qlib/Swagger.qm
-%requires ../../../qlib/OpenApi3.qm
-%requires ../../../qlib/RestClient.qm
-%requires ../../../qlib/DataProvider
-%requires ../../../qlib/HttpClientIo
-%requires ../../../qlib/HttpClientStreamingIo
-%requires ../../../qlib/RestClientIo.qm
+%requires Krb5Util
+%requires HttpServer
+%requires ConnectionProvider
+%requires RestSchemaValidator
+%requires Swagger
+%requires OpenApi3
+%requires RestClient
+%requires DataProvider
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+%requires RestClientIo
 
 %exec-class Krb5GssKdcIntegrationTest
 

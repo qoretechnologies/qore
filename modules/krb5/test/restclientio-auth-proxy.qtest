@@ -10,16 +10,17 @@
 
 %modern
 
-%requires ../../../qlib/QUnit.qm
-%requires ../../../qlib/DataProvider
-%requires ../../../qlib/ConnectionProvider
-%requires ../../../qlib/RestSchemaValidator.qm
-%requires ../../../qlib/Swagger.qm
-%requires ../../../qlib/OpenApi3.qm
-%requires ../../../qlib/HttpClientIo
-%requires ../../../qlib/HttpClientStreamingIo
-%requires ../../../qlib/RestClient.qm
-%requires ../../../qlib/RestClientIo.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestSchemaValidator
+%requires Swagger
+%requires OpenApi3
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+%requires RestClient
+%requires RestClientIo
 %requires krb5
 
 %requires json

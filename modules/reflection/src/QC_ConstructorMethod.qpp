@@ -129,6 +129,10 @@ auto ConstructorMethod::call(...) {
     if (check_constructor(caller, cls, m->pgm, xsink)) {
         return QoreValue();
     }
+    // the access of the constructor's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, m->m, xsink)) {
+        return QoreValue();
+    }
 
     // the constructor variant selected for the arguments must be allowed by the caller and the class's Program
     QoreReflectionCallCheckHelper call_check(caller, m->pgm);
@@ -163,6 +167,10 @@ auto ConstructorMethod::callArgs(*softlist<auto> argv) {
     // the method ptr must be valid
     const QoreClass* cls = m->m->getClass();
     if (check_constructor(caller, cls, m->pgm, xsink)) {
+        return QoreValue();
+    }
+    // the access of the constructor's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, m->m, xsink)) {
         return QoreValue();
     }
 

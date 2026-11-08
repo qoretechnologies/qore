@@ -2,9 +2,9 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/Mime.qm
+%requires QUnit
+%requires HttpServer
+%requires Mime
 %exec-class HttpServerRequestEncodingTest
 
 class RequestEncodingHandler inherits HttpServer::AbstractHttpRequestHandler {

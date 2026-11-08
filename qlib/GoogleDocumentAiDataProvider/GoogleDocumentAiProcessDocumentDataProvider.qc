@@ -35,21 +35,52 @@ public class GoogleDocumentAiProcessDocumentDataProvider inherits GoogleDocument
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
-        static GoogleDocumentAiProcessDocumentRequestDataType RequestType;
-        static GoogleDocumentAiProcessDocumentResponseDataType ResponseType;
     }
 
-    private { static Mutex type_lock(); }
+    private {
+        #! The request type, built on first use; see requestType()
+        static *GoogleDocumentAiProcessDocumentRequestDataType request_type;
+        #! The response type, built on first use; see responseType()
+        static *GoogleDocumentAiProcessDocumentResponseDataType response_type;
+    }
+
+    private {
+        #! The ID of the builder of the types; see initializeTypes()
+        static int types_id = DataProviderActionCatalog::registerLazyValue(
+            \GoogleDocumentAiProcessDocumentDataProvider::buildTypes());
+    }
+
+    #! Returns the request type, which is built on first use
+    /** It is built from the vendored API description, so loading the module does not parse it
+    */
+    static GoogleDocumentAiProcessDocumentRequestDataType requestType() {
+        initializeTypes();
+        return request_type;
+    }
+
+    #! Returns the response type, which is built on first use
+    /** It is built from the vendored API description, so loading the module does not parse it
+    */
+    static GoogleDocumentAiProcessDocumentResponseDataType responseType() {
+        initializeTypes();
+        return response_type;
+    }
 
     #! Initializes schema-backed helper types after the independent inventory is published
-    static initializeTypes() {
-        AutoLock al(type_lock);
-        if (!RequestType) {
-            GoogleDocumentAiProcessDocumentRequestDataType request();
-            GoogleDocumentAiProcessDocumentResponseDataType response();
-            RequestType = request;
-            ResponseType = response;
+    private static initializeTypes() {
+        if (!request_type) {
+            hash<auto> types = DataProviderActionCatalog::getLazyValue(types_id);
+            # the request type is set last: it tells that both are set
+            response_type = types.response;
+            request_type = types.request;
         }
+    }
+
+    #! Builds the types; see initializeTypes()
+    private static hash<auto> buildTypes() {
+        GoogleDocumentAiProcessDocumentRequestDataType request();
+        GoogleDocumentAiProcessDocumentResponseDataType response();
+        return {"request": request, "response": response};
     }
 
     constructor(GoogleDocumentAiRestClient::GoogleDocumentAiRestClientIo rest,
@@ -58,8 +89,8 @@ public class GoogleDocumentAiProcessDocumentDataProvider inherits GoogleDocument
     constructor(*hash<auto> options) : GoogleDocumentAiDataProviderCommon(options) {}
 
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
-    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return requestType(); }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return responseType(); }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     #! Validates source presence and fundamental types before optional-field coercion

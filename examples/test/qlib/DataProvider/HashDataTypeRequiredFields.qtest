@@ -3,8 +3,8 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/DataProvider
+%requires QUnit
+%requires DataProvider
 %exec-class RequiredFieldsTest
 
 class RequiredFieldsTest inherits QUnit::Test {

@@ -1788,6 +1788,23 @@ static QoreValue read_aot_function_call_ref(AOTExprReadCtx& ctx) {
     return QoreValue(new LocalFunctionCallReferenceNode(&loc_builtin, f));
 }
 
+// see QoreAOT.h
+const QoreMethod* qore_aot_find_loading_method(const QoreClass* qc, const char* name, bool is_static) {
+    const qore_class_private* qcp = qore_class_private::get(*qc);
+    const QoreMethod* m = is_static ? qcp->parseFindLocalStaticMethod(name) : qcp->parseFindLocalMethod(name);
+    if (m) {
+        return m;
+    }
+    if (const BCList* scl = qore_class_private::getBaseClassList(*qc)) {
+        for (const auto& i : *scl) {
+            if (i->sclass && (m = qore_aot_find_loading_method(i->sclass, name, is_static))) {
+                return m;
+            }
+        }
+    }
+    return nullptr;
+}
+
 static const QoreMethod* read_aot_method_ref_target(AOTExprReadCtx& ctx, const char* kind,
         bool prefer_static) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
@@ -1808,6 +1825,13 @@ static const QoreMethod* read_aot_method_ref_target(AOTExprReadCtx& ctx, const c
         ? qc->findStaticMethod(method_name) : qc->findMethod(method_name);
     if (!method) {
         method = prefer_static ? qc->findMethod(method_name) : qc->findStaticMethod(method_name);
+    }
+    // a reference read while the class is being loaded, as in a static member's initial value
+    if (!method) {
+        method = qore_aot_find_loading_method(qc, method_name, prefer_static);
+    }
+    if (!method) {
+        method = qore_aot_find_loading_method(qc, method_name, !prefer_static);
     }
     if (!method) {
         ctx.error = std::string("cannot resolve ") + kind + " method reference '"

@@ -4,11 +4,11 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/RestHandler.qm
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/Swagger.qm
+%requires QUnit
+%requires HttpServer
+%requires RestHandler
+%requires RestClient
+%requires Swagger
 %requires json
 %exec-class RestPathEncodingTest
 

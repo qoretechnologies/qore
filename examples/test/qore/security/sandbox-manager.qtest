@@ -2127,8 +2127,11 @@ string sub outerGo(Program pInner, string path) {
         assertEq("nested content", content,
             "nearest-enclosing sandbox (inner) governs module-context I/O");
 
-        # sanity: the outer sandbox really would deny this file when it is the nearest sandbox
-        Program pOuterDirect = makeModuleClient(td.path, modname, smOuter);
+        # sanity: the outer sandbox really would deny this file when it is the nearest sandbox; with a module of its
+        # own, since a module that one sandbox loaded from outside the module path is not given to another one
+        string modname_outer = modname + "Outer";
+        writeIoModule(td.path, modname_outer);
+        Program pOuterDirect = makeModuleClient(td.path, modname_outer, smOuter);
         bool caught = False;
         try {
             pOuterDirect.callFunction("doRead", testFile);

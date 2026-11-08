@@ -500,7 +500,7 @@ public class JinaBatchOutputDataProvider inherits JinaContentDataProvider {
     }
 
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return JinaBatchDownloadResponseDataType;
+        return JinaBatchDownloadResponseDataType::instance();
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {
@@ -544,7 +544,7 @@ public class JinaBatchErrorsDataProvider inherits JinaContentDataProvider {
     }
 
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return JinaBatchDownloadResponseDataType;
+        return JinaBatchDownloadResponseDataType::instance();
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

@@ -516,6 +516,31 @@
     list, which is later than a Counter signalled from @ref on_exit; see the teardown order in its documentation
     (<a href="https://github.com/qoretechnologies/qore/issues/5575">issue 5575</a>).
 
+    @par Exit Hooks
+    register_exit_hook() registers code that the library calls before it waits for background threads to end, at the
+    end of the process or when a @ref Qore::Program "Program" is deleted, so that a module or a program can stop a
+    thread that runs until it is told to stop instead of keeping the process from ending (see
+    @ref user_module_exit_hooks)
+
+    @par System Thread Capabilities
+    @ref Qore::SandboxManager::createSystemThreadCall() "SandboxManager::createSystemThreadCall()" lets a module start a
+    fixed operation in a thread that no sandbox governs, and @ref Qore::SandboxManager::isSandboxed()
+    "SandboxManager::isSandboxed()" tells trusted code whether the code it serves is sandboxed
+
+    @par Module Initialization Belongs to No Sandbox
+    A module from the process-wide module path is initialized as library code, with no sandbox, also when sandboxed
+    code loads it first; every later call into it is governed by its caller (see @ref sandbox_module_init)
+
+    @par Sandboxed Module Loads Cannot Replace Library Modules
+    Sandboxed and restricted code can no longer extend the process-wide module path, replace a library module, or
+    choose the modules and parse defines that a library module uses; a module that it loads from elsewhere is used
+    only by its own sandbox (see @ref sandbox_module_init)
+
+    @par Reflection Member Access
+    Code that a sandbox governs, and code whose parse options restrict a functional domain, may use the
+    \c private and \c private:internal elements of a class through the @ref reflectionintro "reflection" module
+    only where the language allows it (see @ref reflection_member_access)
+
     @par HTTP Server Fast Routes
     A path can be registered with @ref HttpServer::HttpServer::addFastRoute() "addFastRoute()" so that the async I/O
     thread answers its qualifying requests in microseconds, with no worker hand-off and a response identical to the
@@ -891,6 +916,9 @@
       - provider presentation metadata can be localized with source-owned catalogs and the
         \c qore-data-provider-i18n tool
       - watch data providers persist delivery checkpoints (see @ref dataprovider_watch)
+      - a module can register actions to be built on first use, and the provider modules generating actions
+        from REST API descriptions do, so loading them no longer builds their actions (see
+        @ref dataprovider_lazy_actions)
       - see @ref dataprovider_v3_11 for all changes
 
     - @ref dbdataproviderintro "DbDataProvider" module

@@ -5,21 +5,21 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
+%requires Util
+%requires QUnit
+%requires ConnectionProvider
+%requires DataProvider
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
 %requires json
-%requires ../../../../qlib/QoreLlmTypes.qm
-%requires ../../../../qlib/QoreLlmUtils
-%requires ../../../../qlib/QoreRagTypes.qm
-%requires ../../../../qlib/QoreRagUtils
-%requires ../../../../qlib/CohereRestClient.qm
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires QoreRagTypes
+%requires QoreRagUtils
+%requires CohereRestClient
 
 %exec-class CohereRestClientTest
 

@@ -1,0 +1,163 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class SandboxedFirstLoadTest
+
+#! Verifies that DataProvider modules loaded first by sandboxed code from the module path are library code
+/** A module from the process-wide module path is initialized with no sandbox provenance, also when sandboxed code
+    loads it first (see Qore's module initialization barrier): what its initialization registers in DataProvider's
+    process-wide registries (factories, types, child classes, the catalog's callbacks) works, and belongs to no tenant:
+    interrupting the tenant does not affect trusted code that uses it later.
+
+    The probes run in child processes, whose module path is set with \c QORE_MODULE_DIR.
+*/
+class SandboxedFirstLoadTest inherits QUnit::Test {
+    public {
+        #! a module from the module path whose initialization registers in DataProvider's registries
+        const ModuleSource = "%modern
+%requires DataProvider
+%requires GoogleCalendarDataProvider
+
+module TrustedInitRegistrations {
+    version = \"1.0\";
+    desc = \"registrations made by a module's initialization\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+    init = sub () {
+        DataProvider::registerFactory(new TrustedInitRegistrations::Factory());
+        DataProvider::registerType(\"test/trusted-init\", new TrustedInitRegistrations::Type());
+        GoogleCalendarDataProvider::registerChild(\"trusted-init\",
+            Class::forName(\"TrustedInitRegistrations::Factory\"));
+    };
+}
+
+public namespace TrustedInitRegistrations {
+public class Factory inherits AbstractDataProviderFactory {
+    private {
+        Mutex m();
+    }
+
+    #! takes a lock, which an interrupted sandbox refuses
+    string probe() {
+        AutoLock al(m);
+        return \"worked\";
+    }
+
+    private hash<DataProviderFactoryInfo> getInfoImpl() {
+        return <DataProviderFactoryInfo>{\"name\": \"trusted-init\", \"desc\": \"trusted init\"};
+    }
+
+    private hash<DataProviderInfo> getProviderInfoImpl() {
+        return DataProvider::getFactoryEx(\"null\").getProviderInfo();
+    }
+
+    private Class getClassImpl() {
+        return DataProvider::getFactoryEx(\"null\").getClass();
+    }
+}
+
+public class Type inherits HashDataType {
+    private {
+        Mutex m();
+    }
+
+    constructor() : HashDataType(\"TrustedInitType\") {
+    }
+
+    #! takes a lock, which an interrupted sandbox refuses
+    string probe() {
+        AutoLock al(m);
+        return \"worked\";
+    }
+}
+}
+";
+
+        #! the child: loads the module first from a sandboxed Program, then trusted code uses what it registered
+        const ChildSource = "%modern
+%no-child-restrictions
+SandboxManager sm();
+Program loader(PO_NEW_STYLE, True);
+loader.parse(\"sub load() { load_module('TrustedInitRegistrations'); load_module('ConnectionProvider'); load_module('RestClientDataProvider'); }\", \"loader\");
+loader.setSandboxManager(sm);
+loader.callFunction(\"load\");
+Program trusted(PO_NEW_STYLE, True);
+trusted.loadModule(\"TrustedInitRegistrations\");
+trusted.parse(\"%requires DataProvider
+string sub use(string what) {
+    try {
+        switch (what) {
+            case \\\"factory\\\": return cast<TrustedInitRegistrations::Factory>(DataProvider::getFactoryEx(\\\"trusted-init\\\")).probe();
+            case \\\"type\\\": return cast<TrustedInitRegistrations::Type>(DataProvider::getType(\\\"test/trusted-init\\\")).probe();
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub callbacks() {
+    return sprintf(\\\"%y %y %y\\\", DataProviderActionCatalog::hasSchemeLookupCallback(),
+        DataProviderActionCatalog::hasGenericApiCallActionBuilder(), AbstractDataProvider::hasGenericApiCallChildBuilder());
+}
+\", \"trusted\");
+# what the modules registered, used by trusted code while the loader's sandbox is interrupted
+sm.requestInterrupt();
+printf(\"factory: %s\\n\", trusted.callFunction(\"use\", \"factory\"));
+printf(\"type: %s\\n\", trusted.callFunction(\"use\", \"type\"));
+printf(\"callbacks: %s\\n\", trusted.callFunction(\"callbacks\"));
+";
+    }
+
+    private {
+        TmpDir tmp("qore-dp-sandboxed-first-load-");
+    }
+
+    constructor() : QUnit::Test("DataProvider modules loaded first by sandboxed code", "1.0", \ARGV) {
+        addTestCase("registrations made by module initializations belong to no tenant", \registrationsTest());
+        set_return_value(main());
+    }
+
+    registrationsTest() {
+        string dir = tmp.path + DirSep + "modules";
+        mkdir(dir);
+        write(dir + DirSep + "TrustedInitRegistrations.qm", ModuleSource);
+        write(tmp.path + DirSep + "child.q", ChildSource);
+        string output = tmp.path + DirSep + "output.txt";
+        # the test's module directory joins the module path of the test's own environment
+        string module_dir = dir + PathSep + (ENV.QORE_MODULE_DIR ?? (get_script_dir() + "/../../../../qlib"));
+        int rc = system(sprintf("QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1", module_dir,
+            ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0],
+            tmp.path + DirSep + "child.q", output));
+        string out = ReadOnlyFile::readTextFile(output);
+        assertEq(0, rc, out);
+        assertLines(("factory: worked", "type: worked", "callbacks: True True True"), out);
+    }
+
+    #! Asserts that the lines given are lines of the output, in that order
+    private assertLines(list<string> expected, string output) {
+        list<string> lines = map trim($1), output.split("\n");
+        int i = 0;
+        foreach string line in (lines) {
+            if (i < expected.size() && line == expected[i]) {
+                ++i;
+            }
+        }
+        assertEq(expected.size(), i, sprintf("expected %y in order in:\n%s", expected, output));
+    }
+
+    #! Writes a file
+    private static write(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+        f.close();
+    }
+}

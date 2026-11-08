@@ -1,0 +1,438 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}"
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class LazyAppActionsTest
+
+#! Counts the runs of lazy registrations made by the test
+class LazyRuns {
+    public {
+        #! the runs of each registration, by name
+        static hash<string, int> runs = {};
+        #! guards runs
+        static Mutex lck();
+    }
+
+    #! Records a run of the named registration
+    static run(string name) {
+        AutoLock al(lck);
+        runs{name} = (runs{name} ?? 0) + 1;
+    }
+
+    #! Returns the number of runs of the named registration
+    static int get(string name) {
+        AutoLock al(lck);
+        return runs{name} ?? 0;
+    }
+}
+
+#! Verifies DataProviderActionCatalog::registerLazyAppActions()
+/** The lazy registrations of an app run once, the first time that the catalog is asked for the app or its actions,
+    from every getter; what the getters return then is what they return for actions registered eagerly
+*/
+class LazyAppActionsTest inherits QUnit::Test {
+    constructor() : Test("DataProvider lazy action registration", "1.0") {
+        addTestCase("a lazy registration needs a registered app", \unregisteredAppTest());
+        addTestCase("loading a module runs no lazy registration; the first read runs it once",
+            \moduleOwnerTest());
+        addTestCase("every getter runs the lazy registrations first", \gettersTest());
+        addTestCase("the getters return what an eager registration returns", \sameAsEagerTest());
+        addTestCase("the actions of a scheme include lazy actions", \schemeTest());
+        addTestCase("a failed lazy registration is retained and not run again", \failureTest());
+        addTestCase("concurrent first reads run the registration once and read all of it", \concurrentTest());
+        addTestCase("a lazy registration that reads its own app does not wait for itself", \reentrantTest());
+        addTestCase("two initializations reading each other's app do not deadlock", \crossAppTest());
+        addTestCase("two lazy registrations reading each other's app run nested", \crossLazyTest());
+        addTestCase("deregistering an app drops its lazy registrations", \deregistrationTest());
+        addTestCase("discovery qualifies lazy actions", \discoveryTest());
+        addTestCase("NoInit getters run no deferred registration", \pendingRulesTest());
+        set_return_value(main());
+    }
+
+    unregisteredAppTest() {
+        string app = "LazyUnregistered_" + get_random_string(8);
+        assertThrows("APP-ERROR", \DataProviderActionCatalog::registerLazyAppActions(), (app, sub () {}));
+        assertFalse(DataProviderActionCatalog::hasLazyAppActions(app));
+    }
+
+    moduleOwnerTest() {
+        load_module("LazyAppActionsOwnerModule");
+        string app = "QoreTestLazyOwnerApp";
+        assertTrue(DataProviderActionCatalog::hasLazyAppActions(app));
+        assertEq(0, call_function("LazyAppActionsOwnerModule::getCalls"));
+
+        assertEq(("eager-action", "lazy-action", "lazy-class-action"),
+            map $1.action, DataProviderActionCatalog::getActions(app, False));
+        assertEq(1, call_function("LazyAppActionsOwnerModule::getCalls"));
+        assertFalse(DataProviderActionCatalog::hasLazyAppActions(app));
+        DataProviderActionCatalog::getActions(app, False);
+        assertEq(1, call_function("LazyAppActionsOwnerModule::getCalls"));
+
+        # everything registered lazily belongs to the module that made the registration
+        assertEq("LazyAppActionsOwnerModule",
+            DataProviderActionCatalog::getAppActionEx(app, "lazy-class-action").cls_mod);
+        hash<string, list<string>> owned;
+        foreach hash<auto> c in (DataProviderActionCatalog::getPresentationContributionsForModule(
+                "LazyAppActionsOwnerModule")) {
+            owned{c.app.name} = map $1.action, c.actions;
+        }
+        assertEq({app: ("eager-action", "lazy-action", "lazy-class-action")}, owned);
+    }
+
+    gettersTest() {
+        hash<string, code> getters = {
+            "getApp": sub (string app) { DataProviderActionCatalog::getApp(app); },
+            "getAppEx": sub (string app) { DataProviderActionCatalog::getAppEx(app); },
+            "getActions": sub (string app) { DataProviderActionCatalog::getActions(app, False); },
+            "getActionsEx": sub (string app) { DataProviderActionCatalog::getActionsEx(app); },
+            "getActionHash": sub (string app) { DataProviderActionCatalog::getActionHash(app); },
+            "getActionHashEx": sub (string app) { DataProviderActionCatalog::getActionHashEx(app); },
+            "getAppAction": sub (string app) { DataProviderActionCatalog::getAppAction(app, "lazy-b"); },
+            "getAppActionEx": sub (string app) { DataProviderActionCatalog::getAppActionEx(app, "lazy-c"); },
+            "getAllApps": sub (string app) { DataProviderActionCatalog::getAllApps(); },
+            "getAllActions": sub (string app) { DataProviderActionCatalog::getAllActions(); },
+            "searchAppRegex": sub (string app) { DataProviderActionCatalog::searchAppRegex(app); },
+            "searchAppSubstr": sub (string app) { DataProviderActionCatalog::searchAppSubstr(app); },
+            "searchAppSubstr (case-sensitive)": sub (string app) {
+                DataProviderActionCatalog::searchAppSubstr(app, False);
+            },
+            "searchAppActionRegex": sub (string app) {
+                DataProviderActionCatalog::searchAppActionRegex(app, "lazy");
+            },
+            "searchAppActionSubstr": sub (string app) {
+                DataProviderActionCatalog::searchAppActionSubstr(app, "lazy");
+            },
+            "searchAppActionRegexEx": sub (string app) {
+                DataProviderActionCatalog::searchAppActionRegexEx(app, "lazy");
+            },
+            "searchAppActionSubstrEx": sub (string app) {
+                DataProviderActionCatalog::searchAppActionSubstrEx(app, "lazy");
+            },
+            "searchActionRegex": sub (string app) { DataProviderActionCatalog::searchActionRegex("lazy"); },
+            "searchActionSubstr": sub (string app) { DataProviderActionCatalog::searchActionSubstr("lazy"); },
+            "checkpointDiscoverySnapshot": sub (string app) {
+                DataProviderDiscoverySession session = DataProviderActionCatalog::beginDiscovery((), (app,));
+                on_exit DataProviderActionCatalog::abortDiscovery(session);
+                DataProviderActionCatalog::checkpointDiscoverySnapshot(session);
+            },
+            "sealDiscovery": sub (string app) {
+                DataProviderActionCatalog::discardQualifiedDiscovery(DataProviderActionCatalog::sealDiscovery(
+                    DataProviderActionCatalog::beginDiscovery((), (app,))));
+            },
+        };
+        foreach hash<auto> getter in (getters.pairIterator()) {
+            string app = registerLazyApp("LazyGetter");
+            on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+            assertTrue(DataProviderActionCatalog::hasLazyAppActions(app), getter.key);
+            assertEq(0, LazyRuns::get(app), getter.key);
+            getter.value(app);
+            assertEq(1, LazyRuns::get(app), getter.key + " runs the registration");
+            assertFalse(DataProviderActionCatalog::hasLazyAppActions(app), getter.key);
+            assertEq(("eager-a", "lazy-b", "lazy-c"),
+                (map $1.action, DataProviderActionCatalog::getActionsNoInit(app)), getter.key);
+            assertTrue(DataProviderActionCatalog::getAppEx(app).supports_apis, getter.key);
+            DataProviderActionCatalog::getActions(app, False);
+            assertEq(1, LazyRuns::get(app), getter.key + " does not run it again");
+        }
+    }
+
+    sameAsEagerTest() {
+        string lazy = registerLazyApp("LazySame");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(lazy);
+        string eager = registerApp("EagerSame");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(eager);
+        map registerAction(eager, $1), ("eager-a", "lazy-b", "lazy-c");
+
+        # the app's capability flags are set by its actions
+        list<hash<DataProviderAppInfo>> apps = DataProviderActionCatalog::getAllApps();
+        assertEq((select apps, $1.name == lazy)[0] - ("name", "display_name"),
+            (select apps, $1.name == eager)[0] - ("name", "display_name"));
+        assertEq((map LazyAppActionsTest::withoutApp($1), DataProviderActionCatalog::getActions(eager, False)),
+            (map LazyAppActionsTest::withoutApp($1), DataProviderActionCatalog::getActions(lazy, False)));
+    }
+
+    schemeTest() {
+        string scheme = "lazytest" + get_random_string(8).lwr();
+        string app = registerLazyApp("LazyScheme", scheme);
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        assertEq(("eager-a", "lazy-b", "lazy-c"),
+            map $1.action, DataProviderActionCatalog::getActionsForScheme(scheme), $1.app == app);
+        assertEq(1, LazyRuns::get(app));
+    }
+
+    failureTest() {
+        string app = registerApp("LazyFailure");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        registerAction(app, "eager-a");
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            LazyRuns::run(app);
+            registerAction(app, "lazy-b");
+            throw "LAZY-TEST-ERROR", "the schema cannot be read";
+        });
+        assertEq(("eager-a", "lazy-b"), map $1.action, DataProviderActionCatalog::getActions(app, False));
+        list<hash<DataProviderInitializationFailureInfo>> failures
+            = DataProviderActionCatalog::getInitializationFailures((app,));
+        assertEq(1, failures.size());
+        assertEq("app", failures[0].kind);
+        assertEq(app, failures[0].app);
+        assertEq(NOTHING, failures[0].action);
+        assertEq("LAZY-TEST-ERROR", failures[0].error);
+        DataProviderActionCatalog::getActions(app, False);
+        DataProviderActionCatalog::getApp(app);
+        assertEq(1, LazyRuns::get(app), "a failed registration is not run again");
+    }
+
+    concurrentTest() {
+        string app = registerApp("LazyConcurrent");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        registerAction(app, "eager-a");
+        int threads = 8;
+        # every thread has signalled that it reads the app before the registration completes
+        Counter calling(threads);
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            LazyRuns::run(app);
+            registerAction(app, "lazy-b");
+            calling.waitForZero();
+            registerAction(app, "lazy-c");
+        });
+        Queue results();
+        Counter done(threads);
+        for (int i = 0; i < threads; ++i) {
+            background sub () {
+                on_exit done.dec();
+                try {
+                    calling.dec();
+                    results.push(map $1.action, DataProviderActionCatalog::getActions(app, False));
+                } catch (hash<ExceptionInfo> ex) {
+                    results.push(ex);
+                }
+            }();
+        }
+        done.waitForZero();
+        assertEq(1, LazyRuns::get(app));
+        assertEq(threads, results.size());
+        while (results.size()) {
+            assertEq(("eager-a", "lazy-b", "lazy-c"), results.get());
+        }
+    }
+
+    reentrantTest() {
+        string app = registerApp("LazyReentrant");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        list<string> seen;
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            LazyRuns::run(app);
+            registerAction(app, "lazy-a");
+            # the app's own registration is running on this thread
+            seen = map $1.action, DataProviderActionCatalog::getActions(app, False);
+            registerAction(app, "lazy-b");
+        });
+        assertEq(("lazy-a", "lazy-b"), map $1.action, DataProviderActionCatalog::getActions(app, False));
+        assertEq(("lazy-a",), seen);
+        assertEq(1, LazyRuns::get(app));
+    }
+
+    crossLazyTest() {
+        string a = registerApp("LazyNestedA");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(a);
+        string b = registerApp("LazyNestedB");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(b);
+        *list<string> read_a;
+        *list<string> read_b;
+        DataProviderActionCatalog::registerLazyAppActions(a, sub () {
+            registerAction(a, "lazy-a");
+            read_b = map $1.action, DataProviderActionCatalog::getActions(b, False);
+        });
+        DataProviderActionCatalog::registerLazyAppActions(b, sub () {
+            registerAction(b, "lazy-b");
+            read_a = map $1.action, DataProviderActionCatalog::getActions(a, False);
+        });
+        Counter done(1);
+        background LazyAppActionsTest::readApp(a, done);
+        assertEq(0, done.waitForZero(60s), "the reader does not wait forever");
+        # a's registration ran b's, which read what a had registered so far
+        assertEq(("lazy-b",), read_b);
+        assertEq(("lazy-a",), read_a);
+        assertEq(("lazy-a",), map $1.action, DataProviderActionCatalog::getActions(a, False));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((a, b)));
+    }
+
+    crossAppTest() {
+        string a = registerApp("LazyCrossA");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(a);
+        string b = registerApp("LazyCrossB");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(b);
+        # both registrations run before either reads the other app; pending registrations run on their readers'
+        # threads (lazy ones run on the catalog worker, one at a time)
+        Counter started(2);
+        DataProviderActionCatalog::registerPendingAppAction(a, "lazy-a", sub () {
+            registerAction(a, "lazy-a");
+            started.dec();
+            started.waitForZero();
+            DataProviderActionCatalog::getActions(b, False);
+        });
+        DataProviderActionCatalog::registerPendingAppAction(b, "lazy-b", sub () {
+            registerAction(b, "lazy-b");
+            started.dec();
+            started.waitForZero();
+            DataProviderActionCatalog::getActions(a, False);
+        });
+        Counter done(2);
+        # each thread is given its app as an argument; a closure would share the loop variable
+        background LazyAppActionsTest::readApp(a, done);
+        background LazyAppActionsTest::readApp(b, done);
+        # a deadlock fails the test instead of hanging it; the limit is reached only when a wait cannot end
+        assertEq(0, done.waitForZero(60s), "neither thread waits for the other forever");
+        assertEq(("lazy-a",), map $1.action, DataProviderActionCatalog::getActions(a, False));
+        assertEq(("lazy-b",), map $1.action, DataProviderActionCatalog::getActions(b, False));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((a, b)));
+    }
+
+    deregistrationTest() {
+        string app = registerLazyApp("LazyDeregistered");
+        int revision = DataProviderActionCatalog::getCatalogRevision();
+        DataProviderActionCatalog::deregisterDynamicApp(app);
+        assertTrue(DataProviderActionCatalog::getCatalogRevision() > revision);
+        assertFalse(DataProviderActionCatalog::hasLazyAppActions(app));
+        DataProviderActionCatalog::getAllActions();
+        assertEq(0, LazyRuns::get(app));
+        assertEq(NOTHING, DataProviderActionCatalog::getApp(app));
+    }
+
+    discoveryTest() {
+        list<hash<DataProviderDiscoveryExpectedIdentityInfo>> expected;
+        {
+            # sealing without a checkpoint
+            string app = registerLazyApp("LazyDiscovery");
+            on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+            expected = map <DataProviderDiscoveryExpectedIdentityInfo>{"app": app, "action": $1},
+                ("eager-a", "lazy-b", "lazy-c");
+            DataProviderQualifiedDiscovery result = DataProviderActionCatalog::sealDiscovery(
+                DataProviderActionCatalog::beginDiscovery(expected, (app,)));
+            on_exit DataProviderActionCatalog::discardQualifiedDiscovery(result);
+            assertTrue(result.getReport().complete);
+            assertEq((map app + "/" + $1, ("eager-a", "lazy-b", "lazy-c")),
+                sort(map $1, result.getReport().actions, $1.find(app + "/") == 0));
+        }
+        {
+            # a checkpoint runs the lazy registrations before it records the revision, so the snapshot is not stale
+            string app = registerLazyApp("LazyCheckpoint");
+            on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+            expected = map <DataProviderDiscoveryExpectedIdentityInfo>{"app": app, "action": $1},
+                ("eager-a", "lazy-b", "lazy-c");
+            DataProviderDiscoverySession session = DataProviderActionCatalog::beginDiscovery(expected, (app,));
+            DataProviderActionCatalog::checkpointDiscoverySnapshot(session);
+            assertEq(1, LazyRuns::get(app));
+            DataProviderQualifiedDiscovery result = DataProviderActionCatalog::sealDiscovery(session);
+            on_exit DataProviderActionCatalog::discardQualifiedDiscovery(result);
+            assertTrue(result.getReport().complete);
+            assertEq((), result.getReport().failures);
+        }
+    }
+
+    pendingRulesTest() {
+        string app = registerLazyApp("LazyPending");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        bool pending_ran = False;
+        DataProviderActionCatalog::registerPendingAppAction(app, "pending-d", sub () {
+            pending_ran = True;
+            registerAction(app, "pending-d");
+        });
+        # a NoInit getter runs neither registration
+        assertEq(("eager-a",), map $1.action, DataProviderActionCatalog::getActionsNoInit(app));
+        assertFalse(pending_ran);
+        assertEq(0, LazyRuns::get(app));
+        assertEq(("eager-a", "lazy-b", "lazy-c", "pending-d"),
+            map $1.action, DataProviderActionCatalog::getActions(app, False));
+        assertTrue(pending_ran);
+    }
+
+    #! Reads the actions of an app in a thread of the test
+    private static readApp(string app, Counter done) {
+        on_exit done.dec();
+        DataProviderActionCatalog::getActions(app, False);
+    }
+
+    #! Registers a dynamic app with an eager action and a lazy registration of two more actions
+    private string registerLazyApp(string prefix, *string scheme) {
+        string app = registerApp(prefix, scheme);
+        registerAction(app, "eager-a");
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            LazyRuns::run(app);
+            registerAction(app, "lazy-b");
+            registerAction(app, "lazy-c");
+        });
+        return app;
+    }
+
+    #! Registers a dynamic app
+    private static string registerApp(string prefix, *string scheme) {
+        string app = prefix + "_" + get_random_string(8);
+        hash<DataProviderAppInfo> info = <DataProviderAppInfo>{
+            "name": app,
+            "display_name": app,
+            "short_desc": "lazy action registration test",
+            "desc": "lazy action registration test",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "test.svg",
+            "dynamic": True,
+        };
+        if (scheme) {
+            info.scheme = scheme;
+        }
+        DataProviderActionCatalog::registerApp(info);
+        return app;
+    }
+
+    #! Registers an action of the app
+    private static registerAction(string app, string action) {
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": app,
+            "action": action,
+            "path": "/" + action,
+            "display_name": action,
+            "short_desc": "lazy action registration test action",
+            "desc": "lazy action registration test action",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "value": new QoreDataField("value", "Value", new QoreStringDataType()),
+            }),
+            "output_type": new QoreHashDataType(),
+        });
+    }
+
+    #! Returns the action without its app and with its types by name, for comparing the actions of two apps
+    private static hash<auto> withoutApp(hash<DataProviderActionInfo> action) {
+        hash<auto> rv = {};
+        foreach hash<auto> i in (action.pairIterator()) {
+            switch (i.key) {
+                case "app":
+                    break;
+                case "output_type":
+                    rv.output_type = i.value.getName();
+                    break;
+                case "options":
+                    rv.options = {};
+                    foreach hash<auto> o in (i.value.pairIterator()) {
+                        hash<auto> option = {};
+                        map option{$1.key} = $1.key == "type" ? $1.value.getName() : $1.value, o.value.pairIterator();
+                        rv.options{o.key} = option;
+                    }
+                    break;
+                default:
+                    rv{i.key} = i.value;
+            }
+        }
+        return rv;
+    }
+}

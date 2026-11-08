@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+
+%exec-class AOTStaticInitializerMethodRefTest
+
+#! Verifies that a method call reference in a static member's initial value loads from an AOT-compiled module
+/** The qmod loader read a call reference with the runtime method lookups, which see only committed methods and
+    apply the runtime class context for private access; while a class's members are read, its methods are not
+    committed yet and there is no class context, so a reference to a method of the class in a static member's
+    initial value failed to load ("AOT cannot deserialize native default expression ... cannot resolve static method
+    reference"), and the module's source was loaded instead.  The probes cover a private and a public static method,
+    a method of a parent class, and a reference stored in a static member and called later.
+*/
+class AOTStaticInitializerMethodRefTest inherits QUnit::Test {
+    public {
+        const ModuleName = "AotStaticInitMethodRef";
+
+        #! the expected output of the probe script
+        const Expected = (
+            "private: 1",
+            "public: 1",
+            "parent: 1",
+            "stored: \"made\"",
+        );
+    }
+
+    private {
+        string qore_bin;
+        #! the in-tree qcc executable, if available
+        *string qcc_bin;
+        string libqore_dir;
+        #! the environment for child processes, so that they use the build's libqore (Linux and macOS)
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTStaticInitializerMethodRefTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+
+        addTestCase("the module loaded from source", \sourceTest());
+        addTestCase("the module compiled by qcc", \aotTest());
+        set_return_value(main());
+    }
+
+    #! The module under test
+    private string moduleSource() {
+        return "%modern\n"
+            "module " + ModuleName + " {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"method call references in static member initial values\";\n"
+            "    author = \"Qore Technologies, s.r.o.\";\n"
+            "    license = \"MIT\";\n"
+            "}\n"
+            "\n"
+            "public namespace " + ModuleName + " {\n"
+            "public class Base {\n"
+            "    static string makeInParent() { return \"made\"; }\n"
+            "}\n"
+            "\n"
+            "public class Holder inherits Base {\n"
+            "    public {\n"
+            "        static int with_private = Holder::count(\\Holder::makePrivate());\n"
+            "        static int with_public = Holder::count(\\Holder::makePublic());\n"
+            "        static int with_parent = Holder::count(\\Holder::makeInParent());\n"
+            "        static code stored = \\Holder::makePrivate();\n"
+            "    }\n"
+            "\n"
+            "    static string makePublic() { return \"made\"; }\n"
+            "    private static string makePrivate() { return \"made\"; }\n"
+            "    private static int count(code c) { return c() == \"made\" ? 1 : 0; }\n"
+            "}\n"
+            "}\n";
+    }
+
+    #! A script that loads the module and prints what its static members hold
+    private string scriptSource() {
+        return "%modern\n%requires " + ModuleName + "\n"
+            "printf(\"private: %y\\n\", Holder::with_private);\n"
+            "printf(\"public: %y\\n\", Holder::with_public);\n"
+            "printf(\"parent: %y\\n\", Holder::with_parent);\n"
+            "code c = Holder::stored;\n"
+            "printf(\"stored: %y\\n\", c());\n";
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! Runs the probe script with the module directory given and returns its output
+    private string runProbe(string dir) {
+        return backquote(sprintf("%s QORE_MODULE_DIR=%s %s %s 2>&1", env, dir, qore_bin, dir + "/probe.qr"));
+    }
+
+    #! Asserts that the probe printed the expected lines and nothing else
+    private checkProbe(string out) {
+        assertEq(Expected, map $1, trim(out).split("\n"), out);
+    }
+
+    sourceTest() {
+        TmpDir tmp("qore-aot-static-init-ref-src-");
+        write(tmp.path + "/" + ModuleName + ".qm", moduleSource());
+        write(tmp.path + "/probe.qr", scriptSource());
+        checkProbe(runProbe(tmp.path));
+    }
+
+    aotTest() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        TmpDir tmp("qore-aot-static-init-ref-aot-");
+        string src = tmp.path + "/" + ModuleName + ".qm";
+        string qmod = tmp.path + "/" + ModuleName + ".qmod";
+        write(src, moduleSource());
+        write(tmp.path + "/probe.qr", scriptSource());
+        string compile_out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s --module -o %s %s 2>&1", env, tmp.path,
+            qcc_bin, qmod, src));
+        assertTrue(is_file(qmod), compile_out);
+        # without the source, only the AOT module can satisfy the requirement: no fallback hides a load failure
+        unlink(src);
+        checkProbe(runProbe(tmp.path));
+    }
+}

@@ -31,6 +31,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_program_private.h"
 
 //! creates the QoreProgram object: DEPRECATED: use QoreProgramHelper(int64, ExceptionSink&) instead
 QoreProgramHelper::QoreProgramHelper(ExceptionSink& xs) : pgm(new QoreProgram), xsink(xs) {
@@ -44,6 +45,9 @@ QoreProgramHelper::QoreProgramHelper(const QoreParseOptions& parse_options, Exce
 /** QoreProgram objects are deleted when there reference count reaches 0.
  */
 QoreProgramHelper::~QoreProgramHelper() {
+    // the exit hooks can stop threads that would otherwise run forever
+    qore_run_exit_hooks(nullptr);
+
     // waits for all background threads to execute
     thread_counter.waitForZero(&xsink);
 

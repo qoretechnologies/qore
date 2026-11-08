@@ -1,0 +1,1830 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}"
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires DataProvider
+%requires reflection
+%requires LazyAppActionsValues
+%requires ./LazyAppActionsHooks.qm
+
+%exec-class LazyAppActionsSafetyTest
+
+#! Counts the runs of lazy registrations made by the test
+class SafetyRuns {
+    public {
+        #! the runs of each registration, by name
+        static hash<string, int> runs = {};
+        #! guards runs
+        static Mutex lck();
+    }
+
+    #! Records a run of the named registration
+    static run(string name) {
+        AutoLock al(lck);
+        runs{name} = (runs{name} ?? 0) + 1;
+    }
+
+    #! Returns the number of runs of the named registration
+    static int get(string name) {
+        AutoLock al(lck);
+        return runs{name} ?? 0;
+    }
+}
+
+#! The thread on which the registration of barrierRegistrationTest() ran
+our int barrier_registration_tid;
+
+#! The most catalog workers that run at once (DataProviderActionCatalog::MaxLazyWorkers)
+const MaxLazyWorkersForTest = 4;
+
+#! A catalog change listener that queues each call: its thread, revision, and whether it could read a file
+class QueueListener inherits DataProviderCatalogChangeListener {
+    public {
+        Queue calls();
+    }
+
+    private {
+        string path;
+    }
+
+    constructor(string path) {
+        self.path = path;
+    }
+
+    catalogChanged(int revision) {
+        string read;
+        try {
+            ReadOnlyFile::readTextFile(path);
+            read = "read";
+        } catch (hash<ExceptionInfo> ex) {
+            read = ex.err;
+        }
+        calls.push({"tid": gettid(), "revision": revision, "read": read});
+    }
+}
+
+#! A catalog change listener that records the threads that call it
+class SafetyListener inherits DataProviderCatalogChangeListener {
+    private {
+        list<int> tids = ();
+        Mutex m();
+    }
+
+    catalogChanged(int revision) {
+        AutoLock al(m);
+        tids += gettid();
+    }
+
+    list<int> getTids() {
+        AutoLock al(m);
+        return tids;
+    }
+}
+
+#! An object that a lazy registration creates, and that trusted code uses afterwards
+class SafetyProbe {
+    private {
+        Mutex m();
+    }
+
+    #! Takes a lock, which an interrupted sandbox refuses
+    string work() {
+        AutoLock al(m);
+        return "worked";
+    }
+}
+
+#! Verifies that lazy action registrations are safe for their readers
+/** A lazy registration runs in the trusted context of the module that made it, whoever reads the app first; it is
+    never run by a NoInit getter, nor by a thread that holds the catalog lock; an interrupted or cancelled one is run
+    again by the next reader instead of being retained as a failure; and a reader never waits for an initialization
+    that cannot end.  A deadlock is reported as a failed wait with a generous limit, not as a hung test.
+*/
+class LazyAppActionsSafetyTest inherits QUnit::Test {
+    public {
+        #! the most a thread is given to end; reached only when a wait cannot end
+        const Deadline = 60s;
+    }
+
+    constructor() : Test("DataProvider lazy action registration safety", "1.0") {
+        addTestCase("a subclass of the catalog cannot reach its internal state", \subclassTest());
+        addTestCase("sandboxed and restricted code cannot reach the catalog's internal state through reflection",
+            \reflectionTest());
+        addTestCase("code restricted with PO_NO_UNCONTROLLED_APIS uses the catalog after a trusted load",
+            \restrictedCallerTest());
+        addTestCase("a restricted Program loads a module with a lazy value", \restrictedModuleLoadTest());
+        addTestCase("a sandboxed reader under a policy barrier is still sandboxed", \barrierReaderTest());
+        addTestCase("a registration made under a policy barrier for sandboxed code runs at once",
+            \barrierRegistrationTest());
+        addTestCase("NoInit getters never run a lazy registration", \noInitNeverRunsTest());
+        addTestCase("NoInit getters never wait for another thread's initialization", \noInitNeverWaitsTest());
+        addTestCase("a thread holding the catalog lock does not run a lazy registration", \lockHolderTest());
+        addTestCase("a pending app initialized by registerAction() reads a lazy app", \pendingAppReaderTest());
+        addTestCase("a reader holding a lock that another app's registration needs reads its own app",
+            \unrelatedLockTest());
+        addTestCase("registerAction() does not wait for the lazy registrations of the app", \registerActionTest());
+        addTestCase("an interrupted registration is not retained and runs again", \transientFailureTest());
+        addTestCase("an interrupted wait leaves nothing behind, and the initialization ends for everyone",
+            \sandboxInterruptTest());
+        addTestCase("a registration ended by thread_exit() runs again", \threadExitTest());
+        addTestCase("a registration that runs again replaces the actions its stopped run registered",
+            \partialRunTest());
+        addTestCase("a sandboxed reader's registration runs in its module's context", \sandboxedReaderTest());
+        addTestCase("a sandboxed reader's trusted pending registrations run on the worker", \pendingSandboxedReaderTest());
+        addTestCase("a registration made under a sandbox runs under it for any reader", \governedRegistrationTest());
+        addTestCase("a thread loading a module does not wait for an initialization", \moduleLoadTest());
+        addTestCase("a sandboxed thread loading a module is refused trusted registrations", \sandboxedModuleLoadTest());
+        addTestCase("a sandboxed thread loading a module is refused a lazy value that is not built",
+            \sandboxedValueLoadTest());
+        addTestCase("lazy values whose builders need each other end with an error instead of a deadlock",
+            \valueCycleTest());
+        addTestCase("lazy values are registered by modules; a module that sandboxed code loads builds them at once",
+            \valueRegistrationTest());
+        addTestCase("deregistering an app during its initialization retains nothing", \deregistrationTest());
+        addTestCase("no worker runs until a sandboxed reader needs one, and the process ends with it", \exitTest());
+        addTestCase("the end of the process stops the worker, and its waiting readers get an error",
+            \stoppedWorkerTest());
+        addTestCase("a worker whose thread a registration ends releases its readers and is started again",
+            \workerEndTest());
+        addTestCase("the child of a fork() runs the initializations that the parent's threads ran", \forkTest());
+        addTestCase("a registration made under a sandbox runs at once and blocks no other thread",
+            \governedNowTest());
+        addTestCase("sandboxed code cannot add a catalog change listener", \sandboxedListenerTest());
+        addTestCase("a slow trusted registration does not delay another sandboxed reader", \workerPoolTest());
+        addTestCase("four blocked sandboxed readers' jobs run at once, on four workers", \workerPoolGrowthTest());
+        addTestCase("listeners are called on a catalog worker, never on a sandboxed reader's thread",
+            \listenerThreadTest());
+        addTestCase("a listener runs under no tenant's policy", \listenerPolicyTest());
+        addTestCase("the changes made on a sandboxed thread are delivered by a worker", \governedChangeDeliveryTest());
+        addTestCase("a worker's change is delivered when the reader stopped waiting", \interruptedReaderDeliveryTest());
+        addTestCase("a sandboxed thread interrupted when it requests a delivery does not lose it",
+            \interruptedDeliveryRequestTest());
+        addTestCase("a registration made at once by a thread that holds the catalog lock", \lockOwnerRegistrationTest());
+        addTestCase("only a thread that the catalog started runs as a worker", \untrackedWorkerTest());
+        addTestCase("a first load from the module path has a worker, unless restricted; from source and AOT",
+            \noWorkerTest());
+        addTestCase("sandboxed code cannot set or clear a process-wide callback", \callbackSetterTest());
+        addTestCase("the callbacks of an action registered under a sandbox run when it is registered",
+            \governedActionCallbacksTest());
+        addTestCase("a module that sandboxed code loads first sets its callbacks only from the module path",
+            \sandboxedCallbackModuleLoadTest());
+        addTestCase("a module whose load fails removes its lazy values", \failedLoadValueTest());
+        addTestCase("a Program that may not use the sandbox APIs loads the module; registrations run at once",
+            \restrictedLoaderTest());
+        set_return_value(main());
+    }
+
+    subclassTest() {
+        # code that sandboxed code could run in a subclass: none of it may reach the worker, its capability or the
+        # catalog's state
+        list<string> snippets = (
+            "code c = DataProviderActionCatalog::lazy_worker_start; c();",
+            "code c = lazy_worker_start; c();",
+            "DataProviderActionCatalog::lazy_worker_tid = gettid();",
+            "DataProviderActionCatalog::lazy_worker_shutdown = True;",
+            "DataProviderActionCatalog::lazy_values = {};",
+            "DataProviderActionCatalog::lazyactionmap = {};",
+            "remove DataProviderActionCatalog::appcache;",
+            "DataProviderActionCatalog::lazyWorkerMain();",
+            "DataProviderActionCatalog::runGated(\"x\", 1);",
+        );
+        foreach string snippet in (snippets) {
+            Program p(PO_NEW_STYLE, True);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("%requires DataProvider\n"
+                "class Evil inherits DataProviderActionCatalog {\n"
+                "    static f() { " + snippet + " }\n"
+                "}\n", "subclass"), snippet);
+        }
+        # the class can still be subclassed
+        Program p(PO_NEW_STYLE, True);
+        p.parse("%requires DataProvider\nclass Plain inherits DataProviderActionCatalog {}\n", "plain");
+    }
+
+    reflectionTest() {
+        # refl.q and refl2.q: the capability, the worker's state and its methods, from a subclass and from outside
+        list<string> snippets = (
+            "code c = Class::forName('DataProviderActionCatalog').getStaticMember('lazy_worker_start').getValue(); "
+                + "c();",
+            "Class c = Class::forName('DataProviderActionCatalog'); c.getStaticMember('lazy_worker_shutdown').setValue(True);",
+            "Class c = Class::forName('DataProviderActionCatalog'); c.getStaticVariant('stopLazyWorker').call();",
+            "Class c = Class::forName('DataProviderActionCatalog'); c.getStaticMethod('lazyWorkerMain').call();",
+            "Class c = Class::forName('DataProviderActionCatalog'); c.getConstant('MaxLazyWorkers').getValue();",
+        );
+        foreach string snippet in (snippets) {
+            foreach hash<auto> caller in (({"name": "sandboxed", "opts": PO_NEW_STYLE, "sandbox": True},
+                    {"name": "restricted", "opts": PO_NEW_STYLE | PO_NO_FILESYSTEM, "sandbox": False})) {
+                Program p(caller.opts | PO_NO_CHILD_PO_RESTRICTIONS, True);
+                p.parse("%requires reflection\n%requires DataProvider\n"
+                    "class Evil inherits DataProviderActionCatalog { static f() { " + snippet + " } }\n"
+                    "sub from_subclass() { Evil::f(); }\n"
+                    "sub from_outside() { " + snippet + " }\n", "reflection-" + caller.name);
+                if (caller.sandbox) {
+                    p.setSandboxManager(new SandboxManager());
+                }
+                foreach string f in (("from_subclass", "from_outside")) {
+                    assertThrows("REFLECTION-ACCESS-ERROR", \p.callFunction(), (f,),
+                        sprintf("%s %s: %s", caller.name, f, snippet));
+                }
+            }
+        }
+    }
+
+    restrictedCallerTest() {
+        string lazy = registerLazyApp("SafeRestrictedLazy");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(lazy);
+        string pending = registerApp("SafeRestrictedPending");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(pending);
+        DataProviderActionCatalog::registerPendingAppAction(pending, "pending-a", sub () {
+            LazyAppActionsSafetyTest::registerAction(pending, "pending-a");
+        });
+        Program r(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        r.loadModule("LazyAppActionsValues");
+        r.parse("%requires DataProvider\n"
+            "list<string> sub read(string app) { return map $1.action, DataProviderActionCatalog::getActions(app, False); }\n"
+            "list<string> sub read_via_module(string app) { return LazyAppActionsValues::Values::readApp(app); }\n"
+            "sub reg(string app) {\n"
+            "    DataProviderActionCatalog::registerLazyAppActions(app, sub () {\n"
+            "        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app, \"action\": \"later\",\n"
+            "            \"path\": \"/later\", \"display_name\": \"later\", \"short_desc\": \"later\", \"desc\": \"later\",\n"
+            "            \"action_code\": DPAT_API});\n"
+            "    });\n"
+            "    DataProviderActionCatalog::registerPendingAppAction(app, \"pend\", sub () {\n"
+            "        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app, \"action\": \"pend\",\n"
+            "            \"path\": \"/pend\", \"display_name\": \"pend\", \"short_desc\": \"pend\", \"desc\": \"pend\",\n"
+            "            \"action_code\": DPAT_API});\n"
+            "    });\n"
+            "}\n"
+            "auto sub value(int id) { return DataProviderActionCatalog::getLazyValue(id); }\n", "restricted");
+        # lazy and pending registrations of trusted code, read directly and through a trusted module
+        assertEq(("eager-a", "lazy-b", "lazy-c"), r.callFunction("read", lazy));
+        assertEq(("pending-a",), r.callFunction("read_via_module", pending));
+        # registrations of restricted code, which no sandbox governs: deferred as for any trusted code
+        string app = registerApp("SafeRestrictedReg");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        r.callFunction("reg", app);
+        assertTrue(DataProviderActionCatalog::hasLazyAppActions(app));
+        assertEq(("later", "pend"), sort(r.callFunction("read", app)));
+        # a lazy value
+        assertEq("for restricted", r.callFunction("value", Values::for_restricted));
+    }
+
+    restrictedModuleLoadTest() {
+        Program r(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS, True);
+        r.loadModule(get_script_dir() + "/LazyAppActionsRestrictedValues.qm");
+        r.parse("%requires DataProvider\n"
+            "auto sub get() { return DataProviderActionCatalog::getLazyValue(\n"
+            "    LazyAppActionsRestrictedValues::RestrictedValues::getId()); }\n"
+            "int sub runs() { return LazyAppActionsRestrictedValues::RestrictedValues::getRuns(); }\n",
+            "restricted-load");
+        # the module was loaded by code that no sandbox governs: its value is built on first use
+        assertEq(0, r.callFunction("runs"));
+        assertEq("restricted", r.callFunction("get"));
+        assertEq(1, r.callFunction("runs"));
+    }
+
+    barrierReaderTest() {
+        string app = registerApp("SafeBarrierReader");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        registerAction(app, "eager-a");
+        Queue tids();
+        *SafetyProbe probe;
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            tids.push(gettid());
+            probe = new SafetyProbe();
+            LazyAppActionsSafetyTest::registerAction(app, "lazy-b");
+        });
+        # trusted infrastructure that serves sandboxed callers under a policy barrier
+        code cap = SandboxManager::createSystemPolicyCall(\LazyAppActionsSafetyTest::readBarrier());
+        SandboxManager sm();
+        Program tenant(PO_NEW_STYLE, True);
+        tenant.parse("int sub run(code cap, string app, int value) { return cap(app, value); }\n", "barrier-tenant");
+        tenant.setSandboxManager(sm);
+        int reader_tid = tenant.callFunction("run", cap, app, Values::thread);
+        # the registration and the value ran on a worker, not on the tenant's thread
+        int closure_tid = tids.get(0);
+        assertTrue(closure_tid != reader_tid, "the registration did not run on the tenant's thread");
+        assertTrue(Values::built_in != reader_tid, "the value was not built on the tenant's thread");
+        assertEq(("eager-a", "lazy-b"), map $1.action, DataProviderActionCatalog::getActions(app, False));
+        # what the registration created belongs to no sandbox
+        sm.requestInterrupt();
+        on_exit sm.clearInterrupt();
+        assertEq("worked", probe.work());
+    }
+
+    barrierRegistrationTest() {
+        string app = registerApp("SafeBarrierRegistration");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        code cap = SandboxManager::createSystemPolicyCall(\LazyAppActionsSafetyTest::registerBarrier());
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        Program tenant(PO_NEW_STYLE, True);
+        tenant.parse("int sub run(code cap, string app, string path) { return cap(app, path); }\n",
+            "barrier-registrar");
+        tenant.setSandboxManager(sm);
+        int registering_tid = tenant.callFunction("run", cap, app, get_script_path());
+        # registered for sandboxed code: run at once, on the registering thread, nothing deferred
+        assertFalse(DataProviderActionCatalog::hasLazyAppActions(app));
+        assertEq(("lazy-b",), map $1.action, DataProviderActionCatalog::getActionsNoInit(app));
+        assertEq(registering_tid, barrier_registration_tid);
+    }
+
+    noInitNeverRunsTest() {
+        string app = registerLazyApp("SafeNoInit");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        assertEq(("eager-a",), map $1.action, DataProviderActionCatalog::getActionsNoInit(app));
+        assertTrue((map 1, DataProviderActionCatalog::getAllAppsNoInit(), $1.name == app).size() == 1);
+        assertEq(0, SafetyRuns::get(app));
+        assertTrue(DataProviderActionCatalog::hasLazyAppActions(app));
+        # a real read runs it
+        assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(app, False));
+        assertEq(1, SafetyRuns::get(app));
+    }
+
+    noInitNeverWaitsTest() {
+        string app = registerApp("SafeNoWait");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        registerAction(app, "eager-a");
+        Counter started(1);
+        Counter release(1);
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            registerAction(app, "lazy-b");
+            started.dec();
+            release.waitForZero();
+            registerAction(app, "lazy-c");
+        });
+        # a pending action of another app, also initialized by a thread that blocks
+        string other = registerApp("SafeNoWaitPending");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(other);
+        Counter other_started(1);
+        DataProviderActionCatalog::registerPendingAppAction(other, "pending-d", sub () {
+            other_started.dec();
+            release.waitForZero();
+            registerAction(other, "pending-d");
+        });
+        Counter done(2);
+        background LazyAppActionsSafetyTest::read(app, done);
+        background LazyAppActionsSafetyTest::read(other, done);
+        started.waitForZero();
+        other_started.waitForZero();
+        on_exit {
+            release.dec();
+            done.waitForZero();
+        }
+
+        # both initializations are running and blocked: the NoInit getters return at once
+        Counter read_done(1);
+        Queue results();
+        background LazyAppActionsSafetyTest::readNoInit(app, other, read_done, results);
+        assertEq(0, read_done.waitForZero(Deadline), "the NoInit getters do not wait");
+        hash<auto> r = results.get();
+        assertEq(("eager-a", "lazy-b"), r.app);
+        assertEq((), r.other);
+        assertTrue(r.listed);
+    }
+
+    lockHolderTest() {
+        string app = registerLazyApp("SafeLockHolder");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        list<string> seen;
+        DataProviderActionCatalog::commitDiscoveryCatalogMutation(bool sub () {
+            # this thread holds the catalog lock, which the registration needs
+            seen = map $1.action, DataProviderActionCatalog::getActions(app, False);
+            return False;
+        });
+        assertEq(("eager-a",), seen);
+        assertEq(0, SafetyRuns::get(app));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+        assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(app, False));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+    }
+
+    pendingAppReaderTest() {
+        string lazy = registerLazyApp("SafePendingReader");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(lazy);
+        string pending = "SafePendingApp_" + get_random_string(8);
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(pending);
+        list<string> seen;
+        DataProviderActionCatalog::registerPendingApp(pending, sub () {
+            registerAppIntern(pending);
+            seen = map $1.action, DataProviderActionCatalog::getActions(lazy, False);
+        });
+        # registering an action of the pending app initializes it
+        registerAction(pending, "pending-a");
+        assertEq(("eager-a", "lazy-b", "lazy-c"), seen);
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((lazy, pending)));
+        assertEq(1, SafetyRuns::get(lazy));
+    }
+
+    unrelatedLockTest() {
+        # the registration of a, which a trusted reader runs, needs the lock that the second reader holds while it
+        # reads b: b's registration runs on the second reader's thread, not behind a's
+        string a = registerApp("SafeLockedA");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(a);
+        string b = registerLazyApp("SafeLockedB");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(b);
+        Mutex m();
+        Counter started(1);
+        Counter locked(1);
+        DataProviderActionCatalog::registerLazyAppActions(a, sub () {
+            started.dec();
+            locked.waitForZero();
+            AutoLock al(m);
+            registerAction(a, "lazy-a");
+        });
+        Counter done(2);
+        background LazyAppActionsSafetyTest::read(a, done);
+        started.waitForZero();
+        background LazyAppActionsSafetyTest::readLocked(b, m, locked, done);
+        assertEq(0, done.waitForZero(Deadline), "neither reader waits for the other");
+        assertEq(("lazy-a",), map $1.action, DataProviderActionCatalog::getActions(a, False));
+        assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(b, False));
+    }
+
+    registerActionTest() {
+        # a's registration needs the lock that the thread registering another action of a holds
+        string a = registerApp("SafeRegisterAction");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(a);
+        Mutex m();
+        Counter started(1);
+        Counter locked(1);
+        DataProviderActionCatalog::registerLazyAppActions(a, sub () {
+            started.dec();
+            locked.waitForZero();
+            AutoLock al(m);
+            registerAction(a, "lazy-a");
+        });
+        Counter done(2);
+        background LazyAppActionsSafetyTest::read(a, done);
+        started.waitForZero();
+        background LazyAppActionsSafetyTest::registerLocked(a, m, locked, done);
+        assertEq(0, done.waitForZero(Deadline), "registerAction() does not wait for the registration");
+        assertEq(("direct-b", "lazy-a"), sort(map $1.action, DataProviderActionCatalog::getActions(a, False)));
+    }
+
+    transientFailureTest() {
+        string app = registerApp("SafeTransient");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        registerAction(app, "eager-a");
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            SafetyRuns::run(app);
+            registerAction(app, "lazy-b");
+            if (SafetyRuns::get(app) == 1) {
+                throw "PROGRAM-INTERRUPTED", "program execution was interrupted";
+            }
+            registerAction(app, "lazy-c");
+        });
+        assertThrows("PROGRAM-INTERRUPTED", \DataProviderActionCatalog::getActions(), (app, False));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+        assertTrue(DataProviderActionCatalog::hasLazyAppActions(app), "the registration is pending again");
+        assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(app, False));
+        assertEq(2, SafetyRuns::get(app));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+    }
+
+    sandboxInterruptTest() {
+        string app = registerApp("SafeInterrupt");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        registerAction(app, "eager-a");
+        Counter started(1);
+        Counter release(1);
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            SafetyRuns::run(app);
+            registerAction(app, "lazy-b");
+            started.dec();
+            release.waitForZero();
+            registerAction(app, "lazy-c");
+        });
+        # a trusted thread initializes the app
+        Counter done(1);
+        background LazyAppActionsSafetyTest::read(app, done);
+        started.waitForZero();
+        on_exit if (release.getCount()) {
+            release.dec();
+            done.waitForZero();
+        }
+        # a sandboxed reader waits for the initialization, and its sandbox is interrupted
+        SandboxManager sm();
+        on_exit sm.clearInterrupt();
+        Program reader = readerProgram(sm);
+        Counter reader_done(1);
+        Queue results();
+        background LazyAppActionsSafetyTest::readIn(reader, app, reader_done, results);
+        sm.requestInterrupt();
+        assertEq(0, reader_done.waitForZero(Deadline), "the interrupt ends the reader's wait");
+        auto r = results.get();
+        assertEq("PROGRAM-INTERRUPTED", r.err);
+        # the initialization ends for everyone
+        release.dec();
+        assertEq(0, done.waitForZero(Deadline));
+        Counter later(1);
+        background LazyAppActionsSafetyTest::readInto(app, later, results);
+        assertEq(0, later.waitForZero(Deadline), "a later reader does not wait");
+        assertEq(("eager-a", "lazy-b", "lazy-c"), results.get());
+        assertEq(1, SafetyRuns::get(app));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+    }
+
+    threadExitTest() {
+        string app = registerApp("SafeThreadExit");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        registerAction(app, "eager-a");
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            SafetyRuns::run(app);
+            registerAction(app, "lazy-b");
+            if (SafetyRuns::get(app) == 1) {
+                thread_exit;
+            }
+            registerAction(app, "lazy-c");
+        });
+        Counter done(1);
+        background LazyAppActionsSafetyTest::readAndExit(app, done);
+        assertEq(0, done.waitForZero(Deadline));
+        Counter done2(1);
+        Queue results();
+        background LazyAppActionsSafetyTest::readInto(app, done2, results);
+        assertEq(0, done2.waitForZero(Deadline), "a later reader does not wait for the ended initialization");
+        assertEq(("eager-a", "lazy-b", "lazy-c"), results.get());
+        assertEq(2, SafetyRuns::get(app));
+    }
+
+    partialRunTest() {
+        # each run builds new objects for its actions, as a REST schema action set does: the actions of a stopped
+        # run differ from the next run's, and are replaced by them
+        string app = registerApp("SafePartialRun");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            SafetyRuns::run(app);
+            LazyAppActionsSafetyTest::registerTypedAction(app, "lazy-a");
+            if (SafetyRuns::get(app) == 1) {
+                throw "PROGRAM-INTERRUPTED", "program execution was interrupted";
+            }
+            LazyAppActionsSafetyTest::registerTypedAction(app, "lazy-b");
+        });
+        assertThrows("PROGRAM-INTERRUPTED", \DataProviderActionCatalog::getActions(), (app, False));
+        list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(app, False);
+        assertEq(("lazy-a", "lazy-b"), map $1.action, actions);
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+        assertEq(2, SafetyRuns::get(app));
+        # the catalog holds the second run's action, not the stopped run's
+        assertEq("SafePartialRunType2", actions[0].output_type.getName());
+        # an action registered again outside the run that registered it is still refused
+        assertThrows("ACTION-ERROR", "already registered", \LazyAppActionsSafetyTest::registerTypedAction(),
+            (app, "lazy-a"));
+    }
+
+    sandboxedReaderTest() {
+        string app = registerApp("SafeSandboxed");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        registerAction(app, "eager-a");
+        string script = get_script_path();
+        *SafetyProbe probe;
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            SafetyRuns::run(app);
+            # the module's own resources: denied to the reader's sandbox, not to the registration
+            ReadOnlyFile::readTextFile(script);
+            probe = new SafetyProbe();
+            registerAction(app, "lazy-b");
+        });
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        Program reader = readerProgram(sm);
+        reader.callFunction("read", app);
+        assertEq(1, SafetyRuns::get(app));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+        assertEq(("eager-a", "lazy-b"), map $1.action, DataProviderActionCatalog::getActions(app, False));
+        # what the registration created belongs to no sandbox
+        sm.requestInterrupt();
+        on_exit sm.clearInterrupt();
+        assertEq("worked", probe.work());
+    }
+
+    pendingSandboxedReaderTest() {
+        string app = registerApp("SafePendingSandboxed");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        string pending_app = "SafePendingSandboxedApp_" + get_random_string(8);
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(pending_app);
+        string script = get_script_path();
+        *SafetyProbe probe;
+        # trusted pending registrations of an action and of an app: they read the module's own resources, which the
+        # reader's sandbox denies, and create objects that every reader shares
+        DataProviderActionCatalog::registerPendingAppAction(app, "pending-a", sub () {
+            ReadOnlyFile::readTextFile(script);
+            probe = new SafetyProbe();
+            registerAction(app, "pending-a");
+        });
+        DataProviderActionCatalog::registerPendingApp(pending_app, sub () {
+            ReadOnlyFile::readTextFile(script);
+            registerAppIntern(pending_app);
+        });
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        Program reader = readerProgram(sm);
+        reader.callFunction("read", app);
+        reader.callFunction("read", pending_app);
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app, pending_app)));
+        assertEq(("pending-a",), map $1.action, DataProviderActionCatalog::getActions(app, False));
+        assertTrue(exists DataProviderActionCatalog::getApp(pending_app));
+        # what the registration created belongs to no sandbox
+        sm.requestInterrupt();
+        on_exit sm.clearInterrupt();
+        assertEq("worked", probe.work());
+    }
+
+    governedRegistrationTest() {
+        string app = registerApp("SafeGoverned");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        registerAction(app, "eager-a");
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        string script = get_script_path();
+        # sandboxed code registers the lazy actions: they run under its sandbox, as an eager registration would
+        Program registrar(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        registrar.parse("%requires DataProvider\n"
+            "sub reg(string app, string script) {\n"
+            "    DataProviderActionCatalog::registerLazyAppActions(app, sub () {\n"
+            "        string err = \"none\";\n"
+            "        try { ReadOnlyFile::readTextFile(script); } catch (hash<ExceptionInfo> ex) { err = ex.err; }\n"
+            "        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app,\n"
+            "            \"action\": \"probe\", \"path\": \"/probe\", \"display_name\": \"probe\",\n"
+            "            \"short_desc\": err, \"desc\": err, \"action_code\": DPAT_API});\n"
+            "    });\n"
+            "}\n", "lazy-registrar");
+        registrar.setSandboxManager(sm);
+        registrar.callFunction("reg", app, script);
+        # a sandboxed reader is not refused, and the filesystem policy of the registration applies
+        Program reader = readerProgram(sm);
+        reader.callFunction("read", app);
+        hash<DataProviderActionInfo> probe = DataProviderActionCatalog::getAppActionEx(app, "probe");
+        assertNeq("none", probe.short_desc, "the registration's sandbox denies the read");
+    }
+
+    moduleLoadTest() {
+        string app = registerApp("SafeModuleLoad");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        registerAction(app, "eager-a");
+        Counter started(1);
+        Counter in_init(1);
+        *list<string> read;
+        # what the module's initialization does: it reads the app that the worker initializes
+        string hook = registerHook("SafeModuleLoadHook", sub () {
+            in_init.dec();
+            read = map $1.action, DataProviderActionCatalog::getActions(app, False);
+        });
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(hook);
+        setenv("LAZY_APP_ACTIONS_LOAD_HOOK", hook);
+        on_exit unsetenv("LAZY_APP_ACTIONS_LOAD_HOOK");
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            registerAction(app, "lazy-b");
+            started.dec();
+            # the other thread is initializing the module, and reads this app there
+            in_init.waitForZero();
+            load_module("LazyAppActionsLoadModule");
+            registerAction(app, "lazy-c");
+        });
+        Counter done(2);
+        background LazyAppActionsSafetyTest::read(app, done);
+        started.waitForZero();
+        background LazyAppActionsSafetyTest::loadModule(done);
+        assertEq(0, done.waitForZero(Deadline), "neither thread waits for the other");
+        # the module's initialization read what had been registered then
+        assertEq(("eager-a", "lazy-b"), read);
+        assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(app, False));
+    }
+
+    sandboxedModuleLoadTest() {
+        string app = registerLazyApp("SafeSandboxedLoad");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        string result = "not run";
+        # what the module's initialization does under the sandbox of the Program loading it: it reads the app
+        loadSandboxed("LazyAppActionsSandboxedLoad", sub () {
+            try {
+                result = sprintf("%y", map $1.action, DataProviderActionCatalog::getActions(app, False));
+            } catch (hash<ExceptionInfo> ex) {
+                result = ex.err;
+            }
+        });
+        # the module's initialization runs under the loader's sandbox and cannot wait for the worker: it is refused
+        # instead of running the trusted registration under the sandbox
+        assertEq("DATA-PROVIDER-LAZY-INIT-ERROR", result);
+        assertEq(0, SafetyRuns::get(app));
+        assertTrue(DataProviderActionCatalog::hasLazyAppActions(app), "the registration stays pending");
+        assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(app, False));
+        assertEq(1, SafetyRuns::get(app));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+    }
+
+    valueRegistrationTest() {
+        # outside a module's initialization
+        assertThrows("DATA-PROVIDER-LAZY-VALUE-ERROR", "while a module is being loaded",
+            \DataProviderActionCatalog::registerLazyValue(), (sub () {},));
+        Program sandboxed(PO_NEW_STYLE, True);
+        sandboxed.parse("%requires DataProvider\nsub reg() { DataProviderActionCatalog::registerLazyValue(sub () {}); }\n",
+            "sandboxed-value");
+        sandboxed.setSandboxManager(new SandboxManager());
+        assertThrows("DATA-PROVIDER-LAZY-VALUE-ERROR", \sandboxed.callFunction(), ("reg",));
+        # a module that sandboxed code loads: its value is built while it is loaded
+        Program loader(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        loader.parse("sub load(string path) { load_module(path); }\n"
+            "auto sub get(string m) { return call_static_method(\"LazyAppActionsGovernedValues::GovernedValues\", m); }\n",
+            "lazy-governed-value-loader");
+        loader.setSandboxManager(new SandboxManager());
+        string path = get_script_dir() + "/LazyAppActionsGovernedValues.qm";
+        loader.callFunction("load", path);
+        # a module that sandboxed code chose is not given to trusted code
+        assertThrows("LOAD-MODULE-ERROR", "loaded from outside the module path by code that a sandbox governs",
+            \load_module(), (path,));
+        assertEq(1, loader.callFunction("get", "getRuns"));
+        int id = loader.callFunction("get", "getId");
+        assertEq("governed", DataProviderActionCatalog::getLazyValue(id));
+        assertEq(1, loader.callFunction("get", "getRuns"));
+    }
+
+    valueCycleTest() {
+        # two threads build two values whose builders need each other
+        Counter done(2);
+        Queue results();
+        background LazyAppActionsSafetyTest::getValue(Values::cycle_a, done, results);
+        background LazyAppActionsSafetyTest::getValue(Values::cycle_b, done, results);
+        assertEq(0, done.waitForZero(Deadline), "neither thread waits for ever");
+        assertEq(("DATA-PROVIDER-LAZY-VALUE-ERROR", "DATA-PROVIDER-LAZY-VALUE-ERROR"),
+            (results.get(), results.get()));
+    }
+
+    sandboxedValueLoadTest() {
+        string result = "not run";
+        # what the module's initialization does under the sandbox of the Program loading it: it reads the value
+        loadSandboxed("LazyAppActionsSandboxedValueLoad", sub () {
+            try {
+                result = DataProviderActionCatalog::getLazyValue(Values::counted);
+            } catch (hash<ExceptionInfo> ex) {
+                result = ex.err;
+            }
+        });
+        # refused instead of waiting for the worker, which could be loading the same module
+        assertEq("DATA-PROVIDER-LAZY-INIT-ERROR", result);
+        assertEq(0, Values::runs);
+        assertEq("counted", DataProviderActionCatalog::getLazyValue(Values::counted));
+        assertEq(1, Values::runs);
+    }
+
+    deregistrationTest() {
+        string app = registerApp("SafeDeregistered");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        registerAction(app, "eager-a");
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            registerAction(app, "lazy-b");
+            # the app is removed while its registration runs
+            DataProviderActionCatalog::deregisterDynamicApp(app);
+            registerAction(app, "lazy-c");
+        });
+        DataProviderActionCatalog::getActions(app, False);
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+        assertEq(NOTHING, DataProviderActionCatalog::getApp(app));
+        DataProviderQualifiedDiscovery result = DataProviderActionCatalog::sealDiscovery(
+            DataProviderActionCatalog::beginDiscovery());
+        on_exit DataProviderActionCatalog::discardQualifiedDiscovery(result);
+        assertEq((), map $1, result.getReport().failures, $1.app == app);
+    }
+
+    exitTest() {
+        hash<auto> r = runChild("exit", "
+string app = register_lazy(\"SafeExitIdle\");
+register_lazy(\"SafeExitUnread\");
+# trusted readers run lazy registrations on their own threads: no worker is started
+printf(\"%y\\n\", map $1.action, DataProviderActionCatalog::getActions(app, False));
+printf(\"threads: %d\\n\", num_threads());
+# a sandboxed reader starts the worker, which the exit hook stops
+string sandboxed = register_lazy(\"SafeExitSandboxed\");
+Program reader(PO_NEW_STYLE, True);
+reader.parse(\"%requires DataProvider\\nsub read(string app) { DataProviderActionCatalog::getActions(app, False); }\\n\",
+    \"reader\");
+reader.setSandboxManager(new SandboxManager());
+reader.callFunction(\"read\", sandboxed);
+printf(\"threads: %d\\n\", num_threads());
+");
+        assertEq(0, r.rc, r.output);
+        assertLines(("[\"eager-a\", \"lazy-b\"]", "threads: 1", "threads: 2"), r.output);
+    }
+
+    stoppedWorkerTest() {
+%ifdef QoreDebug
+        # the catalog workers are stopped by the exit hook while each runs a sandboxed reader's job, and another
+        # sandboxed reader's job is queued behind them: that reader gets DATA-PROVIDER-LAZY-WORKER-STOPPED.  Four jobs
+        # keep the whole pool busy (DataProviderActionCatalog::MaxLazyWorkers), so that the fifth stays queued.  The
+        # child loads the DataProvider module after it registered the hook releasing the jobs, so that the
+        # DataProvider's exit hook, registered later, runs first.
+        hash<auto> r = runChild("stopped", "
+our Counter release(1);
+register_exit_hook(sub () { release.dec(); });
+", "
+const Workers = 4;
+Counter started(Workers);
+Program reader(PO_NEW_STYLE, True);
+reader.parse(\"%requires DataProvider\\n\"
+    \"string sub read(string app) {\\n\"
+    \"    try { DataProviderActionCatalog::getActions(app, False); return app + \\\": ok\\\"; }\\n\"
+    \"    catch (hash<ExceptionInfo> ex) { return app + \\\": \\\" + ex.err; }\\n\"
+    \"}\\n\", \"reader\");
+reader.setSandboxManager(new SandboxManager());
+for (int i = 0; i < Workers; ++i) {
+    string a = register_lazy(\"SafeStopBlocked\");
+    DataProviderActionCatalog::registerLazyAppActions(a, sub () { started.dec(); release.waitForZero(); });
+    background sub (string app) { printf(\"%s\\n\", regex_subst(reader.callFunction(\"read\", app), \"_[^:]*:\", \":\")); }(a);
+}
+started.waitForZero();
+string b = register_lazy(\"SafeStopQueued\");
+int queued = DataProviderActionCatalog::getLazyInitsQueued();
+background sub () { printf(\"%s\\n\", regex_subst(reader.callFunction(\"read\", b), \"_[^:]*:\", \":\")); }();
+# the last reader's job is queued behind the others, which wait until the process ends
+DataProviderActionCatalog::waitForLazyInitsQueued(queued + 1, 60s);
+", ("release",));
+        assertEq(0, r.rc, r.output);
+        assertEq(("SafeStopBlocked: ok", "SafeStopBlocked: ok", "SafeStopBlocked: ok", "SafeStopBlocked: ok",
+            "SafeStopQueued: DATA-PROVIDER-LAZY-WORKER-STOPPED"),
+            sort(map $1, r.output.split("\n"), $1 =~ /^SafeStop/), r.output);
+%else
+        testSkip("the test needs the catalog worker's test hooks, which only debug builds have");
+%endif
+    }
+
+    workerEndTest() {
+%ifdef QoreDebug
+        # a registration ends its worker's thread while a second job is queued: its reader is told, the registration
+        # is restored, the queued job runs on another worker, and the next sandboxed reader runs the registration
+        string a = registerApp("SafeWorkerEnd");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(a);
+        registerAction(a, "eager-a");
+        string b = registerLazyApp("SafeWorkerEndQueued");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(b);
+        int queued = DataProviderActionCatalog::getLazyInitsQueued();
+        DataProviderActionCatalog::registerLazyAppActions(a, sub () {
+            SafetyRuns::run(a);
+            registerAction(a, "lazy-b");
+            if (SafetyRuns::get(a) == 1) {
+                # the second reader's job is queued behind this one
+                DataProviderActionCatalog::waitForLazyInitsQueued(queued + 2, Deadline);
+                thread_exit;
+            }
+            registerAction(a, "lazy-c");
+        });
+        Program reader = readerProgram(new SandboxManager());
+        Queue results();
+        Counter done(2);
+        background LazyAppActionsSafetyTest::readIn(reader, a, done, results);
+        DataProviderActionCatalog::waitForLazyInitsQueued(queued + 1, Deadline);
+        background LazyAppActionsSafetyTest::readIn(reader, b, done, results);
+        assertEq(0, done.waitForZero(Deadline), "the readers are released");
+        assertEq(("DATA-PROVIDER-LAZY-WORKER-STOPPED", "ok"), sort((results.get().err ?? "ok",
+            results.get().err ?? "ok")));
+        # a new worker runs the restored registration and the queued one
+        reader.callFunction("read", a);
+        reader.callFunction("read", b);
+        assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(a, False));
+        assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(b, False));
+        assertEq(2, SafetyRuns::get(a));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((a, b)));
+%else
+        testSkip("the test needs the catalog worker's test hooks, which only debug builds have");
+%endif
+    }
+
+    forkTest() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        string app = registerApp("SafeFork");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        registerAction(app, "eager-a");
+        int parent = getpid();
+        Counter started(1);
+        Counter release(1);
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            registerAction(app, "lazy-b");
+            if (getpid() == parent) {
+                started.dec();
+                release.waitForZero();
+            }
+            registerAction(app, "lazy-c");
+        });
+        Counter done(1);
+        background LazyAppActionsSafetyTest::read(app, done);
+        # a thread of the parent runs the initialization when the process is copied
+        started.waitForZero();
+        on_exit {
+            release.dec();
+            done.waitForZero();
+        }
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        int pid = fork();
+        if (!pid) {
+            # the child: no thread of the parent runs here, the catalog worker included
+            string result;
+            try {
+                SandboxManager sm();
+                Program reader = readerProgram(sm);
+                try {
+                    reader.callFunction("read", app);
+                    result = "not refused; ";
+                } catch (hash<ExceptionInfo> ex) {
+                    result = ex.err + "; ";
+                }
+                result += sprintf("%y", map $1.action, DataProviderActionCatalog::getActions(app, False));
+            } catch (hash<ExceptionInfo> ex) {
+                result += ex.err + ": " + ex.desc;
+            }
+            Socket s();
+            s.connect("127.0.0.1:" + port);
+            s.send(result + "\n");
+            s.close();
+            exit(0);
+        }
+        *Socket child = listener.accept(Deadline);
+        assertTrue(exists child, "the child reports");
+        string result = trim(child.recv(-1, Deadline));
+        # the child's sandboxed reader starts a worker of its own, which runs the registration that a thread of the
+        # parent was running
+        assertEq("not refused; [\"eager-a\", \"lazy-b\", \"lazy-c\"]", result);
+    }
+
+    restrictedLoaderTest() {
+        # the first Program that loads the module may not use the sandbox APIs, which the module then may not use
+        # either: it loads, and runs lazy registrations and builds lazy values when they are registered
+        string dir = make_tmp_dir("lazy-safety-");
+        on_exit remove_tree(dir);
+        LazyAppActionsSafetyTest::writeFile(dir + "/restricted-code.q", "%requires DataProvider
+sub reg(string app, string action) {
+    DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app, \"action\": action,
+        \"path\": \"/\" + action, \"display_name\": action, \"short_desc\": action, \"desc\": action,
+        \"action_code\": DPAT_API});
+}
+string sub test() {
+    DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": \"RestrictedApp\",
+        \"display_name\": \"x\", \"short_desc\": \"x\", \"desc\": \"x\", \"groups\": (AppGroup::DataTransformation,),
+        \"logo\": \"data\", \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\", \"dynamic\": True});
+    DataProviderActionCatalog::registerLazyAppActions(\"RestrictedApp\", sub () { reg(\"RestrictedApp\", \"lazy-a\"); });
+    # the module's lazy value was built when the module was loaded
+    return sprintf(\"%y %y %y %y\", (map $1.action, DataProviderActionCatalog::getActionsNoInit(\"RestrictedApp\")),
+        DataProviderActionCatalog::hasLazyAppActions(\"RestrictedApp\"),
+        LazyAppActionsGovernedValues::GovernedValues::runs,
+        DataProviderActionCatalog::getLazyValue(LazyAppActionsGovernedValues::GovernedValues::id));
+}
+");
+        string script = dir + "/restricted.q";
+        LazyAppActionsSafetyTest::writeFile(script, "%modern
+Program p(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS, True);
+try {
+    p.loadModule(\"DataProvider\");
+    p.loadModule(\"" + get_script_dir() + "/LazyAppActionsGovernedValues.qm\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"load: %s\\n\", ex.err);
+    exit(1);
+}
+p.parse(ReadOnlyFile::readTextFile(get_script_dir() + \"/restricted-code.q\"), \"restricted\");
+printf(\"%s\\n\", p.callFunction(\"test\"));
+");
+        string output = dir + "/output.txt";
+        int rc = system(sprintf("QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1",
+            get_script_dir() + "/../../../../qlib" + PathSep + (ENV.QORE_MODULE_DIR ?? ""), QORE_ARGV[0], script,
+            output));
+        string out = ReadOnlyFile::readTextFile(output);
+        assertEq(0, rc, out);
+        assertLines(("[\"lazy-a\"] False 1 \"governed\"",), out);
+    }
+
+    governedNowTest() {
+        string app = registerApp("SafeGovernedNow");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        registerAction(app, "eager-a");
+        SandboxManager sm();
+        Program registrar(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        registrar.parse("%requires DataProvider\n"
+            "sub reg(string app, Counter started, Counter release) {\n"
+            "    DataProviderActionCatalog::registerLazyAppActions(app, sub () {\n"
+            "        started.dec();\n"
+            "        release.waitForZero();\n"
+            "        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app,\n"
+            "            \"action\": \"tenant\", \"path\": \"/tenant\", \"display_name\": \"tenant\",\n"
+            "            \"short_desc\": \"tenant\", \"desc\": \"tenant\", \"action_code\": DPAT_API});\n"
+            "    });\n"
+            "}\n", "governed-now");
+        registrar.setSandboxManager(sm);
+        Counter started(1);
+        Counter release(1);
+        Counter done(1);
+        # the tenant's registration runs on the tenant's thread, at once
+        background LazyAppActionsSafetyTest::callIn(registrar, "reg", (app, started, release), done);
+        started.waitForZero();
+        on_exit if (release.getCount()) {
+            release.dec();
+            done.waitForZero();
+        }
+        assertFalse(DataProviderActionCatalog::hasLazyAppActions(app), "nothing is deferred");
+        # trusted code reading the app is not held by the tenant's registration
+        Counter read(1);
+        Queue results();
+        background LazyAppActionsSafetyTest::readInto(app, read, results);
+        assertEq(0, read.waitForZero(Deadline), "the trusted reader is not blocked");
+        assertEq(("eager-a",), results.get());
+        release.dec();
+        assertEq(0, done.waitForZero(Deadline));
+        assertEq(("eager-a", "tenant"), map $1.action, DataProviderActionCatalog::getActions(app, False));
+    }
+
+    sandboxedListenerTest() {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        p.parse("%requires DataProvider\n"
+            "class L inherits DataProviderCatalogChangeListener { catalogChanged(int revision) {} }\n"
+            "sub add() { L l(); DataProviderActionCatalog::addCatalogChangeListener(l); }\n", "sandboxed-listener");
+        p.setSandboxManager(new SandboxManager());
+        assertThrows("DATA-PROVIDER-LISTENER-ERROR", \p.callFunction(), ("add",));
+    }
+
+    workerPoolTest() {
+        # a sandboxed reader's slow trusted registration
+        string slow = registerApp("SafePoolSlow");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(slow);
+        Counter started(1);
+        Counter release(1);
+        DataProviderActionCatalog::registerLazyAppActions(slow, sub () {
+            started.dec();
+            release.waitForZero();
+            registerAction(slow, "lazy-slow");
+        });
+        string quick = registerLazyApp("SafePoolQuick");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(quick);
+        Program reader = readerProgram(new SandboxManager());
+        Counter slow_done(1);
+        Queue errors();
+        background LazyAppActionsSafetyTest::readIn(reader, slow, slow_done, errors);
+        started.waitForZero();
+        on_exit if (release.getCount()) {
+            release.dec();
+            slow_done.waitForZero();
+        }
+        # another sandboxed reader's job runs on another worker
+        Counter quick_done(1);
+        background LazyAppActionsSafetyTest::readIn(reader, quick, quick_done, errors);
+        assertEq(0, quick_done.waitForZero(Deadline), "the second reader is not delayed by the slow registration");
+        assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(quick, False));
+        release.dec();
+        assertEq(0, slow_done.waitForZero(Deadline));
+    }
+
+    workerPoolGrowthTest() {
+        # jobs queued at once, faster than the workers take them: each job is counted from when it is queued, so the
+        # pool grows to one worker per job up to its size (four), and no job waits behind a blocked one
+        int jobs = 4;
+        Counter started(jobs);
+        Counter release(1);
+        list<string> apps = ();
+        on_exit map DataProviderActionCatalog::deregisterDynamicApp($1), apps;
+        for (int i = 0; i < jobs; ++i) {
+            string app = registerApp("SafePoolGrowth");
+            apps += app;
+            DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+                started.dec();
+                release.waitForZero();
+                registerAction(app, "lazy-a");
+            });
+        }
+        Program reader = readerProgram(new SandboxManager());
+        Counter done(jobs);
+        Queue errors();
+        map background LazyAppActionsSafetyTest::readIn(reader, $1, done, errors), apps;
+        on_exit if (release.getCount()) {
+            release.dec();
+            done.waitForZero();
+        }
+        assertEq(0, started.waitForZero(Deadline), "every job runs while the others are blocked");
+        release.dec();
+        assertEq(0, done.waitForZero(Deadline));
+        map assertEq(("lazy-a",), map $1.action, DataProviderActionCatalog::getActions($1, False)), apps;
+    }
+
+    listenerThreadTest() {
+%ifdef QoreDebug
+        string app = registerLazyApp("SafeListenerThread");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        SafetyListener listener();
+        int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
+        # a sandboxed reader has a worker register the actions; the worker delivers the change before the reader's
+        # wait ends
+        Program reader = readerProgram(new SandboxManager());
+        Counter done(1);
+        Queue errors();
+        Queue tids();
+        background LazyAppActionsSafetyTest::readInWithTid(reader, app, done, errors, tids);
+        assertEq(0, done.waitForZero(Deadline));
+        int reader_tid = tids.get();
+        list<int> workers = DataProviderActionCatalog::getLazyWorkers();
+        assertTrue(workers.size() > 0, "a worker ran the registration");
+        list<int> calls = listener.getTids();
+        assertTrue(calls.size() > 0, "the change was delivered");
+        assertEq((), (map $1, calls, !inlist($1, workers)), "every call ran on a worker");
+        assertFalse(inlist(reader_tid, calls), "no call ran on the reader's thread");
+%else
+        testSkip("the test needs the catalog worker's test hooks, which only debug builds have");
+%endif
+    }
+
+    listenerPolicyTest() {
+        string app = registerLazyApp("SafeListenerPolicy");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        QueueListener listener(get_script_path());
+        int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
+        # the tenant may not read files; the listener, trusted code, reads one
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        Program reader = readerProgram(sm);
+        Counter done(1);
+        Queue errors();
+        Queue tids();
+        background LazyAppActionsSafetyTest::readInWithTid(reader, app, done, errors, tids);
+        assertEq(0, done.waitForZero(Deadline));
+        assertEq(0, errors.size());
+        int reader_tid = tids.get();
+        hash<auto> call = listener.calls.get(Deadline);
+        assertTrue(call.tid != reader_tid, "the listener did not run on the tenant's thread");
+        assertEq("read", call.read, "the tenant's filesystem policy does not apply to the listener");
+        assertEq((), DataProviderActionCatalog::getCatalogChangeListenerFailures(id));
+    }
+
+    governedChangeDeliveryTest() {
+        QueueListener listener(get_script_path());
+        int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        Program tenant(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        tenant.parse("%requires DataProvider\n"
+            "int sub reg(string app) {\n"
+            "    DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app, \"display_name\": app,\n"
+            "        \"short_desc\": app, \"desc\": app, \"groups\": (AppGroup::DataTransformation,),\n"
+            "        \"logo\": \"data\", \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\",\n"
+            "        \"dynamic\": True});\n"
+            "    return gettid();\n"
+            "}\n", "tenant-change");
+        tenant.setSandboxManager(sm);
+        string app = "SafeGovernedChange_" + get_random_string(8);
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        int tenant_tid = tenant.callFunction("reg", app);
+        # the tenant's own change is delivered by a worker, not on the tenant's thread
+        hash<auto> call = listener.calls.get(Deadline);
+        assertTrue(call.tid != tenant_tid, "the listener did not run on the tenant's thread");
+        assertEq("read", call.read);
+%ifdef QoreDebug
+        assertTrue(inlist(call.tid, DataProviderActionCatalog::getLazyWorkers()), "a worker delivered the change");
+%endif
+    }
+
+    interruptedReaderDeliveryTest() {
+        string app = registerApp("SafeInterruptedDelivery");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        Counter started(1);
+        Counter release(1);
+        on_exit if (release.getCount()) {
+            release.dec();
+        }
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            started.dec();
+            release.waitForZero();
+            LazyAppActionsSafetyTest::registerAction(app, "lazy-b");
+        });
+        QueueListener listener(get_script_path());
+        int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
+        SandboxManager sm();
+        on_exit sm.clearInterrupt();
+        Program reader = readerProgram(sm);
+        Counter done(1);
+        Queue results();
+        background LazyAppActionsSafetyTest::readIn(reader, app, done, results);
+        # the worker runs the registration, and the reader's wait is interrupted
+        assertEq(0, started.waitForZero(Deadline));
+        sm.requestInterrupt();
+        assertEq(0, done.waitForZero(Deadline));
+        assertEq("PROGRAM-INTERRUPTED", results.get().err);
+        int revision = DataProviderActionCatalog::getCatalogRevision();
+        release.dec();
+        # the worker delivers its change, though no reader waits for it any more
+        while (True) {
+            hash<auto> call = listener.calls.get(Deadline);
+            if (call.revision > revision) {
+                break;
+            }
+        }
+        assertEq(("lazy-b",), map $1.action, DataProviderActionCatalog::getActionsNoInit(app));
+    }
+
+    interruptedDeliveryRequestTest() {
+%ifdef QoreDebug
+        QueueListener listener(get_script_path());
+        int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
+        SandboxManager sm();
+        on_exit sm.clearInterrupt();
+        # the tenant's sandbox is interrupted when it requests the delivery of its change
+        DataProviderActionCatalog::setDeliveryTestHook(sub () { sm.requestInterrupt(); });
+        on_exit DataProviderActionCatalog::setDeliveryTestHook();
+        Program tenant(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        tenant.parse("%requires DataProvider\n"
+            "sub reg(string app) {\n"
+            "    DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app, \"display_name\": app,\n"
+            "        \"short_desc\": app, \"desc\": app, \"groups\": (AppGroup::DataTransformation,),\n"
+            "        \"logo\": \"data\", \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\",\n"
+            "        \"dynamic\": True});\n"
+            "}\n", "tenant-interrupted-delivery");
+        tenant.setSandboxManager(sm);
+        string app = "SafeInterruptedRequest_" + get_random_string(8);
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        int revision = DataProviderActionCatalog::getCatalogRevision();
+        try {
+            tenant.callFunction("reg", app);
+        } catch (hash<ExceptionInfo> ex) {
+            # the interrupt can end the tenant's call after its change
+            assertEq("PROGRAM-INTERRUPTED", ex.err);
+        }
+        # a worker delivers the change, though the tenant's thread was interrupted when it requested the delivery; no
+        # catalog call is made on this thread before, which would deliver it here
+        hash<auto> call;
+        while (True) {
+            call = listener.calls.get(Deadline);
+            if (call.revision > revision) {
+                break;
+            }
+        }
+        assertTrue(call.tid != gettid(), "a worker delivered the change");
+%else
+        testSkip("the test needs the catalog's test hooks, which only debug builds have");
+%endif
+    }
+
+    lockOwnerRegistrationTest() {
+%ifdef QoreDebug
+        string app = "SafeLockOwner_" + get_random_string(8);
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        Program tenant(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        tenant.parse("%requires DataProvider\n"
+            "our int action_runs = 0;\n"
+            "sub reg(string app) {\n"
+            "    DataProviderActionCatalog::registerPendingApp(app, sub () {\n"
+            "        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app, \"display_name\": app,\n"
+            "            \"short_desc\": app, \"desc\": app, \"groups\": (AppGroup::DataTransformation,),\n"
+            "            \"logo\": \"data\", \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\",\n"
+            "            \"dynamic\": True});\n"
+            "    });\n"
+            "    DataProviderActionCatalog::registerPendingAppAction(app, \"pend\", sub () { ++action_runs; });\n"
+            "}\n"
+            "int sub action_runs() { return action_runs; }\n", "tenant-lock-owner");
+        tenant.setSandboxManager(new SandboxManager());
+        # registrations made under a sandbox run at once, also on a thread that holds the catalog lock
+        DataProviderActionCatalog::runWithCatalogLock(sub () { tenant.callFunction("reg", app); });
+        assertEq(app, DataProviderActionCatalog::getApp(app).name);
+        assertEq(1, tenant.callFunction("action_runs"));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+        # and are refused as for any thread when they are registered already
+        assertThrows("APP-ERROR", "already registered", \DataProviderActionCatalog::runWithCatalogLock(),
+            (sub () { tenant.callFunction("reg", app); },));
+%else
+        testSkip("the test needs the catalog's test hooks, which only debug builds have");
+%endif
+    }
+
+    untrackedWorkerTest() {
+        # the worker's code, called by a thread that the catalog did not start, ends at once: it does not take the
+        # catalog's jobs
+        StaticMethod m = Class::forName("DataProviderActionCatalog").getStaticMethod("lazyWorkerMain");
+        Counter done(1);
+        Queue tids();
+        background LazyAppActionsSafetyTest::callWorkerMain(m, done, tids);
+        assertEq(0, done.waitForZero(Deadline), "the worker's code returned at once");
+%ifdef QoreDebug
+        assertFalse(inlist(tids.get(), DataProviderActionCatalog::getLazyWorkers()));
+%endif
+        # the capability, called otherwise than by the catalog, starts threads that end at once; the readers' jobs
+        # still run
+        code start = Class::forName("DataProviderActionCatalog").getStaticMember("lazy_worker_start").getValue();
+        map start(), xrange(MaxLazyWorkersForTest + 2);
+        string app = registerLazyApp("SafeUntrackedWorker");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        Program reader = readerProgram(new SandboxManager());
+        Counter read(1);
+        Queue errors();
+        background LazyAppActionsSafetyTest::readIn(reader, app, read, errors);
+        assertEq(0, read.waitForZero(Deadline));
+        assertEq(NOTHING, LazyAppActionsSafetyTest::describeError(errors));
+%ifdef QoreDebug
+        assertTrue(DataProviderActionCatalog::getLazyWorkers().size() <= MaxLazyWorkersForTest);
+%endif
+    }
+
+    noWorkerTest() {
+        # the first load from the module path: by sandboxed code, and by trusted code serving sandboxed code under a
+        # policy barrier, initialize the module as library code, with a catalog worker; by code restricted with
+        # PO_NO_UNCONTROLLED_APIS, which may not create the worker's capability, without one
+        hash<string, hash<auto>> loaders = {
+            "sandboxed": {"worker": True, "code": "Program loader(PO_NEW_STYLE, True);\n"
+                "loader.parse(\"sub load() { load_module('DataProvider'); }\", \"loader\");\n"
+                "loader.setSandboxManager(new SandboxManager());\n"
+                "loader.callFunction(\"load\");\n"},
+            "barrier": {"worker": True, "code": "code cap = SandboxManager::createSystemPolicyCall(sub () { load_module('DataProvider'); });\n"
+                "Program loader(PO_NEW_STYLE, True);\n"
+                "loader.parse(\"sub load(code cap) { cap(); }\", \"loader\");\n"
+                "loader.setSandboxManager(new SandboxManager());\n"
+                "loader.callFunction(\"load\", cap);\n"},
+            "restricted": {"worker": False, "code": "Program loader(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS, True);\n"
+                "loader.parse(\"sub load() { load_module('DataProvider'); }\", \"loader\");\n"
+                "loader.callFunction(\"load\");\n"},
+        };
+        string body = "Program trusted(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);\n"
+            "trusted.parse(ReadOnlyFile::readTextFile(get_script_dir() + \"/trusted.q\"), \"trusted\");\n"
+            "printf(\"%s\\n\", trusted.callFunction(\"test\"));\n"
+            "Program reader(PO_NEW_STYLE, True);\n"
+            "reader.parse(\"%requires DataProvider\\nstring sub read(string app) { return sprintf('%y', map $1.action, "
+            "DataProviderActionCatalog::getActions(app, False)); }\\n\", \"reader\");\n"
+            "reader.setSandboxManager(new SandboxManager());\n"
+            "printf(\"reader: %s\\n\", reader.callFunction(\"read\", \"NoWorkerApp\"));\n";
+        string trusted = "%requires DataProvider\n"
+            "sub reg(string app, string action) {\n"
+            "    DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app, \"action\": action,\n"
+            "        \"path\": \"/\" + action, \"display_name\": action, \"short_desc\": action, \"desc\": action,\n"
+            "        \"action_code\": DPAT_API});\n"
+            "}\n"
+            "string sub test() {\n"
+            "    string app = \"NoWorkerApp\";\n"
+            "    DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app, \"display_name\": app,\n"
+            "        \"short_desc\": app, \"desc\": app, \"groups\": (AppGroup::DataTransformation,), \"logo\": \"data\",\n"
+            "        \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\", \"dynamic\": True});\n"
+            "    DataProviderActionCatalog::registerLazyAppActions(app, sub () { reg(app, \"lazy-a\"); });\n"
+            "    DataProviderActionCatalog::registerPendingAppAction(app, \"pend\", sub () { reg(app, \"pend\"); });\n"
+            "    return sprintf(\"trusted: %y %y\", DataProviderActionCatalog::hasLazyAppActions(app),\n"
+            "        sort(map $1.action, DataProviderActionCatalog::getActionsNoInit(app)));\n"
+            "}\n";
+        list<hash<auto>> forms = ({"name": "source", "dir": get_script_dir() + "/../../../../qlib"},);
+        if (*string qmod_dir = LazyAppActionsSafetyTest::findQmodDir()) {
+            forms += {"name": "AOT", "dir": qmod_dir};
+        }
+        foreach hash<auto> form in (forms) {
+            foreach hash<auto> loader in (loaders.pairIterator()) {
+                string dir = make_tmp_dir("lazy-safety-");
+                on_exit remove_tree(dir);
+                LazyAppActionsSafetyTest::writeFile(dir + "/trusted.q", trusted);
+                LazyAppActionsSafetyTest::writeFile(dir + "/no-worker.q", "%modern\n%no-child-restrictions\n"
+                    + loader.value.code + body);
+                string output = dir + "/output.txt";
+                int rc = system(sprintf("QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1",
+                    form.dir + PathSep + get_script_dir() + "/../../../../qlib" + PathSep
+                        + (ENV.QORE_MODULE_DIR ?? ""), QORE_ARGV[0], dir + "/no-worker.q", output));
+                string out = ReadOnlyFile::readTextFile(output);
+                string what = form.name + ", " + loader.key;
+                assertEq(0, rc, what + ": " + out);
+                # with a worker, the trusted registrations are deferred, and the worker runs them for the sandboxed
+                # reader; without one, nothing is deferred, and the sandboxed reader needs none
+                string deferred = loader.value.worker ? "trusted: True []" : "trusted: False [\"lazy-a\", \"pend\"]";
+                assertEq(2, LazyAppActionsSafetyTest::countLines((deferred, "reader: [\"lazy-a\", \"pend\"]"), out),
+                    what + ": " + out);
+            }
+        }
+        if (forms.size() == 1) {
+            testSkip("no AOT DataProvider.qmod was found; only the source form was tested");
+        }
+    }
+
+    callbackSetterTest() {
+        Program tenant(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        tenant.parse("%requires DataProvider\n"
+            "sub set_lookup() { DataProviderActionCatalog::setSchemeLookupCallback(*hash<auto> sub (string s) {}); }\n"
+            "sub clear_lookup() { DataProviderActionCatalog::clearSchemeLookupCallback(); }\n"
+            "sub set_builder() { DataProviderActionCatalog::setGenericApiCallActionBuilder(\n"
+            "    hash<DataProviderActionInfo> sub (hash<DataProviderAppInfo> app) { return <DataProviderActionInfo>{}; }); }\n"
+            "sub clear_builder() { DataProviderActionCatalog::clearGenericApiCallActionBuilder(); }\n"
+            "sub set_child() { AbstractDataProvider::setGenericApiCallChildBuilder(*AbstractDataProvider sub (object o) {}); }\n"
+            "sub clear_child() { AbstractDataProvider::clearGenericApiCallChildBuilder(); }\n"
+            "sub barrier(code cap) { cap(); }\n", "tenant-callbacks");
+        tenant.setSandboxManager(new SandboxManager());
+        bool lookup = DataProviderActionCatalog::hasSchemeLookupCallback();
+        bool builder = DataProviderActionCatalog::hasGenericApiCallActionBuilder();
+        bool child = AbstractDataProvider::hasGenericApiCallChildBuilder();
+        foreach string f in (("set_lookup", "clear_lookup", "set_builder", "clear_builder", "set_child",
+                "clear_child")) {
+            assertThrows("DATA-PROVIDER-CALLBACK-ERROR", \tenant.callFunction(), (f,), f);
+        }
+        # also through trusted code serving the tenant under a policy barrier
+        code cap = SandboxManager::createSystemPolicyCall(sub () {
+            DataProviderActionCatalog::clearSchemeLookupCallback();
+        });
+        assertThrows("DATA-PROVIDER-CALLBACK-ERROR", \tenant.callFunction(), ("barrier", cap));
+        assertEq(lookup, DataProviderActionCatalog::hasSchemeLookupCallback());
+        assertEq(builder, DataProviderActionCatalog::hasGenericApiCallActionBuilder());
+        assertEq(child, AbstractDataProvider::hasGenericApiCallChildBuilder());
+    }
+
+    #! Returns the number of the lines given that are lines of the output, in that order
+    private static int countLines(list<string> expected, string output) {
+        int i = 0;
+        foreach string line in (map trim($1), output.split("\n")) {
+            if (i < expected.size() && line == expected[i]) {
+                ++i;
+            }
+        }
+        return i;
+    }
+
+    sandboxedCallbackModuleLoadTest() {
+        # the modules that set the catalog's process-wide callbacks when they are loaded, loaded first by sandboxed code
+        # by name
+        hash<auto> r = runChild("sandboxed-callback-modules", "Program loader(PO_NEW_STYLE, True);\n"
+            "loader.parse(\"sub load() { load_module('ConnectionProvider'); load_module('RestClientDataProvider'); }\",\n"
+            "    \"loader\");\n"
+            "loader.setSandboxManager(new SandboxManager());\n"
+            "loader.callFunction(\"load\");\n"
+            "printf(\"callbacks: %y %y %y\\n\", DataProviderActionCatalog::hasSchemeLookupCallback(),\n"
+            "    DataProviderActionCatalog::hasGenericApiCallActionBuilder(),\n"
+            "    AbstractDataProvider::hasGenericApiCallChildBuilder());\n");
+        assertEq(0, r.rc, r.output);
+        # from the module path: library code, initialized with no sandbox provenance, which sets them
+        assertLines(("callbacks: True True True",), r.output);
+        # sandboxed code cannot load a copy from elsewhere by path in place of the module in the module path, so it
+        # sets none of them
+        string dir = make_tmp_dir("lazy-safety-copy-");
+        on_exit remove_tree(dir);
+        assertEq(0, system(sprintf("cp -R '%s' '%s'", get_script_dir() + "/../../../../qlib/ConnectionProvider", dir)));
+        r = runChild("sandboxed-callback-copy", "Program loader(PO_NEW_STYLE, True);\n"
+            "loader.parse(\"sub load(string path) { load_module(path); }\", \"loader\");\n"
+            "loader.setSandboxManager(new SandboxManager());\n"
+            "try {\n"
+            "    loader.callFunction(\"load\", " + sprintf("%y", dir + "/ConnectionProvider") + ");\n"
+            "} catch (hash<ExceptionInfo> ex) {\n"
+            "    printf(\"load: %s\\n\", ex.err);\n"
+            "}\n"
+            "printf(\"callbacks: %y\\n\", DataProviderActionCatalog::hasSchemeLookupCallback());\n");
+        assertEq(0, r.rc, r.output);
+        assertLines(("load: LOAD-MODULE-ERROR", "callbacks: False"), r.output);
+    }
+
+    governedActionCallbacksTest() {
+        string app = registerApp("SafeGovernedCallbacks");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        Program tenant(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        tenant.parse("%requires DataProvider\n"
+            "hash<auto> sub reg(string app) {\n"
+            "    hash<auto> tids;\n"
+            "    tids.thread = gettid();\n"
+            "    DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app, \"action\": \"typed\",\n"
+            "        \"path\": \"/typed\", \"display_name\": \"typed\", \"short_desc\": \"typed\", \"desc\": \"typed\",\n"
+            "        \"action_code\": DPAT_API,\n"
+            "        \"get_output_type\": AbstractDataProviderType sub () {\n"
+            "            tids.output_type = gettid();\n"
+            "            return new HashDataType(\"SafeGovernedOutput\");\n"
+            "        },\n"
+            "        \"get_dynamic_options\": sub (reference<hash<DataProviderActionInfo>> info) {\n"
+            "            tids.options = gettid();\n"
+            "            info.desc = \"options set\";\n"
+            "        },\n"
+            "    });\n"
+            "    return tids;\n"
+            "}\n", "tenant-action-callbacks");
+        tenant.setSandboxManager(new SandboxManager());
+        hash<auto> tids = tenant.callFunction("reg", app);
+        # both ran on the registering thread, when the action was registered
+        assertEq(tids.thread, tids.output_type);
+        assertEq(tids.thread, tids.options);
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getActionsNoInit(app)[0];
+        assertFalse(action.hasKey("get_output_type") && exists action.get_output_type);
+        assertFalse(action.hasKey("get_dynamic_options") && exists action.get_dynamic_options);
+        assertEq("SafeGovernedOutput", action.output_type.getName());
+        assertEq("options set", action.desc);
+    }
+
+    failedLoadValueTest() {
+        *int id;
+        Hooks::set("LazyAppActionsFailedLoad", sub () {
+            id = DataProviderActionCatalog::registerLazyValue(string sub () { return "never"; });
+            throw "LAZY-TEST-LOAD-ERROR", "the module fails to load";
+        });
+        on_exit Hooks::set("LazyAppActionsFailedLoad");
+        int sp = ImplicitModuleTransaction::savepoint();
+        *hash<ExceptionInfo> error;
+        try {
+            load_module(normalize_dir(get_script_dir()) + "/LazyAppActionsFailedLoad.qm");
+        } catch (hash<ExceptionInfo> ex) {
+            error = ex;
+            ImplicitModuleTransaction::rollback(sp);
+        }
+        assertEq("LAZY-TEST-LOAD-ERROR", error.err, sprintf("the module failed to load: %y", error));
+        assertTrue(exists id, "the module registered a value");
+        assertThrows("DATA-PROVIDER-LAZY-VALUE-ERROR", "no lazy value is registered",
+            \DataProviderActionCatalog::getLazyValue(), id);
+    }
+
+    #! Returns the error that readIn() queued, as text, or NOTHING if the read succeeded
+    private static *string describeError(Queue results) {
+        hash<auto> r = results.get();
+        if (r.err) {
+            return sprintf("%s: %s", r.err, r.desc);
+        }
+    }
+
+    #! Calls the catalog worker's code in a thread of the test
+    private static callWorkerMain(StaticMethod m, Counter done, Queue tids) {
+        on_exit done.dec();
+        tids.push(gettid());
+        m.call();
+    }
+
+    #! Returns the directory of the AOT library modules of the build that runs the test, if any
+    private static *string findQmodDir() {
+        list<string> dirs = (ENV.QORE_MODULE_DIR ?? "").split(PathSep);
+        dirs += dirname(QORE_ARGV[0]) + "/qlib-qmod";
+        foreach string dir in (dirs) {
+            if (dir && is_file(dir + "/DataProvider/DataProvider.qmod")) {
+                return dir;
+            }
+        }
+    }
+
+    #! Reads an app and a lazy value for a sandboxed caller under a policy barrier; returns the thread's TID
+    private static int readBarrier(string app, int value) {
+        DataProviderActionCatalog::getActions(app, False);
+        DataProviderActionCatalog::getLazyValue(value);
+        return gettid();
+    }
+
+    #! Registers lazy actions for a sandboxed caller under a policy barrier; returns the thread's TID
+    private static int registerBarrier(string app, string path) {
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            barrier_registration_tid = gettid();
+            # the barrier masks the caller's filesystem policy
+            ReadOnlyFile::readTextFile(path);
+            LazyAppActionsSafetyTest::registerAction(app, "lazy-b");
+        });
+        return gettid();
+    }
+
+    #! Calls a function of a Program in a thread of the test
+    private static callIn(Program p, string func, list<auto> args, Counter done) {
+        on_exit done.dec();
+        p.callFunctionArgs(func, args);
+    }
+
+    #! Reads an app in a thread of the test with the reader Program given, and returns the thread's TID
+    private static readInWithTid(Program reader, string app, Counter done, Queue results, Queue tids) {
+        on_exit done.dec();
+        tids.push(gettid());
+        try {
+            reader.callFunction("read", app);
+        } catch (hash<ExceptionInfo> ex) {
+            results.push(ex);
+        }
+    }
+
+    #! Runs a child process with the test's lazy app helpers, and returns its exit code and output
+    private hash<auto> runChild(string name, string body) {
+        return runChild(name, "", body);
+    }
+
+    #! Runs a child process; \a pre runs before the DataProvider module is loaded, which \a body uses
+    /** With \a pre, \a body runs in a Program that the child creates after it has loaded the module, and the global
+        variables that \a pre declares with \c our and names in \a imports are imported into it
+    */
+    private hash<auto> runChild(string name, string pre, string body, *list<string> imports) {
+        string dir = make_tmp_dir("lazy-safety-");
+        on_exit remove_tree(dir);
+        string helpers = "sub register_action(string app, string action) {\n"
+            "    DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app, \"action\": action,\n"
+            "        \"path\": \"/\" + action, \"display_name\": action, \"short_desc\": action, \"desc\": action,\n"
+            "        \"action_code\": DPAT_API});\n"
+            "}\n"
+            "string sub register_lazy(string prefix) {\n"
+            "    string app = prefix + \"_\" + get_random_string(8);\n"
+            "    DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app, \"display_name\": app,\n"
+            "        \"short_desc\": app, \"desc\": app, \"groups\": (AppGroup::DataTransformation,), \"logo\": \"data\",\n"
+            "        \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"test.svg\", \"dynamic\": True});\n"
+            "    register_action(app, \"eager-a\");\n"
+            "    DataProviderActionCatalog::registerLazyAppActions(app, sub () { register_action(app, \"lazy-b\"); });\n"
+            "    return app;\n"
+            "}\n";
+        string script = dir + "/" + name + ".q";
+        if (pre) {
+            LazyAppActionsSafetyTest::writeFile(dir + "/body.q", "%modern\n%requires DataProvider\n" + helpers + body);
+            LazyAppActionsSafetyTest::writeFile(script, "%modern\n" + pre
+                + "load_module(\"DataProvider\");\n"
+                # a global: the Program lives until the end of the process, after the exit hooks
+                + "our Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);\n"
+                + ((foldl $1 + $2, (map sprintf("p.importGlobalVariable(%y);\n", $1), imports)) ?? "")
+                + "p.parse(ReadOnlyFile::readTextFile(get_script_dir() + \"/body.q\"), \"body\");\n"
+                + "p.run();\n");
+        } else {
+            LazyAppActionsSafetyTest::writeFile(script, "%modern\n%requires DataProvider\n" + helpers + body);
+        }
+        string output = dir + "/output.txt";
+        string command = sprintf("QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1",
+            get_script_dir() + "/../../../../qlib" + PathSep + (ENV.QORE_MODULE_DIR ?? ""), QORE_ARGV[0], script,
+            output);
+        int rc = system(command);
+        return {"rc": rc, "output": ReadOnlyFile::readTextFile(output)};
+    }
+
+    #! Writes a file of the test
+    private static writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+        f.close();
+    }
+
+    #! Asserts that the lines given are lines of the output, in that order; other lines, as warnings, are ignored
+    private assertLines(list<string> expected, string output) {
+        list<string> lines = map trim($1), output.split("\n");
+        int i = 0;
+        foreach string line in (lines) {
+            if (i < expected.size() && line == expected[i]) {
+                ++i;
+            }
+        }
+        assertEq(expected.size(), i, sprintf("the lines %y are in the output: %s", expected, output));
+    }
+
+    #! Returns a Program that reads the catalog under the sandbox given
+    private static Program readerProgram(SandboxManager sm) {
+        Program reader(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        reader.parse("%requires DataProvider\n"
+            "sub read(string app) { DataProviderActionCatalog::getActions(app, False); }\n", "lazy-reader");
+        reader.setSandboxManager(sm);
+        return reader;
+    }
+
+    #! Gets a lazy value in a thread of the test, and returns the value or the error
+    private static getValue(int id, Counter done, Queue results) {
+        on_exit done.dec();
+        try {
+            results.push(DataProviderActionCatalog::getLazyValue(id));
+        } catch (hash<ExceptionInfo> ex) {
+            results.push(ex.err);
+        }
+    }
+
+    #! Reads an app in a thread of the test while it holds a lock
+    private static readLocked(string app, Mutex m, Counter locked, Counter done) {
+        on_exit done.dec();
+        AutoLock al(m);
+        locked.dec();
+        DataProviderActionCatalog::getActions(app, False);
+    }
+
+    #! Registers an action of an app in a thread of the test while it holds a lock
+    private static registerLocked(string app, Mutex m, Counter locked, Counter done) {
+        on_exit done.dec();
+        AutoLock al(m);
+        locked.dec();
+        LazyAppActionsSafetyTest::registerAction(app, "direct-b");
+    }
+
+    #! Reads an app in a thread of the test
+    private static read(string app, Counter done) {
+        on_exit done.dec();
+        DataProviderActionCatalog::getActions(app, False);
+    }
+
+    #! Reads an app in a thread of the test with the reader Program given, and returns the exception it raises
+    private static readIn(Program reader, string app, Counter done, Queue results) {
+        on_exit done.dec();
+        try {
+            reader.callFunction("read", app);
+            results.push({});
+        } catch (hash<ExceptionInfo> ex) {
+            results.push(ex);
+        }
+    }
+
+    #! Reads an app in a thread of the test and returns its actions
+    private static readInto(string app, Counter done, Queue results) {
+        on_exit done.dec();
+        try {
+            results.push(map $1.action, DataProviderActionCatalog::getActions(app, False));
+        } catch (hash<ExceptionInfo> ex) {
+            results.push(ex);
+        }
+    }
+
+    #! Reads an app in a thread that the registration ends
+    private static readAndExit(string app, Counter done) {
+        on_exit done.dec();
+        DataProviderActionCatalog::getActions(app, False);
+    }
+
+    #! Reads two apps with the NoInit getters
+    private static readNoInit(string app, string other, Counter done, Queue results) {
+        on_exit done.dec();
+        results.push({
+            "app": (map $1.action, DataProviderActionCatalog::getActionsNoInit(app)),
+            "other": (map $1.action, DataProviderActionCatalog::getActionsNoInit(other)) ?? (),
+            "listed": (map 1, DataProviderActionCatalog::getAllAppsNoInit(), $1.name == app).size() == 1,
+        });
+    }
+
+    #! Loads the module whose initialization reads the app
+    private static loadModule(Counter done) {
+        on_exit done.dec();
+        load_module("LazyAppActionsLoadModule");
+    }
+
+    #! Loads a test module from a sandboxed Program; the module's initialization runs the code given in the thread
+    #! loading it, under the loader's sandbox
+    private loadSandboxed(string module, code body) {
+        Hooks::set(module, body);
+        on_exit Hooks::set(module);
+        Program loader(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        loader.parse("sub load(string path) { load_module(path); }\n", "lazy-sandboxed-loader");
+        loader.setSandboxManager(new SandboxManager());
+        loader.callFunction("load", get_script_dir() + "/" + module + ".qm");
+    }
+
+    #! Registers a pending app whose initialization registers it and then runs the code given
+    /** A test module's initialization reads the app named in an environment variable, which runs the code in the
+        thread loading the module
+    */
+    private static string registerHook(string prefix, code hook) {
+        string app = prefix + "_" + get_random_string(8);
+        DataProviderActionCatalog::registerPendingApp(app, sub () {
+            LazyAppActionsSafetyTest::registerAppIntern(app);
+            hook();
+        });
+        return app;
+    }
+
+    #! Registers a dynamic app with an eager action and a lazy registration of two more actions
+    private static string registerLazyApp(string prefix) {
+        string app = registerApp(prefix);
+        registerAction(app, "eager-a");
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            SafetyRuns::run(app);
+            registerAction(app, "lazy-b");
+            registerAction(app, "lazy-c");
+        });
+        return app;
+    }
+
+    #! Registers a dynamic app with a random name
+    private static string registerApp(string prefix) {
+        string app = prefix + "_" + get_random_string(8);
+        registerAppIntern(app);
+        return app;
+    }
+
+    #! Registers a dynamic app
+    private static registerAppIntern(string app) {
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": app,
+            "display_name": app,
+            "short_desc": "lazy action registration safety test",
+            "desc": "lazy action registration safety test",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "test.svg",
+            "dynamic": True,
+        });
+    }
+
+    #! Registers an action of the app with an output type built for each call, named after the run
+    private static registerTypedAction(string app, string action) {
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": app,
+            "action": action,
+            "path": "/" + action,
+            "display_name": action,
+            "short_desc": "lazy action registration safety test action",
+            "desc": "lazy action registration safety test action",
+            "action_code": DPAT_API,
+            "output_type": new HashDataType("SafePartialRunType" + SafetyRuns::get(app)),
+        });
+    }
+
+    #! Registers an action of the app
+    private static registerAction(string app, string action) {
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": app,
+            "action": action,
+            "path": "/" + action,
+            "display_name": action,
+            "short_desc": "lazy action registration safety test action",
+            "desc": "lazy action registration safety test action",
+            "action_code": DPAT_API,
+        });
+    }
+}

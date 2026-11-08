@@ -15095,18 +15095,18 @@ namespace {
 class DbgWaitAgainPollOperation : public SocketPollOperationBase {
 public:
     //! @p obj is kept by the operation's object, whose \c sock member references it
-    DLLLOCAL DbgWaitAgainPollOperation(QoreObject* obj, int events, int waits) : obj(obj), events(events),
+    DbgWaitAgainPollOperation(QoreObject* obj, int events, int waits) : obj(obj), events(events),
             waits(waits) {
     }
 
-    DLLLOCAL virtual bool goalReached() const override {
+    virtual bool goalReached() const override {
         return calls > waits;
     }
 
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
+    virtual void abort(ExceptionSink*) override {
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+    virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
         if (calls++ >= waits) {
             return nullptr;
         }
@@ -15116,11 +15116,11 @@ public:
         return *xsink ? nullptr : info.release();
     }
 
-    DLLLOCAL virtual QoreValue getOutput() const override {
+    virtual QoreValue getOutput() const override {
         return static_cast<int64>(calls);
     }
 
-    DLLLOCAL virtual const char* getStateImpl() const override {
+    virtual const char* getStateImpl() const override {
         return calls > waits ? "done" : "waiting";
     }
 
@@ -19432,6 +19432,23 @@ static QoreValue f_dbg_sandbox_fail_next_budgets(const QoreListNode* params, Run
 #endif
 
 #ifdef DEBUG
+//! Makes the next count system thread starts fail after the start was reserved
+/** Tests that a failed start releases its reservation and its argument (see qore_start_system_thread())
+*/
+static QoreValue f_dbg_fail_next_system_thread_starts(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_fail_next_system_thread_starts(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+    return QoreValue();
+}
+
+//! Returns the number of system thread starts reserved and not released
+static QoreValue f_dbg_system_threads_starting(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_system_threads_starting();
+}
+#endif
+
+#ifdef DEBUG
 //! Returns the CPU time in nanoseconds used by the current call into a sandbox with a CPU time limit, or -1
 static QoreValue f_dbg_sandbox_cpu_used(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return qore_sandbox_dbg_cpu_used();
@@ -19465,6 +19482,11 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_sandbox_fail_next_budgets", f_dbg_sandbox_fail_next_budgets,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
+    qns.addBuiltinVariant("dbg_fail_next_system_thread_starts", f_dbg_fail_next_system_thread_starts,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
+    qns.addBuiltinVariant("dbg_system_threads_starting", f_dbg_system_threads_starting, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_force_fd_swap_next_wait", f_dbg_force_fd_swap_next_wait,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");

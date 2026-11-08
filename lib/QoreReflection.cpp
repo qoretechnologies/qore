@@ -625,11 +625,20 @@ static const QoreParseOptions qore_restricting_domains(QoreParseOptions(QDOM_ALL
 static const QoreParseOptions qore_positive_domains(QoreParseOptions(QDOM_ALL) & QoreParseOptions::POSITIVE_OPTIONS);
 
 QoreReflectionCaller::QoreReflectionCaller() : pgm(::getProgram()), po(runtime_get_parse_options()),
-        sm(qore_find_thread_sandbox_manager_ref()) {
+        sm(qore_find_thread_sandbox_manager_ref()), caller_class(runtime_get_caller_class()) {
     if (!pgm) {
         pgm = rc_get_current_ref().getProgram();
     }
     pgm_id = pgm ? pgm->getProgramId() : 0;
+    // module Programs carry the in-module domain, which restricts nothing that the caller asks for here
+    QoreParseOptions restricting = po & (qore_restricting_domains & ~QoreParseOptions(QDOM_IN_MODULE));
+    if (!restricting) {
+        // also through a policy barrier: it masks the sandbox's filesystem and network policy, not the sandbox
+        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+        member_access = static_cast<bool>(governing);
+    } else {
+        member_access = true;
+    }
 }
 
 QoreReflectionCaller::~QoreReflectionCaller() {
@@ -732,6 +741,46 @@ int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const ch
     xsink->raiseException("REFLECTION-ACCESS-ERROR", "code in Program " QLLD " cannot %s Program " QLLD ": it is not "
         "that Program, did not create it, and has fewer privileges than it", (int64)pgm_id, what,
         (int64)target->getProgramId());
+    return -1;
+}
+
+bool QoreReflectionCaller::appliesMemberAccess() const {
+    return member_access;
+}
+
+int QoreReflectionCaller::checkClassElementAccess(const QoreClass* cls, ClassAccess access, const char* kind,
+        const char* name, ExceptionSink* xsink) const {
+    assert(xsink);
+    if (access == Public || !member_access || !cls) {
+        return 0;
+    }
+    const qore_class_private* qc = qore_class_private::get(*cls);
+    // the rules of the language (see qore_class_private::runtimeGetMemberInfo() and
+    // runtimeCheckPrivateClassAccess()): private:internal only from the declaring class, private from its hierarchy
+    bool allowed;
+    switch (access) {
+        case Internal:
+            allowed = caller_class == qc;
+            break;
+        case Private:
+            allowed = qc->runtimeCheckPrivateClassAccess(caller_class);
+            break;
+        default:
+            allowed = false;
+            break;
+    }
+    if (allowed) {
+        return 0;
+    }
+    if (caller_class) {
+        xsink->raiseException("REFLECTION-ACCESS-ERROR", "%s '%s::%s' is %s and cannot be used from class '%s' by "
+            "code that a sandbox governs or whose functional domains are restricted", kind, cls->getName(), name,
+            privpub(access), caller_class->name.c_str());
+    } else {
+        xsink->raiseException("REFLECTION-ACCESS-ERROR", "%s '%s::%s' is %s and cannot be used outside a class by "
+            "code that a sandbox governs or whose functional domains are restricted", kind, cls->getName(), name,
+            privpub(access));
+    }
     return -1;
 }
 

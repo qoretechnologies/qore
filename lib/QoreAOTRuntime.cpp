@@ -11680,9 +11680,19 @@ static void inheritAOTModulePathLists(QoreProgram* local_pgm, QoreProgram* paren
         return;
     }
 
+    // an AOT module initialized as library code (see QoreModuleInitSandboxBarrierHelper) has a library Program
+    if (qore_module_init_library()) {
+        local_priv->library_module = true;
+    }
+
     const qore_program_private* parent_priv = nullptr;
     if (parent_pgm && parent_pgm != local_pgm) {
         parent_priv = qore_program_private::get(*parent_pgm);
+        // library code does not resolve its own dependencies and child modules through the module paths of code that
+        // is not trusted that loads it; a library module's own Program has only library code's own
+        if (qore_module_init_untrusted_loader() && !parent_priv->library_module) {
+            parent_priv = nullptr;
+        }
     }
 
     // Source modules inherit the importing Program's path lists, then apply

@@ -7,9 +7,9 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires json
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/RestSchemaActions
+%requires QUnit
+%requires DataProvider
+%requires RestSchemaActions
 
 %exec-class LazyResponseTypesTest
 

@@ -1,0 +1,84 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# LazyAppActionsOwnerModule.qm - test module registering the actions of its app lazily
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+
+module LazyAppActionsOwnerModule {
+    version = "1.0";
+    desc = "test module registering the actions of its app lazily";
+    author = "Qore Technologies";
+    license = "MIT";
+    init = sub () {
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": LazyAppActionsOwnerModule::AppName,
+            "display_name": "Lazy Owner App",
+            "short_desc": "App whose actions are registered lazily",
+            "desc": "App whose actions are registered lazily",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "lazy-owner.svg",
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LazyAppActionsOwnerModule::AppName,
+            "path": "/eager-action",
+            "action": "eager-action",
+            "display_name": "Eager Action",
+            "short_desc": "Action registered when the module is loaded",
+            "desc": "Action registered when the module is loaded",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerLazyAppActions(LazyAppActionsOwnerModule::AppName, sub () {
+            ++LazyAppActionsOwnerModule::LazyRuns::calls;
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": LazyAppActionsOwnerModule::AppName,
+                "path": "/lazy-action",
+                "action": "lazy-action",
+                "display_name": "Lazy Action",
+                "short_desc": "Action registered when the app's actions are first read",
+                "desc": "Action registered when the app's actions are first read",
+                "action_code": DPAT_API,
+            });
+            # an action class without a module: the catalog names the module that made the lazy registration
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": LazyAppActionsOwnerModule::AppName,
+                "path": "/lazy-class-action",
+                "action": "lazy-class-action",
+                "display_name": "Lazy Class Action",
+                "short_desc": "Action with a class registered lazily",
+                "desc": "Action with a class registered lazily",
+                "action_code": DPAT_API,
+                "cls": "LazyAppActionsOwnerModule::LazyActionMarker",
+            });
+        });
+    };
+}
+
+#! The public definitions of the test module
+public namespace LazyAppActionsOwnerModule {
+    #! The app the module registers
+    public const AppName = "QoreTestLazyOwnerApp";
+
+    #! Counts the runs of the lazy registration
+    class LazyRuns {
+        public {
+            #! the number of times that the lazy registration ran
+            static int calls = 0;
+        }
+    }
+
+    #! Returns the number of times that the lazy registration ran
+    public int sub getCalls() {
+        return LazyRuns::calls;
+    }
+
+    #! The class named by an action that the module registers lazily
+    public class LazyActionMarker {
+    }
+}

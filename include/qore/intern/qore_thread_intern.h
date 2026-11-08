@@ -495,6 +495,82 @@ DLLLOCAL int qore_check_module_owned_code(const QoreValue code, int64 domain, co
 DLLLOCAL int qore_check_module_owned_code(const ResolvedCallReferenceNode* code, int64 domain, const char* name,
         const char* action, ExceptionSink* xsink);
 
+//! Returns true if the code running on the current thread is not trusted to choose library code
+/** Code that a sandbox governs, and code whose runtime parse options restrict a functional domain (other than the
+    in-module domain of module Programs).  Such code cannot change the process-wide module path, nor replace or
+    choose the modules that library code uses (see QoreModuleManager::isTrustedModulePath()).
+*/
+DLLLOCAL bool qore_caller_is_untrusted();
+
+//! Returns the sandbox of the code running on the current thread, if any, for the modules that it chooses
+/** the caller owns the reference returned; see QoreAbstractModule::isTenantChosen()
+*/
+DLLLOCAL QoreSandboxManager* qore_caller_sandbox_ref();
+
+//! the Program ID returned when there is no Program
+#define QORE_NO_PROGRAM_ID (~(qore_program_id_t)0)
+
+//! Returns the ID of the Program of the code running on the current thread, for the modules that it chooses
+/** That is the Program of the code that loaded library code while it is initialized; QORE_NO_PROGRAM_ID if there
+    is none; see QoreAbstractModule::isTenantChosen()
+*/
+DLLLOCAL qore_program_id_t qore_caller_owner_program_id();
+
+//! Returns true while library code that code that is not trusted loaded is initialized on the current thread
+/** see QoreModuleInitSandboxBarrierHelper
+*/
+DLLLOCAL bool qore_module_init_untrusted_loader();
+
+//! Returns true while library code is initialized on the current thread, and no module that is not library code
+/** see QoreModuleInitSandboxBarrierHelper
+*/
+DLLLOCAL bool qore_module_init_library();
+
+//! Returns the sandbox that governs a module that is not library code, loaded while library code is initialized
+/** That is the sandbox of the code that loaded the library code, if it is not trusted; the caller owns the
+    reference returned; see QoreModuleInitSandboxBarrierHelper
+*/
+DLLLOCAL QoreSandboxManager* qore_module_init_lift_manager_ref();
+
+//! Runs the initialization of a module from a trusted module directory with no sandbox provenance
+/** While it exists, sandbox resolution for every purpose (interrupts, limits, policy and the provenance of what
+    is created) does not look beyond the code that loads the module: not at the Programs that were current when it
+    was created, nor at the provenance, continued-operation or inherited sandbox contexts that the thread had then.
+    A Program entered inside it with a sandbox manager of its own still governs the code that runs in it, as does
+    the provenance of the objects and callbacks that the code uses.
+
+    The module manager creates it only for a module whose file is in a directory of the process-wide module path
+    (see QoreModuleManager::isTrustedModulePath()), never for a module that a caller chose by path or through its own
+    module paths, so that library code is initialized as library code, also when sandboxed code loads it first:
+    its static initializers and init closure belong to no sandbox, and so do the objects they create.  Every later
+    call into the module is governed by its caller as any other call.
+*/
+class QoreModuleInitSandboxBarrierHelper {
+public:
+    //! Establishes the barrier for a module that is library code (\a active), or a lift for one that is not
+    /** The barrier records whether the code that loads the library module is trusted, and its sandbox: while the
+        module is initialized, that code is the caller of the loads that the initialization makes (see
+        qore_caller_is_untrusted() and qore_caller_sandbox_ref()), so a module that is not library code that it loads
+        is checked as a module that the code loads itself.  Such a module is initialized under a lift, which lets
+        sandbox resolution see the code that loaded the library module again, so the module is governed by the
+        sandbox of that code.
+
+        A lift that cannot be recorded makes failed() return true: the load must then fail, since the module would
+        be initialized as library code otherwise.
+    */
+    DLLLOCAL QoreModuleInitSandboxBarrierHelper(bool active);
+    DLLLOCAL ~QoreModuleInitSandboxBarrierHelper();
+
+    //! returns true if a lift was needed and could not be recorded
+    DLLLOCAL bool failed() const {
+        return failed_lift;
+    }
+
+private:
+    bool pushed = false;
+    bool failed_lift = false;
+};
+
 //! Marks module code that runs for no application: a module's init or del closure
 /** The Program that loads or unloads a module does not call its init or del closure on its own behalf, so
     qore_reflection_has_module_caller() does not look beyond this point for an application Program; a call reflected
@@ -1279,6 +1355,11 @@ DLLLOCAL LocalVarValue* thread_try_find_lvar(const LocalVar* local);
 DLLLOCAL QoreObject* runtime_get_stack_object();
 // to get the current runtime class
 DLLLOCAL const qore_class_private* runtime_get_class();
+//! returns the class context of the code that made the call running now, or nullptr if it ran in no class
+/** Set for every call that a code context helper (CodeContextHelperBase) runs: in a builtin method, it is the class
+    context of the code that called the method
+*/
+DLLLOCAL const qore_class_private* runtime_get_caller_class();
 DLLLOCAL void runtime_get_object_and_class(QoreObject*& obj, const qore_class_private*& qc);
 // to get or set the current generic receiver type for static generic method bodies
 DLLLOCAL const QoreTypeInfo* runtime_get_receiver_type_info();
@@ -1291,6 +1372,7 @@ private:
     const char* old_code;
     QoreObject* old_obj;
     const qore_class_private* old_class;
+    const qore_class_private* old_caller_class;
     QoreProgram* old_call_program_context;
     QoreObject* old_rc_obj;
     const qore_class_private* old_rc_class;

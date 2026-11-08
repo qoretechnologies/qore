@@ -5,10 +5,10 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires ../../../../../qlib/QUnit.qm
-%requires ../../../../../qlib/Util.qm
-%requires ../../../../../qlib/HttpServerUtil.qm
-%requires ../../../../../qlib/HttpServer.qm
+%requires QUnit
+%requires Util
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class LocalhostHostsFileTest
 

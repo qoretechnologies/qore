@@ -1,0 +1,226 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# SystemThreadWorker.qm - test module with a worker started by a system thread capability
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module SystemThreadWorker {
+    version = "1.0";
+    desc = "test module with a worker that sandboxed callers start through a system thread capability";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        SystemThreadWorker::Worker::init();
+    };
+}
+
+#! The test module's worker
+public namespace SystemThreadWorker {
+public class Worker {
+    public {
+        #! the most a result is waited for; reached only when the worker does not answer
+        const Deadline = 60s;
+
+        #! what each refused creation of a capability raised during the module's initialization: case -> error
+        static hash<string, string> refusals = {};
+
+        #! a capability created by a Program that was deleted afterwards
+        static code deleted_program_cap;
+
+        #! a Program that created a capability during the module's initialization, for the thread control test
+        /** Its threads wait on a queue of the Program until they are cancelled or the exit hook releases them; its
+            functions: \c start() starts one and waits until it runs, \c running() returns the number running
+        */
+        static Program control;
+    }
+
+    private:internal {
+        #! the capability that starts a worker
+        static code starter;
+        #! the module's file, which a worker reads
+        static string path;
+        #! the work of the workers
+        static Queue jobs();
+        #! the results of the workers
+        static Queue results();
+        #! released by the test while a worker waits on it
+        static Counter go(1);
+        #! the number of workers started
+        static int started = 0;
+        #! guards started
+        static Mutex lck();
+    }
+
+    #! Creates the capability and the exit hook, and records the creations that are refused
+    static init() {
+        path = get_module_context_path();
+        starter = SandboxManager::createSystemThreadCall(\Worker::run());
+        register_exit_hook(\Worker::stop());
+        refusals = {
+            "provenance": Worker::tryCreate(Worker::sandboxedCallback()),
+            "bound": Worker::tryCreate(SandboxManager::bindCall(\Worker::run())),
+            "capability": Worker::tryCreate(starter),
+            "governed": Worker::createGoverned(),
+        };
+        deleted_program_cap = Worker::createInDeletedProgram();
+        control = Worker::createControl();
+    }
+
+    #! Starts a worker, also for a sandboxed caller; returns its TID
+    static int start() {
+        AutoLock al(lck);
+        code start = starter;
+        int tid = start();
+        ++started;
+        return tid;
+    }
+
+    #! Calls the capability with an argument
+    static startWith(auto arg) {
+        code start = starter;
+        start(arg);
+    }
+
+    #! Gives a worker an operation: "probe" or "wait"
+    static submit(string op) {
+        jobs.push(op);
+    }
+
+    #! Returns the next result of a worker
+    static auto result() {
+        return results.get(Deadline);
+    }
+
+    #! Releases a worker that waits
+    static release() {
+        go.dec();
+    }
+
+    #! The exit hook: stops every worker started
+    private:internal static stop() {
+        AutoLock al(lck);
+        map jobs.push(NOTHING), xrange(started);
+    }
+
+    #! A worker: runs the operations it is given until it is stopped
+    private:internal static run() {
+        while (*string op = jobs.get()) {
+            switch (op) {
+                case "probe": {
+                    string fs;
+                    try {
+                        ReadOnlyFile::readTextFile(path);
+                        fs = "read";
+                    } catch (hash<ExceptionInfo> ex) {
+                        fs = ex.err;
+                    }
+                    results.push({"governed": SandboxManager::isGoverned(), "fs": fs});
+                    break;
+                }
+                case "wait": {
+                    try {
+                        go.waitForZero();
+                        Mutex m();
+                        m.lock();
+                        m.unlock();
+                        results.push("waited");
+                    } catch (hash<ExceptionInfo> ex) {
+                        results.push(ex.err);
+                    }
+                    break;
+                }
+            }
+        }
+        printf("worker stopped\n");
+    }
+
+    #! Tries to create a capability; returns the error
+    private:internal static string tryCreate(code c) {
+        try {
+            code cap = SandboxManager::createSystemThreadCall(c);
+            return cap ? "created" : "none";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + ": " + ex.desc;
+        }
+    }
+
+    #! Returns a callback that sandboxed code created
+    private:internal static code sandboxedCallback() {
+        SandboxManager sm();
+        Program p(PO_NEW_STYLE, True);
+        p.parse("code sub get() { return sub () {}; }", "sandboxed-callback");
+        p.setSandboxManager(sm);
+        return p.callFunction("get");
+    }
+
+    #! Returns a capability that a Program created during this initialization, and that was deleted then
+    private:internal static code createInDeletedProgram() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse("code sub create() { return SandboxManager::createSystemThreadCall(sub () {}); }\n", "deleted");
+        code cap = p.callFunction("create");
+        delete p;
+        return cap;
+    }
+
+    #! Returns a Program whose capability starts threads that wait until they are cancelled or released
+    private:internal static Program createControl() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse("our Queue q();\n"
+            "our Counter running();\n"
+            "our Queue started();\n"
+            "our code cap = SandboxManager::createSystemThreadCall(sub () {\n"
+            "    running.inc();\n"
+            "    on_exit running.dec();\n"
+            "    started.push(True);\n"
+            "    # ended by a cancellation of the Program's threads, or by the exit hook\n"
+            "    try {\n"
+            "        q.get();\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        if (ex.err != 'THREAD-CANCELLED') {\n"
+            "            rethrow;\n"
+            "        }\n"
+            "    }\n"
+            "});\n"
+            "# the exit hook releases the threads still waiting\n"
+            "register_exit_hook(sub () { map q.push(NOTHING), xrange(running.getCount()); });\n"
+            "int sub start() { int tid = cap(); started.get(); return tid; }\n"
+            "int sub running() { return running.getCount(); }\n"
+            "# a thread that keeps the Program busy through a cancellation of its threads, until it is released\n"
+            "our Queue hold_q();\n"
+            "our Queue hold_events();\n"
+            "our Counter hold_release(1);\n"
+            "our Queue hold_started();\n"
+            "# returns when the thread runs in the Program\n"
+            "sub hold() {\n"
+            "    background sub () {\n"
+            "        hold_started.push(True);\n"
+            "        try {\n"
+            "            hold_q.get();\n"
+            "        } catch (hash<ExceptionInfo> ex) {\n"
+            "            clear_thread_cancel();\n"
+            "            hold_events.push(ex.err);\n"
+            "            hold_release.waitForZero();\n"
+            "        }\n"
+            "    }();\n"
+            "    hold_started.get();\n"
+            "}\n"
+            "string sub hold_cancelled() { return hold_events.get(); }\n"
+            "sub release_hold() { if (hold_release.getCount()) { hold_release.dec(); } }\n", "control");
+        p.run();
+        return p;
+    }
+
+    #! Returns what sandboxed code gets when it creates a capability
+    private:internal static string createGoverned() {
+        SandboxManager sm();
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse("string sub create() {\n"
+            "    try { code c = SandboxManager::createSystemThreadCall(sub () {}); return c ? \"created\" : \"none\"; }\n"
+            "    catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; }\n"
+            "}\n", "sandboxed-creator");
+        p.setSandboxManager(sm);
+        return p.callFunction("create");
+    }
+}
+}

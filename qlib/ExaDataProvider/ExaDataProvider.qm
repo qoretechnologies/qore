@@ -70,10 +70,14 @@ module ExaDataProvider {
             "groups": (DataProvider::AppGroup::AiLlm, DataProvider::AppGroup::WebAutomation,),
         });
 
-        # every action generated from the vendored Exa Public API description; see ExaManifest for
-        # what is exported and why
-        map DataProviderActionCatalog::registerAction($1),
-            ExaSchema::getActionSet().getActionInfoList(ExaDataProvider::AppName);
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(ExaDataProvider::AppName, sub () {
+            # every action generated from the vendored Exa Public API description; see ExaManifest for
+            # what is exported and why
+            map DataProviderActionCatalog::registerAction($1),
+                ExaSchema::getActionSet().getActionInfoList(ExaDataProvider::AppName);
+        });
     };
 }
 

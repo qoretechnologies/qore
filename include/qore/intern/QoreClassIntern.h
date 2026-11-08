@@ -3424,8 +3424,10 @@ public:
                     access = va;
                 }
 
-                // return null and stop searching in this class if we should verify access, and the var is not accessible
-                if (check && (access > Public) && !parseCheckPrivateClassAccess()) {
+                // return null and stop searching in this class if we should verify access, and the var is not accessible:
+                // an internal member is accessible only in its own class, not in subclasses
+                if (check && (access > Public)
+                    && ((access >= Internal && parse_get_class_priv() != this) || !parseCheckPrivateClassAccess())) {
                     return nullptr;
                 }
 

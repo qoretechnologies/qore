@@ -74,43 +74,47 @@ module FireworksDataProvider {
             "from_wire": auto sub(auto value) { return value; },
             "desc": "Accept a resource ID or full resource name and send the final ID segment.",
         });
-        foreach RestSchemaActionSet aset in (FireworksSchema::getActionSets()) {
-            aset.registerActions(FireworksDataProvider::AppName);
-        }
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(FireworksDataProvider::AppName, sub () {
+            foreach RestSchemaActionSet aset in (FireworksSchema::getActionSets()) {
+                aset.registerActions(FireworksDataProvider::AppName);
+            }
 
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": FireworksDataProvider::AppName,
-            "path": "/create-embeddings",
-            "action": "create-embeddings",
-            "display_name": "Create Embeddings",
-            "short_desc": "Generate embedding vectors from a Fireworks-hosted model",
-            "desc": "Converts text inputs into embedding vectors using a Fireworks-hosted "
-                "embedding model via the OpenAI-compatible `/v1/embeddings` endpoint.",
-            "action_code": DPAT_API,
-            "groups": ("Embeddings",),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                FireworksEmbeddingRequestDataType::Fields{"input", "model",}, {
-                    "preselected": True, "required": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                FireworksEmbeddingRequestDataType::Fields - ("input", "model")
-            ),
-            "output_type": FireworksEmbeddingDataProvider::ResponseType,
-        });
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": FireworksDataProvider::AppName, "path": "/rerank", "action": "rerank", "display_name": "Rerank Documents",
-            "short_desc": "Rank documents by relevance to a search query",
-            "desc": "Improve search results by scoring candidate documents against a query. "
-                "Use `top_n` to keep the most relevant results. **Inference is billed by Fireworks.**",
-            "action_code": DPAT_API, "groups": ("Embeddings",),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                FireworksRerankRequestDataType::Fields{"query", "documents",},
-                {"preselected": True, "required": True})
-                + DataProviderActionCatalog::getActionOptionFromFields(
-                    FireworksRerankRequestDataType::Fields{"model", "top_n",}, {"preselected": True})
-                + DataProviderActionCatalog::getActionOptionFromFields(
-                    FireworksRerankRequestDataType::Fields - ("query", "documents", "model", "top_n")),
-            "output_type": FireworksRerankResponseType,
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": FireworksDataProvider::AppName,
+                "path": "/create-embeddings",
+                "action": "create-embeddings",
+                "display_name": "Create Embeddings",
+                "short_desc": "Generate embedding vectors from a Fireworks-hosted model",
+                "desc": "Converts text inputs into embedding vectors using a Fireworks-hosted "
+                    "embedding model via the OpenAI-compatible `/v1/embeddings` endpoint.",
+                "action_code": DPAT_API,
+                "groups": ("Embeddings",),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    FireworksEmbeddingRequestDataType::Fields{"input", "model",}, {
+                        "preselected": True, "required": True,
+                    }
+                ) + DataProviderActionCatalog::getActionOptionFromFields(
+                    FireworksEmbeddingRequestDataType::Fields - ("input", "model")
+                ),
+                "output_type": FireworksEmbeddingDataProvider::ResponseType,
+            });
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": FireworksDataProvider::AppName, "path": "/rerank", "action": "rerank", "display_name": "Rerank Documents",
+                "short_desc": "Rank documents by relevance to a search query",
+                "desc": "Improve search results by scoring candidate documents against a query. "
+                    "Use `top_n` to keep the most relevant results. **Inference is billed by Fireworks.**",
+                "action_code": DPAT_API, "groups": ("Embeddings",),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    FireworksRerankRequestDataType::Fields{"query", "documents",},
+                    {"preselected": True, "required": True})
+                    + DataProviderActionCatalog::getActionOptionFromFields(
+                        FireworksRerankRequestDataType::Fields{"model", "top_n",}, {"preselected": True})
+                    + DataProviderActionCatalog::getActionOptionFromFields(
+                        FireworksRerankRequestDataType::Fields - ("query", "documents", "model", "top_n")),
+                "output_type": FireworksRerankResponseType,
+            });
         });
     };
 }
