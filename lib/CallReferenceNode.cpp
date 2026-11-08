@@ -1353,7 +1353,7 @@ namespace {
 */
 class SystemThreadCallReference : public ResolvedCallReferenceNode {
 public:
-    DLLLOCAL SystemThreadCallReference(const ResolvedCallReferenceNode* callback, QoreProgram* pgm)
+    SystemThreadCallReference(const ResolvedCallReferenceNode* callback, QoreProgram* pgm)
             : callback(callback->refRefSelf()), pgm(pgm) {
         pgm->depRef();
     }

@@ -5153,7 +5153,7 @@ struct QoreExitHook {
     ResolvedCallReferenceNode* code;
 
     //! Releases the hook's references; called without the registry lock
-    DLLLOCAL void release(ExceptionSink* xsink) {
+    void release(ExceptionSink* xsink) {
         code->deref(xsink);
         pgm->depDeref();
     }
@@ -5288,7 +5288,7 @@ struct QoreSystemThreadArg {
     //! the Program the callback runs in; with a dependency reference
     QoreProgram* pgm;
 
-    DLLLOCAL void release(ExceptionSink* xsink) {
+    void release(ExceptionSink* xsink) {
         code->deref(xsink);
         pgm->depDeref();
     }
