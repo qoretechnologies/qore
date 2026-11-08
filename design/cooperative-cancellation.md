@@ -819,8 +819,14 @@ waitOthers() {
 ```
 
 `WebSocketClient`'s thread accounting (`WscLibraryThreads`), its handoff of an action to a
-`connectAsync()` worker (`WscActionHandoff`), and the Discord heartbeat record (`DiscordHeartbeat`)
-use this pattern.
+`connectAsync()` worker (`WscActionHandoff`, with `WscOrphanedActions` for an action that a
+cancelled thread cannot release), and the Discord heartbeat record (`DiscordHeartbeat`) use this
+pattern.  `WscLibraryThreads::waitOthers()` supports a single waiter (the destructor): it pushes
+one wakeup per change while a waiter is registered.
+
+Not covered yet: a **destructor running on a cancelled thread**.  The destructors of both clients
+take Mutex locks (the handshake lock, the client lock, the heartbeat lock) before they reach this
+bookkeeping, so on a cancelled thread they stop at the first of them with `THREAD-CANCELLED`.
 
 A libqore primitive for "cleanup-only" lock acquisition that is not a cancellation point is not
 added: a `synchronized` method already is one, it cannot be held past its method (so it cannot be

@@ -304,9 +304,10 @@ public const CloseDescMap = {
 
 #! The heartbeat of one gateway connection; internal to DiscordWebSocketClient
 /** Not for use outside of @ref DiscordWebSocketClient::DiscordWebSocketClient "DiscordWebSocketClient" and its
-    subclasses; it may change without notice.  Each heartbeat thread has its own record, so only a stopper of that thread clears its state, and a heartbeat
-    started for a newer connection is never touched by the stop of an older one.  Its members are protected by the
-    client's heartbeat lock, except \c running.
+    subclasses; it may change without notice.  Each heartbeat thread has its own record, so only a stopper of that
+    thread clears its state, and a heartbeat started for a newer connection is never touched by the stop of an older
+    one.  Its state is changed in its synchronized methods; \c seq, \c cid and \c client are set when it is
+    created.
 
     @since DiscordWebSocketClient 1.2
 */
@@ -361,9 +362,10 @@ public class DiscordHeartbeat {
     }
 
     # The state is changed in synchronized methods and waited for with a Queue and a Counter: the changes are made
-    # also by cleanup on a cancelled thread (the heartbeat thread's end, a destructor), and neither a synchronized
+    # also by cleanup on a cancelled thread (the end of a cancelled heartbeat thread), and neither a synchronized
     # method nor a Queue push nor a Counter decrement is a cancellation point, while a Mutex lock is (see
-    # design/cooperative-cancellation.md "Cleanup Critical Sections")
+    # design/cooperative-cancellation.md "Cleanup Critical Sections"); a destructor running on a cancelled thread is
+    # not covered: it takes Mutex locks before it stops the heartbeat
 
     #! Returns @ref True if the thread must stop
     synchronized bool isStopped() {
@@ -410,6 +412,20 @@ public class DiscordHeartbeat {
     #! Waits until the thread ended or was detached, or its start failed
     waitEndedOrDetached() {
         done.waitForZero();
+    }
+
+    #! Waits until the given time or until the thread is told to stop
+    /** Woken by a stop or an interval change; a wakeup before the time only checks for a stop.
+    */
+    waitUntil(date target) {
+        while (!isStopped()) {
+            # in whole milliseconds: a wait of 0 ms would not end before a wakeup
+            int remaining = (target - now_us()).durationMilliseconds();
+            if (remaining <= 0) {
+                return;
+            }
+            sleep(remaining);
+        }
     }
 
     #! Waits for a wakeup of the thread, at most for the given number of milliseconds (more than 0)
@@ -1427,7 +1443,8 @@ hash<auto> h = ws.getInfo();
         @param detach mark the record detached (its thread is not waited for)
     */
     private static stopHeartbeatRecord(DiscordHeartbeat h, *bool detach) {
-        # not a cancellation point: a destructor on a cancelled thread stops the record too
+        # not a cancellation point; note that a destructor running on a cancelled thread does not get here: it takes the
+        # heartbeat lock (a Mutex, a cancellation point) first
         h.requestStop(detach);
     }
 
@@ -1514,16 +1531,7 @@ hash<auto> h = ws.getInfo();
                 sleep = (float("0." + rand()) * sleep).toInt();
                 running = True;
             }
-            # woken by a stop or an interval change; a wakeup before the time only checks for a stop
-            date target = now_us() + milliseconds(sleep);
-            while (!h.isStopped()) {
-                # in whole milliseconds: a wait of 0 ms would not end before a wakeup
-                int remaining = (target - now_us()).durationMilliseconds();
-                if (remaining <= 0) {
-                    break;
-                }
-                h.sleep(remaining);
-            }
+            h.waitUntil(now_us() + milliseconds(sleep));
             if (h.isStopped()) {
                 break;
             }
