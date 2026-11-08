@@ -1868,8 +1868,23 @@ void QoreIRFunction::computeReferenceStoreLocals() {
             may_ref.insert(id);
         }
     }
+    // a value whose facts show a representation or a type that cannot be a reference is none, whatever produced it
+    // (ex: the int element of a list returned by a function of the same batch, which the facts give after projection)
+    auto facts_exclude_reference = [&](uint32_t id) -> bool {
+        const QoreIRValueFacts* facts = getValueFacts(QoreIRValue(id));
+        if (!facts) {
+            return false;
+        }
+        if (facts->representation == QoreIRValueRepresentation::NativeInt
+                || facts->representation == QoreIRValueRepresentation::NativeFloat
+                || facts->representation == QoreIRValueRepresentation::NativeBool) {
+            return true;
+        }
+        return facts->type_info && QoreTypeInfo::hasType(facts->type_info)
+            && QoreTypeInfo::parseReturns(facts->type_info, NT_REFERENCE) == QTI_NOT_EQUAL;
+    };
     auto may_be_reference = [&](uint32_t id) -> bool {
-        return may_ref.count(id) || !defs.count(id);
+        return (may_ref.count(id) || !defs.count(id)) && !facts_exclude_reference(id);
     };
     for (bool changed = true; changed;) {
         changed = false;
@@ -1944,6 +1959,44 @@ void QoreIRFunction::computeReferenceStoreLocals() {
             reference_store_locals.insert(key);
         }
     }
+}
+
+// documented in QoreIR.h
+size_t QoreIRFunction::refineReferenceLocalsFromFacts() {
+    if (reference_store_locals.empty()) {
+        return 0;
+    }
+    std::unordered_set<const void*> before = reference_store_locals;
+    computeReferenceStoreLocals();
+    size_t changed = 0;
+    for (const void* key : before) {
+        if (reference_store_locals.count(key)) {
+            continue;
+        }
+        // a reference slot local that no store can give a reference any longer is an IR-only local; a local on the
+        // runtime stack stays there
+        if (reference_slot_locals.erase(key)) {
+            ir_only_locals.insert(key);
+        }
+        ++changed;
+    }
+    if (!changed) {
+        return 0;
+    }
+    // the instructions' is_ref follows (see computeIROnlyLocals())
+    bool creates_reference = detectCreatesReference();
+    std::unordered_set<const void*> body_local_keys = buildBodyLocalKeys();
+    for (const auto& block : blocks) {
+        for (const auto& inst : block->instructions) {
+            if (auto* local_inst = dynamic_cast<QoreIRLocalInstruction*>(inst.get())) {
+                if (local_inst->local) {
+                    local_inst->is_ref = localMayHoldReference(local_inst->local, creates_reference,
+                        body_local_keys);
+                }
+            }
+        }
+    }
+    return changed;
 }
 
 // documented in QoreIR.h

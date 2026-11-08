@@ -1615,6 +1615,9 @@ public:
     //! For StoreLocal: selects the representation the store uses (see AssignmentMode)
     AssignmentMode mode = AssignmentMode::Normal;
     bool initial_assignment = false; // For StoreLocal/StoreClosure: declaration initializer write
+    //! For StoreLocal/StoreClosure: the assignment of an element to the variable of a foreach loop, whose type error
+    //! the AST interpreter describes as "<foreach lvalue assignment>" (see qore_ir_describe_foreach_assignment_error())
+    bool foreach_assignment = false;
     bool is_closure = false;       // Pre-computed from local->closureUse() during IR analysis
     bool is_ref = false;           // Pre-computed from local->isRef() during IR analysis
     bool is_block_exit = false;    // For UninstantiateLocal: true = block scope exit (clear CVV unconditionally)
@@ -3728,6 +3731,13 @@ public:
     */
     void computeReferenceStoreLocals();
 
+    //! Re-derives reference_store_locals with the value facts known now, after facts were added late (ex: the
+    //! projection of the elements of a list returned by a function of the same batch); a reference slot local that no
+    //! store can give a reference any longer becomes an IR-only local, so that the late specializations apply to it
+    /** @return the number of locals that are no longer reference-store locals
+    */
+    size_t refineReferenceLocalsFromFacts();
+
     //! Returns true if this function can create a reference (\c "\\var") anywhere
     /** Conservative: also true when the IR contains a construct whose AST body this analysis
         cannot see through.  An untyped local of a function that creates no reference can never
@@ -3810,6 +3820,8 @@ public:
     mutable std::vector<uint8_t> interpreter_reference_slots;
     //! Non-zero for the local slots of real_reference_locals, whose object has a real reference from the slot
     mutable std::vector<uint8_t> interpreter_real_slots;
+    //! The local of each local slot (null for a slot of no local), for the release of the locals at the exit
+    mutable std::vector<const LocalVar*> interpreter_slot_locals;
     //! The locals the function owns (QoreIRFunction::pre_instantiated_locals and every body local), which the
     //! interpreter tells from the variables of an enclosing scope
     mutable std::unordered_set<const void*> interpreter_function_own_locals;

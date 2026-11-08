@@ -7135,6 +7135,7 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             if (var->ref.id->closureUse()) {
                 auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, mode);
                 store_inst->initial_assignment = var->isDecl();
+                store_inst->foreach_assignment = context && !strcmp(context, "foreach assignment");
                 if (store_result) {
                     store_inst->result = builder.getFunction()->createValue();
                     *store_result = store_inst->result;
@@ -7150,6 +7151,8 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             {
                 auto* store_inst = builder.createStoreLocal(var->ref.id, value, var->loc, mode);
                 store_inst->initial_assignment = var->isDecl();
+                // a type error of the store is described as the AST interpreter describes it
+                store_inst->foreach_assignment = context && !strcmp(context, "foreach assignment");
                 if (store_result) {
                     store_inst->result = builder.getFunction()->createValue();
                     *store_result = store_inst->result;

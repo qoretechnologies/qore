@@ -200,6 +200,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_value_is_reference", reinterpret_cast<void*>(&qore_rt_value_is_reference) },
     { "qore_rt_read_reference_local", reinterpret_cast<void*>(&qore_rt_read_reference_local) },
     { "qore_rt_reference_slot_write", reinterpret_cast<void*>(&qore_rt_reference_slot_write) },
+    { "qore_rt_foreach_assignment_error", reinterpret_cast<void*>(&qore_rt_foreach_assignment_error) },
     { "qore_rt_element_local_replace", reinterpret_cast<void*>(&qore_rt_element_local_replace) },
     { "qore_rt_reload_local_if_stale_raw", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_raw) },
     { "qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local) },
@@ -1067,9 +1068,14 @@ extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, in
     // order so dependent temporaries (for example iterators) are released
     // before the values they reference.
     for (int32_t i = count - 1; i >= 0; --i) {
-        // the cache of an object local is tagged in the lowest bit of its address; its object is released with the
-        // real reference it has from the cache (see qore_rt_object_slot_release())
+        // a local on the runtime stack whose value is released is given by its LocalVar tagged in bit 1 (see
+        // QoreIRToLLVM::getExitReleaseSequence()); the cache of an object local is tagged in bit 0, and its object is
+        // released with the real reference it has from the cache (see qore_rt_object_slot_release())
         uintptr_t tagged = reinterpret_cast<uintptr_t>(alloca_ptrs[i]);
+        if (tagged & 2) {
+            qore_rt_clear_local(reinterpret_cast<LocalVar*>(tagged & ~static_cast<uintptr_t>(2)), xsink);
+            continue;
+        }
         uint64_t* slot = reinterpret_cast<uint64_t*>(tagged & ~static_cast<uintptr_t>(1));
         uint64_t bits = *slot;
         *slot = 0;
@@ -1749,8 +1755,12 @@ extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak(LocalVar* var, uint64_t
 /** @param normalize_weak_refs true to assign a weak reference as its target, false to keep it as it is (the variable
     of a foreach loop, which is assigned each element as it is)
 */
+//! Coerces a value stored to a local as an assignment to it checks it
+/** @param desc the description of the lvalue in a type error: "<lvalue>", or "<foreach lvalue assignment>" for the
+    variable of a foreach loop, as the AST interpreter describes them
+*/
 static uint64_t qore_rt_coerce_value_impl(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,
-        ExceptionSink* xsink, bool normalize_weak_refs) {
+        ExceptionSink* xsink, bool normalize_weak_refs, const char* desc = "<lvalue>") {
     ti = qore_substitute_type_params_if_needed(ti);
     QoreValue val = fromBits(value);
     ValueHolder weak_eval_holder(xsink);
@@ -1780,7 +1790,7 @@ static uint64_t qore_rt_coerce_value_impl(const QoreTypeInfo* ti, uint64_t value
     if (val.needsRef()) {
         val.refSelf();
     }
-    QoreTypeInfo::acceptAssignment(ti, "<lvalue>", val, xsink);
+    QoreTypeInfo::acceptAssignment(ti, desc, val, xsink);
     if (!xsink || !*xsink) {
         // Keep StoreLocal coercion aligned with LValueHelper::assign(): no-narrow
         // lvalues store plain auto containers
@@ -1826,7 +1836,7 @@ extern "C" DLLEXPORT uint8_t qore_rt_element_value_read_flag(uint64_t value) {
 */
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_element_value(const QoreTypeInfo* ti, uint64_t value,
         uint64_t* cleanup_ptr, uint8_t* read_flag, ExceptionSink* xsink) {
-    uint64_t rv = qore_rt_coerce_value_impl(ti, value, cleanup_ptr, xsink, false);
+    uint64_t rv = qore_rt_coerce_value_impl(ti, value, cleanup_ptr, xsink, false, "<foreach lvalue assignment>");
     if (read_flag) {
         *read_flag = qore_rt_element_value_read_flag(rv);
     }
@@ -2090,7 +2100,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_read_reference_local(uint64_t value, Excep
     @param ref the value in the local's cache: a reference
     @param value the value assigned, whose reference is taken
 */
-extern "C" DLLEXPORT void qore_rt_reference_slot_write(uint64_t ref, uint64_t value, ExceptionSink* xsink) {
+//! Assigns a value through a reference held in a native cache; \a desc describes the lvalue in a type error
+static void qore_rt_reference_slot_write_impl(uint64_t ref, uint64_t value, ExceptionSink* xsink, const char* desc) {
     QoreValue rv = fromBits(ref);
     ValueHolder val(fromBits(value), xsink);
     assert(rv.hasNode() && rv.getInternalNode()->getType() == NT_REFERENCE);
@@ -2098,7 +2109,17 @@ extern "C" DLLEXPORT void qore_rt_reference_slot_write(uint64_t ref, uint64_t va
     if (!lvh) {
         return;
     }
-    lvh.assign(val.release(), "<lvalue>");
+    lvh.assign(val.release(), desc);
+}
+
+//! Describes the type error of the assignment of an element to the variable of a foreach loop as the AST interpreter
+//! does (see qore_ir_describe_foreach_assignment_error())
+extern "C" DLLEXPORT void qore_rt_foreach_assignment_error(ExceptionSink* xsink) {
+    qore_ir_describe_foreach_assignment_error(xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_reference_slot_write(uint64_t ref, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_reference_slot_write_impl(ref, value, xsink, "<lvalue>");
 }
 
 //! Stores an element to the native cache of the IR-only variable of a foreach loop, which holds \a old_value
@@ -2118,7 +2139,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_element_local_replace(uint64_t old_value, 
         ExceptionSink* xsink) {
     QoreValue ov = fromBits(old_value);
     if (ov.hasNode() && ov.getInternalNode()->getType() == NT_REFERENCE) {
-        qore_rt_reference_slot_write(old_value, value, xsink);
+        // a type error is described as the AST interpreter describes the assignment of an element
+        qore_rt_reference_slot_write_impl(old_value, value, xsink, "<foreach lvalue assignment>");
         return old_value;
     }
     ov.discard(xsink);

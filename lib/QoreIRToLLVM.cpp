@@ -2276,6 +2276,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     block_scoped_locals.clear();
     current_body_locals.clear();
     local_cleanup_allocas.clear();
+    deferred_local_releases.clear();
     closure_pre_inst_flags.clear();
     operand_remaining_uses.clear();
     value_def_block.clear();
@@ -2968,11 +2969,93 @@ std::vector<llvm::AllocaInst*> QoreIRToLLVM::getBoxedExitCleanupSlots() const {
     return slots;
 }
 
+// documented in QoreIRToLLVM.h
+std::vector<QoreIRToLLVM::ExitReleaseEntry> QoreIRToLLVM::getExitReleaseSequence(bool runtime_locals,
+        bool cache_allocas) const {
+    std::vector<ExitReleaseEntry> seq;
+    for (llvm::AllocaInst* alloca : preinstantiated_entry_cleanup_allocas) {
+        seq.push_back({alloca, nullptr});
+    }
+    for (llvm::AllocaInst* alloca : fast_entry_param_allocas) {
+        seq.push_back({alloca, nullptr});
+    }
+    if (!runtime_locals || aot_mode || !current_ir_func) {
+        for (llvm::AllocaInst* alloca : owned_ir_local_allocas) {
+            seq.push_back({alloca, nullptr});
+        }
+        return seq;
+    }
+    // the body locals in declaration order: the IR-only locals' caches and the variables on the runtime stack that the
+    // frame instantiated, interleaved
+    std::vector<ExitReleaseEntry> body;
+    std::unordered_set<const llvm::AllocaInst*> placed;
+    for (LocalVar* var : current_ir_func->all_body_locals) {
+        if (!var) {
+            continue;
+        }
+        const void* key = reinterpret_cast<const void*>(var);
+        if (owned_ir_local_alloca_keys.count(key)) {
+            auto it = local_allocas.find(key);
+            if (it != local_allocas.end()) {
+                if (auto* alloca = llvm::dyn_cast<llvm::AllocaInst>(it->second.storage())) {
+                    if (placed.insert(alloca).second) {
+                        body.push_back({alloca, nullptr});
+                    }
+                }
+            }
+            continue;
+        }
+        if (var->closureUse() || (ir_only_locals_set && ir_only_locals_set->count(key))) {
+            continue;
+        }
+        if ((pre_instantiated_locals && pre_instantiated_locals->count(key)) || entry_locals_set.count(key)) {
+            body.push_back({nullptr, var});
+            if (!cache_allocas) {
+                continue;
+            }
+            // the references that the local's native cache holds (the reload tracker, the value it replaced, the
+            // temporaries stored in it) are released before the variable's value, as UninstantiateLocal releases
+            // them, so that releasing the variable's value runs the destructor of an object it holds: they follow the
+            // variable in the sequence, which is released last entry first
+            auto tracker_it = local_reload_trackers.find(key);
+            if (tracker_it != local_reload_trackers.end()) {
+                if (auto* alloca = llvm::dyn_cast<llvm::AllocaInst>(tracker_it->second)) {
+                    body.push_back({alloca, nullptr});
+                }
+            }
+            auto deferred_it = local_reload_deferred.find(key);
+            if (deferred_it != local_reload_deferred.end()) {
+                if (auto* alloca = llvm::dyn_cast<llvm::AllocaInst>(deferred_it->second)) {
+                    body.push_back({alloca, nullptr});
+                }
+            }
+            auto cleanup_it = local_cleanup_allocas.find(key);
+            if (cleanup_it != local_cleanup_allocas.end()) {
+                for (llvm::Value* value : cleanup_it->second) {
+                    if (auto* alloca = llvm::dyn_cast<llvm::AllocaInst>(value)) {
+                        body.push_back({alloca, nullptr});
+                    }
+                }
+            }
+        }
+    }
+    // the caches owned that are not those of body locals are released after the body locals
+    for (llvm::AllocaInst* alloca : owned_ir_local_allocas) {
+        if (!placed.count(alloca)) {
+            seq.push_back({alloca, nullptr});
+        }
+    }
+    seq.insert(seq.end(), body.begin(), body.end());
+    return seq;
+}
+
 bool QoreIRToLLVM::prepareBoxedExitCleanupArray(llvm::Function* llvm_func,
         size_t exit_edges) {
     boxed_exit_cleanup_array = nullptr;
     boxed_exit_cleanup_array_count = 0;
-    const std::vector<llvm::AllocaInst*> slots = getBoxedExitCleanupSlots();
+    // the body locals on the runtime stack are released at their places in the array, which every exit uses: at an
+    // exit that is no exception their values were released already, and they are released again as no value
+    const std::vector<ExitReleaseEntry> slots = getExitReleaseSequence(true, true);
     const size_t count = slots.size();
     const size_t budget = getCleanupPhiBudget();
     if (!llvm_func || !budget || !count || !exit_edges) {
@@ -3000,9 +3083,8 @@ bool QoreIRToLLVM::prepareBoxedExitCleanupArray(llvm::Function* llvm_func,
     llvm::AllocaInst* array = ab.CreateAlloca(ptr_type,
             llvm::ConstantInt::get(i32_type, static_cast<unsigned>(count)),
             "local_cleanup_slots");
-    // qore_rt_cleanup_run_allocas() releases slots in LIFO order; store the
-    // addresses in reverse so the values are released in exactly the order the
-    // inline load/store/decref sequence this replaces used.
+    // qore_rt_cleanup_run_allocas() releases the entries in LIFO order, last local first, as the inline sequence
+    // releases them; a local on the runtime stack is given by its LocalVar tagged in bit 1 of its address
     for (size_t i = 0; i < count; ++i) {
         if (i && !(i % 100)
                 && qore_check_cancel(nullptr, "JIT local cleanup slot registration")) {
@@ -3013,17 +3095,22 @@ bool QoreIRToLLVM::prepareBoxedExitCleanupArray(llvm::Function* llvm_func,
             return false;
         }
         llvm::Value* gep = ab.CreateGEP(ptr_type, array,
-                llvm::ConstantInt::get(i32_type,
-                    static_cast<unsigned>(count - 1 - i)),
+                llvm::ConstantInt::get(i32_type, static_cast<unsigned>(i)),
                 "local_cleanup_slot_ptr");
-        // the cache of an object local is tagged in the lowest bit of its address (an alloca of an i64 is aligned),
-        // and qore_rt_cleanup_run_allocas() releases its object with the real reference it has from the cache
-        llvm::Value* slot_ptr = slots[i];
-        if (isRealReferenceAlloca(slots[i])) {
-            slot_ptr = ab.CreateIntToPtr(ab.CreateOr(ab.CreatePtrToInt(slots[i], i64_type),
+        llvm::Value* entry_ptr;
+        if (slots[i].var) {
+            entry_ptr = ab.CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                reinterpret_cast<uint64_t>(slots[i].var) | 2), ptr_type, "runtime_local_entry");
+        } else if (isRealReferenceAlloca(slots[i].alloca)) {
+            // the cache of an object local is tagged in the lowest bit of its address (an alloca of an i64 is
+            // aligned), and qore_rt_cleanup_run_allocas() releases its object with the real reference it has from
+            // the cache
+            entry_ptr = ab.CreateIntToPtr(ab.CreateOr(ab.CreatePtrToInt(slots[i].alloca, i64_type),
                 llvm::ConstantInt::get(i64_type, 1)), ptr_type, "real_reference_slot_ptr");
+        } else {
+            entry_ptr = slots[i].alloca;
         }
-        ab.CreateStore(slot_ptr, gep);
+        ab.CreateStore(entry_ptr, gep);
     }
     boxed_exit_cleanup_array = array;
     boxed_exit_cleanup_array_count = static_cast<unsigned>(count);
@@ -3251,7 +3338,7 @@ void QoreIRToLLVM::emitOnBlockExitExec(llvm::Module& module) {
     reloadAllLocalsFromRuntime(module, llvm_func, true, true);
 }
 
-void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
+void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module, bool exception_exit) {
     // Re-instantiate closure-use pre-instantiated block-scoped locals that were popped
     // mid-execution (e.g. loop-body closure captures) so evalTiered's cleanup can pop
     // exactly one CVV per var.  Must happen before function return.
@@ -3287,9 +3374,33 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
     // that order, last local first, as the AST interpreter releases the variables of a frame, and as the array form
     // above (qore_rt_cleanup_run_allocas()) releases them: an object local's destructor runs before that of a local
     // declared before it when a function is left by an exception too
-    const std::vector<llvm::AllocaInst*> slots = getBoxedExitCleanupSlots();
+    // At an exit by an exception, the values of the body locals on the runtime stack that the frame instantiated are
+    // released at their places among them (see getExitReleaseSequence()); the variables are removed from the stack
+    // afterwards
+    const std::vector<ExitReleaseEntry> slots = getExitReleaseSequence(exception_exit, false);
     for (auto it = slots.rbegin(); it != slots.rend(); ++it) {
-        llvm::AllocaInst* alloca = *it;
+        if (it->var) {
+            // the references that the local's native cache holds are released before the variable's value, as
+            // UninstantiateLocal releases them, so that releasing the value runs the destructor of an object it holds
+            const void* key = reinterpret_cast<const void*>(it->var);
+            auto cleanup_it = local_cleanup_allocas.find(key);
+            if (cleanup_it != local_cleanup_allocas.end()) {
+                for (llvm::Value* cleanup_alloca : cleanup_it->second) {
+                    llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup_alloca);
+                    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup_alloca);
+                    builder->CreateCall(helper, {old_val, xsink_arg});
+                }
+            }
+            llvm::Function* exit_func = builder->GetInsertBlock()->getParent();
+            ensureLocalReloadDeferred(key, exit_func);
+            clearLocalReloadTracker(key, module, exit_func);
+            auto clear_fn = module.getOrInsertFunction("qore_rt_clear_local",
+                llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+            builder->CreateCall(clear_fn, {builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                reinterpret_cast<uint64_t>(it->var)), ptr_type), xsink_arg});
+            continue;
+        }
+        llvm::AllocaInst* alloca = it->alloca;
         llvm::Value* val = builder->CreateLoad(i64_type, alloca);
         builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
                 alloca);
@@ -4075,6 +4186,64 @@ llvm::BasicBlock* QoreIRToLLVM::createPerInvokeCleanupLP(llvm::Module& module,
     return lp_bb;
 }
 
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::finalizeDeferredLocalReleases(llvm::Module& module) {
+    if (deferred_local_releases.empty()) {
+        return;
+    }
+    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    llvm::IRBuilder<> rb(ctx);
+    for (const DeferredLocalRelease& rel : deferred_local_releases) {
+        if (!rel.block || !rel.block->getParent()) {
+            continue;
+        }
+        llvm::BasicBlock& entry = rel.block->getParent()->getEntryBlock();
+        // the allocas holding references to the local's value now known, in the order the UninstantiateLocal
+        // releases them
+        std::vector<llvm::Value*> current;
+        auto cleanup_it = local_cleanup_allocas.find(rel.key);
+        if (cleanup_it != local_cleanup_allocas.end()) {
+            current.insert(current.end(), cleanup_it->second.begin(), cleanup_it->second.end());
+        }
+        auto tracker_it = local_reload_trackers.find(rel.key);
+        if (tracker_it != local_reload_trackers.end()) {
+            current.push_back(tracker_it->second);
+        }
+        auto deferred_it = local_reload_deferred.find(rel.key);
+        if (deferred_it != local_reload_deferred.end()) {
+            current.push_back(deferred_it->second);
+        }
+        bool positioned = false;
+        for (llvm::Value* value : current) {
+            if (std::find(rel.released.begin(), rel.released.end(), value) != rel.released.end()) {
+                continue;
+            }
+            // only an alloca of the entry block dominates the release point
+            auto* alloca = llvm::dyn_cast<llvm::AllocaInst>(value);
+            if (!alloca || alloca->getParent() != &entry) {
+                continue;
+            }
+            if (!positioned) {
+                if (rel.after && rel.after->getNextNode()) {
+                    rb.SetInsertPoint(rel.after->getNextNode());
+                } else if (!rel.after) {
+                    rb.SetInsertPoint(rel.block, rel.block->getFirstInsertionPt());
+                } else if (llvm::Instruction* term = qoreGetTerminator(*rel.block)) {
+                    rb.SetInsertPoint(term);
+                } else {
+                    rb.SetInsertPoint(rel.block);
+                }
+                positioned = true;
+            }
+            llvm::Value* old_val = rb.CreateLoad(i64_type, alloca);
+            rb.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
+            rb.CreateCall(decref_fn, {old_val, xsink_arg});
+        }
+    }
+    deferred_local_releases.clear();
+}
+
 void QoreIRToLLVM::finalizeFunctionCommonCleanup(llvm::Module& module) {
     if (!function_common_cleanup) {
         return;
@@ -4098,7 +4267,7 @@ void QoreIRToLLVM::finalizeFunctionCommonCleanup(llvm::Module& module) {
     // the temporaries of the statements left are released before the on_block_exit handlers run, as in the AST
     emitExitStatementCleanup(module, false);
     emitOnBlockExitExec(module);
-    emitPreinstantiatedCleanup(module);
+    emitPreinstantiatedCleanup(module, true);
     emitInvokeCleanup(module);
     emitPreInstClosureReInstantiation(module);
     emitLocalUninstantiation(module);
@@ -4972,6 +5141,19 @@ void QoreIRToLLVM::retainLocalCacheValueIntern(const void* key, llvm::Value* loc
     builder->CreateStore(old_tracker, deferred_it->second);
     builder->CreateCall(decref_fn, {old_deferred, xsink_arg});
     markLocalCacheFresh(key, llvm_func);
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::ensureLocalReloadDeferred(const void* key, llvm::Function* llvm_func) {
+    if (local_reload_deferred.find(key) != local_reload_deferred.end() || !canReloadLocalFromRuntime(key)) {
+        return;
+    }
+    llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
+    llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+    llvm::AllocaInst* deferred = alloca_builder.CreateAlloca(i64_type, nullptr, "reload_deferred");
+    alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), deferred);
+    local_reload_deferred[key] = deferred;
+    registerPersistentCleanupAlloca(deferred);
 }
 
 void QoreIRToLLVM::clearLocalReloadTracker(const void* key, llvm::Module& module,
@@ -9881,7 +10063,7 @@ void QoreIRToLLVM::finalizeFunctionUnwindLP(llvm::Module& module) {
     // the temporaries of the statements left are released before the on_block_exit handlers run, as in the AST
     emitExitStatementCleanup(module, false);
     emitOnBlockExitExec(module);
-    emitPreinstantiatedCleanup(module);
+    emitPreinstantiatedCleanup(module, true);
     emitInvokeCleanup(module);
     emitPreInstClosureReInstantiation(module);
     emitLocalUninstantiation(module);
@@ -9911,6 +10093,26 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
     if (skip_next_exception_check) {
         skip_next_exception_check = false;
         return;
+    }
+
+    // a type error of the assignment of an element to the variable of a foreach loop is described as the AST
+    // interpreter describes it (see qore_ir_describe_foreach_assignment_error()); the description is fixed where an
+    // exception was raised, before the exception edge
+    if ((inst->opcode == QoreIROpcode::StoreLocal || inst->opcode == QoreIROpcode::StoreClosure)
+            && static_cast<const QoreIRLocalInstruction*>(inst)->foreach_assignment) {
+        llvm::Value* priv_ptr = builder->CreateLoad(ptr_type, xsink_arg, "foreach_xsink_priv");
+        llvm::Value* head = builder->CreateLoad(ptr_type, priv_ptr, "foreach_xsink_head");
+        llvm::BasicBlock* fix_bb = llvm::BasicBlock::Create(ctx, "foreach_assignment_error", llvm_func);
+        llvm::BasicBlock* fixed_bb = llvm::BasicBlock::Create(ctx, "foreach_assignment_checked", llvm_func);
+        builder->CreateCondBr(builder->CreateICmpNE(head,
+            llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type))), fix_bb, fixed_bb,
+            llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
+        builder->SetInsertPoint(fix_bb);
+        auto fix_fn = module.getOrInsertFunction("qore_rt_foreach_assignment_error",
+            llvm::FunctionType::get(void_type, {ptr_type}, false));
+        builder->CreateCall(fix_fn, {xsink_arg});
+        builder->CreateBr(fixed_bb);
+        builder->SetInsertPoint(fixed_bb);
     }
 
     llvm::BasicBlock* exception_block = nullptr;
@@ -12948,11 +13150,15 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         // AST
         emitExitStatementCleanup(module, false);
         emitOnBlockExitExec(module);
-        emitPreinstantiatedCleanup(module);
+        emitPreinstantiatedCleanup(module, true);
         emitInvokeCleanup(module);
         emitLocalUninstantiation(module);
         builder->CreateRet(getNothingReturnValue());
     }
+
+    // every instruction of the body is lowered: the allocas registered for a local after an UninstantiateLocal of it
+    // was lowered are released there too
+    finalizeDeferredLocalReleases(module);
 
     // C++ EH prototype: finalize the shared function-level unwind landing pad
     // if any invoke emitted during body lowering needed it.
@@ -15433,6 +15639,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     auto replace_fn = module.getOrInsertFunction("qore_rt_element_local_replace",
                         llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
                     llvm::Value* cache_val = builder->CreateCall(replace_fn, {old_val, owned_boxed, xsink_arg});
+                    // the cache takes its value before the exception check: the helper released the value it
+                    // replaced, whose destructor can raise an exception, and the exit release of the cache must not
+                    // release it again
+                    // raw local cache: the value after the store
+                    builder->CreateStore(cache_val, it->second.storage());
                     // the referenced lvalue can be a variable whose value another cache holds
                     llvm::Value* wrote_through = builder->CreateICmpNE(cache_val, owned_boxed);
                     llvm::AllocaInst* epoch_alloca = getOrCreateLocalReloadEpoch(llvm_func);
@@ -15776,6 +15987,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // independently generate decref code for the cleanup allocas.  At
                 // runtime, only one path executes, and the alloca is reset to NOTHING
                 // after decref, so duplicate paths (if somehow both reached) are safe.
+                // the allocas released here; those registered by code lowered after this instruction are released
+                // here too when the function is lowered (see DeferredLocalRelease)
+                std::vector<llvm::Value*> released;
                 auto cleanup_it = local_cleanup_allocas.find(key);
                 if (cleanup_it != local_cleanup_allocas.end()) {
                     for (llvm::Value* cleanup_alloca : cleanup_it->second) {
@@ -15783,6 +15997,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         builder->CreateStore(
                                 llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup_alloca);
                         builder->CreateCall(decref_fn, {old_val, xsink_arg});
+                        released.push_back(cleanup_alloca);
                     }
                 }
 
@@ -15798,6 +16013,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateStore(
                             llvm::ConstantInt::get(i64_type, VAL_NOTHING), tracker_it->second);
                     builder->CreateCall(decref_fn, {old_tracker, xsink_arg});
+                    released.push_back(tracker_it->second);
                 }
                 auto deferred_it = local_reload_deferred.find(key);
                 if (deferred_it != local_reload_deferred.end()) {
@@ -15805,6 +16021,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateStore(
                             llvm::ConstantInt::get(i64_type, VAL_NOTHING), deferred_it->second);
                     builder->CreateCall(decref_fn, {old_deferred, xsink_arg});
+                    released.push_back(deferred_it->second);
+                }
+                // the point the releases of allocas registered later are inserted at: after the last instruction
+                // emitted so far in the block, before the release of the local's value emitted below
+                {
+                    llvm::BasicBlock* release_block = builder->GetInsertBlock();
+                    deferred_local_releases.push_back({key, release_block,
+                        release_block && !release_block->empty() ? &release_block->back() : nullptr,
+                        std::move(released)});
                 }
 
                 // IR-only locals are not necessarily represented on the runtime
@@ -19274,7 +19499,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // the AST
             emitExitStatementCleanup(module, true);
             emitOnBlockExitExec(module);
-            emitPreinstantiatedCleanup(module);
+            emitPreinstantiatedCleanup(module, true);
             emitInvokeCleanup(module);
             emitLocalUninstantiation(module);
             builder->CreateRet(getNothingReturnValue());
@@ -19330,7 +19555,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // the AST
             emitExitStatementCleanup(module, true);
             emitOnBlockExitExec(module);
-            emitPreinstantiatedCleanup(module);
+            emitPreinstantiatedCleanup(module, true);
             emitInvokeCleanup(module);
             emitLocalUninstantiation(module);
             builder->CreateRet(getNothingReturnValue());
@@ -31397,7 +31622,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // the AST
             emitExitStatementCleanup(module, true);
             emitOnBlockExitExec(module);
-            emitPreinstantiatedCleanup(module);
+            emitPreinstantiatedCleanup(module, true);
             emitInvokeCleanup(module);
             emitLocalUninstantiation(module);
             builder->CreateRet(getNothingReturnValue());

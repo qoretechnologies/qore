@@ -19572,6 +19572,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 qore_ir_fuse_aggregate_return_projections(
                     func, projection_query, consumer_query,
                     &borrowed_aggregate_projections);
+            // the projected values can show that a local that a store was taken to give a reference is given none
+            if (aggregate_projections) {
+                func.refineReferenceLocalsFromFacts();
+            }
         }
         size_t object_scalar_projections =
             projectAOTNonescapingObjectScalars(
