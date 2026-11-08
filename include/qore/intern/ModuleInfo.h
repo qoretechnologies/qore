@@ -1048,16 +1048,10 @@ protected:
     //! Returns the file that loadModuleIntern() would load module \a name from, or an empty string
     /** The search order of loadModuleIntern() in the module path of \a pgm, without loading anything: in each
         directory the binary forms, those in a directory of the module's name, the source and a module directory.
-        The mutex must be held.
-
-        @param mod_prepended the directories of an AOT module's own %prepend-module-path directives, which its
-        initialization searches first, or nullptr
-        @param mod_appended the directories of an AOT module's own %append-module-path directives, which its
-        initialization searches last, or nullptr
+        The directories of the AOT modules whose dependencies this thread resolves for \a pgm are searched as well
+        (see QoreModulePathScope).  The mutex must be held.
     */
-    DLLLOCAL std::string findModuleFileUnlocked(const char* name, QoreProgram* pgm,
-            const std::vector<std::string>* mod_prepended = nullptr,
-            const std::vector<std::string>* mod_appended = nullptr);
+    DLLLOCAL std::string findModuleFileUnlocked(const char* name, QoreProgram* pgm);
 
     //! Load direct AOT descriptor dependencies while the parent module owns a load-map reservation.
     DLLLOCAL int loadAOTBinaryModuleDependencies(ExceptionSink& xsink,

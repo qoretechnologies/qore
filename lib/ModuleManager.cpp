@@ -1078,34 +1078,20 @@ static bool qore_aot_dependency_is_compiled_one(const std::string& name, const s
 }
 #endif
 
-std::string QoreModuleManager::findModuleFileUnlocked(const char* name, QoreProgram* pgm,
-        const std::vector<std::string>* mod_prepended, const std::vector<std::string>* mod_appended) {
-    // the order of inheritAOTModulePathLists() for an AOT module's own Program: its own prepended directories, those
-    // of the Program, the module path, those appended by the Program, its own appended directories
+std::string QoreModuleManager::findModuleFileUnlocked(const char* name, QoreProgram* pgm) {
+    // the search path of loadModuleIntern(): for the dependencies of an AOT module, which are checked in its
+    // QoreModulePathScope, its own directories with those of the Program
     std::vector<const std::string*> search_paths;
-    if (mod_prepended) {
-        for (const std::string& p : *mod_prepended) {
-            search_paths.push_back(&p);
-        }
-    }
-    const qore_program_private* priv_pgm = pgm ? qore_program_private::get(*pgm) : nullptr;
-    if (priv_pgm) {
-        for (const std::string& p : priv_pgm->prepended_module_paths) {
-            search_paths.push_back(&p);
-        }
+    std::vector<std::string> prepended, appended;
+    qore_program_private::getEffectiveModulePathLists(pgm, prepended, appended);
+    for (const std::string& p : prepended) {
+        search_paths.push_back(&p);
     }
     for (const std::string& p : moduleDirList) {
         search_paths.push_back(&p);
     }
-    if (priv_pgm) {
-        for (const std::string& p : priv_pgm->appended_module_paths) {
-            search_paths.push_back(&p);
-        }
-    }
-    if (mod_appended) {
-        for (const std::string& p : *mod_appended) {
-            search_paths.push_back(&p);
-        }
+    for (const std::string& p : appended) {
+        search_paths.push_back(&p);
     }
     struct stat sb;
     auto exists = [&sb](const QoreString& p) -> bool {
@@ -1211,9 +1197,9 @@ bool QoreModuleManager::checkAOTModuleDependencyFiles(ExceptionSink& xsink, cons
             file = fn;
             is_aot = !m->isUser() && m->isBuiltin() && static_cast<QoreBuiltinModule*>(m)->isAot();
         } else {
-            // as the AOT module's initialization will load it: with its own module path directives too
-            file = findModuleFileUnlocked(name.c_str(), pgm, &aot_info.prepended_module_paths,
-                &aot_info.appended_module_paths);
+            // as the AOT module's initialization will load it: with its own module path directives too, which the
+            // caller's QoreModulePathScope adds
+            file = findModuleFileUnlocked(name.c_str(), pgm);
             if (file.empty()) {
                 continue;
             }
@@ -2732,20 +2718,19 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     // index 0 per design doc), then the process-global moduleDirList, then per-Program appended
     // paths LAST.  We collect raw pointers to avoid copying strings.  See
     // design/qore-module-structure.md "Module Search Path".
+    // The Program's lists include those of the AOT modules whose dependencies this thread is resolving for it, as
+    // the Program of each such module will have them (see QoreModulePathScope)
     std::vector<const std::string*> search_paths;
-    const qore_program_private* priv_pgm = ctx_pgm ? qore_program_private::get(*ctx_pgm) : nullptr;
-    if (priv_pgm) {
-        for (const std::string& p : priv_pgm->prepended_module_paths) {
-            search_paths.push_back(&p);
-        }
+    std::vector<std::string> ctx_prepended, ctx_appended;
+    qore_program_private::getEffectiveModulePathLists(ctx_pgm, ctx_prepended, ctx_appended);
+    for (const std::string& p : ctx_prepended) {
+        search_paths.push_back(&p);
     }
     for (const std::string& p : moduleDirList) {
         search_paths.push_back(&p);
     }
-    if (priv_pgm) {
-        for (const std::string& p : priv_pgm->appended_module_paths) {
-            search_paths.push_back(&p);
-        }
+    for (const std::string& p : ctx_appended) {
+        search_paths.push_back(&p);
     }
 
     // Installed AOT artifacts and sources can occupy different module directories
@@ -3026,19 +3011,17 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
     QoreStringNode* desc = new QoreStringNodeMaker("feature '%s' is not builtin and no module with this name could "
         "be found in the module path: ", name);
-    if (priv_pgm && !priv_pgm->prepended_module_paths.empty()) {
+    if (!ctx_prepended.empty()) {
         bool first = true;
-        for (const std::string& p : priv_pgm->prepended_module_paths) {
+        for (const std::string& p : ctx_prepended) {
             desc->sprintf("%s%s", first ? "" : ":", p.c_str());
             first = false;
         }
         desc->concat(':');
     }
     moduleDirList.appendPath(*desc);
-    if (priv_pgm && !priv_pgm->appended_module_paths.empty()) {
-        for (const std::string& p : priv_pgm->appended_module_paths) {
-            desc->sprintf(":%s", p.c_str());
-        }
+    for (const std::string& p : ctx_appended) {
+        desc->sprintf(":%s", p.c_str());
     }
     xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), desc);
     return nullptr;
@@ -3345,18 +3328,13 @@ void QoreModuleManager::getModuleCandidateFiles(const char* name, QoreProgram* p
     std::vector<std::string> dirs;
     {
         AutoLocker al(mutex);
-        const qore_program_private* priv_pgm = pgm ? qore_program_private::get(*pgm) : nullptr;
-        if (priv_pgm) {
-            dirs.insert(dirs.end(), priv_pgm->prepended_module_paths.begin(),
-                priv_pgm->prepended_module_paths.end());
-        }
+        std::vector<std::string> prepended, appended;
+        qore_program_private::getEffectiveModulePathLists(pgm, prepended, appended);
+        dirs.insert(dirs.end(), prepended.begin(), prepended.end());
         for (const std::string& dir : moduleDirList) {
             dirs.push_back(dir);
         }
-        if (priv_pgm) {
-            dirs.insert(dirs.end(), priv_pgm->appended_module_paths.begin(),
-                priv_pgm->appended_module_paths.end());
-        }
+        dirs.insert(dirs.end(), appended.begin(), appended.end());
     }
 
     auto add = [&files](const QoreString& path) {
@@ -4402,6 +4380,17 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     }
     bool have_aot_info = aot_info_status == QoreAOTModuleInfoStatus::FOUND;
 
+    // until the module is mapped, its dependencies are found as its initialization finds them, and as a source
+    // module finds them: with its own %prepend-module-path and %append-module-path directories (written by qcc in
+    // its metadata) around the lists of the Program loading it; a dependency found without them is another module
+    // than the one it was compiled against, which the check below reports as out of date, and the source module
+    // is loaded instead
+    std::unique_ptr<QoreModulePathScope> path_scope;
+    if (have_aot_info && (!aot_info.prepended_module_paths.empty() || !aot_info.appended_module_paths.empty())) {
+        path_scope = std::make_unique<QoreModulePathScope>(path_pgm, aot_info.prepended_module_paths,
+            aot_info.appended_module_paths);
+    }
+
     // an AOT module compiled when a module requested with %try-module was unavailable takes the branch for the
     // module being unavailable, so it is stale once the module can be loaded
     if (have_aot_info && !aot_info.unavailable_optional_modules.empty()) {
@@ -4458,6 +4447,8 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
             return nullptr;
         }
     }
+    // the module's initialization runs in a Program of its own, which has its directories
+    path_scope.reset();
 
     // with its dependencies loaded, an AOT module is mapped once, resolving all of its symbols; a module without the
     // metadata is mapped lazily so that its descriptor can be read, and an AOT module without it is refused in

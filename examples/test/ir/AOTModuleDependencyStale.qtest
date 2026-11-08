@@ -57,6 +57,8 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         addTestCase("an include file named like a module is not that module", \includedModuleNameTest());
         addTestCase("a dependency is found as the module's own module path directives find it",
             \modulePathDirectiveTest());
+        addTestCase("a dependency of the descriptor is loaded as the module's own module path directives find it",
+            \modulePathDescriptorDependencyTest());
         set_return_value(main());
     }
 
@@ -482,5 +484,33 @@ try {
         assertEq("other Mid.qm", out.split("\n").last(), out);
         assertRegex("AOT module '.*/Mid\\.qmod' for feature 'Mid' is out of date: it was compiled against other "
             "files of module 'Base' than '.*/own/Base\\.qm'", out);
+    }
+
+    modulePathDescriptorDependencyTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        string own_dir = tmp.path + "/own";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        mkdir(own_dir);
+        # Mid requires Dep, which its %prepend-module-path directive finds in its own directory, before another Dep
+        # in the module path; Dep requires Sub, which only that directory has, as the Program of Dep, a source
+        # module, inherits the directories of the Program it is loaded for
+        writeModule(own_dir, "Sub", "", "public namespace Sub { public string sub value() { return \"sub\"; } }");
+        writeModule(own_dir, "Dep", "%requires Sub", "public namespace Dep { public string sub value() { "
+            "return \"own-\" + Sub::value(); } }");
+        writeModule(src_dir, "Dep", "", "public namespace Dep { public string sub value() { return \"global\"; } }");
+        writeModule(src_dir, "Mid", sprintf("%%prepend-module-path %s\n%%requires Dep", own_dir),
+            "public namespace Mid { public string sub value() { return Dep::value(); } }");
+        string module_path = qmod_dir + ":" + src_dir;
+        compile(module_path, src_dir, qmod_dir, "Mid");
+        assertTrue(inlist(normalize_dir(own_dir) + "/Dep.qm", depfileDeps(qmod_dir + "/Mid.qmod.d")));
+
+        # the dependency of the descriptor is loaded with Mid's own directory first, as the source module loads it:
+        # the AOT module is the one compiled against it, not out of date
+        string out = runRequires(module_path, tmp.path, "Mid", "Mid::value()");
+        assertEq("own-sub Mid.qmod", out, out);
+        assertNRegex("BINARY-MODULE-SOURCE-FALLBACK|AOT-MODULE-STALE", out);
     }
 }

@@ -2450,23 +2450,66 @@ void qore_program_private::inheritParseImports(QoreProgram& child, QoreProgram& 
     (void)xsink;
 }
 
-void qore_program_private::inheritModulePathLists(QoreProgram& child, QoreProgram& parent) {
-    auto append_unique = [](std::vector<std::string>& target, const std::vector<std::string>& source) {
-        for (const std::string& path : source) {
-            bool seen = false;
-            for (const std::string& existing : target) {
-                if (existing == path) {
-                    seen = true;
-                    break;
-                }
-            }
-            if (!seen) {
-                target.push_back(path);
-            }
+namespace {
+//! Appends the directories of \a source that \a target does not have to \a target
+void qore_append_unique_module_paths(std::vector<std::string>& target, const std::vector<std::string>& source) {
+    for (const std::string& path : source) {
+        if (std::find(target.begin(), target.end(), path) == target.end()) {
+            target.push_back(path);
         }
-    };
-    append_unique(child.priv->prepended_module_paths, parent.priv->prepended_module_paths);
-    append_unique(child.priv->appended_module_paths, parent.priv->appended_module_paths);
+    }
+}
+
+//! An AOT module's own module path directories, added for a Program (see QoreModulePathScope)
+struct QoreModulePathScopeEntry {
+    const QoreProgram* pgm;
+    const std::vector<std::string>* prepended;
+    const std::vector<std::string>* appended;
+};
+
+//! The scopes of this thread, outermost first
+thread_local std::vector<QoreModulePathScopeEntry> qore_module_path_scopes;
+}
+
+QoreModulePathScope::QoreModulePathScope(const QoreProgram* pgm, const std::vector<std::string>& prepended,
+        const std::vector<std::string>& appended) {
+    qore_module_path_scopes.push_back({pgm, &prepended, &appended});
+}
+
+QoreModulePathScope::~QoreModulePathScope() {
+    assert(!qore_module_path_scopes.empty());
+    qore_module_path_scopes.pop_back();
+}
+
+void qore_program_private::getEffectiveModulePathLists(const QoreProgram* pgm, std::vector<std::string>& prepended,
+        std::vector<std::string>& appended) {
+    prepended.clear();
+    appended.clear();
+    // a nested module's own directories come before those of the module it is loaded for, as a source module's
+    // Program puts its own before those it inherits
+    for (auto i = qore_module_path_scopes.rbegin(), e = qore_module_path_scopes.rend(); i != e; ++i) {
+        if (i->pgm == pgm) {
+            qore_append_unique_module_paths(prepended, *i->prepended);
+        }
+    }
+    if (pgm) {
+        qore_append_unique_module_paths(prepended, pgm->priv->prepended_module_paths);
+        qore_append_unique_module_paths(appended, pgm->priv->appended_module_paths);
+    }
+    for (const QoreModulePathScopeEntry& entry : qore_module_path_scopes) {
+        if (entry.pgm == pgm) {
+            qore_append_unique_module_paths(appended, *entry.appended);
+        }
+    }
+}
+
+void qore_program_private::inheritModulePathLists(QoreProgram& child, QoreProgram& parent) {
+    // the lists that resolve modules for the parent in this thread, so that a source module loaded as a dependency
+    // of an AOT module finds its own dependencies with the AOT module's directories too
+    std::vector<std::string> prepended, appended;
+    getEffectiveModulePathLists(&parent, prepended, appended);
+    qore_append_unique_module_paths(child.priv->prepended_module_paths, prepended);
+    qore_append_unique_module_paths(child.priv->appended_module_paths, appended);
 }
 
 void qore_program_private::importFunction(ExceptionSink* xsink, QoreFunction* u, const qore_ns_private& oldns, const char* new_name, bool inject) {

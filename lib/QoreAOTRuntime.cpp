@@ -11684,9 +11684,11 @@ static void inheritAOTModulePathLists(QoreProgram* local_pgm, QoreProgram* paren
     if (aot_module_init_loader_pgm) {
         parent_pgm = aot_module_init_loader_pgm;
     }
-    const qore_program_private* parent_priv = nullptr;
+    // with the directories of the AOT modules whose dependencies this thread is loading for it (this module is
+    // loaded as one of them; see QoreModulePathScope)
+    std::vector<std::string> parent_prepended, parent_appended;
     if (parent_pgm && parent_pgm != local_pgm) {
-        parent_priv = qore_program_private::get(*parent_pgm);
+        qore_program_private::getEffectiveModulePathLists(parent_pgm, parent_prepended, parent_appended);
     }
 
     // Source modules inherit the importing Program's path lists, then apply
@@ -11694,10 +11696,8 @@ static void inheritAOTModulePathLists(QoreProgram* local_pgm, QoreProgram* paren
     // order: module prepends, inherited prepends, global module path,
     // inherited appends, module appends.
     append_unique_module_paths(local_priv->prepended_module_paths, module_prepended);
-    if (parent_priv) {
-        append_unique_module_paths(local_priv->prepended_module_paths, parent_priv->prepended_module_paths);
-        append_unique_module_paths(local_priv->appended_module_paths, parent_priv->appended_module_paths);
-    }
+    append_unique_module_paths(local_priv->prepended_module_paths, parent_prepended);
+    append_unique_module_paths(local_priv->appended_module_paths, parent_appended);
     append_unique_module_paths(local_priv->appended_module_paths, module_appended);
 }
 

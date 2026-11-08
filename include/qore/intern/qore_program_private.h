@@ -3699,6 +3699,19 @@ public:
      */
     DLLLOCAL static void inheritModulePathLists(QoreProgram& child, QoreProgram& parent);
 
+    //! Returns the module search-path lists that resolve modules for \a pgm in this thread
+    /** These are the lists of \a pgm, with the directories of the AOT modules whose dependencies this thread is
+        resolving for \a pgm (see QoreModulePathScope): the prepended directories of the innermost such module first
+        and the appended directories of the outermost first, as nested source modules inherit them.  Without such
+        a module, they are the lists of \a pgm.
+
+        @param pgm the Program, or nullptr for none
+        @param prepended receives the directories searched before the module path, without duplicates
+        @param appended receives the directories searched after the module path, without duplicates
+     */
+    DLLLOCAL static void getEffectiveModulePathLists(const QoreProgram* pgm, std::vector<std::string>& prepended,
+            std::vector<std::string>& appended);
+
     DLLLOCAL static void runTimeDefine(QoreProgram* pgm, const char* str, QoreValue val, ExceptionSink* xsink) {
         pgm->priv->runTimeDefine(str, val, xsink);
     }
@@ -4707,6 +4720,29 @@ class RuntimeConfig;
 //! authoritative, falling back to the runtime-config/context Program only when there is no
 //! current Program.  Single definition in ql_misc.cpp; also called from ql_object.cpp.
 DLLLOCAL QoreProgram* q_get_runtime_call_program(RuntimeConfig& runtime_cfg);
+
+//! Makes the module loader find modules for a Program with an AOT module's own module path directories
+/** While an AOT module's dependencies are loaded and checked, before the module is mapped, its own Program does not
+    exist yet; its initialization creates it with the module's own %prepend-module-path and %append-module-path
+    directories around the lists of the Program loading it (inheritAOTModulePathLists() in QoreAOTRuntime.cpp), as a
+    source module's Program has them.  So that its dependencies are the modules that Program, or the module's
+    source, would find, this scope adds the directories, which qcc writes in the module's metadata, to the lists of
+    the loading Program for this thread (see qore_program_private::getEffectiveModulePathLists()), also for the
+    Programs of the source modules loaded in it, which inherit them.  Scopes nest for a dependency's dependencies.
+*/
+class QoreModulePathScope {
+public:
+    //! Adds \a prepended and \a appended to the lists of \a pgm for this thread until destroyed
+    /** the lists must outlive the scope
+    */
+    DLLLOCAL QoreModulePathScope(const QoreProgram* pgm, const std::vector<std::string>& prepended,
+            const std::vector<std::string>& appended);
+
+    DLLLOCAL ~QoreModulePathScope();
+
+    QoreModulePathScope(const QoreModulePathScope&) = delete;
+    QoreModulePathScope& operator=(const QoreModulePathScope&) = delete;
+};
 
 //! returns the structured parse diagnostics collected on the Program serialized as a JSON array;
 //! exported so the standalone interpreter (--diag-format=json) can emit them
