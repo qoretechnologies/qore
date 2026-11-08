@@ -11330,7 +11330,15 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
         int err = SSL_get_error(ssl, rc);
 #ifdef DEBUG
         if (dbg_forced_error_ssl) {
+            // a real TLS protocol error, as SSL_write_ex() queues it for a bad record, so the error path for a
+            // queued TLS-library error runs; errno holds a stale peer-close error, which must not be taken for the
+            // cause
             err = SSL_ERROR_SSL;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+            ERR_raise(ERR_LIB_SSL, SSL_R_DECRYPTION_FAILED_OR_BAD_RECORD_MAC);
+#else
+            SSLerr(SSL_F_SSL_WRITE, SSL_R_DECRYPTION_FAILED_OR_BAD_RECORD_MAC);
+#endif
             errno = EPIPE;
         }
 #endif

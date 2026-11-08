@@ -196,6 +196,9 @@ class TlsWriteAfterPeerResetTest inherits QUnit::Test {
             ex = ex1;
         }
         assertEq("SOCKET-SSL-ERROR", ex.err, ex.desc);
+        # the TLS library's error is reported, not a transport failure
+        assertRegex("decryption failed|bad record mac", ex.desc.lwr(), "the TLS protocol error is reported");
+        assertEq(NOTHING, ex.arg, "the stale errno is not reported as a peer close");
         assertFalse(sock.isOpen(), "the socket is closed after a TLS protocol error");
     }
 
