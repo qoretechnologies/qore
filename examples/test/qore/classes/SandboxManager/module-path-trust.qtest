@@ -501,6 +501,8 @@ switch (case_name) {
             \aotNestedLoadTest());
         addTestCase("a load through a link to a library module loads the library module's file", \canonicalTest());
         addTestCase("a module that a sandbox loads by path is not given to another sandbox", \crossTenantTest());
+        addTestCase("a split AOT module in the module path cannot be replaced", \splitAotShadowTest());
+        addTestCase("a module name is not a pattern", \patternNameTest());
         set_return_value(main());
     }
 

@@ -771,9 +771,10 @@ public:
     */
     DLLLOCAL bool isTrustedModulePath(const char* path, std::string* load_path = nullptr) const;
 
-    //! Returns the path of a module with the name given in the process-wide module path, or an empty string
-    /** Looks for a user module (\c name.qm, a separated module directory \c name/name.qm), an AOT module
-        (\c name.qmod) and a binary module (\c name-api-*.qmod) in each directory of the process-wide module path
+    //! Returns the path of a module with the name given in a directory of library code, or an empty string
+    /** Looks in each directory of library code (see isTrustedModulePath()) for every form that the module search
+        loads a module from: binary modules for the active API versions and AOT modules, flat and in a split module
+        directory, source modules and separated module directories
     */
     DLLLOCAL std::string findTrustedModule(const char* name) const;
 

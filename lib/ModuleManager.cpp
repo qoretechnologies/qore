@@ -2984,40 +2984,59 @@ bool QoreModuleManager::isTrustedModulePath(const char* path, std::string* load_
     return false;
 }
 
-std::string QoreModuleManager::findTrustedModule(const char* name) const {
-    if (!name || !*name) {
-        return std::string();
-    }
+//! Returns the file or directory in a module directory that a module with the name given is loaded from, or ""
+/** The forms and their order are those of the module search in QoreModuleManager::loadModuleIntern(): a binary
+    module for each active API version and an AOT module, flat (\c dir/name...) and then split
+    (\c dir/name/name...), the source module \c dir/name.qm, and a separated module directory \c dir/name with
+    \c name.qm in it.  The name is used as is: no pattern matching takes place.
+*/
+static std::string qore_find_module_in_dir(const std::string& dir, const char* name) {
     struct stat sb;
-    std::vector<std::string> dirs;
-    for (const TrustedModuleDir& td : trusted_module_dirs) {
-        if (!td.named.empty()) {
-            dirs.push_back(td.named);
+    for (bool split : {false, true}) {
+        QoreString base(dir.c_str());
+        base.sprintf(QORE_DIR_SEP_STR "%s", name);
+        if (split) {
+            base.sprintf(QORE_DIR_SEP_STR "%s", name);
         }
-        if (!td.real.empty() && td.real != td.named) {
-            dirs.push_back(td.real);
-        }
-    }
-    for (const std::string& dir : dirs) {
-        for (const char* fmt : {"%s/%s.qm", "%s/%s.qmod", "%s/%s/%s.qm"}) {
-            QoreString candidate;
-            candidate.sprintf(fmt, dir.c_str(), name, name);
-            if (!stat(candidate.c_str(), &sb)) {
-                return candidate.c_str();
+        for (unsigned ai = 0; ai <= qore_mod_api_list_len; ++ai) {
+            QoreString path(base);
+            if (ai < qore_mod_api_list_len) {
+                path.sprintf("-api-%d.%d.qmod", qore_mod_api_list[ai].major, qore_mod_api_list[ai].minor);
+            } else {
+                path.concat(".qmod");
+            }
+            if (!stat(path.c_str(), &sb)) {
+                return path.c_str();
             }
         }
-        // a binary module: name-api-<version>.qmod
-        QoreString pattern;
-        pattern.sprintf("%s/%s-api-*.qmod", dir.c_str(), name);
-        glob_t globbuf;
-        if (!glob(pattern.c_str(), 0, nullptr, &globbuf)) {
-            std::string found = globbuf.gl_pathc ? globbuf.gl_pathv[0] : "";
-            globfree(&globbuf);
+    }
+    QoreString path(dir.c_str());
+    path.sprintf(QORE_DIR_SEP_STR "%s.qm", name);
+    if (!stat(path.c_str(), &sb)) {
+        return path.c_str();
+    }
+    path = dir.c_str();
+    path.sprintf(QORE_DIR_SEP_STR "%s", name);
+    if (!stat(path.c_str(), &sb) && S_ISDIR(sb.st_mode) && has_separated_module_main(path.c_str(), name)) {
+        return path.c_str();
+    }
+    return std::string();
+}
+
+std::string QoreModuleManager::findTrustedModule(const char* name) const {
+    // a feature name has no directory separator; one that has one names no module in a module directory
+    if (!name || !*name || strchr(name, '/') || strchr(name, '\\')) {
+        return std::string();
+    }
+    for (const TrustedModuleDir& td : trusted_module_dirs) {
+        for (const std::string* dir : {&td.named, &td.real}) {
+            if (dir->empty() || (dir == &td.real && td.real == td.named)) {
+                continue;
+            }
+            std::string found = qore_find_module_in_dir(*dir, name);
             if (!found.empty()) {
                 return found;
             }
-        } else {
-            globfree(&globbuf);
         }
     }
     return std::string();
