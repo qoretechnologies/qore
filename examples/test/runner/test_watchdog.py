@@ -13,7 +13,7 @@ limit of 0.
 Copyright (C) 2026 Qore Technologies, s.r.o.
 """
 
-import fcntl
+import errno
 import os
 from pathlib import Path
 import re
@@ -196,58 +196,73 @@ class EventFifoTest(unittest.TestCase):
 
 
 class InterruptedRunnerTest(unittest.TestCase):
-    """A runner ended by a signal stops the watchdog and the test that run, removes its files, the directory of its
-    event FIFO among them, and ends by the signal"""
+    """A runner ended by a signal ends the test that runs, its watchdog and the processes the test left, removes its
+    files, the directory of its event FIFO among them, and ends by the signal"""
 
-    def interrupt(self, sig):
+    # the descriptors at which the processes of a run get the write ends of the harness's pipes (the runner uses 4)
+    READY_FD = 51
+    ALIVE_FD = 50
+
+    def interrupt(self, sig, test_source="", wait=None, test_lines=()):
         with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
             tree = RunnerTree(directory)
             # the test tells the harness that it runs (the runner has made its files and started its watchdog by then)
-            # and blocks; only the signal the runner passes on ends it
-            ready = tree.root / "ready"
+            # and blocks on a FIFO that only the harness's cleanup writes
             hold = tree.root / "hold"
-            os.mkfifo(ready)
             os.mkfifo(hold)
             tree.add_test("blocks.qtest", f"""\
                 # test-timeout: 600
-                with open({str(ready)!r}, "w") as f:
-                    f.write("running\\n")
+                import os
+                {test_source}
+                os.write({self.READY_FD}, b"running\\n")
                 open({str(hold)!r}).read()
                 """)
-            # every process of the run inherits the write end of this pipe: the read end is at its end when the last
-            # of them has ended, the runner, its watchdog and the test, so that none of them is left
-            alive_r, pipe_w = os.pipe()
-            # at a descriptor that the runner does not use (it opens its event FIFO at 4)
-            alive_w = fcntl.fcntl(pipe_w, fcntl.F_DUPFD, 50)
-            os.close(pipe_w)
+            # every process of the run inherits the write ends of these pipes: the ready pipe carries the test's
+            # message, or is at its end if the run ends before the test writes it; the alive pipe is at its end when
+            # the last process of the run has ended, the runner, its watchdog, the test and what the test started
+            ready_r, ready_w = os.pipe()
+            alive_r, alive_w = os.pipe()
+            for fd, target in ((ready_w, self.READY_FD), (alive_w, self.ALIVE_FD)):
+                os.dup2(fd, target)
+                os.close(fd)
+            env = tree.env()
+            if wait is not None:
+                env["QORE_TEST_INTERRUPT_WAIT"] = str(wait)
+            runner = None
             try:
-                runner = subprocess.Popen(["sh", str(RUN_TESTS)], cwd=tree.root, env=tree.env(),
-                                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, pass_fds=(alive_w,),
-                                          preexec_fn=no_core_dumps)
-                os.close(alive_w)
-                alive_w = -1
-                try:
-                    with open(ready) as f:
-                        self.assertEqual("running\n", f.read())
-                    self.assertEqual(1, len(list(tree.tmp.glob("qore-test-events.*"))),
-                                     "the runner made its FIFO directory")
-                    runner.send_signal(sig)
-                    returncode = runner.wait(timeout=60)
-                finally:
-                    if runner.poll() is None:
-                        runner.kill()
-                        runner.wait()
+                runner = subprocess.Popen(["sh", str(RUN_TESTS)], cwd=tree.root, env=env,
+                                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                          pass_fds=(self.READY_FD, self.ALIVE_FD), preexec_fn=no_core_dumps)
+                os.close(self.READY_FD)
+                os.close(self.ALIVE_FD)
+                readable, _, _ = select.select([ready_r], [], [], 120)
+                self.assertEqual([ready_r], readable, "the test did not start")
+                self.assertEqual(b"running\n", os.read(ready_r, 100), "the run ended before the test started")
+                self.assertEqual(1, len(list(tree.tmp.glob("qore-test-events.*"))),
+                                 "the runner made its FIFO directory")
+                runner.send_signal(sig)
+                output = runner.communicate(timeout=120)[0].decode()
                 # the runner ends by the signal, so that its caller sees why
-                self.assertEqual(-sig, returncode)
-                # the read returns when no process holds the pipe anymore; one that is left keeps it open, which
-                # the time limit of the select ends as a failure
+                self.assertEqual(-sig, runner.returncode, output)
+                for line in test_lines:
+                    self.assertIn(line, output)
+                # the read returns when no process holds the pipe anymore; one that is left keeps it open, which the
+                # time limit of the select ends as a failure
                 readable, _, _ = select.select([alive_r], [], [], 60)
                 self.assertEqual([alive_r], readable, "a process of the run is left after signal %d" % sig)
                 self.assertEqual(b"", os.read(alive_r, 1), "a process of the run is left after signal %d" % sig)
             finally:
-                os.close(alive_r)
-                if alive_w >= 0:
-                    os.close(alive_w)
+                if runner is not None and runner.poll() is None:
+                    runner.kill()
+                    runner.wait()
+                # a test that is left (after a failure) is released from its FIFO, if it waits there
+                try:
+                    os.close(os.open(hold, os.O_WRONLY | os.O_NONBLOCK))
+                except OSError as e:
+                    if e.errno != errno.ENXIO:
+                        raise
+                for fd in (ready_r, alive_r):
+                    os.close(fd)
             self.assertEqual([], list(tree.tmp.glob("qore-test-events.*")),
                              "the runner ended by signal %d left its FIFO directory" % sig)
             self.assertEqual([], sorted(p.name for p in tree.cores.iterdir()),
@@ -261,6 +276,19 @@ class InterruptedRunnerTest(unittest.TestCase):
 
     def test_sigterm(self):
         self.interrupt(signal.SIGTERM)
+
+    @unittest.skipUnless(HAVE_TIMEOUT, "the watchdog runs only with a timeout command")
+    def test_a_test_that_handles_the_signal_and_hangs_is_killed(self):
+        # it ignores SIGTERM: the watchdog, told that the run is interrupted, kills it after its wait
+        self.interrupt(signal.SIGTERM, "import signal; signal.signal(signal.SIGTERM, signal.SIG_IGN)", 1,
+                       ("the run is interrupted, and the test did not end within 1s: SIGKILL sent",))
+
+    @unittest.skipUnless(os.path.isdir("/proc/self/task"), "processes a test leaves are found through /proc (Linux)")
+    def test_the_processes_a_test_left_are_ended(self):
+        # the test starts a process that outlives it (in a session of its own, so that no signal to the test's
+        # process group reaches it), which inherits the test's mark and the harness's pipes
+        self.interrupt(signal.SIGTERM, "import subprocess; subprocess.Popen(['sleep', '600'], start_new_session=True, "
+                       f"pass_fds=({self.READY_FD}, {self.ALIVE_FD}))")
 
 
 @unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")

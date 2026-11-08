@@ -657,34 +657,72 @@ remove_runner_files() {
     fi
 }
 trap remove_runner_files 0
-# The test that runs and its watchdog (see run_with_watchdog()), while one runs
+# The test that runs and its watchdog (see run_with_watchdog()), while one runs; *_starting is 1 from just before the
+# process is started until its ID is recorded, so that the trap below takes it from $! in that window
 test_pid=""
+test_starting=0
 watchdog_pid=""
-# Ends the runner for a signal: a shell does not run its EXIT trap when a signal ends it, so this does what the end of
-# a run does.  The watchdog of the test that runs is stopped first: left running, it would end a process minutes later
-# that may have reused the test's process ID.  The test is ended too: it is sent the signal, but SIGTERM for a SIGINT,
-# which a command that a non-interactive shell runs in the background ignores (so a SIGINT from a terminal does not
-# reach it either).  Then the runner ends by the signal itself, so that its caller (a loop in bash, for example) sees
-# why.
+watchdog_starting=0
+# Ends the runner for a signal (the name and the number): a shell does not run its EXIT trap when a signal ends it, so
+# this does what the end of a run does.  The test that runs is sent the signal (SIGTERM for SIGINT, which a command
+# that a non-interactive shell runs in the background ignores, so that a SIGINT from a terminal does not reach it
+# either), and its watchdog is told that the run is interrupted: it then ends the test with SIGKILL if it has not ended
+# within TEST_INTERRUPT_WAIT seconds (a test that handles the signal and hangs), and is stopped once the test has
+# ended and been waited for, as at the end of a test.  Left running, the watchdog would end a process minutes later
+# that may have reused the test's process ID; stopping it also ends its FIFO reader, which GNU timeout runs in a
+# process group of its own, where a SIGHUP from a terminal does not reach it.  The processes the test left are ended
+# as after any test.  Then the runner ends by the signal itself, so that its caller (a loop in bash, for example) sees
+# why.  A test that runs in the foreground (without the watchdog) is waited for before a trap runs, as a shell
+# defers traps until its foreground command has ended.
 runner_signaled() {
-    if [ -n "$watchdog_pid" ]; then
-        echo exit >&4 2>/dev/null
-        wait $watchdog_pid 2>/dev/null
+    if [ -z "$test_pid" ] && [ $test_starting -eq 1 ]; then
+        test_pid=$!
+    fi
+    if [ -z "$watchdog_pid" ] && [ $watchdog_starting -eq 1 ] && [ "$!" != "$test_pid" ]; then
+        watchdog_pid=$!
     fi
     if [ -n "$test_pid" ]; then
+        if [ -n "$watchdog_pid" ]; then
+            echo interrupted >&4 2>/dev/null
+        fi
         if [ "$1" = INT ]; then
             kill -TERM $test_pid 2>/dev/null
         else
             kill -$1 $test_pid 2>/dev/null
         fi
+        wait $test_pid 2>/dev/null
+        test_pid=""
+    fi
+    if [ -n "$watchdog_pid" ]; then
+        echo exit >&4 2>/dev/null
+        wait $watchdog_pid 2>/dev/null
+        watchdog_pid=""
+    fi
+    if [ -n "$TEST_PROCESS_MARK" ]; then
+        find_test_survivors "$TEST_PROCESS_MARK"
+        if [ -n "$TEST_SURVIVORS" ]; then
+            runner_survivors=""
+            while read -r kind pid cmd; do
+                case "$kind" in
+                    watcher|running) runner_survivors="$runner_survivors $pid" ;;
+                esac
+            done <<EOF
+`qore_ci_running_processes $TEST_SURVIVORS`
+EOF
+            if [ -n "$runner_survivors" ]; then
+                kill -KILL $runner_survivors 2>/dev/null
+            fi
+        fi
     fi
     remove_runner_files
     trap - 0 $1
     kill -$1 $$
+    # if the signal did not end the shell
+    exit $((128 + $2))
 }
-trap 'runner_signaled HUP' HUP
-trap 'runner_signaled INT' INT
-trap 'runner_signaled TERM' TERM
+trap 'runner_signaled HUP 1' HUP
+trap 'runner_signaled INT 2' INT
+trap 'runner_signaled TERM 15' TERM
 # A separate marker per runner also permits concurrent test shards.
 TEST_START_MARKER=$(mktemp "$CORE_DIR_ABS/test-start.XXXXXX") || exit 1
 # the core files there were when the current test started (see find_test_core())
@@ -708,6 +746,8 @@ TEST_EVENT_FIFO="$TEST_EVENT_DIR/events"
 # 124 when it ends the test, so the abort is not taken for a crash, as it is when BusyBox timeout ends a test (which
 # keeps SIGTERM: see TIMEOUT_SIGNAL_OPTS).
 TEST_STACK_DUMP_WAIT=${QORE_TEST_STACK_DUMP_WAIT:-30}
+# the seconds a test may take to end after an interrupted run sent it a signal (see runner_signaled())
+TEST_INTERRUPT_WAIT=${QORE_TEST_INTERRUPT_WAIT:-10}
 TEST_TIMEOUT_SIGNAL=ABRT
 TEST_SIGNALS_ENABLED=1
 for opt in $QORE_TEST_OPTS; do
@@ -785,10 +825,13 @@ run_with_watchdog() {
         WATCHDOG_TEST_EXIT=$?
         return $WATCHDOG_TEST_EXIT
     fi
+    test_starting=1
     QORE_TEST_EVENT_FIFO="$TEST_EVENT_FIFO" "$@" 4>&- &
     test_pid=$!
+    test_starting=0
     # The watchdog reads the test's events until its time limit, and ends the test when the limit has passed.  Its exit
     # status has bit 0 set if the limit has passed, and bit 1 if its read of the FIFO failed.
+    watchdog_starting=1
     (
         status=0
 
@@ -863,9 +906,20 @@ event $1
                 END { exit !(threads > 0 && (caught || blocked == threads)) }'
         }
 
-        watchdog_wait $limit exit
+        watchdog_wait $limit exit interrupted
+        watchdog_rc=$?
+        # the run is interrupted (see runner_signaled()): the runner has sent the test a signal; it is ended if it
+        # does not end in time
+        if [ $watchdog_rc -eq 0 ] && watchdog_got interrupted && ! watchdog_got exit; then
+            if ! watchdog_wait $TEST_INTERRUPT_WAIT exit; then
+                echo "*** the run is interrupted, and the test did not end within ${TEST_INTERRUPT_WAIT}s: SIGKILL" \
+                    "sent ***"
+                kill -KILL $test_pid 2>/dev/null
+            fi
+            exit $status
+        fi
         # the test has ended, or the read failed before the time limit: the test is not ended for that
-        if [ $? -ne 1 ]; then
+        if [ $watchdog_rc -ne 1 ]; then
             exit $status
         fi
         status=$((status | 1))
@@ -889,6 +943,7 @@ event $1
         exit $status
     ) &
     watchdog_pid=$!
+    watchdog_starting=0
     wait $test_pid
     WATCHDOG_TEST_EXIT=$?
     test_pid=""
