@@ -1,13 +1,14 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - async accept and keep-alive poll operations, header timeouts, stop during a TLS handshake
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/AsyncSocketIo
-%requires ../../../../qlib/HttpServerAsyncIo
+%requires QUnit
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
 %requires ../../TestCertificates.qm
 
 %exec-class HttpServerAsyncIoTest

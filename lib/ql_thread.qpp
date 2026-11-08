@@ -2334,6 +2334,14 @@ int qore_test_fast_route_guard(string kind, *code cb) {
     return qore_fast_route_guard_probe(kind->c_str(), cb, xsink);
 }
 
+//! Returns the number of local variables on the runtime stack of the current thread for the current Program
+/** Test support for the runtime local variable stack (not documented as API): a call that has returned leaves the
+    stack as it found it, so a test can check that a loop of calls does not grow it
+*/
+int qore_test_local_var_stack_size() {
+    return thread_get_local_var_count(xsink);
+}
+
 //! Moves the clock that FastCell and FastResponseSlot ages are measured by forward, so that a test need not wait
 /** @param ms the time to move the clock forward by, in milliseconds
 */

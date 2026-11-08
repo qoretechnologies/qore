@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - stack guard and stack limits in JIT, tiered and AOT-linked executables in child processes
 
 %modern
 %no-child-restrictions

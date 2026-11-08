@@ -125,6 +125,25 @@
     A class, typed hash or enum inherited or imported from another Program provides no namespace path into its
     declaring Program: reflection returns the namespace with the same path in the reflection object's own Program.
 
+    @subsection reflection_member_access Member Access of Sandboxed and Restricted Callers
+
+    Code that a @ref Qore::SandboxManager "SandboxManager" governs, also through a policy barrier
+    (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()") or in a system-policy
+    capability (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()"), and
+    code whose parse options restrict a functional domain (for example
+    @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM"), uses the elements of a class through reflection as it could use
+    them in source code: a \c private element only from the class that declares it and the classes in its hierarchy,
+    and a @ref private_members "private:internal" element only from the class that declares it, the class context
+    being the one of the code that calls the reflection API.  The rule applies when reading or writing a member or a
+    static member, reading a constant or a member's default value, and calling a method, a method variant, a
+    constructor, a copy method, a destructor or a pseudo-method; a call that selects a method's variant for its
+    arguments requires every variant of the method to be accessible.  Otherwise \c REFLECTION-ACCESS-ERROR is
+    raised.  Inspecting declarations, such as listing members and methods with their access, is not affected.
+
+    Other code may use any element of a class through reflection, whatever its access, as before: debuggers and
+    serializers rely on it.  Trusted code must therefore not rely on @ref private_members "private:internal" alone
+    to keep a capability or other state from code that is itself trusted.
+
     @section reflectionqlibmodules Qore User Modules
 
     - @ref connectionproviderintro "ConnectionProvider" — API for pluggable connection providers to Qore

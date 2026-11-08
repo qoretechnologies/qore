@@ -947,7 +947,7 @@ void QoreNamespace::clear(ExceptionSink* xsink) {
     ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
     priv->clearConstants(**l);
     priv->clearData(xsink);
-    priv->deleteData(true, xsink);
+    priv->deleteData(xsink);
 }
 
 QoreNamespace* QoreNamespace::copy(const QoreParseOptions& po) const {
@@ -1284,12 +1284,18 @@ const QoreNamespace* QoreNamespace::getParent() const {
 }
 
 void QoreNamespace::deleteData(ExceptionSink* xsink) {
-    priv->deleteData(true, xsink);
+    priv->deleteData(xsink);
 }
 
-void QoreNamespaceList::deleteData(bool deref_vars, ExceptionSink* xsink) {
+void QoreNamespaceList::setVarsReleased() {
+    for (auto& i : nsmap) {
+        i.second->priv->setVarsReleased();
+    }
+}
+
+void QoreNamespaceList::deleteData(ExceptionSink* xsink) {
     for (nsmap_t::iterator i = nsmap.begin(), e = nsmap.end(); i != e; ++i)
-        i->second->priv->deleteData(deref_vars, xsink);
+        i->second->priv->deleteData(xsink);
 }
 
 void QoreNamespaceList::getGlobalVars(QoreHashNode& h) const {
@@ -1767,7 +1773,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
 
 StaticSystemNamespace::~StaticSystemNamespace() {
     ExceptionSink xsink;
-    priv->deleteData(true, &xsink);
+    priv->deleteData(&xsink);
     priv->purge();
 }
 
@@ -2538,7 +2544,7 @@ void qore_root_ns_private::parseAddClassIntern(const QoreProgramLocation* loc, c
     } else {
         //printd(5, "qore_root_ns_private::parseAddClassIntern() class '%s' not added: '%s' namespace not found\n", oc->getName(), nscope.ostr);
         // release the class pointer (handle) reference in case the class is a wrapper
-        qore_class_private::derefClass(*oc, true, true);
+        qore_class_private::derefClass(*oc, true, false, true);
     }
 }
 
@@ -3125,7 +3131,7 @@ void qore_ns_private::clearData(ExceptionSink* xsink) {
     // clear/finalize global variables
     var_list.clearAll(xsink);
     // clear/finalize static class vars
-    classList.clear(xsink);
+    classList.clear(xsink, getProgram());
 
     nsl.clearData(xsink);
 }
@@ -3146,18 +3152,23 @@ void qore_ns_private::deleteClearData(ExceptionSink* xsink) {
 }
 */
 
-void qore_ns_private::deleteData(bool deref_vars, ExceptionSink* xsink) {
+void qore_ns_private::setVarsReleased() {
+    classList.setVarsReleased();
+    nsl.setVarsReleased();
+}
+
+void qore_ns_private::deleteData(ExceptionSink* xsink) {
     // clear all constants
     constant.deleteAll(xsink);
     // clear all constants and static class vars
-    classList.deleteClassData(deref_vars, getProgram(), xsink);
+    classList.deleteClassData(getProgram(), xsink);
     // clear all user functions
     func_list.del();
     // delete all global variables
     var_list.deleteAll(xsink);
 
     // repeat for all subnamespaces
-    nsl.deleteData(deref_vars, xsink);
+    nsl.deleteData(xsink);
 }
 
 int qore_ns_private::checkGlobalVarDecl(Var* v, const NamedScope& vname) {
@@ -3462,6 +3473,7 @@ void qore_ns_private::parseCommit() {
     pending_class_names.clear();
     pending_const_names.clear();
     pending_hashdecl_names.clear();
+    pending_enum_names.clear();
     pending_typedef_names.clear();
     pending_ns_names.clear();
 }
@@ -3545,8 +3557,9 @@ void qore_ns_private::parseRollback(ExceptionSink* xsink, bool atomic_rollback) 
         // recursively rollback child namespaces that existed before this transaction
         nsl.parseRollback(xsink, atomic_rollback);
     } else {
-        // Full destructive reset: clear ALL state (original behavior for programs without PO_ALLOW_REPARSE)
-        // After this, the Program is unusable but memory is still valid until Program is destroyed
+        // Full destructive reset: clear ALL state, for a namespace added by a failed parse that is deleted
+        // (QoreNamespaceList::parseRemove()); a Program's rollback is always atomic (see
+        // qore_program_private::internParseRollback())
 
         // delete global variables
         var_list.reset();
@@ -3558,7 +3571,7 @@ void qore_ns_private::parseRollback(ExceptionSink* xsink, bool atomic_rollback) 
         constant.deleteAll(xsink);
         classList.clearConstants(xsink);
         // clear all static class vars
-        classList.deleteClassData(true, getProgram(), xsink);
+        classList.deleteClassData(getProgram(), xsink);
 
         // delete pending constant list
         constant.reset();
@@ -3654,7 +3667,12 @@ qore_ns_private* qore_ns_private::parseAddNamespace(QoreNamespace* nns) {
         return orig->priv;
     }
 
-    return nsl.parseAdd(nns, this);
+    qore_ns_private* rv = nsl.parseAdd(nns, this);
+    // track the new namespace for rollback support
+    if (rv) {
+        pending_ns_names.push_back(rv->name);
+    }
+    return rv;
 }
 
 // only called while parsing before addition to namespace tree, no locking needed
@@ -3675,7 +3693,12 @@ cnemap_t::iterator qore_ns_private::parseAddConstant(const QoreProgramLocation* 
         "constant '%s::%s' is declared public but the enclosing namespace '%s::' is not public", name.c_str(), cname,
         name.c_str());
 
-    return constant.parseAdd(loc, cname, vh.release(), typeInfo, cpub, Public, parseTypeInfo);
+    cnemap_t::iterator rv = constant.parseAdd(loc, cname, vh.release(), typeInfo, cpub, Public, parseTypeInfo);
+    // track the new constant for rollback support
+    if (rv != constant.end()) {
+        pending_const_names.push_back(cname);
+    }
+    return rv;
 }
 
 // only called while parsing before addition to namespace tree, no locking needed
@@ -3850,6 +3873,8 @@ int qore_ns_private::parseAddPendingClass(const QoreProgramLocation* loc, QoreCl
         return -1;
     }
     och.release();
+    // track the new class for rollback support
+    pending_class_names.push_back(oc->getName());
 
     qore_class_private::get(*oc)->setNamespace(this);
 
@@ -3889,6 +3914,8 @@ int qore_ns_private::parseAddPendingHashDecl(const QoreProgramLocation* loc, Typ
     }
 
     thd.release();
+    // track the new hashdecl for rollback support
+    pending_hashdecl_names.push_back(hashdecl->getName());
 
     return 0;
 }
@@ -3958,6 +3985,8 @@ int qore_ns_private::parseAddPendingEnum(const QoreProgramLocation* loc, QoreEnu
         parse_error(*loc, "enum '%s' is already defined in namespace '%s::'", enum_name, name.c_str());
         return -1;
     }
+    // track the new enum for rollback support; its member namespace is tracked by parseAddNamespace()
+    pending_enum_names.push_back(enum_name);
 
     // Create a namespace for enum member access (e.g., EnumName::MemberName)
     QoreNamespace* enum_ns = new QoreNamespace(enum_name);

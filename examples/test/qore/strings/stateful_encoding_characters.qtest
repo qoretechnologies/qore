@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - stateful encodings (ISO-2022-JP, UTF-7) per character with the system libiconv
 # Copyright 2026 Qore Technologies, s.r.o.
 # A stateful encoding (UTF-7, ISO-2022-*, HZ, the mixed EBCDIC code pages) has no fixed byte sequence per
 # character: what a byte means depends on the shift sequences before it.  Strings in such an encoding must have the

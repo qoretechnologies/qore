@@ -173,6 +173,10 @@ auto NormalMethod::call(object obj, ...) {
     if (reflection_check_class_call(caller, m->m->getClass(), m->pgm, false, xsink)) {
         return QoreValue();
     }
+    // the access of the method's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, m->m, xsink)) {
+        return QoreValue();
+    }
     QoreReflectionCallCheckHelper call_check(caller, m->pgm);
     // the method ptr must be valid
     return obj->evalMethod(*m->m, m->m->getClass(), *call_args, xsink);
@@ -217,6 +221,10 @@ auto NormalMethod::callArgs(object obj, *softlist<auto> argv) {
     // the method's class and the variant selected for the arguments must be allowed by the caller and the
     // method's Program
     if (reflection_check_class_call(caller, m->m->getClass(), m->pgm, false, xsink)) {
+        return QoreValue();
+    }
+    // the access of the method's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, m->m, xsink)) {
         return QoreValue();
     }
     QoreReflectionCallCheckHelper call_check(caller, m->pgm);

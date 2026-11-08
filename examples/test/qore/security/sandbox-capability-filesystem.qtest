@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - every global filesystem function on real paths inside and outside a sandbox capability
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 %modern
 %no-child-restrictions

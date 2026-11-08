@@ -36,23 +36,52 @@ public class AzureDocumentIntelligenceAnalyzeDocumentDataProvider
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
-        static AzureDocumentIntelligenceAnalyzeRequestDataType RequestType;
-        static AzureDocumentIntelligenceAnalyzeResponseDataType ResponseType;
+    }
+
+    private {
+        #! The request type, built on first use; see requestType()
+        static *AzureDocumentIntelligenceAnalyzeRequestDataType request_type;
+        #! The response type, built on first use; see responseType()
+        static *AzureDocumentIntelligenceAnalyzeResponseDataType response_type;
     }
     private {
-        static Mutex type_lock();
+        #! The ID of the builder of the types; see initializeTypes()
+        static int types_id = DataProviderActionCatalog::registerLazyValue(
+            \AzureDocumentIntelligenceAnalyzeDocumentDataProvider::buildTypes());
+    }
+
+    #! Returns the request type, which is built on first use
+    /** It is built from the vendored API description, so loading the module does not parse it
+    */
+    static AzureDocumentIntelligenceAnalyzeRequestDataType requestType() {
+        initializeTypes();
+        return request_type;
+    }
+
+    #! Returns the response type, which is built on first use
+    /** It is built from the vendored API description, so loading the module does not parse it
+    */
+    static AzureDocumentIntelligenceAnalyzeResponseDataType responseType() {
+        initializeTypes();
+        return response_type;
     }
 
     #! Initializes complete helper types after the lightweight inventory is registered
     /** @throw AZURE-DOCUMENT-INTELLIGENCE-SCHEMA-ERROR an unreviewed schema resource is installed */
-    static initializeTypes() {
-        AutoLock al(type_lock);
-        if (!RequestType) {
-            AzureDocumentIntelligenceAnalyzeRequestDataType request();
-            AzureDocumentIntelligenceAnalyzeResponseDataType response();
-            RequestType = request;
-            ResponseType = response;
+    private static initializeTypes() {
+        if (!request_type) {
+            hash<auto> types = DataProviderActionCatalog::getLazyValue(types_id);
+            # the request type is set last: it tells that both are set
+            response_type = types.response;
+            request_type = types.request;
         }
+    }
+
+    #! Builds the types; see initializeTypes()
+    private static hash<auto> buildTypes() {
+        AzureDocumentIntelligenceAnalyzeRequestDataType request();
+        AzureDocumentIntelligenceAnalyzeResponseDataType response();
+        return {"request": request, "response": response};
     }
 
     constructor(AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientIo rest)
@@ -61,8 +90,8 @@ public class AzureDocumentIntelligenceAnalyzeDocumentDataProvider
             : AzureDocumentIntelligenceDataProviderCommon(options) {}
 
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
-    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return requestType(); }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return responseType(); }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {

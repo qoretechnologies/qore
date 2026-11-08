@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - fcntl lock helper: blocking waits, release when a SIGKILLed holder exits, FIFO handshakes
 
 %modern
 %no-child-restrictions

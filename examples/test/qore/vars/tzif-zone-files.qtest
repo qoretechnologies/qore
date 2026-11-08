@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - TZif zone file parsing, including files compiled at test time by the platform zic
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 #
 # TZif zone files (RFC 9636, which obsoletes RFC 8536): version 2+ files are read from their 64-bit data block and
@@ -12,8 +13,8 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FsUtil.qm
+%requires QUnit
+%requires FsUtil
 %exec-class TzifZoneFilesTest
 
 #! a local time type of a synthetic TZif file

@@ -12,7 +12,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires json
-%requires ../../../../qlib/OpenApi3.qm
+%requires OpenApi3
 
 int n = (shift ARGV ?? "40").toInt();
 

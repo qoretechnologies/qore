@@ -126,81 +126,85 @@ module UnstructuredDataProvider {
             "output_type": UnstructuredPartitionTextDataProvider::ResponseType,
         });
 
-        # Platform API actions, generated from the vendored schema.  The generator paths them at the
-        # root, and they live under the "platform" child, so each path is prefixed here.
-        map DataProviderActionCatalog::registerAction(cast<hash<DataProviderActionInfo>>($1 + {
-            "path": "/" + UnstructuredPlatformDataProvider::ProviderName + $1.path,
-        })), UnstructuredPlatformSchema::getActionSet().getActionInfoList(
-            UnstructuredDataProvider::AppName);
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(UnstructuredDataProvider::AppName, sub () {
+            # Platform API actions, generated from the vendored schema.  The generator paths them at the
+            # root, and they live under the "platform" child, so each path is prefixed here.
+            map DataProviderActionCatalog::registerAction(cast<hash<DataProviderActionInfo>>($1 + {
+                "path": "/" + UnstructuredPlatformDataProvider::ProviderName + $1.path,
+            })), UnstructuredPlatformSchema::getActionSet().getActionInfoList(
+                UnstructuredDataProvider::AppName);
 
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": UnstructuredDataProvider::AppName,
-            "path": "/" + UnstructuredPlatformDataProvider::ProviderName + "/"
-                + UnstructuredConnectorFieldsDataProvider::ProviderName,
-            "action": "get-connector-fields",
-            "display_name": "Get Connector Configuration Fields",
-            "short_desc": "List the settings a connector type needs",
-            "desc": "Lists the configuration fields a given connector type accepts, so that a "
-                "connector can be created without guessing at its `config` hash.\n\n"
-                "Unstructured types a connector's configuration as a union over one schema per "
-                "connector type — an S3 source takes a bucket URL and credentials, a Confluence "
-                "source a site URL and an API token — so there is no single field list to show "
-                "until the type is known.\n\n"
-                "This action answers from the API description shipped with this module and makes "
-                "no request to Unstructured.",
-            "action_code": DPAT_API,
-            "groups": (UnstructuredPlatformManifest::GroupConnectors,),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                UnstructuredConnectorFieldsRequestDataType::Fields
-            ),
-            "output_type": UnstructuredConnectorFieldsDataProvider::ResponseType,
-        });
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": UnstructuredDataProvider::AppName,
+                "path": "/" + UnstructuredPlatformDataProvider::ProviderName + "/"
+                    + UnstructuredConnectorFieldsDataProvider::ProviderName,
+                "action": "get-connector-fields",
+                "display_name": "Get Connector Configuration Fields",
+                "short_desc": "List the settings a connector type needs",
+                "desc": "Lists the configuration fields a given connector type accepts, so that a "
+                    "connector can be created without guessing at its `config` hash.\n\n"
+                    "Unstructured types a connector's configuration as a union over one schema per "
+                    "connector type — an S3 source takes a bucket URL and credentials, a Confluence "
+                    "source a site URL and an API token — so there is no single field list to show "
+                    "until the type is known.\n\n"
+                    "This action answers from the API description shipped with this module and makes "
+                    "no request to Unstructured.",
+                "action_code": DPAT_API,
+                "groups": (UnstructuredPlatformManifest::GroupConnectors,),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    UnstructuredConnectorFieldsRequestDataType::Fields
+                ),
+                "output_type": UnstructuredConnectorFieldsDataProvider::ResponseType,
+            });
 
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": UnstructuredDataProvider::AppName,
-            "path": "/" + UnstructuredPlatformDataProvider::ProviderName + "/"
-                + UnstructuredPlatformDataProvider::EventsChildName + "/"
-                + UnstructuredJobWatchDataProvider::ProviderName,
-            "action": "job-finished",
-            "display_name": "Job Finished",
-            "short_desc": "Fires when a workflow run reaches a terminal status",
-            "desc": "Fires once for each workflow run that finishes, whether it succeeded, failed, "
-                "was stopped or was rejected.\n\n"
-                "A workflow run is asynchronous, so this is the point at which the documents it "
-                "processed are available at the destination and an integration can act on them.  "
-                "A `COMPLETED` job may still have failed on individual files; **Get Job Failed "
-                "Files** says which.\n\n"
-                "Set `workflow_id` to watch one workflow rather than every run in the account.",
-            "action_code": DPAT_EVENT,
-            "action_val": UnstructuredJobWatchDataProvider::EventJobFinished,
-            "groups": (UnstructuredPlatformManifest::GroupJobs,),
-            "options": {
-                "workflow_id": <ActionOptionInfo>{
-                    "display_name": "Workflow",
-                    "short_desc": "Watch only this workflow's runs",
-                    "desc": "Watch only the runs of this workflow.  Leave unset to fire for every "
-                        "workflow in the account.",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "ref_data": UnstructuredPlatformManifest::RefWorkflow,
-                    "preselected": True,
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": UnstructuredDataProvider::AppName,
+                "path": "/" + UnstructuredPlatformDataProvider::ProviderName + "/"
+                    + UnstructuredPlatformDataProvider::EventsChildName + "/"
+                    + UnstructuredJobWatchDataProvider::ProviderName,
+                "action": "job-finished",
+                "display_name": "Job Finished",
+                "short_desc": "Fires when a workflow run reaches a terminal status",
+                "desc": "Fires once for each workflow run that finishes, whether it succeeded, failed, "
+                    "was stopped or was rejected.\n\n"
+                    "A workflow run is asynchronous, so this is the point at which the documents it "
+                    "processed are available at the destination and an integration can act on them.  "
+                    "A `COMPLETED` job may still have failed on individual files; **Get Job Failed "
+                    "Files** says which.\n\n"
+                    "Set `workflow_id` to watch one workflow rather than every run in the account.",
+                "action_code": DPAT_EVENT,
+                "action_val": UnstructuredJobWatchDataProvider::EventJobFinished,
+                "groups": (UnstructuredPlatformManifest::GroupJobs,),
+                "options": {
+                    "workflow_id": <ActionOptionInfo>{
+                        "display_name": "Workflow",
+                        "short_desc": "Watch only this workflow's runs",
+                        "desc": "Watch only the runs of this workflow.  Leave unset to fire for every "
+                            "workflow in the account.",
+                        "type": AbstractDataProviderTypeMap."*string",
+                        "ref_data": UnstructuredPlatformManifest::RefWorkflow,
+                        "preselected": True,
+                    },
+                    "poll_interval": <ActionOptionInfo>{
+                        "display_name": "Poll Interval",
+                        "short_desc": "How often to check for finished jobs, in seconds",
+                        "desc": "How often to check for finished jobs, in seconds; the minimum is `"
+                            + UnstructuredJobWatchDataProvider::MinPollInterval + "`.",
+                        "type": AbstractDataProviderTypeMap."*softint",
+                        "default_value": UnstructuredJobWatchDataProvider::DefaultPollInterval,
+                    },
+                    "start_date": <ActionOptionInfo>{
+                        "display_name": "Start Date",
+                        "short_desc": "Only fire for jobs created after this date",
+                        "desc": "Only fire for jobs created on or after this date.  Without it, the "
+                            "first cycle fires for every finished job in the account.",
+                        "type": AbstractDataProviderTypeMap."*date",
+                    },
                 },
-                "poll_interval": <ActionOptionInfo>{
-                    "display_name": "Poll Interval",
-                    "short_desc": "How often to check for finished jobs, in seconds",
-                    "desc": "How often to check for finished jobs, in seconds; the minimum is `"
-                        + UnstructuredJobWatchDataProvider::MinPollInterval + "`.",
-                    "type": AbstractDataProviderTypeMap."*softint",
-                    "default_value": UnstructuredJobWatchDataProvider::DefaultPollInterval,
-                },
-                "start_date": <ActionOptionInfo>{
-                    "display_name": "Start Date",
-                    "short_desc": "Only fire for jobs created after this date",
-                    "desc": "Only fire for jobs created on or after this date.  Without it, the "
-                        "first cycle fires for every finished job in the account.",
-                    "type": AbstractDataProviderTypeMap."*date",
-                },
-            },
-            "output_type": UnstructuredJobEventDataType,
+                "output_type": UnstructuredJobEventDataType,
+            });
         });
     };
 }

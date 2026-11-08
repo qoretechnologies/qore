@@ -1,17 +1,18 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP client timeouts, UNIX-socket URLs, chunked disconnects, TLS client certs and HTTP/2
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires ../../../../../qlib/Util.qm
-%requires ../../../../../qlib/Mime.qm
-%requires ../../../../../qlib/QUnit.qm
-%requires ../../../../../qlib/Logger.qm
-%requires ../../../../../qlib/HttpServerUtil.qm
-%requires ../../../../../qlib/HttpServer.qm
+%requires Util
+%requires Mime
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class Main
 

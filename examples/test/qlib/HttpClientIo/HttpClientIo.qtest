@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1, 2 and 3 client connections: happy-eyeballs races, pooling, multiplexing
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved

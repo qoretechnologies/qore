@@ -857,6 +857,11 @@ public:
     bool startBackgroundCompilerForTest() {
         return startBackgroundThread();
     }
+
+    //! For tests: the number of background compiles refused because a Program they refer to is being deleted
+    unsigned bgCompileRefusedClosedCount() const {
+        return dbg_bg_compile_refused_closed.load(std::memory_order_relaxed);
+    }
 #endif
 
     //! Compile an IR function to native code, assuming compile_mutex is already held.
@@ -973,6 +978,8 @@ private:
         std::vector<BatchCallee> callees;                   //!< direct callees (if any)
         std::vector<AbstractQoreFunctionVariant*> variant_refs; //!< refs keeping queued variants alive
         bool has_callees = false;                           //!< true if callees should be compiled
+        //! the Programs whose code the work lowers, each one once; set when the work is accepted
+        std::vector<const QoreProgram*> pgms;
     };
 
     // Background compilation thread management
@@ -996,8 +1003,11 @@ private:
         to decide whether it refers to a Program; it uses this copy.
     */
     std::vector<const QoreProgram*> bg_in_progress_pgms;
-    //! True if the in-progress item has an IR function with no Program (it is treated as referring to every Program)
-    bool bg_in_progress_any_pgm = false;
+
+#ifdef DEBUG
+    //! the number of background compiles refused because a Program they refer to is being deleted
+    std::atomic<unsigned> dbg_bg_compile_refused_closed{0};
+#endif
 
     //! Background thread worker loop
     void bgCompileThreadLoop();
@@ -1048,8 +1058,6 @@ private:
     //! True if a work item's root or any folded-in callee IR belongs to pgm.
     static bool workReferencesPgm(const BgCompileWork& work, const QoreProgram* pgm);
 
-    //! Collects the Programs that the work item refers to; see bg_in_progress_pgms
-    static void collectWorkPgms(const BgCompileWork& work, std::vector<const QoreProgram*>& pgms, bool& any_pgm);
 
     //! Complete a background work item: release refs, update active count, and notify waiters.
     void finishBgCompileWork(BgCompileWork& work);

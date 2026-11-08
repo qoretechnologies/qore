@@ -27,11 +27,11 @@
 %enable-all-warnings
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/SqlUtil
-%requires ../../../../qlib/DbDataProvider
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires SqlUtil
+%requires DbDataProvider
 
 %prepend-module-path "${SCRIPT_DIR}/../SqlUtil"
 %requires ../SqlUtil/PgsqlTestIsolation.qm

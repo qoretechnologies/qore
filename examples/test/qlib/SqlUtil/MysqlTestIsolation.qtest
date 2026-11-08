@@ -48,6 +48,7 @@ class MysqlTestIsolationTest inherits QUnit::Test {
         # the leftover databases are made before the run's database, whose setup drops the ones that may be dropped
         addTestCase("the setup drops only the databases of gone runs", \leftovers());
         addTestCase("the run's connections use the run's database", \runDatabase());
+        addTestCase("the lock of the leftovers is one lock of the server", \leftoverLock());
         addTestCase("the teardown drops the run's database", \teardown());
         addTestCase("a leftover that a live run holds is left for a later run", \liveLeftover());
         set_return_value(main());
@@ -79,14 +80,16 @@ class MysqlTestIsolationTest inherits QUnit::Test {
         string host = getHost();
         int now = now_us().getEpochSeconds();
         int old = now - TestRun::LeftoverAge.durationSeconds() - 60;
+        # each name has this process's host and id: the runs on the server at the same time, on this host or on
+        # another, make databases of their own
         hash<string, bool> expected = {
             # runs at least TestRun::LeftoverAge old, of any host and process, this one's too: dropped
             sprintf("qtest_leftover_%s_%d_%d_abc123", host, getpid(), old): False,
-            sprintf("qtest_otherhost_%s_%d_%d_abc123", host + "x", 1, old): False,
+            sprintf("qtest_otherhost_%s_%d_%d_abc123", host + "x", getpid(), old): False,
             # a recent run: kept
-            sprintf("qtest_recent_%s_%d_%d_abc123", host, 1, now): True,
+            sprintf("qtest_recent_%s_%d_%d_abc123", host, getpid(), now): True,
             # not a run's name: kept
-            sprintf("qtest_%d", old): True,
+            sprintf("qtest_%d_%s_%d", old, host, getpid()): True,
         };
         foreach string db in (keys expected) {
             ds.exec("create database `" + db + "`");
@@ -131,25 +134,72 @@ class MysqlTestIsolationTest inherits QUnit::Test {
 
     #! A leftover database whose objects a connection holds locks of is not waited for longer than a few seconds: it
     #! is left for a later run
+    /** The database was made and committed before the holder's transaction locked its table: the setup of a test that
+        ran at the same time against the same server (another CI job) dropped it in between, and the holder's insert
+        failed (server error 1146: the table does not exist)
+    */
     private liveLeftover() {
         checkSkip();
         Datasource ds(connstr);
         int old = now_us().getEpochSeconds() - TestRun::LeftoverAge.durationSeconds() - 60;
-        string db = sprintf("qtest_livelock_host_1_%d_abc123", old);
-        ds.exec("create database `" + db + "`");
-        ds.exec("create table `" + db + "`.t (id int)");
-        ds.commit();
-        push made, db;
+        string db = sprintf("qtest_livelock_%s_%d_%d_abc123", getHost(), getpid(), old);
         # a transaction that holds a metadata lock of the database's table
         Datasource holder(connstr);
-        holder.exec("insert into `" + db + "`.t values (1)");
         on_exit holder.rollback();
+        # the leftovers are not dropped until the holder's transaction locks the table: the setup of a test that runs
+        # at the same time would drop it
+        {
+            MysqlRunDatabase::lockLeftovers(ds);
+            on_exit MysqlRunDatabase::unlockLeftovers(ds);
+            ds.exec("create database `" + db + "`");
+            push made, db;
+            ds.exec("create table `" + db + "`.t (id int)");
+            ds.commit();
+            holder.exec("insert into `" + db + "`.t values (1)");
+        }
         date start = now_us();
         list<string> dropped = MysqlRunDatabase::dropLeftovers(connstr);
         assertFalse(inlist(db, dropped));
         assertLt(60s, now_us() - start, "the drop is not waited for long");
         assertEq(1, ds.selectRow("select count(*) as c from information_schema.schemata where schema_name = %v",
             db).c);
+    }
+
+    #! The lock of the leftover databases is a named lock of the server: a session of another connection, to any
+    #! database of the server, waits for it
+    private leftoverLock() {
+        checkSkip();
+        Datasource ds(MysqlRunDatabase::getConnectionString(connstr, "MysqlTestIsolation"));
+        on_exit ds.close();
+        assertEq(MysqlRunDatabase::getName(), ds.selectRow("select database() as db").db);
+        Datasource other(connstr);
+        on_exit other.close();
+        int id = ds.selectRow("select connection_id() as id").id.toInt();
+        # the id of the session that holds the lock; 0 if none (the setup of another job may hold it at any time)
+        code holder = int sub () {
+            return (other.selectRow("select is_used_lock(%v) as id", MysqlRunDatabase::LeftoverLockName).id ?? 0)
+                .toInt();
+        };
+        # 1 if the other session takes the lock in the given seconds (it is then released), 0 if not
+        code take = int sub (int timeout) {
+            int rc = (other.selectRow("select get_lock(%v, %v) as rc", MysqlRunDatabase::LeftoverLockName,
+                timeout).rc ?? 0).toInt();
+            if (rc) {
+                other.selectRow("select release_lock(%v) as rc", MysqlRunDatabase::LeftoverLockName);
+            }
+            return rc;
+        };
+        assertNeq(id, holder());
+        MysqlRunDatabase::lockLeftovers(ds);
+        {
+            on_exit MysqlRunDatabase::unlockLeftovers(ds);
+            assertEq(id, holder());
+            # held: the other session does not get it
+            assertEq(0, take(0));
+        }
+        assertNeq(id, holder());
+        # released: the other session gets it once any other job's setup releases it
+        assertEq(1, take(MysqlRunDatabase::LeftoverLockTimeout));
     }
 
     private teardown() {

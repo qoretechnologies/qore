@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - file-type checks on FIFOs and symlinks without opening them, standard module dir discovery
 
 /*  Files.qtest Copyright 2017 - 2026 Qore Technologies, s.r.o.
 

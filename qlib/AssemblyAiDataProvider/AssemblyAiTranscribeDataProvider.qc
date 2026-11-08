@@ -34,23 +34,49 @@ public class AssemblyAiTranscribeDataProvider inherits AssemblyAiDataProviderCom
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
-
-        static AssemblyAiTranscribeRequestDataType RequestType;
-        static AssemblyAiTranscribeResponseDataType ResponseType;
     }
+
     private {
-        static Mutex type_lock();
+        #! The request type, built on first use; see requestType()
+        static *AssemblyAiTranscribeRequestDataType request_type;
+        #! The response type, built on first use; see responseType()
+        static *AssemblyAiTranscribeResponseDataType response_type;
+        #! The ID of the builder of the types; see initializeTypes()
+        static int types_id = DataProviderActionCatalog::registerLazyValue(
+            \AssemblyAiTranscribeDataProvider::buildTypes());
     }
 
-    #! Initializes the shared helper contracts after lightweight inventory registration
-    static initializeTypes() {
-        AutoLock al(type_lock);
-        if (!RequestType) {
-            AssemblyAiTranscribeRequestDataType request();
-            AssemblyAiTranscribeResponseDataType response();
-            RequestType = request;
-            ResponseType = response;
+    #! Returns the request type, which is built on first use
+    /** It is built from the vendored API description, so loading the module does not parse it
+    */
+    static AssemblyAiTranscribeRequestDataType requestType() {
+        initializeTypes();
+        return request_type;
+    }
+
+    #! Returns the response type, which is built on first use
+    /** It is built from the vendored API description, so loading the module does not parse it
+    */
+    static AssemblyAiTranscribeResponseDataType responseType() {
+        initializeTypes();
+        return response_type;
+    }
+
+    #! Sets the types the first time they are used
+    private static initializeTypes() {
+        if (!request_type) {
+            hash<auto> types = DataProviderActionCatalog::getLazyValue(types_id);
+            # the request type is set last: it tells that both are set
+            response_type = types.response;
+            request_type = types.request;
         }
+    }
+
+    #! Builds the types; see initializeTypes()
+    private static hash<auto> buildTypes() {
+        AssemblyAiTranscribeRequestDataType request();
+        AssemblyAiTranscribeResponseDataType response();
+        return {"request": request, "response": response};
     }
 
     constructor(AssemblyAiRestClient::AssemblyAiRestClientIo rest)
@@ -58,8 +84,8 @@ public class AssemblyAiTranscribeDataProvider inherits AssemblyAiDataProviderCom
     constructor(*hash<auto> options) : AssemblyAiDataProviderCommon(options) {}
 
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
-    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return requestType(); }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return responseType(); }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {

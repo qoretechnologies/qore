@@ -177,6 +177,9 @@ public class RestSchemaActionSet {
         #! Builds every output type at construction, even for a set constructed with lazy response types
         static bool eager_response_types = False;
 
+        #! The number of sets constructed in the process; see getConstructionCount()
+        static int construction_count = 0;
+
         #! Output types are built on first use
         bool lazy_response_types;
 
@@ -293,6 +296,30 @@ public class RestSchemaActionSet {
         }
         checkReferenceData();
         checkHostSources();
+        ++construction_count;
+    }
+
+    #! Returns the number of action sets constructed in the process
+    /** A set is counted once its construction has succeeded.  This lets a test verify that loading a module whose
+        actions are registered lazily builds no action set, and that the first read of the module's actions does;
+        see the DataProvider module's \c DataProviderActionCatalog::registerLazyAppActions().
+
+        @return the number of action sets constructed in the process
+
+        @par Example:
+        @code{.py}
+int before = RestSchemaActionSet::getConstructionCount();
+load_module("StripeDataProvider");
+# loading the module builds no action set; reading its actions does
+assert(RestSchemaActionSet::getConstructionCount() == before);
+DataProviderActionCatalog::getActions("Stripe");
+assert(RestSchemaActionSet::getConstructionCount() > before);
+        @endcode
+
+        @since RestSchemaActions 1.0
+    */
+    static int getConstructionCount() {
+        return construction_count;
     }
 
     #! Returns the schema the actions are derived from
@@ -322,6 +349,8 @@ public class RestSchemaActionSet {
         @code{.py}
 RestSchemaActionSet::setEagerResponseTypes(True);
 load_module("StripeDataProvider");
+# the module registers its actions lazily: they and their action sets are built when they are first read
+DataProviderActionCatalog::getActions("Stripe");
         @endcode
 
         @since RestSchemaActions 1.0

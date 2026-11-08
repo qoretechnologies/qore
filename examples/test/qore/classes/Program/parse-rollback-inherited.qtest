@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ParseRollbackInheritedTest
+
+#! records the release of the objects in the static variables and constants of the inherited classes
+class RollbackResults {
+    public {
+        static list<string> released = ();
+    }
+}
+
+#! an object held by an inherited class
+class RollbackObj {
+    private {
+        string name;
+    }
+
+    constructor(string name) {
+        self.name = name;
+    }
+
+    destructor() {
+        RollbackResults::released += name;
+    }
+}
+
+#! a public class inherited by the child Programs
+public class Inherited {
+    public {
+        static RollbackObj o = new RollbackObj("static");
+        static int v = 3;
+        const C = 5;
+    }
+
+    static int f() {
+        return 7;
+    }
+}
+
+#! a public hashdecl inherited by the child Programs
+public hashdecl InheritedHash {
+    int a = 1;
+}
+
+#! a public constant inherited by the child Programs
+public const InheritedConst = 11;
+
+#! The rollback of a failed parse keeps what the Program had before the parse
+/** A failed parse rolled back a Program without PO_ALLOW_REPARSE (which a child Program loses when its parent does
+    not have it) with a full reset that removed everything in its namespaces, including the classes and other symbols
+    inherited from its parent, so a new parse could not find them.  Only what the failed parse added is removed now.
+*/
+class ParseRollbackInheritedTest inherits QUnit::Test {
+    public {
+        #! the code of the failed parse; it uses and adds symbols
+        const BadSrc = "class Pending { public { static int x = 1; } } const PendingConst = 2; "
+            "int sub bad_get() { return Inherited::v; } sub bad( {";
+
+        #! the code of a failed parse that declares symbols of each kind at the top level
+        const BadDeclSrc = "class PendClass {} const PendConst = 1; hashdecl PendHash { int a = 1; } "
+            "enum PendEnum { One = 1 } namespace PendNs { const C = 1; } sub bad( {";
+
+        #! the code that declares the same symbols again
+        const GoodDeclSrc = "class PendClass { static int f() { return 2; } } const PendConst = 3; "
+            "hashdecl PendHash { int a = 4; } enum PendEnum { One = 5 } namespace PendNs { const C = 6; } "
+            "int sub decl_sum() { hash<PendHash> h(); return PendClass::f() + PendConst + h.a + PendEnum::One + "
+            "PendNs::C + Kept::v; }";
+
+        #! the code of the parse after the failed one; it declares the symbols that the failed parse added again
+        const GoodSrc = "int sub get() { return Inherited::v + Inherited::f() + Inherited::C + InheritedConst; } "
+            "int sub hash_a() { hash<InheritedHash> h(); return h.a; } "
+            "class Pending { public { static int y = 2; } } const PendingConst = 3; "
+            "int sub pending() { return Pending::y + PendingConst; }";
+    }
+
+    constructor() : QUnit::Test("ParseRollbackInheritedTest", "1.0", \ARGV) {
+        addTestCase("failed first parse without PO_ALLOW_REPARSE", \rollbackTest(), (PO_NEW_STYLE,));
+        addTestCase("failed first parse with PO_ALLOW_REPARSE requested", \rollbackTest(),
+            (PO_NEW_STYLE | PO_ALLOW_REPARSE,));
+        addTestCase("failed parse in a REPL Program", \replRollbackTest());
+        set_return_value(main());
+    }
+
+    #! A failed parse in a REPL Program removes the symbols it declared at the top level and keeps the committed ones
+    /** The classes, constants, hashdecls, enums and namespaces declared directly in a namespace were not removed by
+        the rollback, so a new parse could not declare them again
+    */
+    replRollbackTest() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+        p.parse("class Kept { public { static int v = 7; } }", "kept");
+        assertThrows("PARSE-EXCEPTION", \p.parse(), (BadDeclSrc, "bad"));
+        p.parse(GoodDeclSrc, "good");
+        assertEq(2 + 3 + 4 + 5 + 6 + 7, p.callFunction("decl_sum"));
+    }
+
+    rollbackTest(int opts) {
+        RollbackResults::released = ();
+        {
+            Program p(opts);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), (BadSrc, "bad"));
+            # the inherited symbols are still there, and what the failed parse added is not
+            p.parse(GoodSrc, "good");
+            assertEq(3 + 7 + 5 + 11, p.callFunction("get"));
+            assertEq(1, p.callFunction("hash_a"));
+            assertEq(5, p.callFunction("pending"));
+            # the rollback did not release the values of the inherited static variables
+            assertEq((), RollbackResults::released);
+            delete p;
+        }
+        # nor did the deletion of the child Program, as this Program shares them
+        assertEq((), RollbackResults::released);
+        assertEq(3, Inherited::v);
+    }
+}

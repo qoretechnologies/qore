@@ -6,10 +6,10 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/CsvUtil
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires CsvUtil
 
 %exec-class CsvProfilerTest
 

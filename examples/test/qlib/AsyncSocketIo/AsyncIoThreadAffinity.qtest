@@ -1,12 +1,13 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - per-thread kqueue polling of loopback sockets spread over several async I/O threads
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
+%requires QUnit
+%requires Logger
 
 %exec-class AsyncIoThreadAffinityTest
 

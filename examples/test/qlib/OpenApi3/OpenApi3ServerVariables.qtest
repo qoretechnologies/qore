@@ -2,8 +2,8 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/OpenApi3.qm
+%requires QUnit
+%requires OpenApi3
 %exec-class ServerVariablesTest
 
 class ServerVariablesTest inherits QUnit::Test {

@@ -59,99 +59,102 @@ module JinaDataProvider {
             "groups": (DataProvider::AppGroup::AiLlm,),
         });
 
-        (JinaSchema::getActionSet()).registerActions(JinaDataProvider::AppName);
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(JinaDataProvider::AppName, sub () {
+            (JinaSchema::getActionSet()).registerActions(JinaDataProvider::AppName);
 
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": JinaDataProvider::AppName,
-            "action": "read-url",
-            "path": "/read-url",
-            "display_name": "Read Web Page or Document",
-            "short_desc": "Convert web pages, HTML, PDF, and Office files into usable content",
-            "desc": "Extract content from a `url`, raw `html`, or a document `file` for search and analysis. Select `region` for EU processing, filter page elements, and choose how content and links are returned.",
-            "action_code": DPAT_API,
-            "groups": ("Reader",),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(JinaReaderRequestDataType::Fields),
-            "output_type": JinaReaderResponseDataType,
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": JinaDataProvider::AppName,
+                "action": "read-url",
+                "path": "/read-url",
+                "display_name": "Read Web Page or Document",
+                "short_desc": "Convert web pages, HTML, PDF, and Office files into usable content",
+                "desc": "Extract content from a `url`, raw `html`, or a document `file` for search and analysis. Select `region` for EU processing, filter page elements, and choose how content and links are returned.",
+                "action_code": DPAT_API,
+                "groups": ("Reader",),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(JinaReaderRequestDataType::Fields),
+                "output_type": JinaReaderResponseDataType,
+            });
+
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": JinaDataProvider::AppName,
+                "action": "search-web",
+                "path": "/search-web",
+                "display_name": "Search the Web",
+                "short_desc": "Find relevant web sources and retrieve their content",
+                "desc": "Search for `q` and return source URLs, descriptions, and readable content. Set `respond_with` to `no-content` for fast result metadata, or use content extraction options to prepare sources for analysis.",
+                "action_code": DPAT_API,
+                "groups": ("Search",),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(JinaSearchRequestDataType::Fields),
+                "output_type": JinaSearchResponseDataType,
+            });
+
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": JinaDataProvider::AppName,
+                "action": "segment-text",
+                "path": "/segment-text",
+                "display_name": "Segment Text",
+                "short_desc": "Count tokens and split text into manageable chunks",
+                "desc": "Prepare long documents for embeddings or language models by splitting `content` into chunks. Request token IDs when needed and use `head` or `tail` to select part of the text.",
+                "action_code": DPAT_API,
+                "groups": ("Text Processing",),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(JinaSegmentRequestDataType::Fields),
+                "output_type": JinaSegmentResponseDataType,
+            });
+
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": JinaDataProvider::AppName,
+                "action": "chat",
+                "path": "/chat",
+                "display_name": "Chat with Vision Model",
+                "short_desc": "Answer questions about text and images with Jina OCR",
+                "desc": "Generate a completed answer from conversation `messages`, including image content. **Experimental:** Jina does not guarantee production availability of this endpoint.",
+                "action_code": DPAT_API,
+                "groups": ("Vision",),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(JinaChatRequestDataType::Fields),
+                "output_type": JinaChatResponseDataType,
+            });
+
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": JinaDataProvider::AppName,
+                "action": "deep-search",
+                "path": "/deep-search",
+                "display_name": "Deep Search",
+                "short_desc": "Research a question across web sources and return a grounded answer",
+                "desc": "Research a question in `messages` using web search and source reading. Control `budget_tokens` and `reasoning_effort` to manage cost and latency. Use `response_format` for structured answers or fact-checking. **Long requests:** this action returns a completed response and may reach the service timeout; reduce the research budget when necessary.",
+                "action_code": DPAT_API,
+                "groups": ("Search",),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(JinaDeepSearchRequestDataType::Fields),
+                "output_type": JinaChatResponseDataType,
+            });
+
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": JinaDataProvider::AppName,
+                "action": "download-batch-output",
+                "path": "/download-batch-output",
+                "display_name": "Download Batch Output",
+                "short_desc": "Download and parse completed batch embeddings",
+                "desc": "Download the JSONL output for `batch_id` as an ordered list of records. Each record retains its `custom_id` for matching embeddings to the original documents.",
+                "action_code": DPAT_API,
+                "groups": ("Batch Embeddings",),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(JinaBatchDownloadRequestDataType::Fields),
+                "output_type": JinaBatchDownloadResponseDataType::instance(),
+            });
+
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": JinaDataProvider::AppName,
+                "action": "download-batch-errors",
+                "path": "/download-batch-errors",
+                "display_name": "Download Batch Errors",
+                "short_desc": "Download and parse errors from batch embedding jobs",
+                "desc": "Inspect failed records for `batch_id` and use their `custom_id` to correct the source data before resubmitting it.",
+                "action_code": DPAT_API,
+                "groups": ("Batch Embeddings",),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(JinaBatchDownloadRequestDataType::Fields),
+                "output_type": JinaBatchDownloadResponseDataType::instance(),
+            });
         });
-
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": JinaDataProvider::AppName,
-            "action": "search-web",
-            "path": "/search-web",
-            "display_name": "Search the Web",
-            "short_desc": "Find relevant web sources and retrieve their content",
-            "desc": "Search for `q` and return source URLs, descriptions, and readable content. Set `respond_with` to `no-content` for fast result metadata, or use content extraction options to prepare sources for analysis.",
-            "action_code": DPAT_API,
-            "groups": ("Search",),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(JinaSearchRequestDataType::Fields),
-            "output_type": JinaSearchResponseDataType,
-        });
-
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": JinaDataProvider::AppName,
-            "action": "segment-text",
-            "path": "/segment-text",
-            "display_name": "Segment Text",
-            "short_desc": "Count tokens and split text into manageable chunks",
-            "desc": "Prepare long documents for embeddings or language models by splitting `content` into chunks. Request token IDs when needed and use `head` or `tail` to select part of the text.",
-            "action_code": DPAT_API,
-            "groups": ("Text Processing",),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(JinaSegmentRequestDataType::Fields),
-            "output_type": JinaSegmentResponseDataType,
-        });
-
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": JinaDataProvider::AppName,
-            "action": "chat",
-            "path": "/chat",
-            "display_name": "Chat with Vision Model",
-            "short_desc": "Answer questions about text and images with Jina OCR",
-            "desc": "Generate a completed answer from conversation `messages`, including image content. **Experimental:** Jina does not guarantee production availability of this endpoint.",
-            "action_code": DPAT_API,
-            "groups": ("Vision",),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(JinaChatRequestDataType::Fields),
-            "output_type": JinaChatResponseDataType,
-        });
-
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": JinaDataProvider::AppName,
-            "action": "deep-search",
-            "path": "/deep-search",
-            "display_name": "Deep Search",
-            "short_desc": "Research a question across web sources and return a grounded answer",
-            "desc": "Research a question in `messages` using web search and source reading. Control `budget_tokens` and `reasoning_effort` to manage cost and latency. Use `response_format` for structured answers or fact-checking. **Long requests:** this action returns a completed response and may reach the service timeout; reduce the research budget when necessary.",
-            "action_code": DPAT_API,
-            "groups": ("Search",),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(JinaDeepSearchRequestDataType::Fields),
-            "output_type": JinaChatResponseDataType,
-        });
-
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": JinaDataProvider::AppName,
-            "action": "download-batch-output",
-            "path": "/download-batch-output",
-            "display_name": "Download Batch Output",
-            "short_desc": "Download and parse completed batch embeddings",
-            "desc": "Download the JSONL output for `batch_id` as an ordered list of records. Each record retains its `custom_id` for matching embeddings to the original documents.",
-            "action_code": DPAT_API,
-            "groups": ("Batch Embeddings",),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(JinaBatchDownloadRequestDataType::Fields),
-            "output_type": JinaBatchDownloadResponseDataType,
-        });
-
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": JinaDataProvider::AppName,
-            "action": "download-batch-errors",
-            "path": "/download-batch-errors",
-            "display_name": "Download Batch Errors",
-            "short_desc": "Download and parse errors from batch embedding jobs",
-            "desc": "Inspect failed records for `batch_id` and use their `custom_id` to correct the source data before resubmitting it.",
-            "action_code": DPAT_API,
-            "groups": ("Batch Embeddings",),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(JinaBatchDownloadRequestDataType::Fields),
-            "output_type": JinaBatchDownloadResponseDataType,
-        });
-
     };
 }
 

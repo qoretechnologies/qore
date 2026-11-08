@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - setenv/getenv/unsetenv across threads, environment of child processes, exec() errors
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

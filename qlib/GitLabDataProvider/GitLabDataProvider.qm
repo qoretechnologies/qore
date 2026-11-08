@@ -76,63 +76,67 @@ module GitLabDataProvider {
             "groups": (DataProvider::AppGroup::VersionControl, DataProvider::AppGroup::DevOps),
         });
 
-        # register every action in the manifest
-        RestSchemaActionSet action_set = GitLabSchema::getActionSet();
-        action_set.registerActions(GitLabDataProvider::AppName);
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(GitLabDataProvider::AppName, sub () {
+            # register every action in the manifest
+            RestSchemaActionSet action_set = GitLabSchema::getActionSet();
+            action_set.registerActions(GitLabDataProvider::AppName);
 
-        # register the record-based table actions; declaring the tables is only half of it, and a table no
-        # action reaches is offered to nobody
-        RestSchemaTablesDataProvider::registerRecordActions(GitLabDataProvider::AppName,
-            "/" + GitLabDataProvider::TablesChildName, action_set, GitLabRecordTables::Tables,
-            GitLabRecordTables::RecordActionIds, {
-                "groups": (GitLabRecordTables::RecordGroup,),
-            });
+            # register the record-based table actions; declaring the tables is only half of it, and a table no
+            # action reaches is offered to nobody
+            RestSchemaTablesDataProvider::registerRecordActions(GitLabDataProvider::AppName,
+                "/" + GitLabDataProvider::TablesChildName, action_set, GitLabRecordTables::Tables,
+                GitLabRecordTables::RecordActionIds, {
+                    "groups": (GitLabRecordTables::RecordGroup,),
+                });
 
-        # register the one hand-written action; see GitLabCreateCommitDataProvider for why it is not
-        # generated
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": GitLabDataProvider::AppName,
-            "path": "/" + GitLabDataProvider::CreateCommitAction,
-            "action": GitLabDataProvider::CreateCommitAction,
-            "display_name": GitLabCreateCommitDataProvider::DisplayName,
-            "short_desc": GitLabCreateCommitDataProvider::ShortDesc,
-            "desc": GitLabCreateCommitDataProvider::Desc,
-            "action_code": DPAT_API,
-            "groups": (GitLabManifest::GroupCommits,),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                GitLabCreateCommitDataProvider::RequestType.getFields()),
-        });
-
-        # register the hand-written project-lookup action; see GitLabProjectIdByUrlDataProvider for why it
-        # is not generated
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": GitLabDataProvider::AppName,
-            "path": "/" + GitLabDataProvider::ProjectIdByUrlAction,
-            "action": GitLabDataProvider::ProjectIdByUrlAction,
-            "display_name": GitLabProjectIdByUrlDataProvider::DisplayName,
-            "short_desc": GitLabProjectIdByUrlDataProvider::ShortDesc,
-            "desc": GitLabProjectIdByUrlDataProvider::Desc,
-            "action_code": DPAT_API,
-            "groups": (GitLabManifest::GroupProjects,),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                GitLabProjectIdByUrlDataProvider::RequestType.getFields()),
-        });
-
-        # register the polling event actions
-        foreach hash<auto> i in (GitLabEventsDataProvider::EventMap.pairIterator()) {
-            Class cls = i.value;
+            # register the one hand-written action; see GitLabCreateCommitDataProvider for why it is not
+            # generated
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
                 "app": GitLabDataProvider::AppName,
-                "path": "/" + GitLabDataProvider::EventsChildName + "/" + i.key,
-                "action": i.key,
-                "display_name": cls.getConstant("DisplayName").getValue(),
-                "short_desc": cls.getConstant("ShortDesc").getValue(),
-                "desc": cls.getConstant("Desc").getValue(),
-                "action_code": DPAT_EVENT,
-                "action_val": i.key,
-                "groups": ("Events",),
+                "path": "/" + GitLabDataProvider::CreateCommitAction,
+                "action": GitLabDataProvider::CreateCommitAction,
+                "display_name": GitLabCreateCommitDataProvider::DisplayName,
+                "short_desc": GitLabCreateCommitDataProvider::ShortDesc,
+                "desc": GitLabCreateCommitDataProvider::Desc,
+                "action_code": DPAT_API,
+                "groups": (GitLabManifest::GroupCommits,),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    GitLabCreateCommitDataProvider::RequestType.getFields()),
             });
-        }
+
+            # register the hand-written project-lookup action; see GitLabProjectIdByUrlDataProvider for why it
+            # is not generated
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": GitLabDataProvider::AppName,
+                "path": "/" + GitLabDataProvider::ProjectIdByUrlAction,
+                "action": GitLabDataProvider::ProjectIdByUrlAction,
+                "display_name": GitLabProjectIdByUrlDataProvider::DisplayName,
+                "short_desc": GitLabProjectIdByUrlDataProvider::ShortDesc,
+                "desc": GitLabProjectIdByUrlDataProvider::Desc,
+                "action_code": DPAT_API,
+                "groups": (GitLabManifest::GroupProjects,),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    GitLabProjectIdByUrlDataProvider::RequestType.getFields()),
+            });
+
+            # register the polling event actions
+            foreach hash<auto> i in (GitLabEventsDataProvider::EventMap.pairIterator()) {
+                Class cls = i.value;
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": GitLabDataProvider::AppName,
+                    "path": "/" + GitLabDataProvider::EventsChildName + "/" + i.key,
+                    "action": i.key,
+                    "display_name": cls.getConstant("DisplayName").getValue(),
+                    "short_desc": cls.getConstant("ShortDesc").getValue(),
+                    "desc": cls.getConstant("Desc").getValue(),
+                    "action_code": DPAT_EVENT,
+                    "action_val": i.key,
+                    "groups": ("Events",),
+                });
+            }
+        });
     };
 }
 

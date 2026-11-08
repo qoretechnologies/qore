@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - per-thread CPU time via Mach thread_info, memory and stack limits of sandbox calls
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 

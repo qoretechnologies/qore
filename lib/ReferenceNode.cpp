@@ -392,7 +392,7 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
     // through the reference, in which case the target keeps its previous (possibly NOTHING) value.
     // Marking the target definitely-assigned here makes JIT/AOT elide the runtime hash/type guard
     // and dereference a null value, so the lvalue check must not imply an assignment
-    int lvalue_err = check_lvalue(lvexp, false);
+    int lvalue_err = check_lvalue(lvexp, false, qore_lvalue_use_e::REFERENCE);
     if (lvalue_err) {
         if (lvalue_err == -1) {
             parse_error(*loc, "the reference operator was expecting an lvalue, got '%s' instead",

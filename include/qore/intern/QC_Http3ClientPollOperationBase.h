@@ -254,6 +254,30 @@ public:
         return s == H3State::READING || s == H3State::WAIT_READ;
     }
 
+    //! Sets the state of the open connection (READING or WAIT_READ) unless it was closed meanwhile; I/O thread only
+    /** H3State::CLOSED is final.  Other threads close the operation too: a submitting thread records a refused
+        submission with setSubmitError(), and abort() runs on any thread.  Such a close can happen while the I/O
+        thread is between its check of the state and its store of the next one, so the store is a compare-exchange
+        that never replaces H3State::CLOSED: a plain store would make the closed connection ready again, and it
+        would take requests and never be closed by the I/O controller (see needsCloseOnComplete()).
+
+        @param s the new state: H3State::READING or H3State::WAIT_READ
+        @param site where the state is set, for the debug hook (see dbgCloseBeforeOpenState())
+    */
+    DLLLOCAL void setOpenState(H3State s, const char* site);
+
+#ifdef DEBUG
+    //! Debug-only: arms a one-shot hook: when the I/O thread of @a op next sets its open state at @a site, the hook
+    //! first records a refused submission with setSubmitError(), as a submitting thread does at that moment
+    /** @a op is compared only, never dereferenced by the hook: the caller keeps the operation alive until the hook
+        fired (see dbgWaitCloseBeforeOpenState()) or until it disarms it (@a op = nullptr).
+    */
+    DLLLOCAL static void dbgArmCloseBeforeOpenState(Http3ClientPollOperationPriv* op, const char* site);
+
+    //! Debug-only: waits until the hook armed with dbgArmCloseBeforeOpenState() fired; returns false on timeout
+    DLLLOCAL static bool dbgWaitCloseBeforeOpenState(int64_t timeout_ms);
+#endif
+
     //! Can be called from any thread: the error is set by the I/O thread under the stream lock
     DLLLOCAL bool hasError() const {
         AutoLocker al(stream_lock);

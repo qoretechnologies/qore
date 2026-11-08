@@ -131,6 +131,9 @@ private:
 };
 
 // the buffers allocated with sb_mem_alloc(), by handle
+// the class created by cpp_api_class_key_value_release() while it is released
+static QoreClass* kv_probe_class = nullptr;
+
 static std::mutex sb_mem_lock;
 static std::map<int64, void*> sb_mem_buffers;
 static int64 sb_mem_next = 0;
@@ -1627,6 +1630,87 @@ nothing sb_mem_free(int handle) {
         sb_mem_buffers.erase(i);
     }
     q_sb_free(p);
+    return QoreValue();
+}
+
+//! Creates a class, stores a new object in its key-value data and releases the class
+/** The class has no static variables; the key-value data is released with the class.  The object is created here, so
+    that the key-value data holds the only reference to it; its destructor can store another value with
+    cpp_api_class_key_value_set() while the data is released.
+
+    @param class_name the class of the object to store with key \c "first", created without arguments
+
+    @throw CLASS-NOT-FOUND the class does not exist
+*/
+nothing cpp_api_class_key_value_release(string class_name) {
+    const QoreClass* ocls = getProgram()->findClass(class_name->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!ocls) {
+        xsink->raiseException("CLASS-NOT-FOUND", "class '%s' does not exist", class_name->c_str());
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(ocls->execConstructor(nullptr, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // forgets the class when it has been released, after the holder below
+    struct ProbeReset {
+        ~ProbeReset() {
+            kv_probe_class = nullptr;
+        }
+    } reset;
+    QoreClassHolder cls(new QoreClass("CppApiKeyValueProbe", "::CppApiKeyValueProbe"));
+    ValueHolder old(static_cast<QoreClass*>(cls)->setKeyValue("first", obj.release()), xsink);
+    kv_probe_class = cls;
+    return QoreValue();
+}
+
+//! Adds a copy of a class of the current Program, made with QoreClass::copy(), to a new namespace of the Program
+/** As a module adds a copy of a class to a Program (the jni module does); the copy shares the class's static
+    variables
+
+    @param name the name of the class
+    @param ns_name the name of the new namespace
+
+    @return @ref True "True" if the class was added, @ref False "False" if the current Program could not be owned for
+    parsing because it is being deleted
+
+    @throw CLASS-NOT-FOUND the class does not exist
+*/
+bool cpp_api_add_class_copy(string name, string ns_name) {
+    QoreProgram* pgm = getProgram();
+    CurrentProgramRuntimeExternalParseContextHelper pch;
+    if (!pch) {
+        return false;
+    }
+    const QoreClass* cls = pgm->findClass(name->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!cls) {
+        xsink->raiseException("CLASS-NOT-FOUND", "class '%s' does not exist", name->c_str());
+        return QoreValue();
+    }
+    QoreNamespace* ns = new QoreNamespace(ns_name->c_str());
+    ns->addSystemClass(const_cast<QoreClass*>(cls)->copy());
+    pgm->getRootNS()->addNamespace(ns);
+    return true;
+}
+
+//! Stores a value in the key-value data of the class that cpp_api_class_key_value_release() is releasing
+/** @param key the key
+    @param value the value to store
+
+    @throw CLASS-KEY-VALUE-ERROR no class is being released
+*/
+nothing cpp_api_class_key_value_set(string key, auto value) {
+    if (!kv_probe_class) {
+        xsink->raiseException("CLASS-KEY-VALUE-ERROR", "no class is being released");
+        return QoreValue();
+    }
+    ValueHolder old(kv_probe_class->setKeyValue(key->c_str(), value.refSelf()), xsink);
     return QoreValue();
 }
 

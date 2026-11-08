@@ -345,7 +345,7 @@ automatically:
   AOT module goes through that descriptor: loadable `.qmod`s, `.qmod`s
   aggregated from objects (the glue object carries the descriptor), `.qoa`
   archives and executables registering embedded modules with
-  `qore_aot_register_into_program()`. The identity is also written to each
+  `qore_aot_register_into_program_v2()`. The identity is also written to each
   metadata blob's `BUILD_INFO` (`aot-runtime-identity`) for inspection, and
   `qcc --version` prints it.
 - **Checking.** `QoreModuleManager::loadBinaryModuleFromDesc()` refuses an AOT
@@ -407,9 +407,15 @@ of the module's image:
   is the record. The linker places it in a `PT_NOTE` segment, and it is marked
   `SHF_GNU_RETAIN`, so `--gc-sections` keeps it.
 
-The record is little-endian: magic `QAMI`, format version (1), payload size,
-then the module name, the dependency count and dependencies, and the optional
-module count and requests, each string as a 32-bit length and its bytes. Every
+The record is little-endian: magic `QAMI`, format version (2), payload size,
+then the module name, the dependency count and dependencies, the optional
+module count and requests, the count and names of the modules the module was
+compiled with (every module it requires, directly or not, and every module one
+of them re-exports, which the loader checks; see `aot-linked-module-sources.md`),
+and the counts and directories of the module's own `%prepend-module-path` and
+`%append-module-path` directives (which its initialization searches, so the
+loader finds the modules it checks with them), each string as a 32-bit length
+and its bytes.  Version 2 added the last three lists. Every
 string is nonempty and contains no NUL; payloads are bounded to 16 MiB and
 65,536 entries per list. `QoreAOTModuleFileInfo` in
 `include/qore/intern/QoreAOTBinary.h` documents the layout.
@@ -472,6 +478,12 @@ fit in its segment ends the scan of that segment.
       json
       reflection
     unavailable optional modules: 0
+    compiled with: 3
+      json
+      reflection
+      yaml
+    prepended module paths: 0
+    appended module paths: 0
 ```
 
 ### Code Signing and Notarization (macOS)
@@ -532,7 +544,20 @@ section, so an AOT module loaded from a file without it was changed after it was
 built (for example by a tool that removed the section): it is refused after the
 runtime identity check, before its initialization, since loading it would skip
 the check of optional modules below. Statically registered AOT modules
-(`.qoa`, `qcc -o` executables) are not loaded from a file and have no section.
+(`.qoa` archives, module objects registered by their `qore_<name>_register()`)
+are not loaded from a file and have no section: an archive or an executable can
+hold several modules. qcc links the record with each module's register function
+instead, as a private constant (`emitStaticModuleInfoRecord()`), and the
+registration passes it to `qore_aot_register_into_program_v2()`, which decodes it.
+With it the loader checks a statically registered module as a `.qmod`: the record
+must name the module, an optional module that it was compiled without and that is
+available now is reported (`BINARY-MODULE-STALE`; there is no source module to
+load instead, so the module is used), and its dependencies are found with its own
+module path directives (`QoreModulePathScope`; see `aot-linked-module-sources.md`).
+The check of the files a module of a build tree was compiled against does not
+apply: the module has no file and no dependency file of its own; it is part of the
+program or archive that links it, whose build rebuilds it when an input changes,
+as for an installed module (`AOTStaticModuleMetadata.qtest`).
 The metadata keeps a qmod self-contained; there is no sidecar whose
 installation, renaming, or symlink lifetime could diverge from the executable
 artifact.

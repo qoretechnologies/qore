@@ -5,16 +5,16 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/QoreRagTypes.qm
-%requires ../../../../qlib/QoreRagUtils
-%requires ../../../../qlib/JinaRestClient.qm
+%requires Util
+%requires QUnit
+%requires ConnectionProvider
+%requires DataProvider
+%requires QoreRagTypes
+%requires QoreRagUtils
+%requires JinaRestClient
 
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/HttpServerUtil.qm
+%requires HttpServer
+%requires HttpServerUtil
 
 %exec-class JinaRestClientTest
 

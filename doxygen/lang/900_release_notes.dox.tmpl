@@ -516,6 +516,31 @@
     list, which is later than a Counter signalled from @ref on_exit; see the teardown order in its documentation
     (<a href="https://github.com/qoretechnologies/qore/issues/5575">issue 5575</a>).
 
+    @par Exit Hooks
+    register_exit_hook() registers code that the library calls before it waits for background threads to end, at the
+    end of the process or when a @ref Qore::Program "Program" is deleted, so that a module or a program can stop a
+    thread that runs until it is told to stop instead of keeping the process from ending (see
+    @ref user_module_exit_hooks)
+
+    @par System Thread Capabilities
+    @ref Qore::SandboxManager::createSystemThreadCall() "SandboxManager::createSystemThreadCall()" lets a module start a
+    fixed operation in a thread that no sandbox governs, and @ref Qore::SandboxManager::isSandboxed()
+    "SandboxManager::isSandboxed()" tells trusted code whether the code it serves is sandboxed
+
+    @par Module Initialization Belongs to No Sandbox
+    A module from the process-wide module path is initialized as library code, with no sandbox, also when sandboxed
+    code loads it first; every later call into it is governed by its caller (see @ref sandbox_module_init)
+
+    @par Sandboxed Module Loads Cannot Replace Library Modules
+    Sandboxed and restricted code can no longer extend the process-wide module path, replace a library module, or
+    choose the modules and parse defines that a library module uses; a module that it loads from elsewhere is used
+    only by its own sandbox (see @ref sandbox_module_init)
+
+    @par Reflection Member Access
+    Code that a sandbox governs, and code whose parse options restrict a functional domain, may use the
+    \c private and \c private:internal elements of a class through the @ref reflectionintro "reflection" module
+    only where the language allows it (see @ref reflection_member_access)
+
     @par HTTP Server Fast Routes
     A path can be registered with @ref HttpServer::HttpServer::addFastRoute() "addFastRoute()" so that the async I/O
     thread answers its qualifying requests in microseconds, with no worker hand-off and a response identical to the
@@ -891,6 +916,9 @@
       - provider presentation metadata can be localized with source-owned catalogs and the
         \c qore-data-provider-i18n tool
       - watch data providers persist delivery checkpoints (see @ref dataprovider_watch)
+      - a module can register actions to be built on first use, and the provider modules generating actions
+        from REST API descriptions do, so loading them no longer builds their actions (see
+        @ref dataprovider_lazy_actions)
       - see @ref dataprovider_v3_11 for all changes
 
     - @ref dbdataproviderintro "DbDataProvider" module
@@ -1449,6 +1477,12 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a @ref cast "cast" as the lvalue of @ref remove "remove" or @ref delete "delete" (ex: <tt>remove cast<int>(x)</tt>)
+      or in the lvalue of a @ref lvalue_references "reference" aborted debug builds or gave wrong results; it is now a
+      parse error, as a cast is not storage that can be removed or referred to
+    - @ref Qore::Thread::Queue::clear() "Queue::clear()", @ref Qore::Thread::Queue::setError() "Queue::setError()" and
+      @ref Qore::TreeMap::put() "TreeMap::put()" released values while holding the container's lock, so a destructor of
+      a released value that used the same container could deadlock or break the lock; values are now released after it
     - a separated module required by the path of its <tt>.qm</tt> file
       (<tt>%requires ../lib/ModuleName/ModuleName.qm</tt>) was loaded without its other files, so its classes and
       functions were missing; the whole module is loaded, as with the path of its directory (see
@@ -1511,6 +1545,54 @@
       the AST interpreter
     - the IR execution mode runs <tt>i += v</tt> on an \c int local with an \c auto local \c v as fast as with an
       \c int local again
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, an operator, a container access or an
+      iteration given a reference that arrives as a value (ex: an element <tt>h.r</tt> holding <tt>\\x</tt>) now
+      takes the reference as it is, as with the AST interpreter, instead of reading the referenced lvalue (ex:
+      <tt>NOTHING + h.r</tt> and <tt>h.r.a</tt> gave the referenced value or its member, <tt>foreach</tt> and
+      \c select iterated the referenced list)
+    - the IR, JIT and tiered execution modes and AOT-compiled code keep the locals of an object type (a class,
+      \c object) out of the runtime stack as they keep other locals, with the same garbage-collection behavior: a loop
+      assigning an object to such a local runs up to 1.4 times faster
+    - a method call whose argument assigns the variable holding the receiver (ex: <tt>o.m(o = new T())</tt>), or a
+      call whose argument assigns a variable read for an earlier argument (ex: <tt>f(t, t = x)</tt>), could crash the
+      program in some execution modes; the call now runs with the values read before the assignment
+    - with the AST interpreter, a call through a variable whose argument assigns it (ex: <tt>c(c = NOTHING)</tt>), and
+      <tt>[]</tt>, <tt>{}</tt> or a slice whose index assigns or removes the container's variable (ex:
+      <tt>l[(l = x).size() - 1]</tt>), could crash the program; they now use the value that the variable held, as in
+      every other execution mode
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, <tt>map $1.key, l</tt> gave \c NOTHING for
+      each object in the list instead of its member, and \c map, \c select and \c foldl over an object that is not
+      an iterator gave a list of one value instead of the value, as the AST interpreter gives it
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for an expression that an
+      exception left were destroyed in another order than with the AST interpreter (ex:
+      <tt>f(new T("a"), new T("b"), thr())</tt> destroyed \c b first); they are now released in the AST interpreter's
+      order
+    - in AOT-compiled code, a function called directly from compiled code left an entry on the runtime stack for each
+      local variable of its own that is visible to the runtime at each call, so a loop of such calls in top-level code
+      took time quadratic in the number of iterations, and memory grew with it
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the operands of a
+      comparison, \c instanceof, \c exists or a slice, for the source of a functional operator and for the elements of
+      a list or hash literal were destroyed when the statement ended (ex: <tt>f(new T("a") == new T("b"), g())</tt>
+      destroyed them after \c g() ran); they are now destroyed when they have been used, as with the AST interpreter
+    - in the IR execution mode, the last element of a \c map or \c select over an iterator was destroyed when the
+      statement ended, and in every compiled mode an exception that left a fused pipeline of functional operators for
+      a \c catch block released the pipeline's source after the block; both are now released as with the AST
+      interpreter
+    - in the IR execution mode, an exception raised by a destructor while an exception left an expression (ex: when
+      the arguments of a call were released) was lost, and a debug build aborted; it is now added to the exception
+      raised, as with the AST interpreter
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the arguments of a
+      call are now destroyed last argument first when the call returns, as with the AST interpreter, also in calls of
+      closures, static methods and constructors and from top-level code, and for an argument given by an expression
+      such as <tt>c ? new T() : new T()</tt>
+    - in AOT-compiled code, an object that a local variable held when it was assigned another value in a loop was
+      destroyed only at the next assignment or when the function returned instead of at the assignment
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, assigning an element of a local hash or
+      list whose key or index expression assigns the variable (ex: <tt>h{(h = x).firstKey()} = v</tt>) stored into
+      the container the variable held before, and could crash the program in the IR execution mode; it now stores into
+      the container assigned, as with the AST interpreter
+    - the IR, JIT and tiered execution modes and AOT-compiled code mark an object held by a local of no type
+      (\c auto) as reachable from the stack, as they mark one held by a local of an object type
     - in the IR execution mode and wherever the JIT and tiered execution modes run a function with the IR
       interpreter, the first call of a large function in a thread with a pending cancellation (ex: in code that
       caught a \c THREAD-CANCELLED exception) raised the exception before the function ran; it is now raised at the
@@ -1580,6 +1662,12 @@
     - an AOT module in a build tree that is a regular file with the dependency file written by \c qcc next to it is
       now checked against its sources like a linked module, so an out-of-date module is no longer used; installed
       modules are not checked (see @ref aot_module_build_tree_staleness)
+    - an AOT module of a build tree was not found out of date, nor compiled again by an incremental build, when a file
+      that it includes with \c %%include, or a module that one of its dependencies requires or re-exports, changed:
+      \c qcc now lists them in the module's dependency file (see @ref aot_module_build_tree_staleness)
+    - an AOT module of a build tree was loaded when a module it requires (directly or not, or re-exported) was loaded
+      from another file than the one it was compiled against, such as a module that appeared in a directory of the
+      module path that is searched first; it is now out of date (see @ref aot_module_build_tree_staleness)
     - a @ref thread_local "thread_local" variable declared in a user module was refused when the module inherited
       @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL": thread-local storage is not thread control (see
       @ref module_parse_option_masks)
@@ -1991,6 +2079,31 @@
       \c FILESYSTEM-ACCESS-DENIED in a program that is not allowed to access the filesystem, and a
       @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" could not be constructed in a sandboxed service; it
       now uses @ref Qore::get_random_bytes()
+    - a destructor run while the @ref static_class_variables "static class variables" of a program were released
+      (at process exit for a user module or the main program, or when a @ref Qore::Program "Program" was deleted)
+      could crash the process if it created a Program: the new Program shares the program's public classes, and
+      deleting it deleted their static variables while the program still used them
+    - deleting @ref Qore::Program "Program" objects that share a class in different threads at the same time could
+      crash the process
+    - a @ref Qore::Program "Program" created while a program's data was released (by a destructor at exit, for
+      example) shared the values of the program's static class variables, so storing it in one of them kept those
+      values, and itself, alive; it now sees the values until they are released, and accessing them afterwards
+      raises a \c PROGRAM-ERROR exception (see @ref static_class_variables)
+    - <b>behavior change:</b> the values of the static variables of a public class are released when the
+      @ref Qore::Program "Program" that defines it is deleted, even if programs that inherited the class still exist;
+      accessing them from those programs then raises \c PROGRAM-ERROR, as calling the class's methods does (see
+      @ref static_class_variables)
+    - the constants and static class variables of a module loaded at runtime while a program's data was released
+      (by a destructor at exit, for example) were never released
+    - key-value data set with the C++ API function QoreClass::setKeyValue() was never released for a class without
+      static variables
+    - after a failed parse, a @ref Qore::Program "Program" without @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE"
+      (which a child program does not get when its parent does not have it) lost the classes, constants and other
+      symbols that it had inherited from its parent, so a new parse could not find them; only what the failed parse
+      added is removed now
+    - after a failed parse, a @ref Qore::Program "Program" with @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE" kept
+      the classes, constants, hashdecls, enums and namespaces that the failed parse had declared, so a new parse could
+      not declare them again
 
     @section qore_2_2_1 Qore 2.2.1
 

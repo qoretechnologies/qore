@@ -27,10 +27,10 @@
 %enable-all-warnings
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/SqlUtil
-%requires ../../../../qlib/DbDataProvider
+%requires QUnit
+%requires DataProvider
+%requires SqlUtil
+%requires DbDataProvider
 
 %exec-class DbForeignConstraintTypeTest
 

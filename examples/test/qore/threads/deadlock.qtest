@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - deadlock detection and sub-millisecond timed lock waits on pthread conditions
 
 %modern
 

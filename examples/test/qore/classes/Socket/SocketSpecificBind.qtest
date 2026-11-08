@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - specific-address binds against wildcard listeners with SO_REUSEADDR (macOS rules differ)
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved

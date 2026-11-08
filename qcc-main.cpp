@@ -62,6 +62,12 @@
 #include <sys/stat.h>
 #include <utime.h>
 #include <unistd.h>
+#include <fcntl.h>
+#ifdef QORE_QCC_TEST_HOOKS
+#include <spawn.h>
+#include <sys/wait.h>
+extern char** environ;
+#endif
 #include <zlib.h>
 #include <zstd.h>
 
@@ -1000,8 +1006,14 @@ static std::string module_name_from_path(const std::string& path) {
     return name;
 }
 
+//! Returns the dependencies of a module compile in the form --depfile-module-deps selects
+/** @param resolved_deps the files of the modules loaded, as the module dependency sink recorded them
+    @param qmod true for the compile of an AOT module (.qmod): with the source form, the depfile of an AOT module of a
+    build tree that is a dependency contributes everything it lists (see qore_aot_set_module_closure_dep_sink());
+    the depfile of an object (.qo) keeps the dependencies the incremental object scheduler reads
+*/
 static std::vector<std::string> qcc_module_depfile_inputs(
-        const std::vector<std::string>& resolved_deps) {
+        const std::vector<std::string>& resolved_deps, bool qmod = false) {
     if (depfile_module_deps_mode == DepfileModuleDepsMode::Artifact) {
         return resolved_deps;
     }
@@ -1037,6 +1049,16 @@ static std::vector<std::string> qcc_module_depfile_inputs(
             // representation that qcc can expand.
             sources.push_back(dep);
             continue;
+        }
+        // An AOT module of a build tree depends on what its own depfile lists:
+        // its sources, the files they include and the modules it requires; a
+        // module requiring it depends on all of them, as it sees the module's
+        // declarations (see qore_aot_set_module_closure_dep_sink())
+        if (qmod) {
+            std::vector<std::string> dep_depfile;
+            if (qore_aot_read_module_depfile(dep, dep_depfile)) {
+                sources.insert(sources.end(), dep_depfile.begin(), dep_depfile.end());
+            }
         }
         std::string name = module_name_from_path(dep);
         std::string parent = dirname_of(dep);
@@ -1089,8 +1111,38 @@ static bool qcc_output_is_qmod(const std::string& output) {
     return output.size() > sizeof(ext) - 1 && !output.compare(output.size() - (sizeof(ext) - 1), sizeof(ext) - 1, ext);
 }
 
+//! Sets the module dependency sink of a module compile: for an AOT module (.qmod), the one that records everything the
+//! module depends on (see qore_aot_set_module_closure_dep_sink()), else the one that records the modules it loads
+static void qcc_set_module_dep_sink(std::vector<std::string>* sink, const std::string& output) {
+    if (qcc_output_is_qmod(output)) {
+        qore_aot_set_module_closure_dep_sink(sink);
+    } else {
+        qore_aot_set_module_dep_sink(sink);
+    }
+}
+
 static std::string qcc_depfile_target(const std::string& output) {
-    return depfile_target_path ? std::string(depfile_target_path) : output;
+    if (depfile_target_path) {
+        return depfile_target_path;
+    }
+    // The module loader uses the depfile of an AOT module only for the module its rule names, and takes a relative
+    // target as relative to the depfile's directory, not to the directory qcc ran in: a relative -o made the loader
+    // ignore the depfile, so that no source of the module was checked.  The target of a .qmod is therefore its real
+    // path (--depfile-target names another one, for a build system that needs it).
+    if (qcc_output_is_qmod(output) && !output.empty() && output[0] != '/') {
+        char* resolved = realpath(output.c_str(), nullptr);
+        if (resolved) {
+            std::string rv = resolved;
+            free(resolved);
+            return rv;
+        }
+        if (char* cwd = getcwd(nullptr, 0)) {
+            std::string rv = std::string(cwd) + "/" + output;
+            free(cwd);
+            return rv;
+        }
+    }
+    return output;
 }
 
 static void print_usage(const char* prog) {
@@ -1357,6 +1409,10 @@ static void print_version() {
     printf("Using Qore library v%s\n", qore_version_string);
     printf("AOT runtime identity: %s\n", qore_aot_runtime_identity);
     printf("Built with LLVM for JIT/AOT compilation\n");
+#ifdef QORE_QCC_TEST_HOOKS
+    // the tests that need them skip without them (see QORE_QCC_TEST_HOOKS in CMakeLists.txt)
+    printf("Test hooks: enabled\n");
+#endif
 }
 
 static bool qccHandleWarnings(ExceptionSink& wsink) {
@@ -7709,100 +7765,114 @@ static bool capture_qcc_observed_source_snapshots(QCCBuildManifest& manifest,
     return true;
 }
 
-static bool qcc_test_wait_after_input_snapshot(std::string& error) {
-    QoreEnvironmentValue marker_holder("QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_MARKER");
-    const char* marker = marker_holder.c_str();
-    if (!marker || !*marker || is_file(marker)) {
+#ifdef QORE_QCC_TEST_HOOKS
+//! Returns true if the source a test hook names (in \a source_var) is an input of this qcc, or if it names none
+static bool qcc_test_hook_source_matches(const QCCBuildManifest& manifest, const char* source_var) {
+    QoreEnvironmentValue source_holder(source_var);
+    const char* source = source_holder.c_str();
+    if (!source || !*source) {
         return true;
     }
-    FILE* f = fopen(marker, "wb");
-    if (!f) {
-        error = "cannot create qcc post-snapshot test marker '"
-            + std::string(marker) + "': " + strerror(errno);
+    if (!manifest.input_snapshots) {
         return false;
     }
-    if (fclose(f) != 0) {
-        error = "cannot close qcc post-snapshot test marker '"
-            + std::string(marker) + "': " + strerror(errno);
-        return false;
-    }
-    long delay_ms = 1000;
-    if (QoreEnvironmentValue delay_holder("QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_DELAY_MS");
-            const char* delay = delay_holder.c_str()) {
-        char* end = nullptr;
-        long parsed = strtol(delay, &end, 10);
-        if (end && !*end && parsed >= 0 && parsed <= 10000) {
-            delay_ms = parsed;
+    std::string canonical_source = canonical_existing_path(source);
+    for (const auto& snapshot : *manifest.input_snapshots) {
+        if (snapshot.first == canonical_source) {
+            return true;
         }
     }
-    while (delay_ms > 0) {
-        long sleep_ms = std::min(delay_ms, 10L);
-        usleep(static_cast<useconds_t>(sleep_ms * 1000));
-        delay_ms -= sleep_ms;
-        if (qcc_check_cancel("qcc post-snapshot test delay")) {
-            error = "operation cancelled during qcc post-snapshot test delay";
+    return false;
+}
+
+//! Runs a test hook of qcc: claims \a marker and runs \a command_var's command, then lets qcc continue
+/** A test that changes a source while qcc compiles sets the hook's marker and command (and, optionally, the source
+    that the qcc it means compiles): the first qcc that reaches the hook creates the marker exclusively
+    (O_CREAT|O_EXCL; any other qcc of the build finds it and goes on) and runs the command synchronously (/bin/sh -c),
+    so the change happens exactly at that point, with no test process that polls for the marker and no delay for it to
+    act in.  The hooks exist only in a qcc built with QORE_QCC_TEST_HOOKS (CMake option of the same name), so that a
+    packaged qcc never runs a command taken from its environment.
+
+    @return false with \a error set if the marker cannot be created or the command fails
+*/
+static bool qcc_run_test_hook(const char* marker, const char* command_var, const char* what, std::string& error) {
+    int fd = open(marker, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
+    if (fd < 0) {
+        if (errno == EEXIST) {
+            // another qcc of the build ran the hook
+            return true;
+        }
+        error = std::string("cannot create qcc ") + what + " test marker '" + marker + "': " + strerror(errno);
+        return false;
+    }
+    if (close(fd) != 0) {
+        error = std::string("cannot close qcc ") + what + " test marker '" + marker + "': " + strerror(errno);
+        return false;
+    }
+    QoreEnvironmentValue command_holder(command_var);
+    const char* command = command_holder.c_str();
+    if (!command || !*command) {
+        return true;
+    }
+    char sh_arg0[] = "sh";
+    char sh_arg1[] = "-c";
+    std::string command_copy(command);
+    char* const argv[] = {sh_arg0, sh_arg1, &command_copy[0], nullptr};
+    pid_t pid;
+    int rc;
+    {
+        // the command gets a copy of the environment, which must not change while it is copied; the lock is not held
+        // while the command runs
+        QoreEnvironmentReadLock env_lock;
+        rc = posix_spawn(&pid, "/bin/sh", nullptr, nullptr, argv, environ);
+    }
+    if (rc) {
+        error = std::string("cannot run qcc ") + what + " test command '" + command_copy + "': " + strerror(rc);
+        return false;
+    }
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR) {
+            error = std::string("cannot wait for qcc ") + what + " test command '" + command_copy + "': "
+                + strerror(errno);
             return false;
         }
+    }
+    if (!WIFEXITED(status) || WEXITSTATUS(status)) {
+        error = std::string("qcc ") + what + " test command failed (status " + std::to_string(status) + "): "
+            + command_copy;
+        return false;
     }
     return true;
 }
+#endif
 
-static bool qcc_test_wait_before_input_validation(
-        const QCCBuildManifest& manifest, std::string& error) {
-    QoreEnvironmentValue marker_holder("QORE_QCC_TEST_INPUT_VALIDATION_MARKER");
+//! A test hook right after qcc took the snapshot of its inputs (see qcc_run_test_hook())
+static bool qcc_test_wait_after_input_snapshot(const QCCBuildManifest& manifest, std::string& error) {
+#ifdef QORE_QCC_TEST_HOOKS
+    QoreEnvironmentValue marker_holder("QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_MARKER");
     const char* marker = marker_holder.c_str();
-    if (!marker || !*marker || is_file(marker)) {
+    if (!marker || !*marker || !qcc_test_hook_source_matches(manifest, "QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_SOURCE")) {
         return true;
     }
-    if (QoreEnvironmentValue source_holder("QORE_QCC_TEST_INPUT_VALIDATION_SOURCE");
-            const char* source = source_holder.c_str()) {
-        std::string canonical_source = canonical_existing_path(source);
-        bool found = false;
-        if (!manifest.input_snapshots) {
-            return true;
-        }
-        for (const auto& snapshot : *manifest.input_snapshots) {
-            if (snapshot.first == canonical_source) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            return true;
-        }
-    }
-
-    FILE* f = fopen(marker, "wb");
-    if (!f) {
-        error = "cannot create qcc input-validation test marker '"
-            + std::string(marker) + "': " + strerror(errno);
-        return false;
-    }
-    if (fclose(f) != 0) {
-        error = "cannot close qcc input-validation test marker '"
-            + std::string(marker) + "': " + strerror(errno);
-        return false;
-    }
-
-    long delay_ms = 1000;
-    if (QoreEnvironmentValue delay_holder("QORE_QCC_TEST_INPUT_VALIDATION_DELAY_MS");
-            const char* delay = delay_holder.c_str()) {
-        char* end = nullptr;
-        long parsed = strtol(delay, &end, 10);
-        if (end && !*end && parsed >= 0 && parsed <= 10000) {
-            delay_ms = parsed;
-        }
-    }
-    while (delay_ms > 0) {
-        long sleep_ms = std::min(delay_ms, 10L);
-        usleep(static_cast<useconds_t>(sleep_ms * 1000));
-        delay_ms -= sleep_ms;
-        if (qcc_check_cancel("qcc input-validation test delay")) {
-            error = "operation cancelled during qcc input-validation test delay";
-            return false;
-        }
-    }
+    return qcc_run_test_hook(marker, "QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_COMMAND", "post-snapshot", error);
+#else
     return true;
+#endif
+}
+
+//! A test hook right before qcc validates its inputs against their snapshot (see qcc_run_test_hook())
+static bool qcc_test_wait_before_input_validation(const QCCBuildManifest& manifest, std::string& error) {
+#ifdef QORE_QCC_TEST_HOOKS
+    QoreEnvironmentValue marker_holder("QORE_QCC_TEST_INPUT_VALIDATION_MARKER");
+    const char* marker = marker_holder.c_str();
+    if (!marker || !*marker || !qcc_test_hook_source_matches(manifest, "QORE_QCC_TEST_INPUT_VALIDATION_SOURCE")) {
+        return true;
+    }
+    return qcc_run_test_hook(marker, "QORE_QCC_TEST_INPUT_VALIDATION_COMMAND", "input-validation", error);
+#else
+    return true;
+#endif
 }
 
 enum class QCCFinishResult {
@@ -8293,6 +8363,21 @@ static void print_aot_module_info(const char* path) {
             return;
         }
         printf("      %s\n", info.unavailable_optional_modules[i].c_str());
+    }
+    printf("    compiled with: %zu\n", info.compiled_with.size());
+    for (size_t i = 0; i < info.compiled_with.size(); ++i) {
+        if (!dump_aot_symbol_index_check_cancel(i, "AOT module metadata dump")) {
+            return;
+        }
+        printf("      %s\n", info.compiled_with[i].c_str());
+    }
+    printf("    prepended module paths: %zu\n", info.prepended_module_paths.size());
+    for (const std::string& dir : info.prepended_module_paths) {
+        printf("      %s\n", dir.c_str());
+    }
+    printf("    appended module paths: %zu\n", info.appended_module_paths.size());
+    for (const std::string& dir : info.appended_module_paths) {
+        printf("      %s\n", dir.c_str());
     }
 }
 
@@ -10654,7 +10739,7 @@ int main(int argc, char** argv) {
         batch_input_manifest.extra_inputs = batch_script_aggregate_manifest_inputs;
         capture_qcc_input_snapshots(batch_input_manifest);
         std::string error;
-        if (!qcc_test_wait_after_input_snapshot(error)) {
+        if (!qcc_test_wait_after_input_snapshot(batch_input_manifest, error)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             return 1;
         }
@@ -11279,7 +11364,7 @@ int main(int argc, char** argv) {
         }
         return 0;
     }
-    if (!qcc_test_wait_after_input_snapshot(error)) {
+    if (!qcc_test_wait_after_input_snapshot(manifest, error)) {
         fprintf(stderr, "error: %s\n", error.c_str());
         return 1;
     }
@@ -11436,9 +11521,9 @@ int main(int argc, char** argv) {
             }
         }
     } else if (is_split_module) {
-        // Compile split module directory
+        // Compile split module directory; the depfile of a .qmod lists everything the module depends on
         std::vector<std::string> dep_module_files;
-        qore_aot_set_module_dep_sink(&dep_module_files);
+        qcc_set_module_dep_sink(&dep_module_files, output);
         bool ok = QoreAOT::compileSeparatedModule(
                 source_file,
                 output,
@@ -11463,7 +11548,7 @@ int main(int argc, char** argv) {
             // Leave `source` empty so the target dir is not double-listed.
             // Dependency modules use the selected deterministic depfile form.
             std::vector<std::string> module_deps =
-                qcc_module_depfile_inputs(dep_module_files);
+                qcc_module_depfile_inputs(dep_module_files, qcc_output_is_qmod(output));
             if (depfile_path
                     && !write_depfile(depfile_path, qcc_depfile_target(output),
                                       std::string(), source_file,
@@ -11472,9 +11557,9 @@ int main(int argc, char** argv) {
             }
         }
     } else if (module_mode) {
-        // Compile single-file module
+        // Compile single-file module; the depfile of a .qmod lists everything the module depends on
         std::vector<std::string> dep_module_files;
-        qore_aot_set_module_dep_sink(&dep_module_files);
+        qcc_set_module_dep_sink(&dep_module_files, output);
         bool ok = QoreAOT::compileModule(
                 source_text.c_str(), (int)source_text.size(),
                 source_file,
@@ -11497,7 +11582,7 @@ int main(int argc, char** argv) {
             }
             // deps = the .qm file plus dependency modules in the selected form.
             std::vector<std::string> module_deps =
-                qcc_module_depfile_inputs(dep_module_files);
+                qcc_module_depfile_inputs(dep_module_files, qcc_output_is_qmod(output));
             if (depfile_path && !write_depfile(depfile_path, qcc_depfile_target(output),
                                                source_file, nullptr,
                                                &module_deps, qcc_output_is_qmod(output))) {

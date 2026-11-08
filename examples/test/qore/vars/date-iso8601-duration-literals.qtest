@@ -4,7 +4,7 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
+%requires QUnit
 %exec-class DateIso8601DurationLiteralsTest
 
 #! ISO 8601 duration literals: the parser reads them as date(string) reads duration strings

@@ -26,9 +26,9 @@
 %enable-all-warnings
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/ParseOptions.qm
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/QUnit.qm
+%requires ParseOptions
+%requires FsUtil
+%requires QUnit
 %requires i18n
 %requires json
 

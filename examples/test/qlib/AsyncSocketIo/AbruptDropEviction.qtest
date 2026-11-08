@@ -7,9 +7,9 @@
 %enable-all-warnings
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/AsyncSocketIo
+%requires QUnit
+%requires Logger
+%requires AsyncSocketIo
 
 %exec-class AbruptDropEvictionTest
 

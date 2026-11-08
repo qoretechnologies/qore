@@ -35,16 +35,51 @@ public class CohereEmbedDataProvider inherits CohereDataProviderCommon {
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
-        static CohereEmbedRequestDataType RequestType = new CohereEmbedRequestDataType();
-        static CohereEmbedResponseDataType ResponseType = new CohereEmbedResponseDataType();
+    }
+
+    private {
+        #! The request type, built on first use; see requestType()
+        static *CohereEmbedRequestDataType request_type;
+        #! The ID of the request type's builder; see requestType()
+        static int request_type_id = DataProviderActionCatalog::registerLazyValue(
+            \CohereEmbedDataProvider::buildRequestType());
+        #! The response type, built on first use; see responseType()
+        static *CohereEmbedResponseDataType response_type;
+        #! The ID of the response type's builder; see responseType()
+        static int response_type_id = DataProviderActionCatalog::registerLazyValue(
+            \CohereEmbedDataProvider::buildResponseType());
+    }
+
+    #! Returns the request type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static CohereEmbedRequestDataType requestType() {
+        return request_type ?? (request_type = DataProviderActionCatalog::getLazyValue(request_type_id));
+    }
+
+    #! Builds the request type; see requestType()
+    private static CohereEmbedRequestDataType buildRequestType() {
+        return new CohereEmbedRequestDataType();
+    }
+
+    #! Returns the response type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static CohereEmbedResponseDataType responseType() {
+        return response_type ?? (response_type = DataProviderActionCatalog::getLazyValue(response_type_id));
+    }
+
+    #! Builds the response type; see responseType()
+    private static CohereEmbedResponseDataType buildResponseType() {
+        return new CohereEmbedResponseDataType();
     }
 
     constructor(RestClientIo::RestClientIo rest) : CohereDataProviderCommon(rest) {}
     constructor(*hash<auto> options) : CohereDataProviderCommon(options) {}
 
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
-    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return requestType(); }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return responseType(); }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     #! Forwards the embedding request to Cohere's <tt>/v2/embed</tt> endpoint

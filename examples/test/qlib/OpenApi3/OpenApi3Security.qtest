@@ -4,8 +4,8 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires json
-%requires ../../../../qlib/OpenApi3.qm
-%requires ../../../../qlib/QUnit.qm
+%requires OpenApi3
+%requires QUnit
 %exec-class OpenApi3SecurityTest
 
 class OpenApi3SecurityTest inherits QUnit::Test {

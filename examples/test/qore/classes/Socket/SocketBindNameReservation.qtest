@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - port reservation across IPv4/IPv6 families and SO_REUSEADDR bind rules of the kernel
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved

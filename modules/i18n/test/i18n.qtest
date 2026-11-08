@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - locale data, collation and plural rules from the ICU library as built on macOS
 
 /*  i18n.qtest Copyright 2026 Qore Technologies, s.r.o.
     MIT License

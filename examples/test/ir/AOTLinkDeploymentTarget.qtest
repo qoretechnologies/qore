@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - macOS deployment target in the LC_BUILD_VERSION of qcc executables and modules
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 

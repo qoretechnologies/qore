@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - kqueue removal of write-only registrations and regular files as extra poll descriptors
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

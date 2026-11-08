@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - non-blocking stream reads and peer resets (RST_STREAM, STOP_SENDING) over HTTP/2 and 3
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 /*

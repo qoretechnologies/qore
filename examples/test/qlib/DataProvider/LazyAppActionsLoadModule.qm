@@ -1,0 +1,32 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# LazyAppActionsLoadModule.qm - test module whose initialization reads an app another thread initializes
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+
+module LazyAppActionsLoadModule {
+    version = "1.0";
+    desc = "test module whose initialization reads the catalog";
+    author = "Qore Technologies";
+    license = "MIT";
+    init = sub () {
+        # the test registers a pending app whose initialization does what the test needs while this module loads
+        LazyAppActionsLoadModule::Hook::run();
+    };
+}
+
+#! The test module's initialization
+public namespace LazyAppActionsLoadModule {
+public class Hook {
+    #! Reads the pending app that the test names in the environment, which runs the test's code in this thread
+    static run() {
+        # the environment of the process, not the copy that the module's Program was created with
+        if (*string hook = getenv("LAZY_APP_ACTIONS_LOAD_HOOK")) {
+            DataProviderActionCatalog::getApp(hook);
+        }
+    }
+}
+}

@@ -559,6 +559,33 @@ class Test {
 
     @note Static class variables cannot have the same name as class constants.
 
+    @par Static Class Variables Shared by Programs
+    The static class variables of a public class are shared by the @ref Qore::Program "Program" objects that inherit
+    the class.  Their values are released, and the destructors of the objects they hold run, when the program that
+    defines the class releases them, when its data is cleared at exit or when it is deleted, even if other programs
+    still share them: the code of the class cannot run once its program has been deleted, and reading or assigning
+    the variables from another program afterwards raises a \c PROGRAM-ERROR exception, as calling the methods of the
+    class does.  Code of the program that defines the class (a destructor run while the values are released, for
+    example) sees \c NOTHING in the variables whose values have been released.  A program that inherits the class
+    from another program, and outlives the program that defines it, must therefore not use its static variables
+    afterwards.  If no program sharing the values is the one that defines the class, the last of them to release
+    them releases them.\n\n
+    A program created while a program's data is cleared (by such a destructor, for example) inherits that program's
+    public classes, but does not share the values of their static variables: it sees them until they are released,
+    and reading or assigning them afterwards raises a \c PROGRAM-ERROR exception.\n\n
+    A program stored in a static variable of a public class that it shares is released with the values, so it does
+    not keep itself alive:
+    @code{.py}
+public class D {
+    public {
+        static *Program p;
+    }
+}
+
+# the program shares D's static variables, and is deleted when this program is deleted
+D::p = new Program(PO_NEW_STYLE);
+    @endcode
+
     @section class_members Class Members
 
     @subsection public_members Public Member Declarations

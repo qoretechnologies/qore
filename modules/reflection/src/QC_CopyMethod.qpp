@@ -134,6 +134,10 @@ object CopyMethod::call(object obj) {
     if (check_constructor(caller, cls, m->pgm, xsink)) {
         return QoreValue();
     }
+    // the access of the copy method, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, m->m, xsink)) {
+        return QoreValue();
+    }
     QoreReflectionCallCheckHelper call_check(caller, m->pgm);
     return cls->execCopy(obj, xsink);
 }

@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qcc .qmod Mach-O __qore_modinfo section, codesign, strip, fat binaries and dylib loading
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -161,13 +162,15 @@ public namespace MetaMod {
                 "size": int(m[2]),
                 "dependencies": (),
                 "optional": (),
+                "compiled_with": (),
             };
             int i = $# + 1;
             *list<*string> name = (lines[i++] =~ x/^    module: (.*)$/);
             assertTrue(exists name, "the module name follows: " + dump);
             rv.module = name[0];
-            foreach string key in (("dependencies", "optional")) {
-                *list<*string> count = (lines[i++] =~ x/^    (?:dependencies|unavailable optional modules): ([0-9]+)$/);
+            foreach string key in (("dependencies", "optional", "compiled_with")) {
+                *list<*string> count = (lines[i++]
+                    =~ x/^    (?:dependencies|unavailable optional modules|compiled with): ([0-9]+)$/);
                 assertTrue(exists count, "the " + key + " count follows: " + dump);
                 for (int j = 0, int n = int(count[0]); j < n; ++j) {
                     *list<*string> entry = (lines[i++] =~ x/^      (.*)$/);
@@ -306,9 +309,11 @@ public namespace MetaMod {
         assertEq("MetaMod", info.module);
         assertEq(("MetaDep",), info.dependencies);
         assertEq(("MetaMissing >= 1.0",), info.optional);
+        # the modules the module was compiled with, by name, which the loader checks
+        assertEq(("MetaDep",), info.compiled_with);
         binary data = readFile(qmod);
         assertEq(RecordMagic, getLe32(data, info.offset), "the record starts with its magic number");
-        assertEq(1, getLe32(data, info.offset + 4), "the record has format version 1");
+        assertEq(2, getLe32(data, info.offset + 4), "the record has format version 2");
         assertEq(info.size - 12, getLe32(data, info.offset + 8), "the record gives the size of its payload");
 
         if (PlatformOS == "Darwin") {
@@ -483,8 +488,8 @@ public namespace MetaMod {
         list<hash<auto>> cases = (
             {"offset": info.offset, "data": le32(0x58414d49), "error": "the record has an invalid magic number "
                 "0x58414d49; the file is damaged"},
-            {"offset": info.offset + 4, "data": le32(2), "error": "the record has format version 2, but this Qore "
-                "runtime reads version 1; rebuild the module with the qcc of this Qore installation"},
+            {"offset": info.offset + 4, "data": le32(1), "error": "the record has format version 1, but this Qore "
+                "runtime reads version 2; rebuild the module with the qcc of this Qore installation"},
             {"offset": info.offset + 8, "data": le32(info.size - 11), "error": "the record gives a size of "
                 + (info.size - 11) + " bytes, but holds " + (info.size - 12) + "; the file is damaged"},
             {"offset": info.offset + 12, "data": le32(0), "error": "the record has an invalid module name; the "

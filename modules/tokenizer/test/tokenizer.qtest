@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - tokenizing with the PCRE2 and utf8proc native libraries as built on macOS
 
 /*  tokenizer.qtest Copyright 2026 Qore Technologies, s.r.o.
     MIT License
@@ -7,8 +8,9 @@
 
 %modern
 
-%requires ../../../qlib/Util.qm
-%requires ../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires Util
+%requires QUnit
 
 %prepend-module-path "${SCRIPT_DIR}/../../../build/modules/tokenizer"
 

@@ -38,6 +38,8 @@ class ThreadExitProgramReleaseTest inherits QUnit::Test {
         addTestCase("a thread exits after a Program it ran code in was deleted", \deleteBeforeThreadExit());
         addTestCase("a hold for another Program does not hold the thread", \holdForOtherProgram());
         addTestCase("hold usage errors", \holdErrors());
+        addTestCase("a thread's data is released when the Program it ran code in was deleted first",
+            \threadDataReleasedAfterDelete());
         set_return_value(main());
     }
 
@@ -93,6 +95,42 @@ printf(\"rv=%d deleted=%y\\n\", rv, !exists t);
 ");
         assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
         assertRegex("rv=1 deleted=True", r.output, sprintf("the thread ran code in the Program: %s", r.output));
+    }
+
+    #! the thread's data is released at its exit when the Program it ran code in was deleted before
+    /** The Program's entry for the thread holds a reference to the thread's data; the Program released it when its
+        data was cleared only if the thread had not ended its use of the Program, so the data of a thread that exited
+        after the Program was deleted was never released
+    */
+    threadDataReleasedAfterDelete() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the thread data count requires a debug build");
+        }
+        hash<auto> r = runChild("%modern
+%no-child-restrictions
+
+int base = call_function(\"dbg_get_thread_program_data_count\");
+Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+t.parse(\"our int calls = 0; int sub f() { return ++calls; }\", \"t\");
+Counter called(1);
+Counter gone(1);
+int rv;
+background sub () {
+    rv = t.callFunction(\"f\");
+    called.dec();
+    gone.waitForZero();
+}();
+called.waitForZero();
+int running = call_function(\"dbg_get_thread_program_data_count\") - base;
+delete t;
+gone.dec();
+# the thread's data is released when the thread has exited
+bool released = call_function(\"dbg_wait_thread_program_data_count\", base, " + StepTimeout + ");
+printf(\"rv=%d running=%d released=%y\\n\", rv, running, released);
+");
+        assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
+        assertRegex("rv=1 running=1 released=True", r.output,
+            sprintf("the data of the thread was released after it exited: %s", r.output));
     }
 
     #! a hold armed for one Program lets the thread release every other Program without stopping
