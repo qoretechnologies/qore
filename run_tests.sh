@@ -471,11 +471,38 @@ fi
 # that has ended meanwhile
 . "$BASE_TEST_PATH/docker_test/ci-job-processes.sh"
 
+# Prints the processes that descend from this runner (Linux only): its children, theirs, and so on
+runner_descendants() {
+    awk -v root=$$ '
+        FNR == 1 { pid = FILENAME; sub(/^\/proc\//, "", pid); sub(/\/status$/, "", pid) }
+        /^PPid:/ { parent[pid] = $2; nextfile }
+        END {
+            found[root] = 1
+            # each pass adds the children of the processes found so far, until a pass adds none
+            do {
+                added = 0
+                for (p in parent) {
+                    if (!(p in found) && (parent[p] in found)) {
+                        found[p] = 1
+                        added = 1
+                    }
+                }
+            } while (added)
+            for (p in found) {
+                if (p != root) {
+                    printf "%s ", p
+                }
+            }
+        }' /proc/[0-9]*/status 2>/dev/null
+}
+
 # Sets TEST_SURVIVORS to the processes the current test started that are still running (Linux only).  Every process a
 # test starts, and every process those start, inherits QORE_TEST_PROCESS_MARK in its environment, also when it
 # leaves the test's session or is adopted by another parent, so a process that still has it when the test has ended
-# was not ended by the test.  Any other process that holds the output of the tests as its standard output or error,
-# such as one a test started with an environment of its own, is one too.
+# was not ended by the test.  Any other process that descends from this runner and holds the output of the tests as
+# its standard output or error, such as one a test started with an environment of its own, is one too: only one that
+# descends from it, as other runners (the shards of one job) can share the output and are no survivors of this one's
+# tests (a process without the mark that left this runner's process tree is not found).
 find_test_survivors() {
     TEST_SURVIVORS=""
     if [ ! -r /proc/self/environ ]; then
@@ -484,7 +511,7 @@ find_test_survivors() {
     if [ -n "$TEST_OUTPUT_PIPES" ]; then
         # the commands that look for them must not hold the output themselves
         TEST_SURVIVORS=`{ ls -l /proc/[0-9]*/fd/1 /proc/[0-9]*/fd/2 | awk -v pipes="$TEST_OUTPUT_PIPES" \
-            -v own="$RUN_TESTS_ANCESTORS" 'BEGIN {
+            -v own="$RUN_TESTS_ANCESTORS" -v descendants="$(runner_descendants)" 'BEGIN {
                 n = split(pipes, list, " ")
                 for (i = 1; i <= n; ++i) {
                     pipe[list[i]] = 1
@@ -493,10 +520,14 @@ find_test_survivors() {
                 for (i = 1; i <= n; ++i) {
                     skip[list[i]] = 1
                 }
+                n = split(descendants, list, " ")
+                for (i = 1; i <= n; ++i) {
+                    mine[list[i]] = 1
+                }
             }
             $(NF - 1) == "->" && ($NF in pipe) {
                 split($(NF - 2), path, "/")
-                if (!(path[3] in skip) && !(path[3] in seen)) {
+                if ((path[3] in mine) && !(path[3] in skip) && !(path[3] in seen)) {
                     seen[path[3]] = 1
                     printf "%s ", path[3]
                 }
@@ -658,61 +689,97 @@ remove_runner_files() {
 }
 trap remove_runner_files 0
 # The test that runs and its watchdog (see run_with_watchdog()), while one runs; *_starting is 1 from just before the
-# process is started until its ID is recorded, so that the trap below takes it from $! in that window
+# process is started until its ID is recorded, so that the trap below takes it from $! in that window if $! has
+# changed since the flag was set (*_before_pid, $! then: the previous test's watchdog, for example)
 test_pid=""
 test_starting=0
+test_before_pid=""
 watchdog_pid=""
 watchdog_starting=0
+watchdog_before_pid=""
+# Ends the processes the current test left (QORE_TEST_PROCESS_MARK, Linux only), except the given test process
+end_test_survivors() {
+    if [ -z "$TEST_PROCESS_MARK" ]; then
+        return
+    fi
+    find_test_survivors "$TEST_PROCESS_MARK"
+    if [ -z "$TEST_SURVIVORS" ]; then
+        return
+    fi
+    runner_survivors=""
+    while read -r kind pid cmd; do
+        case "$kind" in
+            watcher|running)
+                if [ "$pid" != "$1" ]; then
+                    runner_survivors="$runner_survivors $pid"
+                fi
+                ;;
+        esac
+    done <<EOF
+`qore_ci_running_processes $TEST_SURVIVORS`
+EOF
+    if [ -n "$runner_survivors" ]; then
+        kill -KILL $runner_survivors 2>/dev/null
+    fi
+}
 # Ends the runner for a signal (the name and the number): a shell does not run its EXIT trap when a signal ends it, so
-# this does what the end of a run does.  The test that runs is sent the signal (SIGTERM for SIGINT, which a command
-# that a non-interactive shell runs in the background ignores, so that a SIGINT from a terminal does not reach it
-# either), and its watchdog is told that the run is interrupted: it then ends the test with SIGKILL if it has not ended
-# within TEST_INTERRUPT_WAIT seconds (a test that handles the signal and hangs), and is stopped once the test has
-# ended and been waited for, as at the end of a test.  Left running, the watchdog would end a process minutes later
-# that may have reused the test's process ID; stopping it also ends its FIFO reader, which GNU timeout runs in a
-# process group of its own, where a SIGHUP from a terminal does not reach it.  The processes the test left are ended
-# as after any test.  Then the runner ends by the signal itself, so that its caller (a loop in bash, for example) sees
-# why.  A test that runs in the foreground (without the watchdog) is waited for before a trap runs, as a shell
-# defers traps until its foreground command has ended.
+# this does what the end of a run does, in this order:
+# - the watchdog of the test that runs is stopped ("exit" on its FIFO, which ends it in every phase without ending
+#   the test, and ends its FIFO reader, which GNU timeout runs in a process group of its own, where a SIGHUP from a
+#   terminal does not reach it): left running, it would end a process minutes later that may have reused the test's
+#   process ID;
+# - the processes the test left are ended at once (a CI executor may end the job soon after the signal);
+# - the test is sent the signal (SIGTERM for SIGINT, which a command that a non-interactive shell runs in the
+#   background ignores, so that a SIGINT from a terminal does not reach it either) and waited for, for at most
+#   TEST_INTERRUPT_WAIT seconds: a helper waits that long for the trap to report that the test has ended, and sends
+#   it SIGKILL if it has not (a test that handles the signal and hangs);
+# - what the test left meanwhile is ended, and the files are removed;
+# - the runner ends by the signal itself, so that its caller (a loop in bash, for example) sees why.
+# A test that runs in the foreground (without the watchdog) is waited for before a trap runs, as a shell defers traps
+# until its foreground command has ended.
 runner_signaled() {
-    if [ -z "$test_pid" ] && [ $test_starting -eq 1 ]; then
+    if [ -z "$test_pid" ] && [ $test_starting -eq 1 ] && [ "$!" != "$test_before_pid" ]; then
         test_pid=$!
     fi
-    if [ -z "$watchdog_pid" ] && [ $watchdog_starting -eq 1 ] && [ "$!" != "$test_pid" ]; then
+    if [ -z "$watchdog_pid" ] && [ $watchdog_starting -eq 1 ] && [ "$!" != "$watchdog_before_pid" ]; then
         watchdog_pid=$!
-    fi
-    if [ -n "$test_pid" ]; then
-        if [ -n "$watchdog_pid" ]; then
-            echo interrupted >&4 2>/dev/null
-        fi
-        if [ "$1" = INT ]; then
-            kill -TERM $test_pid 2>/dev/null
-        else
-            kill -$1 $test_pid 2>/dev/null
-        fi
-        wait $test_pid 2>/dev/null
-        test_pid=""
     fi
     if [ -n "$watchdog_pid" ]; then
         echo exit >&4 2>/dev/null
         wait $watchdog_pid 2>/dev/null
         watchdog_pid=""
     fi
-    if [ -n "$TEST_PROCESS_MARK" ]; then
-        find_test_survivors "$TEST_PROCESS_MARK"
-        if [ -n "$TEST_SURVIVORS" ]; then
-            runner_survivors=""
-            while read -r kind pid cmd; do
-                case "$kind" in
-                    watcher|running) runner_survivors="$runner_survivors $pid" ;;
-                esac
-            done <<EOF
-`qore_ci_running_processes $TEST_SURVIVORS`
-EOF
-            if [ -n "$runner_survivors" ]; then
-                kill -KILL $runner_survivors 2>/dev/null
-            fi
+    end_test_survivors "$test_pid"
+    if [ -n "$test_pid" ]; then
+        if [ "$1" = INT ]; then
+            kill -TERM $test_pid 2>/dev/null
+        else
+            kill -$1 $test_pid 2>/dev/null
         fi
+        # the helper reads the trap's report that the test has ended from a FIFO of the runner's own, for at most
+        # TEST_INTERRUPT_WAIT seconds; the FIFO is open for reading and writing here, so that neither side blocks
+        interrupt_fifo="$TEST_EVENT_DIR/interrupt"
+        interrupt_helper=""
+        if [ -n "$TIMEOUT_CMD" ] && mkfifo "$interrupt_fifo" 2>/dev/null && (exec 5<>"$interrupt_fifo") 2>/dev/null; then
+            exec 5<>"$interrupt_fifo"
+            (
+                if ! $TIMEOUT_CMD $TEST_INTERRUPT_WAIT sh -c 'read -r ended' <&5 2>/dev/null; then
+                    echo "*** the run is interrupted, and the test did not end within ${TEST_INTERRUPT_WAIT}s:" \
+                        "SIGKILL sent ***"
+                    kill -KILL $test_pid 2>/dev/null
+                fi
+            ) &
+            interrupt_helper=$!
+        fi
+        wait $test_pid 2>/dev/null
+        test_pid=""
+        if [ -n "$interrupt_helper" ]; then
+            echo ended >&5
+            wait $interrupt_helper 2>/dev/null
+            exec 5>&-
+        fi
+        rm -f "$interrupt_fifo"
+        end_test_survivors
     fi
     remove_runner_files
     trap - 0 $1
@@ -825,12 +892,14 @@ run_with_watchdog() {
         WATCHDOG_TEST_EXIT=$?
         return $WATCHDOG_TEST_EXIT
     fi
+    test_before_pid=$!
     test_starting=1
     QORE_TEST_EVENT_FIFO="$TEST_EVENT_FIFO" "$@" 4>&- &
     test_pid=$!
     test_starting=0
     # The watchdog reads the test's events until its time limit, and ends the test when the limit has passed.  Its exit
     # status has bit 0 set if the limit has passed, and bit 1 if its read of the FIFO failed.
+    watchdog_before_pid=$!
     watchdog_starting=1
     (
         status=0
@@ -906,20 +975,10 @@ event $1
                 END { exit !(threads > 0 && (caught || blocked == threads)) }'
         }
 
-        watchdog_wait $limit exit interrupted
-        watchdog_rc=$?
-        # the run is interrupted (see runner_signaled()): the runner has sent the test a signal; it is ended if it
-        # does not end in time
-        if [ $watchdog_rc -eq 0 ] && watchdog_got interrupted && ! watchdog_got exit; then
-            if ! watchdog_wait $TEST_INTERRUPT_WAIT exit; then
-                echo "*** the run is interrupted, and the test did not end within ${TEST_INTERRUPT_WAIT}s: SIGKILL" \
-                    "sent ***"
-                kill -KILL $test_pid 2>/dev/null
-            fi
-            exit $status
-        fi
-        # the test has ended, or the read failed before the time limit: the test is not ended for that
-        if [ $watchdog_rc -ne 1 ]; then
+        watchdog_wait $limit exit
+        # the test has ended, or the read failed before the time limit: the test is not ended for that (an
+        # interrupted run stops the watchdog with "exit" too, in this phase or any later one; see runner_signaled())
+        if [ $? -ne 1 ]; then
             exit $status
         fi
         status=$((status | 1))
