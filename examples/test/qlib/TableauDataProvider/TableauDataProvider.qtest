@@ -128,6 +128,21 @@ class CountingTableauRestClientIo inherits TableauRestClient::TableauRestClientI
     }
 }
 
+#! A Tableau data provider that records its waits for the rate limit instead of waiting
+class RecordingTableauDataProvider inherits TableauDataProvider::TableauDataProvider {
+    public {
+        #! the waits for the rate limit, in order
+        list<date> waits = ();
+    }
+
+    constructor(TableauRestClient::TableauRestClientIo rest) : TableauDataProvider(rest) {
+    }
+
+    private waitForRateLimit(date delay) {
+        waits += delay;
+    }
+}
+
 public class TableauDataProviderTest inherits QUnit::Test {
     private {
         #! Tableau REST client for integration tests
@@ -1040,13 +1055,16 @@ public class TableauDataProviderTest inherits QUnit::Test {
         assertEq("api/3.27/auth/signin", handler.requests[1].path);
         assertEq("session-2", handler.requests[2].auth);
 
-        # a rate-limited request is retried after the time given by the server
+        # a rate-limited request is retried after the time given by the server; a provider that records its waits
+        # instead of waiting makes the request with the same client
+        RecordingTableauDataProvider recording(rest);
         handler.requests = ();
         handler.rate_limited = 1;
-        recs = map $1, projects.searchRecords();
-        assertEq(({"id": "p1", "name": "Default"},), recs);
+        assertEq(({"id": "p1", "name": "Default"},), recording.doGet("projects").projects.project);
         assertEq(2, handler.requests.size());
+        assertEq("api/3.27/sites/site-1/projects", handler.requests[1].path);
         assertEq("session-2", handler.requests[1].auth);
+        assertEq((1s,), recording.waits);
 
         # an error response is raised with the response
         try {
