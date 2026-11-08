@@ -163,6 +163,49 @@ list<Program> sub make(int n) {
 }
 ";
 
+        #! the code of the Program deleted at the same time as the Programs sharing its class in different threads
+        /** The last one to release the static variables runs a destructor that creates a Program; the children read
+            the static variables while the Programs are deleted
+        */
+        const ParallelGuardSrc = "
+public class Guard {
+    destructor() {
+        try {
+            Program p(PO_NEW_STYLE);
+            p.parse(\"int sub get() { return Holder::value(); }\", \"guard\");
+            p.callFunction(\"get\");
+        } catch (hash<ExceptionInfo> ex) {
+            # the Program of the class can be deleted
+        }
+    }
+}
+
+public class Holder {
+    public {
+%s        static Guard guard = new Guard();
+    }
+
+    static int value() {
+        return 42;
+    }
+}
+
+list<Program> sub make(int n) {
+    list<Program> rv = ();
+    for (int i = 0; i < n; ++i) {
+        Program p(PO_NEW_STYLE);
+        p.parse(\"int sub get() { int t = 0; for (int j = 0; j < 10; ++j) { t += %s; } return t; }\", \"child\");
+        rv += p;
+    }
+    return rv;
+}
+";
+
+        #! the number of static variables read by the Programs deleted with the Program of their class
+        const ParallelGuardVars = 50;
+        #! the number of iterations of the parallel deletion with the Program of the class
+        const ParallelGuardIterations = 20;
+
         #! the number of static variables of the class shared by the Programs deleted in parallel
         const ParallelVars = 400;
         #! the number of Programs deleted in parallel
@@ -251,6 +294,8 @@ int sub get() {
         addTestCase("deleted Program; the Program created by the destructor is kept in a static variable of a "
             "class it shares", \deletedProgramCycleTest());
         addTestCase("Programs sharing a class deleted in parallel", \parallelDeleteTest());
+        addTestCase("Programs sharing a class deleted in parallel with the Program of the class",
+            \parallelGuardDeleteTest());
         addTestCase("main Program at exit", \exitTest(), ("main-exit.q", ExitOutput));
         addTestCase("user module at exit", \exitTest(), ("module-exit.q", ExitOutput));
         addTestCase("main Program at exit; the Program created by the destructor shares released variables",
@@ -357,6 +402,53 @@ int sub get() {
             start.dec();
             done.waitForZero();
         }
+    }
+
+    #! The Program of a class and the Programs sharing it are deleted at the same time in different threads
+    /** The children read the static variables of the class until they are deleted; the last Program to release the
+        values runs a destructor that creates a Program, whose method call reads the source Program of the class while
+        the Program of the class releases it (a data race before it was atomic, see TSan)
+    */
+    parallelGuardDeleteTest() {
+        string vars = foldl $1 + $2, (map sprintf("        static int v%d = %d;\n", $1, $1),
+            xrange(ParallelGuardVars));
+        string reads = foldl $1 + " + " + $2, (map sprintf("Holder::v%d", $1), xrange(ParallelGuardVars));
+        string src = sprintf(ParallelGuardSrc, vars, reads);
+        int sum = foldl $1 + $2, xrange(ParallelGuardVars);
+        for (int i = 0; i < ParallelGuardIterations; ++i) {
+            Program p(PO_NEW_STYLE);
+            p.parse(src, "parallel");
+            list<Program> children = p.callFunction("make", ParallelPrograms);
+            assertEq(sum * 10, children[0].callFunction("get"));
+            Counter ready(ParallelPrograms + 1);
+            Counter start(1);
+            Counter done(ParallelPrograms + 1);
+            foreach Program child in (children) {
+                background StaticVarReleaseTest::runAndDeleteProgram(child, ready, start, done);
+            }
+            background StaticVarReleaseTest::deleteProgram(p, ready, start, done);
+            # only the threads reference the Programs now
+            remove p;
+            children = ();
+            ready.waitForZero();
+            start.dec();
+            done.waitForZero();
+        }
+    }
+
+    #! reads the static variables in the Program, then deletes it, once all the threads have started
+    private static runAndDeleteProgram(Program p, Counter ready, Counter start, Counter done) {
+        on_exit done.dec();
+        ready.dec();
+        start.waitForZero();
+        try {
+            for (int i = 0; i < 3; ++i) {
+                p.callFunction("get");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the values can have been released
+        }
+        delete p;
     }
 
     #! deletes the Program once all the threads deleting Programs have started

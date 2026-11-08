@@ -3230,15 +3230,13 @@ CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, 
     // #3390).  AOTSmoke (221/221) and the IR suite (49/49) confirm ca3139789's AOT protection
     // lives in its getProgram() change, not in this gating.
     QoreProgram* call_program_context;
-    if (c && c->spgm) {
-        call_program_context = c->spgm;
+    QoreProgram* class_spgm = c ? c->spgm.load() : nullptr;
+    if (class_spgm) {
+        call_program_context = class_spgm;
     } else if (obj) {
         call_program_context = obj->getProgram();
     } else {
         call_program_context = nullptr;
-    }
-    if (!call_program_context && c) {
-        call_program_context = c->spgm;
     }
     if (call_program_context) {
         old_call_program_context = td->call_program_context;

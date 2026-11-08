@@ -99,11 +99,18 @@ static QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreProgra
     if (!c) {
         return qore_check_pgm_context(explicit_pgm);
     }
-    if (c->spgm) {
-        return qore_check_pgm_context(c->spgm);
+    QoreProgram* spgm = c->spgm;
+    if (spgm) {
+        return qore_check_pgm_context(spgm);
     }
     if (explicit_pgm) {
         return qore_check_pgm_context(explicit_pgm);
+    }
+    // the source Program has released the class (see qore_class_private::deleteClassData()): its namespace is
+    // destroyed with it, possibly in another thread, so it is not used; the method runs in the caller's Program, as
+    // it does once the namespace has been destroyed
+    if (c->released_spgm.load()) {
+        return nullptr;
     }
     // No source Program and no explicit Program (e.g. a builtin/system class such as a Qorus
     // UserApi/ServiceApi/JobApi imported into an interface Program): only switch into the namespace's
@@ -766,7 +773,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         hash(old.hash),
         ptr(old.ptr),
         mud(old.mud ? old.mud->copy() : nullptr),
-        spgm(old.spgm && old.deref_source_program ? old.spgm->programRefSelf() : old.spgm),
+        spgm(old.spgm && old.deref_source_program ? old.spgm.load()->programRefSelf() : old.spgm.load()),
         deref_source_program(old.deref_source_program),
         from_module(old.from_module),
         lang(old.lang) {
@@ -894,10 +901,10 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         // by construction and stay weak (deref_source_program=false) — exactly
         // the existing semantics for namespace-tree copies inside one Program.
         spgm(old.spgm && (old.deref_source_program
-                || (ns && ns->getProgram() != old.spgm))
-            ? old.spgm->programRefSelf() : old.spgm),
+                || (ns && ns->getProgram() != old.spgm.load()))
+            ? old.spgm.load()->programRefSelf() : old.spgm.load()),
         deref_source_program(old.spgm && (old.deref_source_program
-                || (ns && ns->getProgram() != old.spgm))),
+                || (ns && ns->getProgram() != old.spgm.load()))),
         from_module(old.from_module),
         lang(old.lang) {
     QORE_TRACE("qore_class_private::qore_class_private(const qore_class_private& old)");
@@ -915,8 +922,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     cls->priv = this;
 
     printd(5, "qore_class_private::qore_class_private() this: %p creating copy of '%s' (old: '%s') ID:%d cls: %p " \
-        "old: %p sys: %d pgm: %p -> %p\n", this, name.c_str(), old.name.c_str(), classID, cls, old.cls, sys, old.spgm,
-        spgm);
+        "old: %p sys: %d pgm: %p -> %p\n", this, name.c_str(), old.name.c_str(), classID, cls, old.cls, sys,
+        old.spgm.load(), spgm);
 
     // issue #3368: create new type info objects as the class ptr is derived from the typeInfo object in some cases
     typeInfo = new QoreClassTypeInfo(cls, name.c_str(), path.c_str());
@@ -990,11 +997,11 @@ qore_class_private::~qore_class_private() {
     // memory can be reused for another class
     qore_bump_method_dispatch_epoch();
 
-    if (spgm) {
-        if (deref_source_program) {
-            spgm->deref(nullptr);
+    {
+        QoreProgram* p = spgm.exchange(nullptr);
+        if (p) {
+            releaseSourceProgram(p, nullptr);
         }
-        spgm = nullptr;
     }
     //assert(!spgm);
 
@@ -3265,9 +3272,8 @@ void QoreClass::setSystem() {
     // its check silently passes.
     // Note that QoreBuiltinClass(QoreProgram*, ...) assigns the source Program after calling this
     // method, so a Program supplied explicitly by a module is preserved.
-    if (priv->spgm) {
-        QoreProgram* spgm = priv->spgm;
-        priv->spgm = nullptr;
+    QoreProgram* spgm = priv->spgm.exchange(nullptr);
+    if (spgm) {
         if (priv->deref_source_program) {
             priv->deref_source_program = false;
             spgm->deref(nullptr);
@@ -4475,13 +4481,17 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
         // holds only a dependency reference to the Program).  There is then no Program to switch
         // into and the class data has already been cleared, so fail deterministically here rather
         // than running the method against a stale context.
-        if (!spgm && !ns && ns_deleted) {
+        QoreProgram* source_pgm = spgm;
+        // once the source Program has released the class (see deleteClassData()), its namespace is destroyed with
+        // it, possibly in another thread, so it is not used: the method can only be called by that Program itself
+        const QoreProgram* released = source_pgm ? nullptr : released_spgm.load();
+        if (released ? released != getProgram() : (!source_pgm && !ns && ns_deleted)) {
             xsink->raiseException("PROGRAM-ERROR", "cannot call method '%s::%s()'; the Program object "
                 "that owns class '%s' has already been deleted and therefore cannot be accessed at "
                 "runtime", name.c_str(), nme, name.c_str());
             return nullptr;
         }
-        QoreProgram* lookup_pgm = spgm ? spgm : (ns ? ns->getProgram() : pgm);
+        QoreProgram* lookup_pgm = source_pgm ? source_pgm : (released ? pgm : (ns ? ns->getProgram() : pgm));
         // Keep the owning Program alive and select its context without claiming parse ownership.
         // A module loader can own parsing while waiting for an initializer in this thread, so
         // runtime readers must only take the committed namespace's read lock, never its parse lock.

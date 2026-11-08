@@ -233,7 +233,13 @@ void QoreClassList::reset() {
 
 void QoreClassList::namespaceDeleted(const qore_ns_private* ns) {
     for (auto& i : hm) {
-        qore_class_private::get(*i.second.cls)->namespaceDeleted(ns);
+        qore_class_private* qc = qore_class_private::get(*i.second.cls);
+        // only the namespace that declared the class holds the wrapper that created it; a copy shared with another
+        // Program does not touch the class, which the other Programs can use or release at the same time in other
+        // threads
+        if (i.second.cls == qc->cls) {
+            qc->namespaceDeleted(ns);
+        }
     }
 }
 

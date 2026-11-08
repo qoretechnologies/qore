@@ -45,6 +45,7 @@
 #include "qore/vector_set"
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <deque>
 #include <list>
@@ -2393,8 +2394,19 @@ public:
     // pointer to new class when copying
     mutable QoreClass* new_copy = nullptr;
 
-    // pointer to owning program for imported classes
-    QoreProgram* spgm = nullptr;
+    //! the source Program of the class (the Program that created it, or the source of an imported class)
+    /** Atomic: method calls read it in any thread sharing the class (see qore_get_method_pgm_context()) while the
+        Program deleting its class data clears it (deleteClassData()); it is taken with exchange() when released, so
+        it is released once
+    */
+    std::atomic<QoreProgram*> spgm{nullptr};
+
+    //! the source Program that released the class with deleteClassData(), for identification only
+    /** Set before spgm is cleared there: from then on, the namespace of the class is destroyed with that Program in
+        its thread, so method calls in other threads do not use it (see qore_get_method_pgm_context() and
+        getMethodForEval()); never dereferenced
+    */
+    std::atomic<const QoreProgram*> released_spgm{nullptr};
 
     // if the souorce program should be dereference when the class is destroyed
     bool deref_source_program = true;
@@ -3478,24 +3490,32 @@ public:
         */
         // the source Program releases itself before its reference in data_refs, so that the Program that releases the
         // last one, possibly in another thread, does not release it again
-        if (spgm && spgm == pgm) {
-            releaseSourceProgram(xsink);
+        if (pgm && spgm.load() == pgm) {
+            released_spgm.store(pgm);
+            QoreProgram* expected = const_cast<QoreProgram*>(pgm);
+            if (spgm.compare_exchange_strong(expected, nullptr)) {
+                releaseSourceProgram(expected, xsink);
+            }
         }
         if (deref_data && data_refs.ROdereference()) {
             vars.del(xsink);
-            if (spgm) {
-                releaseSourceProgram(xsink);
+            QoreProgram* p = spgm.load();
+            if (p) {
+                released_spgm.store(p);
+                p = spgm.exchange(nullptr);
+                if (p) {
+                    releaseSourceProgram(p, xsink);
+                }
             }
         }
     }
 
-    //! Releases the source Program of the class
-    DLLLOCAL void releaseSourceProgram(ExceptionSink* xsink) {
-        assert(spgm);
+    //! Releases the source Program of the class, which has been taken from spgm
+    DLLLOCAL void releaseSourceProgram(QoreProgram* p, ExceptionSink* xsink) {
+        assert(p);
         if (deref_source_program) {
-            spgm->deref(xsink);
+            p->deref(xsink);
         }
-        spgm = nullptr;
     }
 
     /*
