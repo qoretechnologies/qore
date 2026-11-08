@@ -86,28 +86,6 @@ class LifecycleWsConnection inherits WebSocketConnection {
 }
 
 class LifecycleWsHandler inherits WebSocketHandler {
-    public {
-        #! gets True for each HTTP/2 or HTTP/3 handshake with \c X-Silent, which is held and never answered
-        static Queue silent_tunnel();
-        #! gets True for each HTTP/1.1 Upgrade handshake with \c X-Silent
-        static Queue silent_upgrade();
-        #! released by the test to let the held handshakes go on
-        static Counter silent_release(1);
-    }
-
-    #! holds an HTTP/2 or HTTP/3 handshake with \c X-Silent before it is answered
-    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
-        if (exists hdr."x-silent") {
-            if (exists hdr.upgrade) {
-                LifecycleWsHandler::silent_upgrade.push(True);
-            } else {
-                LifecycleWsHandler::silent_tunnel.push(True);
-                LifecycleWsHandler::silent_release.waitForZero(LifecycleWsClient::HandoffTimeout * 2);
-            }
-        }
-        return WebSocketHandler::handleRequest(cx, hdr, b);
-    }
-
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
         LifecycleWsConnection c(self, exists hdr."x-greet");
         c.discord = exists hdr."x-discord";
@@ -185,6 +163,17 @@ class LifecycleWsClient inherits WebSocketClient {
 
         #! report a thread that waits for an action
         bool report_action_wait = False;
+
+        #! hold the next read of a handshake response of an HTTP/2 or HTTP/3 connect, after its request was sent
+        bool hold_tunnel_read = False;
+        #! released by the test to let the held read go on
+        Counter release_tunnel_read(1);
+        #! report each HTTP/1.1 Upgrade connect, and the destructor's cancel of the handshakes
+        bool report_h1_upgrade = False;
+        #! the next connectAsync() returns only once its worker holds the next tunnel read (see hold_tunnel_read)
+        bool defer_taken = False;
+        #! the Counter that the deferred connectAsync() waits for
+        *Counter deferred_taken;
 
         #! hold the next connect of a reconnect thread in its handshake, with the client's lock held
         bool hold_reconnect_handshake = False;
@@ -333,6 +322,46 @@ class LifecycleWsClient inherits WebSocketClient {
             release_before_open.waitForZero(HandoffTimeout);
         }
         WebSocketClient::runInitialDrain(c);
+    }
+
+    private connectAsyncWorker(*hash<auto> opts, *Queue ready_queue, *Counter taken) {
+        if (taken && defer_taken) {
+            defer_taken = False;
+            deferred_taken = taken;
+            Counter inner(1);
+            WebSocketClient::connectAsyncWorker(opts, ready_queue, inner);
+            return;
+        }
+        WebSocketClient::connectAsyncWorker(opts, ready_queue, taken);
+    }
+
+    private auto readHandshakeResponse() {
+        if (hold_tunnel_read && !(hcio_stream instanceof HttpClientIo::Http1ClientStreamHandle)) {
+            hold_tunnel_read = False;
+            # connectAsync() returns only now, while this thread holds the client's lock
+            if (deferred_taken) {
+                (remove deferred_taken).dec();
+            }
+            events.push("tunnel-read-held");
+            if (release_tunnel_read.waitForZero(HandoffTimeout)) {
+                events.push("tunnel-read-expired");
+            }
+        }
+        return WebSocketClient::readHandshakeResponse();
+    }
+
+    private hash<auto> connectHttp1WebSocketViaHcio(hash<auto> hdr, *reference<hash<auto>> info, *bool reconnect) {
+        if (report_h1_upgrade) {
+            events.push("h1-upgrade");
+        }
+        return WebSocketClient::connectHttp1WebSocketViaHcio(hdr, \info, reconnect);
+    }
+
+    private cancelHandshakeForDestroy() {
+        WebSocketClient::cancelHandshakeForDestroy();
+        if (report_h1_upgrade) {
+            events.push("handshake-canceled");
+        }
     }
 
     private waitLibraryThreads() {
@@ -2152,25 +2181,38 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         if (!ports.h2) {
             testSkip("h2 listener not available");
         }
-        on_exit if (LifecycleWsHandler::silent_release.getCount()) {
-            LifecycleWsHandler::silent_release.dec();
-        }
         LifecycleWsClient c(sub (*data msg) {}, {"url": "wss://localhost:" + ports.h2, "http_version": "auto",
-            "ssl_verify_cert": False, "logger": logger, "timeout": LifecycleWsClient::HandoffTimeout * 4,
-            "connect_timeout": LifecycleWsClient::HandoffTimeout * 4});
+            "ssl_verify_cert": False, "logger": logger});
+        Queue events = c.events;
+        Counter release = c.release_tunnel_read;
+        on_exit if (release.getCount()) {
+            release.dec();
+        }
+        c.hold_tunnel_read = True;
+        c.report_h1_upgrade = True;
+        c.defer_taken = True;
         Queue ready();
-        c.connectAsync({"hdr": {"X-Silent": "1"}}, ready);
-        assertTrue(LifecycleWsHandler::silent_tunnel.get(LifecycleWsClient::HandoffTimeout),
-            "the extended CONNECT reached the server, which holds it");
+        # connectAsync() returns while its worker, holding the client's lock, waits for the handshake response
+        c.connectAsync(NOTHING, ready);
+        # the extended CONNECT was sent; its response is not read yet
+        assertEq("tunnel-read-held", events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq(0, events.size(), "connectAsync() did not wait for the held handshake");
         Queue deleted();
         background TestThreads::run(sub () {
             delete c;
             deleted.push(True);
         });
+        assertEq("handshake-canceled", events.get(LifecycleWsClient::HandoffTimeout));
+        # the destructor waits for the connect, which now reads the response of its canceled handshake
+        release.dec();
         assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout), "the client is destroyed");
         auto r = ready.get(LifecycleWsClient::HandoffTimeout);
-        assertEq("WEBSOCKET-ERROR", r.error.err, "the handshake was canceled");
-        assertEq(0, LifecycleWsHandler::silent_upgrade.size(), "no HTTP/1.1 Upgrade request was made");
+        assertEq("WEBSOCKET-ERROR", r.error.err, sprintf("the handshake was canceled: %y", r));
+        list<string> rest = ();
+        while (events.size()) {
+            rest += events.get();
+        }
+        assertEq((), (select rest, $1 == "h1-upgrade"), sprintf("no HTTP/1.1 Upgrade request was made: %y", rest));
     }
 
     #! The client is destroyed while its connect waits for the server's TLS handshake: the destructor shuts the

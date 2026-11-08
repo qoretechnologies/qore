@@ -1731,13 +1731,20 @@ ws.connect();
     connectAsync(*hash<auto> opts, *Queue ready_queue) {
         opts = addAcceptHeader(opts);
 
+        # the lock is not taken again once the action was handed over: the worker holds it while it connects
+        bool locked = True;
         m.lock();
-        on_exit m.unlock();
+        on_exit if (locked) {
+            m.unlock();
+        }
 
         bool reentry = action_tid == gettid();
         acquireActionUnlocked(getConnectActionTimeout());
         # released here unless handed over to the background thread
-        on_exit releaseActionUnlocked();
+        bool handed_over = False;
+        on_exit if (!handed_over) {
+            releaseActionUnlocked();
+        }
 
         # inside an action of this thread, or on a callback thread that acts without the action (see
         # acquireActionUnlocked()): the action is not this call's to hand over; the background thread takes its own
@@ -1760,8 +1767,10 @@ ws.connect();
         # connect.
         Counter taken(1);
         startLibraryThread(sub () { connectAsyncWorker(opts, ready_queue, taken); });
+        # the worker takes the action over; this call returns once it did, without waiting for the connect
+        handed_over = True;
+        locked = False;
         m.unlock();
-        on_exit m.lock();
         taken.waitForZero();
     }
 
