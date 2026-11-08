@@ -3711,7 +3711,7 @@ static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_
         // the references of the inner Programs' managers, released on every exit
         struct ManagerRefs {
             std::vector<QoreSandboxManager*> v;
-            DLLLOCAL ~ManagerRefs() {
+            ~ManagerRefs() {
                 for (auto* m : v) {
                     m->deref(nullptr);
                 }
