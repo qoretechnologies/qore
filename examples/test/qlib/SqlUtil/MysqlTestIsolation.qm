@@ -50,6 +50,9 @@ module MysqlTestIsolation {
     database behind, so each run drops the databases of runs that are at least
     @ref TestRunIsolation::TestRun::LeftoverAge "TestRun::LeftoverAge" old, whatever their host, as does
     @ref MysqlTestIsolation::MysqlRunDatabase::dropLeftovers() "MysqlRunDatabase::dropLeftovers()" for a CI job.
+    The leftovers are dropped while a named lock of the server is held
+    (@ref MysqlTestIsolation::MysqlRunDatabase::lockLeftovers() "MysqlRunDatabase::lockLeftovers()"), as the runs of
+    the CI jobs use the same server at the same time.
 
     A database is named as @ref TestRunIsolation::TestRun::makeName() "TestRun::makeName()" names it, so no two runs
     have the same one; its creation fails if it exists.  The test's user must be allowed to create and drop databases
@@ -112,6 +115,14 @@ public class MysqlRunDatabase {
 
         #! Serializes setup and teardown
         static Mutex lck();
+    }
+
+    public {
+        #! The most seconds that lockLeftovers() waits for the lock of the leftover databases
+        const LeftoverLockTimeout = 120;
+
+        #! The name of the server-wide lock of the leftover databases (see lockLeftovers())
+        const LeftoverLockName = "qtest-mysql-leftovers";
     }
 
     #! Returns the datasource string of the run's database on the server of the given datasource string
@@ -207,8 +218,33 @@ public class MysqlRunDatabase {
         return MysqlRunDatabase::dropLeftoversIntern(ds);
     }
 
+    #! Takes the server-wide lock of the leftover databases for the session of the datasource
+    /** The leftovers are dropped while the lock is held: a test that makes a database with an old name holds it until
+        a transaction holds a lock of the database's objects, so that no run drops it in between.  The lock is a named
+        lock of the server (\c GET_LOCK()): it is held by the session, not by its transaction, until unlockLeftovers()
+        releases it or the session ends.
+
+        @throw MYSQL-LEFTOVER-LOCK-ERROR the lock was not taken in @ref LeftoverLockTimeout seconds, or could not be
+        taken
+    */
+    static lockLeftovers(Datasource ds) {
+        # 1: taken; 0: not taken in the time given; NULL: an error, such as the session being killed
+        auto rc = ds.selectRow("select get_lock(%v, %v) as rc", LeftoverLockName, LeftoverLockTimeout).rc;
+        if (rc != 1) {
+            throw "MYSQL-LEFTOVER-LOCK-ERROR", sprintf("cannot take the lock %y of the leftover test databases in %d "
+                "seconds (GET_LOCK: %y)", LeftoverLockName, LeftoverLockTimeout, rc);
+        }
+    }
+
+    #! Releases the server-wide lock of the leftover databases that lockLeftovers() took for the session
+    static unlockLeftovers(Datasource ds) {
+        ds.selectRow("select release_lock(%v) as rc", LeftoverLockName);
+    }
+
     #! Drops the databases left by test runs that are at least TestRun::LeftoverAge old, whatever their host
     private static list<string> dropLeftoversIntern(Datasource ds) {
+        MysqlRunDatabase::lockLeftovers(ds);
+        on_exit MysqlRunDatabase::unlockLeftovers(ds);
         list<string> rv = ();
         # a database that a live run (one that runs longer than its name's age tells) holds a lock of is not waited
         # for longer than this: it is dropped by a later run
