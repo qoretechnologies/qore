@@ -1140,7 +1140,8 @@ string sql = db.getDropFunctionSqlIfExists(name);
         *AbstractFunction f = getFunction(name);
         if (!f)
             return;
-        return AbstractDatabase::doDropSql(f.getDropSql(opt), "function", name, opt);
+        # the SQL, given to the callbacks of the options
+        return AbstractDatabase::doCallback(opt, f.getDropSql(opt), AC_Drop, "function", name);
     }
 
     #! returns the SQL require to drop the given procedure if it exists or @ref nothing if the named procedure does not exist
@@ -1161,7 +1162,8 @@ string sql = db.getDropProcedureSqlIfExists(name);
         *AbstractFunction f = getProcedure(name);
         if (!f)
             return;
-        return AbstractDatabase::doDropSql(f.getDropSql(opt), "procedure", name, opt);
+        # the SQL, given to the callbacks of the options
+        return AbstractDatabase::doCallback(opt, f.getDropSql(opt), AC_Drop, "procedure", name);
     }
 
     #! returns the SQL require to drop the given sequence if it exists or @ref nothing if the named sequence does not exist
@@ -1182,7 +1184,8 @@ string sql = db.getDropSequenceSqlIfExists(name);
         *AbstractSequence obj = getSequence(name);
         if (!obj)
             return;
-        return AbstractDatabase::doDropSql(obj.getDropSql(opt), "sequence", name, opt);
+        # the SQL, given to the callbacks of the options
+        return AbstractDatabase::doCallback(opt, obj.getDropSql(opt), AC_Drop, "sequence", name);
     }
 
     #! returns the SQL require to drop the given table if it exists or @ref nothing if the named table does not exist

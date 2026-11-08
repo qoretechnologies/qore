@@ -363,6 +363,13 @@ gosu qore:qore env \
     LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
     ./run_tests.sh || TEST_RC=$?
 qore_ci_resource_report "after the tests"
+# the databases, schemas and users that killed test runs (of this job or of earlier ones) left on the shared test
+# database servers; a server that cannot be reached is reported, and the cleanup never fails the job
+gosu qore:qore env \
+    QORE_MODULE_DIR="${QORE_MODULE_DIR}" \
+    QORE_MODULE_DIR_ONLY="${QORE_MODULE_DIR_ONLY}" \
+    LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
+    "${QORE_DEBUG_BINARY}" examples/test/docker_test/drop-test-run-leftovers.q || true
 
 # the cores of the processes the tests started are kept with those of the tests
 qore_ci_collect_cores "$CORE_DIR"

@@ -1,7 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
-# test-parallel: serial - it creates fixed-name objects in the shared Firebird test database
 
 %modern
 
@@ -11,6 +10,7 @@
 %requires SqlUtil
 %requires XdbcFirebirdSqlUtilBase
 %requires JdbcFirebirdSqlUtil
+%requires ./FirebirdTestIsolation.qm
 
 %try-module jni
 %define NoJni
@@ -363,7 +363,9 @@ class FirebirdBoundValuesTest inherits QUnit::Test {
         if (table) {
             return table;
         }
-        string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD ?? "";
+        # the run's own database: tests that run at the same time do not share the objects of this one
+        string connstr = FirebirdRunDatabase::getConnectionString(m_options.connstr
+            ?? ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD, "FirebirdBoundValues") ?? "";
         if (!connstr.val()) {
             testSkip("no Firebird connection; set QORE_DB_CONNSTR_JDBC_FIREBIRD or use -c");
         }

@@ -2,7 +2,6 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #
 # Copyright 2026 Qore Technologies, s.r.o.
-# test-parallel: serial - it creates fixed-name objects in the shared SQL Server/Sybase (FreeTDS) test database
 
 %modern
 
@@ -11,6 +10,7 @@
 %requires SqlUtil
 %requires MssqlSqlUtilBase
 %requires FreetdsSqlUtil
+%requires ./MssqlTestIsolation.qm
 
 %try-module freetds
 %define NO_FREETDS
@@ -79,7 +79,9 @@ class MssqlKeyAlignmentTest inherits QUnit::Test {
             testSkip("QORE_DB_CONNSTR_FREETDS is not set");
         }
         skipIfNoConnection(ENV.QORE_DB_CONNSTR_FREETDS);
-        Datasource ds(ENV.QORE_DB_CONNSTR_FREETDS);
+        # the run's own database: tests that run at the same time do not share the objects of this one
+        string connstr = MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS, "MssqlKeyAlignment");
+        Datasource ds(connstr);
         if (MssqlDatabase::isSybase(ds)) {
             testSkip("the database is Sybase, not SQL Server");
         }

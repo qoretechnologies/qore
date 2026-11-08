@@ -342,7 +342,14 @@ public class SqlTestBase inherits QUnit::Test {
         }
         assertTrue(commit_error ? True : False, "an unresolved deferred move fails at commit");
         if (commit_error) {
-            assertTrue(commit_error.err =~ /^DBI(:[^:]+)?:ERROR$/, commit_error.err);
+            # a database error: DBI:<DRIVER>:ERROR; Oracle's driver raises DBI:ORACLE:OCI-ERROR, with the error of the
+            # deferred constraint: ORA-02091 (the transaction is rolled back) for ORA-02291 or ORA-02292
+            if (commit_error.err =~ /^DBI:ORACLE:/) {
+                assertEq("DBI:ORACLE:OCI-ERROR", commit_error.err);
+                assertRegex("ORA-02091", commit_error.desc);
+            } else {
+                assertTrue(commit_error.err =~ /^DBI(:[^:]+)?:ERROR$/, commit_error.err);
+            }
         }
         ds.rollback();
     }

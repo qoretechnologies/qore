@@ -1,6 +1,5 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-parallel: serial - it creates fixed-name objects in the shared Firebird test database
 
 %modern
 
@@ -12,6 +11,7 @@
 %requires XdbcFirebirdSqlUtilBase
 %requires JdbcFirebirdSqlUtil
 %requires QUnit
+%requires ./FirebirdTestIsolation.qm
 
 %try-module jni
 %define NoJni
@@ -114,7 +114,9 @@ class FirebirdExpressionTest inherits QUnit::Test {
 %ifdef NoJni
         testSkip("no jni module");
 %endif
-        string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD ?? "";
+        # the run's own database: tests that run at the same time do not share the objects of this one
+        string connstr = FirebirdRunDatabase::getConnectionString(m_options.connstr
+            ?? ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD, "FirebirdExpr") ?? "";
         if (!connstr.val()) {
             testSkip("no DB connection");
         }

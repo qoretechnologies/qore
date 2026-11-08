@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires SqlUtil
+
+%prepend-module-path "${SCRIPT_DIR}/../.."
+%requires DbTestConnections
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+
+%exec-class DropSqlIfExistsTest
+
+#! AbstractDatabase::getDrop*SqlIfExists() give the SQL that drops an object that exists, and nothing for one that
+#! does not exist, on the PostgreSQL and Oracle connections of the test (see DbTestConnections)
+class DropSqlIfExistsTest inherits QUnit::Test {
+    private {
+        list<hash<DbTestConnection>> conns;
+
+        #! the SQL that creates a function and a procedure, by driver
+        const Routines = {
+            "pgsql": {
+                "function": "create function qtest_dsie_f() returns integer as $$ begin return 1; end; $$ "
+                    "language plpgsql",
+                # PgsqlSqlUtil takes a PostgreSQL function for a procedure (getProcedure())
+                "procedure": "create function qtest_dsie_p() returns void as $$ begin null; end; $$ language plpgsql",
+            },
+            "oracle": {
+                "function": "create function qtest_dsie_f return number as begin return 1; end;",
+                "procedure": "create procedure qtest_dsie_p as begin null; end;",
+            },
+        };
+    }
+
+    constructor() : Test("DropSqlIfExistsTest", "1.0", \ARGV) {
+        foreach hash<DbTestConnection> conn in (DbTestConnections::get()) {
+            if (!Routines{conn.driver}) {
+                continue;
+            }
+            # the run's own schema
+            PgsqlRunSchema::setup(conn.connstr, "DropSqlIfExists");
+            conn.connstr = OracleRunSchema::getConnectionString(conn.connstr, "DropSqlIfExists");
+            conns += conn;
+        }
+        if (!conns) {
+            addTestCase("drop SQL if exists", sub () { testSkip("no PostgreSQL or Oracle connection"); });
+        }
+        foreach hash<DbTestConnection> conn in (conns) {
+            addTestCase(conn.label + ": drop SQL if exists", \dropSql(), conn);
+        }
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        PgsqlRunSchema::teardown();
+        OracleRunSchema::teardown();
+    }
+
+    private dropSql(hash<DbTestConnection> conn) {
+        Datasource ds(conn.connstr);
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("cannot connect: %s: %s", ex.err, ex.desc));
+        }
+        on_exit ds.rollback();
+        Database db(ds);
+
+        # nothing for objects that do not exist
+        assertNothing(db.getDropSequenceSqlIfExists("qtest_dsie_s"));
+        assertNothing(db.getDropFunctionSqlIfExists("qtest_dsie_f"));
+        assertNothing(db.getDropProcedureSqlIfExists("qtest_dsie_p"));
+
+        map ds.execRaw($1), db.makeSequence("qtest_dsie_s").getCreateSql();
+        ds.execRaw(Routines{conn.driver}.function);
+        ds.execRaw(Routines{conn.driver}.procedure);
+        ds.commit();
+
+        # the SQL of each object that exists, which drops it, and is given to the SQL callback
+        list<string> called = ();
+        hash<auto> opt = {"sql_callback": sub (string sql) { called += sql; }};
+        hash<string, code> drop_sql = {
+            "sequence": *string sub (string n, *hash<auto> o) { return db.getDropSequenceSqlIfExists(n, o); },
+            "function": *string sub (string n, *hash<auto> o) { return db.getDropFunctionSqlIfExists(n, o); },
+            "procedure": *string sub (string n, *hash<auto> o) { return db.getDropProcedureSqlIfExists(n, o); },
+        };
+        hash<string, string> names = {
+            "sequence": "qtest_dsie_s",
+            "function": "qtest_dsie_f",
+            "procedure": "qtest_dsie_p",
+        };
+        foreach hash<auto> i in (drop_sql.pairIterator()) {
+            *string sql = i.value(names{i.key}, opt);
+            # a PostgreSQL "procedure" is a function
+            assertRegex("^drop " + (conn.driver == "pgsql" && i.key == "procedure" ? "function" : i.key) + " ",
+                sql ?? "", i.key);
+            assertEq(sql, called.last(), i.key + ": callback");
+            ds.execRaw(sql);
+            ds.commit();
+            assertNothing(i.value(names{i.key}), i.key + " dropped");
+        }
+    }
+}

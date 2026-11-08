@@ -1,0 +1,307 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file MssqlTestIsolation.qm gives each run of a SQL Server test its own database
+
+/*  MssqlTestIsolation.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires Util
+%requires ./TestRunIsolation.qm
+
+module MssqlTestIsolation {
+    version = "1.0";
+    desc = "gives each run of a SQL Server test its own database";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+/** @mainpage MssqlTestIsolation Module
+
+    @section mssqltestisolationintro Introduction
+
+    Tests that use a shared SQL Server database must not share their tables, views, sequences, indexes, triggers,
+    functions or types with another test that runs at the same time (run_tests.sh runs tests in parallel), nor list
+    objects that another test creates.
+    @ref MssqlTestIsolation::MssqlRunDatabase::getConnectionString() "MssqlRunDatabase::getConnectionString()"
+    creates a database for the run on the test's server and returns the datasource string of the test's database
+    with the run's database in its place: for the \c freetds driver, and for the \c jdbc driver with a SQL Server URL
+    (its \c databaseName property).  Every object that the test creates is created in the run's database, whatever
+    its name, and its \c dbo schema is the run's own.
+
+    The test's login must be allowed to create databases.  A run whose server is not SQL Server (a Sybase server of
+    the \c freetds driver), or whose login cannot create a database, cannot have a database of its own: the test uses
+    its own datasource string, and the tests that do so on a host run one at a time
+    (@ref TestRunIsolation::TestRun::lockHost() "TestRun::lockHost()").
+
+    @ref MssqlTestIsolation::MssqlRunDatabase::teardown() "MssqlRunDatabase::teardown()" drops the database, ending
+    the connections to it; it is also dropped when the program ends without calling it.  A run that is killed leaves
+    its database behind, so each run drops the databases of runs that are at least
+    @ref TestRunIsolation::TestRun::LeftoverAge "TestRun::LeftoverAge" old, whatever their host, as does
+    @ref MssqlTestIsolation::MssqlRunDatabase::dropLeftovers() "MssqlRunDatabase::dropLeftovers()" for a CI job.
+
+    A database is named as @ref TestRunIsolation::TestRun::makeName() "TestRun::makeName()" names it, so no two runs
+    have the same one; its creation fails if it exists.
+
+    @par Example:
+    @code{.py}
+%requires ./MssqlTestIsolation.qm
+
+*string connstr = MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS, "FreetdsSqlUtil");
+# ... run the tests with connstr ...
+MssqlRunDatabase::teardown();
+    @endcode
+*/
+
+#! Contains the definitions of the MssqlTestIsolation module
+public namespace MssqlTestIsolation {
+#! Holds the run's database on a server and the connection that created it, and drops it when it is destroyed
+class MssqlRunDatabaseGuard {
+    private {
+        #! The connection that created the database
+        Datasource ds;
+
+        #! The name of the database; no value once it is dropped
+        *string name;
+    }
+
+    constructor(Datasource ds, string name) {
+        self.ds = ds;
+        self.name = name;
+    }
+
+    destructor() {
+        drop();
+    }
+
+    #! Drops the database, ending the connections to it, unless it is already dropped
+    drop() {
+        if (!name) {
+            return;
+        }
+        MssqlRunDatabase::dropDatabase(ds, remove name);
+    }
+}
+
+#! The database of this run of a SQL Server test
+public class MssqlRunDatabase {
+    private {
+        #! The name of the run's database, once it is created
+        static *string name;
+
+        #! The run's database on each server, keyed by the datasource string that the test gave
+        static hash<string, MssqlRunDatabaseGuard> guards;
+
+        #! The datasource strings of the run's database, keyed by the datasource string that the test gave
+        static hash<string, string> connstrs;
+
+        #! Serializes setup and teardown
+        static Mutex lck();
+    }
+
+    #! Returns the datasource string of the run's database on the server of the given datasource string
+    /** The first call for a server creates the run's database there; a later call returns the same datasource
+        string.
+
+        @param connstr the datasource string of the test's database; returned as it is when it is not set or not for
+        the \c freetds driver or the \c jdbc driver with a SQL Server URL
+        @param suite the name of the test, used in the name of the database
+
+        @return the datasource string of the run's database; the given one if it is not for SQL Server, or if no
+        database can be created for the run (see the introduction); no value if none is given
+    */
+    static *string getConnectionString(*string connstr, string suite) {
+        try {
+            return MssqlRunDatabase::getConnectionStringIntern(connstr, suite);
+        } catch (hash<ExceptionInfo> ex) {
+            # a message about a datasource string, such as DATASOURCE-PARSE-ERROR's, quotes it with its password
+            throw ex.err, TestRun::maskSecrets(ex.desc ?? "", connstr), ex.arg.typeCode() == NT_STRING
+                ? TestRun::maskSecrets(ex.arg, connstr) : ex.arg;
+        }
+    }
+
+    #! Returns the datasource string of the run's database or schema (see getConnectionString())
+    private static *string getConnectionStringIntern(*string connstr, string suite) {
+        if (!connstr) {
+            return connstr;
+        }
+        hash<auto> config = parse_datasource(connstr);
+        bool jdbc = MssqlRunDatabase::isMssqlJdbc(config);
+        if (config.type != "freetds" && !jdbc) {
+            return connstr;
+        }
+        lck.lock();
+        on_exit lck.unlock();
+        if (connstrs{connstr}) {
+            return connstrs{connstr};
+        }
+        # a datasource string that this function returned is the run's already
+        if (inlist(connstr, connstrs.values())) {
+            return connstr;
+        }
+
+        Datasource ds(connstr);
+        # "create database" and "drop database" cannot run in a transaction (see MssqlRunDatabase::outsideTransaction())
+        ds.setAutoCommit(True);
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            # a server that cannot be reached: the test finds it so when it connects, and reports or skips it
+            return connstr;
+        }
+        string version = ds.selectRow("select @@version as v").v;
+        if (version !~ /^Microsoft SQL Server/) {
+            ds.close();
+            TestRun::lockHost("mssql", connstr);
+            return connstr;
+        }
+        MssqlRunDatabase::dropLeftoversIntern(ds);
+
+        string db = name ?? TestRun::makeName(suite);
+        try {
+            # a database of the run's name is never shared: its creation fails if it exists
+            ds.execRaw(MssqlRunDatabase::outsideTransaction("create database [" + db + "]"));
+        } catch (hash<ExceptionInfo> ex) {
+            # only a login that may not create databases (server message 262: "CREATE DATABASE permission denied")
+            # runs without a database of its own
+            if (ex.desc !~ /CREATE DATABASE permission denied/i) {
+                rethrow;
+            }
+            ds.close();
+            TestRun::lockHost("mssql", connstr);
+            return connstr;
+        }
+        name = db;
+        guards{connstr} = new MssqlRunDatabaseGuard(ds, db);
+        if (jdbc) {
+            return connstrs{connstr} = MssqlRunDatabase::getJdbcConnectionString(config, db);
+        }
+        config.db = db;
+        return connstrs{connstr} = make_datasource_string(config);
+    }
+
+    #! Returns the name of the run's database, or @ref nothing if none was created
+    static *string getName() {
+        return name;
+    }
+
+    #! Drops the run's database on every server it was created on, with everything in it
+    /** Call this at the end of the test; the connections to the database that are still open are ended.  Nothing is
+        done if no database was created.
+    */
+    static teardown() {
+        *hash<string, MssqlRunDatabaseGuard> old_guards;
+        {
+            lck.lock();
+            on_exit lck.unlock();
+            if (!name) {
+                return;
+            }
+            old_guards = remove guards;
+            remove connstrs;
+            remove name;
+        }
+        map $1.drop(), old_guards.iterator();
+    }
+
+    #! Drops a database, ending the connections to it
+    static dropDatabase(Datasource ds, string db) {
+        # rolls back the transactions of the other connections to the database and ends them, so the database can be
+        # dropped
+        ds.execRaw(MssqlRunDatabase::outsideTransaction("if db_id('" + db + "') is not null alter database [" + db
+            + "] set single_user with rollback immediate; if db_id('" + db + "') is not null drop database [" + db
+            + "]"));
+    }
+
+    #! Returns a batch that runs the given SQL outside of any transaction
+    /** The freetds driver's connection has chained (implicit) transactions: a batch is in a transaction when it runs,
+        and a statement that cannot run in a transaction, such as \c "create database", is refused (server message
+        226).  The batch commits the transaction, runs the SQL without implicit transactions, and turns them on again.
+    */
+    static string outsideTransaction(string sql) {
+        return "while @@trancount > 0 commit tran; set implicit_transactions off; " + sql
+            + "; set implicit_transactions on";
+    }
+
+    #! Returns True if a parsed datasource string is for the jdbc driver with a SQL Server URL
+    private static bool isMssqlJdbc(hash<auto> config) {
+        if (config.type != "jdbc") {
+            return False;
+        }
+        string url = config.options.url ?? config.db ?? "";
+        url =~ s/^jdbc://;
+        return url.lwr().startsWith("sqlserver:");
+    }
+
+    #! Returns a jdbc datasource string whose SQL Server URL has the given database as its databaseName
+    private static string getJdbcConnectionString(hash<auto> config, string db) {
+        string key = config.options.url ? "url" : "db";
+        string url = key == "url" ? config.options.url : config.db;
+        # the properties of a SQL Server URL follow the server, each after a ';'
+        url =~ s/;databaseName=[^;]*//i;
+        url += ";databaseName=" + db;
+        if (key == "url") {
+            config.options.url = url;
+        } else {
+            config.db = url;
+        }
+        return make_datasource_string(config);
+    }
+
+    #! Drops the databases left by test runs on the server of the given datasource string
+    /** For a CI job's cleanup: a run that is killed leaves its database behind (see TestRun::isLeftover())
+
+        @return the names of the databases dropped
+    */
+    static list<string> dropLeftovers(string connstr) {
+        Datasource ds(connstr);
+        ds.setAutoCommit(True);
+        return MssqlRunDatabase::dropLeftoversIntern(ds);
+    }
+
+    #! Drops the databases left by test runs that are at least TestRun::LeftoverAge old, whatever their host
+    private static list<string> dropLeftoversIntern(Datasource ds) {
+        list<string> rv = ();
+        *list<string> dbs = ds.select("select name from sys.databases where name like %v", TestRun::Prefix + "%")
+            .name;
+        foreach string db in (dbs) {
+            if (!TestRun::isLeftover(db)) {
+                continue;
+            }
+            # another run may drop the same leftover at the same time: one that cannot be dropped now is left for a
+            # later run
+            try {
+                # a database with sessions is in use by a run that runs longer than its name's age tells: its
+                # sessions are not ended, and it is dropped by a later run
+                if (ds.selectRow("select count(*) as c from sys.dm_exec_sessions where database_id = db_id(%v)",
+                        db).c) {
+                    continue;
+                }
+                ds.execRaw(MssqlRunDatabase::outsideTransaction("if db_id('" + db + "') is not null drop database ["
+                    + db + "]"));
+            } catch (hash<ExceptionInfo> ex) {
+                continue;
+            }
+            rv += db;
+        }
+        return rv;
+    }
+}
+}

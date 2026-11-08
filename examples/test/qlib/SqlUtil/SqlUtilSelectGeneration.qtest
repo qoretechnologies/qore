@@ -1,6 +1,5 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-parallel: serial - it creates fixed-name objects in the shared SQL Server/Sybase (FreeTDS) test database
 
 %modern
 
@@ -15,6 +14,7 @@
 %requires QUnit
 %requires ./MysqlTestIsolation.qm
 %requires ./OracleTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
 
 %exec-class SqlUtilSelectGenerationTest
 
@@ -131,10 +131,11 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         contexts = map new SelectGenerationContext($1), DbTestConnections::get(m_options.connstr);
         # a run on PostgreSQL uses its own schema; this is set up before any connection is opened
         map PgsqlRunSchema::setup($1.conn.connstr, "SqlUtilSelectGeneration"), contexts;
-        # on MySQL and Oracle, the run's own database or schema
+        # on MySQL, Oracle and SQL Server, the run's own database or schema
         foreach SelectGenerationContext ctx in (contexts) {
             ctx.conn.connstr = MysqlRunDatabase::getConnectionString(ctx.conn.connstr, "SqlUtilSelectGen");
             ctx.conn.connstr = OracleRunSchema::getConnectionString(ctx.conn.connstr, "SqlUtilSelectGen");
+            ctx.conn.connstr = MssqlRunDatabase::getConnectionString(ctx.conn.connstr, "SqlUtilSelectGen");
         }
         map setUpContext($1), contexts;
 
@@ -204,6 +205,7 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         PgsqlRunSchema::teardown();
         MysqlRunDatabase::teardown();
         OracleRunSchema::teardown();
+        MssqlRunDatabase::teardown();
     }
 
     #! returns the name in the run's schema on PostgreSQL, so that it can never resolve to a table in another schema
@@ -352,7 +354,9 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         assertNeq("", mem.getSelectSql(sh, \args));
 
         # change the table's definition outside of any SqlUtil table object
-        ds.execRaw("alter table " + q(tmp_table) + " add column extra integer");
+        # the syntax of every database: Oracle and SQL Server have no COLUMN keyword in "add", and Sybase adds a
+        # column only with an explicit null
+        ds.execRaw("alter table " + q(tmp_table) + " add extra integer null");
         ds.commit();
 
         # generation must see the new column without anything being cleared

@@ -3840,9 +3840,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return result;
     }
 
-    #! Overrides the default insertIntern to generate UNNEST-based SQL for bulk inserts
-    private *hash<auto> insertIntern(hash<auto> row, *reference<string> sql, *hash<auto> opt,
-            *reference<softlist<auto>> args) {
+    #! Overrides the default insert SQL with an UNNEST-based insert for bulk inserts (a hash of lists)
+    /** The SQL binds the arguments of the scalar expressions of its SELECT (insert operators, constant values) before
+        the arrays of its UNNEST, which the arguments are in, whatever the order of the columns
+    */
+    private hash<auto> getInsertSqlAndArgs(hash<auto> row) {
         # check if this is a bulk insert (any value is a list)
         bool is_bulk = False;
         foreach auto v in (row.iterator()) {
@@ -3853,12 +3855,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         }
 
         if (!is_bulk || !hasPgsqlArrayBind()) {
-            # delegate for single-row inserts or drivers without native typed-array binds
-            return AbstractTable::insertIntern(row, \sql, opt, \args);
+            # the default SQL for single-row inserts or drivers without native typed-array binds
+            return AbstractTable::getInsertSqlAndArgs(row);
         }
-
-        # check data callback options if any
-        validateOptionsIntern("OPTION-ERROR", getInsertOptions(), \opt);
 
         # ensure columns are loaded
         if (!columns) {
@@ -3951,7 +3950,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             }
         }
 
-        sql = sprintf("insert into %s (%s) select %s from unnest(%s) as u(%s)",
+        string sql = sprintf("insert into %s (%s) select %s from unnest(%s) as u(%s)",
             getSqlName(),
             (foldl $1 + "," + $2, all_col_names),
             (foldl $1 + "," + $2, select_exprs),
@@ -3959,13 +3958,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             (foldl $1 + "," + $2, (map sprintf("c%d", $1), range(unnest_col_idx))));
 
         # combine bind values: scalar %v's in SELECT come before UNNEST %v's in FROM
-        args = scalar_binds + array_binds;
-
-        if (opt.returning) {
-            return doReturningImpl(opt, \sql, args);
-        }
-
-        execData(opt, sql, args);
+        return {"sql": sql, "args": scalar_binds + array_binds};
     }
 
     #! Overrides the default doReturningImpl to return all rows for bulk operations

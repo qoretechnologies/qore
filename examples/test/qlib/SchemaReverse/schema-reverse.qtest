@@ -1,6 +1,5 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-parallel: serial - it reverses the whole shared SQL Server/Sybase (FreeTDS) test database
 
 %modern
 
@@ -69,6 +68,9 @@ class Main inherits QUnit::Test {
 
         #! the drivers whose reverse output the test knows
         const Drivers = ("oracle", "pgsql", "mysql");
+
+        #! the object type of the named-type column on Oracle
+        const OracleObjectType = "schema_reverse_pt";
 
         #! the test's connections
         list<SchemaReverseContext> contexts = ();
@@ -144,11 +146,34 @@ class Main inherits QUnit::Test {
             "columns" : columns,
             "indexes" : ( "schema_reverse_ix1" : ("columns" : ("id",), "unique" : True)),
         );
-        # named types data
+        # named types data: Oracle Spatial's sdo_geometry where the database has it, else an object type of the
+        # test's own (Oracle Database Free's "slim" container images have no Oracle Spatial)
         if (drv == "oracle") {
-            ref_table.columns.loc_col = ( "driver" : ( "oracle" : ("native_type" : "sdo_geometry", "notnull" : False )));
+            string type_name = OracleObjectType;
+            try {
+                if (ctx.ds.selectRow("select count(*) as c from all_types where owner = 'MDSYS' and type_name = "
+                        "'SDO_GEOMETRY'").c) {
+                    type_name = "sdo_geometry";
+                } else {
+                    ctx.ds.exec("create or replace type " + OracleObjectType + " as object (x number, y number)");
+                    ctx.ds.commit();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                ctx.ds.rollback();
+                # the connection's test cases fail with the error
+                ctx.setup_error = ex;
+                return;
+            }
+            ref_table.columns.loc_col = ( "driver" : ( "oracle" : ("native_type" : type_name,
+                "notnull" : False )));
         }
         ctx.ref_table_reverse = ref_table;
+        if (drv == "oracle") {
+            # an Oracle index has a tablespace, which the reverse description gives: the user's default tablespace,
+            # as the test's index is created without one
+            ctx.ref_table_reverse.indexes.schema_reverse_ix1.driver.oracle.index_tablespace =
+                ctx.ds.selectRow("select default_tablespace from user_users").default_tablespace.lwr();
+        }
         if (drv == "pgsql" || drv == "mysql") {
             # an integer column is a bigint, which TableReverse gives with its native type, and with its comment
             ref_table.columns.cnt = {"qore_type": Type::Int, "notnull": True, "comment": "comment for cnt"};
@@ -186,6 +211,14 @@ class Main inherits QUnit::Test {
         foreach SchemaReverseContext ctx in (contexts) {
             try {
                 makeSchema(ctx, "getDropSchemaSql");
+                # the object type of the test's table, once the table is dropped
+                if (ctx.ds && ctx.ds.getDriverName() == "oracle") {
+                    on_exit ctx.ds.commit();
+                    if (ctx.ds.selectRow("select count(*) as c from user_types where type_name = %v",
+                            OracleObjectType.upr()).c) {
+                        ctx.ds.exec("drop type " + OracleObjectType);
+                    }
+                }
             } catch (hash<ExceptionInfo> ex) {
                 printf("WARNING: %s: cannot drop the test schema: %s: %s\n", ctx.conn.label, ex.err, ex.desc);
             }

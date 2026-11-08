@@ -1,6 +1,5 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-parallel: serial - it creates fixed-name objects in the shared SQL Server/Sybase (FreeTDS) test database
 
 %modern
 
@@ -24,6 +23,7 @@
 %requires ../../DbTestConnections.qm
 %requires ../SqlUtil/MysqlTestIsolation.qm
 %requires ../SqlUtil/OracleTestIsolation.qm
+%requires ../SqlUtil/MssqlTestIsolation.qm
 
 #! a connection of the test, and its schema and tables
 class TableMapperContext {
@@ -393,10 +393,11 @@ public class TableMapperTest inherits QUnit::Test {
         # on PostgreSQL, every connection of the run uses the run's own schema; this is set up before any
         # connection is opened
         map PgsqlRunSchema::setup($1.conn.connstr, "TableMapper"), contexts;
-        # on MySQL and Oracle, the run's own database or schema
+        # on MySQL, Oracle and SQL Server, the run's own database or schema
         foreach TableMapperContext ctx in (contexts) {
             ctx.conn.connstr = MysqlRunDatabase::getConnectionString(ctx.conn.connstr, "TableMapper");
             ctx.conn.connstr = OracleRunSchema::getConnectionString(ctx.conn.connstr, "TableMapper");
+            ctx.conn.connstr = MssqlRunDatabase::getConnectionString(ctx.conn.connstr, "TableMapper");
         }
         map setUpContext($1), contexts;
 
@@ -412,6 +413,7 @@ public class TableMapperTest inherits QUnit::Test {
             addTestCase(ctx.name("InboundTableMapper upsert"), \inboundTableMapperUpsertTest(), ctx);
             addTestCase(ctx.name("OutputTableMapper"), \outputTableMapperTest(), ctx);
             addTestCase(ctx.name("OutputTableMapper"), \rawOutputTableMapperTest(), ctx);
+            addTestCase(ctx.name("InboundTableMapper sequence column positions"), \sequencePositionTest(), ctx);
         }
         set_return_value(main());
     }
@@ -464,6 +466,7 @@ public class TableMapperTest inherits QUnit::Test {
         PgsqlRunSchema::teardown();
         MysqlRunDatabase::teardown();
         OracleRunSchema::teardown();
+        MssqlRunDatabase::teardown();
     }
 
     private usageIntern() {
@@ -1225,6 +1228,96 @@ public class TableMapperTest inherits QUnit::Test {
 
     hash asHash(auto h) {
         return cast<hash>(h);
+    }
+
+    #! A mapper inserts rows with a sequence column first, in the middle or last, with and without a column of a
+    #! constant value, row by row (a statement prepared with the first row's SQL inserts the others) and in blocks
+    #! (each block after the first with the first block's SQL), with the arguments that the table binds
+    sequencePositionTest(TableMapperContext ctx) {
+        useContext(ctx);
+        AbstractDatasource ds = table.getDatasource();
+        Database db(ds);
+        hash<string, list<string>> orders = {
+            "first": ("id", "a", "b"),
+            "middle": ("a", "id", "b"),
+            "last": ("a", "b", "id"),
+        };
+        hash<auto> col_desc = {
+            "id": {"qore_type": Type::Number, "size": 14, "notnull": True},
+            "a": {"qore_type": Type::String, "size": 20},
+            "b": {"qore_type": Type::Int},
+        };
+        list<hash<auto>> input = ();
+        foreach int n in (range(1, 6)) {
+            input += {"a": sprintf("row%d", n), "b": n};
+        }
+        foreach hash<auto> i in (orders.pairIterator()) {
+            foreach bool constant in ((False, True)) {
+                foreach bool bulk in ((False, True)) {
+                    string label = sprintf("sequence %s, %s, %s", i.key, constant ? "constant b" : "b mapped",
+                        bulk ? "blocks" : "rows");
+                    string name = sprintf("tm_pos_%s_%d%d", i.key, constant.toInt(), bulk.toInt());
+                    {
+                        *AbstractTable old = db.getTable(name);
+                        if (old) {
+                            old.dropCommit();
+                        }
+                    }
+                    AbstractTable t = db.makeTable(name, {"columns": map {$1: col_desc{$1}}, i.value});
+                    t.create();
+                    ds.commit();
+                    on_exit {
+                        ds.rollback();
+                        db.getTable(name).dropCommit();
+                    }
+                    hash<auto> fmap = {
+                        "id": {"sequence": "seq_table_mapper_test"},
+                        "a": True,
+                        "b": constant ? {"constant": 7} : True,
+                    };
+                    # blocks of two rows; with "rows", each row is inserted when it is given (insertRow())
+                    InboundTableMapper mapper(t, fmap, {"insert_block": 2});
+                    if (bulk) {
+                        foreach hash<auto> rec in (input) {
+                            mapper.queueData(rec);
+                        }
+                        mapper.flush();
+                    } else {
+                        map mapper.insertRow($1), input;
+                    }
+                    mapper.commit();
+
+                    list<hash<auto>> rows = t.selectRows({"orderby": "a"});
+                    assertEq(input.size(), rows.size(), label);
+                    assertEq((map $1.a, input), (map $1.a, rows), label);
+                    assertEq(constant ? (map 7, input) : (map $1.b, input), (map $1.b.toInt(), rows), label);
+                    # every row has an id of its own from the sequence
+                    assertEq(rows.size(), (map {$1.id.toString(): True}, rows).size(), label);
+
+                    # getInsertArgs() gives the arguments of the SQL that insert() runs, for a row and for a block
+                    # (the row's values in the table's column order); with a sequence's insert operator, on a
+                    # database with sequences (MySQL's are emulated, and a mapper gets their values itself)
+                    if (!db.supportsSequences()) {
+                        continue;
+                    }
+                    hash<auto> row = map {$1: {"id": iop_seq("seq_table_mapper_test"), "a": "x", "b": 1}{$1}},
+                        i.value;
+                    hash<SqlResultInfo> info = t.insertWithInfo(row);
+                    assertEq(info.args, t.getInsertArgs(row), label + ": row args");
+                    # the arguments are those of the SQL's placeholders: the SQL runs with them
+                    ds.vexec(info.sql, t.getInsertArgs(row));
+                    hash<auto> block = map {$1: {"id": iop_seq("seq_table_mapper_test"), "a": ("x", "y"),
+                        "b": constant ? 1 : (1, 2)}{$1}}, i.value;
+                    info = t.insertWithInfo(block);
+                    assertEq(info.args, t.getInsertArgs(block), label + ": block args");
+                    # a block's lists are bound as arrays where the driver binds them
+                    if (t.hasArrayBind()) {
+                        ds.vexec(info.sql, t.getInsertArgs(block));
+                    }
+                    ds.rollback();
+                }
+            }
+        }
     }
 
     outputTableMapperTest(TableMapperContext ctx) {

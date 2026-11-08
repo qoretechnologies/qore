@@ -1,6 +1,5 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-parallel: serial - fixed-name objects in the shared Oracle schema of its JDBC connection
 
 %modern
 
@@ -14,6 +13,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires SqlUtilTestBase
+%requires ./OracleTestIsolation.qm
 
 %try-module oracle
 %define NoOracle
@@ -571,6 +571,8 @@ class OracleTest inherits SqlTestBase {
         if (!m_options.connstr) {
             m_options.connstr = ENV.QORE_DB_CONNSTR_JDBC_ORACLE;
         }
+        # the run's own schema: tests that run at the same time do not share the objects of this one
+        m_options.connstr = OracleRunSchema::getConnectionString(m_options.connstr, "JdbcOracleSqlUtil");
         Datasource ds(m_options.connstr);
         if (ds.getDriverRealName() != "Oracle") {
             throw "ORACLE-ERROR", sprintf("cannot execute oracle tests on a connection using driver %y",

@@ -1,6 +1,5 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-parallel: serial - it creates fixed-name objects in the shared SQL Server/Sybase (FreeTDS) test database
 
 %modern
 
@@ -14,6 +13,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./SqlUtilTestBase.qm
+%requires ./MssqlTestIsolation.qm
 
 %exec-class FreetdsTest
 
@@ -757,6 +757,8 @@ class FreetdsTest inherits SqlTestBase {
     Datasource getDatasource() {
         if (!m_options.connstr)
             m_options.connstr = ENV.QORE_DB_CONNSTR_FREETDS;
+        # the run's own database: tests that run at the same time do not share the objects of this one
+        m_options.connstr = MssqlRunDatabase::getConnectionString(m_options.connstr, "FreetdsSqlUtil");
         Datasource ds(m_options.connstr);
         if (ds.getDriverName() != "freetds")
             throw "FREETDS-ERROR", sprintf("cannot execute the freetds tests on a connection using driver %y", ds.getDriverName());
