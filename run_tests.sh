@@ -693,9 +693,26 @@ list_test_cores() {
     done
 }
 
-# Sets CORE_FILE to the core the current test left: a file written after the test started, or one that did not
-# exist before the test (TEST_CORES_BEFORE), as BusyBox find (Alpine) compares whole seconds and so does not find a
-# core written in the second the test started
+# Prints the cores in the given search directory (the arguments: the directory and the find(1) name pattern of its
+# cores) that the current test may have left: the files written after the test started, then those that did not exist
+# before the test (TEST_CORES_BEFORE), as BusyBox find (Alpine) compares whole seconds and so does not find a core
+# written in the second the test started
+list_new_test_cores() {
+    {
+        find "$1" -maxdepth 1 -type f -name "$2" -newer "$TEST_START_MARKER" -print 2>/dev/null
+        find "$1" -maxdepth 1 -type f -name "$2" -print 2>/dev/null | awk -v before="$TEST_CORES_BEFORE" \
+            'BEGIN { while ((getline f < before) > 0) seen[f] = 1 } !($0 in seen)'
+    } | awk '!($0 in listed) { listed[$0] = 1; print }'
+}
+
+# Returns success if the given core is of a process of the current test: the test, and every process it starts and
+# those start, have QORE_TEST_PROCESS_MARK=<the test's mark> in their environment (see run_test()), which a core holds
+# as a string of its own (an environment entry ends with a NUL byte)
+core_has_test_mark() {
+    LC_ALL=C tr -c 'A-Za-z0-9_=.' '\n' < "$1" 2>/dev/null | grep -qxF "QORE_TEST_PROCESS_MARK=$TEST_PROCESS_MARK"
+}
+
+# Sets CORE_FILE to the core the current test left (see list_new_test_cores())
 find_test_core() {
     CORE_FILE=""
     eval "set -- $CORE_SEARCH_DIRS"
@@ -703,30 +720,45 @@ find_test_core() {
         if [ -z "$CORE_SEARCH_DIR" ] || [ ! -d "$CORE_SEARCH_DIR" ]; then
             continue
         fi
-        CORE_SEARCH_NAME=$(core_search_name "$CORE_SEARCH_DIR")
-        # Tests that run at the same time (TEST_JOBS > 1) write their cores to the same places, so only a core
-        # whose name has the process ID of the test as a part of its own (core.%e.%p.%t on Linux CI, core.%P on
-        # macOS CI) is the test's
-        if [ "$TEST_JOBS" -gt 1 ] && [ -n "$TEST_PID" ]; then
-            CORE_FILE=$(find "$CORE_SEARCH_DIR" -maxdepth 1 -type f -name "$CORE_SEARCH_NAME" -print 2>/dev/null \
-                | awk -v pid="$TEST_PID" '{ n = split($0, path, "/"); m = split(path[n], part, ".") }
-                    { for (j = 2; j <= m; ++j) { if (part[j] == pid) { print; exit } } }')
-            if [ -n "$CORE_FILE" ]; then
-                break
-            fi
+        NEW_CORES=$(list_new_test_cores "$CORE_SEARCH_DIR" "$(core_search_name "$CORE_SEARCH_DIR")")
+        if [ -z "$NEW_CORES" ]; then
             continue
         fi
-        CORE_FILE=$(find "$CORE_SEARCH_DIR" -maxdepth 1 -type f -name "$CORE_SEARCH_NAME" \
-            -newer "$TEST_START_MARKER" -print 2>/dev/null | head -1)
+        if [ "$TEST_JOBS" -le 1 ]; then
+            CORE_FILE=$(printf '%s\n' "$NEW_CORES" | head -1)
+            break
+        fi
+        # Tests that run at the same time (TEST_JOBS > 1) write their cores to the same places, so a new core is the
+        # test's only when its name has the process ID of the test as a part of its own (core.%e.%p.%t on Linux CI,
+        # core.%P on macOS CI), or when it holds the test's mark: the core of a process that the test started
+        if [ -n "$TEST_PID" ]; then
+            CORE_FILE=$(printf '%s\n' "$NEW_CORES" | awk -v pid="$TEST_PID" \
+                '{ n = split($0, path, "/"); m = split(path[n], part, ".") }
+                { for (j = 2; j <= m; ++j) { if (part[j] == pid) { print; exit } } }')
+        fi
         if [ -z "$CORE_FILE" ]; then
-            CORE_FILE=$(find "$CORE_SEARCH_DIR" -maxdepth 1 -type f -name "$CORE_SEARCH_NAME" -print 2>/dev/null \
-                | awk -v before="$TEST_CORES_BEFORE" \
-                    'BEGIN { while ((getline f < before) > 0) seen[f] = 1 } !($0 in seen) { print; exit }')
+            while IFS= read -r core; do
+                if core_has_test_mark "$core"; then
+                    CORE_FILE=$core
+                    break
+                fi
+            done <<EOF
+$NEW_CORES
+EOF
         fi
         if [ -n "$CORE_FILE" ]; then
             break
         fi
     done
+}
+
+# Prints the name of the given test in the names of its files in CORE_DIR: its path in the test tree with '_' for '/',
+# as tests in different directories can have the same file name
+test_artifact_name() {
+    _name=${1#./}
+    _name=${_name#examples/test/}
+    _name=${_name%.qtest}
+    printf '%s\n' "$_name" | tr '/' '_'
 }
 
 # The pipes the output of the tests goes to (Linux only): a CI job reads its output through a pipe and ends only when
@@ -1107,7 +1139,7 @@ EOF
             TIMEOUT_CORE=$CORE_FILE
             if [ -n "$TIMEOUT_CORE" ]; then
                 echo "*** Core dump of the hung test: $TIMEOUT_CORE - extracting the stacks of its threads ***"
-                BT_FILE="$CORE_DIR/backtrace-`basename "$test" .qtest`-timeout.txt"
+                BT_FILE="$CORE_DIR/backtrace-`test_artifact_name "$test"`-timeout.txt"
                 gdb -batch -ex "thread apply all bt" -ex "quit" "$QORE" "$TIMEOUT_CORE" > "$BT_FILE" 2>&1
                 head -500 "$BT_FILE"
             fi
@@ -1122,10 +1154,10 @@ EOF
             SIG_NUM=`expr $test_exit - 128`
             echo "*** CRASH: test killed by signal $SIG_NUM (exit code $test_exit) ***"
             find_test_core
-            TEST_BASENAME=$(basename "$test" .qtest)
+            TEST_ARTIFACT_NAME=$(test_artifact_name "$test")
             if [ -n "$CORE_FILE" ] && command -v gdb > /dev/null 2>&1; then
                 echo "*** Core dump found: $CORE_FILE - extracting backtrace ***"
-                BT_FILE="$CORE_DIR/backtrace-${TEST_BASENAME}.txt"
+                BT_FILE="$CORE_DIR/backtrace-${TEST_ARTIFACT_NAME}.txt"
                 # Write the whole backtrace to the file first, then show the head of the file: piping
                 # gdb through "tee | head" makes head close the pipe after its limit, and the
                 # resulting SIGPIPE kills tee and gdb, so the saved artifact is truncated too.  The
@@ -1141,7 +1173,7 @@ EOF
                 esac
             elif [ -n "$CORE_FILE" ] && command -v lldb > /dev/null 2>&1; then
                 echo "*** Core dump found: $CORE_FILE - extracting backtrace ***"
-                BT_FILE="$CORE_DIR/backtrace-${TEST_BASENAME}.txt"
+                BT_FILE="$CORE_DIR/backtrace-${TEST_ARTIFACT_NAME}.txt"
                 # the crashing thread first, as the head of the file is what the log shows
                 lldb --batch -c "$CORE_FILE" "$QORE" -o "thread backtrace" -o "thread backtrace all" \
                     > "$BT_FILE" 2>&1
@@ -1153,7 +1185,7 @@ EOF
                 fi
             elif command -v gdb > /dev/null 2>&1; then
                 echo "*** No core dump found; re-running under gdb to try to capture backtrace ***"
-                BT_FILE="$CORE_DIR/backtrace-${TEST_BASENAME}.txt"
+                BT_FILE="$CORE_DIR/backtrace-${TEST_ARTIFACT_NAME}.txt"
                 # Filter out thread creation/exit noise (both glibc [New Thread] and musl [New LWP] formats)
                 gdb -batch -ex run -ex "bt full" -ex "thread apply all bt full" -ex quit \
                     --args $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT 2>&1 \
@@ -1178,7 +1210,7 @@ EOF
                     fi
                 fi
                 echo "*** No core dump found; re-running under lldb to try to capture backtrace ***"
-                BT_FILE="$CORE_DIR/backtrace-${TEST_BASENAME}.txt"
+                BT_FILE="$CORE_DIR/backtrace-${TEST_ARTIFACT_NAME}.txt"
                 LLDB=lldb
                 # a non-interactive session cannot get permission to debug a process, which root does not
                 # need; only on disposable CI machines, as the test is then run as root

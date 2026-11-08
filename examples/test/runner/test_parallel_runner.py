@@ -61,6 +61,7 @@ class ParallelRunnerTest(unittest.TestCase):
 
     def make_test(self, name, script, header=""):
         path = self.tests / name
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("#!/bin/sh\n" + header + script)
         return path
 
@@ -236,6 +237,34 @@ kill -9 $shells
         self.assertIn("*** the shell that ran ./examples/test/dies.qtest ended without its result ***", result.stdout)
         self.assertIn("Passed 1 out of 2 tests. 1 tests failed.", result.stdout)
         self.assertIn("Failed tests:\n./examples/test/dies.qtest\n", result.stdout)
+
+    def test_cores_of_the_processes_of_a_test(self):
+        # Two tests with the same file name crash at the same time, each after a process it started has left a core
+        # (a core named with that process's ID, not the test's), so that both cores are there when each test looks
+        # for its own: each test's backtrace is made from the core that holds its mark (the environment of every
+        # process of the test has QORE_TEST_PROCESS_MARK), into a file of its own.  The gdb stand-in prints the
+        # arguments it is given, which are the backtrace.  The tests dump no core of their own (ulimit -c 0).
+        gdb = self.bin / "gdb"
+        gdb.write_text('#!/bin/sh\necho "gdb $*"\n')
+        gdb.chmod(0o755)
+        cores = self.root / "cores"
+        crash = ('printf "\\177ELF\\0\\0QORE_TEST_PROCESS_MARK=%%s\\0PATH=/bin\\0" "$QORE_TEST_PROCESS_MARK" '
+                 '> "$CORE_DIR/core.child.%s"\n%s\nulimit -c 0\nkill -SEGV $$\n')
+        self.fifo("ab")
+        self.fifo("ba")
+        # each core is written before either test crashes
+        self.make_test("a/x.qtest", crash % ("1", 'echo met > "$SHARED/ab"\ncat "$SHARED/ba" > /dev/null'))
+        self.make_test("b/x.qtest", crash % ("2", 'cat "$SHARED/ab" > /dev/null\necho met > "$SHARED/ba"'))
+        result = self.run_runner(2, {"CORE_DIR": str(cores)})
+        self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+        blocks = self.blocks(result.stdout)
+        for test, core in (("a/x.qtest", "core.child.1"), ("b/x.qtest", "core.child.2")):
+            with self.subTest(test=test):
+                self.assertIn("*** CRASH: test killed by signal 11 (exit code 139) ***", blocks[test])
+                self.assertIn("*** Core dump found: %s - extracting backtrace ***" % (cores / core), blocks[test])
+                name = "backtrace-%s_x.txt" % test.split("/")[0]
+                backtrace = (cores / name).read_text()
+                self.assertIn(str(cores / core), backtrace, name)
 
     def test_run_without_tests_prints_its_settings(self):
         # a run that selects no test ends with an error once it has printed its settings (the datasource strings with
