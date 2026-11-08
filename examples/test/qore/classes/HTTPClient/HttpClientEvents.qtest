@@ -28,13 +28,15 @@
     while the response body is still outstanding, so that a client can act on the response header.
 */
 
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../.."
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires Util
 %requires Logger
 %requires HttpServerUtil
 %requires HttpServer
-%requires ../../../TestCertificates.qm
+%requires TestCertificates
 
 %exec-class HttpClientEventsTest
 
@@ -122,7 +124,7 @@ class RawHttpPeer {
     #! Releases every send the peer may still be waiting for and waits for it to finish
     stop() {
         # one release per send is enough to unblock the peer wherever it stands in the response
-        foreach string send in (sends) {
+        for (int i = 0; i < sends.size(); ++i) {
             release.push("stop");
         }
         running.waitForZero(30s);
@@ -379,7 +381,7 @@ class HttpClientEventsTest inherits QUnit::Test {
             }
 
             # release the body of the response
-            foreach string send in (framings{framing}[1]) {
+            for (int i = 0; i < framings{framing}[1].size(); ++i) {
                 raw.release.push("send");
             }
             assertEq(ServerBody, result.get(30s).body, framing);
@@ -403,7 +405,7 @@ class HttpClientEventsTest inherits QUnit::Test {
             result.push(hc.get("/chunked", IdentityHeaders));
         }();
         assertEq("/chunked", raw.requests.get(30s).path);
-        foreach string send in (sends) {
+        for (int i = 0; i < sends.size(); ++i) {
             raw.release.push("send");
         }
         assertEq(chunks[0] + chunks[1], result.get(30s));
@@ -445,7 +447,7 @@ class HttpClientEventsTest inherits QUnit::Test {
             result.push(raw_hc.get("/chunked", IdentityHeaders));
         }();
         assertEq("/chunked", raw.requests.get(30s).path);
-        foreach string send in (sends) {
+        for (int i = 0; i < sends.size(); ++i) {
             raw.release.push("send");
         }
         assertEq(chunks[0], result.get(30s));

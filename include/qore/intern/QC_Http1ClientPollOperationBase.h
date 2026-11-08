@@ -61,6 +61,7 @@ class HttpClientEventSink;
     @since %Qore 3.0
 */
 class DLLLOCAL Http1ClientPollOperationPriv : public SocketPollOperationBase {
+    friend class Http1BufferedSendFailureTest;
 public:
     //! HTTP/1.1 connection states
     enum class H1State {
@@ -1036,7 +1037,7 @@ private:
     //! Release the current inner operation
     DLLLOCAL void releaseCurrentOp(ExceptionSink* xsink);
 
-    //! Drives the concurrent chunked request-body send side (full-duplex).
+    //! Drives the concurrent buffered or chunked request-body send side (full-duplex).
     /** Sends as many queued request-body chunks as the socket will accept
         without blocking, creating/polling @ref send_op as needed.  Runs on the
         I/O thread alongside the response-receive machine.
