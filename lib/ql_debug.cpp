@@ -17140,13 +17140,15 @@ static QoreHashNode* dbg_cares_query_options_to_hash(const QoreDbgCaresQueryOpti
     if (opts.ndots >= 0) {
         h->setKeyValue("ndots", opts.ndots, nullptr);
     }
+    h->setKeyValue("query_cache", opts.query_cache, nullptr);
     return h.release();
 }
 
 //! sets the query options of the c-ares channels that ask the DNS servers of dbg_cares_set_servers()
 /** @param opts a hash with the keys \c timeout_ms (the timeout of the first try of a query; default 1000),
     \c tries (the tries of a query; default 3), \c domains (a list of search domains; missing for those of the host)
-    and \c ndots (the \c ndots option; missing for that of the host)
+    \c ndots (the \c ndots option; missing for that of the host) and \c query_cache (@ref False "False" for no
+    query cache; default @ref True "True")
 
     @return the previous options, in the same form
 */
@@ -17184,6 +17186,10 @@ static QoreValue f_dbg_cares_set_query_options(const QoreListNode* params, Runti
     v = h->getKeyValue("ndots");
     if (!v.isNothing()) {
         opts.ndots = static_cast<int>(v.getAsBigInt());
+    }
+    v = h->getKeyValue("query_cache");
+    if (!v.isNothing()) {
+        opts.query_cache = v.getAsBool();
     }
     return dbg_cares_query_options_to_hash(qore_dbg_cares_set_query_options(opts));
 }

@@ -156,6 +156,8 @@ struct QoreDbgCaresQueryOptions {
     std::vector<std::string> domains;
     //! the \c ndots option, or -1 for that of the host
     int ndots = -1;
+    //! false to make the channels keep no answer in their query cache
+    bool query_cache = true;
 };
 
 //! Sets the query options of the c-ares channels made from now on that ask the servers of

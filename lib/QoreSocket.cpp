@@ -6939,6 +6939,11 @@ static std::string qore_cares_debug_servers(struct ares_options& options, int& o
             options.ndots = opts.ndots;
             optmask |= ARES_OPT_NDOTS;
         }
+        if (!opts.query_cache) {
+            // a maximum TTL of 0 disables the query cache
+            options.qcache_max_ttl = 0;
+            optmask |= ARES_OPT_QUERY_CACHE;
+        }
     }
     return servers;
 #else
