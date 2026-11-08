@@ -1348,10 +1348,16 @@ public class DataProviderActionCatalog {
         #! The last job ID
         static int lazy_job_seq = 0;
 
-        #! The TID of the catalog worker, or 0 if none runs
-        static int lazy_worker_tid = 0;
+        #! The catalog workers running: TID -> @ref True; see startLazyWorker()
+        static hash<string, bool> lazy_workers = {};
 
-        #! The process that the catalog worker runs in
+        #! The number of catalog workers running a job
+        static int lazy_busy = 0;
+
+        #! The jobs that catalog workers run: job ID -> the TID of the worker; set under @ref init_lck
+        static hash<string, int> lazy_job_running = {};
+
+        #! The process that the catalog workers run in
         static int lazy_worker_pid = 0;
 
         #! Set by the exit hook: no worker is started afterwards, and a running one ends
@@ -1384,10 +1390,6 @@ public class DataProviderActionCatalog {
 
         #! Signalled when a job is queued for the catalog worker; for tests (debug builds only)
         static Condition lazy_queue_cond();
-
-        #! Signalled, with init_lck held, when a thread starts to wait for an initialization; for tests (debug builds
-        #! only)
-        static Condition lazy_wait_cond();
 %endif
 
 
@@ -1449,7 +1451,11 @@ public class DataProviderActionCatalog {
         #! runGated(): run only the deferred registrations made under a sandbox (on a sandboxed reader's thread)
         const RunGoverned = 2;
 
-        #! What a thread waiting for the catalog worker waits for in @ref init_waits, which is never an application name
+        #! The most catalog workers that run at once: a slow registration does not delay the others
+        const MaxLazyWorkers = 4;
+
+        #! What a thread waiting for a catalog worker waits for in @ref init_waits, followed by the job's ID; it is
+        #! never the beginning of an application name
         const LazyWorkerKey = "<catalog-worker>";
 
         #! The errors raised when a thread is stopped: interrupted, cancelled, or over a sandbox limit
@@ -1493,6 +1499,26 @@ public class DataProviderActionCatalog {
         @since DataProvider 3.0
     */
     static registerPendingApp(string app, code init, *string module_context) {
+        # code that a sandbox governs: the registration runs now, on this thread, so that no code registered under a
+        # sandbox runs later on another thread, where it could block other tenants or trusted code
+        if (DataProviderActionCatalog::isGoverned()) {
+            {
+                DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
+                if (appcache{app}) {
+                    throw "APP-ERROR", sprintf("Application %y is already registered", app);
+                }
+                if (initmap{app}) {
+                    throw "APP-ERROR", sprintf("Application %y is already pending", app);
+                }
+            }
+            DataProviderActionCatalog::doInit({
+                "init": init,
+                "kind": "app",
+                "app": app,
+                "module_context": module_context ?? DataProviderActionCatalog::registrationModulePath(),
+            });
+            return;
+        }
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -1530,6 +1556,26 @@ public class DataProviderActionCatalog {
         @since DataProvider 3.0
     */
     static registerPendingAppAction(string app, string action, code init) {
+        # code that a sandbox governs: the registration runs now, on this thread (see registerPendingApp())
+        if (DataProviderActionCatalog::isGoverned()) {
+            {
+                DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
+                if (app_actionmap{app}{action}) {
+                    throw "APP-ERROR", sprintf("Application %y action %y is already registered", app, action);
+                }
+                if (initactionmap{app}{action}) {
+                    throw "APP-ERROR", sprintf("Application %y action %y is already pending", app, action);
+                }
+            }
+            DataProviderActionCatalog::doInit({
+                "init": init,
+                "kind": "action",
+                "app": app,
+                "action": action,
+                "module_context": DataProviderActionCatalog::registrationModulePath(),
+            });
+            return;
+        }
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -1600,9 +1646,11 @@ DataProviderActionCatalog::registerLazyAppActions(AppName, sub () {
         @since %DataProvider 3.11
     */
     static registerLazyAppActions(string app, code init) {
-        # without the sandbox APIs, the registration runs now, as it did when it was not lazy; it registers through
-        # the catalog, so it runs without the catalog lock
-        if (!sandbox_apis) {
+        # without the sandbox APIs, and for code that a sandbox governs (a module that sandboxed code loads), the
+        # registration runs now, on this thread, as it did when it was not lazy: no code registered under a sandbox
+        # runs later on another thread, where it could block other tenants or trusted code; it registers through the
+        # catalog, so it runs without the catalog lock
+        if (!sandbox_apis || DataProviderActionCatalog::isGoverned()) {
             if (!appcache{app}) {
                 throw "APP-ERROR", sprintf("cannot register lazy actions for application %y, which is not "
                     "registered", app);
@@ -1742,9 +1790,8 @@ class MyProvider {
                 throw "DATA-PROVIDER-LAZY-INIT-ERROR", sprintf("lazy value %d has not been built, and a sandboxed "
                     "thread that is loading a module cannot build it or wait for it to be built", id);
             }
-            DataProviderActionCatalog::runOnWorker({"value": id});
+            return DataProviderActionCatalog::runOnWorker({"value": id});
         }
-        return lazy_values{key}.value;
     }
 
     #! Returns @ref True if the application has lazy action registrations that have not run yet
@@ -1863,9 +1910,16 @@ int id = DataProviderActionCatalog::addCatalogChangeListener(rearm);
 on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
         @endcode
 
+        @throw DATA-PROVIDER-LISTENER-ERROR a sandbox governs the caller
+
         @since %DataProvider 3.11
     */
     static int addCatalogChangeListener(DataProviderCatalogChangeListener listener) {
+        # a listener runs on the threads that change the catalog, of other tenants and of trusted code
+        if (DataProviderActionCatalog::isGoverned()) {
+            throw "DATA-PROVIDER-LISTENER-ERROR", "code that a sandbox governs cannot add a catalog change listener: it "
+                "would run on the threads of other code that changes the catalog";
+        }
         # taken before the listener lock, which is never held while the catalog lock is taken
         int since = getCatalogRevision();
         AutoLock al(listener_lck);
@@ -1931,7 +1985,9 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
     /** Does nothing while this thread holds the catalog lock: the section that releases it delivers.
     */
     private:internal static deliverCatalogChanges() {
-        if (lck.lockOwner()) {
+        # a worker's changes are delivered on the thread of the reader it runs a job for (see runOnWorker()), so that
+        # no listener runs on a worker, where it would delay the jobs of every sandboxed reader
+        if (lck.lockOwner() || DataProviderActionCatalog::isLazyWorker()) {
             return;
         }
         int revision;
@@ -5234,7 +5290,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
     #! Returns @ref True if the current thread is the catalog worker
     private:internal static bool isLazyWorker() {
-        return lazy_worker_tid && gettid() == lazy_worker_tid && lazy_worker_pid == getpid();
+        return lazy_worker_pid == getpid() && (lazy_workers{gettid().toString()} ?? False);
     }
 
     #! Runs a job on the catalog worker and waits for it, starting the worker if needed
@@ -5244,58 +5300,65 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @throw DATA-PROVIDER-LAZY-INIT-ERROR there is no worker and none can be started
         @throw DATA-PROVIDER-LAZY-WORKER-STOPPED the worker was stopped before it ran the job
     */
-    private:internal static runOnWorker(hash<auto> job) {
+    private:internal static auto runOnWorker(hash<auto> job) {
         string tkey = gettid().toString();
-        # the wait for the worker is registered before the job is queued, so that the worker, which can read an app
+        string id;
+        {
+            AutoLock al(lazy_worker_lck);
+            id = (++lazy_job_seq).toString();
+        }
+        # the wait for the worker is registered before the job is queued, so that a worker, which can read an app
         # that this thread initializes, sees it in its cycle check (see initWaitCycle()); a worker waiting already,
         # directly or through others, for an app that this thread initializes would never run the job
         {
             AutoLock al(init_lck);
             if (DataProviderActionCatalog::lazyWorkerWaitsFor(gettid())) {
-                throw "DATA-PROVIDER-LAZY-INIT-ERROR", sprintf("%s cannot be initialized: the catalog worker waits "
+                throw "DATA-PROVIDER-LAZY-INIT-ERROR", sprintf("%s cannot be initialized: a catalog worker waits "
                     "for an initialization that this thread runs", DataProviderActionCatalog::describeJob(job));
             }
-            init_waits{tkey} = LazyWorkerKey;
+            init_waits{tkey} = LazyWorkerKey + id;
         }
-        # removing the entry takes no lock and cannot fail, however the wait ends
-        on_exit remove init_waits{tkey};
-        string id;
+        # removing the entries takes no lock and cannot fail, however the wait ends
+        on_exit {
+            remove init_waits{tkey};
+            remove lazy_job_waiting{id};
+            remove lazy_job_results{id};
+        }
         {
             AutoLock al(lazy_worker_lck);
-            if (!DataProviderActionCatalog::startLazyWorker()) {
+            if (!DataProviderActionCatalog::startLazyWorker(True)) {
                 throw "DATA-PROVIDER-LAZY-INIT-ERROR", sprintf("%s cannot be initialized for code that a sandbox "
                     "governs: the catalog worker %s", DataProviderActionCatalog::describeJob(job),
                     lazy_worker_shutdown ? "has been stopped" : "is not available");
             }
-            id = (++lazy_job_seq).toString();
             lazy_job_waiting{id} = True;
             # a hash of any values: the job given can be narrowed to the type of its values
             hash<auto> queued;
             queued.id = id;
             queued += job;
             lazy_jobs.push(queued);
+            # another worker when every worker is busy: a slow registration does not delay this job
+            DataProviderActionCatalog::startLazyWorker(False);
 %ifdef QoreDebug
             ++lazy_jobs_submitted;
             lazy_queue_cond.broadcast();
 %endif
         }
-        # removing the entries takes no lock and cannot fail, however the wait ends
-        on_exit {
-            remove lazy_job_waiting{id};
-            remove lazy_job_results{id};
-        }
-        *hash<ExceptionInfo> error;
+        hash<auto> result;
         {
             AutoLock al(lazy_worker_lck);
             # an interrupt or limit of the reader ends its wait; the worker runs the job to its end
             while (!exists lazy_job_results{id}) {
                 lazy_job_cond.wait(lazy_worker_lck);
             }
-            error = lazy_job_results{id}.error;
+            result = lazy_job_results{id};
         }
-        if (error) {
-            throw error.err, error.desc, error.arg;
+        # the changes that the worker made are delivered to the listeners on this thread, not on the worker's
+        DataProviderActionCatalog::deliverCatalogChanges();
+        if (result.error) {
+            throw result.error.err, result.error.desc, result.error.arg;
         }
+        return result.value;
     }
 
     #! Describes a job of the catalog worker for an error message
@@ -5336,29 +5399,10 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         return lazy_jobs_submitted;
     }
 
-    #! Waits until the catalog worker waits for another thread's initialization of an app (debug builds only)
-    /** @param app the app
-        @param timeout_ms the most to wait, in milliseconds
-
-        @return @ref True if the worker waits for the app's initialization, @ref False if the time ran out
-
-        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
-    */
-    static bool waitForLazyWorkerWait(string app, timeout timeout_ms) {
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
-            throw "PERMISSION-DENIED", "cannot wait for the catalog worker from a context with restricted process "
-                "control";
-        }
-        AutoLock al(init_lck);
-        while (True) {
-            *int worker = DataProviderActionCatalog::lazyWorkerTid();
-            if (worker && init_waits{worker.toString()} == app) {
-                return True;
-            }
-            if (lazy_wait_cond.wait(init_lck, timeout_ms)) {
-                return False;
-            }
-        }
+    #! Returns the TIDs of the catalog workers running (debug builds only)
+    static list<int> getLazyWorkers() {
+        AutoLock al(lazy_worker_lck);
+        return map $1.toInt(), keys lazy_workers;
     }
 %endif
 
@@ -5401,40 +5445,38 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         return sandbox_apis && call_static_method("SandboxManager", "isGoverned");
     }
 
-    #! Starts the catalog worker unless it runs; lazy_worker_lck is held
-    /** The worker runs in a thread that no sandbox governs (see initLazyWorker()), started when the first sandboxed
-        reader needs it; it is not started after the exit hook stopped the worker
+    #! Starts a catalog worker if none runs, or if every worker is busy; lazy_worker_lck is held
+    /** The workers run in threads that no sandbox governs (see initLazyWorker()), started when the sandboxed readers
+        need them, at most @ref MaxLazyWorkers; none is started after the exit hook stopped them
 
-        @return @ref True if the worker runs
+        @param first @ref True to start one only if none runs, @ref False to start another one if every worker is
+        busy
+
+        @return @ref True if a worker runs
     */
-    private:internal static bool startLazyWorker() {
+    private:internal static bool startLazyWorker(bool first) {
         int pid = getpid();
-        if (lazy_worker_tid && lazy_worker_pid == pid) {
-            return True;
+        # the child of a fork() has none of the parent's threads; the jobs queued for them are dropped
+        if (lazy_worker_pid != pid) {
+            lazy_workers = {};
+            lazy_busy = 0;
+            lazy_jobs.clear();
+            lazy_worker_pid = pid;
+        }
+        int count = lazy_workers.size();
+        if (first ? count : (lazy_busy + lazy_jobs.size() <= count || count >= MaxLazyWorkers)) {
+            return count > 0;
         }
         if (lazy_worker_shutdown || !lazy_worker_start) {
-            return False;
-        }
-        # the child of a fork() has none of the parent's threads; the jobs queued for them are dropped
-        if (lazy_worker_pid && lazy_worker_pid != pid) {
-            lazy_jobs.clear();
+            return count > 0;
         }
         try {
             code start = lazy_worker_start;
-            lazy_worker_tid = start();
+            lazy_workers{start().toString()} = True;
         } catch (hash<ExceptionInfo> ex) {
             # the exit hooks have started: the process is ending
-            return False;
         }
-        lazy_worker_pid = pid;
-        return True;
-    }
-
-    #! Returns the TID of the catalog worker running in this process, or @ref NOTHING; for the cycle check of waits
-    private:internal static *int lazyWorkerTid() {
-        if (lazy_worker_tid && lazy_worker_pid == getpid()) {
-            return lazy_worker_tid;
-        }
+        return lazy_workers.size() > 0;
     }
 
     #! The catalog worker: runs the jobs queued until it is stopped
@@ -5450,30 +5492,42 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             DataProviderActionCatalog::endLazyWorker(tid);
         }
         while (*hash<auto> job = lazy_jobs.get()) {
+            {
+                AutoLock al(lazy_worker_lck);
+                ++lazy_busy;
+            }
+            {
+                AutoLock al(init_lck);
+                lazy_job_running{job.id} = tid;
+            }
             # the reader is released however the job ends, also when a registration ends this thread
-            *hash<ExceptionInfo> error = DataProviderActionCatalog::stoppedError(job);
-            on_exit DataProviderActionCatalog::finishJob(job.id, error);
+            hash<auto> result = {"error": DataProviderActionCatalog::stoppedError(job)};
+            on_exit {
+                remove lazy_job_running{job.id};
+                DataProviderActionCatalog::finishJob(job.id, result);
+            }
             if (lazy_worker_shutdown) {
                 continue;
             }
             try {
                 if (exists job.app) {
                     DataProviderActionCatalog::runPending(job.app, job.what, job.action, RunTrusted);
+                    result = {};
                 } else {
-                    DataProviderActionCatalog::buildLazyValue(job.value.toString());
+                    result = {"value": DataProviderActionCatalog::buildLazyValue(job.value.toString())};
                 }
-                remove error;
             } catch (hash<ExceptionInfo> ex) {
-                error = ex;
+                result = {"error": ex};
             }
         }
     }
 
     #! Delivers the result of a job to its reader, if it still waits
-    private:internal static finishJob(string id, *hash<ExceptionInfo> error) {
+    private:internal static finishJob(string id, hash<auto> result) {
         AutoLock al(lazy_worker_lck);
+        --lazy_busy;
         if (lazy_job_waiting{id}) {
-            lazy_job_results{id} = {"error": error};
+            lazy_job_results{id} = result;
             lazy_job_cond.broadcast();
         }
     }
@@ -5490,8 +5544,10 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     #! Ends the catalog worker: no job is queued for it any more, and the jobs still queued fail
     private:internal static endLazyWorker(int tid) {
         AutoLock al(lazy_worker_lck);
-        if (lazy_worker_tid == tid) {
-            lazy_worker_tid = 0;
+        remove lazy_workers{tid.toString()};
+        # the other workers run the jobs queued
+        if (lazy_workers) {
+            return;
         }
         while (lazy_jobs.size()) {
             *hash<auto> job = lazy_jobs.get();
@@ -5510,8 +5566,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     private:internal static stopLazyWorker() {
         AutoLock al(lazy_worker_lck);
         lazy_worker_shutdown = True;
-        if (lazy_worker_tid && lazy_worker_pid == getpid()) {
-            lazy_jobs.push(NOTHING);
+        if (lazy_worker_pid == getpid()) {
+            map lazy_jobs.push(NOTHING), xrange(lazy_workers.size());
         }
     }
 
@@ -5596,9 +5652,6 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                     return;
                 }
                 init_waits{tkey} = app;
-%ifdef QoreDebug
-                lazy_wait_cond.broadcast();
-%endif
                 wait_for = owner.done;
             }
             # removing the entry cannot fail
@@ -5609,12 +5662,16 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
     #! Returns @ref True if the worker waits, directly or through others, for an app the thread inits; init_lck is held
     private:internal static bool lazyWorkerWaitsFor(int tid) {
-        *int worker = DataProviderActionCatalog::lazyWorkerTid();
-        if (!worker) {
+        if (lazy_worker_pid != getpid()) {
             return False;
         }
-        *string app = init_waits{worker.toString()};
-        return exists app && app != LazyWorkerKey && DataProviderActionCatalog::initWaitCycle(app, tid);
+        foreach string worker in (keys lazy_workers) {
+            *string app = init_waits{worker};
+            if (exists app && !app.equalPartial(LazyWorkerKey) && DataProviderActionCatalog::initWaitCycle(app, tid)) {
+                return True;
+            }
+        }
+        return False;
     }
 
     #! Returns @ref True if waiting for the initialization of the app would close a cycle of waits; init_lck is held
@@ -5634,8 +5691,17 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             if (!exists next) {
                 return False;
             }
-            # a thread waiting for the catalog worker waits for the worker's thread
-            owner = next == LazyWorkerKey ? DataProviderActionCatalog::lazyWorkerTid() : init_owners{next}.tid;
+            if (next.equalPartial(LazyWorkerKey)) {
+                # a thread waiting for a job waits for the worker running it; for a job that no worker runs yet, any
+                # worker could be the one: a worker waiting for it closes a cycle
+                *int worker = lazy_job_running{next.substr(LazyWorkerKey.size())};
+                if (!exists worker) {
+                    return DataProviderActionCatalog::isLazyWorker() && gettid() == tid;
+                }
+                owner = worker;
+            } else {
+                owner = init_owners{next}.tid;
+            }
         }
         return False;
     }

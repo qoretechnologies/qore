@@ -1,0 +1,39 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# LazyAppActionsHooks.qm - test module through which the lazy registration safety test runs code in other test modules
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module LazyAppActionsHooks {
+    version = "1.0";
+    desc = "test module holding the code that other test modules run while they are loaded";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! The hooks of the test modules
+public namespace LazyAppActionsHooks {
+public class Hooks {
+    private:internal {
+        #! module name -> the code its initialization runs
+        static hash<string, code> hooks = {};
+    }
+
+    #! Sets the code that a test module's initialization runs
+    static set(string module, *code hook) {
+        if (hook) {
+            hooks{module} = hook;
+        } else {
+            remove hooks{module};
+        }
+    }
+
+    #! Runs the code set for a test module, in the thread loading it
+    static run(string module) {
+        if (*code hook = hooks{module}) {
+            hook();
+        }
+    }
+}
+}

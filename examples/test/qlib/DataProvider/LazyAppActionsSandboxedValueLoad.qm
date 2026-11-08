@@ -6,6 +6,7 @@
 %modern
 
 %requires DataProvider
+%requires ./LazyAppActionsHooks.qm
 
 module LazyAppActionsSandboxedValueLoad {
     version = "1.0";
@@ -13,20 +14,7 @@ module LazyAppActionsSandboxedValueLoad {
     author = "Qore Technologies";
     license = "MIT";
     init = sub () {
-        # the test registers a pending app whose initialization does what the test needs while this module loads
-        LazyAppActionsSandboxedValueLoad::Hook::run();
+        # the code that the test sets runs here, in the thread loading the module, under the loader's sandbox
+        LazyAppActionsHooks::Hooks::run("LazyAppActionsSandboxedValueLoad");
     };
-}
-
-#! The test module's initialization
-public namespace LazyAppActionsSandboxedValueLoad {
-public class Hook {
-    #! Reads the pending app that the test names in the environment, which runs the test's code in this thread
-    static run() {
-        # the environment of the process, not the copy that the module's Program was created with
-        if (*string hook = getenv("LAZY_APP_ACTIONS_SANDBOXED_VALUE_LOAD_HOOK")) {
-            DataProviderActionCatalog::getApp(hook);
-        }
-    }
-}
 }
