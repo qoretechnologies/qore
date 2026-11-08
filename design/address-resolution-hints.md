@@ -78,7 +78,8 @@ as a lookup takes the environment lock. The checks are:
   with that failure. A definite failure of the lookup started again during which one of its own queries failed is
   checked like the first one (Confirm or Probe), but not started again: if that check finds an address again, the
   answers keep changing, and the lookup fails with the check's temporary status, or `ESERVFAIL` if it saw none (c-ares
-  does not say how the query failed). A definite failure is never reported after a temporary one was seen.
+  does not say how the query failed). A failure is never reported as definite after a check saw a temporary
+  failure.
 - A probe answer with records counts as an address only if one is of the type asked for: a `CNAME` record alone is not
   one.
 

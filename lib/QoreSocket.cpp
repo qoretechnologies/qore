@@ -7759,8 +7759,8 @@ void QoreCaresAddrInfoResolver::complete(int new_status, struct ares_addrinfo* r
     } else if (qore_cares_status_is_definite(status)) {
         if (repeated && repeat_failure != ARES_SUCCESS) {
             // the lookup started again failed with a definite status, but the check before it saw a failure that
-            // might not happen again: the answers of the server changed, and a definite failure is never reported
-            // after a temporary one was seen
+            // might not happen again: the answers of the server changed, and a failure is never reported as definite
+            // after a check saw a temporary failure
             status = repeat_failure;
         } else {
             // whether the failure is checked is decided after c-ares has returned (see advance()): c-ares 1.34.9
