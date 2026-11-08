@@ -235,6 +235,9 @@ $function$
 
 
     @section pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - fixed \c PgsqlTable::bulkInsert() on a connection of a driver other than \c pgsql (ex: \c jdbc), which ran
+      PostgreSQL's \c COPY \c FROM \c STDIN as SQL, which the driver refuses, and aborted the transaction: the rows
+      are inserted as with the other databases
     - fixed the SQL that renames a function or a procedure (\c getRenameSql()), which gave the argument list after
       the new name (<tt>rename to g(args)</tt>), which PostgreSQL refuses
     - fixed @ref SqlUtil::AbstractDatabase::getSequence() "getSequence()" on a connection of the \c jdbc driver, which
@@ -4400,7 +4403,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     #! Inserts a hash-of-lists row batch using the PostgreSQL COPY protocol when possible
-    /** @param data a hash of column name to list of values; each list must have the same number of elements
+    /** The COPY protocol is used with the \c pgsql driver; with another driver (ex: \c jdbc), the rows are inserted
+        as AbstractTable::bulkInsert() inserts them
+
+        @param data a hash of column name to list of values; each list must have the same number of elements
         @param opt optional insert options; if any options are passed, this method falls back to the generic
         AbstractTable::bulkInsert() implementation
 
@@ -4409,7 +4415,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         @since PgsqlSqlUtilBase 1.9
     */
     int bulkInsert(hash<auto> data, *hash<auto> opt) {
-        if (!opt || !opt.size()) {
+        # the COPY protocol is that of the pgsql driver: another driver (ex: jdbc) cannot run "COPY ... FROM STDIN"
+        # as SQL, which fails and aborts the transaction
+        if ((!opt || !opt.size()) && getDriverName() == "pgsql") {
             int rows = getCopyInsertRowCount(data);
             if (rows == 0) {
                 return 0;
