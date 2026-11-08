@@ -394,12 +394,12 @@ fi
 
 TEST_COUNT=`echo $TESTS | wc -w`
 TEST_COUNT=`expr $TEST_COUNT + 0`
-if [ $TEST_COUNT -eq 0 ]; then
-    echo "ERROR: no tests found to run" >&2
-    exit 1
-fi
 # -l: the tests that would run, one per line, and nothing else
 if [ $LIST_TESTS -eq 1 ]; then
+    if [ $TEST_COUNT -eq 0 ]; then
+        echo "ERROR: no tests found to run" >&2
+        exit 1
+    fi
     for test in $TESTS; do
         echo "$test"
     done
@@ -846,6 +846,13 @@ if [ $MEASURE_TIME -eq 1 ]; then
     printf "TIME_CMD: %s\n" "$TIME_CMD"
 fi
 echo
+
+# a run without tests ends here, once it has printed its settings, which run-tests-credentials.qtest reads (-l ends
+# above, before the settings are known)
+if [ $TEST_COUNT -eq 0 ]; then
+    echo "ERROR: no tests found to run" >&2
+    exit 1
+fi
 
 PASSED_TEST_COUNT=0
 FAILED_TEST_COUNT=0

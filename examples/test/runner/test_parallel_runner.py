@@ -64,8 +64,8 @@ class ParallelRunnerTest(unittest.TestCase):
         path.write_text("#!/bin/sh\n" + header + script)
         return path
 
-    def run_runner(self, jobs, extra=None, timeout=60, path=None):
-        env = {
+    def runner_env(self, jobs, path=None):
+        return {
             "PATH": path or (str(self.bin) + os.pathsep + os.defpath),
             "QORE_BINARY": str(self.bin / "qore"),
             "LIBQORE_BINARY": str(self.bin / "libqore.so"),
@@ -73,6 +73,9 @@ class ParallelRunnerTest(unittest.TestCase):
             "SHARED": str(self.shared),
             "QORE_TEST_JOBS": str(jobs),
         }
+
+    def run_runner(self, jobs, extra=None, timeout=60, path=None):
+        env = self.runner_env(jobs, path)
         env.update(extra or {})
         return subprocess.run(["sh", str(ROOT / "run_tests.sh")], cwd=self.root, env=env, capture_output=True,
                               text=True, timeout=timeout)
@@ -201,6 +204,26 @@ class ParallelRunnerTest(unittest.TestCase):
         self.assertIn("*** the shell that ran ./examples/test/dies.qtest ended without its result ***", result.stdout)
         self.assertIn("Passed 1 out of 2 tests. 1 tests failed.", result.stdout)
         self.assertIn("Failed tests:\n./examples/test/dies.qtest\n", result.stdout)
+
+    def test_run_without_tests_prints_its_settings(self):
+        # a run that selects no test ends with an error once it has printed its settings (the datasource strings with
+        # their passwords masked, which run-tests-credentials.qtest checks); -l prints nothing but the error
+        (self.tests / "empty").mkdir()
+        extra = {"QORE_DB_CONNSTR_PGSQL": "pgsql:user/secret-pw@db%localhost:5432", "QORE_TEST_EXTRA_DIRS": ""}
+        for jobs in (1, 3):
+            with self.subTest(jobs=jobs):
+                result = subprocess.run(["sh", str(ROOT / "run_tests.sh"), "-d", "empty"], cwd=self.root,
+                                        env=dict(self.runner_env(jobs), **extra), capture_output=True, text=True,
+                                        timeout=60)
+                self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+                self.assertIn("ERROR: no tests found to run", result.stderr)
+                self.assertIn("QORE_DB_CONNSTR_PGSQL: pgsql:user/****@db%localhost:5432", result.stdout)
+                self.assertNotIn("secret-pw", result.stdout + result.stderr)
+        result = subprocess.run(["sh", str(ROOT / "run_tests.sh"), "-l", "-d", "empty"], cwd=self.root,
+                                env=dict(self.runner_env(1), **extra), capture_output=True, text=True, timeout=60)
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertEqual("", result.stdout)
+        self.assertEqual("ERROR: no tests found to run\n", result.stderr)
 
     def test_jobs_setting(self):
         self.make_test("a.qtest", "exit 0\n")
