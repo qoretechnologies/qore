@@ -12,7 +12,48 @@
 %requires ./TestRunIsolation.qm
 %requires ./MssqlTestIsolation.qm
 
+%try-module freetds
+%define NoFreetds
+%endtry
+
 %exec-class MssqlColumnTypesTest
+
+#! A datasource that does not connect, for a Sybase server: it records the queries, and gives one column of a table
+class SybaseDatasource inherits Datasource {
+    public {
+        list<string> sql = ();
+    }
+
+    constructor() : Datasource("freetds:user/pass@db") {
+    }
+
+    auto getServerVersion() {
+        return "Adaptive Server Enterprise/16.0 SP04";
+    }
+
+    string getDriverRealName() {
+        return "freetds";
+    }
+
+    auto select(string sql, ...) {
+        self.sql += sql;
+        if (sql =~ /syscolumns/) {
+            return {"column_name": ("id",), "data_type": ("int",), "numeric_precision": (NULL,),
+                "numeric_scale": (NULL,), "length": (4,), "column_default": (NULL,), "is_nullable": ("NO",)};
+        }
+        return {};
+    }
+
+    auto selectRow(string sql, ...) {
+        self.sql += sql;
+        return {"schema": "dbo"};
+    }
+
+    auto selectRows(string sql, ...) {
+        self.sql += sql;
+        return ();
+    }
+}
 
 #! The string and binary column types of SQL Server, with the freetds driver and the jdbc driver
 /** The Unicode types nchar, nvarchar, nvarchar(max) and ntext were not in the type map of SQL Server, so a column of
@@ -74,6 +115,7 @@ class MssqlColumnTypesTest inherits QUnit::Test {
     constructor() : Test("MssqlColumnTypesTest", "1.0", \ARGV) {
         addTestCase("the string and binary types with the freetds driver", \freetdsTypes());
         addTestCase("the string and binary types with the jdbc driver", \jdbcTypes());
+        addTestCase("the columns of a table on Sybase", \sybaseColumns());
         set_return_value(main());
     }
 
@@ -87,6 +129,19 @@ class MssqlColumnTypesTest inherits QUnit::Test {
 
     private jdbcTypes() {
         checkTypes("QORE_DB_CONNSTR_JDBC_MSSQL");
+    }
+
+    #! the columns of a table on Sybase are read from its catalog only: SQL Server's default constraints and extended
+    #! properties are not read
+    private sybaseColumns() {
+%ifdef NoFreetds
+        testSkip("freetds module unavailable");
+%endif
+        SybaseDatasource ds();
+        MssqlTable t(ds, "t");
+        assertEq({"id": "int"}, map {$1.name: $1.native_type}, t.describe().iterator());
+        assertEq((), (select ds.sql, $1 =~ /sys\.(default_constraints|extended_properties)/));
+        assertTrue((select ds.sql, $1 =~ /syscolumns/).size() > 0);
     }
 
     #! creates a table with the types, reads its description, aligns it and reads and writes its values
