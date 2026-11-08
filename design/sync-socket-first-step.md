@@ -128,17 +128,32 @@ in place and measured.
 The code that `continuePoll()` reaches asks in about 50 places whether it runs on an I/O thread
 (`qore_on_async_io_thread()`, `onIoExecutionPath()`) and behaves differently.  Each place reachable from an
 operation that allows the first step must ask `SocketSyncPoll::onIoExecutionPath()`, which the step makes true, or
-be shown not to depend on the thread.  Known cases:
+be shown not to depend on the thread.
 
-- `OptionalNonBlockingHelper` makes the descriptor blocking again in its destructor on any thread but an I/O
-  thread; see section 2.
-- `getSSLCipherName()` / `getSSLCipherVersion()` read the TLS connection directly only on an I/O thread; the step
-  holds the socket mutex, so reading it there is as safe, but it must not make a controller round trip from inside
-  the step.
-- `getH2ActiveStreamId()` looks up the stream by the calling thread's ID (`h2_active_stream_ids`), and is called on
-  the I/O thread for `isDataAvailable()`; see "Problems found", 3.
+The audit of phase 1 followed the `continuePoll()` of the receive, send, accept, connect, TLS upgrade and HTTP
+read operations of `Socket` into their poll states, `SSLSocketHelper` and `qore_socket_private`:
 
-The audit is part of the first phase and is a precondition of enabling the step for an operation.
+- **Fixed:** the TLS upgrade operations (and the TLS shutdown operation) asked `QoreSocket::isSecure()` whether the
+  socket already had a TLS connection.  Off an I/O thread that is a controller round trip, made with the socket mutex
+  held; on a thread that drives poll operations it is refused, and the socket was reported as not secure, so the
+  upgrade of a TLS socket failed instead of completing at once.  They read the state directly now
+  (`qore_socket_private::hasSsl()`).
+- **No longer thread-dependent:** `OptionalNonBlockingHelper` (section 2).
+- **Safe in a step, with a change of behavior:** the header and chunked-body reads check for cancellation and the
+  sandbox limits (`qore_check_cancel()`), which on an I/O thread see the I/O thread's own state and on the calling
+  thread see the caller's: a step can end with `THREAD-CANCELLED` or a sandbox limit error, which `exec()` returns as
+  an error of the operation.  The certificate captured during a TLS handshake (`captureRemoteCert()`) is created in
+  the calling thread's Program.
+- **Safe:** the thread IDs taken when an operation is created (`controller_deferred_tid`), the thread-local state that
+  one call sets and clears (`current_socket`, `lent_poll_info`), the sandbox manager captured with the operation, the
+  socket event queues (they never block).
+- **Not allowed the first step:** the stream operations (`sendFromInputStream()`, `recvToOutputStream()` and the
+  chunked variants), which hand their stream between threads (`unassignThread()`); and, until it is changed, the
+  chunked-body read (`SocketReadHttpChunkedBodyPollOperation`), which does not hold the socket mutex for its whole
+  step but takes it for each part, so the "step in progress" flag cannot simply cover it.
+
+So "the step holds the socket mutex" is a property that an operation must have to allow the first step, not one that
+every operation has; `allowsSubmitterFirstStep()` is only true for the operations that hold it.
 
 ### 2. Sockets stay non-blocking
 
@@ -200,7 +215,7 @@ though section 1 removes the round trip from the calls that need no wait.
 
 ## Problems found while writing this
 
-These are in the code today, independent of the design; each needs a test that shows it before it is fixed.
+These were in the code, independent of the design; each was shown by a test before it was fixed (phase 1).
 
 1. **A cancelled synchronous call leaves its operation running.**  When the wait of `exec()` ends with
    `THREAD-CANCELLED` or `PROGRAM-INTERRUPTED`, `exec()` returns without cancelling the operation (`queue->shift()`
@@ -212,10 +227,15 @@ These are in the code today, independent of the design; each needs a test that s
    operation that only reads whether the socket has an HTTP/2 session.  The check is a read of the session holder
    and can be made on the calling thread (or by the message operation's own first step), saving one round trip for
    each `readHTTPHeader()`, `sendHTTPMessage()` and the like.
-3. **`getH2ActiveStreamId()` depends on the calling thread.**  It looks up the stream in `h2_active_stream_ids` by
-   the calling thread's ID, and is called on the I/O thread for `isDataAvailable()`, whose ID is never in the map
-   for a server session.  To be checked with a test of `isDataAvailable()` on a socket with an active HTTP/2
-   stream; the stream must be found from the operation's owner, not from the thread that runs the step.
+3. **`getH2ActiveStreamId()` depended on the calling thread, and was unreachable.**  It looked up the stream in
+   `h2_active_stream_ids` by the calling thread's ID, and was called on the I/O thread for `isDataAvailable()`.
+   Its only use was the `SOCKET-H2-SYNC-ERROR` check of `isDataAvailable()`, which needed a server session with an
+   active stream and `h2_receiving_frames` false; nothing ever set a stream for a server session (the only setter was
+   the HTTP/2 client of `HTTPClient`, whose session is a client one), and `h2_receiving_frames` was never set, so the
+   check could not fire on any thread.  `design/sync-httpclient-as-async-wrapper.md` and
+   `design/http-client-manager-cpp-port.md` (phase P12) already listed the stream ID and the check as unreachable once
+   HTTP/2 moved to the controller.  They are removed; `HTTPClient` keeps its own stream ID
+   (`qore_httpclient_priv::h2_stream_id`).
 
 ## Correctness
 

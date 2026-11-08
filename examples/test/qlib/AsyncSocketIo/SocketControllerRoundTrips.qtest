@@ -16,8 +16,10 @@
 
 #! Counts the async I/O controller submissions of synchronous Socket calls by method name
 /** A synchronous Socket call that must run on the socket's I/O thread submits an operation keyed
-    "QoreSocketObject::sync:<method>:..."; the controller logs every submission at DEBUG level in the calling thread
-    before it returns, so the count is exact when the call returns.
+    "Socket::sync:<method>:..." (the methods of the Socket class), "QoreSocketObject::sync:<method>:..." (the C++
+    API that some of them use) or "QoreSocket::sync:<method>:..." (the C++ API of a bare QoreSocket, which the socket
+    operations use for some state); the controller logs every submission at DEBUG level in the calling thread before it
+    returns, so the count is exact when the call returns.
 */
 class SubmitCountingAppender inherits LoggerAppenderWithLayout {
     private {
@@ -33,7 +35,7 @@ class SubmitCountingAppender inherits LoggerAppenderWithLayout {
         if (type != LoggerAppender::EVENT_LOG) {
             return;
         }
-        *list<*string> m = (params.toString() =~ x/^submit: operation 'QoreSocketObject::sync:([A-Za-z0-9]+):/);
+        *list<*string> m = (params.toString() =~ x/^submit: operation '(?:Socket|QoreSocketObject|QoreSocket)::sync:([A-Za-z0-9]+):/);
         if (m) {
             AutoLock al(mtx);
             ++counts{m[0]};
@@ -44,6 +46,16 @@ class SubmitCountingAppender inherits LoggerAppenderWithLayout {
     hash<string, int> getAll() {
         AutoLock al(mtx);
         return counts;
+    }
+
+    #! Returns the number of submissions of all methods
+    int total() {
+        AutoLock al(mtx);
+        int rv = 0;
+        foreach int n in (counts.values()) {
+            rv += n;
+        }
+        return rv;
     }
 
     #! Returns the number of submissions of the given methods
@@ -157,6 +169,8 @@ qiurSfIBhXYMDdqWsl9GD+c=
         addTestCase("the TLS cipher is read once per TLS state", \cipherCacheTest());
         addTestCase("setting a body size limit needs no round trip", \limitSetterTest());
         addTestCase("options and address information need no round trip", \inlineCallsTest());
+        addTestCase("an HTTP/1 message is one round trip", \http1MessageTest());
+        addTestCase("a TLS upgrade of a TLS socket reads the TLS state directly", \tlsUpgradeOnTlsSocketTest());
         addTestCase("an HTTP/2 request needs no round trip for the cipher and limits", \http2RequestTest());
         addTestCase("a changed body size limit applies to the next request", \limitChangeTest());
         set_return_value(main());
@@ -292,6 +306,64 @@ qiurSfIBhXYMDdqWsl9GD+c=
         assertEq(0, counter.get(LimitMethods) - start, "a changed value is set in the calling thread");
         assertEq(2000, client.getMaxChunkedBodySize());
         assertEq(0, client.getHttp2MaxRequestBodySize());
+    }
+
+    #! Sending an HTTP/1 message or response submits only the send
+    /** The check that the socket has no HTTP/2 session, on which an HTTP/1 message is refused, reads the session in the
+        calling thread; it was a controller round trip of its own before each message.
+    */
+    http1MessageTest() {
+        list<Socket> pair = getSocketPair();
+        Socket client = pair[0];
+        Socket server = pair[1];
+        on_exit {
+            client.close();
+            server.close();
+        }
+
+        int start = counter.total();
+        client.sendHTTPMessage("GET", "/x", "1.1", {"Host": "localhost"});
+        assertEq(1, counter.total() - start, "the message is one submission");
+        hash<auto> hdr = server.readHTTPHeader(10s);
+        assertEq("GET", hdr.method);
+
+        start = counter.total();
+        server.sendHTTPResponse(200, "OK", "1.1", {"Content-Length": 2}, "ok");
+        assertEq(1, counter.total() - start, "the response is one submission");
+        hdr = client.readHTTPHeader(10s);
+        assertEq(200, hdr.status_code);
+        assertEq("ok", client.recv(2, 10s));
+    }
+
+    #! A TLS upgrade operation of a socket that already has a TLS connection finds it without a round trip
+    /** The operation's initialization runs with the socket's mutex held, on the thread that creates the operation (or
+        on the thread that runs its first step); it asked the socket's I/O thread whether the socket was secure, a
+        round trip with the mutex held, and on a thread that drives poll operations the round trip is refused and the
+        socket was reported as not secure, so the upgrade failed instead of completing at once.
+    */
+    tlsUpgradeOnTlsSocketTest() {
+        list<Socket> pair = getSocketPair();
+        Socket client = pair[0];
+        Socket server = pair[1];
+        on_exit {
+            client.close();
+            server.close();
+        }
+        upgradeToTls(client, server);
+        assertTrue(client.isSecure());
+
+        int start = counter.get("isSecure");
+        SocketPollOperation op = client.startPollUpgradeClientToSSL();
+        assertEq(0, counter.get("isSecure") - start, "the TLS state is read without a round trip");
+        assertTrue(op.goalReached(), "the upgrade of a TLS socket completes at once");
+        assertTrue(op.getOutput().secure);
+        op = server.startPollUpgradeServerToSSL();
+        assertEq(0, counter.get("isSecure") - start, "the server's TLS state is read without a round trip");
+        assertTrue(op.goalReached(), "the upgrade of a TLS socket completes at once");
+
+        # the connection still works
+        client.send("tls");
+        assertEq("tls", server.recv(3, 10s));
     }
 
     #! The calls that only read or set an option, and the address information without a host lookup, run in the calling thread

@@ -220,44 +220,6 @@ static int socket_exec_send_poll(QoreObject* self, QoreSocketObject* s, SocketPo
     return *xsink ? -1 : 0;
 }
 
-class SocketExecHttp1AllowedPollOperation : public SocketPollOperationBase {
-public:
-    DLLLOCAL SocketExecHttp1AllowedPollOperation(QoreSocketObject* sock, const char* mname)
-            : sock(sock), mname(mname) {
-    }
-
-    DLLLOCAL virtual bool goalReached() const override {
-        return done;
-    }
-
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
-        done = true;
-    }
-
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
-        if (done) {
-            return nullptr;
-        }
-
-        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
-        if (priv->hasH2SessionForAsyncPoll()) {
-            xsink->raiseException("HTTP2-ERROR",
-                "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname.c_str());
-        }
-        done = true;
-        return nullptr;
-    }
-
-    DLLLOCAL virtual const char* getStateImpl() const override {
-        return done ? "http1-checked" : "checking-http1";
-    }
-
-private:
-    QoreSocketObject* sock;
-    std::string mname;
-    bool done = false;
-};
-
 static QoreValue socket_exec_poll_output(QoreObject* self, QoreSocketObject* s, SocketPollOperationBase* poller,
         const char* owner_name, const char* goal, ExceptionSink* xsink) {
     ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
@@ -286,11 +248,15 @@ static QoreValue socket_exec_poll_output(QoreObject* self, QoreSocketObject* s, 
     return poller->getOutput();
 }
 
-static int socket_exec_check_http1_allowed(QoreObject* self, QoreSocketObject* s, const char* mname,
-        ExceptionSink* xsink) {
-    ValueHolder rv(socket_exec_poll_output(self, s, new SocketExecHttp1AllowedPollOperation(s, mname),
-        mname, "http1-checked", xsink), xsink);
-    return *xsink ? -1 : 0;
+// raises an exception and returns -1 if the socket has an HTTP/2 session, on which no HTTP/1 message may be sent; the
+// session is read through its holder (H2SessionHolder), which any thread may read, so the check needs no controller
+// round trip
+static int socket_check_http1_allowed(QoreSocketObject* s, const char* mname, ExceptionSink* xsink) {
+    if (my_socket_priv::getPriv(*s)->hasH2SessionForAsyncPoll()) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname);
+        return -1;
+    }
+    return 0;
 }
 
 static int socket_exec_send_binary(QoreObject* self, QoreSocketObject* s, BinaryNode* data,
@@ -421,7 +387,7 @@ static int socket_exec_send_http_message(QoreObject* self, QoreSocketObject* s, 
         return -1;
     }
 
-    if (socket_exec_check_http1_allowed(self, s, "sendHTTPMessage", xsink)) {
+    if (socket_check_http1_allowed(s, "sendHTTPMessage", xsink)) {
         return -1;
     }
 
@@ -457,7 +423,7 @@ static int socket_exec_send_http_response(QoreObject* self, QoreSocketObject* s,
         return -1;
     }
 
-    if (socket_exec_check_http1_allowed(self, s, "sendHTTPResponse", xsink)) {
+    if (socket_check_http1_allowed(s, "sendHTTPResponse", xsink)) {
         return -1;
     }
 
@@ -700,7 +666,7 @@ static int socket_exec_send_http_message_callback(QoreObject* self, QoreSocketOb
         return -1;
     }
 
-    if (socket_exec_check_http1_allowed(self, s, "sendHTTPMessageWithCallback", xsink)) {
+    if (socket_check_http1_allowed(s, "sendHTTPMessageWithCallback", xsink)) {
         return -1;
     }
 
@@ -725,7 +691,7 @@ static int socket_exec_send_http_response_callback(QoreObject* self, QoreSocketO
         return -1;
     }
 
-    if (socket_exec_check_http1_allowed(self, s, "sendHTTPResponseWithCallback", xsink)) {
+    if (socket_check_http1_allowed(s, "sendHTTPResponseWithCallback", xsink)) {
         return -1;
     }
 
@@ -751,7 +717,7 @@ static int socket_exec_send_http_response_header(QoreObject* self, QoreSocketObj
     }
 
     // a response header without a message body is an HTTP/1 message: HTTP/2 has no such message
-    if (socket_exec_check_http1_allowed(self, s, "sendHTTPResponseHeader", xsink)) {
+    if (socket_check_http1_allowed(s, "sendHTTPResponseHeader", xsink)) {
         return -1;
     }
 
@@ -775,7 +741,7 @@ static int socket_exec_send_http_response_input_stream(QoreObject* self, QoreSoc
         return -1;
     }
 
-    if (socket_exec_check_http1_allowed(self, s, "sendHTTPResponse", xsink)) {
+    if (socket_check_http1_allowed(s, "sendHTTPResponse", xsink)) {
         return -1;
     }
 
@@ -6249,6 +6215,11 @@ int sock = sock.getSocket();
     @endcode
 
     @return the socket file descriptor number or -1 if the socket is not open
+
+    @note The descriptor is non-blocking (\c O_NONBLOCK): the operations of the socket are made by the async I/O
+    controller, which needs it.  Code that reads or writes the descriptor itself must handle \c EAGAIN, and code
+    that gives it to a library that expects a blocking descriptor must set the descriptor blocking for that use and
+    non-blocking again before the socket is used.
 */
 int Socket::getSocket() [flags=CONSTANT] {
     return s->getSocket();

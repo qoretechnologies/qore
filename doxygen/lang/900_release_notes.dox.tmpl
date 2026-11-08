@@ -98,6 +98,11 @@
     compiled by an earlier \c qcc that exports one is refused when loaded and must be changed and recompiled.  A
     %Program's <tt>public thread_local</tt> variables are still passed to its child Programs.
 
+    @par Socket Descriptors Are Non-Blocking
+    The descriptor of a Socket, which @ref Qore::Socket::getSocket() "Socket::getSocket()" returns, is non-blocking
+    from the socket's creation, also for an accepted socket, and stays so between calls; code that uses the
+    descriptor itself must handle \c EAGAIN.
+
     @par Final Methods Hold for the Whole Class Hierarchy
     A subclass can no longer bypass a @ref final_methods "final" method with an overload that accepts the same
     arguments or with a parent class listed before the final method's class that declares or inherits its name;

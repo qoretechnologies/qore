@@ -257,44 +257,6 @@ private:
     int controller_deferred_tid = -1;
 };
 
-class QoreSocketObjectHttp1AllowedPollOperation : public SocketPollOperationBase {
-public:
-    DLLLOCAL QoreSocketObjectHttp1AllowedPollOperation(QoreSocketObject* sock, const char* mname)
-            : sock(sock), mname(mname) {
-    }
-
-    DLLLOCAL virtual bool goalReached() const override {
-        return done;
-    }
-
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
-        done = true;
-    }
-
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
-        if (done) {
-            return nullptr;
-        }
-
-        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
-        if (priv->hasH2SessionForAsyncPoll()) {
-            xsink->raiseException("HTTP2-ERROR",
-                "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname.c_str());
-        }
-        done = true;
-        return nullptr;
-    }
-
-    DLLLOCAL virtual const char* getStateImpl() const override {
-        return done ? "http1-checked" : "checking-http1";
-    }
-
-private:
-    QoreSocketObject* sock;
-    std::string mname;
-    bool done = false;
-};
-
 class QoreSocketObjectIdleDataPollOperation : public SocketPollOperationBase {
 public:
     QoreSocketObjectIdleDataPollOperation(ExceptionSink* xsink, QoreSocketObject* sock) : sock(sock) {
@@ -2662,11 +2624,16 @@ static QoreValue qore_socket_object_exec_poll_output(QoreSocketObject* s, Socket
     return poller->getOutput();
 }
 
-static int qore_socket_object_exec_check_http1_allowed(QoreSocketObject* s, const char* mname,
-        ExceptionSink* xsink) {
-    ValueHolder rv(qore_socket_object_exec_poll_output(s,
-        new QoreSocketObjectHttp1AllowedPollOperation(s, mname), -1, mname, "http1-checked", xsink), xsink);
-    return *xsink ? -1 : 0;
+//! Raises an exception and returns -1 if the socket has an HTTP/2 session, on which no HTTP/1 message may be sent
+/** The session is read through its holder (H2SessionHolder), which any thread may read, so the check needs no
+    controller round trip
+*/
+static int qore_socket_object_check_http1_allowed(QoreSocketObject* s, const char* mname, ExceptionSink* xsink) {
+    if (my_socket_priv::getPriv(*s)->hasH2SessionForAsyncPoll()) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname);
+        return -1;
+    }
+    return 0;
 }
 
 static QoreValue qore_socket_object_exec_http2_enqueue(QoreSocketObject* s,
@@ -4147,7 +4114,7 @@ static int qore_socket_object_exec_send_http_message(QoreSocketObject* s, QoreHa
         return -1;
     }
 
-    if (qore_socket_object_exec_check_http1_allowed(s, "sendHTTPMessage", xsink)) {
+    if (qore_socket_object_check_http1_allowed(s, "sendHTTPMessage", xsink)) {
         return -1;
     }
 
@@ -4183,7 +4150,7 @@ static int qore_socket_object_exec_send_http_response(QoreSocketObject* s, QoreH
         return -1;
     }
 
-    if (qore_socket_object_exec_check_http1_allowed(s, "sendHTTPResponse", xsink)) {
+    if (qore_socket_object_check_http1_allowed(s, "sendHTTPResponse", xsink)) {
         return -1;
     }
 
@@ -4439,7 +4406,7 @@ static int qore_socket_object_exec_send_http_message_callback(QoreSocketObject* 
         return -1;
     }
 
-    if (qore_socket_object_exec_check_http1_allowed(s, "sendHTTPMessageWithCallback", xsink)) {
+    if (qore_socket_object_check_http1_allowed(s, "sendHTTPMessageWithCallback", xsink)) {
         return -1;
     }
 
@@ -4465,7 +4432,7 @@ static int qore_socket_object_exec_send_http_response_callback(QoreSocketObject*
         return -1;
     }
 
-    if (qore_socket_object_exec_check_http1_allowed(s, "sendHTTPResponseWithCallback", xsink)) {
+    if (qore_socket_object_check_http1_allowed(s, "sendHTTPResponseWithCallback", xsink)) {
         return -1;
     }
 
@@ -4496,7 +4463,7 @@ static int qore_socket_object_exec_send_http_response_input_stream(QoreSocketObj
         return -1;
     }
 
-    if (qore_socket_object_exec_check_http1_allowed(s, "sendHTTPResponse", xsink)) {
+    if (qore_socket_object_check_http1_allowed(s, "sendHTTPResponse", xsink)) {
         return -1;
     }
 

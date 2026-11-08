@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SocketConnectImmediateTest
+
+#! Tests the connect attempts that are checked right after a non-blocking connect() returns EINPROGRESS
+/** On the loopback interface the TCP handshake is done when connect() returns, but it returns EINPROGRESS; the
+    connect state checks the attempt at once instead of waiting for the descriptor to be writable.  The check reads
+    the socket's pending error, so it must also handle an attempt that failed at once (a refused connection): a
+    failure left to a later check would no longer be seen, and the connect would wait for its timeout.
+
+    These are regression tests of the connections that the check handles: the results are those of the path that
+    waited for the descriptor first.  That the check finds a loopback refusal before the descriptor is registered is
+    tested by the C++ unit tests (AsyncIoDescriptorHoldTest::runConnectFailure()).
+*/
+class SocketConnectImmediateTest inherits QUnit::Test {
+    public {
+        #! the timeout of a connect; a connect that ends must end long before it
+        const ConnectTimeout = 30s;
+
+        #! the time in which a connect that does not wait for its timeout ends
+        const QuickMs = 10000;
+    }
+
+    constructor() : QUnit::Test("SocketConnectImmediateTest", "1.0", \ARGV) {
+        addTestCase("loopback connects complete", \testLoopback());
+        addTestCase("a refused connect fails at once", \testRefused());
+        addTestCase("a refused address is followed by the next one", \testRefusedThenNext());
+        set_return_value(main());
+    }
+
+    private Socket listener(string addr = "127.0.0.1") {
+        Socket s();
+        s.bindINET(addr, 0);
+        s.listen();
+        return s;
+    }
+
+    #! returns a port of the loopback interface that nothing listens on
+    private int closedPort() {
+        Socket s = listener();
+        int port = s.getPort();
+        s.close();
+        return port;
+    }
+
+    testLoopback() {
+        Socket l = listener();
+        on_exit l.close();
+        int port = l.getPort();
+        for (int i = 0; i < 200; ++i) {
+            Socket c();
+            c.connect("127.0.0.1:" + port, ConnectTimeout);
+            Socket a = l.accept(ConnectTimeout);
+            c.send("ping");
+            assertEq("ping", a.recv(4, ConnectTimeout));
+            a.send("pong");
+            assertEq("pong", c.recv(4, ConnectTimeout));
+            c.close();
+            a.close();
+        }
+    }
+
+    testRefused() {
+        for (int i = 0; i < 20; ++i) {
+            int port = closedPort();
+            Socket c();
+            date start = now_us();
+            assertThrows("SOCKET-CONNECT-ERROR", \c.connect(), ("127.0.0.1:" + port, ConnectTimeout));
+            assertLt(QuickMs, (now_us() - start).durationMilliseconds(), "the refusal is reported at once");
+            # the socket is usable again
+            Socket l = listener();
+            on_exit l.close();
+            c.connect("127.0.0.1:" + l.getPort(), ConnectTimeout);
+            Socket a = l.accept(ConnectTimeout);
+            c.send("x");
+            assertEq("x", a.recv(1, ConnectTimeout));
+            c.close();
+            a.close();
+        }
+    }
+
+    #! "localhost" has the IPv6 and the IPv4 loopback addresses where IPv6 is available, the IPv6 one first: with a
+    #! listener on the IPv4 one only, the first attempt is refused and the next one connects
+    testRefusedThenNext() {
+        # the case needs "localhost" to have an IPv6 address first, which is refused (nothing listens on it)
+        list<hash<auto>> addrs = getaddrinfo("localhost", NOTHING, AF_UNSPEC, AI_ADDRCONFIG) ?? ();
+        if (!addrs || addrs[0].family != AF_INET6 || !(select addrs, $1.family == AF_INET)) {
+            testSkip("\"localhost\" does not have an IPv6 address first and an IPv4 address");
+        }
+        Socket l = listener();
+        on_exit l.close();
+        int port = l.getPort();
+        for (int i = 0; i < 20; ++i) {
+            Socket c();
+            date start = now_us();
+            c.connect("localhost:" + port, ConnectTimeout);
+            assertLt(QuickMs, (now_us() - start).durationMilliseconds(), "the connect does not wait for its timeout");
+            Socket a = l.accept(ConnectTimeout);
+            c.send("y");
+            assertEq("y", a.recv(1, ConnectTimeout));
+            c.close();
+            a.close();
+        }
+    }
+}

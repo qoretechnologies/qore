@@ -6123,8 +6123,22 @@ public:
         HttpAsyncRequestTest.qtest).  The connection is refused after the descriptor has been registered (the connect
         is started in the operation's first step, and its result is read in the second); the descriptor must still be
         open when the I/O thread removes it.
+
+        The attempt is checked right after connect() returns EINPROGRESS, which on the loopback interface finds the
+        refusal in the first step, before any registration: with @p immediate_check false, the check is skipped
+        (qore_dbg_connect_no_immediate_check), so that the refusal is found after the registration; with it true, the
+        refused connection fails as before, and its descriptor is never registered.  The flag is process-wide: the C++
+        unit tests run one after the other, so no other connect sees it.
     */
-    static void runConnectFailure(UnitTestCounters& c) {
+    static void runConnectFailure(UnitTestCounters& c, bool immediate_check) {
+        struct ImmediateCheckHelper {
+            explicit ImmediateCheckHelper(bool skip) {
+                qore_dbg_connect_no_immediate_check.store(skip, std::memory_order_relaxed);
+            }
+            ~ImmediateCheckHelper() {
+                qore_dbg_connect_no_immediate_check.store(false, std::memory_order_relaxed);
+            }
+        } ich(!immediate_check);
         ExceptionSink xsink;
         ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
         UT_ASSERT(c, !xsink, "connect failure controller construction succeeds");
@@ -6267,8 +6281,14 @@ public:
                 all_open = all_open && open;
             }
         }
-        UT_ASSERT(c, socket_removals > 0, "the socket's descriptor was registered and removed");
-        UT_ASSERT(c, all_open, "the descriptor of the failed attempt is still open when the I/O thread removes it");
+        if (immediate_check) {
+            UT_ASSERT_EQ(c, (size_t)0, socket_removals,
+                "the refusal is found before the socket's descriptor is registered");
+        } else {
+            UT_ASSERT(c, socket_removals > 0, "the socket's descriptor was registered and removed");
+            UT_ASSERT(c, all_open,
+                "the descriptor of the failed attempt is still open when the I/O thread removes it");
+        }
         UT_ASSERT(c, !sock->isOpen(), "the socket has no descriptor after the failed connection");
     }
 
@@ -15233,6 +15253,36 @@ static QoreValue f_dbg_socket_check_idle_data(const QoreListNode* params, Runtim
     return *xsink ? QoreValue() : QoreValue(static_cast<int64>(rv));
 }
 
+//! Debug-only: returns whether the descriptor of a socket is non-blocking
+/** Tests use this to check that a socket stays non-blocking whatever thread uses it (see
+    qore_socket_cloexec_nonblock()).
+
+    @return True if the descriptor has O_NONBLOCK, False if not; NOTHING if the socket is not open or on Windows
+ */
+static QoreValue f_dbg_socket_is_nonblocking(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    ReferenceHolder<QoreSocketObject> sock(
+        static_cast<QoreSocketObject*>(obj->getReferencedPrivateData(CID_SOCKET, xsink)), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+#ifdef _Q_WINDOWS
+    return QoreValue();
+#else
+    qore_socket_private* sp = qore_socket_private::get(*my_socket_priv::getPriv(**sock)->socket);
+    qore_socket_private::IoUseHelper io_use(*sp);
+    int fd = io_use.getDescriptor();
+    if (fd == QORE_INVALID_SOCKET) {
+        return QoreValue();
+    }
+    int fl = fcntl(fd, F_GETFL, 0);
+    if (fl < 0) {
+        return QoreValue();
+    }
+    return (fl & O_NONBLOCK) != 0;
+#endif
+}
+
 //! Debug-only: holds the stream queue registrations of HTTP/2 client connections pending, or applies them again
 /** Tests use this to make data arrive on an HTTP/2 client stream whose queue registration has not been applied yet
     by the I/O thread, deterministically.  A test must stop holding them (also when it fails).
@@ -16690,7 +16740,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runNotifier(c);
     AsyncIoDescriptorHoldTest::runSocketApi(c);
     AsyncIoDescriptorHoldTest::runSharedDescriptor(c);
-    AsyncIoDescriptorHoldTest::runConnectFailure(c);
+    AsyncIoDescriptorHoldTest::runConnectFailure(c, false);
+    AsyncIoDescriptorHoldTest::runConnectFailure(c, true);
     AsyncIoDescriptorHoldTest::runSharedRegistration(c);
     AsyncIoDescriptorHoldTest::runOwnedExtraFd(c);
     AsyncIoDescriptorHoldTest::runRefusedExtraFd(c);
@@ -19883,6 +19934,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_ABSTRACTPOLLABLEIOOBJECTBASE->getTypeInfo(), QORE_PARAM_NO_ARG, "obj",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "events",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "waits");
+    qns.addBuiltinVariant("dbg_socket_is_nonblocking", f_dbg_socket_is_nonblocking,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, boolOrNothingTypeInfo, 1,
+        QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_async_io_quit_io_thread", f_dbg_async_io_quit_io_thread,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");

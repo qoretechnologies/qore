@@ -2782,7 +2782,7 @@ void AsyncIoControllerPriv::flushCallbacksByOwner(const std::string& owner) {
 // --- Public API ---
 
 QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, bool replace,
-        ExceptionSink* xsink, int* thread_idx) {
+        ExceptionSink* xsink, int* thread_idx, std::string* key_out) {
     // Callers transfer ownership of `info`; hold it here so it is deref'd on
     // any return path.  Otherwise the submission hash (spop ref, owner
     // string, sock ref, etc.) leaks for every FTP connect/command and every
@@ -2886,6 +2886,9 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         }
     } else {
         uh = getSocketHash(sock);
+    }
+    if (key_out) {
+        *key_out = uh;
     }
 
     // Route key: that of the socket (see getRouteKey()), so that every operation on one socket - whatever its cache
@@ -3344,7 +3347,11 @@ QoreHashNode* AsyncIoControllerPriv::exec(QoreObject* self, QoreHashNode* info, 
         return nullptr;
     }
 
-    ReferenceHolder<QoreObject> queue_obj(submit(self, info_holder.release(), replace, xsink),
+    // the operation is held until exec() returns, so that it can be canceled by its object (see below)
+    spop_obj->ref();
+    ReferenceHolder<QoreObject> spop_holder(spop_obj, xsink);
+    std::string key;
+    ReferenceHolder<QoreObject> queue_obj(submit(self, info_holder.release(), replace, xsink, nullptr, &key),
         xsink);
     if (*xsink) {
         return nullptr;
@@ -3367,6 +3374,21 @@ QoreHashNode* AsyncIoControllerPriv::exec(QoreObject* self, QoreHashNode* info, 
     bool timed_out = false;
     ValueHolder result(queue->shift(xsink, 0, &timed_out), xsink);
     if (*xsink) {
+        // The wait ended without a result: the thread was canceled or its Program interrupted.  The caller gives the
+        // operation up, so it must not outlive the call: left on the controller, it keeps its claim on the socket
+        // (the next call in its direction fails with SOCKET-NON-BLOCK-ERROR) and a receive that completes later takes
+        // data that no caller gets.  It is canceled as a timeout would cancel it (a receive that has taken part of its
+        // data closes the socket, as the stream position is lost), and the cancel is waited for.  For an operation
+        // whose steps run on the I/O thread (the operations of the synchronous Socket methods), the operation and its
+        // claim are gone when the cancel has been processed, so the socket is usable when the error reaches the
+        // caller; for an operation whose step is running on a callback worker at that moment, the abort follows when
+        // the step returns (pending_aborts), shortly after.  A result that the operation delivered between the
+        // interruption and the cancel is dropped with the Queue: the caller gave the call up.  The operation is
+        // canceled by its object, as another operation can have taken its key once it completed.  The wait for the
+        // cancel does not wait for Qore code: the I/O threads run none.
+        ExceptionSink cancel_xsink;
+        cancelByKeyOnAllThreads(key, &cancel_xsink, spop_obj);
+        xsink->assimilate(cancel_xsink);
         return nullptr;
     }
     if (timed_out) {
@@ -4003,7 +4025,8 @@ bool AsyncIoControllerPriv::cancelByKeyOnIoThread(const std::string& uh, int own
     return rv;
 }
 
-bool AsyncIoControllerPriv::cancelByKeyOnAllThreads(const std::string& uh, ExceptionSink* xsink) {
+bool AsyncIoControllerPriv::cancelByKeyOnAllThreads(const std::string& uh, ExceptionSink* xsink,
+        const QoreObject* only_spop_obj) {
     // Send a Cancel command to every live I/O thread and wait until all have processed it.  A stopped thread's
     // cache is empty: a thread only stops by autostop once every cache is empty, or after its exit cleanup has
     // canceled its operations.
@@ -4023,6 +4046,7 @@ bool AsyncIoControllerPriv::cancelByKeyOnAllThreads(const std::string& uh, Excep
                     Command cmd;
                     cmd.cmd = IoCommand::Cancel;
                     cmd.key = uh;
+                    cmd.cancel_spop_obj = only_spop_obj;
                     completion->ROreference();  // one ref per cmd
                     cmd.completion = completion;
                     tp->cmdq.push(std::move(cmd));
@@ -7458,7 +7482,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
 
                     // Cache access is I/O-thread-only (no lock)
                     auto it = t.cache.find(cmd.key);
-                    if (it != t.cache.end()) {
+                    if (it != t.cache.end() && (!cmd.cancel_spop_obj || it->second.spop_obj == cmd.cancel_spop_obj)) {
                         found = true;
                         ASYNC_IO_TRACE("cache.erase IO_CMD_CANCEL key='%s' owner='%s'\n",
                             cmd.key.c_str(), it->second.owner.c_str());

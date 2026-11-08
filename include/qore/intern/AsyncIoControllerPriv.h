@@ -701,10 +701,11 @@ public:
         @param replace if true, cancel any existing operation with the same key
         @param xsink for exception handling
         @param thread_idx if not nullptr, receives the index of the I/O thread the operation was submitted to
+        @param key_out if not nullptr, receives the cache key of the operation (the custom key or the socket's hash)
         @return a Queue object for receiving the result (or nullptr if callback was provided)
     */
     DLLLOCAL QoreObject* submit(QoreObject* self, QoreHashNode* info, bool replace, ExceptionSink* xsink,
-        int* thread_idx = nullptr);
+        int* thread_idx = nullptr, std::string* key_out = nullptr);
 
     //! Execute an async operation synchronously
     /** @param self the QoreObject wrapping this controller
@@ -1011,6 +1012,11 @@ private:
     struct Command {
         IoCommand cmd = IoCommand::WakeSocket;
         std::string key;                //!< For Cancel / ContinuePollResult / SubmitOp: the cache key
+        //! For Cancel: if set, only the operation of this object is canceled (another operation can have taken the key)
+        /** Compared by address only; the canceling thread holds a reference to the object until the command has been
+            processed, so the address cannot be reused meanwhile
+        */
+        const QoreObject* cancel_spop_obj = nullptr;
         std::string owner;              //!< For CancelOwner / SubmitOp: the owner string
         //! For SubmitOp: the owner of the poll op whose continuePoll() was
         //! running on this (worker) thread when submit() was called — the
@@ -1804,9 +1810,12 @@ private:
     //! cancelByKey() from a non-I/O thread with several I/O threads: searches every live I/O thread and waits
     /** @param uh the operation key
         @param xsink for exception handling
+        @param only_spop_obj if not nullptr, only the operation of this object is canceled; the caller holds a
+        reference to it until this function returns
         @return true if an operation was found and canceled
     */
-    DLLLOCAL bool cancelByKeyOnAllThreads(const std::string& uh, ExceptionSink* xsink);
+    DLLLOCAL bool cancelByKeyOnAllThreads(const std::string& uh, ExceptionSink* xsink,
+        const QoreObject* only_spop_obj = nullptr);
 
     //! Remove cancel_cond_map[key] (if present), broadcast its cond, and drop
     //! the map's ref.  Caller must hold m.
