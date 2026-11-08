@@ -1,0 +1,90 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class ProgramThreadControlTest
+
+class ProgramThreadControlTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Program thread control", "1.0") {
+        addTestCase("idle and invalid requests", \idle());
+        addTestCase("completion notifications and scoped cancellation", \active());
+        addTestCase("wait cancellation", \cancelWait());
+        addTestCase("cancel all includes descendants and resets at idle", \cancelAll());
+        set_return_value(main());
+    }
+    private Program create(Counter entered, Counter gate, int count = 1, string after_cancel = "") {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+        pgm.parse("our Counter entered; our Counter gate; our Queue descendants();", "globals");
+        pgm.setGlobalVarValue("entered", entered); pgm.setGlobalVarValue("gate", gate);
+        pgm.parse(sprintf("for (int i = 0; i < %d; ++i) { background sub () { "
+            "try { entered.dec(); gate.waitForZero(); } catch (hash<ExceptionInfo> ex) { "
+            "if (ex.err != \"THREAD-CANCELLED\") { rethrow; } clear_thread_cancel(); %s } }(); }", count, after_cancel), "workers");
+        pgm.run(); entered.waitForZero(); return pgm;
+    }
+    private nothing idle() {
+        Program pgm(PO_NEW_STYLE, True);
+        assertTrue(pgm.waitForThreads(-1));
+        assertTrue(pgm.waitForThreads(9223372036854775807));
+        assertTrue(pgm.waitForThread(999999, -1));
+        assertFalse(pgm.cancelThread(999999));
+        assertThrows("PROGRAM-THREAD-ERROR", sub () { pgm.waitForThread(0); });
+        assertThrows("PROGRAM-THREAD-ERROR", sub () { pgm.waitForThread(gettid()); });
+        assertThrows("PROGRAM-THREAD-ERROR", sub () { pgm.cancelThread(0); });
+        assertThrows("PROGRAM-THREAD-ERROR", sub () { pgm.cancelThread(gettid()); });
+        assertThrows("PROGRAM-THREAD-ERROR", sub () { pgm.cancelThread(4294967297); });
+        assertThrows("PROGRAM-THREAD-ERROR", sub () { pgm.waitForThread(4294967297); });
+        assertEq(0, pgm.cancelThreads());
+        pgm.parse("our *Program owner; sub wait_self() { owner.waitForThreads(-1); } "
+            "sub cancel_self() { owner.cancelThreads(); }", "self-checks");
+        pgm.setGlobalVarValue("owner", pgm); on_exit pgm.setGlobalVarValue("owner", NOTHING);
+        assertThrows("PROGRAM-THREAD-ERROR", sub () { pgm.callFunction("wait_self"); });
+        assertThrows("PROGRAM-THREAD-ERROR", sub () { pgm.callFunction("cancel_self"); });
+    }
+    private nothing active() {
+        Counter entered(2); Counter gate(1); Program pgm = create(entered, gate, 2);
+        on_exit gate.dec();
+        list<int> tids = pgm.getThreadList(); assertEq(2, tids.size());
+        assertFalse(pgm.waitForThreads(-1)); assertFalse(pgm.waitForThreads(1));
+        assertFalse(pgm.waitForThread(tids[0], -1));
+        Counter observer_ready(1); Queue finished();
+        int observer = background sub () { observer_ready.dec(); finished.push(pgm.waitForThread(tids[0])); }();
+        observer_ready.waitForZero();
+        assertFalse(pgm.cancelThread(observer), "must not cancel an embedding thread");
+        assertTrue(pgm.cancelThread(tids[0], "test single thread"));
+        assertTrue(finished.get(5000), "individual completion wakes while another thread remains");
+        assertTrue(thread_join(observer, 5000)); assertTrue(thread_join(tids[0], 5000));
+        assertFalse(pgm.waitForThreads(-1)); assertFalse(pgm.cancelThread(tids[0]));
+        assertTrue(pgm.cancelThread(tids[1]));
+        assertTrue(pgm.waitForThreads(5000)); assertTrue(thread_join(tids[1], 5000));
+        assertEq(0, pgm.getThreadList().size());
+        pgm.parse("int result = 42;", "after-wait"); pgm.run();
+    }
+    private nothing cancelWait() {
+        Counter entered(1); Counter gate(1); Program pgm = create(entered, gate);
+        on_exit gate.dec();
+        Counter ready(1); Queue finished();
+        int observer = background sub () {
+            try { ready.dec(); pgm.waitForThreads(); finished.push("unexpected"); }
+            catch (hash<ExceptionInfo> ex) { clear_thread_cancel(); finished.push(ex.err); }
+        }();
+        ready.waitForZero(); assertTrue(cancel_thread(observer, "stop observer"));
+        assertEq("THREAD-CANCELLED", finished.get(5000)); assertTrue(thread_join(observer, 5000));
+        assertFalse(pgm.waitForThreads(-1), "cancelling a waiter leaves observed work running");
+        foreach int tid in (pgm.getThreadList()) { pgm.cancelThread(tid); }
+        assertTrue(pgm.waitForThreads(5000));
+    }
+    private nothing cancelAll() {
+        Counter entered(1); Counter gate(1);
+        Program pgm = create(entered, gate, 1, "background defer_thread_cancel(sub () { "
+            "descendants.push(thread_cancelled()); clear_thread_cancel(); });");
+        on_exit gate.dec();
+        assertEq(1, pgm.cancelThreads("cancel entire Program"));
+        assertTrue(pgm.waitForThreads(5000)); assertEq(0, pgm.cancelThreads());
+        Queue descendants = pgm.getGlobalVariable("descendants");
+        assertTrue(descendants.get(5000), "a descendant started during the cancellation wave receives cancellation");
+        # A new evaluation must not inherit the completed cancellation wave.
+        pgm.parse("our int result; background sub () { result = 42; }();", "next-evaluation");
+        pgm.run(); assertTrue(pgm.waitForThreads(5000)); assertEq(42, pgm.getGlobalVars().result);
+    }
+}
