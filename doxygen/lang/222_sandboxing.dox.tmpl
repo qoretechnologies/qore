@@ -203,6 +203,23 @@ authenticate();
     around direct native implementations. Foreign runtime I/O that does not use Qore's policy checks remains outside
     this mechanism; provenance is execution context, not data taint tracking.
 
+    @subsection sandbox_module_init Module Initialization
+
+    A module found in a directory of the process-wide module path (\c QORE_MODULE_DIR and the standard module
+    directories, set when the library is initialized) is library code.  Its initialization (the static initializers
+    of its classes, its global variable and constant initializers and its \c init closure) runs with no sandbox
+    provenance, also when sandboxed or restricted code loads it first: the sandbox of the loading code does not
+    govern it, its interrupts and policy do not apply to it, and what it creates (objects, callbacks, registrations
+    in the module's own registries, threads it starts) belongs to no sandbox, so a later caller that uses it is not
+    affected by the sandbox of the code that happened to load the module.  The parse defines of sandboxed code that
+    loads such a module do not apply to the module's source.  Every later call into the module is governed by its
+    caller, as any other call.  The restrictions of the loading %Program's parse options still apply to the module.
+    The time limits of the loading call still count the time that the initialization takes.
+
+    A module that a caller loads by path, or finds through a module path that a %Program added with
+    \c %prepend-module-path or \c %append-module-path, is not library code: it is initialized under the sandbox of
+    the code that loads it, and a source module's %Program keeps that sandbox, as before.
+
     @section sandbox_filesystem Filesystem Security
 
     The filesystem security system controls which paths can be accessed by sandboxed code. It supports:

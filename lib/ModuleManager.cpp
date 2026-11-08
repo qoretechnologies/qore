@@ -1506,6 +1506,9 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
     QoreNamespace* qns = tpgm->getQoreNS();
 
     if (is_aot_user) {
+        // an AOT module from the process-wide module path is library code: its initialization, which runs when it is
+        // first applied to a Program, belongs to no sandbox (see QoreModuleInitSandboxBarrierHelper)
+        QoreModuleInitSandboxBarrierHelper init_barrier(QMM.isTrustedModulePath(getFileName()));
         // an AOT module merges its namespace under its own fence and must not hold the write lock
         // across the deferred initialization that follows the merge; see qore_aot_module_ns_init_impl()
         module_ns_init(rns, qns, xsink);
@@ -2786,8 +2789,52 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 }
 
 //! Makes a source module Program subject to the importing Program's sandbox during initialization
-static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram* parent_pgm) {
-    if (!parent_pgm || &module_pgm == parent_pgm) {
+//! Returns true if a sandbox governs the code running on the current thread
+static bool qore_thread_is_sandboxed() {
+    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+    return static_cast<bool>(governing);
+}
+
+bool QoreModuleManager::isTrustedModulePath(const char* path) const {
+    if (!path || !*path) {
+        return false;
+    }
+    // the file as named (a module directory can hold links to the files of a build) and the file it is; a name that
+    // is relative or goes up a directory names no file in a module directory
+    std::vector<std::string> names;
+    if (path[0] == '/' && !strstr(path, "/../") && !strstr(path, "/./")) {
+        names.push_back(path);
+    }
+    std::unique_ptr<char, decltype(&free)> real(realpath(path, nullptr), &free);
+    if (!real) {
+        return false;
+    }
+    names.push_back(real.get());
+    auto within = [] (const std::string& name, const std::string& dir) -> bool {
+        size_t dlen = dir.size();
+        while (dlen > 1 && dir[dlen - 1] == '/') {
+            --dlen;
+        }
+        return dlen && name.size() > dlen + 1 && !name.compare(0, dlen, dir, 0, dlen) && name[dlen] == '/';
+    };
+    for (const std::string& dir : moduleDirList) {
+        std::unique_ptr<char, decltype(&free)> real_dir(realpath(dir.c_str(), nullptr), &free);
+        for (const std::string& name : names) {
+            if ((dir[0] == '/' && within(name, dir)) || (real_dir && within(name, real_dir.get()))) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+//! Gives a source module's Program the sandbox manager of the Program loading it, unless the module is library code
+/** A module from a trusted module directory (see QoreModuleManager::isTrustedModulePath()) is initialized with no
+    sandbox provenance, and every later call into it is governed by its caller; any other module, which a caller chose
+    by path or through its own module paths, is governed by the sandbox of the Program that loads it first
+*/
+static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram* parent_pgm, bool trusted) {
+    if (trusted || !parent_pgm || &module_pgm == parent_pgm) {
         return;
     }
     QoreSandboxManager* sm = qore_program_private::get(*parent_pgm)->getSandboxManagerRef();
@@ -2858,6 +2905,12 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     }
     ON_BLOCK_EXIT(module_load_clear, feature);
 
+    // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
+    const bool trusted = isTrustedModulePath(path);
+    // a sandboxed loader's parse defines do not shape library code (see below); checked before the barrier masks it
+    const bool sandboxed_loader = trusted && qore_thread_is_sandboxed();
+    QoreModuleInitSandboxBarrierHelper init_barrier(trusted);
+
     QoreParseCountContextHelper pcch;
 
     // Find the best program to inherit options from
@@ -2896,7 +2949,10 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         // nested %requires(reexport) dependencies resolve against the same
         // module search surface the importer established.
         if (p) {
-            qore_program_private::inheritParseDefines(*mpgm, *p);
+            // library code is not shaped by the parse defines of sandboxed code that loads it
+            if (!sandboxed_loader) {
+                qore_program_private::inheritParseDefines(*mpgm, *p);
+            }
             qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
             qore_program_private::inheritModulePathLists(*mpgm, *p);
         }
@@ -2905,7 +2961,7 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     // constant initialization subject to the caller's sandbox even though it does not execute through a normal
     // caller Program frame.  A narrowly-scoped exception in QoreSandboxManager permits read-only access to the
     // module's own resources while its module context is active.
-    inherit_module_sandbox_manager(*mpgm, p);
+    inherit_module_sandbox_manager(*mpgm, p, trusted);
     // inherit execution mode from parent program
     if (p) {
         qore_program_private* ppriv = qore_program_private::get(*p);
@@ -3814,6 +3870,12 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         return nullptr;
     }
 
+    // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
+    const bool trusted = isTrustedModulePath(path);
+    // a sandboxed loader's parse defines do not shape library code (see below); checked before the barrier masks it
+    const bool sandboxed_loader = trusted && qore_thread_is_sandboxed();
+    QoreModuleInitSandboxBarrierHelper init_barrier(trusted);
+
     QoreParseCountContextHelper pcch;
 
     // Find the best program to inherit options from
@@ -3847,13 +3909,16 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         // nested %requires(reexport) dependencies resolve against the same
         // module search surface the importer established.
         if (p) {
-            qore_program_private::inheritParseDefines(*mpgm, *p);
+            // library code is not shaped by the parse defines of sandboxed code that loads it
+            if (!sandboxed_loader) {
+                qore_program_private::inheritParseDefines(*mpgm, *p);
+            }
             qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
             qore_program_private::inheritModulePathLists(*mpgm, *p);
         }
     }
     // See loadSeparatedModule(): source-module constant initialization must inherit the caller's sandbox.
-    inherit_module_sandbox_manager(*mpgm, p);
+    inherit_module_sandbox_manager(*mpgm, p, trusted);
     // inherit execution mode from parent program
     if (p) {
         qore_program_private* ppriv = qore_program_private::get(*p);
@@ -4118,6 +4183,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     if (checkBlacklist(xsink, feature)) {
         return nullptr;
     }
+
+    // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
+    QoreModuleInitSandboxBarrierHelper init_barrier(isTrustedModulePath(path));
 
     QoreModuleNameContextHelper mnch(feature);
 

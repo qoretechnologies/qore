@@ -519,6 +519,21 @@ public:
     std::vector<const ProgramThreadCountContextHelper*> module_lifecycle_barrier_ctx;
     unsigned module_lifecycle_unrecorded = 0;
 
+    // the module initialization barriers that are active, innermost last (see QoreModuleInitSandboxBarrierHelper):
+    // sandbox resolution does not look beyond the innermost one
+    struct ModuleInitBarrier {
+        //! the program context helper current when it was set
+        const ProgramThreadCountContextHelper* ctx;
+        //! the Program current when it was set
+        const QoreProgram* pgm;
+        //! the innermost provenance frame when it was set; the walk stops there
+        const QoreSandboxProvenanceHelper* provenance;
+        //! the continued-operation and inherited sandbox contexts when it was set; ignored while it is active
+        const QoreSandboxContext* sandbox_context;
+        const QoreSandboxContext* inherited_sandbox_context;
+    };
+    std::vector<ModuleInitBarrier> module_init_barriers;
+
     // cancellation-deferral depth; while non-zero, qore_check_cancel() reports "not cancelled"
     // without touching the pending request, so that a bounded cleanup critical section (acquire a
     // lock, release ownership, signal waiters, unlock) can run to completion on a thread that has
@@ -3706,9 +3721,16 @@ static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_
     if (!td) {
         return nullptr;
     }
+    // a module initialization barrier: nothing that the thread had when it was set is used
+    const ThreadData::ModuleInitBarrier* mib = td->module_init_barriers.empty()
+        ? nullptr : &td->module_init_barriers.back();
     // an operation continued for another thread is governed by the sandbox of the thread that started it; the
     // Program of such a manager is only known by its ID (see get_cancel_scope_pgm_id())
-    if (const QoreSandboxContext* ctx = (policy && td->trusted_policy_depth) ? nullptr : td->sandbox_context) {
+    const QoreSandboxContext* continued = (policy && td->trusted_policy_depth) ? nullptr : td->sandbox_context;
+    if (mib && continued == mib->sandbox_context) {
+        continued = nullptr;
+    }
+    if (const QoreSandboxContext* ctx = continued) {
         QoreSandboxManager* sm = policy ? ctx->policy_manager : ctx->manager;
         if (sm) {
             sm->ref();
@@ -3729,9 +3751,12 @@ static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_
         }
         return sm;
     };
-    // 1) the current program context
-    if (QoreSandboxManager* sm = try_pgm(td->current_pgm)) {
-        return sm;
+    // 1) the current program context; under a module initialization barrier, not the Program that loads the module
+    // while no Program has been entered since
+    if (!mib || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
+        if (QoreSandboxManager* sm = try_pgm(td->current_pgm)) {
+            return sm;
+        }
     }
     // 2) enclosing caller programs via the program-context (call) stack, innermost first
     //
@@ -3746,6 +3771,11 @@ static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_
         if (barrier && ch == barrier_ctx) {
             return nullptr;
         }
+        // a module initialization barrier: the Program that was current when it was set is the old Program of the
+        // first context entered after it
+        if (mib && (ch == mib->ctx || ch->getOldContext() == mib->ctx)) {
+            return nullptr;
+        }
         if (QoreSandboxManager* sm = try_pgm(ch->getOldProgram())) {
             return sm;
         }
@@ -3754,15 +3784,21 @@ static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_
         return nullptr;
     }
     // 3) call program context fallback: matches getProgram()'s fallback when current_pgm is
-    // null (issue #3024), preserving prior single-program resolution in that edge case
-    if (td->current_pgm != td->call_program_context) {
+    // null (issue #3024), preserving prior single-program resolution in that edge case; not under a module
+    // initialization barrier, where it is the context of the code that loads the module
+    if (!mib && td->current_pgm != td->call_program_context) {
         if (QoreSandboxManager* sm = try_pgm(td->call_program_context)) {
             return sm;
         }
     }
     // 4) the sandbox inherited from the code that started this thread: the outermost caller of everything the
-    // thread runs; the Program of its manager is only known by its ID
-    if (const QoreSandboxContext* ctx = td->inherited_sandbox_context) {
+    // thread runs; the Program of its manager is only known by its ID; not the one that the thread had when a module
+    // initialization barrier was set
+    const QoreSandboxContext* inherited = td->inherited_sandbox_context;
+    if (mib && inherited == mib->inherited_sandbox_context) {
+        inherited = nullptr;
+    }
+    if (const QoreSandboxContext* ctx = inherited) {
         QoreSandboxManager* sm = policy ? ctx->policy_manager : ctx->manager;
         if (sm) {
             sm->ref();
@@ -3780,9 +3816,15 @@ static QoreSandboxManager* find_thread_provenance_ref(bool policy) {
     if (!td) {
         return nullptr;
     }
+    const ThreadData::ModuleInitBarrier* mib = td->module_init_barriers.empty()
+        ? nullptr : &td->module_init_barriers.back();
     std::vector<QoreSandboxManager*> managers;
     for (const auto* frame = td->sandbox_provenance; frame; frame = frame->getPrevious()) {
         if (policy && td->trusted_policy_depth && frame == td->trusted_policy_boundary) {
+            break;
+        }
+        // the provenance of the code that loads a module is not that of the module's initialization
+        if (mib && frame == mib->provenance) {
             break;
         }
         const QoreSandboxContext* ctx = frame->getContext();
@@ -3790,7 +3832,7 @@ static QoreSandboxManager* find_thread_provenance_ref(bool policy) {
     }
     if (!policy || !td->trusted_policy_depth) {
         const QoreSandboxContext* ctx = td->sandbox_context ? td->sandbox_context : td->inherited_sandbox_context;
-        if (ctx) {
+        if (ctx && !(mib && (ctx == mib->sandbox_context || ctx == mib->inherited_sandbox_context))) {
             managers.push_back(policy ? ctx->provenance_policy_manager : ctx->provenance_manager);
         }
     }
@@ -3820,6 +3862,32 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(qore_program_i
 
 QoreSandboxManager* qore_find_thread_sandbox_manager_ref() {
     return find_thread_sandbox_manager_ref_intern();
+}
+
+QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool active) {
+    if (!active) {
+        return;
+    }
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return;
+    }
+    // without the barrier recorded, the module's initialization stays governed by the code that loads it
+    try {
+        td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
+            td->sandbox_context, td->inherited_sandbox_context});
+        pushed = true;
+    } catch (std::bad_alloc&) {
+    }
+}
+
+QoreModuleInitSandboxBarrierHelper::~QoreModuleInitSandboxBarrierHelper() {
+    if (!pushed) {
+        return;
+    }
+    ThreadData* td = thread_data.get();
+    assert(td && !td->module_init_barriers.empty());
+    td->module_init_barriers.pop_back();
 }
 
 QoreModuleLifecycleBarrierHelper::QoreModuleLifecycleBarrierHelper() {

@@ -489,6 +489,29 @@ DLLLOCAL int qore_check_module_owned_code(const QoreValue code, int64 domain, co
 DLLLOCAL int qore_check_module_owned_code(const ResolvedCallReferenceNode* code, int64 domain, const char* name,
         const char* action, ExceptionSink* xsink);
 
+//! Runs the initialization of a module from a trusted module directory with no sandbox provenance
+/** While it exists, sandbox resolution for every purpose (interrupts, limits, policy and the provenance of what
+    is created) does not look beyond the code that loads the module: not at the Programs that were current when it
+    was created, nor at the provenance, continued-operation or inherited sandbox contexts that the thread had then.
+    A Program entered inside it with a sandbox manager of its own still governs the code that runs in it, as does
+    the provenance of the objects and callbacks that the code uses.
+
+    The module manager creates it only for a module whose file is in a directory of the process-wide module path
+    (see QoreModuleManager::isTrustedModulePath()), never for a module that a caller chose by path or through its own
+    module paths, so that library code is initialized as library code, also when sandboxed code loads it first:
+    its static initializers and init closure belong to no sandbox, and so do the objects they create.  Every later
+    call into the module is governed by its caller as any other call.
+*/
+class QoreModuleInitSandboxBarrierHelper {
+public:
+    //! Establishes the barrier if \a active
+    DLLLOCAL QoreModuleInitSandboxBarrierHelper(bool active);
+    DLLLOCAL ~QoreModuleInitSandboxBarrierHelper();
+
+private:
+    bool pushed = false;
+};
+
 //! Marks module code that runs for no application: a module's init or del closure
 /** The Program that loads or unloads a module does not call its init or del closure on its own behalf, so
     qore_reflection_has_module_caller() does not look beyond this point for an application Program; a call reflected

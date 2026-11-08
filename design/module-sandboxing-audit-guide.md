@@ -80,12 +80,38 @@ The exception has strict boundaries:
 Module resources should therefore be stored beside the module and read during initialization. Modules must not defer resource
 file reads until an action or method is invoked.
 
+#### Module initialization: library code from the module path
+
+A module found in a directory of the process-wide module path (`QORE_MODULE_DIR` and the standard module directories,
+fixed when the library is initialized; `QoreModuleManager::isTrustedModulePath()`) is library code. Its initialization
+(class static initializers, global and constant initializers, the `init` closure) runs under a
+`QoreModuleInitSandboxBarrierHelper`: sandbox resolution for every purpose (interrupts, limits, policy, provenance)
+does not look beyond the code that loads the module, so the initialization belongs to no sandbox, also when sandboxed
+or restricted code loads the module first, and what it creates (objects, callbacks, catalog and registry entries,
+threads) carries no tenant's sandbox. A Program entered during the initialization that has a sandbox manager of its
+own still governs its code. A source module's Program does not take the loading Program's manager, and the parse
+defines of a sandboxed loader do not apply to the module's source. Every later call into the module is governed by
+its caller.
+
+A module loaded by path, or through a Program's own `%prepend-module-path` / `%append-module-path`, is chosen by its
+caller: it is initialized under the loader's sandbox, and a source module's Program keeps the loader's manager.
+
+What this means for an audit:
+
+- a module's initialization may build shared state (registries, factories, types, worker capabilities) without
+  running into its first loader's sandbox, and must therefore not use input that the loading code controls: no I/O
+  whose target comes from caller data or from parse defines, only the module's own files and the process environment;
+- the loader's parse options still restrict the module, and the loader's call time limits still count the
+  initialization;
+- the read-only module resource exception below matters only for modules that are not library code.
+
 #### How the active manager is resolved (program-context propagation)
 
 A Qore-language (`.qm`) module executes its functions/methods in the **module's own**
-`QoreProgram`. Source-module Programs inherit the importing Program's `SandboxManager`, so
-source constants and other initialization execute under the same policy. Compiled modules
-can have shared module Programs and therefore cannot retain one importing user's manager.
+`QoreProgram`. A source module that a caller loaded by path inherits the importing Program's `SandboxManager`, so
+its constants and other initialization execute under the same policy; a module from the module path does not (see
+above). Compiled modules can have shared module Programs and therefore cannot retain one importing user's
+manager.
 
 Every `QoreSandboxManagerHelper` names its purpose; the no-argument constructor is deprecated, because the two
 purposes resolve differently inside a system-policy capability (`SandboxManager::createSystemPolicyCall()`, which

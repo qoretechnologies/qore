@@ -530,6 +530,13 @@
     tells such infrastructure whether the code it serves is sandboxed, also under a policy barrier, and can be called
     by any code
 
+    @par Module Initialization Belongs to No Sandbox
+    A module from the process-wide module path is initialized as library code, with no sandbox provenance, also when
+    sandboxed or restricted code loads it first: what its initialization creates belongs to no sandbox, and a source
+    module's %Program no longer keeps the sandbox of the %Program that loaded it first, which governed every later
+    call into the module; every call into it is governed by its caller.  A module loaded by path or through a
+    %Program's own module paths is still initialized under the loader's sandbox (see @ref sandbox_module_init)
+
     @par Reflection Member Access
     Code that a sandbox governs, and code whose parse options restrict a functional domain, may use the
     \c private and \c private:internal elements of a class through the @ref reflectionintro "reflection" module

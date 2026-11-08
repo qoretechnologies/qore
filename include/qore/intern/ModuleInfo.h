@@ -718,6 +718,14 @@ public:
     DLLLOCAL QoreHashNode* getModuleHash();
     DLLLOCAL QoreListNode* getModuleList();
 
+    //! Returns true if a module file or directory is in a directory of the process-wide module path
+    /** The process-wide module path is set when the library is initialized (\c QORE_MODULE_DIR and the standard
+        module directories) and cannot be changed afterwards; a path that a caller names, or that a Program adds
+        with \c %prepend-module-path or \c %append-module-path, is not part of it.  A module found there is library
+        code: its initialization runs with no sandbox provenance (see QoreModuleInitSandboxBarrierHelper).
+    */
+    DLLLOCAL bool isTrustedModulePath(const char* path) const;
+
     DLLLOCAL void addModuleDir(const char* dir) {
         AutoLocker al(mutex);
         moduleDirList.push_back(dir);
