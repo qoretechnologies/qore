@@ -176,6 +176,16 @@ DLLLOCAL void qore_declare_child_module(const QoreProgramLocation* loc, const ch
 //! returns the feature name in the given module specification (i.e. without any version constraint)
 DLLLOCAL void qore_get_module_spec_name(const char* spec, QoreString& name);
 
+//! the kinds of module loads that QoreModuleManager::checkShadowingLoad() checks
+enum qore_shadow_load_e {
+    //! a load from a file
+    QSL_LOAD,
+    //! a load into a Program container of the caller's that is not private
+    QSL_CONTAINER,
+    //! a load into a private Program container of the caller's
+    QSL_PRIVATE_CONTAINER,
+};
+
 class QoreAbstractModule {
     friend class QoreModuleManager;
     friend class ChildAttachHelper;
@@ -789,11 +799,13 @@ public:
         @param tenant_chosen set to true if the load is for such code and is allowed: the module is then recorded as
         chosen by that code when it is registered (see QoreAbstractModule::isTenantChosen())
         @param owner set to the sandbox of that code, if any, a reference that the caller owns
+        @param kind the kind of load: a load into a Program container of that code that is not private cannot have
+        the name of a library module either; a private one has a name of its own
 
         @return 0 if the load is allowed, -1 if \c LOAD-MODULE-ERROR was raised
     */
     DLLLOCAL int checkShadowingLoad(ExceptionSink& xsink, const char* path, const char* feature, bool trusted,
-            bool& tenant_chosen, QoreSandboxManager*& owner) const;
+            bool& tenant_chosen, QoreSandboxManager*& owner, qore_shadow_load_e kind = QSL_LOAD) const;
 
     //! Returns true if the code running on the current thread may use a module that code that is not trusted chose
     /** Only code that is not trusted, with the same sandbox as the code that loaded the module

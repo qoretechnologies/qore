@@ -248,7 +248,7 @@ string sub run() {
         #! function of a Program that has no sandbox of its own
         const Container = "string sub run() {
     Program x(PO_NEW_STYLE);
-    x.parse(\"our string result = 'none';
+    x.parse(\"our *string result;
 string sub container_hook() {
     string r;
     try {
@@ -259,7 +259,7 @@ string sub container_hook() {
     return result = sprintf('sandboxed=%y read=%s', SandboxManager::isSandboxed(), r);
 }
 string sub get_result() {
-    return result;
+    return result ?? 'none';
 }
 sub give(Program c) {
     c.importFunction('container_hook');
@@ -506,6 +506,9 @@ switch (case_name) {
         addTestCase("parse defines", \definesTest());
         addTestCase("parse defines set by code that is not trusted", \definesTenantTest());
         addTestCase("classes re-exported by code that is not trusted", \reexportTest());
+        addTestCase("a library module in a private Program container of code that is not trusted",
+            \containerPrivateTest());
+        addTestCase("a library module injected by code that is not trusted", \containerInjectTest());
         set_return_value(main());
     }
 

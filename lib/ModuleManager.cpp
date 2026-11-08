@@ -3037,13 +3037,22 @@ std::string QoreModuleManager::findTrustedModule(const char* name) const {
 }
 
 int QoreModuleManager::checkShadowingLoad(ExceptionSink& xsink, const char* path, const char* feature,
-        bool trusted, bool& tenant_chosen, QoreSandboxManager*& owner) const {
+        bool trusted, bool& tenant_chosen, QoreSandboxManager*& owner, qore_shadow_load_e kind) const {
     tenant_chosen = false;
     owner = nullptr;
     if (trusted || !qore_caller_is_untrusted()) {
         return 0;
     }
-    std::string library = findTrustedModule(feature);
+    // a private module is registered under a name of its own, which no other code requests
+    std::string library = kind == QSL_PRIVATE_CONTAINER ? std::string() : findTrustedModule(feature);
+    if (!library.empty() && kind == QSL_CONTAINER) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(feature), "cannot load module '%s' into a "
+            "Program container: code that a sandbox governs or whose functional domains are restricted cannot load "
+            "a module into a Program container of its own under the name of module '%s' in the module path, which it "
+            "would replace for every later user; load it into a private container instead", feature,
+            library.c_str());
+        return -1;
+    }
     if (!library.empty()) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(feature), "cannot load module '%s' from "
             "path '%s': code that a sandbox governs or whose functional domains are restricted cannot load a module "
@@ -3146,17 +3155,22 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     }
     ON_BLOCK_EXIT(module_load_clear, feature);
 
+    // a library module that code that is not trusted loads into a Program container of its own is parsed and
+    // initialized with the container's code and parse defines: it is not library code
+    const bool untrusted_container = mpgm && qore_caller_is_untrusted();
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
     std::string trusted_path;
-    const bool trusted = isTrustedModulePath(path, &trusted_path);
+    const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path);
     if (trusted) {
         // the file that was found to be library code is the file that is loaded
         path = trusted_path.c_str();
     }
-    // code that is not trusted cannot replace a library module with a module from elsewhere
+    // code that is not trusted cannot replace a library module with a module from elsewhere, nor with one in a
+    // container of its own; a private module has a name of its own
     bool tenant_chosen;
     QoreSandboxManager* owner;
-    if (checkShadowingLoad(xsink, path, feature, trusted, tenant_chosen, owner)) {
+    if (checkShadowingLoad(xsink, path, feature, trusted, tenant_chosen, owner,
+            untrusted_container ? ((load_opt & QMLO_PRIVATE) ? QSL_PRIVATE_CONTAINER : QSL_CONTAINER) : QSL_LOAD)) {
         return nullptr;
     }
     // recorded on the module when it is registered
@@ -4136,17 +4150,22 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         return nullptr;
     }
 
+    // a library module that code that is not trusted loads into a Program container of its own is parsed and
+    // initialized with the container's code and parse defines: it is not library code
+    const bool untrusted_container = mpgm && qore_caller_is_untrusted();
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
     std::string trusted_path;
-    const bool trusted = isTrustedModulePath(path, &trusted_path);
+    const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path);
     if (trusted) {
         // the file that was found to be library code is the file that is loaded
         path = trusted_path.c_str();
     }
-    // code that is not trusted cannot replace a library module with a module from elsewhere
+    // code that is not trusted cannot replace a library module with a module from elsewhere, nor with one in a
+    // container of its own; a private module has a name of its own
     bool tenant_chosen;
     QoreSandboxManager* owner;
-    if (checkShadowingLoad(xsink, path, feature, trusted, tenant_chosen, owner)) {
+    if (checkShadowingLoad(xsink, path, feature, trusted, tenant_chosen, owner,
+            untrusted_container ? ((load_opt & QMLO_PRIVATE) ? QSL_PRIVATE_CONTAINER : QSL_CONTAINER) : QSL_LOAD)) {
         return nullptr;
     }
     // recorded on the module when it is registered
