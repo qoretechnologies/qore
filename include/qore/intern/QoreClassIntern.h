@@ -1270,10 +1270,11 @@ public:
     const void* cb_data = nullptr;
     const QoreClass* cb_cls = nullptr;
 
-    //! the Program that defines the class, once it has released the value; see qore_class_private::releaseVarValues()
-    /** Used for identification only; the name of the class is \a owner_class_name
+    //! the ID of the Program that defines the class, once it has released the value, or 0
+    /** See qore_class_private::releaseVarValues(); the name of the class is \a owner_class_name.  The ID is
+        compared, not the address, as the address of the deleted Program can be reused by another one.
     */
-    std::atomic<const QoreProgram*> released_by_owner{nullptr};
+    std::atomic<qore_program_id_t> released_by_owner_id{0};
     //! the name of the class, for the error that checkOwnerReleased() raises
     const char* owner_class_name = nullptr;
 
@@ -1365,10 +1366,17 @@ public:
     DLLLOCAL void remove(LValueRemoveHelper& lvrh);
 
     //! Records that the Program that defines the class has released the value
-    DLLLOCAL void setOwnerReleased(const QoreProgram* owner, const char* class_name) {
+    /** Called before the value is released under the variable's lock, so a thread that takes the lock afterwards
+        sees the record
+    */
+    DLLLOCAL void setOwnerReleased(qore_program_id_t owner_id, const char* class_name) {
+        assert(owner_id);
         owner_class_name = class_name;
-        released_by_owner.store(owner, std::memory_order_release);
+        released_by_owner_id.store(owner_id, std::memory_order_release);
     }
+
+    //! Returns true if the variable cannot be accessed by the calling Program; see checkOwnerReleased()
+    DLLLOCAL bool isOwnerReleasedForCaller() const;
 
     //! Raises a PROGRAM-ERROR if the variable is accessed by a Program other than the one defining its class after
     //! that Program has released its value
@@ -1380,6 +1388,7 @@ public:
     DLLLOCAL int checkOwnerReleased(const char* name, ExceptionSink* xsink) const;
 
     DLLLOCAL int getLValue(LValueHelper& lvh, const char* name = "<static variable>") {
+        // checked before evalInit(), which runs the initializer, and again under the lock (see below)
         if (checkOwnerReleased(name, lvh.vl.xsink)) {
             return -1;
         }
@@ -1395,7 +1404,9 @@ public:
             return -1;
         }
         lvh.setAndLock(rwl);
-        if (checkFinalized(lvh.vl.xsink)) {
+        // the defining Program can have released the value since the first check: it marks the variable before it
+        // finalizes it under the lock, so the access raises the same error as above
+        if (checkOwnerReleased(name, lvh.vl.xsink) || checkFinalized(lvh.vl.xsink)) {
             return -1;
         }
         lvh.setValue(val, getTypeInfo());
@@ -1424,7 +1435,12 @@ public:
         if (!eval_init && evalInit(name, xsink)) {
             return QoreValue();
         }
-        return getRuntimeReferencedValue();
+        QoreAutoVarRWReadLocker al(rwl);
+        // the defining Program can have released the value since the first check; see getLValue()
+        if (checkOwnerReleased(name, xsink)) {
+            return QoreValue();
+        }
+        return val.getReferencedValue();
     }
 
     //! reads the value from external storage; returns a new reference
@@ -1450,7 +1466,13 @@ public:
         set_cb(*cb_cls, cb_data, v, xsink);
     }
 
+    //! returns the value without raising exceptions: NOTHING if the calling Program cannot access the variable
+    /** See checkOwnerReleased() for the variant raising an exception
+    */
     DLLLOCAL QoreValue getRuntimeReferencedValue() const {
+        if (isOwnerReleasedForCaller()) {
+            return QoreValue();
+        }
         if (get_cb) {
             ExceptionSink xsink;
             ValueHolder rv(getAccessorValue(&xsink), &xsink);
@@ -1459,10 +1481,14 @@ public:
             return rv.release();
         }
         QoreAutoVarRWReadLocker al(rwl);
-        return val.getReferencedValue();
+        return isOwnerReleasedForCaller() ? QoreValue() : val.getReferencedValue();
     }
 
+    //! as getRuntimeReferencedValue(), for the value as an integer
     DLLLOCAL int64 getAsBigInt() const {
+        if (isOwnerReleasedForCaller()) {
+            return 0;
+        }
         if (get_cb) {
             ExceptionSink xsink;
             ValueHolder v(getAccessorValue(&xsink), &xsink);
@@ -1470,10 +1496,14 @@ public:
             return v->getAsBigInt();
         }
         QoreAutoVarRWReadLocker al(rwl);
-        return val.getAsBigInt();
+        return isOwnerReleasedForCaller() ? 0 : val.getAsBigInt();
     }
 
+    //! as getRuntimeReferencedValue(), for the value as a number
     DLLLOCAL double getAsFloat() const {
+        if (isOwnerReleasedForCaller()) {
+            return 0;
+        }
         if (get_cb) {
             ExceptionSink xsink;
             ValueHolder v(getAccessorValue(&xsink), &xsink);
@@ -1481,10 +1511,14 @@ public:
             return v->getAsFloat();
         }
         QoreAutoVarRWReadLocker al(rwl);
-        return val.getAsFloat();
+        return isOwnerReleasedForCaller() ? 0 : val.getAsFloat();
     }
 
+    //! as getRuntimeReferencedValue(), for the value as a boolean
     DLLLOCAL bool getAsBool() const {
+        if (isOwnerReleasedForCaller()) {
+            return false;
+        }
         if (get_cb) {
             ExceptionSink xsink;
             ValueHolder v(getAccessorValue(&xsink), &xsink);
@@ -1492,7 +1526,7 @@ public:
             return v->getAsBool();
         }
         QoreAutoVarRWReadLocker al(rwl);
-        return val.getAsBool();
+        return isOwnerReleasedForCaller() ? false : val.getAsBool();
     }
 
     DLLLOCAL int parseInit(const char* name);
@@ -3515,17 +3549,16 @@ public:
     /** @param xsink for exceptions raised by destructors
         @param defines true if the Program defines the class (its class list holds the wrapper that created it): it
         then releases the values even if other Programs still share them; see var_refs
+        @param owner_id the ID of the Program that defines the class, if \a defines is true and the class list
+        belongs to a Program (not for a namespace without one): the other Programs cannot access the variables
+        afterwards; see releaseVarValues()
     */
-    /** @param xsink for exceptions raised by destructors
-        @param owner the Program that defines the class (its class list holds the wrapper that created it), if it is
-        the one clearing its data: it then releases the values even if other Programs still share them; see var_refs
-    */
-    DLLLOCAL void clear(ExceptionSink* xsink, const QoreProgram* owner = nullptr) {
+    DLLLOCAL void clear(ExceptionSink* xsink, bool defines = false, qore_program_id_t owner_id = 0) {
         //printd(5, "qore_class_private::clear() this: %p '%s' %d -> %d\n", this, name.c_str(), var_refs.reference_count(), var_refs.reference_count() - 1);
-
-        if (var_refs.ROdereference() || owner) {
+        assert(defines || !owner_id);
+        if (var_refs.ROdereference() || defines) {
             // issue #3521: only clear vars here; do not delete
-            releaseVarValues(xsink, owner);
+            releaseVarValues(xsink, owner_id);
         }
     }
 
@@ -3538,16 +3571,18 @@ public:
         The variables themselves are not deleted here; see data_refs.
 
         @param xsink for exceptions raised by destructors
+        @param owner_id the ID of the Program that defines the class, if it releases the values, or 0
     */
-    DLLLOCAL void releaseVarValues(ExceptionSink* xsink, const QoreProgram* owner = nullptr) {
+    DLLLOCAL void releaseVarValues(ExceptionSink* xsink, qore_program_id_t owner_id = 0) {
         if (values_released.exchange(true)) {
             return;
         }
         // once the Program that defines the class has released the values, the other Programs cannot access the
-        // variables any more, as they cannot run the class's code either (see QoreVarInfo::checkOwnerReleased())
-        if (owner) {
+        // variables any more, as they cannot run the class's code either (see QoreVarInfo::checkOwnerReleased());
+        // each variable is marked before its value is released under its lock
+        if (owner_id) {
             for (auto& i : vars.member_list) {
-                i.second->setOwnerReleased(owner, name.c_str());
+                i.second->setOwnerReleased(owner_id, name.c_str());
             }
         }
         vars.clear(xsink);
@@ -3581,7 +3616,7 @@ public:
             bool defines = false) {
         // the Program that defines the class releases the values in any case; see clear()
         if (deref_vars && (var_refs.ROdereference() || defines)) {
-            releaseVarValues(xsink, defines ? pgm : nullptr);
+            releaseVarValues(xsink, defines && pgm ? pgm->getProgramId() : 0);
         }
         // note: kvmap is cleared in clear() for the normal shutdown path (deref_vars=false)
 
@@ -3639,7 +3674,11 @@ public:
         cannot be deleted while the thread is in it, and no reference is taken (\a referenced is false); otherwise a
         reference is taken as with getReferencedSourceProgram(), which the caller must release with deref()
     */
-    DLLLOCAL QoreProgram* getSourceProgramForCall(bool& referenced) const {
+    /** @param referenced set to true if a reference was taken
+        @param deleted if not null, set to true if the class has a source Program, but it is being deleted (its last
+        reference has been released): the code of the class cannot run then
+    */
+    DLLLOCAL QoreProgram* getSourceProgramForCall(bool& referenced, bool* deleted = nullptr) const {
         referenced = false;
         QoreProgram* p = spgm.load();
         if (!p) {
@@ -3650,8 +3689,26 @@ public:
         }
         p = getReferencedSourceProgram();
         referenced = p != nullptr;
+        if (!p && deleted) {
+            *deleted = true;
+        }
+#ifdef DEBUG
+        if (p) {
+            if (dbg_source_program_taken_t hook = dbg_source_program_taken.load()) {
+                hook(*this, p, referenced);
+            }
+        }
+#endif
         return p;
     }
+
+#ifdef DEBUG
+    //! debug-only hook called when a call into the class's code from another Program has taken the source Program
+    /** Called before the thread enters the Program, without locks; tests delete the Program at this point
+    */
+    typedef void (*dbg_source_program_taken_t)(const qore_class_private& cls, QoreProgram* pgm, bool referenced);
+    DLLLOCAL static std::atomic<dbg_source_program_taken_t> dbg_source_program_taken;
+#endif
 
     //! Releases the source Program of the class, which has been taken from spgm
     DLLLOCAL void releaseSourceProgram(QoreProgram* p, ExceptionSink* xsink) {
@@ -4448,7 +4505,7 @@ public:
     //! takes the source Program of the class; may be called once
     DLLLOCAL void set(const qore_class_private* c) {
         assert(!pgm);
-        pgm = c ? c->getSourceProgramForCall(referenced) : nullptr;
+        pgm = c ? c->getSourceProgramForCall(referenced, &deleted) : nullptr;
     }
 
     //! the Program, or nullptr if the class has no source Program (it has released the class, or it is deleted)
@@ -4456,11 +4513,29 @@ public:
         return pgm;
     }
 
+    //! true if the class has a source Program that is being deleted, so its code cannot run
+    DLLLOCAL bool sourceDeleted() const {
+        return deleted;
+    }
+
+    //! the exception sink given
+    DLLLOCAL ExceptionSink* getExceptionSink() const {
+        return xsink;
+    }
+
 private:
     QoreProgram* pgm = nullptr;
     ExceptionSink* xsink;
     bool referenced = false;
+    bool deleted = false;
 };
+
+//! Returns the Program that a method of the class runs in; \a holder keeps the source Program for the call
+/** Returns nullptr if the method runs in the caller's Program; the holder must be declared before the helper that
+    enters the Program returned
+*/
+DLLLOCAL QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgramHolder& holder,
+        QoreProgram* explicit_pgm = nullptr);
 
 class qore_class_private_holder {
     //! the class pointer (handle) to release, if the object was created with one

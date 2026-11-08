@@ -38,6 +38,10 @@ class ProgramTeardownEntryTest inherits QUnit::Test {
         addTestCase("teardown hold usage errors", \holdErrors());
         addTestCase("a background compile for a Program being deleted is refused", \bgCompileRefused());
         addTestCase("a Program is identified by its ID as well as its address", \programId());
+        addTestCase("a call into a class's code while its Program is deleted", \callWhileClassProgramDeleted(),
+            ("",));
+        addTestCase("JIT: a call into a class's code while its Program is deleted",
+            \callWhileClassProgramDeleted(), ("--exec-mode=jit",));
         set_return_value(main());
     }
 
@@ -157,6 +161,51 @@ printf(\"sum=%d open=%d closed=%y\\n\", sum, after_open - before, after_closed >
             sprintf("the compile for the open Program was enqueued: %s", r.output));
         assertNRegex("\\[BG-JIT\\] enqueued compilation of '[^']*\\bf\\b", r.output,
             sprintf("no compile for the closed Program was enqueued: %s", r.output));
+    }
+
+    #! a call into the code of a class from another Program keeps the class's Program while the Program is deleted
+    /** The call takes the Program that defines the class, with a reference, before it enters it; the debug build
+        holds the call at that point while the Program, and the Program whose copy of the class the object has, are
+        deleted.  The call read the Program without a reference, so it could enter a freed Program once the other
+        references were released; the hold reports whether the call holds one.  The call fails as a call into a
+        deleted Program does.
+    */
+    callWhileClassProgramDeleted(string opts) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the source Program hold requires a debug build");
+        }
+        hash<auto> r = runChild("%modern
+%no-child-restrictions
+
+Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+p.parse(\"public class Shared { string m() { return \\\"m\\\"; } }
+Program sub make() { Program c(PO_NEW_STYLE); c.parse(\\\"Shared sub obj() { return new Shared(); }\\\", \\\"c\\\"); return c; }\", \"p\");
+Program c = p.callFunction(\"make\");
+object o = c.callFunction(\"obj\");
+string before = o.m();
+call_function(\"dbg_hold_source_program_call\", p);
+*string rv;
+*string err;
+Counter done(1);
+background sub () {
+    try {
+        rv = o.m();
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex.err;
+    }
+    done.dec();
+}();
+hash<auto> h = call_function(\"dbg_wait_source_program_call_held\", " + StepTimeout + ");
+delete p;
+delete c;
+bool continued = call_function(\"dbg_continue_source_program_call\", " + StepTimeout + ");
+done.waitForZero();
+printf(\"before=%y held=%y referenced=%y continued=%y rv=%y err=%y\\n\", before, h.held, h.referenced, continued,
+    rv, err);
+", opts);
+        assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
+        assertRegex("before=\"m\" held=True referenced=True continued=True rv=null err=\"PROGRAM-ERROR\"", r.output,
+            sprintf("the held call failed as a call into a deleted Program: %s", r.output));
     }
 
     #! a Program is found by the background compiler only with its own ID

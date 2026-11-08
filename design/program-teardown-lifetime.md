@@ -39,30 +39,46 @@ under `gate.asl_lock`) and enters it (`incThreadCount()`), so the teardown waits
 call raises `PROGRAM-ERROR` ("the Program accessed has already been deleted").  The reference is released after
 the thread has left the Program.  A thread that is already in the source Program (`td->current_pgm == spgm`) uses
 it without a reference, as its own entry keeps the Program from being deleted.  The paths are the regular method
-calls (`qore_get_method_pgm_context()`), the IR interpreter's inlined method calls and
-`CodeContextHelperBase` (thread.cpp).
+calls (`qore_get_method_pgm_context()`), the native code's method calls (`qore_rt_method_execution_program()` in
+`lib/JITRuntime.cpp`, which uses `qore_get_method_pgm_context()`), the method lookup of dynamic method calls
+(`qore_class_private::getMethodForEval()`), the IR interpreter's inlined method calls and `CodeContextHelperBase`
+(thread.cpp).  A source Program whose last reference has been released is being deleted: the reference cannot be
+taken, and the call raises `PROGRAM-ERROR` (`QoreSourceProgramHolder::sourceDeleted()`), as entering a Program whose
+teardown has started does.  A method that does not switch Programs runs in the caller's; the native code never falls back to the
+Program of the variant, which is the deleted source Program.
+
+The debug build calls `qore_class_private::dbg_source_program_taken` once a call has taken the source Program and
+before it enters it; `dbg_hold_source_program_call()`, `dbg_wait_source_program_call_held()` and
+`dbg_continue_source_program_call()` delete the Program, and the Program whose copy of the class held its last
+reference, at that point.
 
 ## Static class variables
 
 The values of the static variables of a class are released by the Program that defines the class when it is
 deleted, even when other Programs share them (`QoreClassList::clear()` passes the Program to the entry whose
-class is the original, `qore_class_private::clear()`/`releaseVarValues()`).  Each released variable records the
-Program that released it (`QoreVarInfo::setOwnerReleased()`); a read or write from another Program afterwards
-raises `PROGRAM-ERROR`, as a method call does (`QoreVarInfo::checkOwnerReleased()`, called by `getLValue()` and
-`getReferencedValue()`).  Code of the defining Program (a destructor run while the values are released) sees
-`NOTHING`.  The variables themselves are deleted by the last Program sharing them (`data_refs`).
+class is the original, `qore_class_private::clear()`/`releaseVarValues()`; a namespace without a Program releases
+them too).  Each released variable records the ID of the Program that released it (`QoreVarInfo::setOwnerReleased()`;
+the ID, as the address of the deleted Program can be reused) before its value is released under its lock; a read
+or write from another Program afterwards raises `PROGRAM-ERROR`, as a method call does
+(`QoreVarInfo::checkOwnerReleased()`, called by `getLValue()` and `getReferencedValue()` before the initializer runs
+and again under the variable's lock, so an access racing with the release raises the same error).  The accessors
+that cannot raise exceptions (`getRuntimeReferencedValue()`, `getAsBigInt()` and the others, and the C++ API's
+`QoreExternalStaticMember::getValue()`) return no value then.  Code of the defining Program (a destructor run while
+the values are released) sees `NOTHING`.  The variables themselves are deleted by the last Program sharing them
+(`data_refs`).
 
 ## Background JIT compiles
 
 A background compile lowers the IR of the Programs whose code it compiles (the root function and its folded-in
 callees) in the compiler thread.  `QoreJIT::enqueueBgCompile()` accepts the work only when the Program of every
-IR function is known (`QoreIRFunction::pgm`, or the Program of its variant for IR built by AOT code), still has a
-reference, and does not wait for its compiles (`qore_program_private::bg_compile_closed`, set by
+IR function is known (`QoreIRFunction::pgm` and `pgm_id`, or the Program of its variant and the ID recorded with it,
+`UserVariantBase::pgm_id`, for IR built by AOT code), still has a reference, and does not wait for its compiles (`qore_program_private::bg_compile_closed`, set by
 `QoreJIT::waitForBgCompileQueue(QoreProgram*)` under the queue lock before the Program's data is deleted).
 `qore_program_private::runWithRegisteredPrograms()` looks the Programs up by ID (`QoreIRFunction::pgm_id`) in
 `programid_to_program_map` under its read lock, so a Program is told from a later one at the same address.  The
 Programs found are stored in the work (`BgCompileWork::pgms`) and decide which work the deletion of a Program
-cancels or waits for.  `dbg_close_program_bg_compile()`, `dbg_get_bg_compile_refused_count()` and
+cancels or waits for.  Refused work leaves the function in its tier for good (`jit_compile_state` 2), as it would be
+refused again; only work refused because the compiler stops can be submitted again.  `dbg_close_program_bg_compile()`, `dbg_get_bg_compile_refused_count()` and
 `dbg_program_registered_with_id()` test it.
 
 ## Where the teardown can wait for ever

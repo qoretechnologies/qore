@@ -94,11 +94,15 @@ static QoreProgram* qore_check_pgm_context(QoreProgram* pgm) {
     return (pgm && qore_program_private::isConstructed(*pgm)) ? pgm : nullptr;
 }
 
+#ifdef DEBUG
+std::atomic<qore_class_private::dbg_source_program_taken_t> qore_class_private::dbg_source_program_taken{nullptr};
+#endif
+
 //! Returns the Program that a method of the class runs in; \a holder keeps the source Program for the call
 /** The holder must be declared before the CodeEvaluationHelper that enters the Program; see QoreSourceProgramHolder
 */
-static QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgramHolder& holder,
-        QoreProgram* explicit_pgm = nullptr) {
+QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgramHolder& holder,
+        QoreProgram* explicit_pgm) {
     const qore_class_private* c = qore_class_private::get(cls);
     if (!c) {
         return qore_check_pgm_context(explicit_pgm);
@@ -107,6 +111,15 @@ static QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSource
     QoreProgram* spgm = holder.get();
     if (spgm) {
         return qore_check_pgm_context(spgm);
+    }
+    // the Program that defines the class is being deleted in another thread: the code of the class cannot run, as
+    // when the call enters a Program whose teardown has started
+    if (holder.sourceDeleted()) {
+        if (ExceptionSink* xsink = holder.getExceptionSink()) {
+            xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and therefore "
+                "cannot be accessed at runtime");
+        }
+        return nullptr;
     }
     if (explicit_pgm) {
         return qore_check_pgm_context(explicit_pgm);
@@ -4503,12 +4516,16 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
         // tree, while the class itself survives as long as anything still references it (an object
         // holds only a dependency reference to the Program).  There is then no Program to switch
         // into and the class data has already been cleared, so fail deterministically here rather
-        // than running the method against a stale context.
-        QoreProgram* source_pgm = spgm;
+        // than running the method against a stale context.  The holder keeps the source Program until the thread
+        // has left it (see QoreSourceProgramHolder); it is declared before the helper that enters the Program.
+        QoreSourceProgramHolder source_pgm_holder(this, xsink);
+        QoreProgram* source_pgm = source_pgm_holder.get();
         // once the source Program has released the class (see deleteClassData()), its namespace is destroyed with
         // it, possibly in another thread, so it is not used: the method can only be called by that Program itself
         const QoreProgram* released = source_pgm ? nullptr : released_spgm.load();
-        if (released ? released != getProgram() : (!source_pgm && !ns && ns_deleted)) {
+        // a source Program being deleted (see QoreSourceProgramHolder::sourceDeleted()) cannot run the method either
+        if (source_pgm_holder.sourceDeleted()
+                || (released ? released != getProgram() : (!source_pgm && !ns && ns_deleted))) {
             xsink->raiseException("PROGRAM-ERROR", "cannot call method '%s::%s()'; the Program object "
                 "that owns class '%s' has already been deleted and therefore cannot be accessed at "
                 "runtime", name.c_str(), nme, name.c_str());
@@ -7497,9 +7514,17 @@ int QoreVarInfo::parseInit(const char* name) {
     return err;
 }
 
+bool QoreVarInfo::isOwnerReleasedForCaller() const {
+    qore_program_id_t owner_id = released_by_owner_id.load(std::memory_order_acquire);
+    if (!owner_id) {
+        return false;
+    }
+    const QoreProgram* pgm = getProgram();
+    return !pgm || pgm->getProgramId() != owner_id;
+}
+
 int QoreVarInfo::checkOwnerReleased(const char* name, ExceptionSink* xsink) const {
-    const QoreProgram* owner = released_by_owner.load(std::memory_order_acquire);
-    if (!owner || owner == getProgram()) {
+    if (!isOwnerReleasedForCaller()) {
         return 0;
     }
     if (xsink) {

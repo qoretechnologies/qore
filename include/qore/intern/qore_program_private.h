@@ -3449,6 +3449,12 @@ public:
 
         @return the return value of \a f, or false if a Program has no reference anymore
     */
+    //! Returns a reference to the Program with the given address and ID, or nullptr if it has no reference anymore
+    /** The Program is not dereferenced unless it is found in the ID registry; the caller releases the reference with
+        deref()
+    */
+    DLLLOCAL static QoreProgram* getReferencedProgram(const QoreProgram* p, qore_program_id_t id);
+
     DLLLOCAL static bool runWithRegisteredPrograms(
             const std::vector<std::pair<const QoreProgram*, qore_program_id_t>>& pgms, const std::function<bool()>& f);
 

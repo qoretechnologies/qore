@@ -5013,7 +5013,8 @@ UserVariantBase::UserVariantBase(StatementBlock *b, int n_sig_first_line, int n_
         RetTypeInfo* rv, bool synced)
         : signature(n_sig_first_line, n_sig_last_line, params, rv,
             b ? b->pwo.parse_options : parse_get_parse_options()), statements(b),
-        gate(synced ? new VRMutex : nullptr), pgm(getProgram()), recheck(false), init(false) {
+        gate(synced ? new VRMutex : nullptr), pgm(getProgram()), pgm_id(pgm ? pgm->getProgramId() : 0),
+        recheck(false), init(false) {
     //printd(5, "UserVariantBase::UserVariantBase() this: %p params: %p rv: %p b: %p synced: %d\n", params, rv, b,
     //    synced);
 }

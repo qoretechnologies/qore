@@ -2251,13 +2251,14 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
             p = f->pgm;
             id = f->pgm_id;
         } else {
+            // the ID is taken with the Program, as the Program is not used before it is found in the registry
             const UserVariantBase* vb = v ? v->getUserVariantBase() : nullptr;
-            if (!vb || !vb->pgm) {
+            if (!vb || !vb->pgm || !vb->pgm_id) {
                 pgms_known = false;
                 return;
             }
             p = vb->pgm;
-            id = vb->pgm->getProgramId();
+            id = vb->pgm_id;
         }
         if (std::find(work.pgms.begin(), work.pgms.end(), p) == work.pgms.end()) {
             work.pgms.push_back(p);
@@ -2280,10 +2281,13 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
         work.has_callees = false;
     }
 
+    // set if the work is refused because the compiler stops: the function can be submitted again then
+    bool shutting_down = false;
     bool accepted = pgms_known
         && qore_program_private::runWithRegisteredPrograms(work_pgms, [&]() -> bool {
         std::lock_guard<std::mutex> lock(bg_queue_mutex);
         if (!bg_accept_work.load(std::memory_order_relaxed)) {
+            shutting_down = true;
             return false;
         }
         for (const auto& p : work_pgms) {
@@ -2298,7 +2302,21 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
         return true;
     });
     if (!accepted) {
-        const_cast<UserVariantBase*>(uvb)->jit_compile_state.store(0, std::memory_order_release);
+        // work with code whose Program is unknown is refused for good, as is work for a function whose own Program is
+        // deleted or being deleted: the function stays in its tier (state 2), as submitting it again on every call
+        // would be refused in the same way.  A function whose callee's Program is deleted can be submitted again, as
+        // its callees are collected again (see waitForBgCompileQueue(QoreProgram*)), as can one refused because the
+        // compiler stops.
+        bool final = !pgms_known;
+        if (!final && !shutting_down) {
+            std::vector<std::pair<const QoreProgram*, qore_program_id_t>> root_pgm(work_pgms.begin(),
+                work_pgms.begin() + 1);
+            final = !qore_program_private::runWithRegisteredPrograms(root_pgm, [&]() -> bool {
+                std::lock_guard<std::mutex> lock(bg_queue_mutex);
+                return !qore_program_private::get(*const_cast<QoreProgram*>(root_pgm[0].first))->bg_compile_closed;
+            });
+        }
+        const_cast<UserVariantBase*>(uvb)->jit_compile_state.store(final ? 2 : 0, std::memory_order_release);
         releaseBgCompileWorkRefs(work);
         int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
         if (remaining == 0) {

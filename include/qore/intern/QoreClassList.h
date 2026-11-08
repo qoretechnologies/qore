@@ -162,7 +162,7 @@ public:
     }
 
     // clears static class vars
-    //! releases the static variable values of the classes; \a pgm is the Program owning the list
+    //! releases the static variable values of the classes; \a pgm is the Program owning the list, if any
     DLLLOCAL void clear(ExceptionSink* xsink, const QoreProgram* pgm);
     DLLLOCAL void clearConstants(QoreListNode& l);
     DLLLOCAL void clearConstants(ExceptionSink* xsink);

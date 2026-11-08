@@ -546,6 +546,16 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
 std::atomic<qore_program_private_base::dbg_teardown_hook_t> qore_program_private_base::dbg_teardown_hook{nullptr};
 #endif
 
+QoreProgram* qore_program_private::getReferencedProgram(const QoreProgram* p, qore_program_id_t id) {
+    QoreAutoRWReadLocker al(&lck_programMap);
+    programid_to_program_map_t::const_iterator i = programid_to_program_map.find(id);
+    if (i == programid_to_program_map.end() || i->second != p) {
+        return nullptr;
+    }
+    // a registered Program has references (see derefUnregister())
+    return i->second->optRef() ? i->second : nullptr;
+}
+
 bool qore_program_private::runWithRegisteredPrograms(
         const std::vector<std::pair<const QoreProgram*, qore_program_id_t>>& pgms, const std::function<bool()>& f) {
     QoreAutoRWReadLocker al(&lck_programMap);

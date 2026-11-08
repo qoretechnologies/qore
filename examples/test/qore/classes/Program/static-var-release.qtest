@@ -294,7 +294,10 @@ public class Shared {
 
 Program sub make() {
     Program c(PO_NEW_STYLE);
+    c.loadModule(\"reflection\");
     c.parse(\"auto sub v() { return Shared::v; } int sub tv() { int x = Shared::v; return x; } \"
+        \"auto sub rv() { return Class::forName(\\\"Shared\\\").getStaticMember(\\\"v\\\").getValue(); } \"
+        \"sub rs() { Class cls = Class::forName(\\\"Shared\\\"); cls.getStaticMember(\\\"v\\\").setValue(8); } \"
         \"int sub w() { Shared::v = 7; return 7; } auto sub hello() { return Shared::hello(); } \"
         \"auto sub h() { return Shared::h.a; }\", \"child\");
     return c;
@@ -548,6 +551,7 @@ int sub get() {
         assertEq(5, c.callFunction("tv"));
         assertEq(1, c.callFunction("h"));
         assertEq("hello", c.callFunction("hello"));
+        assertEq(5, c.callFunction("rv"));
         delete p;
         assertEq(("marker released",), Results::reports);
         # a read, a typed read, a read of an element and an assignment raise the error that a method call raises
@@ -561,6 +565,10 @@ int sub get() {
             sub () { c.callFunction("w"); });
         assertThrows("PROGRAM-ERROR", "already been deleted",
             sub () { c.callFunction("hello"); });
+        # the C++ API: a read, which cannot raise an exception, returns no value, and an assignment raises the error
+        assertEq(NOTHING, c.callFunction("rv"));
+        assertThrows("PROGRAM-ERROR", "owns class 'Shared' has already been deleted",
+            sub () { c.callFunction("rs"); });
         delete c;
         assertEq(("marker released",), Results::reports);
     }

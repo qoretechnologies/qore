@@ -1606,7 +1606,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     makeExprDeserializedClosureIRNameUnique(*closure_ir, closure_variant);
     closure_ir->computeSlotIdsAndEmbed();
     closure_variant->setCachedIR(closure_ir.release());
-    closure_variant->pgm = ctx.pgm;
+    closure_variant->setProgram(ctx.pgm);
 
     // Set class type if in a method context
     if (class_type_path && *class_type_path) {
