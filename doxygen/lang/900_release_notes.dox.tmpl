@@ -1511,7 +1511,8 @@
     - in the JIT and tiered execution modes and in AOT-compiled code, a value read through a reference held by a local
       variable (ex: <tt>auto v = \\o; v.name();</tt>) was kept until the next read at the same place or until the
       function returned, so that an object read through the reference outlived the removal of the variable it was
-      read from; it is now released at the end of the statement, as with the AST interpreter
+      read from; it is now released at the end of the statement instead of when the function returns (the AST
+      interpreter releases it when the expression using it completes)
     - in the JIT and tiered execution modes, an exception raised by the destructor of the value that the loop
       variable of \c foreach held when an iterator's next element was assigned could crash the program
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, a type error assigning an element to the

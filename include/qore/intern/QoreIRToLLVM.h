@@ -793,8 +793,8 @@ private:
 
     //! Emits the read of a local with a reference flag: the cached value, or the referenced value if it is a reference
     /** The referenced value is read only when the flag is set (qore_rt_read_reference_local()); it is owned and kept,
-        for the consumers of the value returned, until the read after the next one at this site or the exit of the
-        function, as a reload of a local's cache keeps the value it replaces
+        for the consumers of the value returned, until the end of the statement (the read after the next one at this
+        site releases it earlier); the AST interpreter releases it when the expression using it completes
 
         @param cached the value in the local's cache
     */
