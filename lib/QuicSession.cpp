@@ -499,6 +499,37 @@ static std::map<std::string, QuicTestAddrCounts> quic_test_addr_counts;
 //! Signaled when datagrams have been received; see quic_test_wait_delivered()
 static std::condition_variable quic_test_received_cv;
 
+//! The datagrams sent to each address, by "address:port", never forgotten; under quic_test_fds_m
+/** See qore_quic_test_datagram_totals(): a test whose peer runs in another process exchanges these totals with it
+*/
+static std::map<std::string, int64_t> quic_test_sent_to_total;
+
+//! The datagrams received from each address, by "address:port", never forgotten; under quic_test_fds_m
+static std::map<std::string, int64_t> quic_test_received_from_total;
+
+//! Returns "address:port" for an address, with an IPv4-mapped IPv6 address as IPv4; an empty string for another family
+static std::string quic_test_addr_str(const struct sockaddr* addr) {
+    char buf[INET6_ADDRSTRLEN] = "";
+    int port;
+    if (addr->sa_family == AF_INET) {
+        const struct sockaddr_in* a = reinterpret_cast<const struct sockaddr_in*>(addr);
+        inet_ntop(AF_INET, &a->sin_addr, buf, sizeof(buf));
+        port = ntohs(a->sin_port);
+    } else if (addr->sa_family == AF_INET6) {
+        const struct sockaddr_in6* a = reinterpret_cast<const struct sockaddr_in6*>(addr);
+        if (IN6_IS_ADDR_V4MAPPED(&a->sin6_addr)) {
+            inet_ntop(AF_INET, reinterpret_cast<const char*>(&a->sin6_addr) + 12, buf, sizeof(buf));
+        } else {
+            inet_ntop(AF_INET6, &a->sin6_addr, buf, sizeof(buf));
+        }
+        port = ntohs(a->sin6_port);
+    } else {
+        return std::string();
+    }
+    QoreStringMaker str("%s:%d", buf, port);
+    return str.c_str();
+}
+
 //! Returns the key of an address: its family, IP address and port, with an IPv4-mapped IPv6 address as IPv4
 static std::string quic_test_addr_key(const struct sockaddr* addr) {
     std::string key;
@@ -538,11 +569,13 @@ void qore_quic_test_note_sent(int fd, const struct sockaddr* addr, socklen_t add
     if (key.empty()) {
         return;
     }
+    std::string str = quic_test_addr_str(addr);
     std::lock_guard<std::mutex> g(quic_test_fds_m);
     quic_test_addr_counts[key].sent += count;
+    quic_test_sent_to_total[str] += count;
 }
 
-void qore_quic_test_note_received(int fd, int count) {
+void qore_quic_test_note_received(int fd, const struct sockaddr* src, int count) {
     if (!quic_test_clock_used.load(std::memory_order_acquire)) {
         return;
     }
@@ -555,8 +588,10 @@ void qore_quic_test_note_received(int fd, int count) {
     if (key.empty()) {
         return;
     }
+    std::string from = quic_test_addr_str(src);
     std::lock_guard<std::mutex> g(quic_test_fds_m);
     quic_test_addr_counts[key].received += count;
+    quic_test_received_from_total[from] += count;
     quic_test_received_cv.notify_all();
 }
 
@@ -658,6 +693,46 @@ static bool quic_test_wait_delivered(int timeout_ms) {
     return quic_test_received_cv.wait_for(g, std::chrono::milliseconds(timeout_ms), []() {
         std::vector<int> fds;
         return !quic_test_undelivered_locked(fds);
+    });
+}
+
+void qore_quic_test_count_datagrams() {
+    quic_test_clock_used.store(true, std::memory_order_release);
+}
+
+QoreHashNode* qore_quic_test_datagram_totals() {
+    ReferenceHolder<QoreHashNode> sent(new QoreHashNode(bigIntTypeInfo), nullptr);
+    ReferenceHolder<QoreHashNode> received(new QoreHashNode(bigIntTypeInfo), nullptr);
+    {
+        std::lock_guard<std::mutex> g(quic_test_fds_m);
+        for (const auto& [addr, n] : quic_test_sent_to_total) {
+            sent->setKeyValue(addr.c_str(), n, nullptr);
+        }
+        for (const auto& [addr, n] : quic_test_received_from_total) {
+            received->setKeyValue(addr.c_str(), n, nullptr);
+        }
+    }
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    h->setKeyValue("sent_to", sent.release(), nullptr);
+    h->setKeyValue("received_from", received.release(), nullptr);
+    return h;
+}
+
+bool qore_quic_test_wait_received_from(const char* addr, int64_t count, int timeout_ms) {
+    std::unique_lock<std::mutex> g(quic_test_fds_m);
+    return quic_test_received_cv.wait_for(g, std::chrono::milliseconds(timeout_ms), [addr, count]() {
+        int64_t received = 0;
+        if (addr && *addr) {
+            auto i = quic_test_received_from_total.find(addr);
+            if (i != quic_test_received_from_total.end()) {
+                received = i->second;
+            }
+        } else {
+            for (const auto& [a, n] : quic_test_received_from_total) {
+                received += n;
+            }
+        }
+        return received >= count;
     });
 }
 

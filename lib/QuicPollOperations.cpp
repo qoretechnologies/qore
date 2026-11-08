@@ -279,7 +279,9 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
             return 0;
         }
 #ifdef DEBUG
-        qore_quic_test_note_received(fd, nrecv);
+        for (int i = 0; i < nrecv; ++i) {
+            qore_quic_test_note_received(fd, reinterpret_cast<const struct sockaddr*>(&addrs[i]), 1);
+        }
 #endif
 
         // Batch packets by target session for readPacketBatch();
@@ -408,7 +410,7 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
             return 0;
         }
 #ifdef DEBUG
-        qore_quic_test_note_received(fd, 1);
+        qore_quic_test_note_received(fd, reinterpret_cast<const struct sockaddr*>(&src_addr), 1);
 #endif
 
         // Route to the correct session via dispatcher; drop packets
@@ -935,7 +937,7 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
     econnrefused_deadline_ns_ = 0;
 
 #ifdef DEBUG
-    qore_quic_test_note_received(fd, 1);
+    qore_quic_test_note_received(fd, reinterpret_cast<const struct sockaddr*>(&src_addr), 1);
 #endif
     // Use the cached getsockname() address directly — the client socket is
     // connect()ed, so the local address is always local_addr_.  Do NOT call
@@ -1934,7 +1936,7 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         return 0;
     }
 #ifdef DEBUG
-    qore_quic_test_note_received(fd, 1);
+    qore_quic_test_note_received(fd, reinterpret_cast<const struct sockaddr*>(&src_addr), 1);
 #endif
 
     // Start from cached local address (has correct family + port), then

@@ -288,7 +288,11 @@ inline bool buildSendCmsg(const struct sockaddr* local_addr, socklen_t local_add
 DLLLOCAL void qore_quic_test_note_sent(int fd, const struct sockaddr* addr, socklen_t addrlen, int count);
 
 //! Debug-only: counts datagrams received on a socket for the QUIC test clock (see qore_quic_test_advance_clock())
-DLLLOCAL void qore_quic_test_note_received(int fd, int count);
+/** @param fd the socket the datagrams were received on
+    @param src the source address of the datagrams
+    @param count the number of datagrams received
+*/
+DLLLOCAL void qore_quic_test_note_received(int fd, const struct sockaddr* src, int count);
 #endif
 
 inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
