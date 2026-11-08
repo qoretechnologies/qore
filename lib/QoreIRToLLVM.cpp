@@ -11541,6 +11541,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     element_local_read_flags.clear();
     weak_load_result_ids.clear();
     native_boolean_result_values.clear();
+    // the values read from a local that a write to the local can release before their last use take a reference of
+    // their own
+    if (!qore_ir_find_local_reads_overwritten_before_use(func, overwritten_local_reads)) {
+        error = "cancelled during LLVM overwritten local read analysis";
+        return false;
+    }
     // First: collect all register IDs used as DotEval bases
     std::unordered_set<uint32_t> dot_eval_base_candidates;
     std::unordered_set<uint32_t> non_dot_eval_uses;
@@ -14866,6 +14872,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (assigned_non_nothing_locals.count(key)) {
                         known_not_nothing_values.insert(inst->result.id);
                     }
+                    // the value is borrowed from the cache; one that a later write to the local can release before
+                    // its last use (o.m(o = new T())) takes its own reference, as the AST interpreter evaluates it
+                    if (overwritten_local_reads.count(inst->result.id)) {
+                        loaded = emitHelperRef(module, loaded);
+                        values[inst->result.id] = loaded;
+                        trackResultForCleanup(loaded, inst->result.id, llvm_func);
+                        return true;
+                    }
                 }
                 values[inst->result.id] = loaded;
                 // Native int: NOT in nanboxed_values — ensureIntTypeInline skips unboxing
@@ -15132,6 +15146,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     //     can invalidate the borrowed ref before it's consumed, and
                     // (3) nanboxed marking prevents trackResultForCleanup / double-deref
                     //     at function cleanup time.
+                    // A later write to the variable before the result's last use would release it, so such a
+                    // result takes a reference of its own (see overwritten_local_reads).
+                    if (overwritten_local_reads.count(inst->result.id)) {
+                        boxed = emitHelperRef(module, boxed);
+                        trackResultForCleanup(boxed, inst->result.id, llvm_func);
+                    }
                     values[inst->result.id] = boxed;
                     nanboxed_values.insert(inst->result.id);
                 }
@@ -15713,7 +15733,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             markLocalCacheFresh(key, llvm_func);
             if (inst->result.isValid()) {
-                values[inst->result.id] = reference_slot_store_value ? reference_slot_store_value : boxed;
+                llvm::Value* store_value = reference_slot_store_value ? reference_slot_store_value : boxed;
+                // the value is the local's (or the operand's, which a consumer of the operand can release); a later
+                // write to the local before the result's last use would release it, so such a result takes a
+                // reference of its own (see overwritten_local_reads)
+                if (overwritten_local_reads.count(inst->result.id)) {
+                    store_value = emitHelperRef(module, store_value);
+                    trackResultForCleanup(store_value, inst->result.id, llvm_func);
+                }
+                values[inst->result.id] = store_value;
             }
             // Track cleanup alloca for block-scoped locals: if the stored value has
             // an invoke-result cleanup alloca, record the mapping so UninstantiateLocal

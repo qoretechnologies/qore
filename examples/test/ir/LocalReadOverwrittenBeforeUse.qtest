@@ -1,0 +1,236 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class LocalReadOverwrittenBeforeUseTest
+
+#! Regression test: a value read from a variable keeps its value when a later argument or operand assigns the variable
+/** The AST interpreter evaluates every argument of a call, and the receiver of a method call, into a value of its own
+    before the call, so an argument that assigns the variable read for an earlier argument or for the receiver
+    (<tt>f(t = new T("a"), t = new T("b"))</tt>, <tt>f(t, t = new T())</tt>, <tt>o.m(o = new T())</tt>,
+    <tt>o.m(remove o)</tt>) leaves the value read intact, and the call runs with it.  Native code (JIT, tiered, AOT)
+    read a variable from its local cache without a reference of its own, so the assignment released the value while
+    the call still had to use it (a use after free: 363 valgrind errors in a qcc executable, a crash in JIT code), and
+    the AST interpreter borrowed the receiver read from a variable, so <tt>o.m(o = new T())</tt> ran the method on a
+    destroyed object (a crash).  The script reads a variable for an argument or a receiver and assigns it in a later
+    argument, with typed, \c auto and \c object variables, through a branch and a Phi, through a reference given to a
+    call, and for a hash, a string and a list receiver, in functions and in top-level code, in every execution mode,
+    on the IR tier of tiered execution and as a qcc executable (see ExecModeOutputTest); the destructor messages show
+    that every value lives until the call has returned, and no longer.
+*/
+class LocalReadOverwrittenBeforeUseTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+class T {
+    public { string n; }
+    constructor(string n) { self.n = n; printf("ctor %s\n", n); }
+    destructor() { printf("dtor %s\n", n); }
+    twice(auto o) { printf("twice self=%s arg=%s\n", n, o ? o.n : "-"); }
+}
+sub f2t(T a, T b) { printf("f2t %s %s\n", a.n, b.n); }
+sub f2a(auto a, auto b) { printf("f2a %s %s\n", a ? a.n : "-", b ? b.n : "-"); }
+sub f3a(auto a, auto b, auto c) { printf("f3a %s %s %s\n", a ? a.n : "-", b ? b.n : "-", c ? c.n : "-"); }
+sub setref(reference r, auto v) { r = v; }
+
+# an argument that is the value of an assignment to a variable that a later argument assigns again
+sub args_typed() {
+    *T t;
+    f2t(t = new T("a1"), t = new T("a2"));
+    printf("t %s\n", t.n);
+}
+sub args_auto() {
+    auto t;
+    f2a(t = new T("b1"), t = new T("b2"));
+    printf("t %s\n", t.n);
+}
+sub args_object() {
+    object t;
+    f2a(t = new T("c1"), t = new T("c2"));
+    printf("t %s\n", t.n);
+}
+# a variable given as an argument and assigned by a later argument
+sub args_read() {
+    T t = new T("d1");
+    f2t(t, t = new T("d2"));
+    auto u = new T("d3");
+    f2a(u, u = new T("d4"));
+    printf("t %s u %s\n", t.n, u.n);
+}
+# the receiver of a method call assigned by an argument
+sub recv_auto() {
+    auto o = new T("e1");
+    o.twice(o = new T("e2"));
+    printf("o %s\n", o.n);
+}
+sub recv_typed() {
+    T o = new T("f1");
+    o.twice(o = new T("f2"));
+    *T p = new T("f3");
+    p.twice(p = NOTHING);
+    printf("o %s p %y\n", o.n, p);
+}
+sub recv_remove() {
+    *T o = new T("g1");
+    o.twice(remove o);
+    printf("o %y\n", o);
+}
+# the assignment in a branch of the argument, and the value read in a branch
+sub branches(bool c) {
+    auto o = new T(c ? "h1" : "h2");
+    o.twice(c ? (o = new T("h3")) : o);
+    printf("o %s\n", o.n);
+    auto t = new T(c ? "h4" : "h5");
+    f2a(c ? t : NOTHING, t = new T("h6"));
+    printf("t %s\n", t.n);
+}
+# the variable assigned through a reference by a call made for a later argument
+sub through_reference() {
+    auto t = new T("i1");
+    f2a(t, setref(\t, new T("i2")));
+    f3a(t, setref(\t, new T("i3")), setref(\t, new T("i4")));
+    printf("t %s\n", t.n);
+}
+# the receiver: a hash holding a closure, a string, a list
+sub other_receivers() {
+    hash<auto> h = {"code": sub (auto x) { printf("code %y\n", x); }};
+    h.code(h = {});
+    string s = "abc" + "def";
+    printf("substr %s\n", s.substr((s = "x" + "yz").size()));
+    list<int> l = (1, 2, 3);
+    printf("join %s\n", l.join(sprintf("%d", (l = (7, 8)).size())));
+    printf("s %s l %y\n", s, l);
+}
+args_typed();
+args_auto();
+args_object();
+args_read();
+recv_auto();
+recv_typed();
+recv_remove();
+branches(True);
+branches(False);
+through_reference();
+other_receivers();
+# top-level code
+*T gt;
+f2t(gt = new T("l1"), gt = new T("l2"));
+auto go = new T("l3");
+go.twice(go = new T("l4"));
+printf("gt %s go %s\n", gt.n, go.n);
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "ctor a1",
+            "ctor a2",
+            "f2t a1 a2",
+            "dtor a1",
+            "t a2",
+            "dtor a2",
+            "ctor b1",
+            "ctor b2",
+            "f2a b1 b2",
+            "dtor b1",
+            "t b2",
+            "dtor b2",
+            "ctor c1",
+            "ctor c2",
+            "f2a c1 c2",
+            "dtor c1",
+            "t c2",
+            "dtor c2",
+            "ctor d1",
+            "ctor d2",
+            "f2t d1 d2",
+            "dtor d1",
+            "ctor d3",
+            "ctor d4",
+            "f2a d3 d4",
+            "dtor d3",
+            "t d2 u d4",
+            "dtor d4",
+            "dtor d2",
+            "ctor e1",
+            "ctor e2",
+            "twice self=e1 arg=e2",
+            "dtor e1",
+            "o e2",
+            "dtor e2",
+            "ctor f1",
+            "ctor f2",
+            "twice self=f1 arg=f2",
+            "dtor f1",
+            "ctor f3",
+            "twice self=f3 arg=-",
+            "dtor f3",
+            "o f2 p null",
+            "dtor f2",
+            "ctor g1",
+            "twice self=g1 arg=g1",
+            "dtor g1",
+            "o null",
+            "ctor h1",
+            "ctor h3",
+            "twice self=h1 arg=h3",
+            "dtor h1",
+            "o h3",
+            "ctor h4",
+            "ctor h6",
+            "f2a h4 h6",
+            "dtor h4",
+            "t h6",
+            "dtor h6",
+            "dtor h3",
+            "ctor h2",
+            "twice self=h2 arg=h2",
+            "o h2",
+            "ctor h5",
+            "ctor h6",
+            "dtor h5",
+            "f2a - h6",
+            "t h6",
+            "dtor h6",
+            "dtor h2",
+            "ctor i1",
+            "ctor i2",
+            "f2a i1 -",
+            "dtor i1",
+            "ctor i3",
+            "ctor i4",
+            "dtor i3",
+            "f3a i2 - -",
+            "dtor i2",
+            "t i4",
+            "dtor i4",
+            "code {}",
+            "substr def",
+            "join 12223",
+            "s xyz l [7, 8]",
+            "ctor l1",
+            "ctor l2",
+            "f2t l1 l2",
+            "dtor l1",
+            "ctor l3",
+            "ctor l4",
+            "twice self=l3 arg=l4",
+            "dtor l3",
+            "gt l2 go l4",
+            "dtor l4",
+            "dtor l2",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("LocalReadOverwrittenBeforeUse", Script, (map $1 + "\n", Expected).join(""),
+            "keeps the value read from a variable that a later argument assigns, as the AST interpreter does") {
+    }
+}

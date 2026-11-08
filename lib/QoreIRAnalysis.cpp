@@ -577,6 +577,304 @@ const LocalVar* qore_ir_get_written_local(
     }
 }
 
+// documented in QoreIRAnalysis.h
+bool qore_ir_find_local_reads_overwritten_before_use(const QoreIRFunction& func,
+        std::unordered_set<uint32_t>& result) {
+    result.clear();
+    struct Position {
+        size_t block;
+        size_t index;
+    };
+    struct Read {
+        const LocalVar* local;
+        Position def;
+        std::vector<Position> uses;
+    };
+    size_t check_count = 0;
+    const char* operation = "IR overwritten local read analysis";
+
+    std::unordered_map<const QoreIRBasicBlock*, size_t> block_ids;
+    block_ids.reserve(func.blocks.size());
+    for (size_t b = 0; b < func.blocks.size(); ++b) {
+        block_ids.emplace(func.blocks[b].get(), b);
+    }
+
+    // the values read from a variable (LoadLocal and StoreLocal results)
+    std::unordered_map<uint32_t, Read> reads;
+    // the reads that a value can be: a read itself, or a guard or a Phi of reads
+    std::unordered_map<uint32_t, std::vector<uint32_t>> read_values;
+    std::vector<const QoreIRInstruction*> forwarders;
+    // the writes of each variable
+    std::unordered_map<const LocalVar*, std::vector<Position>> writes;
+    // the instructions that can write any variable through a reference (only in a function that creates one)
+    std::vector<Position> any_writes;
+    bool creates_reference = false;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::CreateParseRef
+                    || (inst->opcode == QoreIROpcode::Invoke
+                        && static_cast<const QoreIRInvokeInstruction*>(inst.get())->invoke_opcode
+                            == QoreIROpcode::CreateParseRef)) {
+                creates_reference = true;
+            }
+        }
+    }
+    for (size_t b = 0; b < func.blocks.size(); ++b) {
+        const auto& insts = func.blocks[b]->instructions;
+        for (size_t i = 0; i < insts.size(); ++i) {
+            if (qore_ir_analysis_cancelled(check_count, operation)) {
+                goto cancelled;
+            }
+            const QoreIRInstruction* inst = insts[i].get();
+            const LocalVar* written = qore_ir_get_written_local(inst);
+            if (written) {
+                writes[written].push_back({b, i});
+            }
+            // in a function that creates a reference, a write to a local that holds one writes the referenced
+            // variable, and a call can write any variable through one
+            if (creates_reference && (written || qore_ir_call_arg_start(inst) >= 0
+                    || qore_ir_instruction_may_invalidate_caller_caches(func, inst))) {
+                any_writes.push_back({b, i});
+            }
+            if (!inst->result.isValid()) {
+                continue;
+            }
+            switch (inst->opcode) {
+                case QoreIROpcode::LoadLocal:
+                case QoreIROpcode::StoreLocal: {
+                    const LocalVar* local = static_cast<const QoreIRLocalInstruction*>(inst)->local;
+                    if (local) {
+                        reads.emplace(inst->result.id, Read{local, {b, i}, {}});
+                        read_values[inst->result.id].push_back(inst->result.id);
+                    }
+                    break;
+                }
+                case QoreIROpcode::GuardType:
+                case QoreIROpcode::GuardNotNothing:
+                case QoreIROpcode::Phi:
+                    forwarders.push_back(inst);
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+    // the reads that guards and Phis forward, until no more are found (a Phi can come before an operand's
+    // definition in a loop)
+    for (bool changed = true; changed;) {
+        changed = false;
+        for (const QoreIRInstruction* fwd : forwarders) {
+            if (qore_ir_analysis_cancelled(check_count, operation)) {
+                goto cancelled;
+            }
+            size_t count = fwd->opcode == QoreIROpcode::Phi ? fwd->operands.size()
+                : std::min<size_t>(fwd->operands.size(), 1);
+            for (size_t o = 0; o < count; ++o) {
+                auto it = read_values.find(fwd->operands[o].id);
+                if (it == read_values.end() || fwd->operands[o].id == fwd->result.id) {
+                    continue;
+                }
+                std::vector<uint32_t> add = it->second;
+                std::vector<uint32_t>& target = read_values[fwd->result.id];
+                for (uint32_t r : add) {
+                    if (std::find(target.begin(), target.end(), r) == target.end()) {
+                        target.push_back(r);
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+    // the uses of each read, directly or through a guard or a Phi
+    for (size_t b = 0; b < func.blocks.size(); ++b) {
+        const auto& insts = func.blocks[b]->instructions;
+        for (size_t i = 0; i < insts.size(); ++i) {
+            const QoreIRInstruction* inst = insts[i].get();
+            bool forwards = inst->opcode == QoreIROpcode::GuardType || inst->opcode == QoreIROpcode::GuardNotNothing
+                || inst->opcode == QoreIROpcode::Phi;
+            if (!qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                        // the use of a guard or a Phi is counted at the uses of its value
+                        if (forwards) {
+                            return;
+                        }
+                        auto it = read_values.find(operand.id);
+                        if (it == read_values.end()) {
+                            return;
+                        }
+                        for (uint32_t r : it->second) {
+                            reads[r].uses.push_back({b, i});
+                        }
+                    }, &check_count, operation)) {
+                goto cancelled;
+            }
+        }
+    }
+    {
+        // the successors of each block, with the handlers of its instructions
+        std::vector<std::vector<size_t>> successors(func.blocks.size());
+        for (size_t b = 0; b < func.blocks.size(); ++b) {
+            auto add = [&](QoreIRBasicBlock* succ) {
+                auto it = block_ids.find(succ);
+                if (it != block_ids.end() && std::find(successors[b].begin(), successors[b].end(), it->second)
+                        == successors[b].end()) {
+                    successors[b].push_back(it->second);
+                }
+            };
+            const auto& insts = func.blocks[b]->instructions;
+            if (!insts.empty()) {
+                qore_ir_visit_successors(*insts.back(), add);
+            }
+            for (const auto& inst : insts) {
+                if (inst->exception_target) {
+                    add(inst->exception_target);
+                }
+            }
+        }
+        // the blocks visited by the path searches; above the budget, a path is assumed to exist
+        size_t search_budget = 1u << 22;
+        // the search that last visited each block, so that a search does not reset the vector
+        std::vector<uint32_t> visited(func.blocks.size(), 0);
+        uint32_t search = 0;
+        std::vector<size_t> stack;
+        // true if a path from the end of block from (through its successors) reaches block to without entering block
+        // avoid, which is the block of the read: a path through it executes the read again, giving a new value; the
+        // block of the read is reached itself when it is the target
+        auto reaches_avoiding = [&](size_t from, size_t to, size_t avoid) -> bool {
+            ++search;
+            stack.assign(successors[from].begin(), successors[from].end());
+            while (!stack.empty()) {
+                if (!search_budget) {
+                    return true;
+                }
+                --search_budget;
+                size_t b = stack.back();
+                stack.pop_back();
+                if (b == to) {
+                    return true;
+                }
+                if (b == avoid || visited[b] == search) {
+                    continue;
+                }
+                visited[b] = search;
+                stack.insert(stack.end(), successors[b].begin(), successors[b].end());
+            }
+            return false;
+        };
+        // true if the write can be executed between the read and a use that is not after it in its block
+        auto between_blocks = [&](const Position& def, const Position& write, const Position& use) -> bool {
+            if (write.block == def.block) {
+                // a write before the read in its block is followed by the read again; one after it is executed on
+                // every path leaving the block
+                return write.index > def.index && reaches_avoiding(def.block, use.block, def.block);
+            }
+            if (!reaches_avoiding(def.block, write.block, def.block)) {
+                return false;
+            }
+            if (write.block == use.block && write.index < use.index) {
+                return true;
+            }
+            return reaches_avoiding(write.block, use.block, def.block);
+        };
+        // the writes of each local, and the writes through a reference, by block, in instruction order (they are
+        // collected in that order), so that a write between a read and a use in one block is found by a binary search
+        using BlockWrites = std::unordered_map<size_t, std::vector<size_t>>;
+        std::unordered_map<const LocalVar*, BlockWrites> local_block_writes;
+        for (const auto& [local, positions] : writes) {
+            BlockWrites& bw = local_block_writes[local];
+            for (const Position& w : positions) {
+                bw[w.block].push_back(w.index);
+            }
+        }
+        BlockWrites any_block_writes;
+        for (const Position& w : any_writes) {
+            any_block_writes[w.block].push_back(w.index);
+        }
+        // true if one of the writes is in the block after index from and before index to
+        auto written_in = [](const BlockWrites* bw, size_t block, size_t from, size_t to) -> bool {
+            if (!bw) {
+                return false;
+            }
+            auto it = bw->find(block);
+            if (it == bw->end()) {
+                return false;
+            }
+            auto w = std::upper_bound(it->second.begin(), it->second.end(), from);
+            return w != it->second.end() && *w < to;
+        };
+        // the number of path checks made for one read with a use in another block, above which a write between is
+        // assumed (the read then takes a reference of its own, which is always correct)
+        constexpr size_t MaxPathChecksPerRead = 256;
+        for (auto& [id, read] : reads) {
+            if (qore_ir_analysis_cancelled(check_count, operation)) {
+                goto cancelled;
+            }
+            auto wi = writes.find(read.local);
+            if (wi == writes.end() && any_writes.empty()) {
+                continue;
+            }
+            auto lbw = local_block_writes.find(read.local);
+            const BlockWrites* bw = lbw == local_block_writes.end() ? nullptr : &lbw->second;
+            // the last use after the read in its block, and the uses elsewhere
+            size_t last_local_use = 0;
+            bool has_local_use = false;
+            std::vector<const Position*> other_uses;
+            for (const Position& use : read.uses) {
+                if (use.block == read.def.block && use.index > read.def.index) {
+                    if (!has_local_use || use.index > last_local_use) {
+                        last_local_use = use.index;
+                        has_local_use = true;
+                    }
+                } else {
+                    other_uses.push_back(&use);
+                }
+            }
+            bool found = has_local_use && (written_in(bw, read.def.block, read.def.index, last_local_use)
+                || written_in(&any_block_writes, read.def.block, read.def.index, last_local_use));
+            size_t checks = 0;
+            for (size_t u = 0; !found && u < other_uses.size(); ++u) {
+                const Position& use = *other_uses[u];
+                auto check = [&](const Position& write) -> bool {
+                    if (++checks > MaxPathChecksPerRead) {
+                        return true;
+                    }
+                    return between_blocks(read.def, write, use);
+                };
+                if (wi != writes.end()) {
+                    for (const Position& write : wi->second) {
+                        if (check(write)) {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if (!found) {
+                    for (const Position& write : any_writes) {
+                        if (check(write)) {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (found) {
+                result.insert(id);
+            }
+        }
+    }
+    return true;
+
+cancelled:
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if ((inst->opcode == QoreIROpcode::LoadLocal || inst->opcode == QoreIROpcode::StoreLocal)
+                    && inst->result.isValid()) {
+                result.insert(inst->result.id);
+            }
+        }
+    }
+    return false;
+}
+
 bool qore_ir_instruction_may_invalidate_caller_caches(
         const QoreIRFunction& func, const QoreIRInstruction* inst) {
     if (!inst) {

@@ -565,6 +565,21 @@ engines take no reference the AST interpreter does not take:
   or inlined call can take its argument's slot over as its parameter;
   `BorrowedLocalArguments.qtest`).
 
+A value read from a variable without a reference of its own (native code reads the local cache
+this way, and the IR interpreter the base of a method call) is borrowed from the variable, and a
+write to the variable releases it. The AST interpreter evaluates every argument of a call and the
+receiver of a method call into a value of its own, so an argument that assigns the variable read
+for an earlier argument or for the receiver (`f(t = new T("a"), t = new T("b"))`, `f(t, t = x)`,
+`o.m(o = new T())`, `o.m(remove o)`) leaves the value read intact.
+`qore_ir_find_local_reads_overwritten_before_use()` finds the reads (LoadLocal, and StoreLocal,
+whose value is the variable's) that a write to the same variable (`qore_ir_get_written_local()`,
+which includes lvalue paths rooted at it; in a function that creates a reference, any call) can
+release before a use, through guards and Phis, on a path that does not execute the read again.
+Native code takes a reference of its own for each of them (`overwritten_local_reads`), released
+as a temporary's, and the IR interpreter borrows none of them as a method base. The AST interpreter
+holds a reference to a receiver read from a variable or a container while the call's arguments
+need evaluation (`QoreDotEvalOperatorNode::evalImpl()`). `LocalReadOverwrittenBeforeUse.qtest`.
+
 `benchmark_exec_modes.qr` (object_local, object_list_index, new_object_member, builtin_method,
 queue_cycle) measures these patterns in every mode.
 

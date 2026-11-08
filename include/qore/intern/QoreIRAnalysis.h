@@ -151,6 +151,32 @@ DLLLOCAL bool qore_ir_get_readonly_scalar_closure_captures(
 DLLLOCAL const LocalVar* qore_ir_get_written_local(
     const QoreIRInstruction* inst);
 
+//! Finds the values read from the storage of a local variable that a later write to the variable can release while
+//! they still have a use
+/** A LoadLocal gives the value the variable holds, as does a StoreLocal (the value it stored), and an engine can give
+    it without a reference of its own, borrowed from the variable's storage (native code reads its local cache this
+    way, the IR interpreter the base of a method call).  The AST interpreter evaluates every argument of a call, and
+    the operands of an operator, into a value of its own, so a write to the variable between the read and the use
+    (ex: <tt>f(t = new T("a"), t = new T("b"))</tt>, <tt>o.m(o = new T())</tt>, <tt>o.m(remove o)</tt>) leaves the
+    value read intact; borrowed, it was released by the write while the call still had to use it.
+
+    A write is any instruction that qore_ir_get_written_local() gives for the variable; in a function that creates a
+    reference (\c \\x), any instruction that can change state visible to its caller, and any write to a local (which can
+    hold a reference), can write a variable through it, and is a write to every variable.  The value of a guard
+    (GuardType, GuardNotNothing) and of a Phi is the value of its operand, so a use of it is a use of the values read
+    that it can be.  A write is between a read and a use in the same block when it comes after the read and before the
+    use; otherwise when a path from the read reaches the use through the write without executing the read again (a path
+    is assumed when the search exceeds its budget, or when a read used in another block needs more than a bounded number
+    of checks).  A write between a read and its uses in the read's block is found by a binary search in the writes of
+    the block, so the analysis takes about n log n steps for a function of n instructions in all but those cases.
+
+    @param func the function
+    @param result the values found (LoadLocal and StoreLocal results)
+    @return false if the analysis was cancelled; @a result then holds every value read from a variable
+*/
+DLLLOCAL bool qore_ir_find_local_reads_overwritten_before_use(const QoreIRFunction& func,
+    std::unordered_set<uint32_t>& result);
+
 //! Return true when one instruction can mutate state visible to its caller.
 //! Direct function calls without reference arguments are handled by the
 //! interprocedural fixed-point analysis and therefore return false here.

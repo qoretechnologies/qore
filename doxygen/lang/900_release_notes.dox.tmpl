@@ -1500,6 +1500,11 @@
     - the IR, JIT and tiered execution modes and AOT-compiled code keep the locals of an object type (a class,
       \c object) out of the runtime stack as they keep other locals, with the same garbage-collection behavior: a loop
       assigning an object to such a local runs up to 1.4 times faster
+    - a method call whose argument assigns the variable holding the receiver (ex: <tt>o.m(o = new T())</tt>,
+      <tt>o.m(remove o)</tt>) could crash the program with every execution mode, and a call whose argument assigns the
+      variable read for an earlier argument (ex: <tt>f(t = new T("a"), t = new T("b"))</tt>, <tt>f(t, t = x)</tt>)
+      could crash the program in the JIT and tiered execution modes and in AOT-compiled code; the call now runs with
+      the values read before the assignment, which live until the call returns
     - in the IR execution mode and wherever the JIT and tiered execution modes run a function with the IR
       interpreter, the first call of a large function in a thread with a pending cancellation (ex: in code that
       caught a \c THREAD-CANCELLED exception) raised the exception before the function ran; it is now raised at the

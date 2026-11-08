@@ -737,6 +737,11 @@ private:
     // This avoids creating temporary strong references from weak member
     // dereferences that would keep objects alive for the function lifetime.
     std::unordered_set<uint32_t> dot_eval_only_bases;
+    //! The values read from a local's storage (LoadLocal and StoreLocal results) that a later write to the local can
+    //! release while they still have a use (see qore_ir_find_local_reads_overwritten_before_use()): a value read
+    //! from the local cache is borrowed from it, so each of these takes a reference of its own, released as a
+    //! temporary's
+    std::unordered_set<uint32_t> overwritten_local_reads;
 
     // Locals assigned through the weak assignment operator. Loads must go
     // through LocalVar::eval() so weak refs are resolved to the current target

@@ -2456,13 +2456,21 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     }
     // the loads of IR-only locals whose only use is the base of a method call in the same block, with no write to
     // the local between: when the value is an object, they borrow it, as the AST interpreter evaluates the base of a
-    // method call without a reference of its own; each reference taken and released was a dereference of the object,
+    // method call without a reference of its own (it takes one only while arguments that need evaluation are
+    // evaluated, which can assign the variable; see QoreDotEvalOperatorNode::evalImpl()); each reference taken and
+    // released was a dereference of the object,
     // which is a garbage-collection decision for an object in a recursive graph.  An argument is never borrowed: a
     // direct or inlined call can take its argument's slot over as the parameter's, and a container is never
     // borrowed: code that receives one with a single reference can take it over or change it in place
     {
         std::vector<uint8_t> borrowed_bases(func.max_value_id + 1, 0);
         const std::vector<uint8_t>& bases = func.interpreter_dot_eval_only_bases;
+        // a write to the local between the load and the call (o.m(o = new T()), o.m(remove o)) can release the value
+        // borrowed; the analysis also sees writes that are not stores (an lvalue path rooted at the local) and the
+        // writes through a reference; if it is cancelled, it gives every load, and none is borrowed
+        // the candidates: the loads of IR-only locals used only as the base of a method call; the analysis runs only
+        // for a function that has one
+        std::vector<std::pair<const QoreIRBasicBlock*, size_t>> candidates;
         for (const auto& block : func.blocks) {
             const auto& insts = block->instructions;
             for (size_t i = 0; i < insts.size(); ++i) {
@@ -2479,28 +2487,34 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                         || !static_cast<const QoreIRLocalInstruction*>(load)->auto_ref) {
                     continue;
                 }
-                for (size_t j = i + 1; j < insts.size(); ++j) {
-                    const QoreIRInstruction* next = insts[j].get();
-                    bool dot_eval = next->opcode == QoreIROpcode::DotEvalMethodDirect
-                        || (next->opcode == QoreIROpcode::Invoke && isDotEvalInvokeOpcode(
-                            static_cast<const QoreIRInvokeInstruction*>(next)->invoke_opcode));
-                    if (dot_eval && !next->operands.empty() && next->operands[0].id == rid) {
-                        borrowed_bases[rid] = 1;
-                        break;
-                    }
-                    // a write to the local can release the value borrowed
-                    const LocalVar* written = nullptr;
-                    if (next->opcode == QoreIROpcode::StoreLocal || next->opcode == QoreIROpcode::UninstantiateLocal
-                            || next->opcode == QoreIROpcode::StoreClosure) {
-                        written = static_cast<const QoreIRLocalInstruction*>(next)->local;
-                    } else if (next->opcode == QoreIROpcode::IncrementLocalInt) {
-                        written = static_cast<const QoreIRIncrementLocalIntInstruction*>(next)->local;
-                    } else if (next->opcode == QoreIROpcode::AddAssignLocalInt) {
-                        written = static_cast<const QoreIRAddAssignLocalIntInstruction*>(next)->target;
-                    }
-                    if (written == lv) {
-                        break;
-                    }
+                candidates.emplace_back(block.get(), i);
+            }
+        }
+        std::unordered_set<uint32_t> overwritten;
+        if (!candidates.empty()) {
+            qore_ir_find_local_reads_overwritten_before_use(func, overwritten);
+        }
+        for (const auto& [block, i] : candidates) {
+            const auto& insts = block->instructions;
+            const QoreIRInstruction* load = insts[i].get();
+            const uint32_t rid = load->result.id;
+            if (overwritten.count(rid)) {
+                continue;
+            }
+            const LocalVar* lv = static_cast<const QoreIRLocalInstruction*>(load)->local;
+            for (size_t j = i + 1; j < insts.size(); ++j) {
+                const QoreIRInstruction* next = insts[j].get();
+                bool dot_eval = next->opcode == QoreIROpcode::DotEvalMethodDirect
+                    || (next->opcode == QoreIROpcode::Invoke && isDotEvalInvokeOpcode(
+                        static_cast<const QoreIRInvokeInstruction*>(next)->invoke_opcode));
+                if (dot_eval && !next->operands.empty() && next->operands[0].id == rid) {
+                    borrowed_bases[rid] = 1;
+                    break;
+                }
+                // a write to the local can release the value borrowed (one between the load and the call puts the
+                // load in overwritten)
+                if (qore_ir_get_written_local(next) == lv) {
+                    break;
                 }
             }
         }
