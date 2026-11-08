@@ -1761,10 +1761,22 @@ class MyProvider {
         } else {
             v.builder = builder;
         }
-        AutoLock al(lazy_worker_lck);
-        int id = ++lazy_value_seq;
-        lazy_values{id.toString()} = v;
+        int id;
+        {
+            AutoLock al(lazy_worker_lck);
+            id = ++lazy_value_seq;
+            lazy_values{id.toString()} = v;
+        }
+        # a module whose load fails removes its values with its other registrations (see ImplicitModuleTransaction)
+        string key = id.toString();
+        ImplicitModuleTransaction::add(sub () { DataProviderActionCatalog::removeLazyValue(key); });
         return id;
+    }
+
+    #! Removes a lazy value of a module whose load failed; a build running ends without storing its value
+    private:internal static removeLazyValue(string key) {
+        AutoLock al(lazy_worker_lck);
+        remove lazy_values{key};
     }
 
     #! Returns a value registered with registerLazyValue(), building it the first time
@@ -5393,13 +5405,23 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         on_exit if (done) {
             DataProviderActionCatalog::exitInit(owner_key, done);
         }
-        if (lazy_values{key}.built) {
-            return lazy_values{key}.value;
+        *hash<auto> v = lazy_values{key};
+        if (v.built) {
+            return v.value;
         }
-        auto value = lazy_values{key}.builder();
+        if (!v) {
+            throw "DATA-PROVIDER-LAZY-VALUE-ERROR", sprintf("lazy value %s was removed: the module that registered it "
+                "failed to load", key);
+        }
+        auto value = v.builder();
         if (done) {
-            lazy_values{key}.value = value;
-            lazy_values{key}.built = True;
+            AutoLock al(lazy_worker_lck);
+            # not stored if the value was removed while it was built
+            if (lazy_values{key}) {
+                lazy_values{key}.value = value;
+                lazy_values{key}.built = True;
+                remove lazy_values{key}.builder;
+            }
         }
         return value;
     }
@@ -5434,7 +5456,10 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             }
             init_waits{tkey} = LazyWorkerKey + id;
         }
-        # removing the entries takes no lock and cannot fail, however the wait ends
+        # removing the entries takes no lock and cannot fail, however the wait ends: the wait of a sandboxed reader
+        # ends when its sandbox is interrupted, and then this thread cannot take a lock; the wait is removed before
+        # the result, and finishJob() removes a result that it stores after the wait was removed, so that no result
+        # is left behind
         on_exit {
             remove init_waits{tkey};
             remove lazy_job_waiting{id};
@@ -5664,6 +5689,11 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         --lazy_pending;
         if (lazy_job_waiting{id}) {
             lazy_job_results{id} = result;
+            # the reader removes its wait, and then the result, without the lock (see runOnWorker()): a wait removed
+            # after it was checked above, and before the result was stored, leaves the result to be removed here
+            if (!lazy_job_waiting{id}) {
+                remove lazy_job_results{id};
+            }
             lazy_job_cond.broadcast();
         }
     }

@@ -5328,9 +5328,53 @@ struct QoreSystemThreadArg {
     //! the Program the callback runs in; with a dependency reference
     QoreProgram* pgm;
 
+    //! takes the references; cannot throw
+    QoreSystemThreadArg(const ResolvedCallReferenceNode* code, QoreProgram* pgm) noexcept
+            : code(code->refRefSelf()), pgm(pgm) {
+        pgm->depRef();
+    }
+
     void release(ExceptionSink* xsink) {
         code->deref(xsink);
         pgm->depDeref();
+    }
+};
+
+//! Releases the argument of a system thread that did not start, also when the start throws
+class QoreSystemThreadArgHolder {
+public:
+    DLLLOCAL QoreSystemThreadArgHolder(QoreSystemThreadArg* arg, ExceptionSink* xsink) : arg(arg), xsink(xsink) {
+    }
+
+    DLLLOCAL ~QoreSystemThreadArgHolder() {
+        if (arg) {
+            arg->release(xsink);
+            delete arg;
+        }
+    }
+
+    //! the thread owns the argument
+    DLLLOCAL void disown() {
+        arg = nullptr;
+    }
+
+    DLLLOCAL QoreSystemThreadArg* get() const {
+        return arg;
+    }
+
+private:
+    QoreSystemThreadArg* arg;
+    ExceptionSink* xsink;
+};
+
+//! Releases a system thread start reserved in qore_start_system_thread() however the start ends
+class QoreSystemThreadStartReservation {
+public:
+    DLLLOCAL ~QoreSystemThreadStartReservation() {
+        std::lock_guard<std::mutex> l(exit_hook_lock);
+        if (!--system_threads_starting) {
+            exit_hook_cond.notify_all();
+        }
     }
 };
 
@@ -5347,6 +5391,8 @@ void qore_system_thread_main(ExceptionSink* xsink, void* arg) {
 }
 
 int qore_start_system_thread(const ResolvedCallReferenceNode* code, QoreProgram* pgm, ExceptionSink* xsink) {
+    // allocated before the start is reserved: whatever throws after the reservation releases it, and the argument
+    QoreSystemThreadArgHolder arg(new QoreSystemThreadArg(code, pgm), xsink);
     // the start is reserved under the lock; the hooks do not start to run until it has been made (see
     // qore_close_exit_hooks()), so that the hook that stops the thread runs after it exists
     {
@@ -5358,22 +5404,14 @@ int qore_start_system_thread(const ResolvedCallReferenceNode* code, QoreProgram*
         }
         ++system_threads_starting;
     }
-    std::unique_ptr<QoreSystemThreadArg> arg(new QoreSystemThreadArg{code->refRefSelf(), pgm});
-    pgm->depRef();
+    // released after the start, also if the start throws
+    QoreSystemThreadStartReservation reservation;
     // started without the lock, which creating a thread must not hold (it takes other locks, and fork() handlers)
     int tid = q_start_thread(xsink, qore_system_thread_main, arg.get(), QTF_NO_SANDBOX_INHERIT);
-    {
-        std::lock_guard<std::mutex> l(exit_hook_lock);
-        if (!--system_threads_starting) {
-            exit_hook_cond.notify_all();
-        }
+    if (tid >= 0) {
+        // the thread owns the argument
+        arg.disown();
     }
-    if (tid < 0) {
-        arg->release(xsink);
-        return -1;
-    }
-    // the thread owns the argument
-    arg.release();
     return tid;
 }
 

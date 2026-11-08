@@ -172,6 +172,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
             \governedActionCallbacksTest());
         addTestCase("a module that sandboxed code loads first sets no process-wide callback",
             \sandboxedCallbackModuleLoadTest());
+        addTestCase("a module whose load fails removes its lazy values", \failedLoadValueTest());
         addTestCase("a Program that may not use the sandbox APIs loads the module; registrations run at once",
             \restrictedLoaderTest());
         set_return_value(main());
@@ -1347,6 +1348,27 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         assertFalse(action.hasKey("get_dynamic_options") && exists action.get_dynamic_options);
         assertEq("SafeGovernedOutput", action.output_type.getName());
         assertEq("options set", action.desc);
+    }
+
+    failedLoadValueTest() {
+        *int id;
+        Hooks::set("LazyAppActionsFailedLoad", sub () {
+            id = DataProviderActionCatalog::registerLazyValue(string sub () { return "never"; });
+            throw "LAZY-TEST-LOAD-ERROR", "the module fails to load";
+        });
+        on_exit Hooks::set("LazyAppActionsFailedLoad");
+        int sp = ImplicitModuleTransaction::savepoint();
+        *hash<ExceptionInfo> error;
+        try {
+            load_module(normalize_dir(get_script_dir()) + "/LazyAppActionsFailedLoad.qm");
+        } catch (hash<ExceptionInfo> ex) {
+            error = ex;
+            ImplicitModuleTransaction::rollback(sp);
+        }
+        assertEq("LAZY-TEST-LOAD-ERROR", error.err, sprintf("the module failed to load: %y", error));
+        assertTrue(exists id, "the module registered a value");
+        assertThrows("DATA-PROVIDER-LAZY-VALUE-ERROR", "no lazy value is registered",
+            \DataProviderActionCatalog::getLazyValue(), id);
     }
 
     #! Returns the error that readIn() queued, as text, or NOTHING if the read succeeded
