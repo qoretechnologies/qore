@@ -1000,6 +1000,7 @@ qore_class_private::~qore_class_private() {
 
     assert(!refs.reference_count());
     assert(!var_refs.reference_count());
+    assert(!data_refs.reference_count());
     assert(!const_refs.reference_count());
 
     if (!vars.empty()) {
@@ -4081,7 +4082,7 @@ BCSMList::BCSMList(const BCSMList& old) {
 
 BCSMList::~BCSMList() {
     for (auto& i : *this) {
-        qore_class_private::derefClass(*i.first, false, false);
+        qore_class_private::derefClass(*i.first, false, false, false);
     }
 }
 
@@ -4246,7 +4247,7 @@ void BCSMList::resolveCopy() {
         QoreClass* old = i->first;
         i->first = old->priv->new_copy;
         qore_class_private::refClass(*i->first);
-        qore_class_private::derefClass(*old, false, false);
+        qore_class_private::derefClass(*old, false, false, false);
     }
 }
 
@@ -4308,7 +4309,7 @@ QoreClass::~QoreClass() {
             }
         }
 
-        priv->deref(true, true, true);
+        priv->deref(true, true, true, true);
     }
 }
 
@@ -7461,6 +7462,15 @@ int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink, bool defer_pen
         return 0;
     }
 
+    // a variable whose value has been released (see clear()) is not initialized again: its value stays NOTHING, like
+    // the values of the other variables of the class, as assignments are refused once the values have been released
+    {
+        QoreAutoVarRWReadLocker al(rwl);
+        if (finalized) {
+            return 0;
+        }
+    }
+
     // The initializer is evaluated into its own sink: the caller's sink is shared by every initializer committed
     // with this one, so classifying it would let one initializer's exception decide another's outcome.
     ExceptionSink init_xsink;
@@ -7592,7 +7602,7 @@ void QoreVarMap::moveAllTo(QoreClass* qc, ClassAccess access) {
 QoreClassHolder::~QoreClassHolder() {
     if (c) {
         // release the class pointer (handle) reference in case the class is a wrapper
-        qore_class_private::derefClass(*c, true, true);
+        qore_class_private::derefClass(*c, true, true, true);
     }
 }
 

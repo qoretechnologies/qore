@@ -2341,7 +2341,7 @@ public:
 
     mutable QoreReferenceCounter refs;  // existence references
     mutable QoreReferenceCounter const_refs; // constant references
-    //! Holds a reference to the static variables of a class while their values are released; see releaseVarsLast()
+    //! Holds a reference to the values of the static variables while they are released; see releaseVarValues()
     class VarRefHolder {
     public:
         DLLLOCAL VarRefHolder(const QoreReferenceCounter& refs) : refs(refs) {
@@ -2369,14 +2369,34 @@ public:
         bool released = false;
     };
 
-    //! static var references: one for each Program sharing the class's static variables
-    /** The Program that releases the last reference releases the variables: it clears their values, which runs the
-        destructors of the objects they hold, and the variables are deleted when no Program shares them.  A Program
-        created while the values are released, by a destructor that they run, shares the class again (it inherits the
-        classes of the Program running the destructor), so a reference is held while the values are released; see
-        releaseVarsLast()
+    //! references to the values of the static variables: one for each Program that has not released them yet
+    /** A Program releases its reference when its data is cleared (clear()), or when it is deleted without having been
+        cleared (deleteClassData() or deref()).  The Program that releases the last one releases the values (see
+        releaseVarValues()); the variables themselves are deleted only when data_refs reaches zero.
+
+        A Program created while the values are released, by a destructor that they run, shares the class (it inherits
+        the public classes of the Program running the destructor) and so takes a reference again, possibly from zero.
+        Releasing that reference releases the values again (no value can be assigned once a variable's value has been
+        released, but key-value data can be set), and never deletes the variables, which the Programs that share the
+        class can still use.
     */
     mutable QoreReferenceCounter var_refs;
+
+    //! references to the static variable objects: one for each Program that has not deleted its class data yet
+    /** Each Program sharing the class takes one (the Program that creates the class holds the first one, and
+        pgmRef() takes one for each other Program), and releases it exactly once, after its references in var_refs:
+        with deleteClassData() when its namespaces' data is deleted, or with deref() when it releases the class
+        without having done so.  The variables (QoreVarMap::del()) are deleted only by whoever releases the last
+        one, so they are deleted exactly once, and only after the last Program that can run code reading them (its
+        parse tree or native code holds QoreVarInfo pointers) has deleted its class data.
+
+        This is separate from var_refs because a Program created while the values are released, after var_refs has
+        reached zero, takes a reference in both counts: if the variables were deleted when var_refs reached zero
+        again, the deletion of such a Program would free the variables while the Program that created it still runs
+        code that reads them, and two Programs deleted at the same time in different threads could both see zero and
+        both delete them.
+    */
+    mutable QoreReferenceCounter data_refs;
 
     unsigned num_methods, num_user_methods, num_static_methods, num_static_user_methods;
 
@@ -2504,9 +2524,11 @@ public:
         return scl ? &scl->sml : nullptr;
     }
 
+    //! References the class for a Program that shares it; see var_refs and data_refs
     DLLLOCAL void pgmRef() const {
         refs.ROreference();
         var_refs.ROreference();
+        data_refs.ROreference();
         const_refs.ROreference();
     }
 
@@ -2514,18 +2536,31 @@ public:
         refs.ROreference();
     }
 
-    DLLLOCAL bool deref(bool ns_const, bool ns_vars, bool in_del = false) {
+    //! Releases a reference to the class
+    /** @param ns_const true if the holder releases its reference to the constants (const_refs)
+        @param ns_vars true if the holder releases its reference to the values of the static variables (var_refs)
+        @param ns_data true if the holder releases its reference to the static variables (data_refs), i.e. it has
+        not deleted its class data with deleteClassData()
+        @param in_del true if called from the destructor of the class object
+
+        @return true if the class was deleted
+    */
+    DLLLOCAL bool deref(bool ns_const, bool ns_vars, bool ns_data, bool in_del = false) {
         if (ns_const && const_refs.ROdereference()) {
             // constants may not be empty when deleting an uninitialized user class
             if (!constlist.empty()) {
                 constlist.deleteAll(nullptr);
             }
         }
+        // the values are released before the variables, as for deleteClassData()
         if (ns_vars && var_refs.ROdereference()) {
             // vars may not be empty when deleting an uninitialized user class
-            if (!vars.empty() && releaseVarsLast(nullptr)) {
-                vars.del(nullptr);
+            if (!vars.empty()) {
+                releaseVarValues(nullptr);
             }
+        }
+        if (ns_data && data_refs.ROdereference() && !vars.empty()) {
+            vars.del(nullptr);
         }
 
         if (refs.ROdereference()) {
@@ -2573,9 +2608,9 @@ public:
 
     //! Dereferences a specific QoreClass pointer (handle) along with the private data
     /** Deletes the wrapper when the last pointer reference is released; see refClass() for the pointer
-        reference contract
+        reference contract, and deref() for the other arguments
     */
-    DLLLOCAL static void derefClass(QoreClass& qc, bool ns_const, bool ns_vars) {
+    DLLLOCAL static void derefClass(QoreClass& qc, bool ns_const, bool ns_vars, bool ns_data) {
         qore_class_private* priv = qc.priv;
         bool del = false;
         if (&qc != priv->cls) {
@@ -2594,7 +2629,7 @@ public:
             }
         }
 
-        priv->deref(ns_const, ns_vars);
+        priv->deref(ns_const, ns_vars, ns_data);
         if (del) {
             delete &qc;
         }
@@ -3410,55 +3445,63 @@ public:
 
         if (var_refs.ROdereference()) {
             // issue #3521: only clear vars here; do not delete
-            releaseVarsLast(xsink);
+            releaseVarValues(xsink);
         }
     }
 
     //! Releases the values of the static variables and the key-value data for the last Program sharing them
     /** Called after the last reference in var_refs has been released.  The destructors of the values run here, and
         one can create a Program that shares the class (a Program inherits the classes of the Program that creates it,
-        and a destructor runs in the Program of its class); deleting that Program would release the variables again,
-        as the last Program sharing them, and delete them while they are being cleared here.  A reference is held
-        while the values are released, so a Program created meanwhile never releases the last one; one that still
-        exists afterwards releases the variables (and the values assigned to them) itself when it is deleted.
+        and a destructor runs in the Program of its class).  A reference is held while the values are released, so
+        that deleting such a Program meanwhile does not release them again while they are being released here; one
+        that still exists afterwards releases them (and any key-value data set meanwhile) when its data is cleared.
+
+        The variables themselves are not deleted here; see data_refs.
 
         @param xsink for exceptions raised by destructors
-
-        @return true if no Program shares the static variables afterwards, false if a Program created while they
-        were released still does
     */
-    DLLLOCAL bool releaseVarsLast(ExceptionSink* xsink) {
-        VarRefHolder holder(var_refs);
-        vars.clear(xsink);
-        // delete key-value data when the last program sharing this class is cleaned up
-        for (auto& i : kvmap) {
-            i.second.discard(xsink);
+    DLLLOCAL void releaseVarValues(ExceptionSink* xsink) {
+        while (true) {
+            VarRefHolder holder(var_refs);
+            vars.clear(xsink);
+            // delete key-value data when the last program sharing this class is cleaned up; the data is taken under
+            // the lock, as the destructors run by discarding it can set key values
+            kvmap_t kv;
+            {
+                AutoLocker al(gate.asl_lock);
+                kv.swap(kvmap);
+            }
+            for (auto& i : kv) {
+                i.second.discard(xsink);
+            }
+            // a Program still sharing the values releases them itself
+            if (!holder.release()) {
+                break;
+            }
+            // the last reference was released again here: release any key-value data set in the meantime
+            AutoLocker al(gate.asl_lock);
+            if (kvmap.empty()) {
+                break;
+            }
         }
-        kvmap.clear();
-        return holder.release();
     }
 
     //! Releases the class data that a Program sharing the class holds, when the Program is deleted
-    /** @param deref_vars whether the Program releases its reference to the static variables
+    /** @param deref_vars whether the Program releases its reference to the values of the static variables
+        (var_refs), i.e. its data has not been cleared with clear()
+        @param deref_data whether the Program releases its reference to the static variables (data_refs), i.e. this
+        is the first call for the Program
         @param pgm the Program whose namespace is deleted, if any
         @param xsink for exceptions raised by destructors
 
-        The source Program is released by the Program itself, or by the last Program sharing the class; another
-        Program that shares the class is deleted while the class runs in the others, which still use it.
+        The static variables are deleted by the Program that releases the last reference in data_refs, after the
+        values have been released.  The source Program is released by the Program itself, or by the last Program
+        sharing the class; another Program that shares the class is deleted while the class runs in the others, which
+        still use it.
     */
-    DLLLOCAL void deleteClassData(bool deref_vars, const QoreProgram* pgm, ExceptionSink* xsink) {
-        // true if no other Program shares the class's data
-        bool last = false;
+    DLLLOCAL void deleteClassData(bool deref_vars, bool deref_data, const QoreProgram* pgm, ExceptionSink* xsink) {
         if (deref_vars && var_refs.ROdereference()) {
-            // a Program created while the values are released can still share the variables, and then deletes them
-            if (releaseVarsLast(xsink)) {
-                last = true;
-                vars.del(xsink);
-            }
-        } else if (!var_refs.reference_count()) {
-            last = true;
-            // delete vars again if possible
-            vars.del(xsink);
+            releaseVarValues(xsink);
         }
         // note: kvmap is cleared in clear() for the normal shutdown path (deref_vars=false)
 
@@ -3467,12 +3510,26 @@ public:
             constlist.deleteAll(xsink);
         }
         */
-        if (spgm && (last || spgm == pgm)) {
-            if (deref_source_program) {
-                spgm->deref(xsink);
-            }
-            spgm = nullptr;
+        // the source Program releases itself before its reference in data_refs, so that the Program that releases the
+        // last one, possibly in another thread, does not release it again
+        if (spgm && spgm == pgm) {
+            releaseSourceProgram(xsink);
         }
+        if (deref_data && data_refs.ROdereference()) {
+            vars.del(xsink);
+            if (spgm) {
+                releaseSourceProgram(xsink);
+            }
+        }
+    }
+
+    //! Releases the source Program of the class
+    DLLLOCAL void releaseSourceProgram(ExceptionSink* xsink) {
+        assert(spgm);
+        if (deref_source_program) {
+            spgm->deref(xsink);
+        }
+        spgm = nullptr;
     }
 
     /*
@@ -4247,9 +4304,9 @@ public:
 
     DLLLOCAL ~qore_class_private_holder() {
         if (qc) {
-            qore_class_private::derefClass(*qc, true, true);
+            qore_class_private::derefClass(*qc, true, true, true);
         } else if (c) {
-            c->deref(true, true);
+            c->deref(true, true, true);
         }
     }
 

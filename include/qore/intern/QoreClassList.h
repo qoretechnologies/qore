@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -81,13 +81,15 @@ private:
     hm_qc_t hm;        // hash_map for name lookups
     bool ns_const : 1;
     bool ns_vars : 1;
+    //! set when the class data has been deleted with deleteClassData(); see qore_class_private::data_refs
+    bool ns_data : 1;
 
     DLLLOCAL void deleteAll();
 
     DLLLOCAL void addInternal(QoreClass* ot, bool priv);
 
 public:
-    DLLLOCAL QoreClassList() : ns_const(false), ns_vars(false) {}
+    DLLLOCAL QoreClassList() : ns_const(false), ns_vars(false), ns_data(false) {}
     DLLLOCAL ~QoreClassList();
     DLLLOCAL QoreClassList(const QoreClassList& old, const QoreParseOptions& po, qore_ns_private* ns);
 

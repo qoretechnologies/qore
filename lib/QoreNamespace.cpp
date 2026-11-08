@@ -2538,7 +2538,7 @@ void qore_root_ns_private::parseAddClassIntern(const QoreProgramLocation* loc, c
     } else {
         //printd(5, "qore_root_ns_private::parseAddClassIntern() class '%s' not added: '%s' namespace not found\n", oc->getName(), nscope.ostr);
         // release the class pointer (handle) reference in case the class is a wrapper
-        qore_class_private::derefClass(*oc, true, true);
+        qore_class_private::derefClass(*oc, true, true, true);
     }
 }
 

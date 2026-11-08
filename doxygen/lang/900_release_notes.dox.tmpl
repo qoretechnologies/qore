@@ -1875,9 +1875,12 @@
       \c FILESYSTEM-ACCESS-DENIED in a program that is not allowed to access the filesystem, and a
       @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" could not be constructed in a sandboxed service; it
       now uses @ref Qore::get_random_bytes()
-    - a destructor that created a @ref Qore::Program "Program" when the static variables of its object's public
-      class were released, at process exit for a user module or the main program, or when a Program was deleted,
-      crashed the process, as the new Program shared the class
+    - a destructor run while the @ref static_class_variables "static class variables" of a program were released
+      (at process exit for a user module or the main program, or when a @ref Qore::Program "Program" was deleted)
+      could crash the process if it created a Program: the new Program shares the program's public classes, and
+      deleting it deleted their static variables while the program still used them
+    - deleting @ref Qore::Program "Program" objects that share a class in different threads at the same time could
+      crash the process
 
     @section qore_2_2_1 Qore 2.2.1
 

@@ -559,6 +559,17 @@ class Test {
 
     @note Static class variables cannot have the same name as class constants.
 
+    @par Static Class Variables Shared by Programs
+    The static class variables of a public class are shared by the @ref Qore::Program "Program" objects that inherit
+    the class.  Their values are released when the last of these programs releases them, when its data is cleared at
+    exit or when it is deleted, and the destructors of the objects they hold run then.  A program created by such a
+    destructor inherits the public classes of the program that the destructor runs in, including those whose static
+    variables have already been released; their values are then \c NOTHING.\n\n
+    If a program created by such a destructor is stored in a static variable of a class that it shares and whose
+    values have not been released yet, the program and that variable reference each other: the values of that class's
+    static variables are then never released, so the destructors of the objects they hold never run, and the program
+    is never deleted.
+
     @section class_members Class Members
 
     @subsection public_members Public Member Declarations
