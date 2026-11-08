@@ -56,6 +56,7 @@
 #include <condition_variable>
 #include <chrono>
 #include <poll.h>
+#include <arpa/inet.h>
 
 #include <algorithm>
 #include <cassert>
@@ -367,6 +368,7 @@ static void quic_test_count_rx(bool is_server) {
 static bool quic_test_pending_input();
 static bool quic_test_undelivered(std::vector<int>& fds);
 static bool quic_test_wait_delivered(int timeout_ms);
+static std::string quic_test_describe_undelivered();
 
 //! Set by the first advance of the QUIC test clock: datagrams are counted from then on (see quic_test_undelivered())
 static std::atomic<bool> quic_test_clock_used{false};
@@ -405,6 +407,22 @@ int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink) {
     //   quiet only when every datagram sent to a socket of the process has been read from it (see
     //   quic_test_undelivered()), and the next pass waits until those still on their way have been read
     quic_test_clock_used.store(true, std::memory_order_release);
+    // waits for the I/O threads to process the commands given to them so far; a controller with no running I/O
+    // thread has no operation to wait for
+    auto wait_io = [&]() -> int {
+        if (ctrl->waitForProcessing(30000, xsink)) {
+            return 0;
+        }
+        if (*xsink) {
+            return -1;
+        }
+        if (!ctrl->running()) {
+            return 0;
+        }
+        xsink->raiseException("DBG-QUIC-CLOCK-ERROR", "the I/O threads of the async I/O controller did not process "
+            "their commands within 30 seconds; the QUIC test clock was not advanced");
+        return -1;
+    };
     bool quiet = false;
     for (int pass = 0; pass < 100 && !quiet; ++pass) {
         int64_t client_before, server_before;
@@ -416,7 +434,7 @@ int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink) {
             return -1;
         }
         ctrl->dbgWakeAllSockets();
-        if (!ctrl->waitForProcessing(30000, xsink) && *xsink) {
+        if (wait_io()) {
             return -1;
         }
         int64_t completed_after;
@@ -425,7 +443,7 @@ int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink) {
                 "become idle within 30 seconds; the QUIC test clock was not advanced");
             return -1;
         }
-        if (!ctrl->waitForProcessing(30000, xsink) && *xsink) {
+        if (wait_io()) {
             return -1;
         }
         int64_t client_after, server_after;
@@ -438,7 +456,7 @@ int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink) {
         // the I/O threads read a datagram when it is in its socket, so the next pass sees what it caused
         if (!quiet && in_flight && !quic_test_wait_delivered(30000)) {
             xsink->raiseException("DBG-QUIC-CLOCK-ERROR", "datagrams sent to sockets of the process were not read "
-                "within 30 seconds; the QUIC test clock was not advanced");
+                "within 30 seconds (%s); the QUIC test clock was not advanced", quic_test_describe_undelivered().c_str());
             return -1;
         }
     }
@@ -581,6 +599,43 @@ static bool quic_test_undelivered_locked(std::vector<int>& fds) {
 static bool quic_test_undelivered(std::vector<int>& fds) {
     std::lock_guard<std::mutex> g(quic_test_fds_m);
     return quic_test_undelivered_locked(fds);
+}
+
+//! Describes the addresses that datagrams were sent to and not read from: "address:port (fd N): sent S, read R"
+static std::string quic_test_describe_undelivered() {
+    std::lock_guard<std::mutex> g(quic_test_fds_m);
+    std::string desc;
+    std::vector<int> fds;
+    quic_test_undelivered_locked(fds);
+    for (int fd : fds) {
+        struct sockaddr_storage local;
+        socklen_t len = sizeof(local);
+        if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local), &len)) {
+            continue;
+        }
+        auto i = quic_test_addr_counts.find(quic_test_addr_key(reinterpret_cast<const struct sockaddr*>(&local)));
+        if (i == quic_test_addr_counts.end()) {
+            continue;
+        }
+        char addr[INET6_ADDRSTRLEN] = "?";
+        int port = 0;
+        if (local.ss_family == AF_INET) {
+            const struct sockaddr_in* a = reinterpret_cast<const struct sockaddr_in*>(&local);
+            inet_ntop(AF_INET, &a->sin_addr, addr, sizeof(addr));
+            port = ntohs(a->sin_port);
+        } else if (local.ss_family == AF_INET6) {
+            const struct sockaddr_in6* a = reinterpret_cast<const struct sockaddr_in6*>(&local);
+            inet_ntop(AF_INET6, &a->sin6_addr, addr, sizeof(addr));
+            port = ntohs(a->sin6_port);
+        }
+        if (!desc.empty()) {
+            desc += "; ";
+        }
+        QoreStringMaker item("%s:%d (fd %d): sent %lld, read %lld", addr, port, fd,
+            static_cast<long long>(i->second.sent), static_cast<long long>(i->second.received));
+        desc += item.c_str();
+    }
+    return desc.empty() ? std::string("no address") : desc;
 }
 
 //! Waits until every datagram sent to a socket of the process has been read from it; false on timeout
