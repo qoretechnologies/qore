@@ -781,6 +781,40 @@ public class WscLibraryThreads {
     }
 }
 
+#! The actions of threads that ended without releasing them; internal to WebSocketClient
+/** An action that must be released by a thread that cannot take the client's lock (it was cancelled: a Mutex lock is
+    a cancellation point) is recorded here, with a synchronized method and a Condition broadcast, neither of which is a
+    cancellation point; the next thread that takes the lock to start an action releases it, and the threads waiting
+    for an action are woken to do so.  A waiter whose wakeup is lost (it checked before the record and waited after
+    the broadcast) releases it when its wait times out, instead of failing.
+
+    @since WebSocketClient 2.5
+*/
+public class WscOrphanedActions {
+    private {
+        #! the TIDs whose action is to be released
+        list<int> tids = ();
+    }
+
+    public {
+        #! Woken when an action is recorded, and when an action is released; waited for with the client's lock
+        Condition wake();
+    }
+
+    #! Records that the action of the given thread is to be released, and wakes the threads waiting for an action
+    synchronized add(int tid) {
+        push tids, tid;
+        wake.broadcast();
+    }
+
+    #! Returns and forgets the TIDs whose action is to be released
+    synchronized list<int> takeAll() {
+        list<int> rv = tids;
+        tids = ();
+        return rv;
+    }
+}
+
 #! The handoff of an action from connectAsync() to its worker; internal to WebSocketClient
 /** Decided once: the worker takes the action over (in acquireActionUnlocked(), with the client's lock held, as its
     connect's action), or abandons it (it ended before, e.g. cancelled, or its code was released unrun), and then the
@@ -791,15 +825,24 @@ public class WscLibraryThreads {
 */
 public class WscActionHandoff {
     private {
-        #! "taken" or "abandoned" once decided
+        #! "taken" or "abandoned" once decided; "orphaned" while undecided after the caller stopped waiting
         *string state;
         #! gets True when the worker took the action over, False when it abandoned it
         Queue result();
+        #! the TID of connectAsync()'s caller, which owns the action until it is taken over
+        int caller_tid;
+        #! where an abandoned action of a caller that stopped waiting is recorded
+        WscOrphanedActions orphans;
+    }
+
+    constructor(WscOrphanedActions orphans) {
+        self.orphans = orphans;
+        caller_tid = gettid();
     }
 
     #! Takes the action over; returns @ref False if the handoff was abandoned
     synchronized bool take() {
-        if (state) {
+        if (state && state != "orphaned") {
             return False;
         }
         state = "taken";
@@ -808,10 +851,27 @@ public class WscActionHandoff {
     }
 
     #! Abandons the handoff unless the action was taken over
+    /** If the caller stopped waiting, its action is recorded to be released by the next holder of the client's lock.
+    */
     synchronized abandon() {
         if (!state) {
             state = "abandoned";
             result.push(False);
+        } else if (state == "orphaned") {
+            state = "abandoned";
+            orphans.add(caller_tid);
+        }
+    }
+
+    #! Called when the caller stops waiting for the decision (it was cancelled)
+    /** If the handoff was already abandoned, the caller's action is recorded to be released; if it is undecided, the
+        worker decides later: it takes the action over or abandons it, which then records it.
+    */
+    synchronized orphan() {
+        if (!state) {
+            state = "orphaned";
+        } else if (state == "abandoned") {
+            orphans.add(caller_tid);
         }
     }
 
@@ -1176,7 +1236,13 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         #! The threads waiting to start an action, in the order they started waiting; protected by \c m
         /** @since WebSocketClient 2.5
         */
-        hash<string, Condition> action_waiters();
+        hash<string, bool> action_waiters();
+
+        #! The actions of threads that ended without releasing them (see WscOrphanedActions); its Condition is the one
+        #! that the threads waiting for an action wait on
+        /** @since WebSocketClient 2.5
+        */
+        WscOrphanedActions orphaned_actions();
 
         #! The handoffs of actions to connectAsync() workers (see connectAsync())
         /** @since WebSocketClient 2.5
@@ -1862,18 +1928,35 @@ ws.connect();
         #
         # The action is handed over to the background thread, so calls made after this method returns run after the
         # connect.
-        WscActionHandoff handoff();
+        WscActionHandoff handoff(orphaned_actions);
         startLibraryThread(sub () { connectAsyncWorker(opts, ready_queue, True); }, NOTHING, handoff);
         # the worker takes the action over as its connect's action, with the lock held; this call returns once it
         # did, without waiting for the connect
         locked = False;
         m.unlock();
-        if (handoff.wait()) {
+        bool took;
+        try {
+            took = handoff.wait();
+        } catch (hash<ExceptionInfo> ex) {
+            # this call was cancelled: the action it owns until the worker takes it over is released by the next
+            # holder of the lock if the worker abandons it (see WscActionHandoff::orphan())
+            handed_over = True;
+            handoff.orphan();
+            rethrow;
+        }
+        if (took) {
             handed_over = True;
             return;
         }
         # the worker ended without taking it over (e.g. it was cancelled): this call still owns the action
-        m.lock();
+        try {
+            m.lock();
+        } catch (hash<ExceptionInfo> ex) {
+            # cancelled: the action is released by the next holder of the lock
+            handed_over = True;
+            orphaned_actions.add(gettid());
+            rethrow;
+        }
         locked = True;
     }
 
@@ -1887,8 +1970,9 @@ ws.connect();
 
         @param opts the connection options
         @param ready_queue optional Queue that receives the connect result hash or an exception hash
-        @param handed_over True if the action of connectAsync() was handed over to this thread: its connect takes it
-        over as its action
+        @param handed_over True if the action of connectAsync() was handed over to this thread; for subclasses
+        overriding this method (the base implementation does not need it: its connect takes the action over from the
+        handoff recorded for this thread)
 
         @since WebSocketClient 2.5
     */
@@ -2528,9 +2612,7 @@ ws.connect();
                 # connectAsync()) fails instead of publishing a connection while the destructor closes the current one
                 destroying = True;
                 # threads waiting for an action stop waiting (see acquireActionUnlocked())
-                foreach Condition c in (action_waiters.iterator()) {
-                    c.signal();
-                }
+                orphaned_actions.wake.broadcast();
             }
 
             # the destructor does not wait for an action; destroying the object while another thread runs one of its
@@ -3537,6 +3619,9 @@ ws.setEventQueue();
     */
     private acquireActionUnlocked(timeout to) {
         int tid = gettid();
+        # the actions of threads that could not release them are released first; a thread with the TID of such a
+        # thread does not take its action for its own
+        releaseOrphanedActionsUnlocked();
         # an action handed over to this thread (see connectAsync()) becomes this call's action, unless the handoff
         # was abandoned
         *WscActionHandoff handoff = action_handoffs.take();
@@ -3564,8 +3649,7 @@ ws.setEventQueue();
         }
         if (action_tid || action_waiters) {
             string t = tid.toString();
-            Condition cond();
-            action_waiters{t} = cond;
+            action_waiters{t} = True;
             on_exit {
                 remove action_waiters{t};
             }
@@ -3574,6 +3658,12 @@ ws.setEventQueue();
             while (action_tid || action_waiters.firstKey() != t) {
                 int remaining_us = (deadline - now_us()).durationMicroseconds();
                 if (remaining_us <= 0) {
+                    # an action whose release was recorded while this thread waited (its wakeup can be lost: the
+                    # record is made without the lock)
+                    releaseOrphanedActionsUnlocked();
+                    if (!action_tid && action_waiters.firstKey() == t) {
+                        break;
+                    }
                     # let the next waiter take the action if it was released while this one timed out
                     if (!action_tid) {
                         signalNextActionWaiterUnlocked(t);
@@ -3582,11 +3672,12 @@ ws.setEventQueue();
                         "within %y", milliseconds(to));
                 }
                 # rounded up, so the wait never ends before the deadline
-                cond.wait(m, (remaining_us + 999) / 1000);
+                orphaned_actions.wake.wait(m, (remaining_us + 999) / 1000);
                 # the destructor ends every action wait
                 if (destroying) {
                     throw "WEBSOCKET-ERROR", "the client is being destroyed";
                 }
+                releaseOrphanedActionsUnlocked();
             }
         }
         action_tid = tid;
@@ -3615,12 +3706,24 @@ ws.setEventQueue();
         signalNextActionWaiterUnlocked();
     }
 
-    #! Signals the first thread waiting to start an action, except \a skip; must be called with \c m held
+    #! Wakes the threads waiting to start an action; the first one, except \a skip, takes it; must be called with
+    #! \c m held
     private signalNextActionWaiterUnlocked(*string skip) {
-        foreach string t in (keys action_waiters) {
-            if (t != skip) {
-                action_waiters{t}.signal();
-                return;
+        if (action_waiters && (!skip || action_waiters.size() > 1)) {
+            orphaned_actions.wake.broadcast();
+        }
+    }
+
+    #! Releases the actions of threads that ended without releasing them (see WscOrphanedActions); must be called
+    #! with \c m held
+    /** @since WebSocketClient 2.5
+    */
+    private releaseOrphanedActionsUnlocked() {
+        foreach int tid in (orphaned_actions.takeAll()) {
+            if (action_tid == tid) {
+                action_tid = 0;
+                action_count = 0;
+                signalNextActionWaiterUnlocked();
             }
         }
     }
@@ -4295,6 +4398,10 @@ ws.setEventQueue();
             return (use_start_thread && start_thread) ? start_thread(run) : background run();
 %endif
         } catch (hash<ExceptionInfo> ex) {
+            # the caller keeps and releases the action: a thread that the hook started anyway cannot take it over
+            if (handoff) {
+                handoff.abandon();
+            }
             lt.startFailed(token);
             rethrow;
         }

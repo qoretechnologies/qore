@@ -334,7 +334,15 @@ class LifecycleWsClient inherits WebSocketClient {
             hold_worker = False;
             Queue q = events;
             q.push("worker-held:" + gettid());
-            release_worker.waitForZero(HandoffTimeout);
+            try {
+                release_worker.waitForZero(HandoffTimeout);
+            } catch (hash<ExceptionInfo> ex) {
+                # cancelled: the worker ends without taking the action over
+                if (ex.err == "THREAD-CANCELLED") {
+                    return;
+                }
+                rethrow;
+            }
         }
         WebSocketClient::connectAsyncWorker(opts, ready_queue, handed_over);
     }
@@ -830,7 +838,10 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         addTestCase("Discord: a cancelled heartbeat thread is not waited for", \cancelledHeartbeatThreadTest());
         addTestCase("Discord: a heartbeat wait of less than a millisecond does not wait for a wakeup",
             \heartbeatShortSleepTest());
+        addTestCase("the handoff of an action is decided once", \actionHandoffDecisionTest());
         addTestCase("a cancelled connectAsync() worker does not keep the action", \cancelledConnectAsyncWorkerTest());
+        addTestCase("a cancelled connectAsync() caller and its cancelled worker do not keep the action",
+            \cancelledConnectAsyncCallerAndWorkerTest());
         addTestCase("Discord: a destructor on another thread waits for a heartbeat thread reconnecting itself",
             \discordDeleteDuringInlineReconnectTest());
         addTestCase("Discord: a destructor on another thread waits for a heartbeat thread that stopped its own record",
@@ -1089,6 +1100,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! A thread of the client is cancelled: it is uncounted when it ends, so the destructor does not wait for it
     cancelledLibraryThreadTest() {
+        TestThreads::cancel_expected = True;
+        on_exit TestThreads::cancel_expected = False;
         LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://localhost:" + ports.h1, "logger": logger});
         Counter running(1);
         Counter block(1);
@@ -1100,7 +1113,13 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             on_exit ended.push(True);
             running.dec();
             # a cancellation point: the cancellation ends it with THREAD-CANCELLED
-            block.waitForZero(LifecycleWsClient::HandoffTimeout);
+            try {
+                block.waitForZero(LifecycleWsClient::HandoffTimeout);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "THREAD-CANCELLED") {
+                    rethrow;
+                }
+            }
         });
         running.waitForZero(LifecycleWsClient::HandoffTimeout);
         cancel_thread(tid, "test");
@@ -1113,6 +1132,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! The thread of a start whose code the hook deferred is cancelled before it ran the code, which it releases: the
     #! start is uncounted
     cancelledDeferredThreadTest() {
+        TestThreads::cancel_expected = True;
+        on_exit TestThreads::cancel_expected = False;
         GatedStarter starter();
         on_exit starter.dropPending();
         LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://localhost:" + ports.h1, "logger": logger,
@@ -1131,6 +1152,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! The heartbeat thread is cancelled: it reports its end, so the destructor does not wait for it
     cancelledHeartbeatThreadTest() {
+        TestThreads::cancel_expected = True;
+        on_exit TestThreads::cancel_expected = False;
         Queue tids();
         HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger,
             "start_thread": int sub (code c) {
@@ -1156,7 +1179,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         DiscordHeartbeat rec(1, 1, 100);
         Queue returned();
         background TestThreads::run(sub () {
-            rec.sleep(0);
+            # the heartbeat thread's wait for its next beat, due in less than a millisecond
+            rec.waitUntil(now_us() + 500us);
             returned.push(True);
         });
         assertTrue(returned.get(LifecycleWsClient::HandoffTimeout), "the wait returned at once");
@@ -1165,6 +1189,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! The worker of connectAsync() is cancelled before it took the action over: connectAsync() releases the action,
     #! so the next action does not wait for it
     cancelledConnectAsyncWorkerTest() {
+        TestThreads::cancel_expected = True;
+        on_exit TestThreads::cancel_expected = False;
         LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://localhost:" + ports.h1, "logger": logger,
             "connect_timeout": LifecycleWsClient::HandoffTimeout});
         Queue events = c.events;
@@ -1184,6 +1210,77 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         cancel_thread(tid, "test");
         thread_join(tid);
         assertTrue(returned.get(LifecycleWsClient::HandoffTimeout), "connectAsync() returned");
+        # the action was released: a connect does not time out waiting for it
+        c.connect();
+        assertTrue(c.isOpen(), "the next connect was made");
+        c.disconnect();
+        destroyChecked(c);
+    }
+
+    #! The handoff of an action from connectAsync() to its worker is decided once; an action that no thread can
+    #! release (the caller stopped waiting and the worker abandoned it) is recorded to be released
+    actionHandoffDecisionTest() {
+        WscOrphanedActions orphans();
+        # taken over: a later abandon (the worker's end) changes nothing
+        WscActionHandoff h1(orphans);
+        assertTrue(h1.take());
+        h1.abandon();
+        assertTrue(h1.wait());
+        assertEq((), orphans.takeAll());
+        # abandoned first (e.g. a start that failed although the hook started the thread): the thread cannot take it
+        WscActionHandoff h2(orphans);
+        h2.abandon();
+        assertFalse(h2.take(), "an abandoned handoff cannot be taken over");
+        assertFalse(h2.wait());
+        assertEq((), orphans.takeAll(), "the caller, which waits, releases the action itself");
+        # the caller stops waiting, then the worker abandons it: the caller's action is recorded
+        WscActionHandoff h3(orphans);
+        h3.orphan();
+        h3.abandon();
+        assertEq((gettid(),), orphans.takeAll(), "the action of the caller is to be released");
+        # the worker abandons it, then the caller stops waiting
+        WscActionHandoff h4(orphans);
+        h4.abandon();
+        h4.orphan();
+        assertEq((gettid(),), orphans.takeAll(), "the action of the caller is to be released");
+        # the caller stops waiting, then the worker takes it over
+        WscActionHandoff h5(orphans);
+        h5.orphan();
+        assertTrue(h5.take(), "the worker takes the action over");
+        h5.abandon();
+        assertEq((), orphans.takeAll());
+    }
+
+    #! The caller of connectAsync() is cancelled while it waits for its worker, which is then cancelled before it
+    #! took the action over: the action is released by the next thread that starts one
+    cancelledConnectAsyncCallerAndWorkerTest() {
+        TestThreads::cancel_expected = True;
+        on_exit TestThreads::cancel_expected = False;
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://localhost:" + ports.h1, "logger": logger,
+            "connect_timeout": LifecycleWsClient::HandoffTimeout});
+        Queue events = c.events;
+        Counter release = c.release_worker;
+        on_exit if (release.getCount()) {
+            release.dec();
+        }
+        c.hold_worker = True;
+        Queue caller_done();
+        int caller = background TestThreads::run(sub () {
+            try {
+                c.connectAsync();
+                caller_done.push("returned");
+            } catch (hash<ExceptionInfo> ex) {
+                caller_done.push(ex.err);
+            }
+        });
+        string ev = events.get(LifecycleWsClient::HandoffTimeout);
+        assertTrue(ev =~ /^worker-held:/, ev);
+        int worker = ev.split(":")[1].toInt();
+        # the caller first, waiting for the worker's decision; then the worker
+        cancel_thread(caller, "test");
+        assertEq("THREAD-CANCELLED", caller_done.get(LifecycleWsClient::HandoffTimeout), "the caller was cancelled");
+        cancel_thread(worker, "test");
+        thread_join(worker);
         # the action was released: a connect does not time out waiting for it
         c.connect();
         assertTrue(c.isOpen(), "the next connect was made");
@@ -4202,6 +4299,8 @@ class TestThreads {
     public {
         #! the exceptions that ended a thread
         static Queue errors();
+        #! set by the tests that cancel threads: THREAD-CANCELLED is not recorded meanwhile
+        static bool cancel_expected = False;
     }
 
     #! runs the given code; an exception that ends it is recorded
@@ -4218,8 +4317,8 @@ class TestThreads {
 
     #! records an exception that ended a thread
     static report(hash<ExceptionInfo> ex) {
-        # the tests cancel threads on purpose
-        if (ex.err == "THREAD-CANCELLED") {
+        # only while a test cancels threads on purpose
+        if (ex.err == "THREAD-CANCELLED" && TestThreads::cancel_expected) {
             return;
         }
         TestThreads::errors.push(get_exception_string(ex));
