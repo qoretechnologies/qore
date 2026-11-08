@@ -164,6 +164,11 @@ Before a cached module is used:
 The depfile, the fingerprints and then the module are each renamed into place, and the module and depfile are
 compared with the entry's digests after the copy.  Anything unexpected makes the module a miss.
 
+Reading the cache never fails a build: any exception while an entry is read or checked (malformed JSON, JSON nested
+deeper than the parser's recursion limit, a file of another type) makes the entry invalid, and a job that writes the
+cache removes it.  A store that fails leaves the compiled module (only a key collision fails the build, see below), and
+a failure while trimming the entries of a base key after a store is only logged.
+
 ### When storing
 
 A module is stored only when qcc wrote the module, the depfile and the fingerprints, the module contains the

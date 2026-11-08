@@ -279,6 +279,24 @@ class CacheStoreTest(unittest.TestCase):
         self.assertEqual(b"three", (Path(self.cache.object_dir("c" * 64)) / "qmod").read_bytes())
         self.assertTrue(self.cache.valid_object("b" * 64, "c" * 64, signer))
 
+    def test_unreadable_entry(self):
+        """Any exception while an entry is read makes it invalid: left out (removed from a writable cache), never
+        raised, also from the pruning of the base key after a store"""
+        f1 = self.files(b"one")
+        base = "b" * 64
+        self.cache.store(base, "c" * 64, self.entry("c" * 64, f1), f1)
+        nested = Path(self.cache.entries) / base / ("d" * 64 + ".json")
+        nested.write_text("[" * 200000 + "]" * 200000)
+        self.assertEqual(["c" * 64], [e["key"] for _, e in self.cache.candidates(base)])
+        self.assertTrue(nested.exists())
+        self.assertFalse(self.cache.valid_object(base, "d" * 64))
+        # the entry of the object being stored itself
+        (Path(self.cache.entries) / base / ("c" * 64 + ".json")).write_text("[" * 200000 + "]" * 200000)
+        self.assertFalse(self.cache.valid_object(base, "c" * 64))
+        self.cache.store(base, "c" * 64, self.entry("c" * 64, f1), f1)
+        self.assertEqual(["c" * 64], [e["key"] for _, e in self.cache.candidates(base, remove_invalid=True)])
+        self.assertFalse(nested.exists())
+
     def test_least_recently_used_entries_of_a_base_go(self):
         base = "b" * 64
         keys = ["%064d" % i for i in range(qc.MAX_ENTRIES_PER_BASE + 1)]
@@ -930,6 +948,29 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         for path in paths:
             if path.exists():
                 self.assertIsNone(qc.entry_problem(json.loads(path.read_text()), path.stem))
+
+    def test_unreadable_entries_are_misses(self):
+        """An entry that raises any exception when it is read (here JSON nested deeper than the parser's recursion
+        limit) is a miss and is removed; neither the lookup nor the store after a compile fails the build"""
+        self.build_all()
+        nested = "[" * 200000 + "]" * 200000
+        planted = []
+        for path in self.entries():
+            p = path.with_name("d" * 64 + ".json")
+            p.write_text(nested)
+            planted.append(p)
+        # every module is still found (the nested entries are removed while the lookup lists the entries)
+        self.assertEqual([], self.build_all())
+        self.assertNotIn("Traceback", self.output)
+        self.assertFalse([p for p in planted if p.exists()])
+        # a compile that stores its module next to such an entry
+        for p in planted:
+            p.write_text(nested)
+        mid = self.source / "qlib" / "Mid.qm"
+        mid.write_text(mid.read_text() + "# changed\n")
+        self.assertEqual(["Mid", "Top"], self.build_all())
+        self.assertNotIn("Traceback", self.output)
+        self.assertEqual("miss", self.origins()["Mid"])
 
     def test_changed_binary_module_dependency(self):
         self.build_all()

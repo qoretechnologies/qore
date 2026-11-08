@@ -1195,8 +1195,8 @@ class Cache:
     def candidates(self, base, remove_invalid=False):
         """Returns the valid entries stored under a base key, most recently used first
 
-        An entry that cannot be read or that entry_problem() refuses is left out, and removed with @p remove_invalid
-        (a cache this job writes to).
+        An entry that cannot be read (any exception while it is read or checked) or that entry_problem() refuses is
+        left out, and removed with @p remove_invalid (a cache this job writes to).
         """
         d = os.path.join(self.entries, base)
         try:
@@ -1210,12 +1210,15 @@ class Cache:
             try:
                 with open(p, "r", encoding="utf-8") as f:
                     entry = json.load(f)
-            except OSError:
+                problem = entry_problem(entry, key) or (entry.get("base_key") != base and "another base key")
+            except FileNotFoundError:
+                # removed since it was listed
                 continue
-            except ValueError:
-                entry = None
-            problem = entry_problem(entry, key) if entry is not None else "the entry is no JSON"
-            if problem or entry.get("base_key") != base:
+            except Exception as e:
+                # whatever an entry holds, reading it never fails the build: JSON nested deeper than the parser's
+                # recursion limit raises RecursionError, an entry of another file type OSError, and so on
+                problem = "the entry cannot be read: %s" % e.__class__.__name__
+            if problem:
                 if remove_invalid:
                     self.remove(p, key)
                 continue
@@ -1300,7 +1303,8 @@ class Cache:
             obj = self.object_dir(key)
             return all(sha256_file(os.path.join(obj, "qmod" + suffix)) == entry["files"][suffix or "qmod"]
                        for suffix in STORED_SUFFIXES)
-        except (OSError, ValueError, KeyError):
+        except Exception:
+            # any exception reading the entry (see candidates()) makes it invalid
             return False
 
     def store(self, base, key, entry, files, signer=None):
@@ -1348,10 +1352,13 @@ class Cache:
             self.mark_used(fd)
         finally:
             os.close(fd)
-        # keep the most recently used entries of the base key
-        cands = self.candidates(base)
-        for p, e in cands[MAX_ENTRIES_PER_BASE:]:
-            self.remove(p, e.get("key", ""))
+        # keep the most recently used entries of the base key; the module is stored, so nothing here can fail it
+        try:
+            cands = self.candidates(base, remove_invalid=True)
+            for p, e in cands[MAX_ENTRIES_PER_BASE:]:
+                self.remove(p, e["key"])
+        except Exception as e:
+            log("pruning the entries of base key %s failed: %s: %s" % (base, e.__class__.__name__, e))
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -1670,8 +1677,9 @@ def cmd_exec(args):
             stored = "; stored"
         except KeyCollision as e:
             return fail_key_hole(mod, cache, False, "KEY COLLISION: %s" % e)
-        except OSError as e:
-            stored = "; not stored: %s" % e
+        except Exception as e:
+            # whatever the cache holds, a store that fails leaves the compiled module, never a failed build
+            stored = "; not stored: %s: %s" % (e.__class__.__name__, e)
     log("miss %s (%s)%s" % (mod.name, reason, stored))
     mod.sidecar("miss", key, entry)
     write_index(mod.build_dir, mod.source_root, mod.out, key)
