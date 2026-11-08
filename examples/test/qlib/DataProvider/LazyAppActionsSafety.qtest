@@ -168,6 +168,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("a worker's change is delivered when the reader stopped waiting", \interruptedReaderDeliveryTest());
         addTestCase("a sandboxed thread interrupted when it requests a delivery does not lose it",
             \interruptedDeliveryRequestTest());
+        addTestCase("a registration made at once by a thread that holds the catalog lock", \lockOwnerRegistrationTest());
         addTestCase("only a thread that the catalog started runs as a worker", \untrackedWorkerTest());
         addTestCase("without a worker, every deferred registration runs when it is made, from source and AOT",
             \noWorkerTest());
@@ -1262,6 +1263,37 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
             }
         }
         assertTrue(call.tid != gettid(), "a worker delivered the change");
+%else
+        testSkip("the test needs the catalog's test hooks, which only debug builds have");
+%endif
+    }
+
+    lockOwnerRegistrationTest() {
+%ifdef QoreDebug
+        string app = "SafeLockOwner_" + get_random_string(8);
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        Program tenant(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        tenant.parse("%requires DataProvider\n"
+            "our int action_runs = 0;\n"
+            "sub reg(string app) {\n"
+            "    DataProviderActionCatalog::registerPendingApp(app, sub () {\n"
+            "        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app, \"display_name\": app,\n"
+            "            \"short_desc\": app, \"desc\": app, \"groups\": (AppGroup::DataTransformation,),\n"
+            "            \"logo\": \"data\", \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\",\n"
+            "            \"dynamic\": True});\n"
+            "    });\n"
+            "    DataProviderActionCatalog::registerPendingAppAction(app, \"pend\", sub () { ++action_runs; });\n"
+            "}\n"
+            "int sub action_runs() { return action_runs; }\n", "tenant-lock-owner");
+        tenant.setSandboxManager(new SandboxManager());
+        # registrations made under a sandbox run at once, also on a thread that holds the catalog lock
+        DataProviderActionCatalog::runWithCatalogLock(sub () { tenant.callFunction("reg", app); });
+        assertEq(app, DataProviderActionCatalog::getApp(app).name);
+        assertEq(1, tenant.callFunction("action_runs"));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+        # and are refused as for any thread when they are registered already
+        assertThrows("APP-ERROR", "already registered", \DataProviderActionCatalog::runWithCatalogLock(),
+            (sub () { tenant.callFunction("reg", app); },));
 %else
         testSkip("the test needs the catalog's test hooks, which only debug builds have");
 %endif

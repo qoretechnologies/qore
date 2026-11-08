@@ -31,6 +31,7 @@ class SystemThreadCallTest inherits QUnit::Test {
             \threadControlTest());
         addTestCase("a system thread started during a cancellation of its Program's threads is cancelled",
             \cancellationWaveTest());
+        addTestCase("a failed start releases its reservation", \startFailureTest());
         set_return_value(main());
     }
 
@@ -139,6 +140,23 @@ class SystemThreadCallTest inherits QUnit::Test {
         assertFalse(p.waitForThread(tid, -1), "the thread runs");
         assertTrue(p.cancelThread(tid, "cancellation wave test"));
         assertTrue(p.waitForThread(tid, SystemThreadWorker::Worker::Deadline));
+    }
+
+    startFailureTest() {
+%ifdef QoreDebug
+        Program p = SystemThreadWorker::Worker::control;
+        dbg_fail_next_system_thread_starts(1);
+        on_exit dbg_fail_next_system_thread_starts(0);
+        assertThrows("THREAD-CREATION-FAILURE", \p.callFunction(), ("start",));
+        # the reservation was released: the exit hooks would otherwise wait for it at the end of the process
+        assertEq(0, dbg_system_threads_starting());
+        # the next start succeeds; the thread is left running: the Program's exit hook releases it at the end of the
+        # process, which would otherwise wait for it for ever
+        p.callFunction("start");
+        assertEq(1, p.callFunction("running"));
+%else
+        testSkip("the fault injection needs a debug build");
+%endif
     }
 
     #! Runs a child process with the test module and the code given; returns its exit code, output and lines

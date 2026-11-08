@@ -4756,6 +4756,14 @@ DLLLOCAL bool qore_exit_hooks_started();
 */
 DLLLOCAL int qore_start_system_thread(const ResolvedCallReferenceNode* code, QoreProgram* pgm, ExceptionSink* xsink);
 
+#ifdef DEBUG
+//! Makes the next \a count system thread starts fail after the start was reserved (debug builds, for tests)
+DLLLOCAL void qore_dbg_fail_next_system_thread_starts(int count);
+
+//! Returns the number of system thread starts reserved and not released (debug builds, for tests)
+DLLLOCAL int qore_dbg_system_threads_starting();
+#endif
+
 //! Releases the exit hooks of a Program without running them; called when the Program is destroyed
 /** A Program that is cleared runs its hooks first (see qore_run_exit_hooks()), so this releases only the hooks of a
     Program destroyed without being cleared

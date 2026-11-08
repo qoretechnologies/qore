@@ -5477,6 +5477,22 @@ void qore_system_thread_main(ExceptionSink* xsink, void* arg) {
     }
     sta->release(xsink);
 }
+
+#ifdef DEBUG
+//! the number of system thread starts that fail after they were reserved; see qore_dbg_fail_next_system_thread_starts()
+std::atomic<int> system_thread_dbg_fail_starts{0};
+
+//! Returns true if a system thread start must fail (debug builds, for tests)
+bool qore_dbg_fail_system_thread_start() {
+    int count = system_thread_dbg_fail_starts.load();
+    while (count > 0) {
+        if (system_thread_dbg_fail_starts.compare_exchange_weak(count, count - 1)) {
+            return true;
+        }
+    }
+    return false;
+}
+#endif
 }
 
 int qore_start_system_thread(const ResolvedCallReferenceNode* code, QoreProgram* pgm, ExceptionSink* xsink) {
@@ -5496,6 +5512,12 @@ int qore_start_system_thread(const ResolvedCallReferenceNode* code, QoreProgram*
     // released after the start, also if the start throws
     QoreSystemThreadStartReservation reservation;
     // started without the lock, which creating a thread must not hold (it takes other locks, and fork() handlers)
+#ifdef DEBUG
+    if (qore_dbg_fail_system_thread_start()) {
+        xsink->raiseException("THREAD-CREATION-FAILURE", "the system thread start failed (debug fault injection)");
+        return -1;
+    }
+#endif
     int tid = q_start_thread(xsink, qore_system_thread_main, arg.get(), QTF_NO_SANDBOX_INHERIT);
     if (tid >= 0) {
         // the thread owns the argument
@@ -5503,6 +5525,17 @@ int qore_start_system_thread(const ResolvedCallReferenceNode* code, QoreProgram*
     }
     return tid;
 }
+
+#ifdef DEBUG
+void qore_dbg_fail_next_system_thread_starts(int count) {
+    system_thread_dbg_fail_starts.store(count > 0 ? count : 0);
+}
+
+int qore_dbg_system_threads_starting() {
+    std::lock_guard<std::mutex> l(exit_hook_lock);
+    return system_threads_starting;
+}
+#endif
 
 void qore_drop_exit_hooks(QoreProgram* pgm) {
     // the Program is destroyed: its hooks are released without their dependency references, which belong to the

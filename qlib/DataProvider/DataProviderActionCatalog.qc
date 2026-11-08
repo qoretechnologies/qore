@@ -2005,6 +2005,22 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
             : listener_failures;
     }
 
+%ifdef QoreDebug
+    #! Runs code while this thread holds the catalog lock (debug builds only)
+    /** For tests: catalog code that the catalog runs under its lock can register (see checkNotPending())
+
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+    */
+    static auto runWithCatalogLock(code c) {
+        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+            throw "PERMISSION-DENIED", "cannot hold the catalog lock from a context with restricted process control";
+        }
+        lck.lock();
+        on_exit DataProviderActionCatalog::unlockCatalog();
+        return c();
+    }
+%endif
+
     #! Throws \c APP-ERROR if an app, or an action of it, is registered or pending already
     /** Takes the catalog lock unless this thread holds it already: a registration that runs at once can be made by
         code that the catalog runs under its lock
