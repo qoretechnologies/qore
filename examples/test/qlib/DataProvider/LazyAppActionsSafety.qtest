@@ -1251,11 +1251,19 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
     }
 
     noWorkerTest() {
-        string body = "Program loader(PO_NEW_STYLE, True);\n"
-            "loader.parse(\"sub load() { load_module('DataProvider'); }\", \"loader\");\n"
-            "loader.setSandboxManager(new SandboxManager());\n"
-            "loader.callFunction(\"load\");\n"
-            "Program trusted(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);\n"
+        # the first load: by sandboxed code, and by trusted code serving sandboxed code under a policy barrier
+        hash<string, string> loaders = {
+            "sandboxed": "Program loader(PO_NEW_STYLE, True);\n"
+                "loader.parse(\"sub load() { load_module('DataProvider'); }\", \"loader\");\n"
+                "loader.setSandboxManager(new SandboxManager());\n"
+                "loader.callFunction(\"load\");\n",
+            "barrier": "code cap = SandboxManager::createSystemPolicyCall(sub () { load_module('DataProvider'); });\n"
+                "Program loader(PO_NEW_STYLE, True);\n"
+                "loader.parse(\"sub load(code cap) { cap(); }\", \"loader\");\n"
+                "loader.setSandboxManager(new SandboxManager());\n"
+                "loader.callFunction(\"load\", cap);\n",
+        };
+        string body = "Program trusted(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);\n"
             "trusted.parse(ReadOnlyFile::readTextFile(get_script_dir() + \"/trusted.q\"), \"trusted\");\n"
             "printf(\"%s\\n\", trusted.callFunction(\"test\"));\n"
             "Program reader(PO_NEW_STYLE, True);\n"
@@ -1286,18 +1294,22 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
             forms += {"name": "AOT", "dir": qmod_dir};
         }
         foreach hash<auto> form in (forms) {
-            string dir = make_tmp_dir("lazy-safety-");
-            on_exit remove_tree(dir);
-            LazyAppActionsSafetyTest::writeFile(dir + "/trusted.q", trusted);
-            LazyAppActionsSafetyTest::writeFile(dir + "/no-worker.q", "%modern\n%no-child-restrictions\n" + body);
-            string output = dir + "/output.txt";
-            int rc = system(sprintf("QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1",
-                form.dir + PathSep + get_script_dir() + "/../../../../qlib" + PathSep + (ENV.QORE_MODULE_DIR ?? ""),
-                QORE_ARGV[0], dir + "/no-worker.q", output));
-            string out = ReadOnlyFile::readTextFile(output);
-            assertEq(0, rc, form.name + ": " + out);
-            # nothing is deferred: a sandboxed reader, which has no worker, needs none
-            assertLines(("trusted: False [\"lazy-a\", \"pend\"]", "reader: [\"lazy-a\", \"pend\"]"), out);
+            foreach hash<auto> loader in (loaders.pairIterator()) {
+                string dir = make_tmp_dir("lazy-safety-");
+                on_exit remove_tree(dir);
+                LazyAppActionsSafetyTest::writeFile(dir + "/trusted.q", trusted);
+                LazyAppActionsSafetyTest::writeFile(dir + "/no-worker.q", "%modern\n%no-child-restrictions\n"
+                    + loader.value + body);
+                string output = dir + "/output.txt";
+                int rc = system(sprintf("QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1",
+                    form.dir + PathSep + get_script_dir() + "/../../../../qlib" + PathSep
+                        + (ENV.QORE_MODULE_DIR ?? ""), QORE_ARGV[0], dir + "/no-worker.q", output));
+                string out = ReadOnlyFile::readTextFile(output);
+                string what = form.name + ", " + loader.key;
+                assertEq(0, rc, what + ": " + out);
+                # nothing is deferred: a sandboxed reader, which has no worker, needs none
+                assertLines(("trusted: False [\"lazy-a\", \"pend\"]", "reader: [\"lazy-a\", \"pend\"]"), out);
+            }
         }
         if (forms.size() == 1) {
             testSkip("no AOT DataProvider.qmod was found; only the source form was tested");
