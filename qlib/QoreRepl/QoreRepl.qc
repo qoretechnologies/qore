@@ -345,19 +345,20 @@ if (!exists result) {
         @endcode
     */
     *hash<auto> eval(string input) {
-        # Expand before classifying commands, so recalled slash commands retain their semantics.
-        if (input.size() >= 2 && input[0] == "!") {
+        # Only new requests interpret history shortcuts; continuation lines are literal Qore source.
+        if (!needsMoreInput() && input.size() >= 2 && input[0] == "!") {
             input = qhistory.expand(input) ?? input;
         }
-        if (trim(input).startsWith("/")) { input = trim(input); }
+        hash<ReplRequestInfo> request = inspectRequest(input);
         # Reject before changing history or the multi-line buffer. Embedders can wait and retry the exact request.
-        if (inspectRequest(input).requires_idle && pgm.getThreadCount()) {
+        if (request.requires_idle && pgm.getThreadCount()) {
             return {"error": <ExceptionInfo>{"err": "REPL-THREADS-ACTIVE",
                 "desc": "Running threads prevent parsing or resetting this Program. Wait, cancel this request, "
                     "or use /cancel all to request thread termination.", "arg": pgm.getThreadList()}};
         }
-        # Check for special commands first
-        if (input =~ /^\//) {
+        # Commands are available only at the primary prompt, never inside unfinished source.
+        if (request.command) {
+            input = trim(input);
             # Add command to history
             history += input;
             qhistory.add(input);
@@ -610,7 +611,9 @@ if (!exists result) {
         return needsMoreInput() ? ContinuationPrompt : DefaultPrompt;
     }
 
-    #! Resets the pending input state
+    #! Cancels unfinished source and returns to the primary prompt without resetting the Program
+    /** Call this method to cancel multiline input before submitting a slash command.
+        @note Interactive frontends bind this action to Ctrl+C. */
     reset() {
         pending_input = "";
         pending_indent_level = 0;
@@ -625,9 +628,11 @@ if (!exists result) {
 
     /** Classifies input without parsing or changing session state.
         @param input source or command @return command metadata; ambiguous commands are left for eval() to report
-        @note Code execution and /load, /reset, /type require an idle Program. Native parsing retains its own guard.
+        @note While needsMoreInput() is true, every input is source. Code execution and /load, /reset, /type
+        require an idle Program. Native parsing retains its own guard.
     */
     hash<ReplRequestInfo> inspectRequest(string input) {
+        if (needsMoreInput()) { return <ReplRequestInfo>{"requires_idle": True}; }
         input = trim(input);
         if (input.size() >= 2 && input[0] == "!") { input = qhistory.expand(input) ?? input; }
         if (!input.startsWith("/")) { return <ReplRequestInfo>{"requires_idle": !!input}; }
@@ -712,7 +717,7 @@ if (!exists result) {
         help += helpLine("/version", "Show QoreRepl and Qore version");
         help += sprintf("\n%s\n", color.key("Session:"));
         help += helpLine("/reset", "Reset the Program state");
-        help += helpLine("/clear", "Clear pending multi-line input");
+        help += helpLine("/clear", "Reset input state at the primary prompt");
         help += helpLine("/history", "Show command history");
         help += helpLine("/timing", "Toggle execution timing display");
         help += sprintf("\n%s\n", color.key("Threads (current Program only):"));
@@ -737,6 +742,8 @@ if (!exists result) {
         help += "\nQore expressions and statements are evaluated directly.\n";
         help += sprintf("Multi-line input is supported - the prompt changes to '%s' when more input is needed.\n",
             color.value("    >"));
+        help += "Continuation lines are Qore source, including /commands and history shortcuts.\n"
+            "Cancel unfinished input before using commands at the qore> prompt.\n";
         if (!keyboard) { return help; }
         help += sprintf("\n%s\n", color.key("Keyboard shortcuts (linenoise):"));
         help += helpLine("Up/Down", "Navigate history");
@@ -2098,7 +2105,7 @@ if (!exists result) {
     */
     private list<string> completionForContext(string input) {
         # Handle REPL-specific command completion
-        if (input.startsWith("/") && input.find(" ") == -1) {
+        if (!needsMoreInput() && input.startsWith("/") && input.find(" ") == -1) {
             return completeCommand({"prefix": input});
         }
 
@@ -2154,7 +2161,7 @@ if (!exists result) {
     hash<auto> extractCompletionContext(string input) {
         # Command completion: only if input starts with "/" and has no space
         # (a space indicates command arguments, which should be completed as identifiers)
-        if (input.startsWith("/") && input.find(" ") == -1) {
+        if (!needsMoreInput() && input.startsWith("/") && input.find(" ") == -1) {
             return {
                 "kind": CC_COMMAND,
                 "prefix": input,
@@ -2185,7 +2192,7 @@ if (!exists result) {
     list<hash<QoreCodeCompletion::CompletionItem>> getCompletionDetails(string input) {
         try {
             # Handle REPL-specific command completion
-            if (input.startsWith("/") && input.find(" ") == -1) {
+            if (!needsMoreInput() && input.startsWith("/") && input.find(" ") == -1) {
                 return getCommandDetails({"prefix": input});
             }
 
