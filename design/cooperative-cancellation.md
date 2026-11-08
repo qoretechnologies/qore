@@ -819,8 +819,9 @@ waitOthers() {
 ```
 
 `WebSocketClient`'s thread accounting (`WscLibraryThreads`), its handoff of an action to a
-`connectAsync()` worker (`WscActionHandoff`, with `WscOrphanedActions` for an action that a
-cancelled thread cannot release), and the Discord heartbeat record (`DiscordHeartbeat`) use this
+`connectAsync()` worker (`WscActionHandoff`, with `WscActionWaiters` recording an action that a
+cancelled thread cannot release; each thread waiting for an action waits on a Queue of its own, so
+the wakeup of such a record is never lost), and the Discord heartbeat record (`DiscordHeartbeat`) use this
 pattern.  `WscLibraryThreads::waitOthers()` supports a single waiter (the destructor): it pushes
 one wakeup per change while a waiter is registered.
 

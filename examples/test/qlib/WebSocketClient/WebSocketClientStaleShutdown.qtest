@@ -170,6 +170,10 @@ class LifecycleWsClient inherits WebSocketClient {
         Counter release_tunnel_read(1);
         #! report each HTTP/1.1 Upgrade connect, and the destructor's cancel of the handshakes
         bool report_h1_upgrade = False;
+        #! hold the next thread about to wait for an action, after its check, before its wait
+        bool hold_action_wait = False;
+        #! released by the test to let the held action wait go on
+        Counter release_action_wait(1);
         #! hold the next connectAsync() worker before it takes the action over
         bool hold_worker = False;
         #! the TID of the last connectAsync() worker that an action was handed over to
@@ -345,6 +349,15 @@ class LifecycleWsClient inherits WebSocketClient {
             }
         }
         WebSocketClient::connectAsyncWorker(opts, ready_queue, handed_over);
+    }
+
+    private waitingForActionHook() {
+        if (hold_action_wait) {
+            hold_action_wait = False;
+            Queue q = events;
+            q.push("action-wait-held");
+            release_action_wait.waitForZero(HandoffTimeout);
+        }
     }
 
     #! starts a thread of the client running @a body; @a tid gets the TID that the start returns
@@ -842,6 +855,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         addTestCase("a cancelled connectAsync() worker does not keep the action", \cancelledConnectAsyncWorkerTest());
         addTestCase("a cancelled connectAsync() caller and its cancelled worker do not keep the action",
             \cancelledConnectAsyncCallerAndWorkerTest());
+        addTestCase("an action released while its waiter checked and did not wait yet is not missed",
+            \orphanedActionWakeupTest());
         addTestCase("Discord: a destructor on another thread waits for a heartbeat thread reconnecting itself",
             \discordDeleteDuringInlineReconnectTest());
         addTestCase("Discord: a destructor on another thread waits for a heartbeat thread that stopped its own record",
@@ -1217,38 +1232,89 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         destroyChecked(c);
     }
 
+    #! A thread waits for the action of a connectAsync() caller; the caller and its worker are cancelled after the
+    #! waiter found the action held and before it waits: the record of the orphaned action wakes it all the same, so
+    #! it takes the action at once, not when its wait times out
+    orphanedActionWakeupTest() {
+        TestThreads::cancel_expected = True;
+        on_exit TestThreads::cancel_expected = False;
+        # the action wait of the waiter is bounded only by a timeout far longer than the test's own waits
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://localhost:" + ports.h1, "logger": logger,
+            "connect_timeout": LifecycleWsClient::HandoffTimeout * 4});
+        Queue events = c.events;
+        Counter release = c.release_worker;
+        Counter release_wait = c.release_action_wait;
+        on_exit map $1.getCount() ? $1.dec() : NOTHING, (release, release_wait);
+        c.hold_worker = True;
+        Queue caller_done();
+        int caller = background TestThreads::run(sub () {
+            try {
+                c.connectAsync();
+                caller_done.push("returned");
+            } catch (hash<ExceptionInfo> ex) {
+                caller_done.push(ex.err);
+            }
+        });
+        string ev = events.get(LifecycleWsClient::HandoffTimeout);
+        assertTrue(ev =~ /^worker-held:/, ev);
+        int worker = ev.split(":")[1].toInt();
+        # a connect waits for the caller's action; it is held after its check, before its wait
+        c.hold_action_wait = True;
+        Queue connected();
+        background TestThreads::run(sub () {
+            try {
+                c.connect();
+                connected.push("connected");
+            } catch (hash<ExceptionInfo> ex) {
+                connected.push(ex.err);
+            }
+        });
+        assertEq("action-wait-held", events.get(LifecycleWsClient::HandoffTimeout));
+        # the action is orphaned now: the caller, then the worker, is cancelled
+        cancel_thread(caller, "test");
+        assertEq("THREAD-CANCELLED", caller_done.get(LifecycleWsClient::HandoffTimeout), "the caller was cancelled");
+        cancel_thread(worker, "test");
+        thread_join(worker);
+        # the waiter waits only now: the wakeup made meanwhile is not lost
+        release_wait.dec();
+        assertEq("connected", connected.get(LifecycleWsClient::HandoffTimeout),
+            "the waiter took the released action without waiting for its timeout");
+        c.disconnect();
+        destroyChecked(c);
+    }
+
     #! The handoff of an action from connectAsync() to its worker is decided once; an action that no thread can
     #! release (the caller stopped waiting and the worker abandoned it) is recorded to be released
     actionHandoffDecisionTest() {
-        WscOrphanedActions orphans();
+        WscActionWaiters orphans();
         # taken over: a later abandon (the worker's end) changes nothing
         WscActionHandoff h1(orphans);
         assertTrue(h1.take());
         h1.abandon();
         assertTrue(h1.wait());
-        assertEq((), orphans.takeAll());
+        assertEq((), orphans.takeOrphans());
         # abandoned first (e.g. a start that failed although the hook started the thread): the thread cannot take it
         WscActionHandoff h2(orphans);
         h2.abandon();
         assertFalse(h2.take(), "an abandoned handoff cannot be taken over");
         assertFalse(h2.wait());
-        assertEq((), orphans.takeAll(), "the caller, which waits, releases the action itself");
+        assertEq((), orphans.takeOrphans(), "the caller, which waits, releases the action itself");
         # the caller stops waiting, then the worker abandons it: the caller's action is recorded
         WscActionHandoff h3(orphans);
         h3.orphan();
         h3.abandon();
-        assertEq((gettid(),), orphans.takeAll(), "the action of the caller is to be released");
+        assertEq((gettid(),), orphans.takeOrphans(), "the action of the caller is to be released");
         # the worker abandons it, then the caller stops waiting
         WscActionHandoff h4(orphans);
         h4.abandon();
         h4.orphan();
-        assertEq((gettid(),), orphans.takeAll(), "the action of the caller is to be released");
+        assertEq((gettid(),), orphans.takeOrphans(), "the action of the caller is to be released");
         # the caller stops waiting, then the worker takes it over
         WscActionHandoff h5(orphans);
         h5.orphan();
         assertTrue(h5.take(), "the worker takes the action over");
         h5.abandon();
-        assertEq((), orphans.takeAll());
+        assertEq((), orphans.takeOrphans());
     }
 
     #! The caller of connectAsync() is cancelled while it waits for its worker, which is then cancelled before it
