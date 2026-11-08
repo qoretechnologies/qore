@@ -3694,6 +3694,9 @@ ws.setEventQueue();
             # the thread waits on a Queue of its own, so a wakeup made while it does not wait yet is not lost
             Queue wake();
             action_waiters.register(wake);
+            # an action orphaned after the release above and before this registration woke no waiter: release it now; an
+            # orphan recorded after this line wakes this registered waiter
+            releaseOrphanedActionsUnlocked();
             # set once the thread takes the action
             bool took = False;
             # not a cancellation point: a thread that stops waiting without the action (cancelled, timed out, or the
