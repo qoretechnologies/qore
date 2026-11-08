@@ -7560,9 +7560,11 @@ void QoreCaresAddrInfoResolver::advance() {
             // complete()); a definite failure of a lookup during which no query failed is not checked: a check sends
             // again a query whose answer the query cache of the channel does not keep, such as an NXDOMAIN answer
             // without an SOA record (c-ares keeps an answer without records for its maximum TTL)
-            if (server_failures && family == AF_UNSPEC) {
+            // the failures of this lookup: those since the check that started it again, if it was
+            bool failed = server_failures > check_failures_start;
+            if (failed && family == AF_UNSPEC) {
                 pending_check = Check::Confirm;
-            } else if (server_failures && singleLabel()) {
+            } else if (failed && singleLabel()) {
                 pending_check = Check::Probe;
             } else {
                 done = true;
@@ -7691,9 +7693,22 @@ void QoreCaresAddrInfoResolver::confirmCallback(void* arg, int status, int, stru
 }
 
 void QoreCaresAddrInfoResolver::probeCallback(void* arg, ares_status_t status, size_t,
-        const ares_dns_record_t*) {
-    // ARES_SUCCESS is an answer with records (ares_dns_query_reply_tostatus())
-    reinterpret_cast<QoreCaresAddrInfoResolver*>(arg)->checked(status, status == ARES_SUCCESS);
+        const ares_dns_record_t* dnsrec) {
+    // ARES_SUCCESS is an answer with records (ares_dns_query_reply_tostatus()), which can be a CNAME record alone:
+    // only a record of the type asked for is an address
+    bool found = false;
+    if (status == ARES_SUCCESS && dnsrec && ares_dns_record_query_cnt(dnsrec) > 0) {
+        ares_dns_rec_type_t qtype;
+        if (ares_dns_record_query_get(dnsrec, 0, nullptr, &qtype, nullptr) == ARES_SUCCESS) {
+            size_t n = ares_dns_record_rr_cnt(dnsrec, ARES_SECTION_ANSWER);
+            for (size_t i = 0; i < n && !found; ++i) {
+                const ares_dns_rr_t* rr = ares_dns_record_rr_get_const(dnsrec, ARES_SECTION_ANSWER, i);
+                found = rr && ares_dns_rr_get_type(rr) == qtype;
+            }
+        }
+    }
+    reinterpret_cast<QoreCaresAddrInfoResolver*>(arg)->checked(found || status != ARES_SUCCESS ? status
+        : ARES_ENODATA, found);
 }
 
 void QoreCaresAddrInfoResolver::serverStateCallback(const char*, ares_bool_t success, int, void* data) {
@@ -7741,16 +7756,19 @@ void QoreCaresAddrInfoResolver::complete(int new_status, struct ares_addrinfo* r
         if (addrs.empty()) {
             status = ARES_ENODATA;
         }
-    } else if (qore_cares_status_is_definite(status) && !repeated) {
-        // whether the failure is checked is decided after c-ares has returned (see advance()): c-ares 1.34.9 reports
-        // the failed queries (serverStateCallback()) when its public call returns, after the lookup's callback
-        lookup_definite = true;
-        return;
-    } else if (qore_cares_status_is_definite(status) && repeated && repeat_failure != ARES_SUCCESS) {
-        // the lookup started again failed with a definite status, but the check before it saw a failure that might
-        // not happen again: the answers of the server changed, and a definite failure is never reported after a
-        // temporary one was seen
-        status = repeat_failure;
+    } else if (qore_cares_status_is_definite(status)) {
+        if (repeated && repeat_failure != ARES_SUCCESS) {
+            // the lookup started again failed with a definite status, but the check before it saw a failure that
+            // might not happen again: the answers of the server changed, and a definite failure is never reported
+            // after a temporary one was seen
+            status = repeat_failure;
+        } else {
+            // whether the failure is checked is decided after c-ares has returned (see advance()): c-ares 1.34.9
+            // reports the failed queries (serverStateCallback()) when its public call returns, after the lookup's
+            // callback; a lookup started again is checked like the first one, as its own queries can fail
+            lookup_definite = true;
+            return;
+        }
     }
     done = true;
 }
@@ -7775,9 +7793,18 @@ void QoreCaresAddrInfoResolver::checked(int new_status, bool found) {
 
 void QoreCaresAddrInfoResolver::finishCheck() {
     if (check_found) {
+        if (repeated) {
+            // the check of the lookup started again found an address again, but the lookup failed: the answers of the
+            // server keep changing, and a query failed, so the failure is not definite; the status of the check if it
+            // saw a temporary one, otherwise ESERVFAIL, as c-ares does not say how the query failed
+            status = qore_cares_status_is_definite(check_status) ? ARES_ESERVFAIL : check_status;
+            done = true;
+            return;
+        }
         // the name has an address after all: the lookup is started again once, and its result is the answer, in
         // the order that c-ares gives it (RFC 6724); a temporary failure that the check saw is reported if the
-        // lookup started again fails with a definite status (see complete())
+        // lookup started again fails with a definite status (see complete()), and a definite failure of the lookup
+        // started again during which a query failed is checked again
         repeat_failure = qore_cares_status_is_definite(check_status) ? ARES_SUCCESS : check_status;
         pending_check = Check::Repeat;
         return;
