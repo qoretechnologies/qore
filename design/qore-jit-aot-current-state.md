@@ -729,6 +729,10 @@ slice or another functional operator of a list type; for a fused pipeline, its b
 fold gives one of its source's elements without a reference of its own, so the source of `foldl`
 and `foldr`, and a source of another type, stay with the statement. `ReleaseOwnedTemp` releases a
 value only when the frame owns it as a temporary, so an operand read from a variable is left alone.
+The release is not a use of the value for the optimizations that count uses: an AOT aggregate-return
+projection of `exists f()` or `elements f()` makes the call give the operator's value, so no
+aggregate is made, and removes the release with the value (`qore_ir_fuse_aggregate_return_projections()`;
+counted as a use, it left the call with two uses, which no projection takes).
 The elements of a list or hash literal that are temporaries are released once the container holds
 them (`releaseContainerElementTemps()`), as the AST interpreter's holders are, so the container's
 references are their only ones. The value of a functional operator can be its source's (over a single

@@ -29,6 +29,7 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 
 ROOT = Path(__file__).resolve().parents[3]
 TOOL = ROOT / "tools" / "qore-qmod-cache.py"
@@ -48,7 +49,7 @@ qc = load_tool()
 def ed25519_keys(directory, name):
     """Returns (the private key's file, the public key's PEM text) of a new Ed25519 key pair, or None without
     OpenSSL 3"""
-    openssl = qc.find_openssl(os.environ)
+    openssl = qc.find_openssl(hermetic_env())
     if not openssl:
         return None
     priv = os.path.join(str(directory), name + ".pem")
@@ -59,10 +60,22 @@ def ed25519_keys(directory, name):
         return priv, f.read()
 
 
+def hermetic_env(**variables):
+    """The environment of every process these tests run: their own, without the settings of the cache and of the CI
+    job, with the given variables
+
+    A CI job exports QORE_QMOD_CACHE_VERIFY_KEY (a CI variable of every job), so a "verify" that inherited it checked the
+    signatures of the test's own entries, which no key signs, and failed; the CI_* variables of a job choose what the
+    cache's setup does (see qmod-cache.sh).  A test sets the ones it tests.
+    """
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("QORE_QMOD_CACHE_", "CI_"))}
+    env.update(variables)
+    return env
+
+
 def sign_build(cache, build, key_path, env=None):
     """Runs "sign" for a build, with the private key's file path on stdin, as qore_qmod_cache_finish does"""
-    full = {k: v for k, v in os.environ.items() if not k.startswith("QORE_QMOD_CACHE_")}
-    full.update(env or {})
+    full = hermetic_env(**(env or {}))
     return subprocess.run([sys.executable, str(TOOL), "sign", "--cache-dir", str(cache), "--build-dir", str(build)],
                           input=key_path + "\n", capture_output=True, text=True, timeout=120, env=full)
 
@@ -718,6 +731,76 @@ with open(here / "compiles.log", "a") as log:
 '''
 
 
+class SharedLibraryTest(unittest.TestCase):
+    """The shared libraries of the build context are those that ldd lists, never its error messages"""
+
+    def libraries(self, ldd_output):
+        with tempfile.TemporaryDirectory(prefix="qore-qmod-cache-") as d:
+            (Path(d) / "qcc").write_text("#!/bin/sh\n")
+            real_run_capture = qc.run_capture
+            real_platform = qc.sys.platform
+            qc.run_capture = lambda argv, env=None: ldd_output if argv[0] == "ldd" else real_run_capture(argv, env)
+            qc.sys.platform = "linux"
+            try:
+                return qc.shared_library_digests(d)
+            finally:
+                qc.run_capture = real_run_capture
+                qc.sys.platform = real_platform
+
+    def test_ldd_errors_are_no_libraries(self):
+        # musl's ldd for a file that is not a dynamic program, such as the script that stands for qcc in these tests:
+        # the context of a build tree with the script differed from that of one without it on Alpine, so a job's
+        # entries were misses for a build tree without it
+        self.assertEqual({}, self.libraries("/lib/ld-musl-x86_64.so.1: /b/qcc: Not a valid dynamic program\n"))
+        # glibc's
+        self.assertEqual({}, self.libraries("\tnot a dynamic executable\n"))
+        self.assertEqual({}, self.libraries("\tstatically linked\n"))
+
+    def test_ldd_libraries(self):
+        with tempfile.TemporaryDirectory(prefix="qore-qmod-cache-libs-") as d:
+            lib = os.path.realpath(os.path.join(d, "libx.so.1"))
+            loader = os.path.realpath(os.path.join(d, "ld.so"))
+            for p in (lib, loader):
+                with open(p, "w") as f:
+                    f.write(p)
+            rv = self.libraries("\tlinux-vdso.so.1 (0x00007ffc1e5f2000)\n"
+                                "\tlibx.so.1 => %s (0x00007f3a1c000000)\n"
+                                "\tlibmissing.so => not found\n"
+                                "\t%s (0x7055f3d14000)\n" % (lib, loader))
+            self.assertEqual(sorted([lib, loader]), sorted(rv))
+            self.assertEqual(qc.file_record(lib), rv[lib])
+
+
+class HermeticTest(unittest.TestCase):
+    """Every process these tests run gets an environment without the settings of the cache and of the CI job, which a
+    CI job exports (see hermetic_env())"""
+
+    def test_every_process_gets_a_hermetic_environment(self):
+        source = Path(__file__).read_text()
+        calls = []
+        for m in re.finditer(r"subprocess\.(?:run|Popen)\(", source):
+            i, depth = m.end(), 1
+            while depth:
+                depth += (source[i] == "(") - (source[i] == ")")
+                i += 1
+            calls.append(source[m.start():i])
+        self.assertGreater(len(calls), 20)
+        # only openssl makes the test's keys without one
+        unscoped = [c for c in calls if "env=" not in c and "genpkey" not in c and '"pkey"' not in c]
+        self.assertEqual([], unscoped)
+        # nor a copy of the test's own environment (mock.patch.dict() of it is not one)
+        self.assertEqual([], re.findall(r"(?<![.\w])dict\(os\.environ\b.*", source))
+
+    def test_hermetic_env(self):
+        with unittest.mock.patch.dict(os.environ, {"QORE_QMOD_CACHE_VERIFY_KEY": "key", "CI_COMMIT_REF_PROTECTED": "true",
+                                                   "QORE_MODULE_DIR": "/m"}):
+            env = hermetic_env(QORE_QMOD_CACHE_DIR="/c")
+        self.assertNotIn("QORE_QMOD_CACHE_VERIFY_KEY", env)
+        self.assertNotIn("CI_COMMIT_REF_PROTECTED", env)
+        self.assertEqual("/m", env["QORE_MODULE_DIR"])
+        self.assertEqual("/c", env["QORE_QMOD_CACHE_DIR"])
+
+
 class CacheBuildTest(unittest.TestCase):
     """The cache in a CMake build of four modules with a stand-in for qcc: Base; Mid, which requires Base; Top, a
     module directory that requires Mid; and Other, which tries to load Opt"""
@@ -785,13 +868,10 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
                                   "-DQORE_QMOD_CACHE_DIR=%s" % (cache or self.cache),
                                   "-DQORE_QMOD_CACHE_READ_DIRS=%s" % ";".join(str(d) for d in read_dirs or []),
                                   "-DPython3_EXECUTABLE=%s" % sys.executable],
-                                 capture_output=True, text=True, timeout=120)
+                                 capture_output=True, text=True, timeout=120, env=hermetic_env())
             self.assertEqual(0, res.returncode, res.stdout + res.stderr)
         before = len(self.compiles())
-        full_env = dict(os.environ)
-        for name in [n for n in full_env if n.startswith("QORE_QMOD_CACHE_")]:
-            del full_env[name]
-        full_env.update(env or {})
+        full_env = hermetic_env(**(env or {}))
         res = subprocess.run([CMAKE, "--build", str(self.build)] + (["--target", target] if target else []),
                              capture_output=True, text=True, timeout=300, env=full_env)
         self.output = res.stdout + res.stderr
@@ -818,7 +898,7 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
     def verify(self):
         return subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build), "--qcc",
                                str(self.source / "qcc"), "--require-sidecars"], capture_output=True, text=True,
-                              timeout=60)
+                              timeout=60, env=hermetic_env())
 
     def entries(self):
         return sorted((self.cache / qc.SCHEMA / "entries").glob("*/*.json"))
@@ -944,7 +1024,7 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertEqual([], self.build_all())
         res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build), "--qcc",
                               str(self.source / "qcc"), "--require-sidecars"], capture_output=True, text=True,
-                             timeout=60)
+                             timeout=60, env=hermetic_env())
         self.assertEqual(0, res.returncode, res.stderr)
         (self.extra_dir / "Base.qm").write_text("module Base { # another one\n}\n")
         self.assertEqual(["Mid", "Top"], self.build_all())
@@ -1097,13 +1177,14 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertEqual(6, len(self.entries()))
         # generous limits remove nothing: another job's entries stay
         res = subprocess.run([sys.executable, str(TOOL), "prune", "--cache-dir", str(self.cache), "--max-age-days",
-                              "7", "--max-size", "1000"], capture_output=True, text=True, timeout=60)
+                              "7", "--max-size", "1000"], capture_output=True, text=True, timeout=60,
+                             env=hermetic_env())
         self.assertEqual(0, res.returncode, res.stderr)
         self.assertEqual(6, len(self.entries()))
         self.assertEqual(6, len([p for p in (self.cache / qc.SCHEMA / "objects").iterdir() if p.is_dir()]))
         self.assertEqual([], self.build_all())
         res = subprocess.run([sys.executable, str(TOOL), "prune", "--cache-dir", str(self.cache), "--max-size", "0"],
-                             capture_output=True, text=True, timeout=60)
+                             capture_output=True, text=True, timeout=60, env=hermetic_env())
         self.assertEqual(0, res.returncode, res.stderr)
         self.assertEqual(0, len(self.entries()))
 
@@ -1347,12 +1428,12 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertEqual(before, sorted((str(p), p.stat().st_mtime_ns) for p in self.cache.rglob("*")))
         res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build), "--qcc",
                               str(self.source / "qcc")], capture_output=True, text=True, timeout=60,
-                             env=dict(os.environ, QORE_QMOD_CACHE_VERIFY_KEY=pub1))
+                             env=hermetic_env(QORE_QMOD_CACHE_VERIFY_KEY=pub1))
         self.assertEqual(0, res.returncode, res.stderr)
         # the guard refuses entries another key signed
         res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build), "--qcc",
                               str(self.source / "qcc")], capture_output=True, text=True, timeout=60,
-                             env=dict(os.environ, QORE_QMOD_CACHE_VERIFY_KEY=pub2))
+                             env=hermetic_env(QORE_QMOD_CACHE_VERIFY_KEY=pub2))
         self.assertEqual(1, res.returncode, res.stderr)
         self.assertIn("entry not signed with the signing key", res.stderr)
         # an entry changed by someone without the private key: a reader does not use it
@@ -1426,15 +1507,15 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
             self.assertEqual([], self.build_all(env={"QORE_QMOD_CACHE_VERIFY_KEY": value}))
             res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build), "--qcc",
                                   str(self.source / "qcc"), "--require-sidecars"], capture_output=True, text=True,
-                                 timeout=60, env=dict(os.environ, QORE_QMOD_CACHE_VERIFY_KEY=value))
+                                 timeout=60, env=hermetic_env(QORE_QMOD_CACHE_VERIFY_KEY=value))
             self.assertEqual(0, res.returncode, res.stderr)
             self.assertIn("4 supplied by the cache", res.stderr)
             res = subprocess.run([sys.executable, str(TOOL), "signer-check", "--verify-only"], capture_output=True,
-                                 text=True, timeout=60, env=dict(os.environ, QORE_QMOD_CACHE_VERIFY_KEY=value))
+                                 text=True, timeout=60, env=hermetic_env(QORE_QMOD_CACHE_VERIFY_KEY=value))
             self.assertEqual(0, res.returncode, res.stderr)
             # and as the public key of the private key, which protected jobs check
             res = subprocess.run([sys.executable, str(TOOL), "signer-check"], input=priv + "\n", capture_output=True,
-                                 text=True, timeout=60, env=dict(os.environ, QORE_QMOD_CACHE_VERIFY_KEY=value))
+                                 text=True, timeout=60, env=hermetic_env(QORE_QMOD_CACHE_VERIFY_KEY=value))
             self.assertEqual(0, res.returncode, res.stderr)
             self.assertEqual(pub, res.stdout)
         # another key's text is no match
@@ -1454,7 +1535,7 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         # the guard of such a build: the cache was cold, which is no failure
         res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build), "--qcc",
                               str(self.source / "qcc"), "--require-sidecars"], capture_output=True, text=True,
-                             timeout=60, env=dict(os.environ, QORE_QMOD_CACHE_VERIFY_KEY="pub",
+                             timeout=60, env=hermetic_env(QORE_QMOD_CACHE_VERIFY_KEY="pub",
                                                   QORE_QMOD_CACHE_OPENSSL="/nonexistent/openssl"))
         self.assertEqual(0, res.returncode, res.stderr)
         self.assertIn("no OpenSSL 3 to check signatures: the build ran without the cache", res.stderr)
@@ -1463,7 +1544,7 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertEqual([], self.build_all())
         res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build), "--qcc",
                               str(self.source / "qcc")], capture_output=True, text=True, timeout=60,
-                             env=dict(os.environ, QORE_QMOD_CACHE_VERIFY_KEY="pub",
+                             env=hermetic_env(QORE_QMOD_CACHE_VERIFY_KEY="pub",
                                       QORE_QMOD_CACHE_OPENSSL="/nonexistent/openssl"))
         self.assertEqual(1, res.returncode, res.stderr)
         self.assertIn("its signature cannot be checked without OpenSSL 3", res.stderr)
@@ -1523,7 +1604,7 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertTrue(material)
         mount = self.root / "mount"
         (mount / "protected" / "build-x").mkdir(parents=True)
-        real = qc.find_openssl(os.environ)
+        real = qc.find_openssl(hermetic_env())
         log_dir = self.root / "openssl-log"
         log_dir.mkdir()
         wrapper = self.root / "openssl-wrapper"
@@ -1543,7 +1624,7 @@ qore_qmod_cache_finish "{root}" "{build}"
 env > "{finished}"
 """.format(script=CiScriptTest.SCRIPT, root=ROOT, source=self.source, build=self.build, python=sys.executable,
            after=self.root / "env-after-build.txt", finished=self.root / "env-after-finish.txt"))
-        env = {k: v for k, v in os.environ.items() if not k.startswith(("QORE_QMOD_CACHE_", "CI_"))}
+        env = hermetic_env()
         env.update({"QORE_QMOD_CACHE_DIR": str(mount), "CI_COMMIT_REF_PROTECTED": "true", "CI_JOB_NAME": "build-x",
                     "CI_PROJECT_DIR": str(self.root), "QORE_QMOD_CACHE_SIGNING_KEY": priv,
                     "QORE_QMOD_CACHE_OPENSSL": str(wrapper)})
@@ -1633,13 +1714,13 @@ env > "{finished}"
         other = self.root / "build-other"
         res = subprocess.run([sys.executable, str(TOOL), "prune", "--cache-dir", str(self.cache), "--build-dir",
                               str(other), "--max-age-days", "7", "--max-size", "1000"], capture_output=True,
-                             text=True, timeout=60)
+                             text=True, timeout=60, env=hermetic_env())
         self.assertEqual(0, res.returncode, res.stderr)
         self.assertEqual([], self.build_all())
 
     def prune(self, *args):
         res = subprocess.run([sys.executable, str(TOOL), "prune", "--cache-dir", str(self.cache)] + list(args),
-                             capture_output=True, text=True, timeout=120)
+                             capture_output=True, text=True, timeout=120, env=hermetic_env())
         self.assertEqual(0, res.returncode, res.stdout + res.stderr)
         return res.stdout
 
@@ -1762,12 +1843,10 @@ env > "{finished}"
             build = self.root / ("build%d" % i)
             res = subprocess.run([CMAKE, "-G", "Unix Makefiles", "-S", str(src), "-B", str(build),
                                   "-DQORE_QMOD_CACHE_DIR=%s" % self.cache, "-DPython3_EXECUTABLE=%s" % sys.executable],
-                                 capture_output=True, text=True, timeout=120)
+                                 capture_output=True, text=True, timeout=120, env=hermetic_env())
             self.assertEqual(0, res.returncode, res.stdout + res.stderr)
             trees.append((src, build))
-        env = dict(os.environ)
-        for name in [n for n in env if n.startswith("QORE_QMOD_CACHE_")]:
-            del env[name]
+        env = hermetic_env()
         for rnd in range(3):
             builds = []
             for src, build in trees:
@@ -1776,7 +1855,8 @@ env > "{finished}"
                 builds.append(subprocess.Popen([CMAKE, "--build", str(build), "-j4"], stdout=subprocess.PIPE,
                                                stderr=subprocess.STDOUT, env=env))
             pruners = [subprocess.Popen([sys.executable, str(TOOL), "prune", "--cache-dir", str(self.cache),
-                                         "--max-size", "0"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                         "--max-size", "0"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                        env=env)
                        for _ in range(3)]
             for p in builds + pruners:
                 out = p.communicate(timeout=300)[0].decode()
@@ -1785,7 +1865,7 @@ env > "{finished}"
             for src, build in trees:
                 res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(build), "--qcc",
                                       str(src / "qcc"), "--require-sidecars"], capture_output=True, text=True,
-                                     timeout=60)
+                                     timeout=60, env=env)
                 self.assertEqual(0, res.returncode, res.stderr)
         # what the pruners left is consistent: every entry has its object
         cache = qc.Cache(str(self.cache))
@@ -1812,7 +1892,7 @@ class CiScriptTest(unittest.TestCase):
         return self._keys
 
     def run_sh(self, cmd, **env):
-        full = {k: v for k, v in os.environ.items() if not k.startswith(("QORE_QMOD_CACHE", "CI_"))}
+        full = hermetic_env()
         full.update(env)
         return subprocess.run(["sh", "-c", '. "%s"; %s' % (self.SCRIPT, cmd)], capture_output=True, text=True,
                               env=full, timeout=60)
@@ -2098,12 +2178,9 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         shutil.rmtree(self.build, ignore_errors=True)
         res = subprocess.run([CMAKE, "-S", str(self.source), "-B", str(self.build),
                               "-DQORE_QMOD_CACHE_DIR=%s" % self.cache, "-DPython3_EXECUTABLE=%s" % sys.executable],
-                             capture_output=True, text=True, timeout=120)
+                             capture_output=True, text=True, timeout=120, env=hermetic_env())
         self.assertEqual(0, res.returncode, res.stdout + res.stderr)
-        full_env = dict(os.environ)
-        for name in [n for n in full_env if n.startswith("QORE_QMOD_CACHE_")]:
-            del full_env[name]
-        full_env.update(env or {})
+        full_env = hermetic_env(**(env or {}))
         res = subprocess.run([CMAKE, "--build", str(self.build)], capture_output=True, text=True, timeout=600,
                              env=full_env)
         self.output = res.stdout + res.stderr
@@ -2120,7 +2197,7 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
 
     def load(self, name, expr):
         """Loads a module with the build's qore from the build tree's qlib-qmod, as the in-tree tests do"""
-        env = dict(os.environ)
+        env = hermetic_env()
         env["QORE_MODULE_DIR"] = "%s:%s" % (self.build / "qlib-qmod", self.source / "qlib")
         env["QORE_MODULE_DIR_ONLY"] = "1"
         env["LD_LIBRARY_PATH" if sys.platform != "darwin" else "DYLD_LIBRARY_PATH"] = str(self.qore_build)
@@ -2139,12 +2216,12 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         # compiles with must give the same module)
         res = subprocess.run([str(self.qore_build / "qcc"), "--dump-info",
                               str(self.build / "qlib-qmod" / "CacheBase.qmod")], capture_output=True, text=True,
-                             timeout=120, env=dict(os.environ, LD_LIBRARY_PATH=str(self.qore_build),
+                             timeout=120, env=hermetic_env(LD_LIBRARY_PATH=str(self.qore_build),
                                                    DYLD_LIBRARY_PATH=str(self.qore_build)))
         self.assertIn("aot-runtime-identity", res.stdout, res.stderr)
         self.assertNotIn("git-hash", res.stdout)
         res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build)],
-                             capture_output=True, text=True, timeout=60)
+                             capture_output=True, text=True, timeout=60, env=hermetic_env())
         self.assertEqual(0, res.returncode, res.stderr)
         # the module loader uses the supplied modules: they are not out of date with their sources, also when the
         # sources have other modification times than when the modules were compiled (as after a checkout), so that
