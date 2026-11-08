@@ -829,6 +829,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
         addTestCase("a canceled HTTP/2 WebSocket handshake does not fall back to HTTP/1.1",
             \destroyDuringTunnelHandshakeTest());
+        addTestCase("the destructor ends a connect in its TLS handshake", \destroyDuringTlsHandshakeTest());
         # last: an exception that no thread of the tests handled fails the run
         addTestCase("no unhandled exception in a thread of the tests", \noUnhandledThreadExceptionsTest());
         set_return_value(main());
@@ -2106,6 +2107,40 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         auto r = ready.get(LifecycleWsClient::HandoffTimeout);
         assertEq("WEBSOCKET-ERROR", r.error.err, "the handshake was canceled");
         assertEq(0, LifecycleWsHandler::silent_upgrade.size(), "no HTTP/1.1 Upgrade request was made");
+    }
+
+    #! The client is destroyed while its connect waits for the server's TLS handshake: the destructor shuts the
+    #! connection manager down instead of waiting for the connect timeout
+    destroyDuringTlsHandshakeTest() {
+        Socket srv();
+        srv.bindINET("localhost", "0");
+        srv.listen();
+        int port = srv.getSocketInfo().port;
+        Queue accepted();
+        Counter server_done(1);
+        on_exit if (server_done.getCount()) {
+            server_done.dec();
+        }
+        background TestThreads::run(sub () {
+            # the connection is accepted, and no ServerHello is ever sent
+            *Socket s = srv.accept(LifecycleWsClient::HandoffTimeout);
+            accepted.push(exists s);
+            server_done.waitForZero(LifecycleWsClient::HandoffTimeout * 4);
+        });
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "wss://localhost:" + port, "http_version": "auto",
+            "ssl_verify_cert": False, "logger": logger, "timeout": LifecycleWsClient::HandoffTimeout * 4,
+            "connect_timeout": LifecycleWsClient::HandoffTimeout * 4});
+        Queue ready();
+        c.connectAsync(NOTHING, ready);
+        assertTrue(accepted.get(LifecycleWsClient::HandoffTimeout), "the client connected");
+        Queue deleted();
+        background TestThreads::run(sub () {
+            delete c;
+            deleted.push(True);
+        });
+        assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout), "destroyed without waiting for the connect timeout");
+        auto r = ready.get(LifecycleWsClient::HandoffTimeout);
+        assertTrue(exists r.error, sprintf("the connect failed: %y", r));
     }
 
     #! Every thread that the tests or the clients' start_thread hooks started ended without an unhandled exception

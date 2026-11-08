@@ -1193,6 +1193,13 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         */
         bool handshake_canceled = False;
 
+        #! The connection manager a connect acquires its connection from, if any; the destructor shuts it down
+        /** Protected by @ref handshake_lock.
+
+            @since WebSocketClient 2.5
+        */
+        *HttpClientIo::HttpClientConnectionManager handshake_mgr;
+
         #! Counter tracking active delivery threads for deterministic shutdown
         /** Incremented when a delivery thread is launched, decremented when it exits.
             The destructor waits for this to reach zero to ensure the delivery thread
@@ -4166,32 +4173,57 @@ ws.setEventQueue();
         return rv;
     }
 
-    #! Raises \c WEBSOCKET-ERROR if the destructor canceled the handshakes
-    /** Called before each step of a connect that sends a request, so a connect continued after the destructor
-        began does not go on.
+    #! Raises \c WEBSOCKET-ERROR if the destructor canceled the handshakes, else records the connection manager
+    /** Called before each step of a connect that could wait for the network (acquiring a connection, starting a
+        request), so a connect started or continued after the destructor began does not go on.
+
+        @param mgr the connection manager that the step acquires its connection from, if any; the destructor shuts it
+        down, which ends a connection acquisition in progress (a TCP connect or a TLS handshake)
 
         @throw WEBSOCKET-ERROR the client is being destroyed
 
         @since WebSocketClient 2.5
     */
-    private checkHandshakeCanceled() {
+    private checkHandshakeCanceled(*HttpClientIo::HttpClientConnectionManager mgr) {
         AutoLock al(handshake_lock);
         if (handshake_canceled) {
             throw "WEBSOCKET-ERROR", "the client is being destroyed";
         }
+        if (mgr) {
+            handshake_mgr = mgr;
+        }
+    }
+
+    #! Forgets the connection manager recorded by checkHandshakeCanceled()
+    private clearHandshakeMgr() {
+        AutoLock al(handshake_lock);
+        remove handshake_mgr;
     }
 
     #! Cancels a handshake in progress, and every later one, for the destructor
     /** @since WebSocketClient 2.5
     */
     private cancelHandshakeForDestroy() {
-        AutoLock al(handshake_lock);
-        handshake_canceled = True;
-        if (handshake_stream) {
+        *HttpClientIo::HttpClientConnectionManager mgr;
+        {
+            AutoLock al(handshake_lock);
+            handshake_canceled = True;
+            mgr = handshake_mgr;
+            if (handshake_stream) {
+                try {
+                    handshake_stream.cancel();
+                } catch (hash<ExceptionInfo> ex) {
+                    logDebug("error canceling the handshake: %s: %s", ex.err, ex.desc);
+                }
+            }
+        }
+        # a connection acquisition in progress (TCP connect or TLS handshake) ends when its manager is shut down, and
+        # one started later fails at once; not under the lock, since the shutdown waits for the callers of the manager
+        if (mgr) {
             try {
-                handshake_stream.cancel();
+                mgr.closeAll();
             } catch (hash<ExceptionInfo> ex) {
-                logDebug("error canceling the handshake: %s: %s", ex.err, ex.desc);
+                logDebug("error shutting down the connection manager of the connect: %s: %s", ex.err, ex.desc);
             }
         }
     }
@@ -4775,12 +4807,17 @@ ws.setEventQueue();
 
         int retries = 0;
         while (True) {
-            # not after the destructor began, also not as a retry
-            checkHandshakeCanceled();
+            # not after the destructor began, also not as a retry; the destructor shuts the manager down, which ends
+            # the acquisition
+            checkHandshakeCanceled(hcio_mgr);
             # Acquire a stream — the manager negotiates the best protocol via
             # ALPN (H1/H2) and Alt-Svc (H3). We use the same stream for the
             # WS handshake — no probe-and-discard.
-            HttpClientIo::HttpClientStreamHandle stream = hcio_mgr.acquireStream(http_opts.url);
+            HttpClientIo::HttpClientStreamHandle stream;
+            {
+                on_exit clearHandshakeMgr();
+                stream = hcio_mgr.acquireStream(http_opts.url);
+            }
 
             if (stream instanceof HttpClientIo::Http1ClientStreamHandle) {
                 logDebug("HCIO auto: negotiated H1, using Upgrade handshake");
@@ -5054,8 +5091,11 @@ ws.setEventQueue();
         # Switching Protocols, not as a chunked HTTP request body.  Passing
         # True here would add "Transfer-Encoding: chunked" to the upgrade
         # request and the server would reject the handshake.
-        checkHandshakeCanceled();
-        hcio_stream = hcio_mgr.acquireAndStartStreaming(http_opts.url, "GET", path, hdr, False);
+        checkHandshakeCanceled(hcio_mgr);
+        {
+            on_exit clearHandshakeMgr();
+            hcio_stream = hcio_mgr.acquireAndStartStreaming(http_opts.url, "GET", path, hdr, False);
+        }
 
         # Read the 101 response headers from the Channel
         auto rh = readHandshakeResponse();
