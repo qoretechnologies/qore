@@ -13152,11 +13152,23 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     break;
             }
             if (phi_temp_cleanup) {
-                // the Phi's cleanup slot takes the incoming temporary's reference over; a value that a jump past the
-                // end of its statement left in the slot is released first
-                llvm::Value* inc_cleanup = invoke_alloca_map[inc.value.id];
-                llvm::Value* owned = builder->CreateLoad(i64_type, inc_cleanup);
-                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), inc_cleanup);
+                // the Phi's cleanup slot takes the incoming temporary's reference over when the temporary owns it in a
+                // cleanup slot of its own; an incoming value that does not (a temporary whose cleanup is SSA-direct)
+                // gives the slot a reference of its own, and a native scalar none; a value that a jump past the end
+                // of its statement left in the slot is released first
+                llvm::Value* owned;
+                auto alloca_it = invoke_alloca_map.find(inc.value.id);
+                if (alloca_it != invoke_alloca_map.end() && alloca_it->second
+                        && llvm::isa<llvm::AllocaInst>(alloca_it->second)
+                        && nanboxed_values.count(inc.value.id) && !weak_load_result_ids.count(inc.value.id)) {
+                    llvm::Value* inc_cleanup = alloca_it->second;
+                    owned = builder->CreateLoad(i64_type, inc_cleanup);
+                    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), inc_cleanup);
+                } else if (nanboxed_values.count(inc.value.id)) {
+                    owned = emitHelperRef(module, val);
+                } else {
+                    owned = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+                }
                 llvm::Value* old_val = builder->CreateLoad(i64_type, phi_temp_cleanup);
                 builder->CreateStore(owned, phi_temp_cleanup);
                 builder->CreateCall(module.getOrInsertFunction("qore_rt_decref",
@@ -16390,31 +16402,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // PHI carries NaN-boxed i64 values (incoming values are boxed in fixup pass).
                 nanboxed_values.insert(inst->result.id);
             }
-            // a Phi of temporaries, each of which owns its reference in a cleanup slot of its own, is a temporary
-            // too: its own cleanup slot takes the incoming value's reference over at the end of the predecessor
-            // (in the fixup pass), so a call consumes it as it consumes any temporary argument (see
-            // consumable_phis); an incoming value not lowered yet (a forward edge) has no slot to take over
+            // a Phi of temporaries is a temporary too: its own cleanup slot takes each incoming temporary's reference
+            // over at the end of the predecessor (in the fixup pass, when every block is lowered: the blocks of a
+            // nested ?: or ?? that gives an incoming value are lowered after the outer Phi), so a call consumes it as
+            // it consumes any temporary argument (see consumable_phis).  The slot is created here, before the
+            // statement's DiscardTemps is lowered, so that the statement releases it
             llvm::AllocaInst* temp_cleanup = nullptr;
             if (phi_value_kind == QoreIRPhiValueKind::QoreValue && consumable_phis.count(inst->result.id)) {
-                bool all_owned = true;
-                for (const auto& inc : phi->incoming) {
-                    auto alloca_it = invoke_alloca_map.find(inc.value.id);
-                    if (alloca_it == invoke_alloca_map.end() || !alloca_it->second
-                            || !llvm::isa<llvm::AllocaInst>(alloca_it->second)
-                            || !nanboxed_values.count(inc.value.id)
-                            || weak_load_result_ids.count(inc.value.id)) {
-                        all_owned = false;
-                        break;
-                    }
-                }
-                if (all_owned) {
-                    llvm::IRBuilder<> alloca_builder(&llvm_func->getEntryBlock(),
-                        llvm_func->getEntryBlock().begin());
-                    temp_cleanup = alloca_builder.CreateAlloca(i64_type, nullptr, "phi_temp_cleanup");
-                    alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), temp_cleanup);
-                    registerInvokeCleanupAlloca(temp_cleanup);
-                    invoke_alloca_map[inst->result.id] = temp_cleanup;
-                }
+                llvm::IRBuilder<> alloca_builder(&llvm_func->getEntryBlock(),
+                    llvm_func->getEntryBlock().begin());
+                temp_cleanup = alloca_builder.CreateAlloca(i64_type, nullptr, "phi_temp_cleanup");
+                alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), temp_cleanup);
+                registerInvokeCleanupAlloca(temp_cleanup);
+                invoke_alloca_map[inst->result.id] = temp_cleanup;
             }
             // Store for fixup pass after all blocks are lowered (incoming values
             // may not be lowered yet due to forward edges).

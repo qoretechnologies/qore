@@ -595,7 +595,13 @@ the interpreter's `releaseConsumedCallArgs` and `consumeLastUseCallArgSlots()`),
 temporaries that are used by the Phi once, and otherwise only before it in their own block, takes
 their references over, so that it is a temporary the call consumes too
 (`interpreter_phi_takes_incoming`; native code: `consumable_phis`, whose cleanup slot takes the
-incoming temporary's slot over at the end of each predecessor). `CallArgumentReleaseOrder.qtest`.
+incoming temporary's slot over at the end of each predecessor). The native slot is created when the
+Phi is lowered, before the statement's `DiscardTemps`, and the decision for each incoming value is
+made in the fixup pass, when every block is lowered: the blocks of a nested `?:` or `??` that give an
+incoming value are lowered after the outer Phi, whose temporaries otherwise were released at the next
+iteration of a loop. An incoming value with no cleanup slot of its own gives the Phi's slot a
+reference of its own. In the IR interpreter every Phi's slot owns its value, so every Phi is a
+temporary. `CallArgumentReleaseOrder.qtest`.
 
 The native cache of a local on the runtime stack is retained by the local's reload tracker. A
 store releases the tracker's reference before the runtime assignment releases the variable's, so

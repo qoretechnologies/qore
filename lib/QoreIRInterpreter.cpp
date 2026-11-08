@@ -2247,10 +2247,10 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             }
         }
     }
-    // a Phi of temporaries used by the Phi only takes their references over (see takes_incoming), and is a
-    // temporary itself, which a call consumes as its argument as it consumes any temporary
+    // a Phi is a temporary, which a call consumes as its argument as it consumes any temporary
     // (f(new T(), c ? new T() : new T(), new T())), so that it is released with the other arguments, last argument
-    // first, as the AST interpreter releases the callee's parameters; a Phi of Phis is found by repeating
+    // first, as the AST interpreter releases the callee's parameters; the incoming temporaries that the Phi takes over
+    // are marked in phi_takes_incoming (by value)
     phi_takes_incoming.assign(counts.size(), 0);
     // an incoming temporary is used by its Phi once, and otherwise only in the block that defines it, before the Phi
     // (new T() ?? x tests the temporary before the Phi), so the Phi's slot can take its reference over
@@ -2274,25 +2274,19 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             }
         }
     }
-    for (bool changed = true; changed;) {
-        changed = false;
-        for (const QoreIRPhiInstruction* phi : phis) {
-            uint32_t id = phi->result.id;
-            if (id >= def_by_call.size() || def_by_call[id] || phi->incoming.empty()) {
-                continue;
-            }
-            bool temps = true;
-            for (const auto& inc : phi->incoming) {
-                if (!inc.value.isValid() || inc.value.id >= counts.size() || !def_by_call[inc.value.id]
-                        || phi_uses[inc.value.id] != 1 || used_elsewhere[inc.value.id]) {
-                    temps = false;
-                    break;
-                }
-            }
-            if (temps) {
-                def_by_call[id] = 1;
-                phi_takes_incoming[id] = 1;
-                changed = true;
+    // a Phi's slot owns its value (taken over or referenced again; see setPhiValue), so a Phi is a temporary that a
+    // call consumes as any temporary; an incoming value that is a temporary (a call result or a Phi) used by the Phi
+    // once, and otherwise only before it in its own block, gives the Phi its reference (nested ?: and ??)
+    for (const QoreIRPhiInstruction* phi : phis) {
+        if (phi->result.id < def_by_call.size()) {
+            def_by_call[phi->result.id] = 1;
+        }
+    }
+    for (const QoreIRPhiInstruction* phi : phis) {
+        for (const auto& inc : phi->incoming) {
+            if (inc.value.isValid() && inc.value.id < counts.size() && def_by_call[inc.value.id]
+                    && phi_uses[inc.value.id] == 1 && !used_elsewhere[inc.value.id]) {
+                phi_takes_incoming[inc.value.id] = 1;
             }
         }
     }
@@ -7487,7 +7481,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto setPhiValue = [&](const QoreIRPhiInstruction* phi, QoreIRValue incoming) {
         QoreValue val = getIRValue(values, incoming);
         uint32_t id = incoming.id;
-        if (val.needsRef() && phi->result.id < phi_takes_incoming.size() && phi_takes_incoming[phi->result.id]
+        if (val.needsRef() && id < phi_takes_incoming.size() && phi_takes_incoming[id]
                 && id < values.size() && !weak_load_temp_slots.count(id)
                 && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)
                 && removeAllCleanupEntries(cleanup, id)) {
