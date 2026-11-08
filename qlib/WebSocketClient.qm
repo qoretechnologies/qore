@@ -741,6 +741,14 @@ public class WscLibraryThreads {
         }
     }
 
+    #! Returns the number of starts reported failed whose thread may still run (and is then not counted)
+    /** An entry is removed when the thread ends or when the start's code is released without having been run.
+    */
+    int getFailedCount() {
+        AutoLock al(m);
+        return failed.size();
+    }
+
     #! Returns the number of counted starts
     int getCount() {
         AutoLock al(m);

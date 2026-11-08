@@ -3296,6 +3296,17 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertFalse(lt.hasOthers());
         lt.leave(t4);
         assertEq(0, lt.getCount(), "the count never goes below zero");
+        assertEq(0, lt.getFailedCount(), "the failed start is forgotten once its thread ended");
+
+        # a failed start whose code is released without being run is forgotten
+        int t7 = lt.starting();
+        {
+            WscStartTicket ticket(lt, t7);
+            lt.startFailed(t7);
+            assertEq(1, lt.getFailedCount());
+        }
+        assertEq(0, lt.getFailedCount(), "the failed start is forgotten once its code was released");
+        assertEq(0, lt.getCount());
 
         # the code of a start is released without being run: the start is uncounted, the ticket keeps it counted
         # until then
