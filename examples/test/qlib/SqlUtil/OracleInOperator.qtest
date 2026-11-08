@@ -11,6 +11,7 @@
 %requires DataProvider
 %requires SqlUtil
 %requires OracleSqlUtilBase
+%requires ./TestRunIsolation.qm
 %requires ./OracleTestIsolation.qm
 
 %exec-class OracleInOperatorTest
@@ -23,6 +24,9 @@ class OracleInOperatorTest inherits QUnit::Test {
         # driver -> table
         hash<string, AbstractTable> tables;
 
+        # driver -> the name of its test table: a name of the run's own, as the run may have no schema of its own
+        hash<string, string> names;
+
         # the number of rows: more than two constructors
         const Rows = 2100;
 
@@ -30,7 +34,10 @@ class OracleInOperatorTest inherits QUnit::Test {
     }
 
     constructor() : Test("OracleInOperatorTest", "1.0", \ARGV) {
-        on_exit OracleRunSchema::teardown();
+        on_exit {
+            dropTables();
+            OracleRunSchema::teardown();
+        }
         foreach hash<auto> i in ({"oracle": "QORE_DB_CONNSTR_ORACLE", "jdbc": "QORE_DB_CONNSTR_JDBC_ORACLE"}
                 .pairIterator()) {
             if (!ENV{i.value}.val()) {
@@ -42,7 +49,8 @@ class OracleInOperatorTest inherits QUnit::Test {
             }
             Datasource ds(connstr);
             ds.open();
-            tables{i.key} = setupTable(ds);
+            names{i.key} = TestRun::makeName("in_" + i.key);
+            tables{i.key} = setupTable(ds, names{i.key});
         }
 
         addTestCase("numbers", \numbers());
@@ -53,19 +61,39 @@ class OracleInOperatorTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private AbstractTable setupTable(Datasource ds) {
-        Table t(ds, "in_test");
+    #! drops the test tables
+    private dropTables() {
+        foreach hash<auto> i in (tables.pairIterator()) {
+            try {
+                AbstractDatasource ds = i.value.getDatasource();
+                ds.rollback();
+                i.value.drop();
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: %s: cannot drop table %s: %s: %s\n", i.key, names{i.key}, ex.err, ex.desc);
+            }
+        }
+    }
+
+    private AbstractTable setupTable(Datasource ds, string name) {
+        Table t(ds, name);
         t.setupTable({
             "columns": {
                 "id": {"qore_type": SqlUtil::NUMERIC, "size": 14, "notnull": True},
                 "s": {"qore_type": SqlUtil::VARCHAR, "size": 20},
                 "d": {"qore_type": Type::Date},
             },
-            "primary_key": {"name": "pk_in_test", "columns": ("id",)},
+            "primary_key": {"name": "pk_" + name, "columns": ("id",)},
         });
         t.create();
         ds.commit();
-        AbstractTable table = new Table(ds, "in_test").getTable();
+        # a table that is not set up is dropped here, as only the tables that are set up are dropped at the end
+        on_error {
+            ds.rollback();
+            t.drop();
+            ds.commit();
+        }
+        AbstractTable table = new Table(ds, name).getTable();
         map table.insert({"id": $1, "s": sprintf("s%d", $1), "d": Day + days($1)}), seq(1, Rows);
         ds.commit();
         return table;
