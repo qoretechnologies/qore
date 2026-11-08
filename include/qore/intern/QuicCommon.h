@@ -277,6 +277,19 @@ inline bool buildSendCmsg(const struct sockaddr* local_addr, socklen_t local_add
 
     @since %Qore 3.0
 */
+#ifdef DEBUG
+//! Debug-only: counts datagrams sent to an address for the QUIC test clock (see qore_quic_test_advance_clock())
+/** @param fd the socket the datagrams were sent with
+    @param addr the destination address, or nullptr for the peer of a connected socket
+    @param addrlen the length of \a addr
+    @param count the number of datagrams sent
+*/
+DLLLOCAL void qore_quic_test_note_sent(int fd, const struct sockaddr* addr, socklen_t addrlen, int count);
+
+//! Debug-only: counts datagrams received on a socket for the QUIC test clock (see qore_quic_test_advance_clock())
+DLLLOCAL void qore_quic_test_note_received(int fd, int count);
+#endif
+
 inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
                                 const struct sockaddr* addr, socklen_t addrlen,
                                 const struct sockaddr* local_addr = nullptr,
@@ -383,6 +396,11 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
             return -1;
         }
         ++offset;
+    }
+#endif
+#ifdef DEBUG
+    if (offset > 0) {
+        qore_quic_test_note_sent(fd, addr, addrlen, offset);
     }
 #endif
     // Partial sends are expected under congestion; QUIC retransmission handles recovery.

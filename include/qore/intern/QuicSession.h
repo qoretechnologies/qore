@@ -2079,12 +2079,19 @@ public:
 /** QuicSession::timestamp() adds the total of the advances, so the timers of the connections (idle timeout, keep-alive,
     loss detection) run as if that much time had passed; the clock only goes forward, as ngtcp2 requires.  The packets
     already received are processed on the current clock first (the operations of every socket of the async I/O
-    controller are woken, and the I/O threads are waited for, until a pass processes no packet, as the packets sent
-    while processing are received by other connections of the process), so that none is taken as received after the
-    advance;
-    then the clock is advanced and the operations are woken again, so that they handle the timers that are due on the
-    new clock at once (see AsyncIoControllerPriv::dbgWakeAllSockets()).  A test must make sure that no peer still sends
-    packets that it does not want processed after the advance (a killed peer has exited, for example).
+    controller are woken, and the I/O threads and the worker threads that run the operations implemented in %Qore and
+    their onComplete() callbacks are waited for (see AsyncIoControllerPriv::dbgWaitWorkersIdle()), until a pass
+    processes no packet and completes no operation, every datagram sent to a socket of the process has been read from
+    it, and no socket of the connections has a packet to read (see qore_quic_test_note_receive_fd(),
+    qore_quic_test_note_sent() and qore_quic_test_note_received()), as the packets sent while processing are received
+    by other connections of the process, an operation submitted again reads what it was sent in the next pass, and
+    macOS delivers a loopback datagram after its send has returned), so that
+    none is taken as received after the advance; then the clock is advanced and the operations are woken again, so
+    that they handle the timers that are due on the new clock at once (see AsyncIoControllerPriv::dbgWakeAllSockets()).
+    A test must make sure that no peer still sends packets that it does not want processed after the advance (a killed
+    peer has exited, for example).  A DBG-QUIC-CLOCK-ERROR exception is raised, and the clock is not advanced, if the
+    worker threads are not idle within 30 seconds, if a datagram sent to a socket of the process is not delivered
+    within 30 seconds, or if the connections still process packets after 100 passes.
 
     @return the total advance in milliseconds
 */
@@ -2092,6 +2099,12 @@ DLLLOCAL int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink);
 
 //! Debug-only: the number of QUIC packets that client and server connections of the process have processed
 DLLLOCAL void qore_quic_test_packets_received(int64_t& client, int64_t& server);
+
+//! Debug-only: records a UDP socket that QUIC connections of the process receive packets on
+/** qore_quic_test_advance_clock() advances the clock only when none of these sockets has a packet waiting to be
+    read, and every datagram sent to one of them has been read from it (see qore_quic_test_note_sent())
+*/
+DLLLOCAL void qore_quic_test_note_receive_fd(int fd);
 
 #endif
 

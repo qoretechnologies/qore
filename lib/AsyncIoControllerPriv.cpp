@@ -1246,6 +1246,9 @@ void QoreCallDispatcher::dispatchAbortAsync(QoreObject* spop_obj, const std::str
 
 void QoreCallDispatcher::dispatchOnCompleteAsync(QoreObject* spop_obj, QoreHashNode* result,
         const std::string& owner, AsyncIoSandboxContext sandbox_ctx) {
+#ifdef DEBUG
+    dbg_on_complete_dispatched.fetch_add(1, std::memory_order_acq_rel);
+#endif
     AsyncWorkItem item{spop_obj, result, nullptr, nullptr, DT_ON_COMPLETE, nullptr, std::string()};
     item.owner = owner;
     item.sandbox_ctx = std::move(sandbox_ctx);
@@ -1584,6 +1587,22 @@ void QoreCallDispatcher::waitForIdle() {
         idle_cond.wait(m);
     }
 }
+
+#ifdef DEBUG
+bool QoreCallDispatcher::dbgWaitAllIdle(int timeout_ms) {
+    int64 deadline_us = q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000;
+    AutoLocker al(m);
+    // idle_cond is signaled after every item a worker has processed, and when queued items are dropped
+    while (active_processing || !async_queue.empty()) {
+        int64 remaining_ms = (deadline_us - q_get_monotonic_us()) / 1000;
+        if (remaining_ms <= 0) {
+            return false;
+        }
+        idle_cond.wait(m, static_cast<int>(remaining_ms));
+    }
+    return true;
+}
+#endif
 
 void QoreCallDispatcher::waitForProgramIdle(QoreProgram* pgm) {
     AutoLocker al(m);
@@ -4633,6 +4652,31 @@ void AsyncIoControllerPriv::wakeSocketAfterClose(const std::string& sock_hash, A
 }
 
 #ifdef DEBUG
+bool AsyncIoControllerPriv::dbgWaitWorkersIdle(int timeout_ms, int64_t& on_complete_dispatched) {
+    on_complete_dispatched = 0;
+    // the controller is referenced so that its dispatcher cannot be deleted while it is waited for (see
+    // flushCallbacks())
+    ref();
+    struct Unref {
+        AsyncIoControllerPriv* ctrl;
+        ~Unref() {
+            ExceptionSink xsink;
+            ctrl->deref(&xsink);
+        }
+    } unref{this};
+    QoreCallDispatcher* cd;
+    {
+        AutoLocker al(m);
+        cd = call_dispatcher;
+    }
+    if (!cd) {
+        return true;
+    }
+    bool idle = cd->dbgWaitAllIdle(timeout_ms);
+    on_complete_dispatched = cd->dbgOnCompleteDispatched();
+    return idle;
+}
+
 size_t AsyncIoControllerPriv::dbgWakeAllSockets() {
     std::vector<std::string> hashes;
     {

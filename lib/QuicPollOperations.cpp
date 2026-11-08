@@ -261,6 +261,9 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
             msgs[i].msg_hdr.msg_controllen = QUIC_CMSG_BUF_SIZE;
         }
 
+#ifdef DEBUG
+        qore_quic_test_note_receive_fd(fd);
+#endif
         int nrecv = recvmmsg(fd, msgs, QUIC_MAX_RECV_BATCH, MSG_DONTWAIT, nullptr);
         if (nrecv < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -275,6 +278,9 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
         if (nrecv == 0) {
             return 0;
         }
+#ifdef DEBUG
+        qore_quic_test_note_received(fd, nrecv);
+#endif
 
         // Batch packets by target session for readPacketBatch();
         // common case: all packets go to the same session (single client).
@@ -382,6 +388,9 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
     while (true) {
         socklen_t src_addrlen = sizeof(src_addr);
         size_t cmsg_len = sizeof(cmsg_buf);
+#ifdef DEBUG
+        qore_quic_test_note_receive_fd(fd);
+#endif
         ssize_t nread = recvQuicPacket(fd, recv_buf, recv_buf_size, MSG_DONTWAIT,
                                         reinterpret_cast<struct sockaddr*>(&src_addr), &src_addrlen,
                                         cmsg_buf, &cmsg_len);
@@ -398,6 +407,9 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
         if (nread == 0) {
             return 0;
         }
+#ifdef DEBUG
+        qore_quic_test_note_received(fd, 1);
+#endif
 
         // Route to the correct session via dispatcher; drop packets
         // with unrecognized DCIDs rather than misrouting them.  Pin the session
@@ -876,6 +888,9 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
 
     int fd = sock->priv->socket->getSocket();
     size_t cmsg_len = sizeof(cmsg_buf);
+#ifdef DEBUG
+    qore_quic_test_note_receive_fd(fd);
+#endif
     ssize_t nread = recvQuicPacket(fd, recv_buf_, sizeof(recv_buf_), 0,
                                     reinterpret_cast<struct sockaddr*>(&src_addr), &src_addrlen,
                                     cmsg_buf, &cmsg_len);
@@ -919,6 +934,9 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
     // Successful recv: peer is responsive — disarm the unreachable deadline.
     econnrefused_deadline_ns_ = 0;
 
+#ifdef DEBUG
+    qore_quic_test_note_received(fd, 1);
+#endif
     // Use the cached getsockname() address directly — the client socket is
     // connect()ed, so the local address is always local_addr_.  Do NOT call
     // extractPktinfoAddr(): on macOS, IP_RECVDSTADDR on connected UDP sockets
@@ -1895,6 +1913,9 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
 
     int fd = sock->priv->socket->getSocket();
     size_t cmsg_len = sizeof(cmsg_buf);
+#ifdef DEBUG
+    qore_quic_test_note_receive_fd(fd);
+#endif
     ssize_t nread = recvQuicPacket(fd, recv_buf_, sizeof(recv_buf_), 0,
                                     reinterpret_cast<struct sockaddr*>(&src_addr), &src_addrlen,
                                     cmsg_buf, &cmsg_len);
@@ -1912,6 +1933,9 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
     if (nread == 0) {
         return 0;
     }
+#ifdef DEBUG
+    qore_quic_test_note_received(fd, 1);
+#endif
 
     // Start from cached local address (has correct family + port), then
     // overwrite the IP from pktinfo for actual per-packet destination

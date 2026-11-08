@@ -389,6 +389,21 @@ public:
     */
     DLLLOCAL void waitForIdle();
 
+#ifdef DEBUG
+    //! Debug-only: waits until no item is queued or being processed, continuePoll() calls included
+    /** Unlike waitForIdle(), this waits for continuePoll() calls too, which can block; it is meant for tests that
+        need every operation of the controller to have run (see qore_quic_test_advance_clock())
+
+        @return true if the dispatcher is idle, false if it was not when \a timeout_ms elapsed
+    */
+    DLLLOCAL bool dbgWaitAllIdle(int timeout_ms);
+
+    //! Debug-only: the number of onComplete() calls dispatched so far
+    DLLLOCAL int64_t dbgOnCompleteDispatched() const {
+        return dbg_on_complete_dispatched.load(std::memory_order_acquire);
+    }
+#endif
+
     //! Mark a program as shutting down so workers skip callbacks for it
     /** Called at the start of cancelByProgram(), before any I/O thread commands.
         Workers that pick up items for this program will silently discard them
@@ -490,6 +505,10 @@ private:
         blocked ping continuePoll wedge HttpServer::stop()->flushCallbacks()
         forever (qorus-core shutdown deadlock). */
     int active_continue_poll = 0;
+#ifdef DEBUG
+    //! Debug-only: the number of onComplete() calls dispatched so far (see dbgOnCompleteDispatched())
+    std::atomic<int64_t> dbg_on_complete_dispatched{0};
+#endif
     int max_workers;                        //!< Maximum workers
     bool stopping = false;                  //!< Set during shutdown
     AsyncIoControllerPriv* ctrl = nullptr;  //!< Owning controller for logging (not ref'd — controller outlives dispatcher)
@@ -751,6 +770,18 @@ public:
         @return the number of sockets woken
     */
     DLLLOCAL size_t dbgWakeAllSockets();
+
+    //! Debug-only: waits until the worker threads have run every item they were given (see dbgWaitAllIdle())
+    /** The operations implemented in %Qore, and their onComplete() callbacks, run in worker threads, which
+        waitForProcessing() does not wait for: it covers the commands given to the I/O threads only
+
+        @param timeout_ms the maximum time to wait
+        @param on_complete_dispatched set to the number of onComplete() calls dispatched so far, with which a caller
+        sees whether an operation completed (and could have been submitted again) while it waited
+
+        @return true if the worker threads are idle, false if they were not when \a timeout_ms elapsed
+    */
+    DLLLOCAL bool dbgWaitWorkersIdle(int timeout_ms, int64_t& on_complete_dispatched);
 #endif
 
     //! Wakes a socket operation by QoreObject identity
