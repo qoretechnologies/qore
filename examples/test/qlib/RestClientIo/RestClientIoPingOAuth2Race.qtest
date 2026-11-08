@@ -23,10 +23,10 @@
 
     The OAuth2 token endpoint of a polling ping, reached through the race of automatic protocol selection.
 
-    The token endpoint is a TLS server whose UDP port is closed, so the HTTP/3 candidate of the race is refused (ICMP
-    port unreachable) and closes after the refusal grace period, while the HTTP/2 candidate is held before its TLS
-    handshake: the race is unresolved when the closed HTTP/3 candidate is reported to the ping.  Every proof is a
-    state that was reached, not a time measured.
+    The token endpoint is a TLS server whose UDP port number refuses datagrams, so the HTTP/3 candidate of the race is
+    refused (ICMP port unreachable) and closes after the refusal grace period, while the HTTP/2 candidate is held
+    before its TLS handshake: the race is unresolved when the closed HTTP/3 candidate is reported to the ping.  Every
+    proof is a state that was reached, not a time measured.
 */
 
 %modern
@@ -46,17 +46,30 @@
 
 %exec-class RestClientIoPingOAuth2RaceTest
 
-#! An OAuth2 token endpoint over TLS that offers only HTTP/1.1 with ALPN; its UDP port is closed
+#! An OAuth2 token endpoint over TLS that offers only HTTP/1.1 with ALPN; its UDP port number refuses datagrams
 /** Every response closes its connection, so the number of connections accepted is the number of TCP connection
     attempts that the client made.  A connection can be held before its TLS handshake (see @ref hold()), so that it
     cannot settle until it is released.
+
+    QUIC datagrams sent to the port number of the listener must be refused (ICMP port unreachable), so no socket may
+    receive them, and the port number must stay so while the server runs.  It is held for UDP by a socket that is
+    connected to another UDP socket of the server: a connected UDP socket receives only the datagrams of its peer, so
+    a datagram from the client finds no socket and is refused, while the port stays bound:
+    - on Linux, no other socket can be bound to the port number on 127.0.0.1, 0.0.0.0 or the IPv6 wildcard address
+      while the socket holds it, and the system does not assign it to another socket
+    - on macOS, the same holds for a socket that does not set \c SO_REUSEADDR or \c SO_REUSEPORT, and the system
+      does not assign the port number to another socket either; a program that sets one of these options and binds
+      the port number explicitly can share it, on 127.0.0.1 or a wildcard address, and would receive the datagrams.
+      No socket state prevents that on macOS and still refuses the datagrams: an unconnected socket on 127.0.0.1 or
+      on a wildcard address would receive them itself, a socket on 127.0.0.1 does not keep such a program off the
+      wildcard addresses, and connecting a socket on a wildcard address binds it to the address of its route
 */
 class TokenServer {
     public {
         #! The fail-safe bound of the waits of the server for an event that is due
         const EventTimeout = 20s;
 
-        #! The number of ports tried when another process uses the port number of the listener for UDP
+        #! The number of port numbers tried when another program uses the port number of the UDP socket for TCP
         const MaxPortAttempts = 20;
 
         #! The access token returned
@@ -69,6 +82,12 @@ class TokenServer {
 
         #! The port of the listener
         int port;
+
+        #! The UDP socket that holds the port number of the listener, connected to @ref udp_peer
+        *Socket udp_guard;
+
+        #! The UDP socket that @ref udp_guard is connected to; it never sends a datagram
+        Socket udp_peer();
 
         #! Guards the members below
         Mutex m();
@@ -94,34 +113,46 @@ class TokenServer {
 
     #! Creates the server and starts accepting connections
     constructor() {
-        # the UDP port with the number of the listener must be closed, so that QUIC datagrams are refused; another
-        # process may use the port number for UDP, in which case another port is chosen
+        # the UDP socket that holds the port number gets its port from the system, and the listener is bound to the
+        # same port number for TCP; another port number is used if another program uses the port number for TCP
+        udp_peer.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+        int peer_port = udp_peer.getSocketInfo().port;
         for (int attempt = 1; ; ++attempt) {
+            Socket u();
+            u.connectINET("127.0.0.1", peer_port, EventTimeout, AF_INET, SOCK_DGRAM);
+            int p = u.getSocketInfo().port;
             Socket tcp();
             tcp.setCertificate(new SSLCertificate(TestCertificates::CertPem));
             tcp.setPrivateKey(new SSLPrivateKey(TestCertificates::KeyPem));
-            tcp.bindINET("127.0.0.1", "0", True);
-            int p = tcp.getSocketInfo().port;
-            Socket u();
             try {
-                u.bindINET("127.0.0.1", string(p), False, AF_INET, SOCK_DGRAM);
+                tcp.bindINET("127.0.0.1", string(p), True);
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err != "SOCKET-BIND-ERROR" || attempt == MaxPortAttempts) {
                     rethrow;
                 }
                 continue;
             }
-            u.close();
+            if (tcp.listen()) {
+                if (attempt == MaxPortAttempts) {
+                    throw "SOCKET-LISTEN-ERROR", sprintf("cannot listen on 127.0.0.1:%d: %s", p, strerror(errno()));
+                }
+                continue;
+            }
+            udp_guard = u;
             listener = tcp;
             port = p;
             break;
         }
-        listener.listen();
         background serve();
     }
 
     destructor() {
         stop();
+    }
+
+    #! Returns the port number of the token endpoint, for TCP and UDP
+    int getPort() {
+        return port;
     }
 
     #! Returns the URL of the token endpoint
@@ -190,6 +221,8 @@ class TokenServer {
         running.waitForZero();
         handlers.waitForZero();
         try { listener.close(); } catch () {}
+        try { udp_guard.close(); } catch () {}
+        try { udp_peer.close(); } catch () {}
     }
 
     #! Accepts connections until the server stops
@@ -314,6 +347,14 @@ public class RestClientIoPingOAuth2RaceTest inherits QUnit::Test {
 
         TokenServer token_server();
         on_exit token_server.stop();
+        # the UDP port number of the token endpoint stays held: no other socket can be bound to it and receive the
+        # QUIC datagrams of the client instead of the system refusing them
+        foreach string addr in ("127.0.0.1", "0.0.0.0") {
+            assertThrows("SOCKET-BIND-ERROR", sub () {
+                Socket s();
+                s.bindINET(addr, string(token_server.getPort()), False, AF_INET, SOCK_DGRAM);
+            }, NOTHING, addr);
+        }
         # connection 1 is the HTTP/2 candidate of the race; HTTP/3 does not connect over TCP
         token_server.hold(1);
 
