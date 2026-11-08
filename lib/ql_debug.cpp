@@ -1839,6 +1839,68 @@ struct UtRegularFile {
     something else, without reading it, spin; it is reported when it is registered, when its registrations or events
     change and when rearmAlwaysReady() is called, and a closed file is reported once with an error and dropped
 */
+//! A poll reports the armed regular files without looking at every registration of the loop
+/** addAlwaysReadyEvents() looked at every registration at every poll in which a regular file was armed, so a loop
+    with many sockets and a file read in steps did work for every socket at every step.
+*/
+static void ut_event_loop_armed_scan(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreEventLoop loop(&xsink);
+    UT_ASSERT(c, !xsink && loop.isValid(), "armed scan: the event loop is created");
+    UtRegularFile file;
+    if (xsink || !file.open()) {
+        UT_ASSERT(c, false, "armed scan: a regular file is made");
+        xsink.clear();
+        return;
+    }
+    // many sockets that are not ready
+    constexpr int Pairs = 32;
+    std::vector<int> fds;
+    ON_BLOCK_EXIT([&fds] () {
+        for (int fd : fds) {
+            ::close(fd);
+        }
+    });
+    for (int i = 0; i < Pairs; ++i) {
+        int sv[2];
+        if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
+            UT_ASSERT(c, false, "armed scan: a socket pair is made");
+            return;
+        }
+        fds.push_back(sv[0]);
+        fds.push_back(sv[1]);
+        UT_ASSERT_EQ(c, 0, loop.addRegistration(sv[0], 1, QORE_EV_READ, nullptr, &xsink),
+            "armed scan: a socket is registered");
+    }
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(file.fd, 1, QORE_EV_READ, nullptr, &xsink),
+        "armed scan: the file is registered");
+    size_t visits = loop.dbgAlwaysReadyVisits();
+    UT_ASSERT_EQ(c, 1, static_cast<int>(ut_event_loop_poll_keys(loop, file.fd).size()),
+        "armed scan: the file is reported");
+    UT_ASSERT_EQ(c, 1, static_cast<int>(loop.dbgAlwaysReadyVisits() - visits),
+        "armed scan: the poll looked at the armed file only");
+    for (int i = 0; i < 3; ++i) {
+        loop.rearmAlwaysReady(file.fd);
+        visits = loop.dbgAlwaysReadyVisits();
+        UT_ASSERT_EQ(c, 1, static_cast<int>(ut_event_loop_poll_keys(loop, file.fd).size()),
+            "armed scan: the rearmed file is reported");
+        UT_ASSERT_EQ(c, 1, static_cast<int>(loop.dbgAlwaysReadyVisits() - visits),
+            "armed scan: a poll after a rearm looked at the armed file only");
+    }
+    // a file disarmed by its removal is not reported, and a file armed twice is reported once
+    loop.rearmAlwaysReady(file.fd);
+    UT_ASSERT_EQ(c, 0, loop.removeRegistration(file.fd, 1, &xsink), "armed scan: the armed file is removed");
+    UT_ASSERT(c, ut_event_loop_poll_keys(loop, file.fd).empty(), "armed scan: a removed file is not reported");
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(file.fd, 1, QORE_EV_READ, nullptr, &xsink),
+        "armed scan: the file is registered again");
+    loop.rearmAlwaysReady(file.fd);
+    UT_ASSERT_EQ(c, 1, static_cast<int>(ut_event_loop_poll_keys(loop, file.fd).size()),
+        "armed scan: the file registered again is reported once");
+    UT_ASSERT_EQ(c, 0, static_cast<int>(loop.dbgArmedCount()), "armed scan: no file is armed after the poll");
+    UT_ASSERT(c, !xsink, "armed scan: no exception");
+    xsink.clear();
+}
+
 static void ut_event_loop_always_ready(UnitTestCounters& c) {
     ExceptionSink xsink;
     QoreEventLoop loop(&xsink);
@@ -14670,6 +14732,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_event_loop_fifo_registrations(c);
 #ifdef DEBUG
     ut_event_loop_always_ready(c);
+    ut_event_loop_armed_scan(c);
 #ifdef DARWIN
     ut_event_loop_remove_write_only_registration(c);
 #endif

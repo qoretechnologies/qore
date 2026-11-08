@@ -354,6 +354,13 @@ loop.removeRegistration(fd, op_key, xsink);
         return always_ready_count;
     }
 
+    //! Debug-only: the number of descriptors that the polls have looked at to report the armed always-ready ones
+    /** See armed_fds: a poll looks at the descriptors armed since the previous poll, not at every registration
+    */
+        DLLLOCAL size_t dbgAlwaysReadyVisits() const {
+        return dbg_always_ready_visits;
+    }
+
     //! Debug-only: the number of registered regular files to report at the next poll (see armed_count)
     DLLLOCAL size_t dbgArmedCount() const {
         return armed_count;
@@ -408,6 +415,8 @@ private:
         bool always_ready = false;
         //! An always-ready descriptor to report at the next poll (see armed_count)
         bool armed = false;
+        //! The descriptor, which an armed always-ready descriptor is reported with (see armed_fds)
+        int fd = -1;
         //! The identity of an always-ready descriptor's file, to find a close or a reuse of its number
         dev_t dev = 0;
         ino_t ino = 0;
@@ -547,6 +556,17 @@ private:
 
     //! the number of always-ready descriptors to report at the next poll; while there are any, poll() does not wait
     size_t armed_count = 0;
+
+    //! the always-ready descriptors armed since the last poll, which poll() reports (see addAlwaysReadyEvents())
+    /** A descriptor is added when it is armed; one that was disarmed or removed since is skipped by the poll, and one
+        armed again after it was disarmed can be in the list more than once.  The poll reports the armed descriptors
+        from this list instead of looking at every registration.
+    */
+    std::vector<int> armed_fds;
+
+    //! the number of descriptors that the polls have looked at to report the armed always-ready ones (see
+    //! dbgAlwaysReadyVisits())
+    size_t dbg_always_ready_visits = 0;
 
 #ifdef DARWIN
     int event_fd = -1;  //!< kqueue file descriptor
