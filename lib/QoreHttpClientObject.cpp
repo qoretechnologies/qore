@@ -4410,7 +4410,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             const char* err_str = err_data.c_str();
             const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/2 CONNECT request failed";
             cleanup_failed_connect();
-            xsink->raiseException(err_str, "%s", desc_str);
+            xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
             return nullptr;
         }
 
@@ -4635,7 +4635,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
             const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/3 CONNECT request failed";
             cleanup_failed_connect();
             restore_forced_h3();
-            xsink->raiseException(err_str, "%s", desc_str);
+            xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
             return nullptr;
         }
 
@@ -4783,7 +4783,7 @@ BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int tim
                 QoreStringDataHelper desc_data(h->getKeyValue("desc"));
                 const char* err_str = err_data.c_str();
                 const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/2 stream read failed";
-                xsink->raiseException(err_str, "%s", desc_str);
+                xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
                 return nullptr;
             }
             QoreValue legacy_error = h->getKeyValue("error");
@@ -4991,7 +4991,7 @@ BinaryNode* QoreHttpClientObject::readHttp3StreamData(int64_t stream_id, int tim
                 QoreStringDataHelper desc_data(h->getKeyValue("desc"));
                 const char* err_str = err_data.c_str();
                 const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/3 stream read failed";
-                xsink->raiseException(err_str, "%s", desc_str);
+                xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
                 return nullptr;
             }
             QoreValue legacy_error = h->getKeyValue("error");
@@ -5846,7 +5846,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             QoreStringValueHelper desc(desc_val);
                             desc_str = desc->c_str();
                         }
-                        xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+                        xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s",
+                            desc_str.c_str());
                         close_and_evict_if_unusable();
                         return nullptr;
                     }
@@ -6248,7 +6249,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         QoreStringValueHelper desc(desc_val);
                         desc_str = desc->c_str();
                     }
-                    xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+                    xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
                     // a reused connection closed by the peer before a response was received
                     if (!got_headers && HttpClientConnectionManagerBase::isConnectionClosedError(*xsink)
                             && canRepeatOnNewConnection(meth, conn_reused, stream_retried)) {
@@ -6642,7 +6643,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         QoreStringValueHelper desc(desc_val);
                         desc_str = desc->c_str();
                     }
-                    xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+                    xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
                     return nullptr;
                 }
 
@@ -6754,7 +6755,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         QoreStringValueHelper desc(desc_val);
                         desc_str = desc->c_str();
                     }
-                    xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+                    xsink->raiseExceptionArg(err_str.c_str(), raw_resp->getKeyValue("arg").refSelf(), "%s",
+                        desc_str.c_str());
                     return nullptr;
                 }
                 QoreValue sc_val = raw_resp->getKeyValue("status_code");
@@ -7198,7 +7200,7 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
             const char* err_str = err_data ? err_data.c_str() : "HTTP-CLIENT-RECEIVE-ERROR";
             const char* desc_str = desc_data ? desc_data.c_str() : "WebSocket Upgrade request failed";
             // the description is text, not a format
-            xsink->raiseException(err_str, "%s", desc_str);
+            xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
             return nullptr;
         }
 
@@ -8226,7 +8228,8 @@ public:
             if (dv) {
                 desc_str = dv.c_str();
             }
-            xsink->raiseException(err_str, "%s", desc_str);
+            xsink->raiseExceptionArg(err_str, err_info ? err_info->getKeyValue("arg").refSelf() : QoreValue(),
+                "%s", desc_str);
             done = true;
             phase = Phase::DONE;
             clearPendingUnlocked(xsink);
@@ -8333,7 +8336,8 @@ public:
                     desc_str = desc->c_str();
                 }
             }
-            xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+            xsink->raiseExceptionArg(err_str.c_str(), err_info ? err_info->getKeyValue("arg").refSelf() : QoreValue(),
+                "%s", desc_str.c_str());
             done = true;
             phase = Phase::DONE;
             clearPendingUnlocked(xsink);
@@ -8388,7 +8392,8 @@ public:
                     desc_str = desc->c_str();
                 }
             }
-            xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+            xsink->raiseExceptionArg(err_str.c_str(), err_info ? err_info->getKeyValue("arg").refSelf() : QoreValue(),
+                "%s", desc_str.c_str());
             done = true;
             phase = Phase::DONE;
             clearPendingUnlocked(xsink);
@@ -8497,7 +8502,7 @@ public:
             QoreStringValueHelper desc(desc_val);
             desc_str = desc->c_str();
         }
-        xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+        xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
         return true;
     }
 
@@ -9766,7 +9771,7 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
             QoreStringValueHelper desc(desc_val);
             desc_str = desc->c_str();
         }
-        xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+        xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
         return nullptr;
     }
 
