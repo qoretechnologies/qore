@@ -232,8 +232,9 @@ The signatures are made and checked with the `openssl` command (OpenSSL 3: `pkey
 LibreSSL has no Ed25519, so the MacPorts or Homebrew one is used, or `QORE_QMOD_CACHE_OPENSSL`): Python's standard
 library has no asymmetric signatures, and an HMAC key would let every job that checks entries also forge them.  A
 check costs one process (about 8 ms), once per module looked up.  A job with a key but no OpenSSL 3 builds without
-the cache.  The guard checks the signatures of the entries the cache supplied.  `qore_qmod_cache_finish` unsets the
-private key, so that nothing run after the build (the tests of `test-macos.sh`) has it.
+the cache.  The guard checks the signatures of the entries the cache supplied.  qcc gets none of the cache's settings
+(`QORE_QMOD_CACHE_*`) in its environment, and `qore_qmod_cache_finish` unsets the private key, so that nothing run after
+the build (the tests of `test-macos.sh`) has it.
 
 A job of a protected ref on a runner that mounts `protected/` read-only uses it read-only
 (`QORE_QMOD_CACHE_READONLY=1`).

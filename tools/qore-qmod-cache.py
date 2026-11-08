@@ -602,7 +602,7 @@ def qcc_identity(version_output):
 def compute_context(source_dir, build_dir, qcc, inputs, env=None):
     """Computes the build context: everything that can change what qcc writes and is the same for every module"""
     env = os.environ if env is None else env
-    version = run_capture([qcc, "--version"], env=dict(env))
+    version = run_capture([qcc, "--version"], env=qcc_environment(env))
     identity = qcc_identity(version)
     if not identity:
         raise CacheError("'%s --version' reports no AOT runtime identity" % qcc)
@@ -927,6 +927,11 @@ def check_signature(entry, signer):
     if not signer.verify(entry):
         return "entry not signed with the signing key"
     return None
+
+
+def qcc_environment(env):
+    """The environment of qcc: without the cache's settings, among them the signing key"""
+    return {k: v for k, v in env.items() if not k.startswith("QORE_QMOD_CACHE_")}
 
 
 def module_include_files(source_root, deps):
@@ -1507,7 +1512,7 @@ class Module:
         return None, reason
 
     def run_qcc(self, argv=None):
-        return subprocess.run(argv or self.argv, env=self.env).returncode
+        return subprocess.run(argv or self.argv, env=qcc_environment(self.env)).returncode
 
     def describe(self):
         """Returns (key, entry) of the module qcc has just written, or raises CacheError if it cannot be stored"""
@@ -1611,7 +1616,7 @@ def cmd_exec(args):
     except (OSError, ValueError, KeyError, CacheError) as e:
         # without a usable context the module is compiled as without the cache
         log("%s: not cached: %s" % (args.name, e))
-        return subprocess.run(args.qcc_argv, env=env).returncode
+        return subprocess.run(args.qcc_argv, env=qcc_environment(env)).returncode
     # a job that can only verify signed entries writes nothing
     readonly = readonly or mod.readonly
     cache = Cache(args.cache_dir)

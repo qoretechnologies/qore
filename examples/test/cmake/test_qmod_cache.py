@@ -506,6 +506,10 @@ FAKE_QCC = r'''import hashlib, os, re, struct, sys, time
 from pathlib import Path
 here = Path(__file__).parent
 args = sys.argv[1:]
+leaked = sorted(k for k in os.environ if k.startswith("QORE_QMOD_CACHE_"))
+if leaked:
+    with open(here / "qcc-env.txt", "a") as log:
+        log.write(" ".join(leaked) + "\n")
 if "--version" in args:
     print("AOT runtime identity: " + (here / "identity.txt").read_text().strip())
     sys.exit(0)
@@ -1091,6 +1095,13 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all(env=env))
         self.assertIn("signed entries need OpenSSL 3", self.output)
         self.assertEqual(entries, self.entries())
+
+    def test_qcc_gets_no_cache_settings(self):
+        priv, pub = self.key_pair("k")
+        self.build_all(env={"QORE_QMOD_CACHE_SIGNING_KEY": priv, "QORE_QMOD_CACHE_VERIFY_KEY": pub,
+                            "QORE_QMOD_CACHE_AUDIT": "0"})
+        self.assertFalse((self.source / "qcc-env.txt").exists(),
+                         (self.source / "qcc-env.txt").read_text() if (self.source / "qcc-env.txt").exists() else "")
 
     def test_read_cache_of_a_trusted_level(self):
         protected = self.root / "protected"
