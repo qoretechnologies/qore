@@ -117,7 +117,9 @@ MAX_ENTRIES_PER_BASE = 8
 
 #: AOT module metadata record (include/qore/intern/QoreAOTBinary.h, QoreAOTModuleFileInfo)
 QAMI_MAGIC = b"QAMI"
-QAMI_VERSION = 1
+#: the record versions read: 1 (name, dependencies, unavailable optional modules) and 2, which adds the names of the
+#: compile-time closure and the module's own module path directives
+QAMI_VERSIONS = (1, 2)
 QAMI_MAX_PAYLOAD = 16 * 1024 * 1024
 
 FINGERPRINT_HEADER = "# qore AOT module source fingerprints 1"
@@ -310,12 +312,32 @@ def read_fingerprints(path):
     return rv
 
 
+class ModuleInfo:
+    """The metadata record of an AOT module
+
+    - dependencies: the hard dependencies of the module descriptor (not the modules required with %requires(reexport))
+    - optional: the %try-module requests that failed when the module was compiled
+    - compiled_with: (version 2) the names of every module of the compile-time closure, direct and transitive,
+      re-exported ones too, but not the module itself; None for a version 1 record
+    - prepend_paths, append_paths: (version 2) the module's own %prepend-module-path and %append-module-path
+      directories as compiled in
+    """
+
+    def __init__(self, name, dependencies, optional, compiled_with=None, prepend_paths=(), append_paths=()):
+        self.name = name
+        self.dependencies = dependencies
+        self.optional = optional
+        self.compiled_with = compiled_with
+        self.prepend_paths = list(prepend_paths)
+        self.append_paths = list(append_paths)
+
+
 def parse_qami_record(data, offset):
-    """Parses an AOT module metadata record at @p offset; returns (name, dependencies, optional) or None"""
+    """Parses an AOT module metadata record at @p offset; returns a ModuleInfo or None"""
     if offset + 12 > len(data):
         return None
     magic, version, payload_size = struct.unpack_from("<4sII", data, offset)
-    if magic != QAMI_MAGIC or version != QAMI_VERSION or payload_size > QAMI_MAX_PAYLOAD:
+    if magic != QAMI_MAGIC or version not in QAMI_VERSIONS or payload_size > QAMI_MAX_PAYLOAD:
         return None
     pos = offset + 12
     end = pos + payload_size
@@ -351,15 +373,22 @@ def parse_qami_record(data, offset):
         name, pos = read_str(pos)
         deps, pos = read_list(pos)
         optional, pos = read_list(pos)
+        if version == 1:
+            info = ModuleInfo(name, deps, optional)
+        else:
+            compiled_with, pos = read_list(pos)
+            prepend, pos = read_list(pos)
+            append, pos = read_list(pos)
+            info = ModuleInfo(name, deps, optional, compiled_with, prepend, append)
     except (ValueError, UnicodeDecodeError):
         return None
     if pos != end:
         return None
-    return name, deps, optional
+    return info
 
 
 def read_module_info(path, name):
-    """Returns (dependencies, unavailable optional modules) from the metadata record of the AOT module @p name
+    """Returns the ModuleInfo of the metadata record of the AOT module @p name
 
     The record is found by its magic and must parse completely and name the module; exactly one such record must be
     in the file (an ELF note or a Mach-O section holds it), or CacheError is raised.
@@ -370,12 +399,12 @@ def read_module_info(path, name):
     pos = data.find(QAMI_MAGIC)
     while pos >= 0:
         rec = parse_qami_record(data, pos)
-        if rec and rec[0] == name:
+        if rec and rec.name == name:
             found.append(rec)
         pos = data.find(QAMI_MAGIC, pos + 1)
     if len(found) != 1:
         raise CacheError("module '%s' has %d metadata records for '%s'" % (path, len(found), name))
-    return found[0][1], found[0][2]
+    return found[0]
 
 
 def module_spec_name(spec):
@@ -971,13 +1000,14 @@ def check_includes_listed(source_root, deps):
     module_include_files(source_root, deps)
 
 
-def classify_dependencies(build_dir, source_root, deps):
+def classify_dependencies(build_dir, source_root, deps, include_files=()):
     """Returns the dependency records of a module from its depfile's dependencies
 
     - a source of the module itself: its content ("own")
     - a source of another in-tree module compiled or supplied by the cache: its content and that module's key
       ("module"), which covers the module's own dependencies
-    - any other file (a binary module, an include file): its content ("file")
+    - any other file (a binary module, a file the module includes, @p include_files, whatever its name): its content
+      ("file")
 
     CacheError is raised for a dependency that the key cannot cover: a missing file, or a Qore module source or AOT
     module whose own dependencies are not known (a module from outside the build tree, or one not built through the
@@ -999,7 +1029,8 @@ def classify_dependencies(build_dir, source_root, deps):
             records.append({"path": dep, "kind": "module", "sha256": content, "module_root": mod[0],
                             "module_key": mod[1]})
             continue
-        if real.endswith(QORE_SOURCE_SUFFIXES):
+        # a file the module includes is no module source, even when it is named like one (<x>.qm)
+        if real.endswith(QORE_SOURCE_SUFFIXES) and real not in include_files:
             raise CacheError("dependency '%s' is a module source that is not built through the cache" % dep)
         if is_module_artifact(real):
             with open(real, "rb") as f:
@@ -1033,17 +1064,27 @@ def check_optional(records, dirs):
     return None
 
 
-def required_module_names(required, deps, source_root, own_name):
-    """The names of the modules a module requires: those of its metadata's dependencies, and those the files of its
-    depfile belong to
+def required_module_names(required, deps, source_root, own_name, compiled_with=None):
+    """The names of the modules a module requires: those of its metadata's dependencies, and every module of its
+    compile-time closure
 
-    The metadata names only the hard dependencies of the module descriptor: qcc leaves the modules required with
-    %requires(reexport) out of it (to avoid load cycles), so they come from the depfile, which lists every module
-    the module requires directly (and, with a qcc that lists the closure, indirectly): a <dir>/<Name>.qm or a module
-    directory's <dir>/<Name>/<Name>.qm is module Name, a binary module <name>-api-<x>.<y>.qmod is module name, an AOT
-    module <Name>.qmod is module Name; class files, include files and the module's own sources name no module.
+    @param compiled_with the closure that qcc wrote in a version 2 metadata record (ModuleInfo.compiled_with): every
+    module the module was compiled against, directly or not, re-exported ones too; None for a version 1 record
+
+    The descriptor dependencies leave out the modules required with %requires(reexport) (to avoid load cycles).  A
+    version 2 record names them in its closure.  For a version 1 record they come from the file names of the depfile
+    (a <dir>/<Name>.qm, a module directory's <dir>/<Name>/<Name>.qm, a binary module <name>-api-<x>.<y>.qmod and an
+    AOT module <Name>.qmod are module Name), which takes a file that a module includes and that is named <x>.qm for a
+    module x as well.
     """
     names = set(module_spec_name(r) for r in required)
+    if compiled_with is not None:
+        names.update(compiled_with)
+        names.discard(own_name)
+        names.discard("")
+        return sorted(names)
+    # TODO(#5624): the version 1 path goes when this branch and fix/qmod-staleness-gaps (whose qcc writes version 2
+    # records) are merged; until then this branch's own qcc writes version 1 records
     own_root = os.path.realpath(source_root)
     own_is_dir = os.path.isdir(source_root)
     for dep in deps:
@@ -1544,10 +1585,13 @@ class Module:
                 raise CacheError("source '%s' has gone" % path)
             if st.st_size != size or st.st_mtime_ns != mtime_ns:
                 raise CacheError("source '%s' changed while the module was compiled" % path)
-        check_includes_listed(self.source_root, deps)
+        includes = module_include_files(self.source_root, deps)
         check_no_module_path_directives(self.source_root, deps)
-        records = classify_dependencies(self.build_dir, self.source_root, deps)
-        required, optional_specs = read_module_info(self.out, self.name)
+        records = classify_dependencies(self.build_dir, self.source_root, deps, set(includes))
+        info = read_module_info(self.out, self.name)
+        if info.prepend_paths or info.append_paths:
+            raise CacheError("the module changes the module path, which the key does not cover")
+        optional_specs = info.optional
         # the compile may have written files in the module path since a lookup listed it
         _listdir_cache.clear()
         dirs = self.search_dirs()
@@ -1555,7 +1599,8 @@ class Module:
         for spec in optional_specs:
             name = module_spec_name(spec)
             optional.append({"spec": spec, "name": name, "candidates": module_candidates(name, dirs)})
-        resolution = resolution_records(required_module_names(required, deps, self.source_root, self.name), dirs)
+        resolution = resolution_records(required_module_names(info.dependencies, deps, self.source_root, self.name,
+                                                              info.compiled_with), dirs)
         key = result_key(self.base, records, optional, resolution)
         entry = {
             "schema": SCHEMA,
@@ -1786,10 +1831,11 @@ def cmd_verify(args):
             for d in entry["deps"]:
                 if sha256_file(os.path.realpath(d["path"])) != d["sha256"]:
                     raise CacheError("dependency '%s' has changed since the module was supplied" % d["path"])
-            required, optional = read_module_info(qmod, rec["name"])
-            if optional != [o["spec"] for o in entry["optional"]]:
+            info = read_module_info(qmod, rec["name"])
+            if info.optional != [o["spec"] for o in entry["optional"]]:
                 raise CacheError("its unavailable optional modules differ from the cache entry")
-            names = required_module_names(required, deps, rec.get("source_root") or "", rec["name"])
+            names = required_module_names(info.dependencies, deps, rec.get("source_root") or "", rec["name"],
+                                          info.compiled_with)
             if names != [r["name"] for r in entry["resolution"]]:
                 raise CacheError("the modules it requires differ from the cache entry")
         except (OSError, ValueError, KeyError, CacheError) as e:

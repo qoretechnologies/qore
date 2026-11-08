@@ -99,14 +99,18 @@ module built in the tree where an installed one was found before) would be loade
 the files the entry names are unchanged.  So the entry records, for each module the module requires, the files in
 the module path that are candidates for it, and a hit needs the same list.
 
-The modules a module requires are those of its metadata record and those its depfile's files belong to
-(`required_module_names()`): qcc leaves the modules required with `%requires(reexport)` out of the metadata (the
-module descriptor's hard dependencies, which the loader loads before it maps the module, so a re-exported module that
-requires the module back would make a cycle), and a module sees the declarations of what it re-exports, so a module
-that appears for a re-exported module must make it a miss as well.  Every module required directly is in the depfile
-(with a qcc that lists the closure, every module required indirectly too): `<dir>/<Name>.qm` and a module directory's
-`<dir>/<Name>/<Name>.qm` are module `Name`, `<name>-api-<x>.<y>.qmod` is the binary module `name`, `<Name>.qmod` the
-AOT module `Name`.  The guard checks the same list.
+The modules a module requires are those of its metadata record's dependencies and every module of its compile-time
+closure (`required_module_names()`): qcc leaves the modules required with `%requires(reexport)` out of the
+dependencies (the module descriptor's hard dependencies, which the loader loads before it maps the module, so a
+re-exported module that requires the module back would make a cycle), and a module sees the declarations of what it
+re-exports, so a module that appears for a re-exported module must make it a miss as well.  Version 2 of the
+metadata record names the closure: every module the module was compiled against, directly or not, re-exported ones
+too, as qcc loaded them.  For a version 1 record (a qcc before version 2) the closure is guessed from the depfile's
+file names (`<dir>/<Name>.qm` and a module directory's `<dir>/<Name>/<Name>.qm` are module `Name`,
+`<name>-api-<x>.<y>.qmod` the binary module `name`, `<Name>.qmod` the AOT module `Name`), which also takes a file
+that a module includes and that is named `<x>.qm` for a module `x`: a module `x` that appears in the module path then
+makes the module a miss for nothing.  A file the module includes is never taken for the source of a module from
+outside the tree, whatever its name.  The guard checks the same list.
 
 ### Why absolute paths
 
@@ -117,8 +121,9 @@ depfile (whose target must be the module).  CI keeps the checkout path stable in
 
 ### Module path directives
 
-A module whose sources have `%prepend-module-path` or `%append-module-path` (with or without environment variables)
-is not stored: the modules those directives make qcc find are not in the candidate-file records.
+A module whose sources have `%prepend-module-path` or `%append-module-path` (with or without environment variables),
+or whose metadata record (version 2) has module path directories of its own, is not stored: the modules those
+directives make qcc find are not in the candidate-file records.
 
 ### Why the failed optional modules
 
