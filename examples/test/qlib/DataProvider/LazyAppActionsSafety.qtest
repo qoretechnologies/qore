@@ -74,6 +74,8 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("an interrupted wait leaves nothing behind, and the initialization ends for everyone",
             \sandboxInterruptTest());
         addTestCase("a registration ended by thread_exit() runs again", \threadExitTest());
+        addTestCase("a registration that runs again replaces the actions its stopped run registered",
+            \partialRunTest());
         addTestCase("a sandboxed reader's registration runs in its module's context", \sandboxedReaderTest());
         addTestCase("a registration made under a sandbox runs under it for any reader", \governedRegistrationTest());
         addTestCase("a thread loading a module does not wait for an initialization", \moduleLoadTest());
@@ -305,6 +307,31 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         assertEq(0, done2.waitForZero(Deadline), "a later reader does not wait for the ended initialization");
         assertEq(("eager-a", "lazy-b", "lazy-c"), results.get());
         assertEq(2, SafetyRuns::get(app));
+    }
+
+    partialRunTest() {
+        # each run builds new objects for its actions, as a REST schema action set does: the actions of a stopped
+        # run differ from the next run's, and are replaced by them
+        string app = registerApp("SafePartialRun");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            SafetyRuns::run(app);
+            LazyAppActionsSafetyTest::registerTypedAction(app, "lazy-a");
+            if (SafetyRuns::get(app) == 1) {
+                throw "PROGRAM-INTERRUPTED", "program execution was interrupted";
+            }
+            LazyAppActionsSafetyTest::registerTypedAction(app, "lazy-b");
+        });
+        assertThrows("PROGRAM-INTERRUPTED", \DataProviderActionCatalog::getActions(), (app, False));
+        list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(app, False);
+        assertEq(("lazy-a", "lazy-b"), map $1.action, actions);
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+        assertEq(2, SafetyRuns::get(app));
+        # the catalog holds the second run's action, not the stopped run's
+        assertEq("SafePartialRunType2", actions[0].output_type.getName());
+        # an action registered again outside the run that registered it is still refused
+        assertThrows("ACTION-ERROR", "already registered", \LazyAppActionsSafetyTest::registerTypedAction(),
+            (app, "lazy-a"));
     }
 
     sandboxedReaderTest() {
@@ -784,6 +811,20 @@ DataProviderActionCatalog::waitForLazyInitsQueued(queued + 1, 60s);
             "logo_mime_type": MimeTypeSvg,
             "logo_file_name": "test.svg",
             "dynamic": True,
+        });
+    }
+
+    #! Registers an action of the app with an output type built for each call, named after the run
+    private static registerTypedAction(string app, string action) {
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": app,
+            "action": action,
+            "path": "/" + action,
+            "display_name": action,
+            "short_desc": "lazy action registration safety test action",
+            "desc": "lazy action registration safety test action",
+            "action_code": DPAT_API,
+            "output_type": new HashDataType("SafePartialRunType" + SafetyRuns::get(app)),
         });
     }
 

@@ -358,7 +358,8 @@ provider, or only needs the connection, never registers the actions at all.
   this thread has loaded its own, and the module loader does not see a wait for the worker, so the two threads
   would wait for each other. A closure that fails is retained as an initialization failure of the app and not run
   again (at load, the same failure made the module fail to load), unless its thread was interrupted, cancelled or
-  over a limit, or exited: then the next reader runs it again.
+  over a limit, or exited: then the next reader runs it again, and the actions it registers replace those that the
+  stopped run registered, which differ from them in the objects that each run builds.
   `examples/test/qlib/DataProvider/LazyAppActionsSafety.qtest` covers sandboxed readers, interrupted waits,
   `thread_exit`, the catalog lock, lock-holding readers, module loads, deregistration during an initialization,
   `fork()`, the worker's start on demand, its end, and the end of the process.

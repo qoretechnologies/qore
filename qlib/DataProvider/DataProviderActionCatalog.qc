@@ -1060,7 +1060,9 @@ AbstractDataProviderType output_type = action.output_type;
     were registered while the module was loaded, the same exception made the module fail to load.  A registration
     stopped because its thread was interrupted, cancelled or over a sandbox limit, or that ended without an
     exception, as when its thread exits, is not retained: the exception is raised to the reader, and the next reader
-    runs the registration again.  Nothing is retained for an application deregistered while its registration ran.
+    runs the registration again, which replaces the actions that the stopped run registered (each run builds new
+    objects for its actions, so they differ from the stopped run's).  Nothing is retained for an application
+    deregistered while its registration ran.
 */
 #! Holds the catalog lock for a scope, and calls a function once it has released it; for the catalog only
 /** Like @ref Qore::Thread::AutoLock "AutoLock", it releases the lock when it goes out of scope, also when an
@@ -1283,6 +1285,15 @@ public class DataProviderActionCatalog {
             \c init is a system-policy capability created when it was registered; see registerLazyAppActions()
         */
         static hash<string, list<hash<auto>>> lazyactionmap = {};
+
+        #! The last lazy registration ID; see registerLazyAppActions()
+        static int lazy_reg_seq = 0;
+
+        #! The actions registered by lazy registrations that have not ended: app -> action -> registration ID
+        /** A registration that runs again, because a run was stopped (see doLazyInit()), replaces the actions that its
+            stopped run registered: a run builds new objects for its actions, which differ from the stopped run's
+        */
+        static hash<string, hash<string, int>> lazy_action_regs = {};
 
         #! The registration serial of each registered application: app -> serial
         /** A lazy registration belongs to the registration of its app that it was made for; it is not retained or
@@ -1584,6 +1595,7 @@ DataProviderActionCatalog::registerLazyAppActions(AppName, sub () {
             "module_name": DataProviderActionCatalog::registrationModuleName(),
             "serial": app_serials{app},
             "governed": SandboxManager::isGoverned(),
+            "reg_id": ++lazy_reg_seq,
         };
         if (lazyactionmap{app}) {
             lazyactionmap{app} += registration;
@@ -3220,6 +3232,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         map remove top_actionmap{name + "/" + $1.action}, dactions.values();
         remove initactionmap{name};
         remove lazyactionmap{name};
+        remove lazy_action_regs{name};
         remove app_serials{name};
         remove resolve_output_types{name};
         remove resolved_output_type_callbacks{name};
@@ -3416,6 +3429,11 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         appcache{action.app}{ActionCodeFlagMap{action.action_code}} = True;
         if (*hash<DataProviderActionInfo> act = app_actionmap{action.app}{action.action}) {
+            # a lazy registration that runs again replaces what its stopped run registered
+            if (exists _lazy_reg_id && lazy_action_regs{action.app}{action.action} == _lazy_reg_id) {
+                DataProviderActionCatalog::replaceAction(app, key, action, has_get_output_type);
+                return;
+            }
             # the definition of an action whose deferred output type was resolved carries the callback that
             # resolved it, and is the same action
             hash<DataProviderActionInfo> registered = action;
@@ -3450,6 +3468,9 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         top_actionmap{key} = action;
         app_actionmap{action.app}{action.action} = action;
         ++catalog_revision;
+        if (exists _lazy_reg_id) {
+            lazy_action_regs{action.app}{action.action} = _lazy_reg_id;
+        }
         if (module_path) {
             actionmodmap{action.app}{action.action}{module_path} = True;
         }
@@ -3465,6 +3486,25 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         DataProviderActionCatalog::clearSuccessfulInitializationState(
             action.app, action.action);
+    }
+
+    #! Replaces an action that a stopped run of the lazy registration running now registered; lck is held
+    private static replaceAction(hash<DataProviderAppInfo> app, string key, hash<DataProviderActionInfo> action,
+            bool has_get_output_type) {
+        top_actionmap{key} = action;
+        app_actionmap{action.app}{action.action} = action;
+        if (app.scheme && smap{app.scheme}) {
+            smap{app.scheme} = map ($1.app == action.app && $1.action == action.action) ? action : $1,
+                smap{app.scheme};
+        }
+        remove resolved_output_type_callbacks{action.app}{action.action};
+        if (has_get_output_type) {
+            resolve_output_types{action.app}{action.action} = True;
+        } else {
+            remove resolve_output_types{action.app}{action.action};
+        }
+        ++catalog_revision;
+        DataProviderActionCatalog::clearSuccessfulInitializationState(action.app, action.action);
     }
 
     #! Checks for a valid name
@@ -4722,6 +4762,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         *hash<string, hash<DataProviderActionInfo>> actions = remove app_actionmap{name};
         remove initactionmap{name};
         remove lazyactionmap{name};
+        remove lazy_action_regs{name};
         remove app_serials{name};
         remove initialization_failure_map{name};
         remove expected_initialization_map{name};
@@ -5452,8 +5493,13 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     */
     private static doLazyInit(hash<auto> h) {
         bool settled;
-        on_exit if (!settled) {
-            DataProviderActionCatalog::restoreLazy((h,));
+        on_exit {
+            if (!settled) {
+                DataProviderActionCatalog::restoreLazy((h,));
+            } else {
+                # the registration has ended: what it registered is no longer replaced
+                DataProviderActionCatalog::endLazyActionRegs(h.app, h.reg_id);
+            }
         }
         try {
             DataProviderActionCatalog::doInitIntern(h);
@@ -5468,6 +5514,18 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                     h.module_context);
             }
             settled = True;
+        }
+    }
+
+    #! Forgets the actions that an ended lazy registration registered; takes no lock and raises no exception
+    private static endLazyActionRegs(string app, int reg_id) {
+        foreach hash<auto> i in (lazy_action_regs{app}.pairIterator()) {
+            if (i.value == reg_id) {
+                remove lazy_action_regs{app}{i.key};
+            }
+        }
+        if (!lazy_action_regs{app}) {
+            remove lazy_action_regs{app};
         }
     }
 
@@ -5486,11 +5544,15 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         *string save = _mod_init_ctx;
         *string save_load = _mod_init_load_ctx;
         *string save_name = _mod_init_name;
+        *int save_reg = _lazy_reg_id;
         on_exit {
             _mod_init_ctx = save;
             _mod_init_load_ctx = save_load;
             _mod_init_name = save_name;
+            _lazy_reg_id = save_reg;
         }
+        # set only for lazy action registrations; see replaceAction()
+        _lazy_reg_id = h.reg_id;
         _mod_init_ctx = h.module_context;
         # recorded only for lazy action registrations; see registrationModuleName()
         _mod_init_name = h.module_name;
@@ -5508,4 +5570,7 @@ thread_local *string _mod_init_ctx;
 thread_local *string _mod_init_load_ctx;
 #! The name of the module that made the lazy action registration in progress
 thread_local *string _mod_init_name;
+
+#! The ID of the lazy action registration that the current thread runs, if any; see DataProviderActionCatalog
+thread_local *int _lazy_reg_id;
 }
