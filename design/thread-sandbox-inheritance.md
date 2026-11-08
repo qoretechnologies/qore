@@ -43,7 +43,7 @@ started for an *unrestricted* caller is not in any sandbox's scope, so sandboxed
 | `q_start_thread()` (all three overloads) | **yes**, unless `QTF_NO_SANDBOX_INHERIT` | `q_capture_start_thread_sandbox()`, `q_run_thread()` applies (`lib/thread.cpp`) |
 | `call_async()`, `parallel_map()`, `parallel_foreach()` | **yes** (they use `q_start_thread()`) | `lib/ql_thread.qpp` |
 | async I/O timer callback | **yes** — the sandbox of the code that added the timer | `addTimer()` captures, delivered via the callback worker (`lib/AsyncIoControllerPriv.cpp`) |
-| `ThreadPool` workers | **no** (opt out) — each task carries its own capture | `QTF_NO_SANDBOX_INHERIT`; `ThreadTask` captures per task (`include/qore/intern/ThreadPool.h`) |
+| `ThreadPool` workers | **no** (opt out) — each task carries its own capture; the workers count against the creating Program's sandbox (see "The thread limit") | `QTF_NO_SANDBOX_INHERIT`; `ThreadTask` captures per task (`include/qore/intern/ThreadPool.h`) |
 | async I/O controller I/O and callback threads | **no** (opt out) — each operation carries its own capture | `QTF_NO_SANDBOX_INHERIT`; `AsyncIoSandboxContext` per operation (`lib/AsyncIoControllerPriv.cpp`) |
 | `ml` `OnnxSessionPool` async/leader threads | **no** (opt out) — each request/batch carries its own capture | `QTF_NO_SANDBOX_INHERIT`; `QoreSandboxCapture` per request (`modules/ml`) |
 
@@ -79,8 +79,36 @@ while the current Program has a sandbox asserts that the policy lookup found one
 `QoreSandboxManager::setMaxThreads(n)` limits the number of threads that code governed by the sandbox may have
 running at the same time: `background`, `call_async()`, the workers of `parallel_map()`/`parallel_foreach()`, and
 threads a module starts with `q_start_thread()` on the sandboxed code's behalf — exactly the threads that inherit
-the sandbox. The thread that enters the sandboxed Program from outside is not counted, and neither are the shared
-opt-out threads (ThreadPool, async I/O), because they do not inherit the sandbox.
+the sandbox. The thread that enters the sandboxed Program from outside is not counted, and neither are the async
+I/O threads, which do not inherit the sandbox.
+
+The threads of a `ThreadPool` do not inherit a sandbox either, but they count against the sandbox of the Program that
+created the pool (the Program running the constructor), if it has one: the pool takes a reference to that Program's
+`QoreSandboxManager` when it is created (keeping it if the Program later gets another manager), its own thread holds a
+slot from construction until the pool has stopped (the constructor raises `THREAD-CREATION-FAILURE` if none is free),
+and each worker holds one of its thread slots while it is in the pool, also while idle. The slots are taken and
+released under the pool's lock: a slot is taken before a worker is started, and released when a worker leaves the pool
+(idle release, `done()` not requeuing it) or when the pool stops, so the slots held are always the pool's workers, and
+a worker that is still exiting never holds one. When no slot is free, queued tasks wait for one of the pool's busy
+workers or for a slot that another thread of the sandbox releases (see below), and idle workers beyond the limit
+(`min_idle_threads`) are not started. A pool with no worker could not run a queued task, so `submit()` reserves the
+slot of the first worker in the submitting thread when the pool has none, raising `THREAD-CREATION-FAILURE` there if
+the sandbox has no free slot. A pool created by a Program without a sandbox manager serves every caller and is not
+limited; a module's Program inherits the manager of the Program that loads the module first
+(`inherit_module_sandbox_manager()`), so a pool that the code of a module first loaded by sandboxed code creates is
+counted (qore#5635; test: `examples/test/qore/security/thread-pool-thread-limit.qtest`).
+
+A pool whose queued tasks wait for a slot is woken by its own workers becoming free, by a slot that any other thread
+of the sandbox releases and by a raised limit (`setMaxThreads()` notifies like a release): the pool's thread registers in a registry of waiting pools (keyed by manager, in
+`lib/QoreSandboxManager.cpp`) before it tries to take a slot, and `QoreSandboxManager::releaseThreadSlot()` wakes the
+pools registered for the manager (and for the members of a composition) after releasing the slot. Registering before
+the attempt and reading the registry count after the release (both sequentially consistent) means either the pool
+gets the slot or the release sees the pool. A notifier takes the registry lock, references the waiting pools, releases
+the registry lock and then takes each pool's lock to signal it; a pool releases its own slots with its lock held
+quietly (`releaseThreadSlotQuiet()`) and notifies after unlocking, so pool locks never nest. A pool does not wake
+itself for its own release, and after a failed attempt followed by its own release (the rollback of a composition)
+it tries again only when another thread released a slot, so it cannot spin. A notifier references a waiting pool
+only while the pool still has references (`optRef()`), so a pool being destroyed is never revived.
 
 A thread is counted when its inheritance is captured (`QoreInheritedSandbox::capture()`), before the thread is
 created, so the count is accurate the moment `background`/`q_start_thread()` returns. Starting a thread at the limit
@@ -88,6 +116,47 @@ raises `THREAD-CREATION-FAILURE` ("cannot start a thread: sandbox thread limit o
 A counted thread stops counting when its work ends (`QoreInheritedSandbox::releaseSlot()`), which runs before the
 thread's Program sees it end, so code waiting for a Program's threads to finish can rely on the slots being freed.
 Lowering the limit does not affect threads already running.
+
+### Restricted callers and module code
+
+`PO_NO_THREAD_CONTROL` restricts the code of the Program that has it, when that code is parsed; it does not stop
+module code that the Program calls from starting threads, including threads that run the Program's own closures (a
+module function or method doing `background c()` with a closure that the caller passed in). The `background` operator
+in module code is checked against the module's own parse options only. Such threads inherit the caller's sandbox and
+count against its thread limit like any other thread started on the sandboxed code's behalf, so the sandbox thread
+limit bounds them. A user module that the restricted Program loads first inherits its restrictions and cannot use
+`background`; module threads come from modules that the host loaded already or loads with a parse option mask.
+
+`PO_NO_THREAD_CONTROL` does not stop a Program from creating a `ThreadPool` (the class is in the `THREAD_CLASS`
+domain; `PO_NO_THREAD_CLASSES` refuses it); the workers of a pool that the sandboxed Program creates count against its
+thread limit as described above. The `MODULE_OWNED` builtins (`call_async()`,
+`parallel_map()`, `parallel_foreach()`, the `AsyncIoController` timer and task submitters) additionally refuse to run
+the code of a caller that may not control threads; a module's own closure that calls the caller's code is accepted, and
+its thread is counted as well.
+
+A blanket run-time refusal of `background` in module code for restricted callers is deliberately not implemented:
+many modules run their callers' code on their own threads (pollers calling subclass methods, `HttpServer` handlers,
+WebSocket event callbacks, logger appenders), and the sandbox already governs those threads.
+
+Tests: `examples/test/qore/security/module-thread-limit.qtest` (a real user module, `SandboxThreadFixture.qm`, running
+the closures of a `PO_NO_THREAD_CONTROL` caller) and `examples/test/qore/security/thread-sandbox-inheritance.qtest`.
+
+### Default limit
+
+A `QoreSandboxManager` has no thread limit (0) unless one is set, and this default is kept deliberately (qore#5635):
+
+- no single number suits every host: a pipeline or service host legitimately runs many threads per sandbox, while a
+  preview or tenant host needs a small bound;
+- a non-zero default would silently limit every existing sandbox, including those a host creates only for a
+  filesystem or network policy, and the members of a composed sandbox, whose tightest positive limit applies;
+- the process-wide thread table (`MAX_QORE_THREADS`) still bounds all threads, and the presets `createLockdown()` (1)
+  and `createWebSafe()` (4) set a limit.
+
+Without a limit, sandboxed code can exhaust the process's threads for the host and for other sandboxes, so the
+documentation (`SandboxManager::setMaxThreads()`, the sandboxing guide's resource limits, best practices and security
+checklist) states that a host running untrusted code must set one. In Qorus, every tenant and interface sandbox should
+get a limit with a configurable default and an administrator override; this is host configuration, not a libqore
+change.
 
 ## C++ API
 
