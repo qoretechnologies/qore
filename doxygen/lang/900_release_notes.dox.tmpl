@@ -1894,6 +1894,11 @@
       example) shared the values of the program's static class variables, so storing it in one of them kept those
       values, and itself, alive; it now sees the values until they are released, and \c NOTHING afterwards (see
       @ref static_class_variables)
+    - <b>behavior change:</b> the values of the @ref static_class_variables "static class variables" of a public
+      class are now released when the @ref Qore::Program "Program" that defines the class is deleted (or its data is
+      cleared at exit), even if programs that inherited the class still exist; they see \c NOTHING in the variables
+      afterwards.  Before, the values were released only by the last program sharing them, so a program stored in
+      a static variable of a class that it shared was never deleted, and the destructors of the values never ran
     - the constants and static class variables of a module loaded at runtime while a program's data was released
       (by a destructor at exit, for example) were never released
     - key-value data set with the C++ API function QoreClass::setKeyValue() was never released for a class without

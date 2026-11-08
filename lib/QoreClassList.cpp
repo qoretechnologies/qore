@@ -342,7 +342,10 @@ void QoreClassList::clear(ExceptionSink* xsink) {
     for (auto& i : hm) {
         if (i.second.vars) {
             i.second.vars = false;
-            qore_class_private::get(*i.second.cls)->clear(xsink);
+            qore_class_private* qc = qore_class_private::get(*i.second.cls);
+            // the Program that defines the class (its declaring namespace holds the wrapper that created it) releases
+            // the values even if other Programs share them; see qore_class_private::var_refs
+            qc->clear(xsink, i.second.cls == qc->cls);
         }
     }
 }
@@ -355,7 +358,8 @@ void QoreClassList::deleteClassData(const QoreProgram* pgm, ExceptionSink* xsink
         bool deref_data = i.second.data;
         i.second.vars = false;
         i.second.data = false;
-        qore_class_private::get(*i.second.cls)->deleteClassData(deref_vars, deref_data, pgm, xsink);
+        qore_class_private* qc = qore_class_private::get(*i.second.cls);
+        qc->deleteClassData(deref_vars, deref_data, pgm, xsink, i.second.cls == qc->cls);
     }
 }
 

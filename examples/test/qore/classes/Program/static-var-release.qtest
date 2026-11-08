@@ -249,6 +249,55 @@ int sub get() {
 }
 ";
 
+        #! the code of the in-process Program that keeps a child Program in a static variable of a public class that the
+        #! child shares
+        const StoredChildSrc = "
+class Marker {
+    destructor() {
+        svr_report(\"marker released\");
+    }
+}
+
+public class D {
+    public {
+        static *Program p;
+        static Marker m = new Marker();
+    }
+}
+
+int sub get() {
+    D::p = new Program(PO_NEW_STYLE);
+    D::p.parse(\"int sub v() { return 41; }\", \"child\");
+    return D::p.callFunction(\"v\") + 1;
+}
+";
+
+        #! the code of the in-process Program whose child Program reads its class's static variables after it is deleted
+        const ChildReaderSrc = "
+class Marker {
+    destructor() {
+        svr_report(\"marker released\");
+    }
+}
+
+public class Shared {
+    public {
+        static int v = 5;
+        static Marker m = new Marker();
+    }
+}
+
+Program sub make() {
+    Program c(PO_NEW_STYLE);
+    c.parse(\"auto sub v() { return Shared::v; }\", \"child\");
+    return c;
+}
+
+int sub get() {
+    return 42;
+}
+";
+
         #! the number of static variables read by the Programs deleted with the Program of their class
         const ParallelGuardVars = 50;
         #! the number of iterations of the parallel deletion with the Program of the class
@@ -357,6 +406,10 @@ int sub get() {
             "class it shares", \deletedProgramCycleTest());
         addTestCase("a static variable whose initializer failed is read after the values were released",
             \evalInitAfterReleaseTest());
+        addTestCase("deleted Program; its child Program is kept in a static variable of a class it shares",
+            \deletedProgramStoredChildTest());
+        addTestCase("deleted Program; its child Program reads the static variables of its class afterwards",
+            \deletedProgramChildReaderTest());
         addTestCase("Programs sharing a class deleted in parallel", \parallelDeleteTest());
         addTestCase("Programs sharing a class deleted in parallel with the Program of the class",
             \parallelGuardDeleteTest());
@@ -368,6 +421,10 @@ int sub get() {
             \exitTest(), ("module-exit-shared.q", SharedExitOutput));
         addTestCase("main Program at exit; a destructor loads a module whose classes are added to the cleared "
             "class lists", \exitTest(), ("main-exit-late-load.q", LateLoadExitOutput));
+        addTestCase("main Program at exit; a child Program is kept in a static variable of a class it shares",
+            \exitTest(), ("main-exit-stored-child.q", ("main done 42", "marker released")));
+        addTestCase("AOT: main Program at exit; a child Program is kept in a static variable of a class it shares",
+            \aotExitTest(), ("main-exit-stored-child.q", ("main done 42", "marker released")));
         addTestCase("Programs created by a destructor deleted in another thread", \exitTest(),
             ("xthread-delete.q", XThreadExitOutput));
         addTestCase("AOT: main Program at exit", \aotExitTest(), ("main-exit.q", ExitOutput));
@@ -458,6 +515,33 @@ int sub get() {
         }
         # the kept Program and the values of Xray's static variables are released with the Program
         assertEq(("guard Program: 42 7 null", "marker released"), Results::reports);
+    }
+
+    #! The Program that defines a class releases the values of its static variables when it is deleted
+    /** A child Program kept in a static variable of a public class that it shares, and so shared the values of,
+        kept the values, and itself, alive: the Program and the values were never released
+    */
+    deletedProgramStoredChildTest() {
+        Results::reports = ();
+        {
+            Program p = getProgram(False, StoredChildSrc);
+            delete p;
+        }
+        assertEq(("marker released",), Results::reports);
+    }
+
+    #! A child Program that shares the values of a class's static variables sees NOTHING once the Program that
+    #! defines the class is deleted
+    deletedProgramChildReaderTest() {
+        Results::reports = ();
+        Program p = getProgram(False, ChildReaderSrc);
+        Program c = p.callFunction("make");
+        assertEq(5, c.callFunction("v"));
+        delete p;
+        assertEq(("marker released",), Results::reports);
+        assertEq(NOTHING, c.callFunction("v"));
+        delete c;
+        assertEq(("marker released",), Results::reports);
     }
 
     #! A static variable whose initializer failed is not initialized by a read after the values were released
