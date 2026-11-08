@@ -1336,6 +1336,11 @@ private:
 
 class qore_program_private : public qore_program_private_base {
 public:
+    //! set when the exit hooks of the Program have started to run; guarded by the exit hook registry's lock
+    /** No hook can be registered for the Program afterwards (see qore_register_exit_hook())
+    */
+    bool exit_hooks_closed = false;
+
     //! Returns true if a debugger is currently attached to this program
     DLLLOCAL bool hasDebuggerAttached() const {
         return dpgm.load(std::memory_order_relaxed) != nullptr;

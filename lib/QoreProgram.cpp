@@ -5175,6 +5175,9 @@ bool qore_take_last_exit_hook(QoreProgram* pgm, QoreExitHook& hook) {
     std::lock_guard<std::mutex> l(exit_hook_lock);
     if (!pgm) {
         exit_hooks_closed = true;
+    } else {
+        // the Program's hooks have started: its code can register no more
+        qore_program_private::get(*pgm)->exit_hooks_closed = true;
     }
     for (auto i = exit_hooks.rbegin(), e = exit_hooks.rend(); i != e; ++i) {
         if (!pgm || i->pgm == pgm) {
@@ -5220,6 +5223,12 @@ int64 qore_register_exit_hook(const ResolvedCallReferenceNode* code, ExceptionSi
     std::lock_guard<std::mutex> l(exit_hook_lock);
     if (exit_hooks_closed) {
         xsink->raiseException("EXIT-HOOK-ERROR", "an exit hook cannot be registered after the exit hooks have run");
+        return -1;
+    }
+    if (qore_program_private::get(*pgm)->exit_hooks_closed) {
+        // it would never run: the Program's hooks have run, or are running, because it is being deleted
+        xsink->raiseException("EXIT-HOOK-ERROR", "an exit hook cannot be registered by the code of a Program whose "
+            "exit hooks have run");
         return -1;
     }
     int64 id = ++exit_hook_seq;
