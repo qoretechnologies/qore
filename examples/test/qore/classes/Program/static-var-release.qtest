@@ -220,6 +220,13 @@ list<Program> sub make(int n) {
         const SharedExitOutput = ("main done: 42", "guard Program result: 42", "guard read: null null",
             "reader read: null null");
 
+        #! the output of the exit script whose destructor loads a module while the static variables are released
+        /** The constant and the static variable of the module's class added to the main Program's cleared class
+            lists are released
+        */
+        const LateLoadExitOutput = ("main done", "loaded at teardown: LateHolder", "late marker released",
+            "late marker released");
+
         #! the reports of the in-process Programs whose guard Program shares a class whose variables have been
         #! released
         const SharedReports = ("guard Program result: 42", "guard read: null null", "reader read: null null");
@@ -302,6 +309,8 @@ int sub get() {
             \exitTest(), ("main-exit-shared.q", SharedExitOutput));
         addTestCase("user module at exit; the Program created by the destructor shares released variables",
             \exitTest(), ("module-exit-shared.q", SharedExitOutput));
+        addTestCase("main Program at exit; a destructor loads a module whose classes are added to the cleared "
+            "class lists", \exitTest(), ("main-exit-late-load.q", LateLoadExitOutput));
         set_return_value(main());
     }
 

@@ -43,8 +43,12 @@
 struct cl_rec_t {
     QoreClass* cls = nullptr;
     bool priv = false;
+    //! true if the entry holds a reference to the class's constants; see qore_class_private::const_refs
+    bool consts = true;
     //! true if the entry holds a reference to the values of the class's static variables; see qore_class_private::var_refs
     bool vars = true;
+    //! true if the entry holds a reference to the class's static variables; see qore_class_private::data_refs
+    bool data = true;
 
     DLLLOCAL cl_rec_t() {
     }
@@ -81,16 +85,24 @@ class QoreClassList {
 
 private:
     hm_qc_t hm;        // hash_map for name lookups
+    //! set when the constants of the classes have been released; a class added afterwards releases its reference
     bool ns_const : 1;
     //! set when the Program owning the list releases the values of the static variables of its classes
     /** Set when the Program's data is being cleared (see setVarsReleased()), and by clear() and deleteClassData().
-        A copy of a class from a list with this flag set does not share the values (see qore_class_private::var_refs).
+        A copy of a class from a list with this flag set does not share the values (see qore_class_private::var_refs),
+        nor does a class added to it.
     */
     bool ns_vars : 1;
-    //! set when the class data has been deleted with deleteClassData(); see qore_class_private::data_refs
-    bool ns_data : 1;
 
     DLLLOCAL void deleteAll();
+
+    //! releases the references of a class added to the list after its data was released
+    /** A class can be added while the Program's data is released or afterwards (by a runtime module load in a
+        destructor, for example): its references to the constants and to the values of the static variables are then
+        released here, as the list no longer releases them; its reference to the static variables (data_refs) is
+        released with the rest of the list's
+    */
+    DLLLOCAL void releaseAdded(cl_rec_t& rec);
 
     //! adds a copy of a class; \a vars is true if the copy holds a reference to the values of its static variables
     DLLLOCAL void addInternal(QoreClass* ot, bool priv, bool vars);
@@ -101,7 +113,7 @@ private:
     DLLLOCAL bool copyVarRef(const cl_rec_t& rec) const;
 
 public:
-    DLLLOCAL QoreClassList() : ns_const(false), ns_vars(false), ns_data(false) {}
+    DLLLOCAL QoreClassList() : ns_const(false), ns_vars(false) {}
     DLLLOCAL ~QoreClassList();
     DLLLOCAL QoreClassList(const QoreClassList& old, const QoreParseOptions& po, qore_ns_private* ns);
 
