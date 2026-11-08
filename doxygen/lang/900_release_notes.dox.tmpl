@@ -1519,45 +1519,38 @@
     - the IR, JIT and tiered execution modes and AOT-compiled code keep the locals of an object type (a class,
       \c object) out of the runtime stack as they keep other locals, with the same garbage-collection behavior: a loop
       assigning an object to such a local runs up to 1.4 times faster
-    - a method call whose argument assigns the variable holding the receiver (ex: <tt>o.m(o = new T())</tt>,
-      <tt>o.m(remove o)</tt>) could crash the program with every execution mode, and a call whose argument assigns the
-      variable read for an earlier argument (ex: <tt>f(t = new T("a"), t = new T("b"))</tt>, <tt>f(t, t = x)</tt>)
-      could crash the program in the JIT and tiered execution modes and in AOT-compiled code; the call now runs with
-      the values read before the assignment, which live until the call returns
-    - with the AST interpreter, a call through a variable whose argument assigns the variable another value (ex:
-      <tt>c(c = NOTHING)</tt>, <tt>c(c = other)</tt>), and the \c [] and \c {} operators on a variable that the index
-      or key expression assigns or removes (ex: <tt>l[(l = x).size() - 1]</tt>, <tt>h{(h = x).firstKey()}</tt>,
-      <tt>l[0..(l = x).size()]</tt>), could crash the program; the call now runs the closure or call reference that
-      the variable held, and the operators read the list or hash that the variable held, as in every other execution
-      mode
+    - a method call whose argument assigns the variable holding the receiver (ex: <tt>o.m(o = new T())</tt>), or a
+      call whose argument assigns a variable read for an earlier argument (ex: <tt>f(t, t = x)</tt>), could crash the
+      program in some execution modes; the call now runs with the values read before the assignment
+    - with the AST interpreter, a call through a variable whose argument assigns it (ex: <tt>c(c = NOTHING)</tt>), and
+      <tt>[]</tt>, <tt>{}</tt> or a slice whose index assigns or removes the container's variable (ex:
+      <tt>l[(l = x).size() - 1]</tt>), could crash the program; they now use the value that the variable held, as in
+      every other execution mode
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, <tt>map $1.key, l</tt> gave \c NOTHING for
       each object in the list instead of its member, and \c map, \c select and \c foldl over an object that is not
       an iterator gave a list of one value instead of the value, as the AST interpreter gives it
-    - in the IR, JIT and tiered execution modes and in AOT-compiled code, when an exception left an expression, the
-      objects created for it were destroyed in another order than with the AST interpreter (ex:
-      <tt>f(new T("a"), new T("b"), thr())</tt> destroyed \c b before \c a); the arguments evaluated are now released
-      first argument first, the innermost call's first, and the objects that the statement holds (such as the object
-      of a method call) last, as with the AST interpreter
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for an expression that an
+      exception left were destroyed in another order than with the AST interpreter (ex:
+      <tt>f(new T("a"), new T("b"), thr())</tt> destroyed \c b first); they are now released in the AST interpreter's
+      order
     - in AOT-compiled code, a function called directly from compiled code left an entry on the runtime stack for each
       local variable of its own that is visible to the runtime at each call, so a loop of such calls in top-level code
       took time quadratic in the number of iterations, and memory grew with it
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the operands of a
-      comparison, \c instanceof, \c exists or a slice, and the elements of a list that is the source of \c map,
-      \c select or the hash \c map operators, were destroyed when the statement ended instead of when the operator
-      had run (ex: <tt>f(new T("a") == new T("b"), g())</tt> destroyed the objects after \c g() ran); they are now
-      destroyed when the operator has run, as with the AST interpreter; so are now the elements of a list or hash
-      literal once the container holds them, the source of \c foldl and \c foldr and a single value that is the
-      source of a functional operator, and, in the IR execution mode, the last element of a \c map or \c select over
-      an iterator, and an exception that leaves a fused pipeline of functional operators for a \c catch block
-      releases the pipeline's source before the block runs
+      comparison, \c instanceof, \c exists or a slice, for the source of a functional operator and for the elements of
+      a list or hash literal were destroyed when the statement ended (ex: <tt>f(new T("a") == new T("b"), g())</tt>
+      destroyed them after \c g() ran); they are now destroyed when they have been used, as with the AST interpreter
+    - in the IR execution mode, the last element of a \c map or \c select over an iterator was destroyed when the
+      statement ended, and in every compiled mode an exception that left a fused pipeline of functional operators for
+      a \c catch block released the pipeline's source after the block; both are now released as with the AST
+      interpreter
     - in the IR execution mode, an exception raised by a destructor while an exception left an expression (ex: when
       the arguments of a call were released) was lost, and a debug build aborted; it is now added to the exception
       raised, as with the AST interpreter
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the arguments of a
-      call are now destroyed last argument first when the call returns, as with the AST interpreter (they were
-      destroyed first argument first in calls of closures, of static methods and from top-level code, and of
-      constructors in the IR execution mode), also when an argument is given by an expression such as
-      <tt>c ? new T() : new T()</tt>
+      call are now destroyed last argument first when the call returns, as with the AST interpreter, also in calls of
+      closures, static methods and constructors and from top-level code, and for an argument given by an expression
+      such as <tt>c ? new T() : new T()</tt>
     - in AOT-compiled code, an object that a local variable held when it was assigned another value in a loop was
       destroyed only at the next assignment or when the function returned instead of at the assignment
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, assigning an element of a local hash or
