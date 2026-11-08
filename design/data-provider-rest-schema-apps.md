@@ -360,18 +360,30 @@ provider, or only needs the connection, never registers the actions at all.
   again (at load, the same failure made the module fail to load), unless its thread was interrupted, cancelled or
   over a limit, or exited: then the next reader runs it again, and the actions it registers replace those that the
   stopped run registered, which differ from them in the objects that each run builds.
-- **No tenant's code runs on another tenant's or trusted code's thread.** A registration made under a sandbox (a
-  module that sandboxed code loads), lazy or pending, runs when it is made, on the registering thread, as before
-  registrations were deferred. Sandboxed code cannot add a catalog change listener (listeners run on the threads
-  that change the catalog). The changes a worker makes are delivered to the listeners on the waiting reader's
-  thread, never on a worker. The workers are a pool of at most four threads, so one slow trusted closure delays no
-  other sandboxed reader; a reader waiting for a job is followed to the worker running it in the cycle check.
+- **No code that a tenant registers runs on another tenant's or trusted code's thread, and no trusted listener runs
+  under a tenant's sandbox.** A registration made under a sandbox (a module that sandboxed code loads, also under a
+  policy barrier), lazy or pending, runs when it is made, on the registering thread, as before registrations were
+  deferred, and so do the `get_output_type` and `get_dynamic_options` callbacks of the actions it registers.
+  Sandboxed code cannot add a catalog change listener or set or clear a process-wide callback (the scheme lookup
+  callback, the generic API call action builder and `AbstractDataProvider`'s generic API call child builder):
+  `ConnectionProvider` and `RestClientDataProvider` do not set theirs when sandboxed code loads them first. The
+  listeners run on the threads that change the catalog, except a sandboxed one: a worker delivers the changes that it
+  makes itself (also when its reader stopped waiting), and those made on a sandboxed thread (`queueDelivery()`). The
+  workers are a pool of at most four threads, so one slow trusted closure delays no other sandboxed reader; a reader
+  waiting for a job is followed to the worker running it in the cycle check. A worker registers itself when it
+  starts, and only against a start that the catalog reserved, so a thread that the capability starts otherwise, or
+  that calls the worker's code otherwise, ends at once; the exit hook stops the reserved workers too.
   All of the catalog's state is `private:internal`: a subclass, possibly a sandboxed one, cannot reach the workers'
-  capability, their state or the catalog's maps (see the storage rule in `design/module-sandboxing-audit-guide.md`).
-- **A Program that may not use the sandbox APIs** (`PO_NO_UNCONTROLLED_APIS`) can still load DataProvider first:
-  the module calls those APIs by name (`call_static_method()`), so that its code parses there, and when the call is
-  refused at load, lazy registrations run and lazy values are built when they are registered, as before they were
-  lazy.
+  capability, their state or the catalog's maps, and neither can sandboxed or restricted code through reflection
+  (see the storage rule in `design/module-sandboxing-audit-guide.md`).
+- **Every decision on where code runs uses `SandboxManager::isSandboxed()`**, which sees a sandbox through a policy
+  barrier and is not restricted, so code restricted with `PO_NO_UNCONTROLLED_APIS` uses the catalog after a trusted
+  load as any other code. The module creates the worker's capability by name (`call_static_method()`), so that its
+  code parses in any Program; when the module is loaded first by sandboxed code, or by code that may not create the
+  capability, there is no worker, and every deferred registration runs, and every lazy value is built, when it is
+  registered, in source and AOT form alike.
+- **A lazy value registered by a module whose load fails is removed** with the module's other registrations when the
+  load is rolled back (`ImplicitModuleTransaction`); a build running then does not store its value.
   `examples/test/qlib/DataProvider/LazyAppActionsSafety.qtest` covers sandboxed readers, interrupted waits,
   `thread_exit`, the catalog lock, lock-holding readers, module loads, deregistration during an initialization,
   `fork()`, the worker's start on demand, its pool, its end, the end of the process, subclasses, lazy values, and

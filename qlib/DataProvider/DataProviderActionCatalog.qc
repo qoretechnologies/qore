@@ -1045,15 +1045,20 @@ AbstractDataProviderType output_type = action.output_type;
     and the registration stays pending, when there is no worker (after it was stopped, or when the module was
     loaded by code that may not create the capability) and when it is loading a module: a registration can load a
     module, which another thread cannot load until this thread has loaded its own, so it cannot wait for the worker.
-    A registration made by code that a sandbox governs (as by a module that sandboxed code loads), lazy or pending,
-    runs when it is made, on the registering thread, as before registrations were deferred: no code registered
-    under a sandbox runs later on another thread, where it could block other tenants or trusted code.  For the same
-    reason, sandboxed code cannot add a catalog change listener, and the changes that a worker makes are delivered to
-    the listeners on the thread of the reader it ran the job for; the workers are a small pool, so that a slow
-    registration delays no other sandboxed reader.  registerLazyValue() builds other
-    shared values, such as types built from a vendored API description, the same way.  When the Program that loaded
-    the module first may not use the sandbox APIs (@ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"),
-    nor may the module: lazy registrations then run, and lazy values are built, when they are registered.
+    A registration made by code that a sandbox governs (as by a module that sandboxed code loads, also under a policy
+    barrier), lazy or pending, runs when it is made, on the registering thread, as before registrations were
+    deferred, and so do the callbacks of an action that it registers (\c get_output_type, \c get_dynamic_options):
+    no code registered under a sandbox runs later on another thread, where it could block other tenants or trusted
+    code.  For the same reason, sandboxed code cannot add a catalog change listener or set a process-wide callback
+    (setSchemeLookupCallback(), setGenericApiCallActionBuilder()), and the listeners, which belong to trusted code,
+    never run on a sandboxed thread: a worker delivers the changes that it makes, and those made on a sandboxed
+    thread; the workers are a small pool, so that a slow registration delays no other sandboxed reader.
+    registerLazyValue() builds other shared values, such as types built from a vendored API description, the same
+    way.  Every such decision uses Qore::SandboxManager::isSandboxed(), so it is the same for callers restricted with
+    @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS".  There is no worker when the module was loaded first
+    by sandboxed code, or by code that may not create the worker's capability (also under a policy barrier, or
+    restricted with \c PO_NO_UNCONTROLLED_APIS): then every deferred registration runs, and every lazy value is
+    built, when it is registered.
 
     The deferred initialization of an application, pending or lazy, runs on one thread at a time: a thread that
     uses the application while another thread initializes it waits until the initialization has ended.  A thread
@@ -1506,10 +1511,12 @@ public class DataProviderActionCatalog {
         @param init the initialization code that will register the app
         @param module_context optional module path to associate with the app while running \a init
 
-        Called by code that a sandbox governs, \a init runs at once, on the calling thread, so that no code registered
-        under a sandbox runs later on another thread, where it could block other tenants or trusted code; for a
-        sandboxed reader, the registrations that trusted code made run on the catalog worker (see
-        @ref dataprovider_lazy_actions)
+        Called by code that a sandbox governs (also under a policy barrier), \a init runs at once, on the calling
+        thread, so that no code registered under a sandbox runs later on another thread, where it could block other
+        tenants or trusted code; for a sandboxed reader, the registrations that trusted code made run on a catalog
+        worker (see @ref dataprovider_lazy_actions).  When the module has no catalog worker (it was loaded first by
+        sandboxed code, or by code that may not create the worker's capability), \a init runs at once for every
+        caller.
 
         @since DataProvider 3.0
     */
@@ -1561,7 +1568,8 @@ public class DataProviderActionCatalog {
         @param action the action to register
         @param init the initialization code that will register the app
 
-        Called by code that a sandbox governs, \a init runs at once, on the calling thread (see registerPendingApp())
+        Called by code that a sandbox governs, or when the module has no catalog worker, \a init runs at once, on the
+        calling thread (see registerPendingApp())
 
         @since DataProvider 3.0
     */

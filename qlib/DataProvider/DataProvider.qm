@@ -1642,14 +1642,18 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       "DataProviderActionCatalog::registerLazyValue()" and
       @ref DataProvider::DataProviderActionCatalog::getLazyValue() "DataProviderActionCatalog::getLazyValue()" to
       build shared values, such as types built from a vendored API description, on first use in the same way
-    - the module needs a %Qore with \c register_exit_hook() and \c SandboxManager::createSystemThreadCall(); when
-      the @ref Qore::Program "Program" that loads it first may not use the sandbox APIs
-      (@ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"), lazy registrations run and lazy values are
-      built when they are registered, as before they were lazy
-    - pending registrations (\c registerPendingApp(), \c registerPendingAppAction()) made by code that a sandbox
-      governs run when they are made, so that no code registered under a sandbox runs later on another thread; for a
-      sandboxed reader, the catalog worker runs the registrations that trusted code made
-    - sandboxed code cannot add a catalog change listener
+    - the module needs a %Qore with \c register_exit_hook(), \c SandboxManager::createSystemThreadCall() and
+      \c SandboxManager::isSandboxed(); when the @ref Qore::Program "Program" that loads it first is sandboxed or
+      may not create the worker's capability (@ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"), every
+      deferred registration runs and every lazy value is built when it is registered, as before they were deferred;
+      code restricted with \c PO_NO_UNCONTROLLED_APIS uses the catalog as any other code after a trusted load
+    - registrations (pending or lazy) made by code that a sandbox governs, also under a policy barrier, run when they
+      are made, and so do the output type and dynamic option callbacks of the actions that it registers, so that no
+      code registered under a sandbox runs later on another thread; for a sandboxed reader, the catalog workers run
+      the registrations that trusted code made
+    - sandboxed code cannot add a catalog change listener, nor set or clear the scheme lookup callback or the
+      generic API call action or child builder; a catalog change listener never runs on a sandboxed thread
+    - a lazy value registered by a module whose load fails and is rolled back is removed
     - the \c NoInit getters of @ref DataProvider::DataProviderActionCatalog "DataProviderActionCatalog" never run or
       wait for deferred registrations; the deferred initialization of an app runs on one thread at a time, and a
       thread that uses the app meanwhile waits for it instead of reading part of what it registers

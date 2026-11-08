@@ -517,7 +517,14 @@
     @ref Qore::SandboxManager::createSystemThreadCall() "SandboxManager::createSystemThreadCall()" creates, during a
     module's initialization, a capability that starts a fixed operation in a new thread that no sandbox governs, so that
     trusted infrastructure can do work for sandboxed callers, such as building shared state, without the callers'
-    sandbox, interrupts or limits reaching it
+    sandbox, interrupts or limits reaching it; @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()"
+    tells such infrastructure whether the code it serves is sandboxed, also under a policy barrier, and can be called
+    by any code
+
+    @par Reflection Member Access
+    Code that a sandbox governs, and code whose parse options restrict a functional domain, may use the
+    \c private and \c private:internal elements of a class through the @ref reflectionintro "reflection" module
+    only where the language allows it (see @ref reflection_member_access)
 
     @par HTTP Server Fast Routes
     A path can be registered with @ref HttpServer::HttpServer::addFastRoute() "addFastRoute()" so that the async I/O
