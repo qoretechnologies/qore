@@ -114,6 +114,11 @@ class RecordingFreshBooksNewClientWatchDataProvider inherits FreshBooksDataProvi
         return doGet(getResourcePath(), {});
     }
 
+    #! Returns the fake example data that the provider returns when its request fails
+    hash<auto> fakeExampleData() {
+        return getFakeExampleData();
+    }
+
     private waitForRateLimit(date delay) {
         waits += delay;
     }
@@ -179,6 +184,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
         addTestCase("local server tests", \localServerTests());
         addTestCase("example data rate limit", \exampleDataRateLimitTests());
+        addTestCase("rate-limited retry", \rateLimitedRetryTests());
         addTestCase("client option tests", \clientOptionTests());
 
         # Integration tests (require FreshBooks credentials)
@@ -960,6 +966,57 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
         watch.requestResource();
         assertEq((60s,), watch.waits, "a request outside of example data waits for the rate limit");
         assertEq(2, handler.requests.size());
+    }
+
+    #! A rate-limited request (HTTP 429) is retried after a wait, but not while example data is requested
+    rateLimitedRetryTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        FakeFreshBooksHandler handler();
+        server.setHandler("freshbooks", "", NOTHING, handler);
+        server.setDefaultHandler("freshbooks", handler);
+
+        FreshBooksRestClient::FreshBooksRestClientIo rest({
+            "url": "http://localhost:" + port,
+            "token": "test-token",
+            "account_id": "acct1",
+        });
+        RecordingFreshBooksNewClientWatchDataProvider watch(rest, {"poll_interval": 60});
+
+        # the example data is requested once: the rate-limited request is not retried, there is no wait, and the
+        # fake example data is returned
+        handler.rate_limited = 1;
+        auto example = watch.getExampleEventData(watch.getName());
+        assertEq(1, handler.requests.size(), "the rate-limited request for example data was made once");
+        assertEq((), watch.waits, "the example data did not wait for the rate limit");
+        assertEq(watch.fakeExampleData(), example);
+
+        # a request that is not for example data is retried after waiting the time given by the server
+        handler.requests = ();
+        handler.rate_limited = 1;
+        hash<auto> rv = watch.requestResource();
+        assertEq(4, rv.clients[0].id);
+        assertEq(2, handler.requests.size(), "the rate-limited request was retried");
+        assertEq((1s,), watch.waits, "the retry waited for the rate limit");
+
+        # a request that stays rate-limited fails after the last retry
+        handler.requests = ();
+        handler.rate_limited = FreshBooksDataProvider::MaxRetries + 1;
+        watch.waits = ();
+        try {
+            watch.requestResource();
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(429, ex.arg.status_code);
+        }
+        assertEq(FreshBooksDataProvider::MaxRetries + 1, handler.requests.size());
+        # each retry waited
+        list<date> retry_waits = map 1s, xrange(FreshBooksDataProvider::MaxRetries);
+        assertEq(retry_waits, watch.waits);
     }
 
     #! Connection tests - verify connection scheme registration

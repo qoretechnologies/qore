@@ -50,6 +50,8 @@ class FakeZohoInvoiceHandler inherits AbstractHttpRequestHandler {
         bool rate_limit_exhausted;
         #! the seconds until the rate limit is reset, as reported with an exhausted rate limit
         string rate_limit_reset = "1";
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited;
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -59,6 +61,14 @@ class FakeZohoInvoiceHandler inherits AbstractHttpRequestHandler {
             "authorization": hdr.authorization,
             "body": body ? parse_json(body.toString()) : NOTHING,
         };
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"code": 44, "message": "rate limited"}),
+            };
+        }
         hash<auto> resp_hdr = {"Content-Type": MimeTypeJson};
         if (rate_limit_exhausted) {
             rate_limit_exhausted = False;
@@ -135,6 +145,11 @@ class RecordingZohoInvoiceNewContactWatchDataProvider inherits ZohoInvoiceDataPr
         return doGet(getResourcePath(), {});
     }
 
+    #! Returns the fake example data that the provider returns when its request fails
+    hash<auto> fakeExampleData() {
+        return getFakeExampleData();
+    }
+
     private waitForRateLimit(date delay) {
         waits += delay;
     }
@@ -187,6 +202,7 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
         addTestCase("local server tests", \localServerTests());
         addTestCase("example data rate limit", \exampleDataRateLimitTests());
+        addTestCase("rate-limited retry", \rateLimitedRetryTests());
         addTestCase("client option tests", \clientOptionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
 
@@ -731,6 +747,57 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
         watch.requestResource();
         assertEq((60s,), watch.waits, "a request outside of example data waits for the rate limit");
         assertEq(2, handler.requests.size());
+    }
+
+    #! A rate-limited request (HTTP 429) is retried after a wait, but not while example data is requested
+    rateLimitedRetryTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        FakeZohoInvoiceHandler handler();
+        server.setHandler("zohoinvoice", "", NOTHING, handler);
+        server.setDefaultHandler("zohoinvoice", handler);
+
+        ZohoInvoiceRestClient::ZohoInvoiceRestClientIo rest({
+            "url": "http://localhost:" + port,
+            "token": "test-token",
+            "organization_id": "org-1",
+        });
+        RecordingZohoInvoiceNewContactWatchDataProvider watch(rest, {"poll_interval": 60});
+
+        # the example data is requested once: the rate-limited request is not retried, there is no wait, and the
+        # fake example data is returned
+        handler.rate_limited = 1;
+        auto example = watch.getExampleEventData("new-contact");
+        assertEq(1, handler.requests.size(), "the rate-limited request for example data was made once");
+        assertEq((), watch.waits, "the example data did not wait for the rate limit");
+        assertEq(watch.fakeExampleData(), example);
+
+        # a request that is not for example data is retried after waiting 5 seconds
+        handler.requests = ();
+        handler.rate_limited = 1;
+        hash<auto> rv = watch.requestResource();
+        assertEq("c1", rv.contacts[0].contact_id);
+        assertEq(2, handler.requests.size(), "the rate-limited request was retried");
+        assertEq((5s,), watch.waits, "the retry waited for the rate limit");
+
+        # a request that stays rate-limited fails after the last retry
+        handler.requests = ();
+        handler.rate_limited = ZohoInvoiceDataProvider::MaxRetries + 1;
+        watch.waits = ();
+        try {
+            watch.requestResource();
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(429, ex.arg.status_code);
+        }
+        assertEq(ZohoInvoiceDataProvider::MaxRetries + 1, handler.requests.size());
+        # each retry waited
+        list<date> retry_waits = map 5s, xrange(ZohoInvoiceDataProvider::MaxRetries);
+        assertEq(retry_waits, watch.waits);
     }
 
     #! Connection tests - verify connection scheme registration
