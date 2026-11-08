@@ -42,6 +42,9 @@ print_usage () {
   echo "                           Set to '1' to leave out the tests that declare '# test-exec-mode: children'"
   echo "                           (needs --exec-mode in QORE_TEST_OPTS): their child processes set their own"
   echo "                           execution mode, so a run in the default mode makes the same checks."
+  echo "  QORE_TEST_PLATFORM_SUBSET"
+  echo "                           Set to 'macos' to run only the tests that declare '# test-platform: macos - <why>'"
+  echo "                           (the macOS CI job sets it): the tests whose checks depend on the platform."
   echo "  QORE_TEST_QMOD_DIR       Directory with AOT qmods to prefer before ./qlib."
   echo "  QORE_TEST_SOURCE_MODULES Set to '1' to ignore the default build qmod directory."
   echo "  QORE_TEST_BUILD_JOBS     Jobs a test that builds a CMake project runs (default: the number of CPUs, at"
@@ -239,6 +242,47 @@ $test
             "their own execution mode and run in the default-mode jobs"
     fi
 fi
+
+# A test whose checks depend on the platform (the OS, its C library, file systems, sockets, processes and signals,
+# threads, time zones, locales, dynamic loading, the toolchain and linker) declares each platform beside Linux that it
+# must also run on, on a line of its own:
+#   # test-platform: macos - <why>
+# A run with QORE_TEST_PLATFORM_SUBSET=<platform> runs only the tests that declare that platform; the macOS CI job sets
+# it to "macos" (test-macos.sh), as the Linux jobs run every test and so cover the checks that do not depend on the
+# platform.  Without QORE_TEST_PLATFORM_SUBSET every test runs and the declarations change nothing.
+# examples/test/runner/test_platform_markers.py checks the declarations.
+case "${QORE_TEST_PLATFORM_SUBSET}" in
+    "") ;;
+    macos)
+        PLATFORM_TESTS=""
+        if [ -n "$TESTS" ]; then
+            PLATFORM_TESTS=`grep -l "^# test-platform: ${QORE_TEST_PLATFORM_SUBSET} - " $TESTS`
+        fi
+        FILTERED=""
+        SELECTED_COUNT=0
+        ALL_COUNT=0
+        for test in $TESTS; do
+            ALL_COUNT=$(( ALL_COUNT + 1 ))
+            case "
+$PLATFORM_TESTS
+" in
+                *"
+$test
+"*) SELECTED_COUNT=$(( SELECTED_COUNT + 1 )); FILTERED="$FILTERED $test" ;;
+            esac
+        done
+        TESTS="$FILTERED"
+        if [ $LIST_TESTS -eq 0 ]; then
+            echo "Selected $SELECTED_COUNT of $ALL_COUNT tests that declare" \
+                "'test-platform: ${QORE_TEST_PLATFORM_SUBSET}' (QORE_TEST_PLATFORM_SUBSET): the Linux jobs run the others"
+        fi
+        ;;
+    *)
+        echo "ERROR: QORE_TEST_PLATFORM_SUBSET is empty or a platform that tests declare with '# test-platform:'" \
+            "(macos): '${QORE_TEST_PLATFORM_SUBSET}'" >&2
+        exit 1
+        ;;
+esac
 
 # The durations of the tests: each CI test job is a column of test-durations.tsv (see update-test-durations.py),
 # named by the job without its shard (CI_JOB_NAME "test-alpine-amd64 2/3" reads column test-alpine-amd64), or by

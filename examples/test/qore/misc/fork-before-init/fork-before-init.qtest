@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - pthread recursive mutexes created before qore_init() and in fork()ed children
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

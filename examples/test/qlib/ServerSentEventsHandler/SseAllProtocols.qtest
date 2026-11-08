@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - SSE over HTTP/1.1, 2 and 3: QUIC idle timeout, peer disconnect detection, heartbeats
 
 /*  SseAllProtocols.qtest Copyright 2026 Qore Technologies, s.r.o.
 

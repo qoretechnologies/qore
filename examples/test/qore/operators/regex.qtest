@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - PCRE2 as built on macOS with its JIT (MAP_JIT and W^X on arm64)
 
 %modern
 

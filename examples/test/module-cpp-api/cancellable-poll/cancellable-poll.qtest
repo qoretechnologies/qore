@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qore_cancellable_poll() on descriptors with thread cancellation and timeouts
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

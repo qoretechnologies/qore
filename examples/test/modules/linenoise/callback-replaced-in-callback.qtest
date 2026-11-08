@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - linenoise line editing in a pseudo-terminal driven by script(1) (BSD script on macOS)
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # A callback that replaces or removes itself while it runs (the completion, hints and syntax callbacks, a key binding

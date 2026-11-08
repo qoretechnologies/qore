@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - child processes under another TZ, qcc-compiled .qmod loaded in place of its source
 # Copyright 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"

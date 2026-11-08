@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - TCP user timeout on a platform without TCP_USER_TIMEOUT (cached value path)
 
 # Socket::setUserTimeout / Socket::getUserTimeout (TCP_USER_TIMEOUT) regression
 # test.  On Linux, getUserTimeout queries the kernel via getsockopt, so any

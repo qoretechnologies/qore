@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - SQLite3 transactions: rollback, affected row counts and string expression semantics
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved

@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - a .qo module statically linked into a C++ host by the system linker, its linked metadata
 
 # Copyright 2026 Qore Technologies, s.r.o.
 

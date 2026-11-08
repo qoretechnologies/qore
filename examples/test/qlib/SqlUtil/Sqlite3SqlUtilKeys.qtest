@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - keys, indexes, upserts and introspection with the native SQLite3 library
 #
 # Copyright 2026 Qore Technologies, s.r.o.
 

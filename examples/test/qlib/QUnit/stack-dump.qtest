@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - SIGUSR1 handlers dumping thread stacks in child processes, reports through a FIFO
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

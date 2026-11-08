@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - QUIC and HTTP/3 sessions over UDP loopback sockets: streams, throughput, GOAWAY
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved

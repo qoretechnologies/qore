@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - avro container files with zlib deflate codec and OpenSSL random sync markers
 
 /*  AvroContainer.qtest Copyright 2026 Qore Technologies, s.r.o.
 

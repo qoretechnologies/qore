@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - unlinking dangling and live symlinks and removing populated directory trees
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util

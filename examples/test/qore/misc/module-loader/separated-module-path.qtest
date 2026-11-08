@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - module search path resolution of relative and absolute dirs under the symlinked temp dir
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: LGPL-2.1-or-later
 

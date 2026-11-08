@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - TCP, UNIX-domain and IPv6 sockets, TLS, timeouts, pipes as sockets, async socket I/O
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 

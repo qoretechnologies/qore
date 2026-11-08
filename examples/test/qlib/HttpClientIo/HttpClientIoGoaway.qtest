@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 and HTTP/3 GOAWAY draining and request resubmission on a new connection
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved

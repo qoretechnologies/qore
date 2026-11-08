@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - backquotes and system() start commands without fork(), spawn failures and child status
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

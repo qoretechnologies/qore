@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - QUIC connection migration to a new local UDP socket and port during transfers
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved

@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP client timeouts, UNIX-socket URLs, chunked disconnects, TLS client certs and HTTP/2
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 

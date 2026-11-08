@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - async accept and keep-alive poll operations, header timeouts, stop during a TLS handshake
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

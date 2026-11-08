@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - transactional DDL rollback and NOT NULL changes by SQLite3 library version
 # Copyright 2026 Qore Technologies, s.r.o., all rights reserved
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"

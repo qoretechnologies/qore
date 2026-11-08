@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - exported symbol visibility of binary module dylibs loaded into one process
 
 /*  module-symbol-visibility.qtest Copyright 2026 Qore Technologies, s.r.o.
 

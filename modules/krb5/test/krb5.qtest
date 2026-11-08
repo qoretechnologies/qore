@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - credential caches and principals with the system Kerberos/GSS-API library on macOS
 %modern
 
 /* Copyright (C) 2026 Qore Technologies, s.r.o. */

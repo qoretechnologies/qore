@@ -551,6 +551,10 @@ test-tiered-ubuntu-amd64:
       - crash-dumps/
     expire_in: 7 days
 
+# The macOS job (test-macos.sh) runs only the tests that declare "# test-platform: macos - <why>" (see run_tests.sh and
+# examples/test/runner/test_platform_markers.py); the Linux jobs run every test.  Its compiles go through ccache when
+# the runner mounts the cache directory and the image has ccache (ccache-ci.sh; same mount and trust levels as the qmod
+# build cache, design/qmod-build-cache-runners.md).
 test-macos:
   extends: .qmod-cache
   stage: test

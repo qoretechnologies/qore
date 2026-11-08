@@ -49,6 +49,11 @@ Copyright (C) 2026 Qore Technologies, s.r.o.
 - The existing runner (`macOS Runner (prof)`, every ref) adds the same with `:ro`
   (`"qmod-cache:/Users/david/ci/qore-qmod-cache:ro"`): a VM cannot remount the host's directory read-write.
 - `test-macos` takes the writer's tag on protected refs.
+- The same mount holds the C and C++ compiler cache of `test-macos` (`examples/test/docker_test/ccache-ci.sh`):
+  `/Users/david/ci/qore-qmod-cache/ccache`, beside `protected/` (create it, owned by the runner's user); the job uses
+  it when the directory exists and the image has ccache (Homebrew `ccache`, installed by qore-test-base's
+  `prep-macos.sh`), writes it only on a protected ref with the read-write mount, and keeps a cache per toolchain
+  under it.  It is not in `protected/`, whose directories the qmod cache prunes as its own.
 
 ## Kubernetes (amd64, arm64)
 
