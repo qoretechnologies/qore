@@ -54,6 +54,7 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
             \nativeModuleTest());
         addTestCase("a module compiled with a relative output path is checked", \relativeOutputTest());
         addTestCase("a module file the sandbox does not let the loader read is not read", \sandboxDeniedTest());
+        addTestCase("an include file named like a module is not that module", \includedModuleNameTest());
         set_return_value(main());
     }
 
@@ -433,5 +434,24 @@ try {
             "files of module 'Zed' than '.*/shadow/Zed\\.qm'", out);
         # the module check did not read the file the sandbox denies
         assertEq(old_atime, hstat(denied_qmod).atime, out);
+    }
+
+    includedModuleNameTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        mkdir(src_dir + "/parts", 0755, True);
+        mkdir(qmod_dir, 0755, True);
+        # an include file with the name of a module, Other, that the module does not require
+        write(src_dir + "/parts/Other.qm", "const Value = \"v1\";\n");
+        writeModule(src_dir, "Other", "", "public namespace Other { public string sub value() { return \"other\"; } }");
+        writeModule(src_dir, "Inc2", "", "%include parts/Other.qm\npublic namespace Inc2 { public string sub value() { "
+            "return Value; } }");
+        string module_path = qmod_dir + ":" + src_dir;
+        compile(module_path, src_dir, qmod_dir, "Inc2");
+        assertTrue(inlist(normalize_dir(src_dir) + "/parts/Other.qm", depfileDeps(qmod_dir + "/Inc2.qmod.d")));
+        # the module was compiled with no module Other, so the one in the module path does not make it out of date
+        string out = runRequires(module_path, tmp.path, "Inc2", "Inc2::value()");
+        assertEq("v1 Inc2.qmod", out, out);
     }
 }

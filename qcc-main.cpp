@@ -8335,6 +8335,13 @@ static void print_aot_module_info(const char* path) {
         }
         printf("      %s\n", info.unavailable_optional_modules[i].c_str());
     }
+    printf("    compiled with: %zu\n", info.compiled_with.size());
+    for (size_t i = 0; i < info.compiled_with.size(); ++i) {
+        if (!dump_aot_symbol_index_check_cancel(i, "AOT module metadata dump")) {
+            return;
+        }
+        printf("      %s\n", info.compiled_with[i].c_str());
+    }
 }
 
 static int dump_aot_info_for_file(const char* path) {

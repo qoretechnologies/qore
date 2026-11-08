@@ -407,9 +407,13 @@ of the module's image:
   is the record. The linker places it in a `PT_NOTE` segment, and it is marked
   `SHF_GNU_RETAIN`, so `--gc-sections` keeps it.
 
-The record is little-endian: magic `QAMI`, format version (1), payload size,
-then the module name, the dependency count and dependencies, and the optional
-module count and requests, each string as a 32-bit length and its bytes. Every
+The record is little-endian: magic `QAMI`, format version (2), payload size,
+then the module name, the dependency count and dependencies, the optional
+module count and requests, and the count and names of the modules the module
+was compiled with (every module it requires, directly or not, and every module
+one of them re-exports, which the loader checks; see
+`aot-linked-module-sources.md`; version 2 added them), each string as a 32-bit
+length and its bytes. Every
 string is nonempty and contains no NUL; payloads are bounded to 16 MiB and
 65,536 entries per list. `QoreAOTModuleFileInfo` in
 `include/qore/intern/QoreAOTBinary.h` documents the layout.
@@ -472,6 +476,10 @@ fit in its segment ends the scan of that segment.
       json
       reflection
     unavailable optional modules: 0
+    compiled with: 3
+      json
+      reflection
+      yaml
 ```
 
 ### Code Signing and Notarization (macOS)

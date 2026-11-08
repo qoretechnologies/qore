@@ -1078,29 +1078,6 @@ static bool qore_aot_dependency_is_compiled_one(const std::string& name, const s
 }
 #endif
 
-#ifndef _Q_WINDOWS
-//! Adds the names of the modules whose files a depfile lists to \a names
-/** A user module is listed by its sources: <tt>\<dir\>/\<name\>.qm</tt>, or <tt>\<dir\>/\<name\>/\<name\>.qm</tt> and the
-    other files of its module directory; a binary module by its file (<tt>\<name\>-api-\<x\>.\<y\>.qmod</tt>, or an AOT
-    module's <tt>\<name\>.qmod</tt>).  The depfile of an AOT module lists every module it requires, directly or not,
-    and the modules they re-export (see design/aot-linked-module-sources.md).
-*/
-static void qore_aot_depfile_module_names(const std::vector<std::string>& deps, std::set<std::string>& names) {
-    for (const std::string& dep : deps) {
-        size_t sep = dep.rfind(QORE_DIR_SEP);
-        std::string base = sep == std::string::npos ? dep : dep.substr(sep + 1);
-        if (base.size() > 3 && !base.compare(base.size() - 3, 3, ".qm")) {
-            names.insert(base.substr(0, base.size() - 3));
-            continue;
-        }
-        if (base.size() > 5 && !base.compare(base.size() - 5, 5, ".qmod")) {
-            size_t api = base.find("-api-");
-            names.insert(base.substr(0, api == std::string::npos ? base.size() - 5 : api));
-        }
-    }
-}
-#endif
-
 std::string QoreModuleManager::findModuleFileUnlocked(const char* name, QoreProgram* pgm) {
     std::vector<const std::string*> search_paths;
     const qore_program_private* priv_pgm = pgm ? qore_program_private::get(*pgm) : nullptr;
@@ -1156,7 +1133,7 @@ std::string QoreModuleManager::findModuleFileUnlocked(const char* name, QoreProg
 }
 
 bool QoreModuleManager::checkAOTModuleDependencyFiles(ExceptionSink& xsink, const char* path, const char* feature,
-        const std::vector<std::string>& dependencies, QoreProgram* pgm, std::string& stale_desc) {
+        const QoreAOTModuleFileInfo& aot_info, QoreProgram* pgm, std::string& stale_desc) {
 #ifndef _Q_WINDOWS
     if (pgm && (pgm->getParseOptions() & PO_NO_FILESYSTEM)) {
         return false;
@@ -1194,12 +1171,13 @@ bool QoreModuleManager::checkAOTModuleDependencyFiles(ExceptionSink& xsink, cons
     if (allowed(target + ".d" QORE_AOT_MODULE_FINGERPRINT_SUFFIX)) {
         qore_aot_read_module_source_fingerprints(target + ".d" QORE_AOT_MODULE_FINGERPRINT_SUFFIX, fingerprints);
     }
-    // every module the AOT module was compiled with: the dependencies of its descriptor, and the modules whose files
-    // its depfile lists, which are those it requires directly or not and those they re-export (a re-exported module
-    // is not a dependency of the descriptor, and a module further down the chain can be loaded from another file
-    // while its dependent comes from its source)
-    std::set<std::string> names(dependencies.begin(), dependencies.end());
-    qore_aot_depfile_module_names(deps, names);
+    // every module the AOT module was compiled with: the dependencies of its descriptor, and the modules its metadata
+    // names, which are those it requires directly or not and those they re-export (a re-exported module is not a
+    // dependency of the descriptor, and a module further down the chain can be loaded from another file while its
+    // dependent comes from its source); qcc names them, as the files of the depfile do not say which of them are
+    // modules (an %include file can have the name of one)
+    std::set<std::string> names(aot_info.dependencies.begin(), aot_info.dependencies.end());
+    names.insert(aot_info.compiled_with.begin(), aot_info.compiled_with.end());
     names.erase(feature);
     names.erase("qore");
     size_t count = 0;
@@ -4451,7 +4429,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
         // the AOT module is loaded, and the warning tells that it must be rebuilt, as for an optional module that is
         // available now
         std::string stale_desc;
-        bool stale = checkAOTModuleDependencyFiles(xsink, path, feature, aot_info.dependencies, path_pgm,
+        bool stale = checkAOTModuleDependencyFiles(xsink, path, feature, aot_info, path_pgm,
             stale_desc);
         if (xsink) {
             return nullptr;

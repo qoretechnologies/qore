@@ -85,12 +85,14 @@ was not compiled for.  So once the dependencies of an AOT module of a build tree
 mapped (`QoreModuleManager::checkAOTModuleDependencyFiles()`, called by `loadBinaryModuleFromPath()`), every module
 it was compiled with is checked:
 
-- the dependencies of its descriptor, and every module whose files its depfile lists: the modules it requires,
-  directly or not, and the modules they re-export.  qcc keeps `%requires(reexport)` modules out of the descriptor's
-  dependencies (a re-exported module can require the module back, and the loader loads the descriptor's dependencies
-  before it maps the module), and a module further down the chain can be loaded from another file while its dependent
-  comes from its source, so the descriptor alone is not enough.  The names come from the depfile's files:
-  `<name>.qm` (a single-file module, or the main source of a module directory) and `<name>[-api-<x>.<y>].qmod`;
+- the dependencies of its descriptor, and every module its metadata says it was compiled with: the modules it
+  requires, directly or not, and the modules they re-export.  qcc keeps `%requires(reexport)` modules out of the
+  descriptor's dependencies (a re-exported module can require the module back, and the loader loads the descriptor's
+  dependencies before it maps the module), and a module further down the chain can be loaded from another file while
+  its dependent comes from its source, so the descriptor alone is not enough.  qcc writes the names
+  (`QoreAOTModuleFileInfo::compiled_with`, format version 2 of the metadata record) from the modules loaded in the
+  Program the module was compiled in: the files of the depfile do not say which of them are modules (a file that an
+  `%include` directive opened can have the name of a module, `<x>.qm`);
 - a module that is loaded is checked as it was loaded; one that is not loaded yet (a module the AOT module
   re-exports, which its initialization loads) is found without loading it, in the search order of
   `loadModuleIntern()` (`QoreModuleManager::findModuleFileUnlocked()`).

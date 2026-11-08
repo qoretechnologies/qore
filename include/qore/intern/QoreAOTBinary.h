@@ -2474,12 +2474,21 @@ struct QoreAOTModuleFileInfo {
     std::vector<std::string> dependencies;
     //! the %try-module requests that failed when the module was compiled, as written in the directive
     std::vector<std::string> unavailable_optional_modules;
+    //! the names of the modules the module was compiled with: every module it requires, directly or through
+    //! another module, and every module one of them re-exports; not the module itself
+    /** The module loader checks that each of them that it loads for the module is the one the module was compiled
+        against (see QoreModuleManager::checkAOTModuleDependencyFiles()); a re-exported module is not in
+        \c dependencies (see design/aot-linked-module-sources.md)
+    */
+    std::vector<std::string> compiled_with;
 };
 
 //! The magic number of an AOT module metadata record: 'QAMI' little-endian
 static constexpr uint32_t QORE_AOT_MODULE_INFO_MAGIC = 0x494d4151u;
 //! The format version of AOT module metadata records
-static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 1u;
+/** version 2 added the names of the modules the module was compiled with
+*/
+static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 2u;
 //! The size of the header of an AOT module metadata record: magic, version and payload size
 static constexpr size_t QORE_AOT_MODULE_INFO_HEADER_SIZE = 12;
 //! The segment of the Mach-O section holding AOT module metadata

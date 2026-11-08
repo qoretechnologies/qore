@@ -573,6 +573,7 @@ struct DLHelper {
 };
 
 class ModuleLoadMapHelper;
+struct QoreAOTModuleFileInfo;
 
 class QoreModuleManager {
     friend class QoreAbstractModule;
@@ -1028,20 +1029,21 @@ protected:
 
     //! Checks that the modules an AOT module of a build tree was compiled with are the ones it was compiled against
     /** A module of a build tree has the depfile that qcc wrote next to it; for any other module nothing is checked.
-        The modules checked are the dependencies of its descriptor and every module whose files its depfile lists
-        (those it requires, directly or not, and those they re-export); a module that is loaded is checked as it is
-        loaded, and one that is not as findModuleFileUnlocked() finds it.  A module is the one compiled against if the
-        file it comes from is listed in the depfile, or is a copy of a listed file (the same name, size and content),
-        or is an AOT module of a build tree whose own sources are
-        listed (an AOT module without a depfile is not checked).  The mutex must be held.
+        The modules checked are the dependencies of its descriptor and the modules its metadata says it was compiled
+        with (those it requires, directly or not, and those they re-export); a module that is loaded is checked as it
+        is loaded, and one that is not as findModuleFileUnlocked() finds it.  A module is the one compiled against if
+        the file it comes from is listed in the depfile, is a copy of a listed file (the same name, size and content),
+        or is an AOT module of a build tree whose own sources are listed (an AOT module without a depfile is not
+        checked).  The mutex must be held.
 
+        @param aot_info the metadata of the AOT module
         @param stale_desc set to why the AOT module is out of date
 
         @return true if the AOT module is out of date; false if it is not, if it is not checked, or if the check was
         cancelled (an exception is then raised in \a xsink, which the caller must check)
     */
     DLLLOCAL bool checkAOTModuleDependencyFiles(ExceptionSink& xsink, const char* path, const char* feature,
-            const std::vector<std::string>& dependencies, QoreProgram* pgm, std::string& stale_desc);
+            const QoreAOTModuleFileInfo& aot_info, QoreProgram* pgm, std::string& stale_desc);
 
     //! Returns the file that loadModuleIntern() would load module \a name from, or an empty string
     /** The search order of loadModuleIntern() in the module path of \a pgm, without loading anything: in each

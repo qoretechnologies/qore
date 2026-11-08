@@ -737,7 +737,8 @@ bool qoreAOTEncodeModuleInfo(const QoreAOTModuleFileInfo& info, std::vector<uint
     };
     if (!put_string(info.module_name, "module name")
             || !put_list(info.dependencies, "module dependency")
-            || !put_list(info.unavailable_optional_modules, "unavailable optional module")) {
+            || !put_list(info.unavailable_optional_modules, "unavailable optional module")
+            || !put_list(info.compiled_with, "module compiled with")) {
         return false;
     }
     record.reserve(QORE_AOT_MODULE_INFO_HEADER_SIZE + payload.size());
@@ -843,6 +844,10 @@ QoreAOTModuleInfoStatus qoreAOTDecodeModuleInfo(const uint8_t* data, size_t len,
     if (!get_list(info.unavailable_optional_modules)) {
         return fail(cancel_error.empty() ? moduleInfoDamaged("the record has an invalid optional module list")
             : cancel_error);
+    }
+    if (!get_list(info.compiled_with)) {
+        return fail(cancel_error.empty() ? moduleInfoDamaged("the record has an invalid list of the modules it was "
+            "compiled with") : cancel_error);
     }
     if (pos != size) {
         return fail(moduleInfoDamaged("the record has " + std::to_string(size - pos) + " unexpected bytes after "

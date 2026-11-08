@@ -282,8 +282,9 @@ extern \"C\" DLLEXPORT void AotSingleMap_qore_module_desc(QoreModuleInfo& mod_in
 
     #! returns the C++ declaration of the AOT module metadata section of a module with the given name
     /** qcc stores the metadata of an AOT module in a section of its image, which the loader reads before mapping the
-        module: a record of the magic number 'QAMI', the format version 1, the payload size and the payload (the
-        module name and the counts of dependencies and of unavailable optional modules, here none).  On macOS the
+        module: a record of the magic number 'QAMI', the format version 2, the payload size and the payload (the
+        module name and the counts of dependencies, of unavailable optional modules and of the modules it was compiled
+        with, here none).  On macOS the
         record is the Mach-O section __TEXT,__qore_modinfo; elsewhere it is the description of a note with the owner
         "Qore" and the record's magic number as its type in the ELF note section .note.qore.modinfo.
     */
@@ -294,12 +295,13 @@ extern \"C\" DLLEXPORT void AotSingleMap_qore_module_desc(QoreModuleInfo& mod_in
         payload.write(module_name);
         payload.writei4LSB(0);
         payload.writei4LSB(0);
+        payload.writei4LSB(0);
         binary payload_data = payload_out.getData();
 
         BinaryOutputStream record_out();
         StreamWriter record(record_out);
         record.writei4LSB(0x494d4151);
-        record.writei4LSB(1);
+        record.writei4LSB(2);
         record.writei4LSB(payload_data.size());
         record.write(payload_data);
         binary record_data = record_out.getData();

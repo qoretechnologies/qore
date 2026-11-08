@@ -750,11 +750,10 @@ static void qore_aot_add_module_files(QoreAbstractModule* m, std::vector<std::st
     }
 }
 
-//! Appends the files of everything an AOT module depends on to \a files; see qore_aot_set_module_closure_dep_sink()
-static bool qore_aot_add_module_closure_files(qore_program_private* pp, std::vector<std::string>& files,
-        std::string& error) {
-    files.insert(files.end(), pp->included_files.begin(), pp->included_files.end());
-    // the modules required, directly or not, breadth first from those the module loaded itself
+//! Calls \a visit for each module loaded that a Program requires, directly or not, breadth first from those it
+//! loaded itself (those it re-exports among them)
+static bool qore_aot_visit_module_closure(qore_program_private* pp,
+        const std::function<void(const std::string&, QoreAbstractModule*)>& visit, std::string& error) {
     strset_t seen(pp->parse_modules.begin(), pp->parse_modules.end());
     std::deque<std::string> todo(pp->parse_modules.begin(), pp->parse_modules.end());
     size_t count = 0;
@@ -769,7 +768,7 @@ static bool qore_aot_add_module_closure_files(qore_program_private* pp, std::vec
         if (!m) {
             continue;
         }
-        qore_aot_add_module_files(m, files);
+        visit(name, m);
         strset_t deps;
         QMM.getModuleDependencies(name.c_str(), deps);
         for (const std::string& dep : deps) {
@@ -779,6 +778,15 @@ static bool qore_aot_add_module_closure_files(qore_program_private* pp, std::vec
         }
     }
     return true;
+}
+
+//! Appends the files of everything an AOT module depends on to \a files; see qore_aot_set_module_closure_dep_sink()
+static bool qore_aot_add_module_closure_files(qore_program_private* pp, std::vector<std::string>& files,
+        std::string& error) {
+    files.insert(files.end(), pp->included_files.begin(), pp->included_files.end());
+    return qore_aot_visit_module_closure(pp, [&files](const std::string&, QoreAbstractModule* m) {
+        qore_aot_add_module_files(m, files);
+    }, error);
 }
 
 // Collect the on-disk file of every module loaded into the compile program and
@@ -25441,18 +25449,34 @@ static void emitFragmentSymbols(llvm::LLVMContext& ctx, llvm::Module& module,
     @param ctx the LLVM context
     @param module the LLVM module of the object
     @param mod_info the module's descriptor information
-    @param unavailable_try_modules the %try-module requests that failed when the module was compiled
+    @param pgm the Program the module was compiled in: the %try-module requests that failed and the modules it was
+    compiled with come from it
     @param target_triple the target, or nullptr for the host
     @param error receives a description of invalid metadata or of an unsupported object format
 
     @return true on success
 */
 static bool addAOTModuleInfoSection(llvm::LLVMContext& ctx, llvm::Module& module, const QoreAOTModuleInfo& mod_info,
-        const std::vector<std::string>& unavailable_try_modules, const char* target_triple, std::string& error) {
+        QoreProgram* pgm, const char* target_triple, std::string& error) {
+    qore_program_private* pp = qore_program_private::get(*pgm);
     QoreAOTModuleFileInfo info;
     info.module_name = mod_info.name;
     info.dependencies = mod_info.dependencies;
-    info.unavailable_optional_modules = unavailable_try_modules;
+    info.unavailable_optional_modules = pp->unavailable_try_modules;
+    // the modules the module was compiled with, by name: the module loader checks those it loads for the module;
+    // the names of the files of a depfile do not say which of them are modules (an %include file can have the name
+    // of one)
+    {
+        strset_t names;
+        if (!qore_aot_visit_module_closure(pp, [&names](const std::string& name, QoreAbstractModule*) {
+            names.insert(name);
+        }, error)) {
+            return false;
+        }
+        names.erase(mod_info.name);
+        names.erase("qore");
+        info.compiled_with.assign(names.begin(), names.end());
+    }
     std::vector<uint8_t> record;
     if (!qoreAOTEncodeModuleInfo(info, record, error)) {
         return false;
@@ -26289,8 +26313,8 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         // at module load time.  mod_po is only the initial seed.
         generateModuleABIV2(ctx, *module, metadata, label, qpgm->getParseOptions(),
             mod_info, compiled_funcs, compile_only);
-        if (!compile_only && !addAOTModuleInfoSection(ctx, *module, mod_info,
-                qore_program_private::get(**qpgm)->unavailable_try_modules, target_triple, error)) {
+        if (!compile_only && !addAOTModuleInfoSection(ctx, *module, mod_info, *qpgm, target_triple,
+                error)) {
             return false;
         }
 
@@ -26772,8 +26796,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             // single-file module path.
             generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(),
                 qpgm->getParseOptions(), mod_info, compiled_funcs, compile_only);
-            if (!compile_only && !addAOTModuleInfoSection(ctx, *module, mod_info,
-                    qore_program_private::get(**qpgm)->unavailable_try_modules, target_triple, error)) {
+            if (!compile_only && !addAOTModuleInfoSection(ctx, *module, mod_info, *qpgm, target_triple,
+                    error)) {
                 return false;
             }
 
@@ -31132,8 +31156,8 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(),
                 qpgm->getParseOptions(), mod_info, compiled_funcs,
                 /*compile_only=*/false);
-            if (!addAOTModuleInfoSection(ctx, *module, mod_info,
-                    qore_program_private::get(**qpgm)->unavailable_try_modules, target_triple, error)) {
+            if (!addAOTModuleInfoSection(ctx, *module, mod_info, *qpgm, target_triple,
+                    error)) {
                 return false;
             }
         }
