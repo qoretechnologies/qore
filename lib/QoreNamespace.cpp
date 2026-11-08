@@ -3473,6 +3473,7 @@ void qore_ns_private::parseCommit() {
     pending_class_names.clear();
     pending_const_names.clear();
     pending_hashdecl_names.clear();
+    pending_enum_names.clear();
     pending_typedef_names.clear();
     pending_ns_names.clear();
 }
@@ -3556,8 +3557,9 @@ void qore_ns_private::parseRollback(ExceptionSink* xsink, bool atomic_rollback) 
         // recursively rollback child namespaces that existed before this transaction
         nsl.parseRollback(xsink, atomic_rollback);
     } else {
-        // Full destructive reset: clear ALL state (original behavior for programs without PO_ALLOW_REPARSE)
-        // After this, the Program is unusable but memory is still valid until Program is destroyed
+        // Full destructive reset: clear ALL state, for a namespace added by a failed parse that is deleted
+        // (QoreNamespaceList::parseRemove()); a Program's rollback is always atomic (see
+        // qore_program_private::internParseRollback())
 
         // delete global variables
         var_list.reset();
@@ -3665,7 +3667,12 @@ qore_ns_private* qore_ns_private::parseAddNamespace(QoreNamespace* nns) {
         return orig->priv;
     }
 
-    return nsl.parseAdd(nns, this);
+    qore_ns_private* rv = nsl.parseAdd(nns, this);
+    // track the new namespace for rollback support
+    if (rv) {
+        pending_ns_names.push_back(rv->name);
+    }
+    return rv;
 }
 
 // only called while parsing before addition to namespace tree, no locking needed
@@ -3686,7 +3693,12 @@ cnemap_t::iterator qore_ns_private::parseAddConstant(const QoreProgramLocation* 
         "constant '%s::%s' is declared public but the enclosing namespace '%s::' is not public", name.c_str(), cname,
         name.c_str());
 
-    return constant.parseAdd(loc, cname, vh.release(), typeInfo, cpub, Public, parseTypeInfo);
+    cnemap_t::iterator rv = constant.parseAdd(loc, cname, vh.release(), typeInfo, cpub, Public, parseTypeInfo);
+    // track the new constant for rollback support
+    if (rv != constant.end()) {
+        pending_const_names.push_back(cname);
+    }
+    return rv;
 }
 
 // only called while parsing before addition to namespace tree, no locking needed
@@ -3861,6 +3873,8 @@ int qore_ns_private::parseAddPendingClass(const QoreProgramLocation* loc, QoreCl
         return -1;
     }
     och.release();
+    // track the new class for rollback support
+    pending_class_names.push_back(oc->getName());
 
     qore_class_private::get(*oc)->setNamespace(this);
 
@@ -3900,6 +3914,8 @@ int qore_ns_private::parseAddPendingHashDecl(const QoreProgramLocation* loc, Typ
     }
 
     thd.release();
+    // track the new hashdecl for rollback support
+    pending_hashdecl_names.push_back(hashdecl->getName());
 
     return 0;
 }
@@ -3969,6 +3985,8 @@ int qore_ns_private::parseAddPendingEnum(const QoreProgramLocation* loc, QoreEnu
         parse_error(*loc, "enum '%s' is already defined in namespace '%s::'", enum_name, name.c_str());
         return -1;
     }
+    // track the new enum for rollback support; its member namespace is tracked by parseAddNamespace()
+    pending_enum_names.push_back(enum_name);
 
     // Create a namespace for enum member access (e.g., EnumName::MemberName)
     QoreNamespace* enum_ns = new QoreNamespace(enum_name);

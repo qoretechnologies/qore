@@ -1620,8 +1620,10 @@ void qore_program_private_base::copyExternalData() {
 
 void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     bool atomic_rollback = static_cast<bool>(pwo.parse_options & PO_ALLOW_REPARSE);
-    // delete pending changes to namespaces
-    qore_root_ns_private::get(*RootNS)->parseRollback(xsink, atomic_rollback);
+    // delete pending changes to namespaces: only what the failed parse added is removed, also without
+    // PO_ALLOW_REPARSE, as the namespaces hold what the Program had before the parse, including the classes and
+    // other symbols inherited from its parent when it was created, which a new parse must still find
+    qore_root_ns_private::get(*RootNS)->parseRollback(xsink, true);
 
     // delete pending statements
     sb.parseRollback();

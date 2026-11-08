@@ -1889,6 +1889,13 @@
       (by a destructor at exit, for example) were never released
     - key-value data set with the C++ API function QoreClass::setKeyValue() was never released for a class without
       static variables
+    - after a failed parse, a @ref Qore::Program "Program" without @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE"
+      (which a child program does not get when its parent does not have it) lost the classes, constants and other
+      symbols that it had inherited from its parent, so a new parse could not find them; only what the failed parse
+      added is removed now
+    - after a failed parse, a @ref Qore::Program "Program" with @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE" kept
+      the classes, constants, hashdecls, enums and namespaces that the failed parse had declared, so a new parse could
+      not declare them again
 
     @section qore_2_2_1 Qore 2.2.1
 
