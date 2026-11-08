@@ -586,6 +586,13 @@ def tool_versions(cmake_cache):
     return rv
 
 
+#: a library in the output of ldd (glibc and musl): "<name> => <path> (0x<address>)" or "<path> (0x<address>)"; the
+#: output has the errors of ldd too, as musl's "/lib/ld-musl-x86_64.so.1: <file>: Not a valid dynamic program" for a
+#: file that is not a dynamic program (a script), which was taken for a library named "/lib/ld-musl-x86_64.so.1:", so
+#: that the context of a build tree with a script as its qcc depended on whether the script was there
+LDD_LIBRARY_LINE = re.compile(r"^\s*(?:\S+\s+=>\s*(/\S+)|(/\S+))\s+\(0x[0-9a-fA-F]+\)\s*$")
+
+
 def shared_library_digests(build_dir):
     """The content of every shared library that libqore and qcc are linked with (the LLVM library and the system
     libraries, whose patch versions /etc/os-release does not name), by their real paths"""
@@ -604,9 +611,9 @@ def shared_library_digests(build_dir):
             out = run_capture(["ldd", t])
             libs = []
             for line in out.splitlines():
-                m = re.search(r"=>\s*(/\S+)", line) or re.match(r"\s*(/\S+)", line)
+                m = LDD_LIBRARY_LINE.match(line)
                 if m:
-                    libs.append(m.group(1))
+                    libs.append(m.group(1) or m.group(2))
         for lib in libs:
             if lib.startswith("@"):
                 # @rpath/libqore is the build's own library, whose sources are in the context; @rpath/libLLVM is
