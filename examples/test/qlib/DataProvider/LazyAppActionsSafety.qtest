@@ -39,6 +39,9 @@ class SafetyRuns {
     }
 }
 
+#! The thread on which the registration of barrierRegistrationTest() ran
+our int barrier_registration_tid;
+
 #! A catalog change listener that records the threads that call it
 class SafetyListener inherits DataProviderCatalogChangeListener {
     private {
@@ -84,6 +87,12 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
 
     constructor() : Test("DataProvider lazy action registration safety", "1.0") {
         addTestCase("a subclass of the catalog cannot reach its internal state", \subclassTest());
+        addTestCase("code restricted with PO_NO_UNCONTROLLED_APIS uses the catalog after a trusted load",
+            \restrictedCallerTest());
+        addTestCase("a restricted Program loads a module with a lazy value", \restrictedModuleLoadTest());
+        addTestCase("a sandboxed reader under a policy barrier is still sandboxed", \barrierReaderTest());
+        addTestCase("a registration made under a policy barrier for sandboxed code runs at once",
+            \barrierRegistrationTest());
         addTestCase("NoInit getters never run a lazy registration", \noInitNeverRunsTest());
         addTestCase("NoInit getters never wait for another thread's initialization", \noInitNeverWaitsTest());
         addTestCase("a thread holding the catalog lock does not run a lazy registration", \lockHolderTest());
@@ -150,6 +159,105 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         # the class can still be subclassed
         Program p(PO_NEW_STYLE, True);
         p.parse("%requires DataProvider\nclass Plain inherits DataProviderActionCatalog {}\n", "plain");
+    }
+
+    restrictedCallerTest() {
+        string lazy = registerLazyApp("SafeRestrictedLazy");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(lazy);
+        string pending = registerApp("SafeRestrictedPending");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(pending);
+        DataProviderActionCatalog::registerPendingAppAction(pending, "pending-a", sub () {
+            LazyAppActionsSafetyTest::registerAction(pending, "pending-a");
+        });
+        Program r(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        r.loadModule("LazyAppActionsValues");
+        r.parse("%requires DataProvider\n"
+            "list<string> sub read(string app) { return map $1.action, DataProviderActionCatalog::getActions(app, False); }\n"
+            "list<string> sub read_via_module(string app) { return LazyAppActionsValues::Values::readApp(app); }\n"
+            "sub reg(string app) {\n"
+            "    DataProviderActionCatalog::registerLazyAppActions(app, sub () {\n"
+            "        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app, \"action\": \"later\",\n"
+            "            \"path\": \"/later\", \"display_name\": \"later\", \"short_desc\": \"later\", \"desc\": \"later\",\n"
+            "            \"action_code\": DPAT_API});\n"
+            "    });\n"
+            "    DataProviderActionCatalog::registerPendingAppAction(app, \"pend\", sub () {\n"
+            "        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app, \"action\": \"pend\",\n"
+            "            \"path\": \"/pend\", \"display_name\": \"pend\", \"short_desc\": \"pend\", \"desc\": \"pend\",\n"
+            "            \"action_code\": DPAT_API});\n"
+            "    });\n"
+            "}\n"
+            "auto sub value(int id) { return DataProviderActionCatalog::getLazyValue(id); }\n", "restricted");
+        # lazy and pending registrations of trusted code, read directly and through a trusted module
+        assertEq(("eager-a", "lazy-b", "lazy-c"), r.callFunction("read", lazy));
+        assertEq(("pending-a",), r.callFunction("read_via_module", pending));
+        # registrations of restricted code, which no sandbox governs: deferred as for any trusted code
+        string app = registerApp("SafeRestrictedReg");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        r.callFunction("reg", app);
+        assertTrue(DataProviderActionCatalog::hasLazyAppActions(app));
+        assertEq(("later", "pend"), sort(r.callFunction("read", app)));
+        # a lazy value
+        assertEq("for restricted", r.callFunction("value", Values::for_restricted));
+    }
+
+    restrictedModuleLoadTest() {
+        Program r(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS, True);
+        r.loadModule(get_script_dir() + "/LazyAppActionsRestrictedValues.qm");
+        r.parse("%requires DataProvider\n"
+            "auto sub get() { return DataProviderActionCatalog::getLazyValue(\n"
+            "    LazyAppActionsRestrictedValues::RestrictedValues::getId()); }\n"
+            "int sub runs() { return LazyAppActionsRestrictedValues::RestrictedValues::getRuns(); }\n",
+            "restricted-load");
+        # the module was loaded by code that no sandbox governs: its value is built on first use
+        assertEq(0, r.callFunction("runs"));
+        assertEq("restricted", r.callFunction("get"));
+        assertEq(1, r.callFunction("runs"));
+    }
+
+    barrierReaderTest() {
+        string app = registerApp("SafeBarrierReader");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        registerAction(app, "eager-a");
+        Queue tids();
+        *SafetyProbe probe;
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            tids.push(gettid());
+            probe = new SafetyProbe();
+            LazyAppActionsSafetyTest::registerAction(app, "lazy-b");
+        });
+        # trusted infrastructure that serves sandboxed callers under a policy barrier
+        code cap = SandboxManager::createSystemPolicyCall(\LazyAppActionsSafetyTest::readBarrier());
+        SandboxManager sm();
+        Program tenant(PO_NEW_STYLE, True);
+        tenant.parse("int sub run(code cap, string app, int value) { return cap(app, value); }\n", "barrier-tenant");
+        tenant.setSandboxManager(sm);
+        int reader_tid = tenant.callFunction("run", cap, app, Values::thread);
+        # the registration and the value ran on a worker, not on the tenant's thread
+        int closure_tid = tids.get(0);
+        assertTrue(closure_tid != reader_tid, "the registration did not run on the tenant's thread");
+        assertTrue(Values::built_in != reader_tid, "the value was not built on the tenant's thread");
+        assertEq(("eager-a", "lazy-b"), map $1.action, DataProviderActionCatalog::getActions(app, False));
+        # what the registration created belongs to no sandbox
+        sm.requestInterrupt();
+        on_exit sm.clearInterrupt();
+        assertEq("worked", probe.work());
+    }
+
+    barrierRegistrationTest() {
+        string app = registerApp("SafeBarrierRegistration");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        code cap = SandboxManager::createSystemPolicyCall(\LazyAppActionsSafetyTest::registerBarrier());
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        Program tenant(PO_NEW_STYLE, True);
+        tenant.parse("int sub run(code cap, string app, string path) { return cap(app, path); }\n",
+            "barrier-registrar");
+        tenant.setSandboxManager(sm);
+        int registering_tid = tenant.callFunction("run", cap, app, get_script_path());
+        # registered for sandboxed code: run at once, on the registering thread, nothing deferred
+        assertFalse(DataProviderActionCatalog::hasLazyAppActions(app));
+        assertEq(("lazy-b",), map $1.action, DataProviderActionCatalog::getActionsNoInit(app));
+        assertEq(registering_tid, barrier_registration_tid);
     }
 
     noInitNeverRunsTest() {
@@ -945,6 +1053,24 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
 %else
         testSkip("the test needs the catalog worker's test hooks, which only debug builds have");
 %endif
+    }
+
+    #! Reads an app and a lazy value for a sandboxed caller under a policy barrier; returns the thread's TID
+    private static int readBarrier(string app, int value) {
+        DataProviderActionCatalog::getActions(app, False);
+        DataProviderActionCatalog::getLazyValue(value);
+        return gettid();
+    }
+
+    #! Registers lazy actions for a sandboxed caller under a policy barrier; returns the thread's TID
+    private static int registerBarrier(string app, string path) {
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            barrier_registration_tid = gettid();
+            # the barrier masks the caller's filesystem policy
+            ReadOnlyFile::readTextFile(path);
+            LazyAppActionsSafetyTest::registerAction(app, "lazy-b");
+        });
+        return gettid();
     }
 
     #! Calls a function of a Program in a thread of the test

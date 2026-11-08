@@ -1371,14 +1371,6 @@ public class DataProviderActionCatalog {
         #! Set by the exit hook: no worker is started afterwards, and a running one ends
         static bool lazy_worker_shutdown = False;
 
-        #! @ref True if the module can use the sandbox APIs that deferred registration needs
-        /** They are in the \c UNCONTROLLED_API domain: when the Program that loaded the module first may not use them
-            (@ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"), neither may the module, which then runs
-            lazy registrations and builds lazy values when they are registered, as modules did before they were lazy;
-            the module calls them by name, so that it can be loaded by such a Program at all
-        */
-        static bool sandbox_apis = DataProviderActionCatalog::checkSandboxApis();
-
         #! The capability that starts the catalog worker in a thread that no sandbox governs, or @ref NOTHING
         /** Created when the module is loaded, with the exit hook that stops the worker; see initLazyWorker()
         */
@@ -1663,11 +1655,12 @@ DataProviderActionCatalog::registerLazyAppActions(AppName, sub () {
         @since %DataProvider 3.11
     */
     static registerLazyAppActions(string app, code init) {
-        # without the sandbox APIs, and for code that a sandbox governs (a module that sandboxed code loads), the
+        # without a catalog worker (see initLazyWorker()), and for code that a sandbox governs (a module that sandboxed
+        # code loads, also under a policy barrier), the
         # registration runs now, on this thread, as it did when it was not lazy: no code registered under a sandbox
         # runs later on another thread, where it could block other tenants or trusted code; it registers through the
         # catalog, so it runs without the catalog lock
-        if (!sandbox_apis || DataProviderActionCatalog::isGoverned()) {
+        if (!lazy_worker_start || DataProviderActionCatalog::isGoverned()) {
             if (!appcache{app}) {
                 throw "APP-ERROR", sprintf("cannot register lazy actions for application %y, which is not "
                     "registered", app);
@@ -1764,9 +1757,9 @@ class MyProvider {
         }
         # a hash of any values: the value replaces the builder's entry when it is built
         hash<auto> v;
-        # without the sandbox APIs, and for a module that sandboxed code loads, the value is built now, as it was when
+        # without a catalog worker, and for a module that sandboxed code loads, the value is built now, as it was when
         # it was not lazy: no code registered under a sandbox runs later, on another thread
-        if (!sandbox_apis || DataProviderActionCatalog::isGoverned()) {
+        if (!lazy_worker_start || DataProviderActionCatalog::isGoverned()) {
             v.value = builder();
             v.built = True;
         } else {
@@ -5428,18 +5421,16 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     #! Creates the capability that starts the catalog worker, and the exit hook that stops it
     /** Called when the module is loaded, in the context of the code loading it: the capability starts the worker in a
         thread that no sandbox governs, also when a sandboxed reader needs it first, and no worker runs until one
-        does.  When the module is loaded first by sandboxed code, there is no worker; then every registration that
-        the module's users make is made under the sandbox, as the module's Program inherits it, and runs when it is
-        made, so no sandboxed reader needs a worker.  When the module is loaded first by code that may not use these
-        APIs (@ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"), which could not load it at all before
-        it called them by name, registrations run when they are made as well (see @ref sandbox_apis).
+        does.  The capability can only be created by code that no sandbox governs, also through a policy barrier, and
+        that may use the \c UNCONTROLLED_API domain (the module calls the method by name, so that it can be loaded by
+        any Program): when the module is loaded first by sandboxed code, under a policy barrier, or by code restricted
+        with @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", there is no worker, and every deferred
+        registration runs, and every lazy value is built, when it is registered, as before registrations were
+        deferred.
 
         @return the capability, or @ref NOTHING if there is no worker
     */
     private:internal static *code initLazyWorker() {
-        if (!sandbox_apis) {
-            return;
-        }
         try {
             code start = call_static_method("SandboxManager", "createSystemThreadCall",
                 \DataProviderActionCatalog::lazyWorkerMain());
@@ -5450,21 +5441,15 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
     }
 
-    #! Returns @ref True if the module can use the sandbox APIs; see @ref sandbox_apis
-    private:internal static bool checkSandboxApis() {
-        try {
-            call_static_method("SandboxManager", "isGoverned");
-            return True;
-        } catch (hash<ExceptionInfo> ex) {
-            return False;
-        }
-    }
-
-    #! Returns @ref True if a sandbox governs the current thread's code (Qore::SandboxManager::isGoverned())
-    /** @ref False when the module cannot use the sandbox APIs; see @ref sandbox_apis
+    #! Returns @ref True if a sandbox governs the current thread's code, also through a policy barrier
+    /** Every decision the catalog makes on where code runs uses this: Qore::SandboxManager::isSandboxed() sees the
+        sandbox of the code being served also under a policy barrier (Qore::SandboxManager::callWithSystemPolicy())
+        or in a system-policy capability, which mask only the sandbox's filesystem and network policy, not its
+        interrupts or the provenance of what the code creates; and it is not restricted, so the catalog decides the
+        same for callers restricted with @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"
     */
     private:internal static bool isGoverned() {
-        return sandbox_apis && call_static_method("SandboxManager", "isGoverned");
+        return SandboxManager::isSandboxed();
     }
 
     #! Starts a catalog worker if none runs, or if every worker is busy; lazy_worker_lck is held

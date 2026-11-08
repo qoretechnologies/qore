@@ -23,6 +23,13 @@ public class Values {
         #! the builds of counted
         static int runs = 0;
 
+        #! records the thread that builds it
+        static int thread = DataProviderActionCatalog::registerLazyValue(\Values::buildThread());
+        #! the thread that built thread
+        static int built_in;
+        #! a value for code restricted with PO_NO_UNCONTROLLED_APIS
+        static int for_restricted = DataProviderActionCatalog::registerLazyValue(\Values::buildForRestricted());
+
         #! two values whose builders get each other
         static int cycle_a = DataProviderActionCatalog::registerLazyValue(\Values::buildCycleA());
         static int cycle_b = DataProviderActionCatalog::registerLazyValue(\Values::buildCycleB());
@@ -35,10 +42,24 @@ public class Values {
         static Mutex m();
     }
 
+    #! Reads an app's actions; restricted code calls the catalog through this trusted module
+    static list<string> readApp(string app) {
+        return map $1.action, DataProviderActionCatalog::getActions(app, False);
+    }
+
     static string buildCounted() {
         AutoLock al(m);
         ++runs;
         return "counted";
+    }
+
+    static string buildForRestricted() {
+        return "for restricted";
+    }
+
+    static string buildThread() {
+        built_in = gettid();
+        return "thread";
     }
 
     static string buildCycleA() {
