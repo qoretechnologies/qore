@@ -38,6 +38,11 @@ module DnsTestServer {
     - \c nodata: \c NOERROR (0) without an answer, the name has no address (c-ares: \c ENODATA)
     - \c servfail: \c SERVFAIL (2), the server failed (c-ares: \c ESERVFAIL)
     - \c refused: \c REFUSED (5), the server refused the query (c-ares: \c EREFUSED)
+    - \c mixed: \c SERVFAIL for an \c A query; \c NOERROR without an answer for an \c AAAA query, given only once
+      the server has answered the \c A query of the same lookup (the one received last before it, or else the next
+      one) @ref DnsTestServer::DnsTestServer::MixedATries "MixedATries" times: a lookup of both address families
+      (\c AF_UNSPEC) gets the answer for \c AAAA last, after c-ares has given up on the \c A query, which it sends
+      again after each \c SERVFAIL answer with the same id (an \c AAAA query alone is not answered)
     - any other name: \c SERVFAIL
 
     A debug build of %Qore sends the name lookups of the process to it with \c dbg_cares_set_servers(), so a test of
@@ -63,6 +68,11 @@ public namespace DnsTestServer {
         "refused": 5,
     };
 
+    #! the type of an A query (RFC 1035 section 3.2.2)
+    public const TypeA = 1;
+    #! the type of an AAAA query (RFC 3596 section 2.1)
+    public const TypeAaaa = 28;
+
     #! The DNS server
     public class DnsTestServer {
         private {
@@ -74,7 +84,20 @@ public namespace DnsTestServer {
             #! the number of queries answered, by the first label of the name
             hash<string, int> queries;
             Mutex m();
+            #! the AAAA queries for \c mixed names to answer: the reply, the address and port it goes to, and the
+            #! id of the A query to answer before it (none: the next A query)
+            list<hash<auto>> held_aaaa = ();
+            #! the A queries for \c mixed names being answered: the times each was answered, by id
+            hash<string, int> a_answers;
+            #! the id of the A query for a \c mixed name received last, while it is being answered
+            *string last_a_id;
         }
+
+        #! the times the A query of a lookup of a \c mixed name is answered before its AAAA query
+        /** The tries of the channels that \c dbg_cares_set_servers() sends the lookups of a debug build to: the last
+            answer for the A query of a lookup of both families comes before the answer for its AAAA query
+        */
+        public const MixedATries = 3;
 
         #! Starts the server on a port that the system assigns on 127.0.0.1
         constructor() {
@@ -114,15 +137,50 @@ public namespace DnsTestServer {
                 if (dgram.data == Stop) {
                     return;
                 }
-                *binary reply = answer(dgram.data);
-                if (reply) {
-                    drive(sock.startPollSendTo(dgram.address, dgram.port, reply));
+                *hash<auto> reply = answer(dgram.data);
+                if (!reply) {
+                    continue;
+                }
+                if (reply.held) {
+                    held_aaaa += {"reply": reply.data, "address": dgram.address, "port": dgram.port,
+                        "a_id": last_a_id};
+                    continue;
+                }
+                if (reply.mixed_a && !a_answers{reply.id}) {
+                    # the A query of a lookup: the AAAA queries waiting for the next one wait for it
+                    last_a_id = reply.id;
+                    foreach hash<auto> h in (\held_aaaa) {
+                        if (!h.a_id) {
+                            h.a_id = reply.id;
+                        }
+                    }
+                }
+                drive(sock.startPollSendTo(dgram.address, dgram.port, reply.data));
+                if (reply.mixed_a && ++a_answers{reply.id} == MixedATries) {
+                    # the last answer for the A query: the AAAA queries of its lookup are answered
+                    remove a_answers{reply.id};
+                    if (last_a_id == reply.id) {
+                        remove last_a_id;
+                    }
+                    list<hash<auto>> held = ();
+                    foreach hash<auto> h in (held_aaaa) {
+                        if (h.a_id == reply.id) {
+                            drive(sock.startPollSendTo(h.address, h.port, h.reply));
+                        } else {
+                            held += h;
+                        }
+                    }
+                    held_aaaa = held;
                 }
             }
         }
 
         #! Returns the response to a query, or nothing if it is not a query
-        private *binary answer(binary query) {
+        /** @return <tt>{"data": binary, "id": string, "held": bool, "mixed_a": bool}</tt>: the response; the id of
+            the query in hex; whether it is held (an AAAA query for a \c mixed name), and whether it answers an A query
+            for a \c mixed name
+        */
+        private *hash<auto> answer(binary query) {
             # header (12 bytes), then the question: the name's labels, a zero byte, the type and the class
             if (query.size() < 17) {
                 return;
@@ -143,7 +201,9 @@ public namespace DnsTestServer {
             if (question_end > query.size()) {
                 return;
             }
-            int rcode = Rcodes{first} ?? 2;
+            int qtype = query.substr(offset + 1, 2).toHex().toInt(16);
+            bool mixed = first == "mixed";
+            int rcode = mixed ? (qtype == TypeAaaa ? 0 : 2) : (Rcodes{first} ?? 2);
             {
                 m.lock();
                 on_exit m.unlock();
@@ -157,7 +217,12 @@ public namespace DnsTestServer {
             # one question, no answer, authority or additional records
             reply += <0001000000000000>;
             reply += query.substr(12, question_end - 12);
-            return reply;
+            return {
+                "data": reply,
+                "id": query.substr(0, 2).toHex(),
+                "held": mixed && qtype == TypeAaaa,
+                "mixed_a": mixed && qtype == TypeA,
+            };
         }
 
         private static drive(AbstractPollOperation op) {

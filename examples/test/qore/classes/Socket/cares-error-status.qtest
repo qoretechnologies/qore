@@ -24,6 +24,7 @@ class CaresErrorStatusTest inherits QUnit::Test {
     constructor() : QUnit::Test("CaresErrorStatus", "1.0") {
         addTestCase("getaddrinfo() gives the resolver's status", \getaddrinfoTest());
         addTestCase("getaddrinfo_async() gives the resolver's status", \getaddrinfoAsyncTest());
+        addTestCase("a lookup of both families is definite only if both answers are", \mixedFamiliesTest());
         addTestCase("Socket::resolveAddrInfo() gives the resolver's status", \resolveAddrInfoTest());
         addTestCase("Socket::connect() gives the resolver's status", \connectTest());
         addTestCase("HTTPClient gives the resolver's status", \httpClientTest());
@@ -60,6 +61,25 @@ class CaresErrorStatusTest inherits QUnit::Test {
         foreach hash<auto> i in (Expected.pairIterator()) {
             checkStatus(sub (string name) { getaddrinfo_async(name).get(); }, (i.key + ".qore-test.",), i.value);
         }
+    }
+
+    #! c-ares gives the status of the address family whose query finished last
+    /** A SERVFAIL answer for the A query and a NODATA answer for the AAAA query, which the server gives last, made
+        the lookup of both families fail with ENODATA, a definite answer, so a caller that retries temporary failures
+        did not retry it
+    */
+    mixedFamiliesTest() {
+        checkDebug();
+        string name = "mixed.qore-test.";
+        checkStatus(\getaddrinfo(), (name,), "ESERVFAIL");
+        checkStatus(\getaddrinfo(), (name, NOTHING, AF_UNSPEC), "ESERVFAIL");
+        checkStatus(\Socket::resolveAddrInfo(), (name, "80"), "ESERVFAIL");
+        checkStatus(sub (string name) { getaddrinfo_async(name).get(); }, (name,), "ESERVFAIL");
+        # a lookup of IPv4 only gives the answer of its family
+        checkStatus(\getaddrinfo(), (name, NOTHING, AF_INET), "ESERVFAIL");
+        # names whose answers are the same for both families keep their definite status
+        checkStatus(\getaddrinfo(), ("nx.qore-test.", NOTHING, AF_UNSPEC), "ENOTFOUND");
+        checkStatus(\getaddrinfo(), ("nodata.qore-test.", NOTHING, AF_UNSPEC), "ENODATA");
     }
 
     resolveAddrInfoTest() {

@@ -558,7 +558,9 @@
       read; a TLS connection sends its \c close_notify alert first
     - a \c QOREADDRINFO-GETINFO-ERROR exception for an answer of the resolver gives the resolver's status in its
       argument (<tt>arg.status</tt>), so that a definite answer such as \c "ENOTFOUND" (the name does not exist) can
-      be told from a failure that can be temporary, such as \c "ETIMEOUT" or \c "ESERVFAIL" (see
+      be told from a failure that can be temporary, such as \c "ETIMEOUT" or \c "ESERVFAIL"; a lookup of both
+      address families is definite only if the answers for both are, and the Future of
+      @ref Qore::getaddrinfo_async() "getaddrinfo_async()" raises the same argument (see
       @ref Qore::getaddrinfo() "getaddrinfo()")
     @endparblock
 

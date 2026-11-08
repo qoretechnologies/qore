@@ -644,6 +644,11 @@ DLLLOCAL const char* qore_cares_status_name(int status);
 */
 DLLLOCAL QoreHashNode* qore_cares_error_arg(int status);
 
+//! Returns true if a c-ares status is a definite answer about a name: \c ENOTFOUND or \c ENODATA
+/** These are the answers that can differ by address family; see QoreCaresAddrInfoResolver::complete()
+*/
+DLLLOCAL bool qore_cares_status_is_definite(int status);
+
 class QoreCaresAddrInfoResolver {
 public:
     DLLLOCAL QoreCaresAddrInfoResolver(std::string host, std::string service, int family, int type, int protocol,
@@ -678,12 +683,33 @@ private:
     DLLLOCAL int restart(ExceptionSink* xsink);
     DLLLOCAL void process(ExceptionSink* xsink);
     DLLLOCAL void updateFd(ares_socket_t socket_fd, int readable, int writable);
+    //! Records the result of the lookup
+    /** A lookup of both address families (\c AF_UNSPEC) that failed with a definite answer (see
+        qore_cares_status_is_definite()) is confirmed by a lookup of each family (see startConfirmation()): c-ares
+        gives the status of the family whose query finished last, which hid a failure of the other family that
+        might not happen again
+    */
     DLLLOCAL void complete(int new_status, struct ares_addrinfo* res);
+    //! Starts the lookup of each address family that confirms the definite failure of a lookup of both
+    /** Called after c-ares has returned, not from its callback, as it takes the environment lock that the start of a
+        lookup holds
+    */
+    DLLLOCAL void startConfirmation();
+    //! Records the result of the lookup of one family that confirms a definite failure (0: IPv6, 1: IPv4)
+    /** The failure is definite if both answers are; a family that has addresses gives them as the result
+    */
+    DLLLOCAL void confirmed(int index, int new_status, struct ares_addrinfo* res);
+    //! Adds the addresses of a c-ares result
+    DLLLOCAL void addAddresses(const struct ares_addrinfo* res);
+    //! Drops the confirmation of a failure and frees its results
+    DLLLOCAL void resetConfirmation() noexcept;
     //! Removes the loopback addresses that c-ares added to the hosts file's answer for a localhost name
     DLLLOCAL void keepHostsFileAddresses() noexcept;
     DLLLOCAL int raiseError(ExceptionSink* xsink) const;
 
     DLLLOCAL static void callback(void* arg, int status, int, struct ares_addrinfo* res);
+    DLLLOCAL static void confirmCallback6(void* arg, int status, int, struct ares_addrinfo* res);
+    DLLLOCAL static void confirmCallback4(void* arg, int status, int, struct ares_addrinfo* res);
     DLLLOCAL static void sockStateCallback(void* arg, ares_socket_t socket_fd, int readable, int writable);
 
     std::string host;
@@ -701,6 +727,16 @@ private:
     std::vector<QoreHostsFileAddress> hosts_file_addrs;
     std::unordered_map<int, int> fd_events;
     int status = ARES_SUCCESS;
+    //! the hints of the lookup
+    struct ares_addrinfo_hints hints = {};
+    //! set when a definite failure of a lookup of both families is to be confirmed (see complete())
+    bool confirm_pending = false;
+    //! the number of lookups of single families confirming a failure that have not finished
+    int confirm_remaining = 0;
+    //! the status of a confirmed failure: definite unless the lookup of a family fails otherwise
+    int confirm_status = ARES_SUCCESS;
+    //! the results of the lookups of single families that confirm a failure: IPv6, IPv4
+    struct ares_addrinfo* confirm_res[2] = {nullptr, nullptr};
     //! the number of times the lookup was started again after c-ares lost its query
     unsigned lost_query_restarts = 0;
     bool started = false;

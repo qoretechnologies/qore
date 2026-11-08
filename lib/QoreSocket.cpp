@@ -7238,6 +7238,18 @@ QoreCaresAddrInfoResolver::~QoreCaresAddrInfoResolver() {
         ares_destroy(channel);
         channel = nullptr;
     }
+    resetConfirmation();
+}
+
+void QoreCaresAddrInfoResolver::resetConfirmation() noexcept {
+    for (struct ares_addrinfo*& res : confirm_res) {
+        if (res) {
+            ares_freeaddrinfo(res);
+            res = nullptr;
+        }
+    }
+    confirm_pending = false;
+    confirm_remaining = 0;
 }
 
 int QoreCaresAddrInfoResolver::continuePoll(ExceptionSink* xsink) {
@@ -7278,6 +7290,8 @@ int QoreCaresAddrInfoResolver::restart(ExceptionSink* xsink) {
     channel = nullptr;
     // the destroyed channel's sockets are closed; the new channel reports its own
     fd_events.clear();
+    // the lookup starts again: a confirmation of its failure that was started (see complete()) is dropped
+    resetConfirmation();
     started = false;
     status = ARES_SUCCESS;
     return start(xsink);
@@ -7435,7 +7449,7 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
         return -1;
     }
 
-    struct ares_addrinfo_hints hints = {};
+    hints = {};
     // POSIX AI_* and c-ares ARES_AI_* flags have different values, including across operating systems.
     // Translate their meanings rather than passing the platform bitmask to c-ares unchanged.
     static constexpr std::pair<int, int> flag_map[] = {
@@ -7479,10 +7493,33 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
         ares_getaddrinfo(channel, has_host ? host.c_str() : nullptr, has_service ? service.c_str() : nullptr,
             &hints, callback, this);
     }
+    if (confirm_pending) {
+        startConfirmation();
+    }
     if (done) {
         return status == ARES_SUCCESS ? 0 : raiseError(xsink);
     }
     return 0;
+}
+
+void QoreCaresAddrInfoResolver::startConfirmation() {
+    assert(confirm_pending && family == AF_UNSPEC);
+    confirm_pending = false;
+    confirm_remaining = 2;
+    // the status reported if the answers of both families are definite
+    confirm_status = status;
+    struct ares_addrinfo_hints family_hints = hints;
+    QoreEnvironmentReadLock env_lock;
+#ifdef DEBUG
+    qore_dbg_cares_lookup_env_read();
+#endif
+    // a callback can run here, before the second lookup has started; it only records its result
+    family_hints.ai_family = AF_INET6;
+    ares_getaddrinfo(channel, has_host ? host.c_str() : nullptr, has_service ? service.c_str() : nullptr,
+        &family_hints, confirmCallback6, this);
+    family_hints.ai_family = AF_INET;
+    ares_getaddrinfo(channel, has_host ? host.c_str() : nullptr, has_service ? service.c_str() : nullptr,
+        &family_hints, confirmCallback4, this);
 }
 
 void QoreCaresAddrInfoResolver::process(ExceptionSink* xsink) {
@@ -7500,6 +7537,9 @@ void QoreCaresAddrInfoResolver::process(ExceptionSink* xsink) {
             }
         }
     }
+    if (confirm_pending) {
+        startConfirmation();
+    }
     if (done && status != ARES_SUCCESS) {
         raiseError(xsink);
     }
@@ -7507,6 +7547,14 @@ void QoreCaresAddrInfoResolver::process(ExceptionSink* xsink) {
 
 void QoreCaresAddrInfoResolver::callback(void* arg, int status, int, struct ares_addrinfo* res) {
     reinterpret_cast<QoreCaresAddrInfoResolver*>(arg)->complete(status, res);
+}
+
+void QoreCaresAddrInfoResolver::confirmCallback6(void* arg, int status, int, struct ares_addrinfo* res) {
+    reinterpret_cast<QoreCaresAddrInfoResolver*>(arg)->confirmed(0, status, res);
+}
+
+void QoreCaresAddrInfoResolver::confirmCallback4(void* arg, int status, int, struct ares_addrinfo* res) {
+    reinterpret_cast<QoreCaresAddrInfoResolver*>(arg)->confirmed(1, status, res);
 }
 
 void QoreCaresAddrInfoResolver::sockStateCallback(void* arg, ares_socket_t socket_fd, int readable, int writable) {
@@ -7539,37 +7587,76 @@ void QoreCaresAddrInfoResolver::complete(int new_status, struct ares_addrinfo* r
     status = new_status;
     result = res;
     if (status == ARES_SUCCESS && result) {
-        bool first = true;
-        const char* canonname = nullptr;
-        if (flags & AI_CANONNAME) {
-            canonname = result->name && *result->name
-                ? result->name
-                : (result->cnames && result->cnames->name && *result->cnames->name ? result->cnames->name
-                    : nullptr);
-        }
-        for (struct ares_addrinfo_node* n = result->nodes; n; n = n->ai_next) {
-            if (!n->ai_addr || n->ai_addrlen <= 0
-                    || n->ai_addrlen > static_cast<ares_socklen_t>(sizeof(struct sockaddr_storage))) {
-                continue;
-            }
-            SocketResolvedAddrInfo ai;
-            ai.family = n->ai_family;
-            ai.socktype = n->ai_socktype;
-            ai.protocol = n->ai_protocol;
-            ai.addrlen = static_cast<socklen_t>(n->ai_addrlen);
-            memcpy(&ai.addr, n->ai_addr, n->ai_addrlen);
-            if (first && canonname) {
-                ai.canonname = canonname;
-            }
-            addrs.push_back(ai);
-            first = false;
-        }
+        addAddresses(result);
         keepHostsFileAddresses();
         if (addrs.empty()) {
             status = ARES_ENODATA;
         }
+    } else if (family == AF_UNSPEC && qore_cares_status_is_definite(status)) {
+        // c-ares gives the status of the query of the address family that finished last: a SERVFAIL answer for one
+        // family and a NODATA answer for the other, finishing last, gave ENODATA, which is definite, though the
+        // first was a failure that might not happen again; the failure is definite only if the answer for each
+        // family is, so each family is looked up again (see confirmed()); a definite answer that has an SOA record,
+        // as DNS servers give them, comes from the query cache of the channel
+        confirm_pending = true;
+        return;
     }
     done = true;
+}
+
+void QoreCaresAddrInfoResolver::confirmed(int index, int new_status, struct ares_addrinfo* res) {
+    if (restarting) {
+        if (res) {
+            ares_freeaddrinfo(res);
+        }
+        return;
+    }
+    assert(confirm_remaining > 0 && !confirm_res[index]);
+    confirm_res[index] = res;
+    if (new_status != ARES_SUCCESS && !qore_cares_status_is_definite(new_status)
+            && qore_cares_status_is_definite(confirm_status)) {
+        // a family whose answer is not definite makes the failure one that might not happen again
+        confirm_status = new_status;
+    }
+    if (--confirm_remaining) {
+        return;
+    }
+    // a family that has addresses now gives them as the answer, the IPv6 addresses first
+    for (const struct ares_addrinfo* r : confirm_res) {
+        if (r) {
+            addAddresses(r);
+        }
+    }
+    keepHostsFileAddresses();
+    status = addrs.empty() ? confirm_status : ARES_SUCCESS;
+    done = true;
+}
+
+void QoreCaresAddrInfoResolver::addAddresses(const struct ares_addrinfo* res) {
+    bool first = addrs.empty();
+    const char* canonname = nullptr;
+    if (flags & AI_CANONNAME) {
+        canonname = res->name && *res->name
+            ? res->name
+            : (res->cnames && res->cnames->name && *res->cnames->name ? res->cnames->name : nullptr);
+    }
+    for (struct ares_addrinfo_node* n = res->nodes; n; n = n->ai_next) {
+        if (!n->ai_addr || n->ai_addrlen <= 0
+                || n->ai_addrlen > static_cast<ares_socklen_t>(sizeof(struct sockaddr_storage))) {
+            continue;
+        }
+        SocketResolvedAddrInfo ai;
+        ai.family = n->ai_family;
+        ai.socktype = n->ai_socktype;
+        ai.protocol = n->ai_protocol;
+        ai.addrlen = static_cast<socklen_t>(n->ai_addrlen);
+        memcpy(&ai.addr, n->ai_addr, n->ai_addrlen);
+        if (first && canonname) {
+            ai.canonname = canonname;
+        }
+        addrs.push_back(ai);
+        first = false;
+    }
 }
 
 void QoreCaresAddrInfoResolver::keepHostsFileAddresses() noexcept {
@@ -7617,6 +7704,10 @@ const char* qore_cares_status_name(int status) {
         case ARES_ENOSERVER: return "ENOSERVER";
         default: return "EUNKNOWN";
     }
+}
+
+bool qore_cares_status_is_definite(int status) {
+    return status == ARES_ENOTFOUND || status == ARES_ENODATA;
 }
 
 QoreHashNode* qore_cares_error_arg(int status) {
