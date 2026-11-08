@@ -61,7 +61,8 @@ class DescriptorsCloexecTest inherits QUnit::Test {
         client.connect("127.0.0.1:" + port);
         *Socket accepted = listener.accept(10s);
         assertTrue(exists accepted);
-        list<int> fds = (listener.getSocket(), client.getSocket(), accepted.getSocket());
+        list<int> fds = (listener.getPollableDescriptor(), client.getPollableDescriptor(),
+            accepted.getPollableDescriptor());
         map assertGt(2, $1), fds;
         assertEq((), openInChild(fds));
     }

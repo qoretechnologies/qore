@@ -98,10 +98,11 @@
     compiled by an earlier \c qcc that exports one is refused when loaded and must be changed and recompiled.  A
     %Program's <tt>public thread_local</tt> variables are still passed to its child Programs.
 
-    @par Socket Descriptors Are Non-Blocking
-    The descriptor of a Socket, which @ref Qore::Socket::getSocket() "Socket::getSocket()" returns, is non-blocking
-    from the socket's creation, also for an accepted socket, and stays so between calls; code that uses the
-    descriptor itself must handle \c EAGAIN.
+    @par Socket::getSocket() Is Removed, and Socket Descriptors Are Non-Blocking
+    \c Socket::getSocket(), which returned the socket's descriptor, is removed: every operation on a socket is made by
+    the async I/O controller, and the descriptor, which is non-blocking from the socket's creation, is the
+    controller's; a poll operation that waits for the socket returns the socket itself in its
+    @ref Qore::SocketPollInfo "SocketPollInfo".
 
     @par Final Methods Hold for the Whole Class Hierarchy
     A subclass can no longer bypass a @ref final_methods "final" method with an overload that accepts the same
@@ -4797,7 +4798,7 @@
       initialized or at runtime
       (<a href="https://github.com/qoretechnologies/qore/issues/3561">issue 3561</a>)
     - fixed a bug where different connections on the same @ref Qore::Socket "Socket" object could not be identified;
-      code that relied on @ref Qore::Socket::getSocket() "Socket::getSocket()" is unreliable as the same descriptor
+      code that relied on \c Socket::getSocket() is unreliable as the same descriptor
       can be reassigned
       (<a href="https://github.com/qoretechnologies/qore/issues/3558">issue 3558</a>)
     - fixed a core dump in @ref Qore::FileLineIterator::getFileName() "FileLineIterator::getFileName()"

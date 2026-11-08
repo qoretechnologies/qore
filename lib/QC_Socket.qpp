@@ -6208,23 +6208,6 @@ int Socket::getPort() [flags=CONSTANT] {
     return s->getPort();
 }
 
-//! Returns the socket file descriptor number
-/** @par Example:
-    @code{.py}
-int sock = sock.getSocket();
-    @endcode
-
-    @return the socket file descriptor number or -1 if the socket is not open
-
-    @note The descriptor is non-blocking (\c O_NONBLOCK): the operations of the socket are made by the async I/O
-    controller, which needs it.  Code that reads or writes the descriptor itself must handle \c EAGAIN, and code
-    that gives it to a library that expects a blocking descriptor must set the descriptor blocking for that use and
-    non-blocking again before the socket is used.
-*/
-int Socket::getSocket() [flags=CONSTANT] {
-    return s->getSocket();
-}
-
 //! sets the send timeout as a socket option
 /** Returns 0 for success, -1 for error (check errno() for the actual error in this case)
 
