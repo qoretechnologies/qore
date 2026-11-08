@@ -205,8 +205,11 @@ public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase
     #! Returns example event data for documentation / flow-builder previews
     private auto getExampleEventDataImpl(string event_id) {
         try {
-            hash<auto> response = callMethod("getJournalList", {
-                "logs_types": (getLogType(),),
+            # the example data is requested once, without retries
+            hash<auto> response = DataProviderRetryUtil::runWithoutRetries(hash<auto> sub () {
+                return callMethod("getJournalList", {
+                    "logs_types": (getLogType(),),
+                });
             });
             list<auto> logs = response.logs ?? ();
             if (logs) {

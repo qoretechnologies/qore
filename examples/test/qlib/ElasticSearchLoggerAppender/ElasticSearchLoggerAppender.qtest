@@ -638,16 +638,33 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
         assertEq("POST", fake.last_method);
         assertEq("_bulk", fake.last_path);
 
-        appender.close();
-
-        # after close() the timer must no longer flush anything
-        logger.info("message after close");
-        try {
-            string extra = fake.bulk_requests.get(TimerWaitMs);
-            fail(sprintf("the flush timer was still running after close(): %y", extra));
-        } catch (hash<ExceptionInfo> ex) {
-            assertEq("QUEUE-TIMEOUT", ex.err);
+        # after close() the timer must no longer flush anything, also when a timer that fired before close() runs its
+        # callback after it: the DEBUG-only hook of the async I/O controller holds the callback of the next timer that
+        # fires, and runs it after close() has returned and an event has been logged; the callback finds the timer
+        # stopped and does not flush (in other builds, close() is called with the timer pending)
+        bool hold = Option::HAVE_LIBRARY_DEBUGGING;
+        if (hold) {
+            call_function("dbg_async_io_hold_timer_callbacks", True);
         }
+        on_exit if (hold) {
+            call_function("dbg_async_io_hold_timer_callbacks", False);
+            call_function("dbg_async_io_release_held_timer_callbacks");
+        }
+        if (hold) {
+            assertTrue(call_function("dbg_async_io_wait_held_timer_callbacks", 1, TimerWaitMs),
+                "the callback of the flush timer that fired is held");
+        }
+        appender.close();
+        logger.info("message after close");
+        # an event that reaches the appender after close() (as one still queued for it would) stays buffered: only a
+        # timer callback that ignored the stop could flush it
+        appender.processEventImpl(LoggerAppender::EVENT_LOG, {"message": "event after close"});
+        if (hold) {
+            call_function("dbg_async_io_hold_timer_callbacks", False);
+            assertEq(1, call_function("dbg_async_io_release_held_timer_callbacks"),
+                "the held callback of the flush timer ran after close()");
+        }
+        assertEq(0, fake.bulk_requests.size(), "nothing was flushed after close()");
     }
 
     #! Tests that closing the appender waits for a flush that is already in progress

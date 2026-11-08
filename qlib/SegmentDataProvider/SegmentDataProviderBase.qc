@@ -122,7 +122,7 @@ public class SegmentDataProviderBase inherits DataProvider::AbstractDataProvider
             try {
                 return rest.restDoRequest(method, path, body, hdr);
             } catch (hash<ExceptionInfo> ex) {
-                if (RetrySet{ex.err}) {
+                if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet)) {
                     if (++retries == MaxIoRetries) {
                         rethrow;
                     }

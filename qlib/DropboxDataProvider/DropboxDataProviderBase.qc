@@ -200,7 +200,7 @@ public class DropboxDataProviderBase inherits DataProvider::AbstractDataProvider
                 debug("Dropbox RPC %y", path);
                 return rest.restPost(path, body).body ?? {};
             } catch (hash<ExceptionInfo> ex) {
-                if (RetrySet{ex.err} && retries < MaxIoRetries) {
+                if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet) && retries < MaxIoRetries) {
                     ++retries;
                     debug("Dropbox I/O error %s; retrying (%d/%d)", ex.err, retries, MaxIoRetries);
                     continue;
@@ -228,7 +228,7 @@ public class DropboxDataProviderBase inherits DataProvider::AbstractDataProvider
                 debug("Dropbox content %y", path);
                 return rest.contentRequest(path, arg, body, content_type);
             } catch (hash<ExceptionInfo> ex) {
-                if (RetrySet{ex.err} && retries < MaxIoRetries) {
+                if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet) && retries < MaxIoRetries) {
                     ++retries;
                     debug("Dropbox I/O error %s; retrying (%d/%d)", ex.err, retries, MaxIoRetries);
                     continue;
@@ -558,7 +558,7 @@ public class DropboxPollOperation inherits Qore::AbstractPollOperation<auto> {
             try {
                 return op.continuePoll();
             } catch (hash<ExceptionInfo> ex) {
-                if (DropboxDataProviderBase::RetrySet{ex.err}
+                if (DataProviderRetryUtil::isRetriableTransportError(ex, DropboxDataProviderBase::RetrySet)
                         && retries < DropboxDataProviderBase::MaxIoRetries) {
                     ++retries;
                     # a poll operation cannot be rewound, so the retry is a new request

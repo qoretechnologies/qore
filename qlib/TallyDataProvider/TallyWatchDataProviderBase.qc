@@ -194,7 +194,10 @@ public class TallyWatchDataProviderBase inherits TallyDataProviderBase,
     #! Returns example event data
     private auto getExampleEventDataImpl(string event_id) {
         try {
-            list<hash<auto>> records = fetchRecords();
+            # the example data is requested once, without retries
+            list<hash<auto>> records = DataProviderRetryUtil::runWithoutRetries(list<hash<auto>> sub () {
+                return fetchRecords();
+            });
             if (records) {
                 return records[0];
             }

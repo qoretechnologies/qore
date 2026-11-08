@@ -723,6 +723,32 @@ set QORE_DATA_PROVIDERS=MyDataProvider;OtherDataProvider
     @verbatim
 $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     @endverbatim
+
+    @section dataprovider_retries Retries of Failed Requests
+
+    Data providers that call a remote API retry a request that failed with a transient transport error, such as a
+    refused connection or a timeout, usually after an increasing delay; a rate-limited request is retried after the
+    time given by the server.  The parts of this policy that are the same for all of them are implemented by
+    @ref DataProvider::DataProviderRetryUtil "DataProviderRetryUtil":
+    - a request that failed because the name of the server does not exist, has no address or is not a valid name,
+      or because its service is not known, is not retried; a failure of name resolution that can be temporary, such
+      as a DNS server that does not answer, is retried
+    - example data (@ref DataProvider::AbstractDataProvider::getExampleEventData() "getExampleEventData()",
+      @ref DataProvider::AbstractDataProvider::getExampleRecordData() "getExampleRecordData()" and their
+      \c WithOptions variants) is built with retries suppressed
+      (@ref DataProvider::DataProviderRetryUtil::runWithoutRetries() "runWithoutRetries()"): a request made for it
+      is made once, also when it fails with a transport error or is rate-limited, and a data provider that
+      requests a real record returns generated or fake example data when the request fails
+    - the delays between transport retries are multiples of a unit of 1 second by default, which a process can
+      change for all data providers with
+      @ref DataProvider::DataProviderRetryUtil::setTransportRetryDelayUnit() "setTransportRetryDelayUnit()";
+      a unit of zero retries without waiting
+
+    @par Example
+    @code{.py}
+# transport retries wait milliseconds instead of seconds
+DataProviderRetryUtil::setTransportRetryDelayUnit(1ms);
+    @endcode
 */
 /** @page dataprovider_pipelines Data Provider Pipelines
 
@@ -1631,6 +1657,14 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_11 DataProvider v3.11
+    - added @ref DataProvider::DataProviderRetryUtil "DataProviderRetryUtil", the retry policy shared by data
+      providers that retry failed requests: a request that failed because the name of the server does not exist
+      is not retried, code that builds example data can make its requests without retries, and the
+      unit of the delays between transport retries can be set for all data providers with
+      @ref DataProvider::DataProviderRetryUtil::setTransportRetryDelayUnit() "setTransportRetryDelayUnit()"
+      (see @ref dataprovider_retries)
+    - the example event and record data of every data provider are built with retries suppressed: a request made
+      for example data is made once, without retries or waits (see @ref dataprovider_retries)
     - fixed @ref DataProvider::FileDataType::acceptsValue() "FileDataType::acceptsValue()" for a hash holding only
       binary values, such as a literal <tt>{"content": binary("x")}</tt>: encoding the content raised
       \c RUNTIME-TYPE-ERROR instead of checking the value

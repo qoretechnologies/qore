@@ -326,13 +326,13 @@ public class InsightlyDataProviderBase inherits DataProvider::AbstractDataProvid
 
     #! Checks if a request should be retried
     private bool retryRequest(hash<ExceptionInfo> ex, reference<int> retries) {
-        if (retries >= MaxRetries) {
+        if (retries >= MaxRetries || DataProviderRetryUtil::retriesSuppressed()) {
             return False;
         }
         # Retry on certain socket errors
-        if (RetrySet{ex.err}) {
+        if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet)) {
             ++retries;
-            sleep(pow(2, retries) * 1000ms);
+            DataProviderRetryUtil::waitTransportRetry(pow(2, retries));
             return True;
         }
         # Retry on rate limit errors (HTTP 429)
