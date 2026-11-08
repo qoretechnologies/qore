@@ -54,6 +54,8 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
             \nativeModuleTest());
         addTestCase("a module compiled with a relative output path is checked", \relativeOutputTest());
         addTestCase("a module file the sandbox does not let the loader read is not read", \sandboxDeniedTest());
+        addTestCase("the module check of library code is not governed by the sandbox of the code that loads it",
+            \sandboxLibraryTest());
         addTestCase("an include file named like a module is not that module", \includedModuleNameTest());
         addTestCase("a dependency is found as the module's own module path directives find it",
             \modulePathDirectiveTest());
@@ -395,8 +397,14 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         assertEq(0, system(sprintf("TZ=%s touch -a -t 200101010000 '%s'", TestFileTime::TouchZone, path)));
     }
 
-    sandboxDeniedTest() {
-        TmpDir tmp("qore-aot-dep-stale-");
+    #! Makes the modules of the sandbox cases: Mid re-exports Base, which is loaded after Mid's module check, and
+    #! requires Zed; Base's AOT module is in a directory that the sandbox of the loading Program denies, another Zed in
+    #! a directory searched next, and there is no source of Mid: Mid is out of date, so Base is never loaded
+    /** @return a hash with "denied_dir", "shadow_dir", "qmod_dir" and "denied_qmod" (Base's AOT module in the denied
+        directory, with an access time before its modification time), or NOTHING if reading a file does not change
+        its access time on this filesystem
+    */
+    private *hash<auto> makeSandboxModules(TmpDir tmp) {
         string src_dir = tmp.path + "/qlib";
         string qmod_dir = tmp.path + "/build/qlib-qmod";
         string denied_dir = tmp.path + "/denied";
@@ -413,10 +421,9 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         date old_atime = hstat(control).atime;
         ReadOnlyFile::readTextFile(control);
         if (hstat(control).atime == old_atime) {
-            testSkip("reading a file does not change its access time on this filesystem");
+            return;
         }
 
-        # Mid re-exports Base, which is loaded after Mid's module check, and requires Zed
         writeModule(src_dir, "Base", "", "public namespace Base { public string sub value() { return \"base\"; } }");
         writeModule(src_dir, "Zed", "", "public namespace Zed { public string sub value() { return \"zed\"; } }");
         writeModule(src_dir, "Mid", "%requires(reexport) Base\n%requires Zed", "public namespace Mid { public string "
@@ -425,15 +432,28 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         foreach string name in ("Base", "Zed", "Mid") {
             compile(module_path, src_dir, qmod_dir, name);
         }
-        # Base's AOT module in a directory that the sandbox of the Program denies, another Zed in a directory searched
-        # next, and no source of Mid: Mid is out of date, so Base is never loaded
         assertEq(0, system(sprintf("cp '%s/Base.qmod' '%s/Base.qmod'", qmod_dir, denied_dir)));
         writeModule(shadow_dir, "Zed", "", "public namespace Zed { public string sub value() { return \"other\"; } "
             "}");
         string denied_qmod = denied_dir + "/Base.qmod";
         setOldAccessTime(denied_qmod);
-        old_atime = hstat(denied_qmod).atime;
+        return {
+            "denied_dir": denied_dir,
+            "shadow_dir": shadow_dir,
+            "qmod_dir": qmod_dir,
+            "denied_qmod": denied_qmod,
+        };
+    }
 
+    #! Runs a script that requires Mid in a Program whose sandbox denies the given directory
+    /** @param module_dirs the directories of the Program's own module path, searched in this order
+        @param env_module_path the process-wide module path (QORE_MODULE_DIR)
+    */
+    private string runSandboxed(TmpDir tmp, string denied_dir, list<string> module_dirs, string env_module_path) {
+        string directives;
+        foreach string dir in (module_dirs) {
+            directives += sprintf("%%append-module-path \"%s\"\n", dir);
+        }
         string script = tmp.path + "/sandbox.q";
         write(script, sprintf("%%modern
 Program p(PO_NEW_STYLE);
@@ -442,18 +462,46 @@ m.setFilesystemDefaultPolicy(True);
 m.addFilesystemDeniedPath(%y);
 p.setSandboxManager(m);
 try {
-    p.parse(\"%%requires Mid\\n\", \"probe\");
+    p.parse(%y, \"probe\");
     print(\"loaded\\n\");
 } catch (hash<ExceptionInfo> ex) {
     printf(\"%%s: %%s\\n\", ex.err, ex.desc);
 }
-", realpath(denied_dir)));
-        string out = trim(run(sprintf("%s QORE_MODULE_DIR=%s:%s:%s %s %s", env, denied_dir, shadow_dir, qmod_dir,
-            qore_bin, script)));
+", realpath(denied_dir), directives + "%requires Mid\n"));
+        return trim(run(sprintf("%s QORE_MODULE_DIR=%s %s %s", env, env_module_path, qore_bin, script)));
+    }
+
+    sandboxDeniedTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        *hash<auto> h = makeSandboxModules(tmp);
+        if (!h) {
+            testSkip("reading a file does not change its access time on this filesystem");
+        }
+        date old_atime = hstat(h.denied_qmod).atime;
+        # Mid is found through the module path of the sandboxed code, so it is not library code: its module check is
+        # governed by that code's sandbox (see sandboxLibraryTest() for a module of the process-wide module path)
+        string out = runSandboxed(tmp, h.denied_dir, (h.denied_dir, h.shadow_dir, h.qmod_dir), tmp.path + "/none");
         assertRegex("AOT module '.*/Mid\\.qmod' for feature 'Mid' is out of date: it was compiled against other "
             "files of module 'Zed' than '.*/shadow/Zed\\.qm'", out);
         # the module check did not read the file the sandbox denies
-        assertEq(old_atime, hstat(denied_qmod).atime, out);
+        assertEq(old_atime, hstat(h.denied_qmod).atime, out);
+    }
+
+    sandboxLibraryTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        *hash<auto> h = makeSandboxModules(tmp);
+        if (!h) {
+            testSkip("reading a file does not change its access time on this filesystem");
+        }
+        date old_atime = hstat(h.denied_qmod).atime;
+        # Mid is in the process-wide module path, so it is library code, which is initialized with no sandbox
+        # provenance: its dependencies are found and loaded as library code, from the denied directory too, so its
+        # module check reads the file it would load (see design/aot-linked-module-sources.md)
+        string out = runSandboxed(tmp, h.denied_dir, (), sprintf("%s:%s:%s", h.denied_dir, h.shadow_dir,
+            h.qmod_dir));
+        assertRegex("AOT module '.*/Mid\\.qmod' for feature 'Mid' is out of date: it was compiled against other "
+            "files of module 'Zed' than '.*/shadow/Zed\\.qm'", out);
+        assertNeq(old_atime, hstat(h.denied_qmod).atime, out);
     }
 
     includedModuleNameTest() {

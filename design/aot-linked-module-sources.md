@@ -49,7 +49,12 @@ extraction gives files new modification times without changing them (see below),
 tell a changed source from a touched one.
 
 The check is skipped for a Program that cannot access the filesystem (`PO_NO_FILESYSTEM`), and a file that the
-filesystem policy of a sandbox does not allow to be read is not checked.  When the source module that is loaded
+filesystem policy of a sandbox does not allow to be read is not checked.  The sandbox is the one that governs the
+load: none for library code (a module from the process-wide module path, initialized with no sandbox provenance; see
+`QoreModuleInitSandboxBarrierHelper`), whose dependencies are found and loaded as library code, so its check reads
+the files that it would load; for a module that sandboxed code finds through its own module path or names by path,
+the sandbox of that code (`sandboxDeniedTest` and `sandboxLibraryTest` in
+`examples/test/ir/AOTModuleDependencyStale.qtest`).  When the source module that is loaded
 instead fails, `AOT-MODULE-STALE` follows its error in the exception chain (see
 `design/module-parse-option-masks.md`, "Reporting a refused AOT module").
 
@@ -127,9 +132,9 @@ be loaded, loads the source module instead with a `BINARY-MODULE-SOURCE-FALLBACK
 the error stands: AOT code compiled against another module than the one loaded for it can misbehave, so it is not
 loaded with a warning (unlike an AOT module compiled without an optional module that is available now).  A module
 that differs only in its path (an identical copy) is not another module, so it never gets here.  A builtin
-module, a file the sandbox does not let the loader read and a module loaded into a Program without filesystem access
-are not checked.  An incremental build cannot see such a module appear (a make prerequisite cannot be a file that
-does not exist); the loader reports it and asks for the module to be rebuilt.
+module, a file the sandbox that governs the load does not let the loader read (see above) and a module loaded into a
+Program without filesystem access are not checked.  An incremental build cannot see such a module appear (a make
+prerequisite cannot be a file that does not exist); the loader reports it and asks for the module to be rebuilt.
 
 ## When a source has changed
 
