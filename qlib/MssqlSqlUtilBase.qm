@@ -186,6 +186,9 @@ hash<auto> desc = {
     schema alignment.
 
     @subsection MssqlSqlUtilBasev11 MssqlSqlUtilBase v1.1
+    - the triggers of a table on SQL Server are read from the database: a table with triggers is aligned with no
+      change, a changed trigger is dropped and created, and a trigger that the template does not have is dropped; each
+      alignment created the triggers again, which failed as they existed
     - added SQL Server's Unicode string types \c nchar, \c nvarchar, \c nvarchar(max) and \c ntext, and
       \c varchar(max); a column of one of them raised an error
     - a \c varchar(max), \c nvarchar(max) or \c varbinary(max) column is described with that type, and a \c text,
@@ -1319,6 +1322,15 @@ public class MssqlTrigger inherits SqlUtil::AbstractTrigger {
     #! returns a string that can be used to drop the trigger from the database
     softlist getDropSql(string table_name) {
         return sprintf("drop trigger %s", mssql_get_sql_identifier(name));
+    }
+
+    #! returns the source for comparisons: lines end with a newline, and the source has no space around it
+    /** SQL Server keeps the definition of a trigger as it was sent, which may end its lines with \c "\r\n"
+    */
+    string getNormalizedSource(string src) {
+        src =~ s/\r\n/\n/g;
+        trim src;
+        return AbstractFunctionBase::getNormalizedSource(src);
     }
 
     #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -3300,8 +3312,46 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         return c;
     }
 
+    #! returns the triggers of the table, read from the database on SQL Server
+    /** Sybase's triggers are not read: a table on Sybase has no triggers in its description
+    */
     private Triggers getTriggersImpl() {
-        return new Triggers();
+        Triggers rv();
+        if (is_sybase) {
+            return rv;
+        }
+        *hash<auto> qh = ds.select("select tr.name, object_definition(tr.object_id) as definition "
+            "from sys.triggers tr "
+            "join sys.tables t on t.object_id = tr.parent_id "
+            "join sys.schemas s on s.schema_id = t.schema_id "
+            "where tr.parent_class = 1 and s.name = %v and t.name = %v order by tr.name", schema, name);
+        foreach hash<auto> row in (qh.contextIterator()) {
+            # the definition of an encrypted trigger cannot be read
+            if (!row.definition.val()) {
+                continue;
+            }
+            rv.add(row.name, new MssqlTrigger(row.name, MssqlTable::getTriggerSource(row.definition)));
+        }
+        return rv;
+    }
+
+    #! returns the source of a trigger as MssqlTrigger has it: its definition after the trigger's name
+    /** SQL Server keeps the definition of a trigger as it was created (\c "CREATE TRIGGER name ON ..."); the source of
+        a trigger in a table description is the part after the name, from \c ON
+
+        @param definition the definition of the trigger as \c OBJECT_DEFINITION() gives it
+
+        @return the source of the trigger, or the definition if it does not begin with \c "CREATE TRIGGER" and a
+        name
+    */
+    static string getTriggerSource(string definition) {
+        # a name part is a bracketed name ("]]" is a "]" of the name), a double-quoted name or an ordinary name; a
+        # name can be qualified with its schema
+        *string src = (definition =~ x/^\s*create\s+(?:or\s+alter\s+)?trigger\s+(?:(?:\[(?:[^\]]|\]\])*\]|"[^"]*"|[^\s.\["]+)\.)?(?:\[(?:[^\]]|\]\])*\]|"[^"]*"|[^\s.\["]+)\s+(.*)$/is)[0];
+        if (!src) {
+            return definition;
+        }
+        return trim(src);
     }
 
     #! returns a string that can be used to create the table in the database
