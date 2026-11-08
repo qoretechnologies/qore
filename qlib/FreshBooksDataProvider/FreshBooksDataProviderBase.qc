@@ -278,8 +278,10 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
                 }
                 hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
-                # Check for rate limiting (response header names are lowercase in RestClientIo)
-                if (response.headers."x-ratelimit-remaining" == "0") {
+                # Check for rate limiting (response header names are lowercase in RestClientIo); there is no wait
+                # while a data provider requests example data in this thread (see
+                # DataProviderRetryUtil::runWithoutRetries())
+                if (response.headers."x-ratelimit-remaining" == "0" && !DataProviderRetryUtil::retriesSuppressed()) {
                     *string reset = response.headers."retry-after";
                     if (reset.val()) {
                         int reset_secs = reset.toInt();
