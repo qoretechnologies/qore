@@ -542,6 +542,17 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     copyExternalData();
 }
 
+bool qore_program_private::runWithRegisteredPrograms(const std::vector<const QoreProgram*>& pgms,
+        const std::function<bool()>& f) {
+    QoreAutoRWReadLocker al(&lck_programMap);
+    for (const QoreProgram* p : pgms) {
+        if (qore_program_set.find(const_cast<QoreProgram*>(p)) == qore_program_set.end()) {
+            return false;
+        }
+    }
+    return f();
+}
+
 void qore_program_private::registerProgram() {
     QoreAutoRWWriteLocker al(&qore_program_private::lck_programMap);
     assert(qore_program_set.find(pgm) == qore_program_set.end());

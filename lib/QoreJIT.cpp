@@ -33,6 +33,7 @@
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/qore_program_private.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -2250,14 +2251,25 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
         work.has_callees = false;
     }
 
-    bool accepted = false;
-    {
+    // the work is only accepted while the Programs whose code it lowers exist and do not wait for their background
+    // compiles to delete their data (see qore_program_private::bg_compile_closed): the code of a Program can be called
+    // by a Program sharing one of its classes in another thread while the Program is deleted
+    std::vector<const QoreProgram*> work_pgms;
+    bool work_any_pgm = false;
+    collectWorkPgms(work, work_pgms, work_any_pgm);
+    bool accepted = qore_program_private::runWithRegisteredPrograms(work_pgms, [&]() -> bool {
         std::lock_guard<std::mutex> lock(bg_queue_mutex);
-        if (bg_accept_work.load(std::memory_order_relaxed)) {
-            bg_compile_queue.push(std::move(work));
-            accepted = true;
+        if (!bg_accept_work.load(std::memory_order_relaxed)) {
+            return false;
         }
-    }
+        for (const QoreProgram* p : work_pgms) {
+            if (qore_program_private::get(*const_cast<QoreProgram*>(p))->bg_compile_closed) {
+                return false;
+            }
+        }
+        bg_compile_queue.push(std::move(work));
+        return true;
+    });
     if (!accepted) {
         const_cast<UserVariantBase*>(uvb)->jit_compile_state.store(0, std::memory_order_release);
         releaseBgCompileWorkRefs(work);
@@ -2347,6 +2359,8 @@ void QoreJIT::waitForBgCompileQueue(QoreProgram* pgm) {
     std::vector<BgCompileWork> cancelled;
     {
         std::unique_lock<std::mutex> lock(bg_queue_mutex);
+        // no work referring to the Program is accepted from now on (see enqueueBgCompile())
+        qore_program_private::get(*pgm)->bg_compile_closed = true;
         if (!bg_compile_queue.empty()) {
             std::queue<BgCompileWork> kept;
             while (!bg_compile_queue.empty()) {

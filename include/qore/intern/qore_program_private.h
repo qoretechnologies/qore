@@ -62,6 +62,7 @@ class QoreSandboxManager;
 #include <atomic>
 #include <cerrno>
 #include <cstdarg>
+#include <functional>
 #include <map>
 #include <tuple>
 #include <mutex>
@@ -624,6 +625,13 @@ public:
     /** nullptr when the Program does not inherit it (PO_NO_INHERIT_PROGRAM_DATA); see copyExternalData()
     */
     QoreProgram* ext_parent = nullptr;
+
+    //! set once the background JIT compiler takes no more work that refers to this Program
+    /** Set when the Program waits for the background compiles of its code before its data is deleted
+        (QoreJIT::waitForBgCompileQueue()): a compile requested afterwards, by a Program sharing one of its classes, for
+        example, would lower code and read data of the Program while they are deleted.  Guarded by the JIT's queue lock.
+    */
+    bool bg_compile_closed = false;
 
     //! set once the Program's constructor has run to completion
     /** QoreProgram::priv is published, and the Program's namespace tree is created and owned by the
@@ -3416,6 +3424,15 @@ public:
     DLLLOCAL static void runtimeImportSystemApi(QoreProgram& pgm, ExceptionSink* xsink) {
         pgm.priv->runtimeImportSystemApi(xsink);
     }
+
+    //! Runs \a f while the given Programs cannot be destroyed, if all of them still exist
+    /** The Programs are looked up in the registry under its read lock, which is held while \a f runs, so that \a f
+        can use their private data; a Program is removed from the registry when it is destroyed
+
+        @return the return value of \a f, or false if a Program does not exist anymore
+    */
+    DLLLOCAL static bool runWithRegisteredPrograms(const std::vector<const QoreProgram*>& pgms,
+            const std::function<bool()>& f);
 
     DLLLOCAL static qore_program_private* get(QoreProgram& pgm) {
         return pgm.priv;

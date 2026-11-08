@@ -511,21 +511,24 @@ int sub get() {
     }
 
     #! The Program of a class and the Programs sharing it are deleted at the same time in different threads
-    /** The children read the static variables of the class until they are deleted; the last Program to release the
-        values runs a destructor that creates a Program, whose method call reads the source Program of the class while
-        the Program of the class releases it (a data race before it was atomic, see TSan)
+    /** The children read the static variables of the class and call its static method until they are deleted; the
+        last Program to release the values runs a destructor that creates a Program, which calls the method too.  The
+        method calls read the source Program of the class while the Program of the class releases it (a data race
+        before it was atomic, see TSan), and run the method's code, which belongs to the Program of the class, while
+        that Program is deleted
     */
     parallelGuardDeleteTest() {
         string vars = foldl $1 + $2, (map sprintf("        static int v%d = %d;\n", $1, $1),
             xrange(ParallelGuardVars));
-        string reads = foldl $1 + " + " + $2, (map sprintf("Holder::v%d", $1), xrange(ParallelGuardVars));
+        string reads = (foldl $1 + " + " + $2, (map sprintf("Holder::v%d", $1), xrange(ParallelGuardVars)))
+            + " + Holder::value()";
         string src = sprintf(ParallelGuardSrc, vars, reads);
         int sum = foldl $1 + $2, xrange(ParallelGuardVars);
         for (int i = 0; i < ParallelGuardIterations; ++i) {
             Program p(PO_NEW_STYLE);
             p.parse(src, "parallel");
             list<Program> children = p.callFunction("make", ParallelPrograms);
-            assertEq(sum * 10, children[0].callFunction("get"));
+            assertEq((sum + 42) * 10, children[0].callFunction("get"));
             Counter ready(ParallelPrograms + 1);
             Counter start(1);
             Counter done(ParallelPrograms + 1);

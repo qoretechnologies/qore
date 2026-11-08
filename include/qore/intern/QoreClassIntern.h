@@ -3537,23 +3537,45 @@ public:
         // the source Program releases itself before its reference in data_refs, so that the Program that releases the
         // last one, possibly in another thread, does not release it again
         if (pgm && spgm.load() == pgm) {
-            released_spgm.store(pgm);
             QoreProgram* expected = const_cast<QoreProgram*>(pgm);
-            if (spgm.compare_exchange_strong(expected, nullptr)) {
+            bool taken;
+            {
+                // see getReferencedSourceProgram()
+                AutoLocker al(gate.asl_lock);
+                released_spgm.store(pgm);
+                taken = spgm.compare_exchange_strong(expected, nullptr);
+            }
+            if (taken) {
                 releaseSourceProgram(expected, xsink);
             }
         }
         if (deref_data && data_refs.ROdereference()) {
             vars.del(xsink);
-            QoreProgram* p = spgm.load();
-            if (p) {
-                released_spgm.store(p);
-                p = spgm.exchange(nullptr);
+            QoreProgram* p;
+            {
+                // see getReferencedSourceProgram()
+                AutoLocker al(gate.asl_lock);
+                p = spgm.load();
                 if (p) {
-                    releaseSourceProgram(p, xsink);
+                    released_spgm.store(p);
+                    p = spgm.exchange(nullptr);
                 }
             }
+            if (p) {
+                releaseSourceProgram(p, xsink);
+            }
         }
+    }
+
+    //! Returns a reference to the source Program of the class, or nullptr if it has released the class or is deleted
+    /** spgm is cleared under gate.asl_lock in deleteClassData() before the Program can be freed, so the Program read
+        here under the lock is still allocated; a reference is taken only if it still has one (a Program whose last
+        reference has been released is being deleted).  The caller must release the reference with deref().
+    */
+    DLLLOCAL QoreProgram* getReferencedSourceProgram() const {
+        AutoLocker al(gate.asl_lock);
+        QoreProgram* p = spgm.load();
+        return p && p->optRef() ? p : nullptr;
     }
 
     //! Releases the source Program of the class, which has been taken from spgm

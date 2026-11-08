@@ -2571,19 +2571,46 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
     return eligible_state;
 }
 
-static QoreProgram* qore_ir_method_execution_program(const QoreMethod* method, const UserVariantBase* uvb) {
-    QoreProgram* pgm = nullptr;
-    if (method) {
-        const QoreClass* qc = method->getClass();
-        if (qc) {
-            pgm = qc->getSourceProgram();
-            if (!pgm) {
-                pgm = qc->getProgram();
+//! Holds a reference to the Program in which an inlined method runs, for the whole inlined call
+/** The method's code, its IR and the thread-local data that it runs on belong to the Program of its class, which can be
+    deleted in another thread while a Program sharing the class calls the method: the reference keeps the Program
+    allocated, and entering it (ProgramThreadCountContextHelper) fails once its teardown has started, so the call is
+    refused with an exception instead of running on a deleted Program.  Declared before the
+    ProgramThreadCountContextHelper, so that the Program is released after the thread has left it.
+*/
+class QoreIRInlineMethodProgramHolder {
+public:
+    //! takes a reference to the source Program of the method's class; see qore_class_private::getReferencedSourceProgram()
+    DLLLOCAL QoreIRInlineMethodProgramHolder(const QoreMethod* method, ExceptionSink* xsink) : xsink(xsink) {
+        const QoreClass* qc = method ? method->getClass() : nullptr;
+        const qore_class_private* qcp = qc ? qore_class_private::get(*qc) : nullptr;
+        pgm = qcp ? qcp->getReferencedSourceProgram() : nullptr;
+    }
+
+    DLLLOCAL ~QoreIRInlineMethodProgramHolder() {
+        if (pgm) {
+            if (xsink) {
+                pgm->deref(xsink);
+            } else {
+                ExceptionSink local_xsink;
+                pgm->deref(&local_xsink);
             }
         }
     }
-    return pgm ? pgm : (uvb ? uvb->pgm : nullptr);
-}
+
+    QoreIRInlineMethodProgramHolder(const QoreIRInlineMethodProgramHolder&) = delete;
+    QoreIRInlineMethodProgramHolder& operator=(const QoreIRInlineMethodProgramHolder&) = delete;
+
+    //! the Program, or nullptr if the class has no source Program, which has released it or is deleted: the method is
+    //! then not inlined, and the call takes the regular path, which reports it
+    DLLLOCAL QoreProgram* get() const {
+        return pgm;
+    }
+
+private:
+    QoreProgram* pgm;
+    ExceptionSink* xsink;
+};
 
 class QoreIRInlineCallStackLocation : public QoreStackLocation {
 public:
@@ -4107,11 +4134,8 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
-    // the method runs in this interpreter instead of being called, so the call is counted here for its promotion
-    // to native code; once it is native, this inline path is no longer taken
-    uvb->recordFastCallExecution();
-
-    QoreProgram* exec_pgm = qore_ir_method_execution_program(method, uvb);
+    QoreIRInlineMethodProgramHolder exec_pgm_holder(method, xsink);
+    QoreProgram* exec_pgm = exec_pgm_holder.get();
     if (!exec_pgm) {
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
@@ -4122,6 +4146,9 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         result = QoreValue();
         return true;
     }
+    // the method runs in this interpreter instead of being called, so the call is counted here for its promotion
+    // to native code (only once it runs in its Program); once it is native, this inline path is no longer taken
+    uvb->recordFastCallExecution();
 
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
@@ -4380,11 +4407,8 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
-    // the static method runs in this interpreter instead of being called, so the call is counted here for its
-    // promotion to native code; once it is native, this inline path is no longer taken
-    uvb->recordFastCallExecution();
-
-    QoreProgram* exec_pgm = qore_ir_method_execution_program(inst->method, uvb);
+    QoreIRInlineMethodProgramHolder exec_pgm_holder(inst->method, xsink);
+    QoreProgram* exec_pgm = exec_pgm_holder.get();
     if (!exec_pgm) {
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
@@ -4394,6 +4418,10 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         result = QoreValue();
         return true;
     }
+    // the static method runs in this interpreter instead of being called, so the call is counted here for its
+    // promotion to native code (only once it runs in its Program); once it is native, this inline path is no longer
+    // taken
+    uvb->recordFastCallExecution();
 
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
