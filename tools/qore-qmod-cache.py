@@ -771,10 +771,10 @@ def own_source_files(source_root):
 MODULE_PATH_DIRECTIVE = re.compile(rb"^[ \t]*%(prepend|append)-module-path\b", re.M)
 
 
-def check_no_module_path_directives(source_root):
-    """Raises CacheError for a module whose sources change the module path (%prepend-module-path,
-    %append-module-path, with or without environment variables in them)"""
-    for path in own_source_files(source_root):
+def check_no_module_path_directives(source_root, deps):
+    """Raises CacheError for a module whose sources, or the files they include, change the module path
+    (%prepend-module-path, %append-module-path, with or without environment variables in them)"""
+    for path in own_source_files(source_root) + module_include_files(source_root, deps):
         with open(path, "rb") as f:
             if MODULE_PATH_DIRECTIVE.search(f.read()):
                 raise CacheError("source '%s' changes the module path, which the key does not cover" % path)
@@ -797,23 +797,41 @@ def check_signature(entry, key):
     return None
 
 
-def check_includes_listed(source_root, deps):
-    """Raises CacheError for a module whose sources include a file that its depfile does not list: a qcc that does not
-    list included files (before the fix of design/aot-linked-module-sources.md "The sources of a module") would leave
-    their content out of the key.  A file included by a name that cannot be resolved here (an environment variable,
-    a file found through QORE_INCLUDE_DIR) counts as not listed."""
+def module_include_files(source_root, deps):
+    """Returns the files that the module's sources include with %include, directly or from an included file
+
+    Raises CacheError for an included file that the module's depfile does not list: a qcc that does not list included
+    files (before the fix of design/aot-linked-module-sources.md "The sources of a module") would leave their content
+    out of the key.  A name is resolved as the scanner does first, against the directory of the module's main source
+    (the Program's script directory); one that cannot be resolved here (an environment variable, a file found through
+    QORE_INCLUDE_DIR or an include path directive) counts as not listed.
+    """
     listed = set(os.path.realpath(d) for d in deps)
-    for path in own_source_files(source_root):
+    script_dir = source_root if os.path.isdir(source_root) else os.path.dirname(source_root)
+    rv = []
+    todo = list(own_source_files(source_root))
+    seen = set(os.path.realpath(p) for p in todo)
+    while todo:
+        path = todo.pop(0)
         with open(path, "rb") as f:
             text = f.read()
         for m in INCLUDE_DIRECTIVE.finditer(text):
             name = m.group(1).strip().decode("utf-8", "replace")
             if len(name) > 1 and name[0] == name[-1] and name[0] in "\"'":
                 name = name[1:-1]
-            included = os.path.realpath(os.path.join(os.path.dirname(path), name)) if name and name[0] != "$" \
-                else None
-            if not included or included not in listed:
+            included = os.path.realpath(os.path.join(script_dir, name)) if name and name[0] != "$" else None
+            if not included or included not in listed or not os.path.isfile(included):
                 raise CacheError("source '%s' includes '%s', which its depfile does not list" % (path, name))
+            if included not in seen:
+                seen.add(included)
+                rv.append(included)
+                todo.append(included)
+    return rv
+
+
+def check_includes_listed(source_root, deps):
+    """Raises CacheError for a module that includes a file its depfile does not list; see module_include_files()"""
+    module_include_files(source_root, deps)
 
 
 def classify_dependencies(build_dir, source_root, deps):
@@ -1381,7 +1399,7 @@ class Module:
             if st.st_size != size or st.st_mtime_ns != mtime_ns:
                 raise CacheError("source '%s' changed while the module was compiled" % path)
         check_includes_listed(self.source_root, deps)
-        check_no_module_path_directives(self.source_root)
+        check_no_module_path_directives(self.source_root, deps)
         records = classify_dependencies(self.build_dir, self.source_root, deps)
         required, optional_specs = read_module_info(self.out, self.name)
         # the compile may have written files in the module path since a lookup listed it

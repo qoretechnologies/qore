@@ -158,6 +158,15 @@ class IncludeTest(unittest.TestCase):
             qc.check_includes_listed(str(mod), [str(mod), str(part)])
             with self.assertRaises(qc.CacheError, msg=directive):
                 qc.check_includes_listed(str(mod), [str(mod)])
+        # a file included from an included file must be listed too
+        nested = root / "nested.ql"
+        nested.write_text("x\n")
+        part.write_text("%include nested.ql\n")
+        mod.write_text("%include part.ql\nmodule M {}\n")
+        qc.check_includes_listed(str(mod), [str(mod), str(part), str(nested)])
+        with self.assertRaises(qc.CacheError):
+            qc.check_includes_listed(str(mod), [str(mod), str(part)])
+        part.write_text("x\n")
         # a name that cannot be resolved here
         mod.write_text("%include $DIR/part.ql\nmodule M {}\n")
         with self.assertRaises(qc.CacheError):
@@ -998,6 +1007,15 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertEqual({"Base": "uncacheable", "Mid": "uncacheable", "Top": "uncacheable", "Other": "miss"},
                          self.origins())
         self.assertIn("changes the module path", self.output)
+
+    def test_module_path_directive_in_include_file_is_not_stored(self):
+        (self.source / "list-includes.txt").write_text("1")
+        (self.source / "qlib" / "part.ql").write_text("%append-module-path /elsewhere\n")
+        (self.source / "qlib" / "Base.qm").write_text("%include part.ql\nmodule Base {}\n")
+        self.build_all()
+        self.assertEqual({"Base": "uncacheable", "Mid": "uncacheable", "Top": "uncacheable", "Other": "miss"},
+                         self.origins())
+        self.assertIn("part.ql' changes the module path", self.output)
 
     def test_signed_entries(self):
         key1 = {"QORE_QMOD_CACHE_SIGNING_KEY": "secret-1"}
