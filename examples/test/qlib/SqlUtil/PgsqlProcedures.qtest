@@ -76,6 +76,7 @@ class PgsqlProceduresTest inherits QUnit::Test {
         addTestCase("a schema with a procedure is aligned", \alignSchema());
         addTestCase("functions and procedures are renamed", \rename());
         addTestCase("before PostgreSQL 11, functions are read without a routine kind", \beforeProcedures());
+        addTestCase("routines are read with standard_conforming_strings off", \nonStandardStrings());
         set_return_value(main());
     }
 
@@ -126,6 +127,32 @@ class PgsqlProceduresTest inherits QUnit::Test {
                 "a; end; $$").className(), i.key);
             assertEq((), (select ds.sql, $1 =~ /prokind/), i.key);
             assertTrue(ds.sql.size() > 0, i.key);
+        }
+    }
+
+    #! the argument lists of routines were read with a replacement string literal of a backslash, which is an escape
+    #! in a string literal when standard_conforming_strings is off: the argument mode IN was replaced with a control
+    #! character
+    private nonStandardStrings() {
+        skipIfNone();
+        foreach hash<auto> i in (conns.pairIterator()) {
+            Database db = getDatabase(i.value);
+            AbstractDatasource ds = db.getDatasource();
+            on_exit {
+                ds.rollback();
+                ds.execRaw("set standard_conforming_strings = on");
+                ds.commit();
+            }
+            ds.execRaw("set standard_conforming_strings = off");
+            assertEq("off", ds.selectRow("show standard_conforming_strings").standard_conforming_strings, i.key);
+            list<string> l = db.listProcedures();
+            list<string> p = select l, $1 =~ /^qtest_pp_p\(/;
+            assertEq(1, p.size(), i.key + ": " + l.join(","));
+            assertRegex("^qtest_pp_p\\(a int(eger)?\\)$", p[0], i.key);
+            assertEq("PgsqlProcedure", db.getProcedure("qtest_pp_p(a integer)").className(), i.key);
+            assertEq("PgsqlFunction", db.getFunction("qtest_pp_f(a integer)").className(), i.key);
+            l = db.listFunctions();
+            assertEq((), (select l, $1 =~ /[\x00-\x1f\\]/), i.key + ": " + l.join(","));
         }
     }
 
