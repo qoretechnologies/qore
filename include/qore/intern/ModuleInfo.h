@@ -623,6 +623,10 @@ struct DLHelper {
 };
 
 class ModuleLoadMapHelper;
+struct QoreAOTModuleFileInfo;
+
+//! The attributes of the module manager's mutex: an error-checking mutex in a debug build, the default otherwise
+DLLLOCAL const pthread_mutexattr_t* qore_module_manager_mutex_attr();
 
 class QoreModuleManager {
     friend class QoreAbstractModule;
@@ -762,8 +766,13 @@ public:
     DLLLOCAL void getModuleCandidateFiles(const char* name, QoreProgram* pgm, std::vector<std::string>& files);
 
     //! Worker for ModuleManager::registerAOTStaticModule — no dlopen, skip filesystem search
+    /** @param aot_info the metadata record that qcc linked with the module (see qore_aot_register_into_program_v2()),
+        or nullptr; with it, the module's name is checked, an optional module that it was compiled without and that is
+        available now is reported (\c BINARY-MODULE-STALE, as the module has no source to fall back to), and its
+        dependencies are found with its own module path directives (QoreModulePathScope), as for a \c .qmod
+    */
     DLLLOCAL int registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreProgram* tpgm,
-            qore_binary_module_desc_t desc_fn, const char* path);
+            qore_binary_module_desc_t desc_fn, const char* path, const QoreAOTModuleFileInfo* aot_info = nullptr);
 
     DLLLOCAL QoreHashNode* getModuleHash();
     DLLLOCAL QoreListNode* getModuleList();
@@ -946,6 +955,14 @@ public:
 
     DLLLOCAL int addModuleToBlacklist(const char* name, const char* msg);
 
+    //! Adds the names of the modules that the loaded module \a name requires directly to \a deps
+    /** For a user module loaded from its source, the user and binary modules it loaded while it was parsed; for an
+        AOT module, the dependencies its descriptor names; for a native binary module, those it declares
+        (qore_module_dependencies).  Nothing is added for a module that is not loaded.  qcc lists the files of the
+        modules a module requires, directly or not, in the depfile of an AOT module (see qore_aot_deps.h).
+    */
+    DLLLOCAL void getModuleDependencies(const char* name, strset_t& deps);
+
     //! Returns true if the module dependency map already has a path from \a from to \a to
     /** A path from \a from to \a to means that \a to must be deleted before \a from; adding the reverse edge
         would make a cycle, which module teardown (delUser()) cannot resolve.  The mutex must be held when
@@ -1027,8 +1044,13 @@ private:
     DLLLOCAL void clearModuleLoadWaitEdge(int tid);
 
 protected:
-    // mutex for atomicity
-    QoreThreadLock mutex;
+    //! mutex for atomicity
+    /** Not recursive: a thread that takes it twice deadlocks, and one that releases it without holding it (as
+        UnlockedModuleProgramRelease and the loaders that release it while a module initializes do) corrupts it.  In a
+        debug build it is an error-checking mutex, so either mistake fails an assertion in QoreThreadLock instead;
+        see qore_module_manager_mutex_attr()
+    */
+    QoreThreadLock mutex{qore_module_manager_mutex_attr()};
 
     // user module dependency map: module -> dependents
     ModMap md_map;
@@ -1147,6 +1169,32 @@ protected:
             QoreModuleInfo& mod_info, const char* path, const char* feature = nullptr, bool reexport = false,
             QoreProgram* mpgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
             ModuleLoadMapHelper* load_guard = nullptr);
+
+    //! Checks that the modules an AOT module of a build tree was compiled with are the ones it was compiled against
+    /** A module of a build tree has the depfile that qcc wrote next to it; for any other module nothing is checked.
+        The modules checked are the dependencies of its descriptor and the modules its metadata says it was compiled
+        with (those it requires, directly or not, and those they re-export); a module that is loaded is checked as it
+        is loaded, and one that is not as findModuleFileUnlocked() finds it.  A module is the one compiled against if
+        the file it comes from is listed in the depfile, is a copy of a listed file (the same name, size and content),
+        or is an AOT module of a build tree whose own sources are listed (an AOT module without a depfile is not
+        checked).  The mutex must be held.
+
+        @param aot_info the metadata of the AOT module
+        @param stale_desc set to why the AOT module is out of date
+
+        @return true if the AOT module is out of date; false if it is not, if it is not checked, or if the check was
+        cancelled (an exception is then raised in \a xsink, which the caller must check)
+    */
+    DLLLOCAL bool checkAOTModuleDependencyFiles(ExceptionSink& xsink, const char* path, const char* feature,
+            const QoreAOTModuleFileInfo& aot_info, QoreProgram* pgm, std::string& stale_desc);
+
+    //! Returns the file that loadModuleIntern() would load module \a name from, or an empty string
+    /** The search order of loadModuleIntern() in the module path of \a pgm, without loading anything: in each
+        directory the binary forms, those in a directory of the module's name, the source and a module directory.
+        The directories of the AOT modules whose dependencies this thread resolves for \a pgm are searched as well
+        (see QoreModulePathScope).  The mutex must be held.
+    */
+    DLLLOCAL std::string findModuleFileUnlocked(const char* name, QoreProgram* pgm);
 
     //! Load direct AOT descriptor dependencies while the parent module owns a load-map reservation.
     DLLLOCAL int loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
@@ -1434,6 +1482,8 @@ public:
 
     DLLLOCAL ~UnlockedModuleProgramRelease() {
         if (holder) {
+            // the mutex must be held here; in a debug build releasing it without holding it fails an assertion (see
+            // QoreModuleManager::mutex)
             AutoUnlocker au(QMM.mutex);
             holder = nullptr;
         }

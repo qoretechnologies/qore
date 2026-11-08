@@ -207,7 +207,7 @@ Coverage: `AOTIncrementalDeps.qtest` (the batch records the fold; standalone and
 enum folds, the narrowed edge, same-named enums, and mode-independent declarations),
 `AOTSmoke.qtest` (enum members returned through fast entries),
 `AOTSccIncrementalDriver.qc` (`AOTSccIncrementalDriver-*.qtest`) (the closure reaches the provider) and
-`CMakeBuildHelpers.qc` (`CMakeBuildHelpers-*.qtest`) (the whole path, through a real incremental build).
+`CMakeBuildHelpers-preload.qtest` (the whole path, through a real incremental build).
 
 Nothing breaks a cycle at load time, and both of its outcomes are build-stopping:
 

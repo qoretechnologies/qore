@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/FsUtil.qm
+%requires ./CMakeBuildHelpersTestBase.qm
+
+%exec-class CMakeGenericGenerationTest
+
+#! Generic qcc objects: the generation map and the relinks it drives
+/** One scenario of the incremental life of the generic qcc object helper project of CMakeBuildHelpersTestBase.qm,
+    on a baseline built for it.  Each scenario is a file of its own, so that none comes near the time limit of a
+    test and test shards run them side by side.
+*/
+class CMakeGenericGenerationTest inherits CMakeBuildHelpersTestBase::GenericQccObjectTest {
+    constructor() : GenericQccObjectTest("CMakeGenericGenerationTest", "1.0", \ARGV) {
+        addTestCase("generic qcc objects: the link aggregate relinks for a new object generation only",
+            \testGenerationMap());
+        set_return_value(main());
+    }
+
+    #! The group's generation map, and the link aggregate relinked for a new generation only
+    /** Setup: the tree is current (@ref settleGenericBaseline()), and the provider's object was last published by
+        a compile of its component alone (@ref publishProviderAlone()): the generations and the link that the steps
+        compare are those such a compile published, not those of the baseline's shared parse.
+
+        Steps, each on the tree the step before it left:
+        - the generation map names every component; the link aggregate validates it, the script aggregate does not
+        - the provider touched: the same generations, no relink; then a comment: a new generation
+        - the provider rewritten with the same content: no relink
+    */
+    testGenerationMap() {
+        TmpDir tmp("qore-cmake-qcc-generation-");
+        hash<GenericQccProject> project = buildGenericBaseline(tmp.path);
+        settleGenericBaseline(project);
+        publishProviderAlone(project);
+
+        string build_dir = project.build_dir;
+        string provider = project.provider;
+
+        # Link publication contract: every consumer of the object set records the
+        # group's generation map as one of its own manifest inputs, so a consumer
+        # may skip only while its manifest names the same completed generations.
+        string generation_map = build_dir + "/qo-scripts/.qcc-generation.map";
+        assertTrue(is_file(generation_map),
+            "the object group publishes one generation map");
+        string generation_text = read(generation_map);
+        assertTrue(generation_text.find("format=1\n") == 0,
+            "the generation map has a stable format header: " + generation_text);
+        assertEq(24, generation_text.split("generation=").size() - 1,
+            "the generation map names every component of the group: "
+                + generation_text);
+        # The qo-link aggregate reads the member objects, so it validates the
+        # generation identity. A script aggregate is compiled from the sources in
+        # one parse and never reads a member .qo, so it is ordered after the
+        # generations without keying its skip decision on them.
+        assertTrue(read(build_dir + "/linked.qo.qolink.manifest.json").find(
+                generation_map) != -1,
+            "the qo-link aggregate validates the object generation map");
+        assertEq(-1, read(build_dir
+                + "/script-aggregate.qo.script-aggregate.manifest.json").find(
+                    generation_map),
+            "a source-compiled aggregate does not key its skip decision on object "
+                "generations");
+
+        # A republication that leaves every generation unchanged must not relink,
+        # and one that changes a generation must.
+        string link_stamp_before = read(build_dir + "/linked.qo.content.stamp");
+        string generation_before = generation_text;
+        run(sprintf("cmake -E touch %s", provider));
+        string generation_no_op = run(buildCommand(build_dir));
+        assertEq(generation_before, read(generation_map),
+            "a timestamp-only source change publishes the same generations: "
+                + generation_no_op);
+        assertEq(link_stamp_before, read(build_dir + "/linked.qo.content.stamp"),
+            "an unchanged generation does not relink: " + generation_no_op);
+        write(provider, read(provider) + "# generation map change\n");
+        string generation_change = run(buildCommand(build_dir));
+        assertNeq(generation_before, read(generation_map),
+            "a source change publishes a new generation: " + generation_change);
+
+        string link_content_stamp = read(build_dir + "/linked.qo.content.stamp");
+        string provider_body = read(provider);
+        write(provider, provider_body);
+        string same_content = run(buildCommand(build_dir));
+        assertEq(link_content_stamp, read(build_dir + "/linked.qo.content.stamp"),
+            "same-content source mtime rebuild does not relink aggregate: " + same_content);
+    }
+}

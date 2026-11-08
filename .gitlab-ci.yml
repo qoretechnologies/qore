@@ -120,12 +120,62 @@ check-fast-routes-core-sanitizers:
     - . test/docker_test/tree-tested-skip.sh
     - test/cpp/run-sanitizers.sh
 
+# The qmod build cache (design/qmod-build-cache.md): every job that builds Qore reuses the AOT modules that earlier
+# jobs compiled, from a directory of the host that its runner mounts into the job and names in QORE_QMOD_CACHE_DIR (the
+# runner sets it; without it, or when the directory is not mounted, the build runs without the cache).  A module is
+# reused only when everything that can change what qcc writes is unchanged; test/docker_test/qmod-cache.sh fails the
+# job when a module the cache supplied is not what it verified, prunes the cache after every job (entries unused for
+# QORE_QMOD_CACHE_MAX_AGE_DAYS days, then the least recently used ones above QORE_QMOD_CACHE_MAX_SIZE_MB MiB per job
+# name) and prints the hits, misses and the cache size before and after pruning.  A sample of the modules the cache
+# supplies is compiled again and must be byte for byte the same (QORE_QMOD_CACHE_AUDIT; 1 audits every one).
+# Only the jobs of protected refs write the cache, and sign its entries after the build with the Ed25519 private key
+# QORE_QMOD_CACHE_SIGNING_KEY (a protected CI variable of type File, limited to the build jobs' environment, which no
+# process of the build gets); every job uses only entries that the public key QORE_QMOD_CACHE_VERIFY_KEY (a CI
+# variable) verifies.  The jobs that build Qore on the writer's runner name the environment "qmod-cache-build"
+# (action "prepare": no deployment), to which the private key's variable is scoped, so that no other job gets it.
+# QORE_QMOD_CACHE_DISABLE=1 compiles every module and stores nothing.
+# The cache's runners (design/qmod-build-cache-runners.md): a job of a protected ref runs on the runner that mounts
+# the cache read-write (tags qmod-cache-writer and the architecture; macOS: macos-qmod-cache-writer), the other jobs on
+# the one that mounts it read-only (qmod-cache-reader and the architecture; macOS: the existing runner, tag macos).
+# Until those runners are registered, the CI variable QORE_QMOD_CACHE_RUNNERS is unset and the jobs keep the shared
+# runners' tags (k8s, macos), which mount no cache, so the jobs build without it; QORE_QMOD_CACHE_RUNNERS=1 switches.
+# Only a job that runs on the writer's runner names the environment qmod-cache-build, to which the signing key's
+# variable is scoped: every other job (on the shared runners, which run privileged pods, or on the reader's runner)
+# names qmod-cache-read, so GitLab never writes the key into it.  A pipeline variable must not be able to override
+# these variables (pipeline variables Maintainer-only; see design/qmod-build-cache-runners.md).
+.qmod-cache:
+  environment:
+    name: $QORE_QMOD_CACHE_ENVIRONMENT
+    action: prepare
+  variables:
+    QORE_QMOD_CACHE_AUDIT: "0.03:${CI_PIPELINE_ID}"
+    QORE_QMOD_CACHE_MAX_SIZE_MB: "3072"
+    QORE_QMOD_CACHE_MAX_AGE_DAYS: "7"
+    QORE_QMOD_CACHE_RUNNER_TAG: k8s
+    QORE_QMOD_CACHE_MACOS_RUNNER_TAG: macos
+    QORE_QMOD_CACHE_ENVIRONMENT: qmod-cache-read
+  # as for a job without rules, no merge request pipeline runs these jobs; the rules only choose the runner's tag
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$QORE_QMOD_CACHE_RUNNERS == "1" && $CI_COMMIT_REF_PROTECTED == "true"'
+      variables:
+        QORE_QMOD_CACHE_RUNNER_TAG: qmod-cache-writer
+        QORE_QMOD_CACHE_MACOS_RUNNER_TAG: macos-qmod-cache-writer
+        QORE_QMOD_CACHE_ENVIRONMENT: qmod-cache-build
+    - if: '$QORE_QMOD_CACHE_RUNNERS == "1"'
+      variables:
+        QORE_QMOD_CACHE_RUNNER_TAG: qmod-cache-reader
+        QORE_QMOD_CACHE_MACOS_RUNNER_TAG: macos
+    - when: on_success
+
 # Build stage - compile once per platform, save build/ as artifact
 build-ubuntu-amd64:
+  extends: .qmod-cache
   stage: build
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
-    - k8s
+    - $QORE_QMOD_CACHE_RUNNER_TAG
     - amd64
   services: []
   before_script: []
@@ -138,10 +188,11 @@ build-ubuntu-amd64:
     expire_in: 1 day
 
 build-ubuntu-arm64:
+  extends: .qmod-cache
   stage: build
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-arm64
   tags:
-    - k8s
+    - $QORE_QMOD_CACHE_RUNNER_TAG
     - arm64
   services: []
   before_script: []
@@ -154,10 +205,11 @@ build-ubuntu-arm64:
     expire_in: 1 day
 
 build-alpine-amd64:
+  extends: .qmod-cache
   stage: build
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
   tags:
-    - k8s
+    - $QORE_QMOD_CACHE_RUNNER_TAG
     - amd64
   services: []
   before_script: []
@@ -170,10 +222,11 @@ build-alpine-amd64:
     expire_in: 1 day
 
 build-alpine-arm64:
+  extends: .qmod-cache
   stage: build
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine-arm64
   tags:
-    - k8s
+    - $QORE_QMOD_CACHE_RUNNER_TAG
     - arm64
   services: []
   before_script: []
@@ -186,10 +239,11 @@ build-alpine-arm64:
     expire_in: 1 day
 
 build-perf:
+  extends: .qmod-cache
   stage: build
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
-    - k8s
+    - $QORE_QMOD_CACHE_RUNNER_TAG
     - amd64
   services: []
   before_script: []
@@ -498,11 +552,12 @@ test-tiered-ubuntu-amd64:
     expire_in: 7 days
 
 test-macos:
+  extends: .qmod-cache
   stage: test
   timeout: 150 minutes
   needs: [{job: tree-already-tested, optional: true}]
   tags:
-    - macos
+    - $QORE_QMOD_CACHE_MACOS_RUNNER_TAG
   services: []
   variables:
     QORE_TEST_OPTS: '-penable-debug'

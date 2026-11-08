@@ -10,6 +10,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../TestFileTime.qm
+%requires ./CMakeBuildHelpersTestBase.qm
 # catalog install reconciliation is verified by composing what it leaves installed
 %requires DataProvider
 %requires i18n

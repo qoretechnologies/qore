@@ -483,9 +483,11 @@ public:
     // A cancellation wave includes preregistered workers and descendants until the Program becomes idle.
     bool cancel_new_threads = false;
     //! the references released by threads that deleted this Program while running its code: tid -> count
-    /** A thread that deletes the Program while it runs the Program's code cannot wait for itself to leave that code,
-        so the Program is kept until it has left it: the last of these threads to leave the code clears the Program,
-        and each releases its references then (see deferDerefIfRunning() and decThreadCount())
+    /** A thread that deletes the Program while it runs the Program's code, or while it holds its parse lock (code
+        that the parse commit runs, a constant initializer for example), cannot wait for itself to leave that code or
+        to release that lock, so the Program is kept until it has done both: the last of these threads to do so clears
+        the Program, and each releases its references then (see deferDerefIfRunning(), decThreadCount() and
+        unlockParsing())
     */
     ptid_map_t deferred_derefs;
     unsigned thread_waiting = 0; // number of threads waiting on all threads to terminate or parsing to complete
@@ -541,6 +543,12 @@ public:
         unavailable; see QoreAOTModuleFileInfo
     */
     std::vector<std::string> unavailable_try_modules;
+
+    //! the files that %include directives opened while this Program was parsed, by their real paths, without duplicates
+    /** qcc lists them in the depfile of an AOT module, with which an incremental build and the module loader decide
+        whether the module is out of date with its sources (see design/aot-linked-module-sources.md)
+    */
+    strset_t included_files;
 
     struct ModuleParseCommand {
         std::string module;
@@ -1166,6 +1174,16 @@ public:
         }
     }
 
+    //! Records a file that a %include directive opened while the Program was parsed
+    DLLLOCAL void addIncludedFile(const char* path) {
+        QoreString resolved;
+        if (q_realpath(QoreString(path), resolved)) {
+            included_files.insert(path);
+        } else {
+            included_files.insert(resolved.c_str());
+        }
+    }
+
     DLLLOCAL void addModuleParseCommand(const char* mod, const QoreString& cmd) {
         module_parse_commands.push_back(ModuleParseCommand{mod ? mod : "", cmd.c_str()});
     }
@@ -1590,11 +1608,9 @@ public:
         assert(i != tidmap.end());
         if (!--i->second) {
             tidmap.erase(i);
-            ptid_map_t::iterator di = deferred_derefs.find(tid);
-            if (di != deferred_derefs.end()) {
-                derefs = di->second;
-                deferred_derefs.erase(di);
-                clear = deferred_derefs.empty();
+            // a thread that still holds the parse lock releases its deferred references when it releases the lock
+            if (parse_tid != tid) {
+                derefs = takeDeferredDerefs(tid, clear);
             }
         }
 
@@ -1619,11 +1635,29 @@ public:
     DLLLOCAL bool deferDerefIfRunning() {
         int tid = q_gettid();
         AutoLocker al(plock);
-        if (tidmap.find(tid) == tidmap.end()) {
+        // a thread that holds the parse lock (the parse commit runs code) cannot wait for itself to release it either
+        if (tidmap.find(tid) == tidmap.end() && parse_tid != tid) {
             return false;
         }
         ++deferred_derefs[tid];
         return true;
+    }
+
+    //! Takes the references that the given thread deferred when it deleted the Program; called with plock held
+    /** @param tid the thread, which neither runs the Program's code nor holds its parse lock anymore
+        @param clear set to true if no other thread has deferred references, so the thread must clear the Program
+
+        @return the number of references that the thread must release
+    */
+    DLLLOCAL unsigned takeDeferredDerefs(int tid, bool& clear) {
+        ptid_map_t::iterator di = deferred_derefs.find(tid);
+        if (di == deferred_derefs.end()) {
+            return 0;
+        }
+        unsigned derefs = di->second;
+        deferred_derefs.erase(di);
+        clear = deferred_derefs.empty();
+        return derefs;
     }
 
     // gets a list of all thread IDs using this Program
@@ -1681,17 +1715,31 @@ public:
         return 0;
     }
 
-    DLLLOCAL void unlockParsing() {
+    //! Releases the parse lock
+    /** @param clear set to true if the thread must clear the Program, as the last thread that deleted it while it
+        held the parse lock
+
+        @return the number of references that the thread released when it deleted the Program while it held the parse
+        lock and must release now; 0 if it did not delete the Program, or if it still runs the Program's code (it then
+        releases them when it leaves it; see decThreadCount())
+    */
+    DLLLOCAL unsigned unlockParsing(bool& clear) {
         // grab program-level lock
         AutoLocker al(plock);
-        assert(parse_tid == q_gettid());
+        int tid = q_gettid();
+        assert(parse_tid == tid);
         assert(parse_count > 0);
+        unsigned derefs = 0;
         if (!(--parse_count)) {
             parse_tid = -1;
             if (thread_waiting) {
                 pcond.broadcast();
             }
+            if (tidmap.find(tid) == tidmap.end()) {
+                derefs = takeDeferredDerefs(tid, clear);
+            }
         }
+        return derefs;
     }
 
     DLLLOCAL bool parsingLocked() const {
@@ -1701,6 +1749,9 @@ public:
     // called only with plock held
     DLLLOCAL void waitForAllThreadsToTerminateIntern() {
         int tid = q_gettid();
+        // the thread would wait for itself: a deletion while it holds the parse lock is deferred until it releases it
+        // (see deferDerefIfRunning())
+        assert(parse_tid != tid);
 
         // the calling thread does not wait for itself: all of its entries are discounted, as it can be in the
         // Program's code more than once (nested calls)
@@ -3524,9 +3575,17 @@ public:
         return pgm.priv->lockParsing(xsink);
     }
 
-    DLLLOCAL static void unlockParsing(QoreProgram& pgm) {
-        pgm.priv->unlockParsing();
-    }
+    //! Releases the parse lock; clears and dereferences a Program deleted while the thread held it
+    /** @param pgm the Program
+        @param xsink exceptions raised while the Program is cleared are appended here; if null, they are handled
+
+        The caller must not use \a pgm afterwards unless it holds a reference to it
+    */
+    DLLLOCAL static void unlockParsing(QoreProgram& pgm, ExceptionSink* xsink = nullptr);
+
+    //! Clears (if \a clear) and dereferences a Program deleted by the current thread while it ran its code or held its
+    //! parse lock, once it has left the code and released the lock
+    DLLLOCAL static void releaseDeferredDerefs(QoreProgram& pgm, unsigned derefs, bool clear, ExceptionSink* xsink);
 
     DLLLOCAL static int incThreadCount(QoreProgram& pgm, ExceptionSink* xsink) {
         return pgm.priv->incThreadCount(xsink);
@@ -3782,6 +3841,19 @@ public:
         @since %Qore 3.0
      */
     DLLLOCAL static void inheritModulePathLists(QoreProgram& child, QoreProgram& parent);
+
+    //! Returns the module search-path lists that resolve modules for \a pgm in this thread
+    /** These are the lists of \a pgm, with the directories of the AOT modules whose dependencies this thread is
+        resolving for \a pgm (see QoreModulePathScope): the prepended directories of the innermost such module first
+        and the appended directories of the outermost first, as nested source modules inherit them.  Without such
+        a module, they are the lists of \a pgm.
+
+        @param pgm the Program, or nullptr for none
+        @param prepended receives the directories searched before the module path, without duplicates
+        @param appended receives the directories searched after the module path, without duplicates
+     */
+    DLLLOCAL static void getEffectiveModulePathLists(const QoreProgram* pgm, std::vector<std::string>& prepended,
+            std::vector<std::string>& appended);
 
     DLLLOCAL static void runTimeDefine(QoreProgram* pgm, const char* str, QoreValue val, ExceptionSink* xsink) {
         pgm->priv->runTimeDefine(str, val, xsink);
@@ -4791,6 +4863,29 @@ class RuntimeConfig;
 //! authoritative, falling back to the runtime-config/context Program only when there is no
 //! current Program.  Single definition in ql_misc.cpp; also called from ql_object.cpp.
 DLLLOCAL QoreProgram* q_get_runtime_call_program(RuntimeConfig& runtime_cfg);
+
+//! Makes the module loader find modules for a Program with an AOT module's own module path directories
+/** While an AOT module's dependencies are loaded and checked, before the module is mapped, its own Program does not
+    exist yet; its initialization creates it with the module's own %prepend-module-path and %append-module-path
+    directories around the lists of the Program loading it (inheritAOTModulePathLists() in QoreAOTRuntime.cpp), as a
+    source module's Program has them.  So that its dependencies are the modules that Program, or the module's
+    source, would find, this scope adds the directories, which qcc writes in the module's metadata, to the lists of
+    the loading Program for this thread (see qore_program_private::getEffectiveModulePathLists()), also for the
+    Programs of the source modules loaded in it, which inherit them.  Scopes nest for a dependency's dependencies.
+*/
+class QoreModulePathScope {
+public:
+    //! Adds \a prepended and \a appended to the lists of \a pgm for this thread until destroyed
+    /** the lists must outlive the scope
+    */
+    DLLLOCAL QoreModulePathScope(const QoreProgram* pgm, const std::vector<std::string>& prepended,
+            const std::vector<std::string>& appended);
+
+    DLLLOCAL ~QoreModulePathScope();
+
+    QoreModulePathScope(const QoreModulePathScope&) = delete;
+    QoreModulePathScope& operator=(const QoreModulePathScope&) = delete;
+};
 
 //! returns the structured parse diagnostics collected on the Program serialized as a JSON array;
 //! exported so the standalone interpreter (--diag-format=json) can emit them

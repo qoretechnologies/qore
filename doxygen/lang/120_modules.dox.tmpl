@@ -1495,6 +1495,18 @@ qcc of this Qore installation
     the source \c qlib directory) and to a module that is a regular file with its dependency file next to it (as in
     the directory of the built modules).
 
+    The sources that the dependency file lists are those of the module, the files its \c %%include directives open,
+    and those of the modules it requires, directly or through another module (a module sees the declarations of the
+    modules its dependencies re-export), so a change to any of them makes the module out of date, and an incremental
+    build compiles it again.
+
+    A module is out of date as well when a module it requires, directly or through another module, or a module that
+    one of them re-exports, is loaded from another module than the one it was compiled against, for example one that
+    appeared in a directory of the module path that is searched first: the module loader raises
+    \c AOT-MODULE-STALE for it and loads its source module instead; without a source module, the module cannot be
+    loaded until it is rebuilt.  Another build of a binary module, even with the same name and
+    module API version, such as an installed one, is a different module unless it is an identical copy.
+
     A module without a dependency file next to it is not checked: an installed module (the install rules do not
     install dependency files), and a module compiled by hand with <tt>qcc --compile-module</tt> without
     <tt>--depfile</tt>, which is loaded even if its source has changed since it was compiled.  Rebuild such a module

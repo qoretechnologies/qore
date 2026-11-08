@@ -4562,7 +4562,8 @@ ProgramRuntimeParseCommitContextHelper::~ProgramRuntimeParseCommitContextHelper(
     td->tlpd        = old_tlpd;
     sync_runtime_config_program(td);
 
-    qore_program_private::unlockParsing(*pgm);
+    // last: the Program is cleared and dereferenced here if the commit's code deleted it
+    qore_program_private::unlockParsing(*pgm, xsink);
 }
 
 ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink* xsink, QoreProgram* pgm)
@@ -4587,9 +4588,11 @@ ProgramRuntimeParseContextHelper::~ProgramRuntimeParseContextHelper() {
         return;
 
     ThreadData* td = thread_data.get();
-    qore_program_private::unlockParsing(*td->current_pgm);
+    QoreProgram* pgm = td->current_pgm;
     td->current_pgm = old_pgm;
     sync_runtime_config_program(td);
+    // last: the Program is cleared and dereferenced here if code run while it was locked deleted it
+    qore_program_private::unlockParsing(*pgm);
 }
 
 CurrentProgramRuntimeParseContextHelper::CurrentProgramRuntimeParseContextHelper() {

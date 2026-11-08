@@ -1656,6 +1656,12 @@
     - an AOT module in a build tree that is a regular file with the dependency file written by \c qcc next to it is
       now checked against its sources like a linked module, so an out-of-date module is no longer used; installed
       modules are not checked (see @ref aot_module_build_tree_staleness)
+    - an AOT module of a build tree was not found out of date, nor compiled again by an incremental build, when a file
+      that it includes with \c %%include, or a module that one of its dependencies requires or re-exports, changed:
+      \c qcc now lists them in the module's dependency file (see @ref aot_module_build_tree_staleness)
+    - an AOT module of a build tree was loaded when a module it requires (directly or not, or re-exported) was loaded
+      from another file than the one it was compiled against, such as a module that appeared in a directory of the
+      module path that is searched first; it is now out of date (see @ref aot_module_build_tree_staleness)
     - a @ref thread_local "thread_local" variable declared in a user module was refused when the module inherited
       @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL": thread-local storage is not thread control (see
       @ref module_parse_option_masks)

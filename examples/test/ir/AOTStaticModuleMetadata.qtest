@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+
+%exec-class AOTStaticModuleMetadataTest
+
+#! A module registered statically (from its .qo, or a .qoa) is checked with the metadata record linked with it
+/** A statically registered AOT module is not loaded from a file, so it has no metadata section; qcc links its record
+    with its register function instead (qore_aot_register_into_program_v2()).  With it, as for a .qmod:
+    - the module's dependencies are found with its own %prepend-module-path directories, as its source finds them;
+    - an optional module that it was compiled without and that is available now is reported (BINARY-MODULE-STALE;
+      the module has no source module to load instead, so it is used).
+    The check of the files of a build tree (the depfile) does not apply: the module is part of the program that links
+    it, which its build rebuilds.  See design/aot-object-files-and-module-artifacts.md.
+*/
+class AOTStaticModuleMetadataTest inherits QUnit::Test {
+    public {
+        #! a C++ host that registers the module from its object and calls it
+        const HostCode = "#include <qore/Qore.h>
+#include <stdio.h>
+
+extern \"C\" void qore_StatMod_register(QoreProgram*);
+
+int main(int argc, char** argv) {
+    qore_init(QL_GPL, \"UTF-8\", true);
+    int rc = 1;
+    {
+        QoreProgram* pgm = new QoreProgram(PO_NEW_STYLE);
+        qore_StatMod_register(pgm);
+        ExceptionSink xsink;
+        pgm->parse(\"%requires StatMod\\nstring sub main() { return StatMod::value(); }\\n\", \"host\", &xsink);
+        if (!xsink) {
+            ValueHolder v(pgm->callFunction(\"main\", nullptr, &xsink), &xsink);
+            if (!xsink && v->getType() == NT_STRING) {
+                printf(\"%s\\n\", v->get<const QoreStringNode>()->c_str());
+                rc = 0;
+            }
+        }
+        pgm->waitForTerminationAndDeref(&xsink);
+    }
+    qore_cleanup();
+    return rc;
+}
+";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string source_root;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTStaticModuleMetadataTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = normalize_dir(ENV.QORE_LIBDIR ?? dirname(qore_bin));
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        source_root = realpath(dirname(get_script_path()) + "/../../..");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+
+        addTestCase("a statically registered module is checked with its linked metadata", \staticModuleTest());
+        set_return_value(main());
+    }
+
+    private static list<string> libqoreTargetFlags() {
+        *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        return m ? (m[0],) : ();
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private static write(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+    }
+
+    #! writes the source of a module with the given directives and body
+    private writeModule(string dir, string name, string directives, string body) {
+        write(sprintf("%s/%s.qm", dir, name), sprintf("%%modern\n%s\nmodule %s { version = \"1.0\"; "
+            "desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n%s\n", directives, name, body));
+    }
+
+    staticModuleTest() {
+        TmpDir tmp("qore-aot-static-meta-");
+        string src_dir = tmp.path + "/src";
+        string own_dir = tmp.path + "/own";
+        string opt_dir = tmp.path + "/opt";
+        mkdir(src_dir);
+        mkdir(own_dir);
+        mkdir(opt_dir);
+        # Dep is found through StatMod's own directory, before another Dep in the module path; StatOpt is not
+        # available when StatMod is compiled
+        writeModule(own_dir, "Dep", "", "public namespace Dep { public string sub value() { return \"own\"; } }");
+        writeModule(src_dir, "Dep", "", "public namespace Dep { public string sub value() { return \"global\"; } }");
+        writeModule(src_dir, "StatMod", sprintf("%%prepend-module-path %s\n%%requires Dep\n%%try-module StatOpt\n"
+            "%%define NoStatOpt\n%%endtry", own_dir), "public namespace StatMod { public string sub value() {
+%ifdef NoStatOpt
+    return Dep::value() + \"-noopt\";
+%else
+    return Dep::value() + \"-opt\";
+%endif
+} }");
+        string obj = tmp.path + "/StatMod.qo";
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -c -o %s %s", env, src_dir, qcc_bin, obj,
+            src_dir + "/StatMod.qm"));
+        assertTrue(is_file(obj), "compiled the module object: " + out);
+
+        string host = tmp.path + "/host.cpp";
+        write(host, HostCode);
+        string exe = tmp.path + "/static-host";
+        string cxx = ENV.CXX ?? "c++";
+        out = run(sprintf("%s -std=c++17 -I%s -I%s %s %s -L%s -Wl,-rpath,%s -lqore -o %s %s", cxx,
+            source_root + "/include", libqore_dir + "/include", host, obj, libqore_dir, libqore_dir, exe,
+            libqoreTargetFlags().join(" ")));
+        if (!is_file(exe)) {
+            if (out =~ /not found/) {
+                testSkip("no C++ compiler to build the host: " + out);
+            }
+            assertTrue(False, "linked the C++ host: " + out);
+            return;
+        }
+
+        # the dependency is the Dep of the module's own directory, as for its source
+        out = trim(run(sprintf("%s QORE_MODULE_DIR=%s %s", env, src_dir, exe)));
+        assertEq("own-noopt", out, out);
+
+        # the optional module is available now: the module is used, and the missing functionality is reported
+        writeModule(opt_dir, "StatOpt", "", "public namespace StatOpt {}");
+        out = trim(run(sprintf("%s QORE_MODULE_DIR=%s:%s %s", env, src_dir, opt_dir, exe)));
+        assertEq("own-noopt", out.split("\n").last(), out);
+        assertRegex("warning: AOT module 'StatMod' linked into this program was compiled when optional module "
+            "'StatOpt' was not available, but it is available now", out);
+    }
+}

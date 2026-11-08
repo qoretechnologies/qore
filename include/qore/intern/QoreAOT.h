@@ -708,14 +708,16 @@ extern "C" void qore_aot_raise_init_error(ExceptionSink* xsink, QoreStringNode* 
 
 //! C ABI bridge for `.qo`-linked statically-compiled AOT modules.
 /** Invoked by the per-module `qore_MOD_register(QoreProgram*)` entry point that
-    `qcc -c` emits into each `.qo`.  Internally delegates to
-    `ModuleManager::registerAOTStaticModule`; any exception raised by the underlying
+    `qcc -c` emits into each `.qo`, and by `qore_qoa_register_all()` of a `.qoa`.  Decodes
+    the module's metadata record (\a record, \a record_len; see QoreAOTModuleFileInfo), which
+    qcc links with the module as it has no metadata section, and delegates to
+    `QoreModuleManager::registerAOTStaticModuleIntern`; any exception raised by the underlying
     load is reported to stderr via `xsink.handleExceptions()` — there is no return
     value to signal failure yet.  The plain C function-pointer type is used instead
     of `qore_binary_module_desc_t` to keep IR emission straightforward.
 */
-extern "C" void qore_aot_register_into_program(QoreProgram* tpgm,
-        void (*desc_fn)(QoreModuleInfo&), const char* path);
+extern "C" void qore_aot_register_into_program_v2(QoreProgram* tpgm,
+        void (*desc_fn)(QoreModuleInfo&), const char* path, const uint8_t* record, uint64_t record_len);
 
 //! Returns true if \a name is registered as an AOT user module (a source Qore
 //! module compiled to .qmod binary form).  AOT user modules must be tracked in

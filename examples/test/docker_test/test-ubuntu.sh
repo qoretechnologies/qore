@@ -119,7 +119,7 @@ if [ -d "${QORE_SRC_DIR}/build" ] && [ -f "${QORE_SRC_DIR}/build/CMakeCache.txt"
             echo "Building Release mode..."
             mkdir -p build-release
             cd build-release
-            cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+            cmake .. -DCMAKE_BUILD_TYPE=release -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
             make -j${MAKE_JOBS}
             echo "Release build complete"
         ) &
@@ -154,7 +154,7 @@ else
             echo "Building Debug mode..."
             mkdir -p build
             cd build
-            cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+            cmake .. -DCMAKE_BUILD_TYPE=debug -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
             make -j${MAKE_JOBS}
             make install
             echo "Debug build complete"
@@ -165,7 +165,7 @@ else
             echo "Building Release mode..."
             mkdir -p build-release
             cd build-release
-            cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+            cmake .. -DCMAKE_BUILD_TYPE=release -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
             make -j${MAKE_JOBS}
             echo "Release build complete"
         ) &
@@ -185,7 +185,7 @@ else
         echo && echo "-- building Qore Debug; perf tests excluded, skipping release build --"
         mkdir -p build
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+        cmake .. -DCMAKE_BUILD_TYPE=debug -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
         make -j${MAKE_JOBS}
         make install
         cd ${QORE_SRC_DIR}
