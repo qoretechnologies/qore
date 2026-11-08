@@ -635,13 +635,35 @@ if [ -n "$TIMEOUT_CMD" ] && $TIMEOUT_CMD --version 2>/dev/null | grep -q GNU; th
     TIMEOUT_SIGNAL_OPTS="-s ABRT -k 60"
 fi
 
+# The files of this runner, removed by their exact names when it ends
+TEST_START_MARKER=""
+TEST_CORES_BEFORE=""
+TEST_EVENT_DIR=""
+TEST_EVENT_FIFO=""
+remove_runner_files() {
+    for f in "$TEST_START_MARKER" "$TEST_CORES_BEFORE" "$TEST_EVENT_FIFO"; do
+        if [ -n "$f" ]; then
+            rm -f "$f"
+        fi
+    done
+    if [ -n "$TEST_EVENT_DIR" ]; then
+        rmdir "$TEST_EVENT_DIR" 2>/dev/null
+    fi
+}
+trap remove_runner_files 0
 # A separate marker per runner also permits concurrent test shards.
 TEST_START_MARKER=$(mktemp "$CORE_DIR_ABS/test-start.XXXXXX") || exit 1
 # the core files there were when the current test started (see find_test_core())
 TEST_CORES_BEFORE=$(mktemp "$CORE_DIR_ABS/test-cores.XXXXXX") || exit 1
-# the FIFO through which a test and run_tests.sh report events to the watchdog of the test (see run_with_watchdog())
-TEST_EVENT_FIFO="$CORE_DIR_ABS/test-events.$$"
-trap 'rm -f "$TEST_START_MARKER" "$TEST_CORES_BEFORE" "$TEST_EVENT_FIFO"' 0
+# The FIFO through which a test and run_tests.sh report events to the watchdog of the test (see run_with_watchdog()),
+# in a directory that only this runner uses: no other runner can open or remove it, whatever process IDs the runners
+# have and whatever tree they share.  It was named after the runner's process ID in the core directory, so runners in
+# containers that shared a tree, each of them process 2, used the same FIFO: another runner removed it between this
+# runner's mkfifo and its open, which then made a regular file, and the watchdog took the end of that file for the
+# time limit (a test was sent SIGUSR1 20 ms after it started and reported as having exceeded its 600 s limit).
+TEST_EVENT_TMP=${TMPDIR:-/tmp}
+TEST_EVENT_DIR=$(mktemp -d "${TEST_EVENT_TMP%/}/qore-test-events.XXXXXX") || exit 1
+TEST_EVENT_FIFO="$TEST_EVENT_DIR/events"
 
 # A test that exceeds its time limit is first sent SIGUSR1, unless signal handling is disabled (where SIGUSR1 would
 # end it without a core dump): a QUnit test then prints the call stacks of all its threads and reports it through
