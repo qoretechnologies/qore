@@ -554,6 +554,33 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
 std::atomic<qore_program_private_base::dbg_teardown_hook_t> qore_program_private_base::dbg_teardown_hook{nullptr};
 #endif
 
+namespace {
+//! the Programs whose data the calling thread deletes, innermost last; see qore_program_torn_down_by_current_thread()
+/** Only the addresses are compared, so a Program deleted by another thread is never dereferenced
+*/
+thread_local std::vector<const QoreProgram*> qore_programs_torn_down;
+
+//! records that the calling thread deletes a Program's data while it exists
+class QoreProgramTeardownScope {
+public:
+    DLLLOCAL QoreProgramTeardownScope(const QoreProgram* pgm) {
+        qore_programs_torn_down.push_back(pgm);
+    }
+
+    DLLLOCAL ~QoreProgramTeardownScope() {
+        qore_programs_torn_down.pop_back();
+    }
+
+    QoreProgramTeardownScope(const QoreProgramTeardownScope&) = delete;
+    QoreProgramTeardownScope& operator=(const QoreProgramTeardownScope&) = delete;
+};
+}
+
+bool qore_program_torn_down_by_current_thread(const QoreProgram* pgm) {
+    return std::find(qore_programs_torn_down.begin(), qore_programs_torn_down.end(), pgm)
+        != qore_programs_torn_down.end();
+}
+
 QoreProgram* qore_program_private::getReferencedProgram(const QoreProgram* p, qore_program_id_t id) {
     QoreAutoRWReadLocker al(&lck_programMap);
     programid_to_program_map_t::const_iterator i = programid_to_program_map.find(id);
@@ -1784,6 +1811,10 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     }
 
     if (clr) {
+        // the code of the Program's classes that runs while its data is deleted (destructors) runs in it although
+        // its last reference may have been released (see qore_class_private::getSourceProgramForCall())
+        QoreProgramTeardownScope teardown_scope(pgm);
+
         // purge thread resources before clearing pgm
         purge_pgm_thread_resources(pgm, xsink);
 

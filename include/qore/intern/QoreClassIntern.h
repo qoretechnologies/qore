@@ -2240,6 +2240,11 @@ typedef vector_map_t<QoreClass*, unsigned> qc_ref_map_t;
 
 // private QoreClass implementation
 // only dynamically allocated; reference counter managed in "refs"
+//! Returns true if the calling thread deletes the Program's data (see qore_program_private::waitForTerminationAndClear())
+/** Only the address is compared: the Program is not dereferenced
+*/
+DLLLOCAL bool qore_program_torn_down_by_current_thread(const QoreProgram* pgm);
+
 class qore_class_private {
 public:
     const QoreProgramLocation* loc; // location of declaration
@@ -3692,10 +3697,21 @@ public:
         if (p == ::getProgram()) {
             return p;
         }
-        p = getReferencedSourceProgram();
-        referenced = p != nullptr;
-        if (!p && deleted) {
-            *deleted = true;
+        {
+            // see getReferencedSourceProgram()
+            AutoLocker al(gate.asl_lock);
+            p = spgm.load();
+            if (p && p->optRef()) {
+                referenced = true;
+            } else if (p && !qore_program_torn_down_by_current_thread(p)) {
+                // the Program's last reference has been released, and another thread deletes it
+                p = nullptr;
+                if (deleted) {
+                    *deleted = true;
+                }
+            }
+            // otherwise the Program is deleted by this thread, which runs the code of its classes while it deletes
+            // their data (destructors, for example): the Program stays allocated until the deletion has returned
         }
 #ifdef DEBUG
         if (p) {
