@@ -64,6 +64,13 @@ enum class SslCall : unsigned char {
     Setup,
     //! a call that reads from or writes to the socket
     Transport,
+    //! a write to the socket that failed because the peer closed or reset the connection
+    /** Reported like @ref SslCall::Transport, but the socket is left open: what the peer sent before it closed is
+        still in the receive buffer and can be read, as after a failed write of a plain socket.
+
+        @since %Qore 3.0
+    */
+    Write,
 };
 
 class QoreStringNode;
@@ -255,6 +262,14 @@ private:
     //! the TLS connection that carries this connection, if any; see setLayeredClient()
     SSLSocketHelper* outer = nullptr;
 
+    //! True once a write failed because the peer closed or reset the connection and the socket was kept open
+    /** OpenSSL forbids SSL_shutdown() after a fatal error (SSL_ERROR_SYSCALL), so sendCloseNotify() sends no
+        close_notify alert then.
+
+        @since %Qore 3.0
+    */
+    std::atomic<bool> write_failed{false};
+
     //! ALPN protocols for client-side negotiation (wire format)
     std::vector<unsigned char> alpn_wire_format;
     //! ALPN protocols for server-side selection
@@ -293,6 +308,14 @@ private:
     */
     DLLLOCAL bool sslError(ExceptionSink* xsink, const char* meth, const char* msg, bool always_error = true,
             SslCall call = SslCall::Transport);
+
+    //! Returns the errno of the transport failure that made the last SSL call fail
+    /** The system error that OpenSSL queued for the failed call (OpenSSL 3 queues an \c ERR_LIB_SYS entry with the
+        errno as its reason), or else the socket's errno.  The queue is only peeked, so sslError() still reports it.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL static int transportErrno();
 
     //! Reports a failed SSL call that returned SSL_ERROR_SYSCALL; must be called as sslError()
     DLLLOCAL int sysCallError(ExceptionSink* xsink, int rc, const char* mname, const char* ssl_func);

@@ -95,6 +95,7 @@ void AbstractHttpPollConnectionPriv::setClosed() {
     // design/http-client-manager-cpp-port.md for the lock ordering rules.
     if (fire_hook) {
 #ifdef DEBUG
+        qore_dbg_http_note_closed();
         // tests hold the close notification after the connection is marked closed and its waiters are woken
         qore_dbg_conn_close_notify_hook_t notify_hook = qore_dbg_conn_close_notify_hook.load();
         if (notify_hook) {

@@ -292,6 +292,90 @@ class SqlRecordingDatasource inherits AbstractDatasource {
     }
 }
 
+#! an SQLite datasource that fails like PostgreSQL: after a statement fails, every statement fails with "current
+#! transaction is aborted" until the transaction is rolled back
+class AbortingSqlDatasource inherits SqlRecordingDatasource {
+    public {
+        #! the number of rollbacks
+        int rollbacks = 0;
+    }
+
+    private {
+        #! the statement that fails: "check" for the existence check of SqlUtil, "insert" for an insert
+        string fail_at;
+        #! the insert that fails, counting from 1, if \a fail_at is "insert"
+        int fail_insert;
+        #! the number of inserts executed directly
+        int inserts = 0;
+        #! True after a statement failed, until the transaction is rolled back
+        bool aborted = False;
+    }
+
+    constructor(bool table_exists, string fail_at, int fail_insert = 1) : SqlRecordingDatasource(table_exists) {
+        self.fail_at = fail_at;
+        self.fail_insert = fail_insert;
+    }
+
+    nothing rollback() {
+        ++rollbacks;
+        aborted = False;
+    }
+
+    recordPrepare(string sql) {
+        checkAborted();
+        SqlRecordingDatasource::recordPrepare(sql);
+    }
+
+    recordExec(*softlist<auto> args) {
+        checkAborted();
+        SqlRecordingDatasource::recordExec(args);
+    }
+
+    auto exec(string sql, ...) {
+        return execSql(sql);
+    }
+    auto vexec(string sql, *softlist<auto> args) {
+        return execSql(sql);
+    }
+    auto execRaw(string sql) {
+        return execSql(sql);
+    }
+    auto selectRow(string sql, ...) {
+        return checkTable();
+    }
+    auto vselectRow(string sql, *softlist<auto> args) {
+        return checkTable();
+    }
+
+    private checkAborted() {
+        if (aborted) {
+            throw "DBI:PGSQL:ERROR", "current transaction is aborted, commands ignored until end of transaction block";
+        }
+    }
+
+    private fail(string desc) {
+        aborted = True;
+        throw "DBI:PGSQL:ERROR", desc;
+    }
+
+    private auto execSql(string sql) {
+        checkAborted();
+        push self.sql, sql;
+        if (fail_at == "insert" && sql =~ /^insert /i && ++inserts == fail_insert) {
+            fail("the bulk insert failed");
+        }
+        return 1;
+    }
+
+    private auto checkTable() {
+        checkAborted();
+        if (fail_at == "check") {
+            fail("the existence check failed");
+        }
+        return table_exists ? {"name": "t"} : NOTHING;
+    }
+}
+
 class DataFrameTest inherits QUnit::Test {
     constructor() : Test("DataFrameTest", "1.0", \ARGV) {
         addTestCase("constructionTest", \constructionTest());
@@ -345,6 +429,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("null and NUL group and join keys", \nullKeyTest());
         addTestCase("toTable() names are plain SQL identifiers", \sqlIdentifierTest());
         addTestCase("toTable() needs SqlUtil", \sqlUtilRequiredTest());
+        addTestCase("toTable() raises a failed SqlUtil statement unchanged", \sqlUtilErrorTest());
         addTestCase("NUL characters in file paths", \nulPathTest());
         addTestCase("a cycle through an object in a DataFrame cell is collected", \dgcCellTest());
         addTestCase("a cycle through a ColumnRef is collected", \dgcColumnRefTest());
@@ -3849,6 +3934,53 @@ sub write_parquet(string path) {
         assertThrows("DATAFRAME-DB-ERROR", "needs the SqlUtil module.*'sqlite3' driver", \p.callFunction(),
             ("write", plain, ds), "toTable() refuses to write without SqlUtil");
         assertEq((), ds.sql + ds.prepared, "no SQL is sent without SqlUtil");
+    }
+
+    # an error of a statement that SqlUtil executes is raised unchanged, with no other statement after it: the
+    # transaction belongs to the caller, and a database like PostgreSQL aborts it on an error, so a fallback statement
+    # would only fail with an error that hides the real one
+    sqlUtilErrorTest() {
+        DataFrame::DataFrame df({"a": (1, 2, 3)});
+
+        # the bulk insert of the first block fails
+        AbortingSqlDatasource ds(True, "insert");
+        assertThrows("DBI:PGSQL:ERROR", "^the bulk insert failed$", \df.toTable(), (ds, "t"),
+            "a failed bulk insert of the first block is raised unchanged");
+        assertEq(("insert into t (a) values (%v)",), ds.sql, "no statement follows the failed bulk insert");
+        assertEq((), ds.prepared, "no row insert statement is prepared after the failed bulk insert");
+        assertEq((), ds.executed, "no row insert statement is executed after the failed bulk insert");
+        assertEq(0, ds.rollbacks, "toTable() does not roll back the caller's transaction");
+        # the caller can roll back and write the rows again
+        ds.rollback();
+        df.toTable(ds, "t");
+        # SqlUtil emulates the bulk insert for SQLite with an insert for each row
+        assertEq(("insert into t (a) values (%v)",) + (map "insert into t (a) values (%v)", xrange(3)), ds.sql,
+            "the rows are written after the caller rolled back");
+
+        # the bulk insert of a later block fails
+        ds = new AbortingSqlDatasource(True, "insert", 2);
+        assertThrows("DBI:PGSQL:ERROR", "^the bulk insert failed$", \df.toTable(), (ds, "t", {"block_size": 1}),
+            "a failed bulk insert of a later block is raised unchanged");
+        assertEq(("insert into t (a) values (%v)", "insert into t (a) values (%v)"), ds.sql,
+            "no block is written after the failed one");
+        assertEq((), ds.prepared + ds.executed, "no row insert follows the failed bulk insert of a later block");
+
+        # the existence check fails
+        foreach bool table_exists in ((True, False)) {
+            ds = new AbortingSqlDatasource(table_exists, "check");
+            assertThrows("DBI:PGSQL:ERROR", "^the existence check failed$", \df.toTable(), (ds, "t"),
+                sprintf("a failed existence check is raised unchanged (table exists: %y)", table_exists));
+            assertEq((), ds.sql + ds.prepared + ds.executed,
+                sprintf("no insert follows the failed existence check (table exists: %y)", table_exists));
+        }
+
+        # a table that SqlUtil does not see is still written with a row insert statement
+        ds = new AbortingSqlDatasource(False, "insert");
+        df.toTable(ds, "t");
+        assertEq(("INSERT INTO t (a) VALUES (%v)",), ds.prepared,
+            "a table SqlUtil does not see is written with a prepared statement");
+        assertEq(((1,), (2,), (3,)), ds.executed, "each row is inserted with the prepared statement");
+        assertEq((), ds.sql, "no bulk insert is attempted for a table SqlUtil does not see");
     }
 
     # a file path with a NUL character would name another file, so it is refused

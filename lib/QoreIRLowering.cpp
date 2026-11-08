@@ -1456,6 +1456,11 @@ bool QoreIRLowering::tryEmitFusedBranchIfLtLocalInt(const QoreValue& cond,
     if (!isLocalNonClosureVar(left_var) || !isLocalNonClosureVar(right_var)) {
         return false;
     }
+    // a local holding a reference reads as the referenced lvalue, which can change without a store to the local,
+    // while the instruction caches the value it reads in the local's slot
+    if (QoreTypeInfo::isReference(left_var->getTypeInfo()) || QoreTypeInfo::isReference(right_var->getTypeInfo())) {
+        return false;
+    }
     builder.createBranchIfLtLocalInt(left_var->ref.id, right_var->ref.id,
         true_target, false_target, lt->loc);
     return true;
@@ -2396,6 +2401,15 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.setBlock(catch_block);
             builder.createLandingPad(try_scope_depth, try_scope_id, stmt->loc);
             builder.createRefForeachCleanup(state, stmt->loc);
+            // the loop variables are released before the exception leaves the statement, as the AST interpreter's
+            // foreach statement releases them when it unwinds, before the handlers of the enclosing blocks run; a
+            // closure-bound variable was otherwise released by the exit of the function, after its handlers
+            if (const LVList* loop_lvars = foreach_stmt->getLVList()) {
+                for (int i = static_cast<int>(loop_lvars->size()) - 1; i >= 0; --i) {
+                    auto* ui = builder.createUninstantiateLocal(loop_lvars->lv[i], stmt->loc);
+                    ui->is_block_exit = true;
+                }
+            }
             {
                 // Route the synthetic rethrow to the outer exception handler (if any)
                 // so try/catch blocks around the ref foreach can catch the exception
@@ -2770,7 +2784,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // it holds to the list, and not at the end of the frame (an exhausted iterator has been released by
         // IteratorNext, which cleared its handle), and the list temporary is released before the variables rather
         // than at the end of the statement's temp scope
+        // The reference that the loop holds to the current element besides the variable's (the value that
+        // IteratorNext gave) is released first: native code keeps it until the next element or the end of the frame,
+        // so that after a break the element outlived the loop variable when the variable no longer held it
         if (foreach_source_entries) {
+            if (value_val.isValid()) {
+                builder.createReleaseOwnedTemp(value_val, stmt->loc);
+            }
             builder.createIteratorRelease(iter_val, stmt->loc);
             builder.createReleaseOwnedTemp(list_val, stmt->loc);
         }
@@ -7130,6 +7150,7 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             if (var->ref.id->closureUse()) {
                 auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, mode);
                 store_inst->initial_assignment = var->isDecl();
+                store_inst->foreach_assignment = context && !strcmp(context, "foreach assignment");
                 if (store_result) {
                     store_inst->result = builder.getFunction()->createValue();
                     *store_result = store_inst->result;
@@ -7145,6 +7166,8 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             {
                 auto* store_inst = builder.createStoreLocal(var->ref.id, value, var->loc, mode);
                 store_inst->initial_assignment = var->isDecl();
+                // a type error of the store is described as the AST interpreter describes it
+                store_inst->foreach_assignment = context && !strcmp(context, "foreach assignment");
                 if (store_result) {
                     store_inst->result = builder.getFunction()->createValue();
                     *store_result = store_inst->result;
@@ -7950,6 +7973,11 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
     if (left_var && left_var->getType() == VT_IMMEDIATE) {
         left_var = nullptr;
     }
+    // the value of an assignment that can be a reference the variable now holds is given by the lvalue path, as the
+    // AST interpreter gives it (see assignmentValueMayBeReference())
+    if (left_var && !is_weak && assign->needsReturnValue() && assignmentValueMayBeReference(left_var, right_expr)) {
+        left_var = nullptr;
+    }
     if (left_var) {
         QoreIRValue store_result;
         if (!storeVarRef(left_var, right, error, "assignment", &right_expr, nullptr, assign_mode,
@@ -8049,6 +8077,21 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
     return right;
 }
 
+// documented in QoreIRLowering.h
+QoreIRValue QoreIRLowering::compoundAssignmentResult(bool needs_rv, const VarRefNode* var,
+        const QoreValue& left, QoreIRValue result, std::string& error, const char* context) {
+    // the variable's type can convert the value that the operation computes when it is stored (ex: an any or auto!
+    // variable stores a hash<HD> as a plain hash, a softint variable stores 2.5 as 2), and the AST interpreter's +=,
+    // -=, *= and /= operators return the value the lvalue holds afterwards (doPlusEqualsOnLValue(),
+    // doMinusEqualsOnLValue(), QoreMultiplyEqualsOperatorNode and QoreDivideEqualsOperatorNode), so the variable is
+    // read again; the integer operators (%=, &=, |=, ^=, <<=, >>=) only apply to lvalues that store the integer they
+    // compute as it is, so their result is the value they compute and they do not use this function
+    if (!needs_rv) {
+        return result;
+    }
+    return loadVarRef(var, error, context, left);
+}
+
 QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* op = dynamic_cast<const QorePlusEqualsOperatorNode*>(node);
@@ -8098,7 +8141,13 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             && !QoreTypeInfo::isReference(left_var->getTypeInfo())) {
         const AbstractQoreNode* right_node = right_expr.getInternalNode();
         auto* right_var = dynamic_cast<const VarRefNode*>(right_node);
-        if (isLocalNonClosureVar(right_var)) {
+        // the source is an int local or a local of no type (auto): the instruction reads the source as a load of it
+        // reads it (a reference that a local of no type holds as the referenced value, the target of a weak
+        // reference) and adds it as an int, leaving the source unchanged, whatever it holds (ex: an int local with no
+        // value, a string); a source of another type, which native code can keep unboxed as a float or a bool, takes
+        // the generic path
+        if (isLocalNonClosureVar(right_var) && (right_var->getTypeInfo() == bigIntTypeInfo
+                || !QoreTypeInfo::hasType(right_var->getTypeInfo()))) {
             // target += source (both typed int locals) → AddAssignLocalInt
             auto* inst = builder.createAddAssignLocalInt(
                 left_var->ref.id, right_var->ref.id, op->loc);
@@ -8129,6 +8178,11 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     }
     // a variable that other threads can change is changed in one operation; see isSharedVar()
     if (changesThroughLValue(left_var)) {
+        left_var = nullptr;
+    }
+    // += on a variable with no value assigns the value added as it is, and the value of the operation is the value
+    // the variable holds then, which can be a reference (see assignmentValueMayBeReference())
+    if (left_var && op->needsReturnValue() && assignmentValueMayBeReference(left_var, right_expr)) {
         left_var = nullptr;
     }
     if (!left_var) {
@@ -8267,7 +8321,8 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     if (!storeVarRef(left_var, result, error, "plus-equals", &right_expr)) {
         return QoreIRValue();
     }
-    return result;
+    return compoundAssignmentResult(op->needsReturnValue(), left_var, op->getLeft(), result, error,
+        "plus-equals result");
 }
 
 QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string& error) {
@@ -8481,7 +8536,29 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
     if (!storeVarRef(left_var, result, error, "minus-equals", &right_expr)) {
         return QoreIRValue();
     }
-    return result;
+    return compoundAssignmentResult(op->needsReturnValue(), left_var, op->getLeft(), result, error,
+        "minus-equals result");
+}
+
+//! Returns true if *= or /= on a variable of the given type must change it through its lvalue path
+/** The operator's value can be a float or a number (with such an operand, or a float or number lvalue), which a
+    variable of a type that accepts neither (ex: \c int, \c timeout) refuses.  The AST interpreter's operator raises
+    the error with its own description (ex: <tt>\<*= operator\> expects type 'timeout'</tt>); a load, compute and
+    store lowering would raise it from the store, as an assignment (<tt>\<lvalue\></tt>), so such a variable is
+    changed through its lvalue path, which runs the AST operator, whenever the operand can be a float or a number.
+
+    @param ti the type of the variable
+    @param operand the operand of the operator
+*/
+static bool qore_ir_multiplicative_store_may_fail(const QoreTypeInfo* ti, const QoreValue& operand) {
+    if (!QoreTypeInfo::hasType(ti)
+            || (QoreTypeInfo::parseAccepts(ti, floatTypeInfo) != QTI_NOT_EQUAL
+                && QoreTypeInfo::parseAccepts(ti, numberTypeInfo) != QTI_NOT_EQUAL)) {
+        return false;
+    }
+    const QoreTypeInfo* oti = operand.getTypeInfo();
+    return !QoreTypeInfo::hasType(oti) || QoreTypeInfo::parseReturns(oti, NT_FLOAT) != QTI_NOT_EQUAL
+        || QoreTypeInfo::parseReturns(oti, NT_NUMBER) != QTI_NOT_EQUAL;
 }
 
 QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::string& error) {
@@ -8498,12 +8575,14 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
 
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Force lvalue path for types where load-compute-store produces wrong result types
+    // Force lvalue path for types where load-compute-store produces wrong result types or errors; see
+    // qore_ir_multiplicative_store_may_fail()
     if (left_var && left_var->getTypeInfo()) {
         const QoreTypeInfo* ti = left_var->getTypeInfo();
         if (QoreTypeInfo::getBaseType(ti) == NT_FLOAT
                 || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
-                || QoreTypeInfo::isReference(ti)) {
+                || QoreTypeInfo::isReference(ti)
+                || qore_ir_multiplicative_store_may_fail(ti, op->getRight())) {
             left_var = nullptr;
         }
     }
@@ -8596,7 +8675,8 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
     if (!storeVarRef(left_var, result, error, "multiply-equals", &right_expr)) {
         return QoreIRValue();
     }
-    return result;
+    return compoundAssignmentResult(op->needsReturnValue(), left_var, op->getLeft(), result, error,
+        "multiply-equals result");
 }
 
 QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string& error) {
@@ -8613,12 +8693,14 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
 
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Force lvalue path for types where load-compute-store produces wrong result types
+    // Force lvalue path for types where load-compute-store produces wrong result types or errors; see
+    // qore_ir_multiplicative_store_may_fail()
     if (left_var && left_var->getTypeInfo()) {
         const QoreTypeInfo* ti = left_var->getTypeInfo();
         if (QoreTypeInfo::getBaseType(ti) == NT_FLOAT
                 || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
-                || QoreTypeInfo::isReference(ti)) {
+                || QoreTypeInfo::isReference(ti)
+                || qore_ir_multiplicative_store_may_fail(ti, op->getRight())) {
             left_var = nullptr;
         }
     }
@@ -8702,7 +8784,8 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
     if (!storeVarRef(left_var, result, error, "divide-equals", &right_expr)) {
         return QoreIRValue();
     }
-    return result;
+    return compoundAssignmentResult(op->needsReturnValue(), left_var, op->getLeft(), result, error,
+        "divide-equals result");
 }
 
 QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string& error) {
@@ -13128,6 +13211,34 @@ bool QoreIRLowering::callArgumentMayPassReference(const QoreValue& arg) const {
         return QoreTypeInfo::parseReturns(analysis.known_type, NT_REFERENCE) != QTI_NOT_EQUAL;
     }
 
+    return true;
+}
+
+// documented in QoreIRLowering.h
+bool QoreIRLowering::assignmentValueMayBeReference(const VarRefNode* var, const QoreValue& right) const {
+    // a variable of a type other than a reference type never holds a reference; a reference-typed variable is
+    // assigned through its lvalue path
+    if (!var || QoreTypeInfo::hasType(var->getTypeInfo())) {
+        return false;
+    }
+    if (right.getType() == NT_REFERENCE || right.getType() == NT_PARSEREFERENCE) {
+        return true;
+    }
+    if (!right.hasNode()) {
+        return false;
+    }
+    const AbstractQoreNode* node = right.getInternalNode();
+    if (dynamic_cast<const ParseReferenceNode*>(node)) {
+        return true;
+    }
+    // a value, or a read of a variable, which reads a reference that the variable holds as the referenced value
+    if (!dynamic_cast<const ParseNode*>(node) || dynamic_cast<const VarRefNode*>(node)) {
+        return false;
+    }
+    QoreParseAnalysis analysis;
+    if (getAnalysis(right, analysis) && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo) && analysis.known_type) {
+        return QoreTypeInfo::parseReturns(analysis.known_type, NT_REFERENCE) != QTI_NOT_EQUAL;
+    }
     return true;
 }
 

@@ -150,6 +150,37 @@ class RedirectObserver inherits DataProvider::Observer {
     }
 }
 
+#! Returns from each async request submission only once its response has arrived
+/** The operation that starts an async request then finds every response complete already in the call that
+    starts it, as it can find a fast response on a loopback connection, and a redirect is followed, or fails,
+    in that call as well.
+*/
+class InlineResponseRestClientIo inherits RestClientIo {
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager mgr) : RestClientIo(opts, mgr) {
+    }
+
+    hash<auto> submitPreparedAsyncRequestAttemptWithNotifier(string method, string path, *hash<auto> hdr,
+            hash<auto> prepared, EventNotifier notifier) {
+        return waitForResponse(RestClientIo::submitPreparedAsyncRequestAttemptWithNotifier(method, path, hdr,
+            prepared, notifier));
+    }
+
+    hash<auto> submitRedirectAttemptWithNotifier(string origin, string method, string path, *hash<auto> hdr,
+            *data body, EventNotifier notifier) {
+        return waitForResponse(RestClientIo::submitRedirectAttemptWithNotifier(origin, method, path, hdr, body,
+            notifier));
+    }
+
+    private static hash<auto> waitForResponse(hash<auto> result) {
+        try {
+            result.future.get();
+        } catch (hash<ExceptionInfo> ex) {
+            # the operation reads the error from the Future itself
+        }
+        return result;
+    }
+}
+
 public class RestClientIoRedirectTest inherits QUnit::Test {
     private {
         HttpServer server_a;
@@ -166,6 +197,7 @@ public class RestClientIoRedirectTest inherits QUnit::Test {
         addTestCase("asynchronous method rules", \testAsyncMethodRules());
         addTestCase("caller-driven poll requests", \testPollRequest());
         addTestCase("redirect limits and errors", \testErrors());
+        addTestCase("redirect errors with responses that arrive at once", \testErrorsInlineResponses());
         addTestCase("redirect passthru", \testPassthru());
         addTestCase("cookies", \testCookies());
         addTestCase("SSE reader", \testSseReader());
@@ -317,6 +349,40 @@ public class RestClientIoRedirectTest inherits QUnit::Test {
         assertThrows("HTTP-CLIENT-REDIRECT-ERROR", "no redirect location given", \f.get());
         # the SSE reader reports redirect errors as well
         assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", \rest.restSseReader(), ("GET", "/loop"));
+    }
+
+    #! An async request reports its redirect errors with its Future, however fast the responses arrive
+    testErrorsInlineResponses() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"max_redirects": 1});
+        on_exit mgr.closeAll();
+        InlineResponseRestClientIo rest({"url": url_a, "data": "json"}, mgr);
+        on_exit rest.close();
+        peer_a.setRoute("/loop", 302, {"Location": "/loop"});
+        peer_a.setRoute("/ftp", 302, {"Location": "ftp://127.0.0.1/x"});
+        peer_a.setRoute("/noloc", 302);
+        peer_a.setRoute("/inline-redirect", 302, {"Location": "/inline-landed"});
+        list<list<string>> cases = (
+            ("/loop", "HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirects \\(1\\) exceeded"),
+            ("/ftp", "HTTP-CLIENT-UNKNOWN-PROTOCOL", "unsupported scheme"),
+            ("/noloc", "HTTP-CLIENT-REDIRECT-ERROR", "no redirect location given"),
+        );
+        foreach list<string> c in (cases) {
+            # the error is not raised by the call that starts the request
+            RestFuture f = rest.restGetAsync(c[0]);
+            assertThrows(c[1], c[2], \f.get(), NOTHING, c[0]);
+            EventNotifier notifier();
+            hash<auto> info = rest.restDoRequestAsyncWithNotifier("GET", c[0], NOTHING, NOTHING, notifier);
+            Future raw = info.future;
+            assertThrows(c[1], c[2], \raw.get(), NOTHING, c[0]);
+            # the notifier is signaled for a failed request too
+            assertEq(1, Socket::poll((<SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier},), 0).size(),
+                c[0]);
+        }
+        # a redirect followed in the call that starts the request resolves the Future
+        hash<RestResponseInfo> resp = rest.restGetAsync("/inline-redirect").get();
+        assertEq(200, resp.status_code);
+        assertEq("/inline-landed", resp.body.target);
+        assertEq(1, resp.redirects.size());
     }
 
     testPassthru() {

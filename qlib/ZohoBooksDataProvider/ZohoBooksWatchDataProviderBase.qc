@@ -159,7 +159,10 @@ public class ZohoBooksWatchDataProviderBase inherits ZohoBooksDataProviderBase,
                 "page": 1,
                 "per_page": 1,
             };
-            hash<auto> response = doGet(getResourcePath(), params);
+            # the example data is requested once, without retries
+            hash<auto> response = DataProviderRetryUtil::runWithoutRetries(hash<auto> sub () {
+                return doGet(getResourcePath(), params);
+            });
             list<auto> records = response{getResourceKey()} ?? ();
             if (records) {
                 return records[0];

@@ -96,13 +96,23 @@ if ! command -v tree-sitter > /dev/null 2>&1; then
     cargo install tree-sitter-cli@0.26.5
 fi
 
-# build Qore with Release optimization
-echo && echo "-- building Qore (Release) --"
+# build Qore with Release optimization: only qore and the modules that the performance tests require (their qmods
+# and the binary modules), not the whole tree with the qmods of every user module (see perf-build-targets.py)
+echo && echo "-- building Qore (Release) for the performance tests --"
 cd ${QORE_SRC_DIR}
+# the tests that test-perf runs: its job sets QORE_PERF_TESTS_ONLY=1 and clears QORE_EXCLUDE_PERF_TESTS, which the
+# other jobs (this one too) get from the global variables of .gitlab-ci.yml
+PERF_TESTS=$(QORE_EXCLUDE_PERF_TESTS="" QORE_PERF_TESTS_ONLY=1 ./run_tests.sh -l)
+if [ -z "${PERF_TESTS}" ]; then
+    echo "no performance tests found"
+    exit 1
+fi
 mkdir -p build
 cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
-make -j${MAKE_JOBS}
+PERF_TARGETS=$(cd ${QORE_SRC_DIR} && python3 -I test/docker_test/perf-build-targets.py build ${PERF_TESTS})
+echo "-- targets: ${PERF_TARGETS} --"
+make -j${MAKE_JOBS} ${PERF_TARGETS}
 
 # Remove intermediate object files to reduce artifact size
 find . -name "*.o" -delete 2>/dev/null || true

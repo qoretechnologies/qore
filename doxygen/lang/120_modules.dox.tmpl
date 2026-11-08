@@ -34,6 +34,11 @@ ModuleName/
     |-SomeModuleFunction.ql
     @endcode \n
 
+    @anchor separated_module_paths
+    A separated module can also be required by the path of its directory or of its <tt>.qm</tt> file
+    (<tt>%requires ../lib/ModuleName</tt> or <tt>%requires ../lib/ModuleName/ModuleName.qm</tt>); either path loads the
+    whole module.
+
     The <tt>.qm</tt> file is parsed first, then the other files in the bytewise order of their names.  Parse directives
     belong in the <tt>.qm</tt> file: the parse options and the warnings it sets apply to every file of the module.  A warning
     directive in another file, such as @ref disable-warning "%disable-warning", applies only to that file.
@@ -1684,6 +1689,17 @@ public class Lookup {
     module's own options.  Some builtins that act only on the module's own state or on the calling thread, or that
     run the module's own code asynchronously, are checked differently when module code calls them; see
     @ref OWN_PROGRAM_STATE, @ref CURRENT_THREAD_ONLY and @ref MODULE_OWNED.
+
+    The @ref background "background" operator in module code is checked against the module's own options when the
+    module is parsed, so module code can start threads for a caller with
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL", also threads that run the caller's code.  Such threads are
+    governed by the caller's @ref Qore::SandboxManager "SandboxManager", whose thread limit bounds their number (see
+    @ref sandbox_po_threads).  A module that runs its callers' code asynchronously should use
+    @ref Qore::call_async() "call_async()" or @ref Qore::AsyncIoController "AsyncIoController", which apply the
+    caller's restrictions (see @ref MODULE_OWNED) and its sandbox, or a @ref Qore::Thread::ThreadPool "ThreadPool",
+    which applies the sandbox of the code that submits each task; the threads of a pool count against the thread limit
+    of the sandbox of the %Program that created it, which for module code is the sandbox of the %Program that loaded
+    the module first, if it has one.
 
     @subsection module_parse_option_masks Module Restrictions and Parse Option Masks
 

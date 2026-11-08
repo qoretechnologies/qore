@@ -185,6 +185,26 @@ public:
     QoreIRValue lowerConstant(const QoreValue& expr, std::string& error);
     QoreIRValue lowerVarRef(const QoreValue& expr, std::string& error);
     QoreIRValue lowerAssignment(const QoreValue& expr, std::string& error);
+    //! Returns the result of +=, -=, *= or /= on a variable that is changed by loading it, computing its new value
+    //! and storing it
+    /** The result is the value the variable holds after the store, as in the AST interpreter, whose +=, -=, *= and
+        /= operators return the lvalue's value: the variable's declared type can convert the computed value when it is
+        stored (ex: an \c any or \c auto! variable stores a \c hash<HD> as a plain \c hash, a \c softint variable
+        stores 17.5 as 17), so the variable is read again when the result is used.  The integer operators (%=, &=,
+        |=, ^=, <<=, >>=) apply only to lvalues that accept and return an integer, which store the integer computed
+        as it is, so their lowerings return the value they compute.
+
+        @param needs_rv true if the result of the operator is used
+        @param var the variable
+        @param left the operator's lvalue expression
+        @param result the computed value that was stored
+        @param error for an error message
+        @param context the context of the load for error messages
+
+        @return the result of the operator
+    */
+    QoreIRValue compoundAssignmentResult(bool needs_rv, const VarRefNode* var, const QoreValue& left,
+        QoreIRValue result, std::string& error, const char* context);
     QoreIRValue lowerPlusEquals(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMinusEquals(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMultiplyEquals(const QoreValue& expr, std::string& error);
@@ -423,6 +443,17 @@ private:
     bool lowerCallArgs(const QoreParseListNode* parse_args, const QoreListNode* args,
         std::vector<QoreIRValue>& lowered, std::string& error);
     bool callArgumentMayPassReference(const QoreValue& arg) const;
+    //! Returns true if the value of an assignment to a variable can be a reference that the variable now holds
+    /** The value of <tt>t = v</tt> and <tt>t += v</tt> in the AST interpreter is the value the lvalue holds
+        afterwards, taken as it is (LValueHelper::getReferencedValue()): if \a v is a reference that a variable of
+        no type now holds (an element <tt>h.r</tt> holding <tt>\x</tt>, the value of a call), the value is the
+        reference, so that <tt>auto r = (t = h.r); r = 5;</tt> assigns \c x.  Reading the variable again gives the
+        referenced value instead, so such an assignment whose value is used is lowered as an lvalue path operation,
+        which gives the value as the AST interpreter does.
+        @param var the variable assigned
+        @param right the value assigned or added
+    */
+    bool assignmentValueMayBeReference(const VarRefNode* var, const QoreValue& right) const;
     bool callArgsMayPassReferences(const QoreParseListNode* parse_args, const QoreListNode* args) const;
     bool markReferenceArgumentAssignmentsUnknown(const QoreParseListNode* parse_args,
         const QoreListNode* args, std::string& error);

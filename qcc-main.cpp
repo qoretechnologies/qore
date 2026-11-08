@@ -3466,6 +3466,11 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
                 return false;
             }
         }
+        // the class-flags byte (QORE_AOT_CLASS_FLAGS_VERSION)
+        if (reader.getHeader().version >= QORE_AOT_CLASS_FLAGS_VERSION && !dump_skip_bytes(p, end, 1)) {
+            error = "truncated class flags";
+            return false;
+        }
 
         uint32_t num_members = 0;
         if (!dump_read_u32(p, end, num_members)) {

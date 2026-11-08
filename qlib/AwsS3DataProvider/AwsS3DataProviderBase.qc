@@ -389,7 +389,7 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
                 return AwsS3DataProviderBase::normalizeResponse(
                     rest.restDoRequestAssumingXml(method, path, body, hdr));
             } catch (hash<ExceptionInfo> ex) {
-                if (RetrySet{ex.err} && retries < MaxIoRetries) {
+                if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet) && retries < MaxIoRetries) {
                     ++retries;
                     debug("S3 I/O error %s; retrying (%d/%d)", ex.err, retries, MaxIoRetries);
                     continue;
@@ -697,7 +697,8 @@ public class AwsS3PollOperation inherits Qore::AbstractPollOperation<auto> {
             try {
                 return op.continuePoll();
             } catch (hash<ExceptionInfo> ex) {
-                if (AwsS3DataProviderBase::RetrySet{ex.err} && retries < AwsS3DataProviderBase::MaxIoRetries) {
+                if (DataProviderRetryUtil::isRetriableTransportError(ex, AwsS3DataProviderBase::RetrySet)
+                        && retries < AwsS3DataProviderBase::MaxIoRetries) {
                     ++retries;
                     # a poll operation cannot be rewound, so the retry is a new one; it is prepared and
                     # signed afresh, which it must be -- a SigV4 signature carries the time it was made and

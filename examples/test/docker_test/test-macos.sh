@@ -256,7 +256,19 @@ if [ -z "${QORE_TEST_DIRS:-}" ]; then
 fi
 export QORE_TEST_EXTRA_DIRS
 
+# The tests run as many at a time as the machine has CPUs (the VM's size is set in the runner, so it is read here),
+# unless QORE_TEST_JOBS says otherwise; see run_tests.sh for the tests that run in a lane of their own
+QORE_TEST_JOBS="${QORE_TEST_JOBS:-$(sysctl -n hw.ncpu)}"
+export QORE_TEST_JOBS
+. ./test/docker_test/ci-resource-report.sh
+qore_ci_resource_report "before the tests"
+
 # Run the test suite (QORE_TEST_OPTS is read from the environment by run_tests.sh)
-./run_tests.sh
+TEST_RC=0
+./run_tests.sh || TEST_RC=$?
+qore_ci_resource_report "after the tests"
+if [ "${TEST_RC}" != "0" ]; then
+    exit ${TEST_RC}
+fi
 
 echo "=== macOS CI Tests Complete ==="

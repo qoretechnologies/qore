@@ -4702,6 +4702,14 @@ private:
             if (fn->ir_only_locals.count(key)) {
                 helper->ir_only_locals.insert(key);
             }
+            // the locals that a reference can reach as a stored value (see
+            // QoreIRFunction::reference_store_locals) keep their storage in the helper
+            if (fn->reference_store_locals.count(key)) {
+                helper->reference_store_locals.insert(key);
+            }
+            if (fn->reference_slot_locals.count(key)) {
+                helper->reference_slot_locals.insert(key);
+            }
         }
         for (const LocalVar* lv : region.shared_locals) {
             const void* key = reinterpret_cast<const void*>(lv);
@@ -4710,6 +4718,12 @@ private:
             // optimization: stores must publish to the TLS stack and loads
             // must reload after the helper call.
             fn->ir_only_locals.erase(key);
+            // a shared local that a reference can reach is on the runtime stack in both functions, which read and
+            // write it as a variable that can hold a reference
+            fn->reference_slot_locals.erase(key);
+            if (fn->reference_store_locals.count(key)) {
+                helper->reference_store_locals.insert(key);
+            }
         }
         helper->total_local_count = region.contained_locals.size()
             + region.shared_locals.size();
@@ -19553,6 +19567,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 qore_ir_fuse_aggregate_return_projections(
                     func, projection_query, consumer_query,
                     &borrowed_aggregate_projections);
+            // the projected values can show that a local that a store was taken to give a reference is given none
+            if (aggregate_projections) {
+                func.refineReferenceLocalsFromFacts();
+            }
         }
         size_t object_scalar_projections =
             projectAOTNonescapingObjectScalars(

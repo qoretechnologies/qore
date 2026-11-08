@@ -196,6 +196,12 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_make_weak_value", reinterpret_cast<void*>(&qore_rt_make_weak_value) },
     { "qore_rt_make_opaque_value", reinterpret_cast<void*>(&qore_rt_make_opaque_value) },
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
+    { "qore_rt_load_local_raw", reinterpret_cast<void*>(&qore_rt_load_local_raw) },
+    { "qore_rt_value_is_reference", reinterpret_cast<void*>(&qore_rt_value_is_reference) },
+    { "qore_rt_read_reference_local", reinterpret_cast<void*>(&qore_rt_read_reference_local) },
+    { "qore_rt_reference_slot_write", reinterpret_cast<void*>(&qore_rt_reference_slot_write) },
+    { "qore_rt_element_local_replace", reinterpret_cast<void*>(&qore_rt_element_local_replace) },
+    { "qore_rt_reload_local_if_stale_raw", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_raw) },
     { "qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local) },
     { "qore_rt_binary_op", reinterpret_cast<void*>(&qore_rt_binary_op) },
     { "qore_rt_list_index_dynamic", reinterpret_cast<void*>(&qore_rt_list_index_dynamic) },
@@ -392,7 +398,47 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_reload_chain_clear", reinterpret_cast<void*>(&qore_rt_reload_chain_clear) },
     { "qore_rt_reload_local_if_stale", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale) },
     { "qore_rt_reload_local_if_stale_aot", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_aot) },
+    { "qore_rt_load_local_raw_aot", reinterpret_cast<void*>(&qore_rt_load_local_raw_aot) },
+    { "qore_rt_reload_local_if_stale_raw_aot",
+        reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_raw_aot) },
     { "qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot) },
+    { "qore_rt_aot_local_var", reinterpret_cast<void*>(&qore_rt_aot_local_var) },
+    { "qore_rt_coerce_value_foreach",
+        reinterpret_cast<void*>(&qore_rt_coerce_value_foreach) },
+    { "qore_rt_coerce_value_foreach_throwing",
+        reinterpret_cast<void*>(&qore_rt_coerce_value_foreach_throwing) },
+    { "qore_rt_coerce_value_foreach_aot",
+        reinterpret_cast<void*>(&qore_rt_coerce_value_foreach_aot) },
+    { "qore_rt_coerce_value_foreach_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_coerce_value_foreach_aot_throwing) },
+    { "qore_rt_coerce_value_foreach_by_type_path_aot",
+        reinterpret_cast<void*>(&qore_rt_coerce_value_foreach_by_type_path_aot) },
+    { "qore_rt_coerce_value_foreach_by_type_path_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_coerce_value_foreach_by_type_path_aot_throwing) },
+    { "qore_rt_assign_local_foreach",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach) },
+    { "qore_rt_assign_local_foreach_eval_weak",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach_eval_weak) },
+    { "qore_rt_assign_local_foreach_throwing",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach_throwing) },
+    { "qore_rt_assign_local_foreach_eval_weak_throwing",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach_eval_weak_throwing) },
+    { "qore_rt_assign_local_foreach_aot",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach_aot) },
+    { "qore_rt_assign_local_foreach_eval_weak_aot",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach_eval_weak_aot) },
+    { "qore_rt_assign_local_foreach_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach_aot_throwing) },
+    { "qore_rt_assign_local_foreach_eval_weak_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach_eval_weak_aot_throwing) },
+    { "qore_rt_store_closure_foreach_aot",
+        reinterpret_cast<void*>(&qore_rt_store_closure_foreach_aot) },
+    { "qore_rt_store_closure_foreach_eval_weak_aot",
+        reinterpret_cast<void*>(&qore_rt_store_closure_foreach_eval_weak_aot) },
+    { "qore_rt_store_closure_foreach_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_store_closure_foreach_aot_throwing) },
+    { "qore_rt_store_closure_foreach_eval_weak_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_store_closure_foreach_eval_weak_aot_throwing) },
     { "qore_rt_assign_local_no_coerce_aot", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot) },
     { "qore_rt_assign_local_aot_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_aot_throwing) },
     { "qore_rt_assign_local_no_coerce_aot_throwing",
@@ -1030,6 +1076,27 @@ extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, in
     // order so dependent temporaries (for example iterators) are released
     // before the values they reference.
     for (int32_t i = count - 1; i >= 0; --i) {
+        // a local on the runtime stack whose value is released is given by its LocalVar tagged in bit 1 (see
+        // QoreIRToLLVM::getExitReleaseSequence()); a closure-bound variable that the frame instantiated is tagged in
+        // bits 0 and 1 and popped from the closure stack, and the alloca of a foreach statement's iterator in bit 2
+        static_assert(alignof(LocalVar) >= 4, "the exit release array tags LocalVar addresses in bits 0 and 1");
+        uintptr_t tagged = reinterpret_cast<uintptr_t>(alloca_ptrs[i]);
+        if ((tagged & 3) == 3) {
+            qore_rt_pop_closure_var(reinterpret_cast<LocalVar*>(tagged & ~static_cast<uintptr_t>(3)), xsink);
+            continue;
+        }
+        if (tagged & 2) {
+            qore_rt_clear_local(reinterpret_cast<LocalVar*>(tagged & ~static_cast<uintptr_t>(2)), xsink);
+            continue;
+        }
+        // the alloca of the iterator of a foreach statement is tagged in bit 2
+        if (tagged & 4) {
+            void** iter_slot = reinterpret_cast<void**>(tagged & ~static_cast<uintptr_t>(4));
+            void* iter = *iter_slot;
+            *iter_slot = nullptr;
+            qore_rt_iterator_cleanup(iter);
+            continue;
+        }
         uint64_t* slot = alloca_ptrs[i];
         QoreValue v = fromBits(*slot);
         *slot = 0;
@@ -1622,8 +1689,12 @@ static QoreValue qore_rt_get_borrowed_list_element(const QoreListNode* l, size_t
     return qore_rt_get_weak_reference_target(l->retrieveEntry(i));
 }
 
+//! Assigns a value to a local on the runtime stack
+/** @param desc the description of the lvalue in a type error of the assignment's own type check: "<lvalue>", or
+    "<foreach lvalue assignment>" for the variable of a foreach loop, as the AST interpreter describes them
+*/
 static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSink* xsink,
-        bool check_types, bool normalize_weak_refs) {
+        bool check_types, bool normalize_weak_refs, const char* desc = "<lvalue>") {
     if (!var || *xsink) {
         return;
     }
@@ -1641,11 +1712,11 @@ static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSi
     }
     // refSelf before assign — assign takes ownership of the reference
     QoreValue stored = val.needsRef() ? val.refSelf() : val;
-    helper.assign(stored, "<lvalue>", check_types);
+    helper.assign(stored, desc, check_types);
 }
 
 static void qore_rt_assign_closure_impl(ClosureVarValue* cvv, uint64_t value,
-        ExceptionSink* xsink, bool normalize_weak_refs) {
+        ExceptionSink* xsink, bool normalize_weak_refs, const char* desc = "<lvalue>") {
     if (!cvv || *xsink) {
         return;
     }
@@ -1662,7 +1733,7 @@ static void qore_rt_assign_closure_impl(ClosureVarValue* cvv, uint64_t value,
         return;
     }
     QoreValue stored = val.needsRef() ? val.refSelf() : val;
-    helper.assign(stored, "<lvalue>", true);
+    helper.assign(stored, desc, true);
 }
 
 // Variant of qore_rt_assign_local_impl() that TRANSFERS ownership of value's
@@ -1704,9 +1775,11 @@ extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak(LocalVar* var, uint64_t
 //! Coerces a value as an assignment to an lvalue of the given type does; see qore_rt_coerce_value()
 /** @param normalize_weak_refs true to assign a weak reference as its target, false to keep it as it is (the variable
     of a foreach loop, which is assigned each element as it is)
+    @param desc the description of the lvalue in a type error: "<lvalue>", or "<foreach lvalue assignment>" for the
+    variable of a foreach loop, as the AST interpreter describes them
 */
 static uint64_t qore_rt_coerce_value_impl(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,
-        ExceptionSink* xsink, bool normalize_weak_refs) {
+        ExceptionSink* xsink, bool normalize_weak_refs, const char* desc = "<lvalue>") {
     ti = qore_substitute_type_params_if_needed(ti);
     QoreValue val = fromBits(value);
     ValueHolder weak_eval_holder(xsink);
@@ -1736,7 +1809,7 @@ static uint64_t qore_rt_coerce_value_impl(const QoreTypeInfo* ti, uint64_t value
     if (val.needsRef()) {
         val.refSelf();
     }
-    QoreTypeInfo::acceptAssignment(ti, "<lvalue>", val, xsink);
+    QoreTypeInfo::acceptAssignment(ti, desc, val, xsink);
     if (!xsink || !*xsink) {
         // Keep StoreLocal coercion aligned with LValueHelper::assign(): no-narrow
         // lvalues store plain auto containers
@@ -1782,7 +1855,7 @@ extern "C" DLLEXPORT uint8_t qore_rt_element_value_read_flag(uint64_t value) {
 */
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_element_value(const QoreTypeInfo* ti, uint64_t value,
         uint64_t* cleanup_ptr, uint8_t* read_flag, ExceptionSink* xsink) {
-    uint64_t rv = qore_rt_coerce_value_impl(ti, value, cleanup_ptr, xsink, false);
+    uint64_t rv = qore_rt_coerce_value_impl(ti, value, cleanup_ptr, xsink, false, "<foreach lvalue assignment>");
     if (read_flag) {
         *read_flag = qore_rt_element_value_read_flag(rv);
     }
@@ -1993,6 +2066,121 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* x
     return toBits(rv);
 }
 
+//! Returns 1 if the value is a reference (as <tt>\x</tt> creates), 0 otherwise
+/** A local variable of no reference type (no type, \c auto, \c any) can hold a reference, which it reads as the
+    referenced lvalue; native code records whether the value in such a variable's cache is one (see
+    QoreIRToLLVM::localReferenceFlag())
+*/
+extern "C" DLLEXPORT uint8_t qore_rt_value_is_reference(uint64_t value) {
+    QoreValue v = fromBits(value);
+    return v.hasNode() && v.getInternalNode()->getType() == NT_REFERENCE ? 1 : 0;
+}
+
+//! Loads a local variable's value for its native cache: a reference it holds is returned as the reference itself
+/** As qore_rt_load_local(), except that a reference held by the variable is not dereferenced: the cache of a variable
+    of no reference type then holds the reference, which every read dereferences (qore_rt_read_reference_local()),
+    so that the variable reads as the referenced lvalue whenever the lvalue changes, as the AST interpreter reads it;
+    native code sets the variable's reference flag from the value returned (qore_rt_value_is_reference())
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_load_local_raw(LocalVar* var, ExceptionSink* xsink) {
+    if (var && !var->closureUse()) {
+        LocalVarValue* lvv = thread_try_find_lvar(var);
+        if (lvv && lvv->isRef()) {
+            return toBits(lvv->val.getReferencedValue());
+        }
+    }
+    return qore_rt_load_local(var, xsink);
+}
+
+//! Reads the value in the native cache of a local variable of no reference type that holds a reference
+/** @param value the value in the cache: a reference (see qore_rt_load_local_raw()) or any other value
+    @return the value of the referenced lvalue, or the value itself, always with a reference for the caller
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_read_reference_local(uint64_t value, ExceptionSink* xsink) {
+    QoreValue v = fromBits(value);
+    if (v.hasNode() && v.getInternalNode()->getType() == NT_REFERENCE) {
+        // read as a read of the variable reads it, without creating a missing hash key or list element
+        bool needs_deref = true;
+        QoreValue rv = qore_local_reference_eval(*reinterpret_cast<const ReferenceNode*>(v.getInternalNode()),
+            needs_deref, xsink);
+        if (!needs_deref && rv.needsRef()) {
+            rv = rv.refSelf();
+        }
+        return toBits(rv);
+    }
+    return toBits(v.needsRef() ? v.refSelf() : v);
+}
+
+//! Assigns a value through the reference that the native cache of an IR-only local holds
+/** A store to a local that holds a reference assigns the referenced lvalue, as LocalVarValue::getLValue() resolves
+    it for an assignment, and the local keeps the reference.  An IR-only local has no LocalVarValue: its cache is the
+    variable (see QoreIRFunction::reference_slot_locals).
+
+    @param ref the value in the local's cache: a reference
+    @param value the value assigned, whose reference is taken
+*/
+//! Assigns a value through a reference held in a native cache; \a desc describes the lvalue in a type error
+static void qore_rt_reference_slot_write_impl(uint64_t ref, uint64_t value, ExceptionSink* xsink, const char* desc) {
+    QoreValue rv = fromBits(ref);
+    ValueHolder val(fromBits(value), xsink);
+    assert(rv.hasNode() && rv.getInternalNode()->getType() == NT_REFERENCE);
+    LValueHelper lvh(*reinterpret_cast<const ReferenceNode*>(rv.getInternalNode()), xsink);
+    if (!lvh) {
+        return;
+    }
+    lvh.assign(val.release(), desc);
+}
+
+extern "C" DLLEXPORT void qore_rt_reference_slot_write(uint64_t ref, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_reference_slot_write_impl(ref, value, xsink, "<lvalue>");
+}
+
+//! Stores an element to the native cache of the IR-only variable of a foreach loop, which holds \a old_value
+/** The AST interpreter assigns each element to the variable of a foreach loop as an assignment does
+    (ForEachStatement::execImpl()): if the variable holds a reference, given by an earlier element, the element is
+    assigned to the referenced lvalue and the variable keeps the reference.  Otherwise the value the cache holds is
+    released and the element takes its place.
+
+    @param old_value the value the cache holds, with its reference
+    @param value the element, whose reference is taken
+    @param xsink for an exception raised by the assignment of the referenced lvalue (a type error)
+
+    @return the value of the cache after the store: \a old_value if the element was assigned through it, otherwise
+    \a value
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_element_local_replace(uint64_t old_value, uint64_t value,
+        ExceptionSink* xsink) {
+    QoreValue ov = fromBits(old_value);
+    if (ov.hasNode() && ov.getInternalNode()->getType() == NT_REFERENCE) {
+        // a type error is described as the AST interpreter describes the assignment of an element
+        qore_rt_reference_slot_write_impl(old_value, value, xsink, "<foreach lvalue assignment>");
+        return old_value;
+    }
+    ov.discard(xsink);
+    return value;
+}
+
+//! As qore_rt_reload_local_if_stale(), loading the value with qore_rt_load_local_raw()
+/** @return 1 if the value in the cache, reloaded or not, is a reference, 0 otherwise: the variable's reference flag,
+    returned rather than written through a pointer so that native code keeps the flag in a register
+*/
+extern "C" DLLEXPORT uint8_t qore_rt_reload_local_if_stale_raw(LocalVar* var, uint64_t* cache,
+        uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch, ExceptionSink* xsink) {
+    assert(cache && tracker && deferred && valid_epoch);
+    if (*valid_epoch != epoch) {
+        uint64_t old_tracker = *tracker;
+        uint64_t old_deferred = *deferred;
+        uint64_t reloaded = qore_rt_load_local_raw(var, xsink);
+
+        *cache = reloaded;
+        *tracker = reloaded;
+        *deferred = old_tracker;
+        qore_rt_decref(old_deferred, xsink);
+        *valid_epoch = epoch;
+    }
+    return qore_rt_value_is_reference(*cache);
+}
+
 extern "C" DLLEXPORT void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t* cache,
         uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch,
         ExceptionSink* xsink) {
@@ -2060,9 +2248,10 @@ extern "C" DLLEXPORT void qore_rt_clear_local(LocalVar* var, ExceptionSink* xsin
         // (e.g., closures submitted to a thread pool that haven't executed
         // yet).  When references == 1, only the cvstack entry remains, so
         // it's safe to trigger timely destruction at block scope exit.
-        // NOTE: Use thread_try_find_closure_var() to avoid asserting when the
-        // variable is not on the cvstack (e.g., in closure contexts on background threads).
-        ClosureVarValue* cvv = thread_try_find_closure_var(var->getName());
+        // The variable is looked up in the current frame only: a frame never clears a variable of another frame (ex:
+        // a recursive call's, or the caller's when this frame has not instantiated its own), and a variable that is
+        // not on the cvstack (e.g., in closure contexts on background threads) is left alone
+        ClosureVarValue* cvv = thread_try_find_closure_var_in_current_frame(var->getName());
         if (cvv && cvv->references.load(std::memory_order_acquire) == 1) {
             cvv->clearValue(xsink);
         }
@@ -2096,7 +2285,36 @@ extern "C" DLLEXPORT void qore_rt_uninstantiate_local(LocalVar* var, ExceptionSi
 
 // --- Generic opcode dispatch helpers ---
 
+//! Returns true for the compound assignment opcodes whose operands are the values the operation takes as they are
+/** The value of a compound assignment is computed as the AST interpreter computes it on the lvalue
+    (qore_compound_assign_value()), with the operand as it was evaluated: a reference that it gives (an element holding
+    \c \\x) is not read, as <tt>auto t; t += h.r;</tt> assigns the reference itself (see doPlusEqualsOnLValue())
+*/
+static bool qore_rt_binary_op_takes_operands_as_is(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::AddAssignAny:
+        case QoreIROpcode::SubAssignAny:
+        case QoreIROpcode::MulAssignAny:
+        case QoreIROpcode::DivAssignAny:
+        case QoreIROpcode::ModAssignAny:
+        case QoreIROpcode::AndAssignAny:
+        case QoreIROpcode::OrAssignAny:
+        case QoreIROpcode::XorAssignAny:
+        case QoreIROpcode::ShlAssignAny:
+        case QoreIROpcode::ShrAssignAny:
+            return true;
+        default:
+            return false;
+    }
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_binary_op(int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreIROpcode op = static_cast<QoreIROpcode>(opcode);
+    // the same as the native implementations of these opcodes (ex: qore_rt_add_assign_any())
+    if (qore_rt_binary_op_takes_operands_as_is(op)) {
+        return toBits(QoreIRInterpreter::evalBinary(op, fromBits(left), fromBits(right), xsink));
+    }
+
     ValueEvalOptimizedRefHolder lv(fromBits(left), xsink);
     if (xsink && *xsink) {
         return toBits(QoreValue());
@@ -2107,7 +2325,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_binary_op(int opcode, uint64_t left, uint6
         return toBits(QoreValue());
     }
 
-    QoreValue result = QoreIRInterpreter::evalBinary(static_cast<QoreIROpcode>(opcode), *lv, *rv, xsink);
+    QoreValue result = QoreIRInterpreter::evalBinary(op, *lv, *rv, xsink);
     return toBits(result);
 }
 
@@ -2379,9 +2597,21 @@ static void qore_rt_store_global_impl(Var* var, uint64_t value, ExceptionSink* x
     }
     QoreValue stored = val.needsRef() ? val.refSelf() : val;
     LValueHelper helper(xsink);
-    if (!var->getLValue(helper, false)) {
-        helper.assign(stored);
+    if (var->getLValue(helper, false)) {
+        // the value is released by the helper
+        helper.saveTempRef(stored);
+        return;
     }
+    // a global variable holding a reference is assigned through it, as LValueHelper::doLValue() resolves the
+    // variable of an assignment in the AST interpreter
+    if (const ReferenceNode* ref = helper.getReference()) {
+        helper.clearPtr();
+        if (helper.doLValue(ref, false)) {
+            helper.saveTempRef(stored);
+            return;
+        }
+    }
+    helper.assign(stored);
 }
 
 extern "C" DLLEXPORT void qore_rt_store_global(Var* var, uint64_t value, ExceptionSink* xsink) {
@@ -12165,6 +12395,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_
     return qore_rt_load_local(ctx->locals[idx], xsink);
 }
 
+//! AOT variant of qore_rt_load_local_raw()
+extern "C" DLLEXPORT uint64_t qore_rt_load_local_raw_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_load_local_raw(ctx->locals[idx], xsink);
+}
+
+//! AOT variant of qore_rt_reload_local_if_stale_raw()
+extern "C" DLLEXPORT uint8_t qore_rt_reload_local_if_stale_raw_aot(QoreAOTContext* ctx, int32_t idx,
+        uint64_t* cache, uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch,
+        ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_reload_local_if_stale_raw(ctx->locals[idx], cache, tracker, deferred, valid_epoch, epoch,
+        xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_load_local_weak_aot(QoreAOTContext* ctx, int32_t idx,
         int8_t* owned_out, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
@@ -12282,6 +12527,12 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_cast_by_type_pat
 extern "C" DLLEXPORT void qore_rt_instantiate_local_aot(QoreAOTContext* ctx, int32_t idx) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_instantiate_local(ctx->locals[idx]);
+}
+
+//! Returns the variable of an AOT local slot (see QoreIRToLLVM::prepareBoxedExitCleanupArray())
+extern "C" DLLEXPORT LocalVar* qore_rt_aot_local_var(QoreAOTContext* ctx, int32_t idx) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return ctx->locals[idx];
 }
 
 extern "C" DLLEXPORT void qore_rt_clear_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
@@ -12792,6 +13043,159 @@ extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_closure_eval_w
     }
 }
 
+// --- The store helpers of the assignment of an element to the variable of a foreach loop ---
+// Each is the helper of the same name without "_foreach", except that the store's own type check describes a type
+// error as the AST interpreter describes it (ForEachStatement): "<foreach lvalue assignment>".  The description is
+// given to that check only, never to code that the store runs (a destructor of the value replaced), whose errors
+// keep their own; see qore_store_helper_name() in QoreIRToLLVM.cpp
+
+//! The description of the variable of a foreach loop in a type error of the assignment of an element to it
+static constexpr const char* QORE_FOREACH_LVALUE_DESC = "<foreach lvalue assignment>";
+
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_foreach(const QoreTypeInfo* ti, uint64_t value,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    return qore_rt_coerce_value_impl(ti, value, cleanup_ptr, xsink, true, QORE_FOREACH_LVALUE_DESC);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_coerce_value_foreach_throwing(
+        const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_coerce_value_foreach(ti, value, cleanup_ptr, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_foreach_aot(QoreAOTContext* ctx, int32_t local_idx,
+        uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    assert(ctx && local_idx >= 0 && local_idx < ctx->num_locals);
+    const QoreTypeInfo* ti = ctx->locals[local_idx]->getTypeInfoForLValue();
+    return qore_rt_coerce_value_foreach(ti, value, cleanup_ptr, xsink);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_coerce_value_foreach_aot_throwing(
+        QoreAOTContext* ctx, int32_t local_idx, uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_coerce_value_foreach_aot(ctx, local_idx, value, cleanup_ptr, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_foreach_by_type_path_aot(QoreAOTContext* ctx,
+        const char* type_path, uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    const QoreTypeInfo* type_info = nullptr;
+    if (type_path && *type_path) {
+        type_info = qore_rt_resolve_full_type_path_cached(ctx, type_path, "local variable type", xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
+    }
+    return qore_rt_coerce_value_foreach(type_info, value, cleanup_ptr, xsink);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_coerce_value_foreach_by_type_path_aot_throwing(
+        QoreAOTContext* ctx, const char* type_path, uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_coerce_value_foreach_by_type_path_aot(ctx, type_path, value, cleanup_ptr, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_local_foreach(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_assign_local_impl(var, value, xsink, true, false, QORE_FOREACH_LVALUE_DESC);
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_local_foreach_eval_weak(LocalVar* var, uint64_t value,
+        ExceptionSink* xsink) {
+    qore_rt_assign_local_impl(var, value, xsink, true, true, QORE_FOREACH_LVALUE_DESC);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_foreach_throwing(LocalVar* var,
+        uint64_t value, ExceptionSink* xsink) {
+    qore_rt_assign_local_foreach(var, value, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_foreach_eval_weak_throwing(LocalVar* var,
+        uint64_t value, ExceptionSink* xsink) {
+    qore_rt_assign_local_foreach_eval_weak(var, value, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_local_foreach_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_assign_local_foreach(ctx->locals[idx], val, xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_local_foreach_eval_weak_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_assign_local_foreach_eval_weak(ctx->locals[idx], val, xsink);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_foreach_aot_throwing(QoreAOTContext* ctx,
+        int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_assign_local_foreach_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_foreach_eval_weak_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_assign_local_foreach_eval_weak_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+//! As qore_rt_store_closure_aot() and qore_rt_store_closure_eval_weak_aot() with the foreach description
+static void qore_rt_store_closure_foreach_aot_impl(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        ExceptionSink* xsink, bool normalize_weak_refs) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    static constinit QoreEnvFlag disable_direct_store_env("QORE_DISABLE_AOT_DIRECT_CLOSURE_STORE");
+    if (!disable_direct_store_env.get()) {
+        if (ClosureVarValue* cvv = thread_resolve_runtime_closure_var(ctx->locals[idx])) {
+            qore_rt_assign_closure_impl(cvv, val, xsink, normalize_weak_refs, QORE_FOREACH_LVALUE_DESC);
+            return;
+        }
+    }
+    qore_rt_assign_local_impl(ctx->locals[idx], val, xsink, true, normalize_weak_refs, QORE_FOREACH_LVALUE_DESC);
+}
+
+extern "C" DLLEXPORT void qore_rt_store_closure_foreach_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        ExceptionSink* xsink) {
+    qore_rt_store_closure_foreach_aot_impl(ctx, idx, val, xsink, false);
+}
+
+extern "C" DLLEXPORT void qore_rt_store_closure_foreach_eval_weak_aot(QoreAOTContext* ctx, int32_t idx,
+        uint64_t val, ExceptionSink* xsink) {
+    qore_rt_store_closure_foreach_aot_impl(ctx, idx, val, xsink, true);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_closure_foreach_aot_throwing(QoreAOTContext* ctx,
+        int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_store_closure_foreach_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_closure_foreach_eval_weak_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_store_closure_foreach_eval_weak_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
 static const QoreProgramLocation* qore_rt_aot_expr_loc(QoreAOTContext* ctx, int32_t idx) {
     if (!ctx || idx < 0 || idx >= ctx->num_exprs) {
         return nullptr;
@@ -13138,10 +13542,15 @@ static int qore_rt_get_self_member_lvalue(const char* member_name,
 // Note: slice_values stores BORROWED QoreValues aliasing the dyn_vals array;
 // the caller must not use path_copy beyond the lifetime of dyn_vals.
 // Returns 0 for OK, -1 if an exception was raised converting a dynamic hash key to the default encoding.
-static int patchLVPath(std::vector<LVPathStep>& path_copy,
+static int patchLVPath(IRLVPath& path,
         const QoreIRLValuePathInstruction* inst,
         const uint64_t* dyn_vals, ExceptionSink* xsink) {
-    path_copy = inst->path;
+    // a path with no dynamic step is read in place (see IRLVPath)
+    if (!qore_lv_path_has_dynamic_steps(inst->path)) {
+        path.setShared(inst->path);
+        return 0;
+    }
+    std::vector<LVPathStep>& path_copy = path.makeCopy(inst->path);
     int dyn_idx = 0;
     for (auto& step : path_copy) {
         if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
@@ -13178,7 +13587,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
     if (*xsink) {
         return toBits(QoreValue());
     }
-    std::vector<LVPathStep> path_copy;
+    IRLVPath path_copy;
     if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
         return toBits(QoreValue());
     }
@@ -13255,7 +13664,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_consume(QoreIRLValuePathIns
     if (*xsink) {
         return toBits(QoreValue());
     }
-    std::vector<LVPathStep> path_copy;
+    IRLVPath path_copy;
     if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
         return toBits(QoreValue());
     }
@@ -13337,7 +13746,7 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
             if (arithmetic && (vtype == NT_NUMBER || rhs.getType() == NT_NUMBER)) {
                 switch (compound_op) {
                     case LVCompoundOp::MulAssign:
-                        lvh.multiplyEqualsNumber(rhs);
+                        lvh.multiplyEqualsNumber(rhs, "<*= operator>");
                         if (!*xsink) {
                             res = lvh.getReferencedValue();
                         }
@@ -13347,7 +13756,7 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                             xsink->raiseException("DIVISION-BY-ZERO",
                                 "division by zero in arbitrary-precision numeric expression");
                         } else {
-                            lvh.divideEqualsNumber(rhs);
+                            lvh.divideEqualsNumber(rhs, "</= operator>");
                             if (!*xsink) {
                                 res = lvh.getReferencedValue();
                             }
@@ -13357,14 +13766,24 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                 }
             } else if (arithmetic && (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT)) {
                 double rv = rhs.getAsFloat();
+                // the result is the value the lvalue holds afterwards, as in the AST interpreter (a softint lvalue
+                // stores 17.5 as 17)
                 switch (compound_op) {
-                    case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
+                    case LVCompoundOp::MulAssign:
+                        lvh.multiplyEqualsFloat(rv, "<*= operator>");
+                        if (!*xsink) {
+                            res = lvh.getReferencedValue();
+                        }
+                        break;
                     case LVCompoundOp::DivAssign:
                         if (rv == 0.0) {
                             xsink->raiseException("DIVISION-BY-ZERO",
                                 "division by zero in floating-point expression");
                         } else {
-                            res = lvh.divideEqualsFloat(rv);
+                            lvh.divideEqualsFloat(rv, "</= operator>");
+                            if (!*xsink) {
+                                res = lvh.getReferencedValue();
+                            }
                         }
                         break;
                     default: break;
@@ -13374,12 +13793,15 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                 switch (compound_op) {
                     case LVCompoundOp::MulAssign:
                         // a zero factor assigns 0, which the lvalue converts as an assignment does (ex: 0.0 for a
-                        // *float lvalue with no value), as in the AST interpreter
+                        // *float lvalue with no value), as in the AST interpreter; the result is the value the
+                        // lvalue holds afterwards
                         if (!lvh.getAsBigInt() || !rv) {
-                            lvh.assign(0ll, "<*= operator>");
-                            res = 0ll;
+                            lvh.assign(0ll);
                         } else {
-                            res = lvh.multiplyEqualsBigInt(rv);
+                            lvh.multiplyEqualsBigInt(rv, "<*= operator>");
+                        }
+                        if (!*xsink) {
+                            res = lvh.getReferencedValue();
                         }
                         break;
                     case LVCompoundOp::DivAssign:
@@ -13387,7 +13809,10 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                             xsink->raiseException("DIVISION-BY-ZERO",
                                 "division by zero in integer expression");
                         } else {
-                            res = lvh.divideEqualsBigInt(rv);
+                            lvh.divideEqualsBigInt(rv, "</= operator>");
+                            if (!*xsink) {
+                                res = lvh.getReferencedValue();
+                            }
                         }
                         break;
                     case LVCompoundOp::ModAssign:
@@ -13395,14 +13820,16 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                             lvh.assign(0ll, "<%= operator>");
                             res = 0ll;
                         } else {
-                            res = lvh.modulaEqualsBigInt(rv);
+                            res = lvh.modulaEqualsBigInt(rv, "<%= operator>");
                         }
                         break;
-                    case LVCompoundOp::AndAssign: res = lvh.andEqualsBigInt(rv); break;
-                    case LVCompoundOp::OrAssign: res = lvh.orEqualsBigInt(rv); break;
-                    case LVCompoundOp::XorAssign: res = lvh.xorEqualsBigInt(rv); break;
-                    case LVCompoundOp::ShlAssign: res = lvh.shiftLeftEqualsBigInt(rv); break;
-                    case LVCompoundOp::ShrAssign: res = lvh.shiftRightEqualsBigInt(rv); break;
+                    // the descriptions of the AST operators, which errors (ex: the lvalue's type rejecting the
+                    // result) give
+                    case LVCompoundOp::AndAssign: res = lvh.andEqualsBigInt(rv, "<&= operator>"); break;
+                    case LVCompoundOp::OrAssign: res = lvh.orEqualsBigInt(rv, "<|= operator>"); break;
+                    case LVCompoundOp::XorAssign: res = lvh.xorEqualsBigInt(rv, "<^= operator>"); break;
+                    case LVCompoundOp::ShlAssign: res = lvh.shiftLeftEqualsBigInt(rv, "<<= operator>"); break;
+                    case LVCompoundOp::ShrAssign: res = lvh.shiftRightEqualsBigInt(rv, "<>>= operator>"); break;
                     default: break;
                 }
             }
@@ -13414,6 +13841,12 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
 
 QoreValue qore_compound_assign_value(LVCompoundOp op, const QoreValue& left, const QoreValue& right,
         ExceptionSink* xsink) {
+    // += on an "auto" lvalue with no value assigns the value added as it is (doPlusEqualsOnLValue()), which can be a
+    // reference, while the assignment to the temporary lvalue below would store the referenced value; the native
+    // fast path gives the same (QoreIRToLLVM::emitAnyCompoundAssignFastPath())
+    if (op == LVCompoundOp::AddAssign && left.isNullOrNothing() && !right.isNothing()) {
+        return right.refSelf();
+    }
     // += takes the operand's reference when it stores the value; the holder must be declared before the
     // LValueHelper (see qore_rt_apply_lvalue_compound())
     ValueHolder rhs_holder(right.refSelf(), xsink);
@@ -13421,7 +13854,14 @@ QoreValue qore_compound_assign_value(LVCompoundOp op, const QoreValue& left, con
     ValueHolder value(left.refSelf(), xsink);
     {
         LValueHelper lvh(xsink);
-        lvh.setValue(*value);
+        // the value is computed as for an "auto" lvalue, whose assignment converts nothing, and not for an lvalue
+        // without a type, whose assignment strips the complex type of a container (see
+        // QoreTypeInfo::acceptAssignment()): "auto v; v += <HD>{}" must give the "hash<HD>" that the AST interpreter
+        // gives.  The variables of other untyped declared types, "any" and "auto!", reach this function too; the
+        // store that follows applies the variable's declared type, which strips the complex type for them as their
+        // assignment does in the AST interpreter, and the result of += and -= is read from the variable afterwards
+        // (QoreIRLowering::compoundAssignmentResult())
+        lvh.setValue(*value, autoTypeInfo);
         ValueHolder res(qore_rt_apply_lvalue_compound(lvh, op, rhs_holder, xsink), xsink);
     }
     if (*xsink) {
@@ -13433,7 +13873,7 @@ QoreValue qore_compound_assign_value(LVCompoundOp op, const QoreValue& left, con
 //! Applies a compound assignment to an lvalue path; the value's reference is held by \a rhs_holder
 static uint64_t qore_rt_lv_path_compound_impl(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
         ValueHolder& rhs_holder, ExceptionSink* xsink) {
-    std::vector<LVPathStep> path_copy;
+    IRLVPath path_copy;
     if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
         return toBits(QoreValue());
     }
@@ -14038,7 +14478,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
     if (*xsink) {
         return toBits(QoreValue());
     }
-    std::vector<LVPathStep> path_copy;
+    IRLVPath path_copy;
     if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
         return toBits(QoreValue());
     }
@@ -14276,7 +14716,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
 
         {
             LValueHelper lvh(xsink);
-            if (lvh.navigatePath(path_copy.data(), path_copy.size(), true)) {
+            // the remove or delete of the variable itself (see LValueHelper::navigatePath())
+            if (lvh.navigatePath(path_copy.data(), path_copy.size(), true, path_copy.size() == 1)) {
                 return toBits(QoreValue());
             }
             if (inst->unary_op == LVUnaryOp::Remove) {
@@ -14500,7 +14941,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
 */
 static uint64_t qore_rt_lv_path_binary_mut_impl(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
         ValueHolder& rhs_holder, ExceptionSink* xsink) {
-    std::vector<LVPathStep> path_copy;
+    IRLVPath path_copy;
     if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
         return toBits(QoreValue());
     }
@@ -14628,7 +15069,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
     }
     // the instruction and its path are shared by every thread running this code, so the dynamic keys and indexes
     // of this call are resolved in a private copy of the path, as for the other lvalue path operations
-    std::vector<LVPathStep> path_copy;
+    IRLVPath path_copy;
     if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
         return toBits(QoreValue());
     }
@@ -16754,6 +17195,14 @@ extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_ref_foreach_cleanup_
 
 // --- Direct dot-eval method call (pre-evaluated base + args) ---
 
+//! Builds the argument list of a call from NaN-boxed arguments, which the list references
+/** The owners of consumed arguments (arg_cleanups) are released right after the list is built
+    (clearConsumedArgCleanups()), before the call: a temporary object is then dereferenced while it is linked to
+    nothing yet, which needs no garbage-collection decision.  Giving the owner's reference to the list instead leaves
+    the dereference to the list's release after the call, when the call may have linked the object into a recursive
+    graph (a value pushed to a Queue that it holds), where it is a garbage-collection decision: that made an AOT loop
+    pushing such values 13% slower.
+*/
 static QoreListNode* buildArgListFromNanBoxed(uint64_t* args, int nargs, ExceptionSink* xsink) {
     if (nargs <= 0) {
         return nullptr;
@@ -16862,8 +17311,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb(const QoreClass* qc,
     object_type_info = qore_substitute_type_params_if_needed(object_type_info);
     // Pass nullptr (not *arg_list) when nargs=0: buildArgListFromNanBoxed
     // returns null for empty lists and *arg_list on a null holder is UB.
+    // the list is the call's own, which gives its values to the constructor (tmp_args)
     return toBits(qore_class_private::execConstructor(*qc, rc, variant,
-        nargs > 0 ? *arg_list : nullptr, xsink, object_type_info));
+        nargs > 0 ? *arg_list : nullptr, xsink, object_type_info, true));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_new_object_by_path_nb(QoreAOTContext* ctx, const char* class_path,
@@ -16908,8 +17358,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_consume_args(
     }
     RuntimeConfig& rc = rc_get_current_ref();
     object_type_info = qore_substitute_type_params_if_needed(object_type_info);
+    // the list is the call's own, which gives its values to the constructor (tmp_args)
     return toBits(qore_class_private::execConstructor(*qc, rc, variant,
-        nargs > 0 ? *arg_list : nullptr, xsink, object_type_info));
+        nargs > 0 ? *arg_list : nullptr, xsink, object_type_info, true));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_new_object_by_path_nb_consume_args(QoreAOTContext* ctx, const char* class_path,

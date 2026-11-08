@@ -1,0 +1,415 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  DataProviderRetryUtil.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires RestClient
+%requires RestClientIo
+%requires ../../DnsTestServer.qm
+%requires ../../ClosingTestServer.qm
+
+%exec-class DataProviderRetryUtilTest
+
+#! A readable provider that records whether retries were suppressed when its first record was searched
+class RetryRecordingProvider inherits AbstractDataProvider {
+    public {
+        #! retriesSuppressed() for each search, in order
+        list<bool> suppressed = ();
+    }
+
+    private {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "RetryRecordingProvider",
+            "supports_read": True,
+        };
+    }
+
+    string getName() {
+        return "retry-recording";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+
+    private *hash<auto> searchFirstRecordImpl(hash<auto> where_cond, *hash<auto> search_options) {
+        suppressed += DataProviderRetryUtil::retriesSuppressed();
+        return {"id": 1};
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+        };
+    }
+}
+
+public class DataProviderRetryUtilTest inherits QUnit::Test {
+    private {
+        #! A URL whose name is not a valid name: it has an empty label, which the resolver refuses itself, without a
+        #! DNS query (c-ares: \c EBADNAME), so the lookup does not depend on the network in any build
+        const MalformedNameUrl = "http://bad..retry-util-test.";
+
+        #! The transport errors retried in the tests
+        const RetrySet = {
+            "SOCKET-CONNECT-ERROR": True,
+            "HTTPCLIENT-CONNECT-ERROR": True,
+        };
+    }
+
+    constructor() : Test("DataProviderRetryUtil Test", "1.0") {
+        addTestCase("name resolution errors", \nameResolutionErrors());
+        addTestCase("real name resolution errors", \realNameResolutionErrors());
+        addTestCase("local name resolution errors", \localNameResolutionErrors());
+        addTestCase("retriable transport errors", \retriableTransportErrors());
+        addTestCase("retry suppression", \retrySuppression());
+        addTestCase("transport retry delay", \transportRetryDelay());
+        addTestCase("restricted transport retry delay", \restrictedTransportRetryDelay());
+        addTestCase("example record", \exampleRecord());
+        set_return_value(main());
+    }
+
+    nameResolutionErrors() {
+        # the definite answers of the resolver: the name does not exist, has no address, is not a valid name, or is
+        # not a numeric address where one is required, or the service is not known
+        assertEq(("ENOTFOUND", "ENODATA", "EBADNAME", "ENONAME", "ESERVICE"),
+            keys DataProviderRetryUtil::DefiniteResolverStatuses);
+        # the error itself, for each definite answer of the resolver
+        foreach string status in (keys DataProviderRetryUtil::DefiniteResolverStatuses) {
+            assertTrue(DataProviderRetryUtil::isNameResolutionError({"err": "QOREADDRINFO-GETINFO-ERROR",
+                "arg": {"status": status}}), status);
+        }
+        # the connection error in the argument, as raised by HttpClientIo
+        assertTrue(DataProviderRetryUtil::isNameResolutionError({
+            "err": "HTTPCLIENT-CONNECT-ERROR",
+            "arg": {"err": "QOREADDRINFO-GETINFO-ERROR", "desc": "Domain name not found",
+                "arg": {"status": "ENOTFOUND"}},
+        }));
+        # an argument nested in an argument
+        assertTrue(DataProviderRetryUtil::isNameResolutionError({
+            "err": "PROVIDER-ERROR",
+            "arg": {"err": "HTTPCLIENT-CONNECT-ERROR", "arg": {"err": "QOREADDRINFO-GETINFO-ERROR",
+                "arg": {"status": "ENODATA"}}},
+        }));
+        # a chained exception
+        assertTrue(DataProviderRetryUtil::isNameResolutionError({
+            "err": "HTTPCLIENT-CONNECT-ERROR",
+            "next": {"err": "SOCKET-CONNECT-ERROR", "next": {"err": "QOREADDRINFO-GETINFO-ERROR",
+                "arg": {"status": "EBADNAME"}}},
+        }));
+
+        # failures that can be temporary are not definite: a DNS server that did not answer or failed, a canceled
+        # lookup, a resolver that could not be initialized (no status)
+        foreach string status in ("ETIMEOUT", "ESERVFAIL", "EREFUSED", "ECONNREFUSED", "ENOMEM", "EUNKNOWN") {
+            assertFalse(DataProviderRetryUtil::isNameResolutionError({"err": "QOREADDRINFO-GETINFO-ERROR",
+                "arg": {"status": status}}), status);
+            assertFalse(DataProviderRetryUtil::isNameResolutionError({"err": "HTTPCLIENT-CONNECT-ERROR",
+                "arg": {"err": "QOREADDRINFO-GETINFO-ERROR", "arg": {"status": status}}}), status);
+        }
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({"err": "QOREADDRINFO-GETINFO-ERROR"}));
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({"err": "QOREADDRINFO-CANCELLED",
+            "arg": {"status": "ENOTFOUND"}}));
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({"err": "QOREADDRINFO-GETINFO-ERROR",
+            "arg": "ENOTFOUND"}));
+
+        # negative cases
+        assertFalse(DataProviderRetryUtil::isNameResolutionError());
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({}));
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({"err": "SOCKET-CONNECT-ERROR",
+            "desc": "QOREADDRINFO-GETINFO-ERROR"}));
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({
+            "err": "HTTPCLIENT-CONNECT-ERROR",
+            "desc": "ares_getaddrinfo() error: Domain name not found",
+            "arg": {"err": "SOCKET-CONNECT-ERROR", "desc": "Connection refused", "arg": 61},
+        }));
+        # an argument that is not an error hash is not searched
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({
+            "err": "REST-RESPONSE-ERROR",
+            "arg": {"body": {"err": "QOREADDRINFO-GETINFO-ERROR"}},
+        }));
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({"err": 1, "arg": "QOREADDRINFO-GETINFO-ERROR",
+            "next": "QOREADDRINFO-GETINFO-ERROR"}));
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({"err": "XQOREADDRINFO-GETINFO-ERROR"}));
+    }
+
+    realNameResolutionErrors() {
+        # a name that is not a valid name is a definite answer, which is not retried; the resolver refuses it without a
+        # DNS query, so it is checked in every build
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            # a local DNS server gives each answer without the network (see DnsTestServer)
+            DnsTestServer dns();
+            on_exit dns.stop();
+            string servers = call_function("dbg_cares_set_servers", dns.getServer());
+            on_exit call_function("dbg_cares_set_servers", servers);
+            # a name that does not exist is a definite answer, which is not retried
+            checkClientErrors("http://nx.retry-util-test.", True, "ENOTFOUND");
+            # a DNS server that failed can answer the next query: the failure is retried
+            checkClientErrors("http://servfail.retry-util-test.", False, "ESERVFAIL");
+            # a failure for one address family is not hidden by a definite answer for the other: a SERVFAIL answer
+            # for A and a NODATA answer for AAAA, given last, made the lookup fail with ENODATA, which was not retried;
+            # each query is tried once, so that the answer for AAAA comes after the last one for A
+            {
+                hash<auto> opts = call_function("dbg_cares_set_query_options", {"tries": 1, "timeout_ms": 60000});
+                on_exit call_function("dbg_cares_set_query_options", opts);
+                checkClientErrors("http://mixed.retry-util-test.", False, "ESERVFAIL");
+            }
+            assertGt(0, dns.getQueries("nx"), "the names were looked up with the DNS server");
+            checkClientErrors(MalformedNameUrl, True, "EBADNAME");
+            # the resolver refused the malformed name without a query, so its lookup needs no DNS server in a build
+            # without debugging either
+            assertEq(0, dns.getQueries("bad"), "the malformed name was not sent to the DNS server");
+        } else {
+            # a temporary failure of name resolution needs an answer from a DNS server, which only a debug build can
+            # send its lookups to (dbg_cares_set_servers()), so only the definite answer for a malformed name is
+            # checked
+            checkClientErrors(MalformedNameUrl, True, "EBADNAME");
+        }
+
+        # a failed connection is not a name resolution failure and is retried
+        ClosingTestServer server();
+        on_exit server.stop();
+        string url = sprintf("https://127.0.0.1:%d", server.getPort());
+        hash<ExceptionInfo> ex = getError(sub () {
+            RestClientIo rest({"url": url, "protocol": "h1"});
+            rest.restDoRequest("GET", "/");
+        });
+        assertTrue(RetrySet{ex.err}, ex.err);
+        assertFalse(DataProviderRetryUtil::isNameResolutionError(ex));
+        assertTrue(DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet));
+    }
+
+    #! Lookups that the resolver refuses itself, without a DNS query, are definite answers
+    localNameResolutionErrors() {
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            # in a debug build, a local DNS server shows that no query was sent (see DnsTestServer)
+            DnsTestServer dns();
+            on_exit dns.stop();
+            string servers = call_function("dbg_cares_set_servers", dns.getServer());
+            on_exit call_function("dbg_cares_set_servers", servers);
+            checkLocalLookups();
+            assertEq(0, dns.getQueries("retry-util-test"), "no name was sent to the DNS server");
+        } else {
+            checkLocalLookups();
+        }
+    }
+
+    #! Checks the lookups that the resolver refuses without a DNS query
+    private checkLocalLookups() {
+        # a service that is not a port number, where a numeric service is required (AI_NUMERICSERV): no service
+        # database is read
+        checkLocalLookup("ESERVICE", sub () {
+            list<auto> l = getaddrinfo("127.0.0.1", "no-such-service-retry-util-test", AF_UNSPEC, AI_NUMERICSERV);
+        });
+        # a port number that is out of range
+        checkLocalLookup("ESERVICE", sub () {
+            list<auto> l = getaddrinfo("127.0.0.1", "70000", AF_UNSPEC, AI_NUMERICSERV);
+        });
+        # a service name that is not known, as a socket connects: the name of the host is numeric, so it is not
+        # looked up
+        checkLocalLookup("ESERVICE", sub () {
+            Socket s();
+            s.connectINET("127.0.0.1", "no-such-service-retry-util-test", 10s);
+        });
+        # a name that is not a numeric address, where one is required (AI_NUMERICHOST)
+        checkLocalLookup("ENONAME", sub () {
+            list<auto> l = getaddrinfo("retry-util-test.", NOTHING, AF_UNSPEC, AI_NUMERICHOST);
+        });
+        checkLocalLookup("ENONAME", sub () {
+            list<auto> l = Socket::resolveAddrInfo("retry-util-test.", NOTHING, AF_UNSPEC, AI_NUMERICHOST);
+        });
+    }
+
+    #! Checks that the given lookup fails with a definite answer of the resolver
+    private checkLocalLookup(string status, code lookup) {
+        hash<ExceptionInfo> ex = getError(lookup);
+        assertEq("QOREADDRINFO-GETINFO-ERROR", ex.err, status);
+        assertEq(status, ex.arg.status, status);
+        assertTrue(DataProviderRetryUtil::isNameResolutionError(ex), status);
+        assertFalse(DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet + {ex.err: True}), status);
+        # as the connection error of an asynchronous client
+        hash<auto> conn_ex = {"err": "HTTPCLIENT-CONNECT-ERROR", "desc": "connection failed", "arg": ex};
+        assertTrue(DataProviderRetryUtil::isNameResolutionError(conn_ex), status);
+        assertFalse(DataProviderRetryUtil::isRetriableTransportError(conn_ex, RetrySet), status);
+    }
+
+    #! Checks the errors of the synchronous and asynchronous REST clients for a URL whose name cannot be resolved
+    /** @param url the URL
+        @param definite True if the resolver's answer is definite, so the error is not retried
+        @param status the status of the resolver
+    */
+    private checkClientErrors(string url, bool definite, string status) {
+        # the synchronous client raises the resolver's error as it is
+        hash<ExceptionInfo> ex = getError(sub () {
+            RestClient rest({"url": url}, True);
+            rest.get("/");
+        });
+        assertEq("QOREADDRINFO-GETINFO-ERROR", ex.err, url);
+        assertEq(status, ex.arg.status, url);
+        assertEq(definite, DataProviderRetryUtil::isNameResolutionError(ex), url);
+        assertEq(!definite, DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet + {ex.err: True}), url);
+
+        # the asynchronous client raises HTTPCLIENT-CONNECT-ERROR with the resolver's error in the argument
+        ex = getError(sub () {
+            RestClientIo rest({"url": url});
+            rest.restDoRequest("GET", "/");
+        });
+        assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err, url);
+        assertEq("QOREADDRINFO-GETINFO-ERROR", ex.arg.err, url);
+        assertEq(status, ex.arg.arg.status, url);
+        assertEq(definite, DataProviderRetryUtil::isNameResolutionError(ex), url);
+        assertEq(!definite, DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet), url);
+    }
+
+    retriableTransportErrors() {
+        assertTrue(DataProviderRetryUtil::isRetriableTransportError({"err": "SOCKET-CONNECT-ERROR"}, RetrySet));
+        assertFalse(DataProviderRetryUtil::isRetriableTransportError({"err": "SOCKET-TIMEOUT"}, RetrySet));
+        assertFalse(DataProviderRetryUtil::isRetriableTransportError({"err": "REST-RESPONSE-ERROR",
+            "arg": {"status_code": 503}}, RetrySet));
+        assertFalse(DataProviderRetryUtil::isRetriableTransportError({}, RetrySet));
+        assertFalse(DataProviderRetryUtil::isRetriableTransportError({"err": "SOCKET-CONNECT-ERROR"}, {}));
+        assertFalse(DataProviderRetryUtil::isRetriableTransportError({"err": "HTTPCLIENT-CONNECT-ERROR",
+            "arg": {"err": "QOREADDRINFO-GETINFO-ERROR", "arg": {"status": "ENOTFOUND"}}}, RetrySet));
+        # a failure of name resolution that can be temporary is retried
+        assertTrue(DataProviderRetryUtil::isRetriableTransportError({"err": "HTTPCLIENT-CONNECT-ERROR",
+            "arg": {"err": "QOREADDRINFO-GETINFO-ERROR", "arg": {"status": "ETIMEOUT"}}}, RetrySet));
+        assertTrue(DataProviderRetryUtil::isRetriableTransportError({"err": "HTTPCLIENT-CONNECT-ERROR",
+            "arg": {"err": "SOCKET-CONNECT-ERROR"}}, RetrySet));
+        # no transport error is retried while retries are suppressed
+        assertFalse(DataProviderRetryUtil::runWithoutRetries(
+            bool sub () {
+                return DataProviderRetryUtil::isRetriableTransportError({"err": "SOCKET-CONNECT-ERROR"}, RetrySet);
+            }));
+    }
+
+    retrySuppression() {
+        assertFalse(DataProviderRetryUtil::retriesSuppressed());
+        # the code's value is returned
+        assertEq(2, DataProviderRetryUtil::runWithoutRetries(int sub () {
+            assertTrue(DataProviderRetryUtil::retriesSuppressed());
+            # nested calls keep retries suppressed until the outermost call returns
+            int rv = DataProviderRetryUtil::runWithoutRetries(int sub () {
+                assertTrue(DataProviderRetryUtil::retriesSuppressed());
+                return 1;
+            });
+            assertTrue(DataProviderRetryUtil::retriesSuppressed());
+            return rv + 1;
+        }));
+        assertFalse(DataProviderRetryUtil::retriesSuppressed());
+
+        # the suppression ends when the code raises an exception
+        assertThrows("RETRY-TEST-ERROR", sub () {
+            DataProviderRetryUtil::runWithoutRetries(sub () {
+                DataProviderRetryUtil::runWithoutRetries(sub () {
+                    throw "RETRY-TEST-ERROR";
+                });
+            });
+        });
+        assertFalse(DataProviderRetryUtil::retriesSuppressed());
+
+        # other threads are not affected
+        Queue q();
+        DataProviderRetryUtil::runWithoutRetries(sub () {
+            background q.push(DataProviderRetryUtil::retriesSuppressed());
+            assertFalse(q.get());
+        });
+    }
+
+    transportRetryDelay() {
+        assertEq(1s, DataProviderRetryUtil::DefaultTransportRetryDelayUnit);
+        date orig = DataProviderRetryUtil::getTransportRetryDelayUnit();
+        assertEq(DataProviderRetryUtil::DefaultTransportRetryDelayUnit, orig);
+        on_exit DataProviderRetryUtil::setTransportRetryDelayUnit(orig);
+
+        # with the default unit, the delay is the number of units in seconds
+        assertEq(8s, DataProviderRetryUtil::getTransportRetryDelay(8));
+        assertEq(1500ms, DataProviderRetryUtil::getTransportRetryDelay(1.5));
+        assertEq(0s, DataProviderRetryUtil::getTransportRetryDelay(0));
+        assertEq(0s, DataProviderRetryUtil::getTransportRetryDelay(-1));
+
+        DataProviderRetryUtil::setTransportRetryDelayUnit(5ms);
+        assertEq(5ms, DataProviderRetryUtil::getTransportRetryDelayUnit());
+        assertEq(40ms, DataProviderRetryUtil::getTransportRetryDelay(pow(2, 3)));
+
+        DataProviderRetryUtil::setTransportRetryDelayUnit(0s);
+        assertEq(0s, DataProviderRetryUtil::getTransportRetryDelay(8));
+        # a zero delay returns at once
+        DataProviderRetryUtil::waitTransportRetry(8);
+
+        # a negative unit, an absolute date/time value and a unit longer than the default are refused, and the unit
+        # is kept
+        assertThrows("TRANSPORT-RETRY-DELAY-ERROR", \DataProviderRetryUtil::setTransportRetryDelayUnit(), -1ms);
+        assertThrows("TRANSPORT-RETRY-DELAY-ERROR", "absolute", \DataProviderRetryUtil::setTransportRetryDelayUnit(),
+            2026-01-01T00:00:00Z);
+        assertThrows("TRANSPORT-RETRY-DELAY-ERROR", "longer", \DataProviderRetryUtil::setTransportRetryDelayUnit(),
+            DataProviderRetryUtil::DefaultTransportRetryDelayUnit + 1us);
+        assertEq(0s, DataProviderRetryUtil::getTransportRetryDelayUnit());
+
+        # the delay is limited; a huge number of units gave a delay that wrapped around to a negative one
+        DataProviderRetryUtil::setTransportRetryDelayUnit(1s);
+        assertEq(DataProviderRetryUtil::MaxTransportRetryDelay, DataProviderRetryUtil::getTransportRetryDelay(
+            pow(2, 62)));
+        assertEq(DataProviderRetryUtil::MaxTransportRetryDelay, DataProviderRetryUtil::getTransportRetryDelay(
+            1e30n));
+        assertEq(DataProviderRetryUtil::MaxTransportRetryDelay, DataProviderRetryUtil::getTransportRetryDelay(
+            86400));
+        assertEq(86399s, DataProviderRetryUtil::getTransportRetryDelay(86399));
+    }
+
+    restrictedTransportRetryDelay() {
+        date orig = DataProviderRetryUtil::getTransportRetryDelayUnit();
+        on_exit DataProviderRetryUtil::setTransportRetryDelayUnit(orig);
+
+        # the unit applies to the whole process: a Program restricted from process control cannot change it
+        Program p(PO_NO_PROCESS_CONTROL | PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.parse("%requires DataProvider\n"
+            "nothing sub set_unit() { DataProviderRetryUtil::setTransportRetryDelayUnit(0s); }\n"
+            "date sub get_unit() { return DataProviderRetryUtil::getTransportRetryDelayUnit(); }\n", "restricted");
+        assertThrows("PERMISSION-DENIED", \p.callFunction(), "set_unit");
+        assertEq(orig, DataProviderRetryUtil::getTransportRetryDelayUnit(), "the unit is kept");
+        # reading it is not restricted
+        assertEq(orig, p.callFunction("get_unit"));
+    }
+
+    exampleRecord() {
+        RetryRecordingProvider prov();
+        # the example record is searched without retries
+        assertEq({"id": 1}, prov.getExampleRecordData());
+        # a search for records is retried
+        assertEq({"id": 1}, prov.searchFirstRecord({}));
+        assertEq((True, False), prov.suppressed);
+    }
+
+    #! Returns the exception raised by the given code
+    private hash<ExceptionInfo> getError(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        throw "TEST-ERROR", "the code did not raise an exception";
+    }
+}

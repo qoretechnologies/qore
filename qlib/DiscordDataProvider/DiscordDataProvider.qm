@@ -26,6 +26,9 @@
 %requires qore >= 2.0
 # assume local scope for variables, do not use "$" signs
 %modern
+
+# the client's event forwarder refers to its data provider by a weak reference
+%allow-weak-references
 # require type definitions everywhere
 # strict argument handling
 # enable all warnings
@@ -139,6 +142,16 @@ module DiscordDataProvider {
     @section Discorddataprovider_relnotes Release Notes
 
     @subsection Discorddataprovider_v2_1 DiscordDataProvider v2.1
+    - @ref DiscordDataProvider::DiscordGatewayDataProvider "DiscordGatewayDataProvider" raises its connection and
+      disconnection events (@ref WebSocketClient::EVENT_WS_CONNECTED and @ref WebSocketClient::EVENT_WS_CLOSED) to its
+      observers, as declared in its provider info; created from a
+      @ref DiscordWebSocketClient::DiscordWebSocketClient "DiscordWebSocketClient" or a
+      @ref DiscordWebSocketClient::DiscordWebSocketConnection "DiscordWebSocketConnection", it now observes the client
+      too, so it raises its events in that case as well; it observes the client through a forwarder that does not
+      keep it alive, and stops observing it when destroyed
+    - a request that failed because the name of the server does not exist is no longer retried, and no
+      request is retried while @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed"
+      (see @ref dataprovider_retries)
     - API calls are made with an asynchronous @ref DiscordRestClient::DiscordRestClientIo "DiscordRestClientIo"
       from the connection's \c getAsync() or created from the options; a synchronous
       @ref DiscordRestClient::DiscordRestClient "DiscordRestClient" passed to the data provider, directly or in the

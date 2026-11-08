@@ -1,0 +1,142 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ClosingTestServer.qm a local TCP server that closes each connection it accepts, for tests of failed connections
+
+/*  ClosingTestServer.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module ClosingTestServer {
+    version = "1.0";
+    desc    = "a local TCP server that closes each connection it accepts, for tests of failed connections";
+    author  = "David Nichols <david@qore.org>";
+    url     = "http://qore.org";
+    license = "MIT";
+}
+
+/** A TCP server on a port of the loopback address that accepts each connection and closes it at once, without TLS.
+
+    An HTTPS request to it fails in the TLS handshake, which the server ends, with a transport error that clients
+    retry (the asynchronous clients raise \c HTTPCLIENT-CONNECT-ERROR), at once and the same way every time, so a
+    test of the retries of a failed connection does not depend on the network or on timing:
+    - the port is held by the listener while the server runs, so no other program can listen on it meanwhile: a port
+      that is free when a test reads it can be taken by another test run at the same time before it is used
+    - a port that is bound but does not listen would not do: it refuses a connection on Linux, but macOS drops the
+      connection request, so the connection waits for its timeout
+    - the client must use HTTP/1.1 only (\c "protocol": \c "h1"), so that it does not race HTTP/3 over UDP against
+      the port number
+
+    @par Example:
+    @code{.py}
+%requires ../../ClosingTestServer.qm
+
+ClosingTestServer server();
+on_exit server.stop();
+RestClientIo rest({"url": sprintf("https://127.0.0.1:%d", server.getPort()), "protocol": "h1"});
+    @endcode
+*/
+public namespace ClosingTestServer {
+    #! The server
+    public class ClosingTestServer {
+        private {
+            #! the listener
+            Socket listener();
+            #! the port of the listener
+            int port;
+            #! the thread that accepts the connections has ended when this is zero
+            Counter done(1);
+            #! guards the members below
+            Mutex m();
+            #! True once the server is stopping
+            bool stopping;
+            #! the number of connections accepted and closed
+            int connections;
+        }
+
+        #! Starts the server on a port that the system assigns on 127.0.0.1
+        constructor() {
+            listener.bindINET("127.0.0.1", "0", False, AF_INET);
+            listener.listen();
+            port = listener.getSocketInfo().port;
+            background run();
+        }
+
+        #! Returns the port of the server on 127.0.0.1
+        int getPort() {
+            return port;
+        }
+
+        #! Returns the number of connections that the server accepted and closed
+        /** A connection is counted before it is closed, so a client that has seen its connection fail has been
+            counted
+        */
+        int getConnections() {
+            m.lock();
+            on_exit m.unlock();
+            return connections;
+        }
+
+        #! Stops the server and waits for its thread to end; does nothing if the server has been stopped already
+        stop() {
+            {
+                m.lock();
+                on_exit m.unlock();
+                if (stopping) {
+                    return;
+                }
+                stopping = True;
+            }
+            # the thread is woken by a connection of its own
+            Socket s();
+            on_exit s.close();
+            try {
+                s.connect(sprintf("127.0.0.1:%d", port), 10s);
+            } catch (hash<ExceptionInfo> ex) {
+                # the thread ends when its accept() fails as well
+            }
+            done.waitForZero();
+            listener.close();
+        }
+
+        #! Accepts connections and closes them until the server stops
+        private run() {
+            on_exit done.dec();
+            while (True) {
+                Socket s;
+                try {
+                    s = listener.accept();
+                } catch (hash<ExceptionInfo> ex) {
+                    return;
+                }
+                {
+                    m.lock();
+                    on_exit m.unlock();
+                    if (stopping) {
+                        s.close();
+                        return;
+                    }
+                    ++connections;
+                }
+                s.close();
+            }
+        }
+    }
+}

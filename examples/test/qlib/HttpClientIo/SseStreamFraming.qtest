@@ -126,6 +126,8 @@ class SseStreamFramingTest inherits QUnit::Test {
         Counter served = serve(True);
         on_exit served.waitForZero(30s);
         HttpClientIo::HttpClientConnectionManager mgr();
+        # the connection stays in the pool after the stream ends; the server waits for the client to close it
+        on_exit mgr.closeAll();
         HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + port);
         on_exit {
             try {
@@ -149,6 +151,8 @@ class SseStreamFramingTest inherits QUnit::Test {
         Counter served = serve(True);
         on_exit served.waitForZero(30s);
         HttpClientIo::HttpClientConnectionManager mgr();
+        # the connection stays in the pool after the stream ends; the server waits for the client to close it
+        on_exit mgr.closeAll();
         HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming("http://127.0.0.1:" + port, "GET",
             "/", {"Accept": MimeTypeSse});
         on_exit {

@@ -57,9 +57,18 @@
 bool qore_fd_poll_misses_hangup(int fd) {
 #ifdef DARWIN
     struct stat st;
-    return fd >= 0 && !fstat(fd, &st) && S_ISFIFO(st.st_mode) && st.st_dev;
+    return fd >= 0 && !fstat(fd, &st) && qore_stat_poll_misses_hangup(st);
 #else
     (void)fd;
+    return false;
+#endif
+}
+
+bool qore_stat_poll_misses_hangup(const struct stat& st) {
+#ifdef DARWIN
+    return S_ISFIFO(st.st_mode) && st.st_dev;
+#else
+    (void)st;
     return false;
 #endif
 }

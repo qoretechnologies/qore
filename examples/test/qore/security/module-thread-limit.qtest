@@ -1,0 +1,352 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# PO_NO_THREAD_CONTROL restricts the code of a Program when it is parsed, but module code that the Program calls can
+# still start threads, including threads that run the Program's own closures.  Such threads are governed by the
+# caller's sandbox, and the sandbox thread limit (SandboxManager::setMaxThreads()) bounds how many of them can run at
+# once: starting one more raises THREAD-CREATION-FAILURE in the code that starts it, and a thread stops counting when
+# its work ends (qore#5635).
+#
+# The module code is a real user module (SandboxThreadFixture.qm in this directory); the restricted code is a Program
+# with PO_NO_THREAD_CONTROL and a SandboxManager.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}"
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires Util
+%requires SandboxThreadFixture
+
+%exec-class ModuleThreadLimitTest
+
+class ModuleThreadLimitTest inherits QUnit::Test {
+    private {
+        #! the test directory
+        string dir;
+        #! a file that the sandbox denies
+        string secret;
+    }
+
+    #! the content of the secret file
+    const SecretContent = "the secret content";
+
+    #! the restricted code: it cannot start threads itself, but it calls module code that runs its closures in threads
+    const RestrictedSource = "
+# starts n threads in the module, each running a closure of this Program that waits on the gate; returns the TID of
+# each thread or the exception that refused it, which this code handles
+list<auto> sub start(int n, Queue gate, *Queue result) {
+    list<auto> rv = ();
+    for (int i = 0; i < n; ++i) {
+        code wait = sub () {
+            try {
+                auto v = gate.get(60s);
+                if (result) {
+                    result.push(v);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (result) {
+                    result.push(ex.err);
+                }
+            }
+        };
+        try {
+            rv += SandboxThreadFixture::Runner::start(wait);
+        } catch (hash<ExceptionInfo> ex) {
+            rv += sprintf(\"%s: %s\", ex.err, ex.desc);
+        }
+    }
+    return rv;
+}
+
+# reads a file in a thread that the module starts for a closure of this Program
+auto sub read_in_module_thread(string path) {
+    Queue q();
+    SandboxThreadFixture::Runner::start(sub () {
+        try {
+            q.push(ReadOnlyFile::readTextFile(path));
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex.err);
+        }
+    });
+    return q.get(60s);
+}
+
+# runs n closures of this Program with call_async() through a closure of the module
+list<auto> sub start_async(int n, Queue gate) {
+    list<auto> rv = ();
+    for (int i = 0; i < n; ++i) {
+        try {
+            rv += SandboxThreadFixture::Runner::startAsync(auto sub () { return gate.get(60s); });
+        } catch (hash<ExceptionInfo> ex) {
+            rv += sprintf(\"%s: %s\", ex.err, ex.desc);
+        }
+    }
+    return rv;
+}
+
+# starts a module thread that starts another thread for a closure of this Program
+int sub start_nested(Queue result, Queue outer_gate, Queue inner_gate) {
+    return SandboxThreadFixture::Runner::startNested(sub () { inner_gate.get(60s); }, result, outer_gate);
+}
+
+# starts n threads with a module function, which runs in this Program
+list<auto> sub start_with_function(int n, Queue gate) {
+    list<auto> rv = ();
+    for (int i = 0; i < n; ++i) {
+        try {
+            rv += SandboxThreadFixture::start_thread(sub () { gate.get(60s); });
+        } catch (hash<ExceptionInfo> ex) {
+            rv += sprintf(\"%s: %s\", ex.err, ex.desc);
+        }
+    }
+    return rv;
+}
+";
+
+    #! the restricted code in %modern, which every execution mode can run
+    const ModernRestrictedSource = "%modern\n" + RestrictedSource;
+
+    constructor() : QUnit::Test("module thread limit", "1.0", \ARGV) {
+        addTestCase("the restricted code cannot start a thread itself", \testRestrictedParse());
+        addTestCase("a module thread for the restricted code is governed by its sandbox", \testInheritance());
+        addTestCase("the limit refuses a module thread in the starting code in every execution mode",
+            \testLimitModes());
+        addTestCase("a module thread stops counting when it ends", \testRelease());
+        addTestCase("a cancelled module thread stops counting", \testReleaseCancelled());
+        addTestCase("call_async() through a closure of the module counts", \testAsync());
+        addTestCase("a thread that a module thread starts counts", \testNested());
+        addTestCase("a module function that starts a thread counts", \testModuleFunction());
+        addTestCase("module threads for an unsandboxed caller are not limited", \testUnsandboxed());
+        addTestCase("only PO_NO_THREAD_CLASSES keeps restricted code from creating a ThreadPool", \testThreadPoolOption());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        string tmp = tmp_location() + DirSep + "qore-module-thread-limit-" + get_random_string(8);
+        mkdir(tmp);
+        dir = realpath(tmp);
+        secret = dir + DirSep + "secret.txt";
+        File f();
+        f.open2(secret, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(SecretContent);
+        f.close();
+    }
+
+    globalTearDown() {
+        if (dir.val()) {
+            try {
+                unlink(secret);
+                rmdir(dir);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+    }
+
+    #! releases n waiting threads
+    private static release(Queue gate, int n) {
+        for (int i = 0; i < n; ++i) {
+            gate.push(True);
+        }
+    }
+
+    #! waits until each thread in the list has ended; elements that are not TIDs are ignored
+    private joinAll(list<auto> l) {
+        foreach auto tid in (l) {
+            if (tid.typeCode() == NT_INT) {
+                assertTrue(thread_join(tid, 60s), sprintf("thread %d ended", tid));
+            }
+        }
+    }
+
+    #! returns a Program that cannot start threads and that the module was given; it has no sandbox if not given one
+    private static Program getRestrictedProgram(string name, *SandboxManager sm, *ExecMode mode) {
+        Program p(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+        # the module has been loaded already, so it is not checked against the restrictions of the Program: the host
+        # gives it to the Program as a capability
+        p.loadModule("SandboxThreadFixture");
+        if (exists mode) {
+            p.setExecMode(mode);
+            p.parse(ModernRestrictedSource, name);
+        } else {
+            p.parse(RestrictedSource, name);
+        }
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        return p;
+    }
+
+    #! returns a restricted Program that cannot start threads, with a sandbox limited to the given number of threads
+    private Program getRestricted(int max_threads, *ExecMode mode) {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.setMaxThreads(max_threads);
+        return getRestrictedProgram("restricted", sm, mode);
+    }
+
+    #! returns the expected error for a thread refused at the given limit
+    private static string refused(int max_threads) {
+        return sprintf("THREAD-CREATION-FAILURE: cannot start a thread: sandbox thread limit of %d reached",
+            max_threads);
+    }
+
+    testRestrictedParse() {
+        Program p(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+        assertThrows("PARSE-EXCEPTION", "background", \p.parse(), ("sub f() { background sleep(0); }", "restricted"));
+    }
+
+    testInheritance() {
+        # unsandboxed, the closure reads the file in the module thread
+        Program free = getRestrictedProgram("unsandboxed");
+        assertEq(SecretContent, free.callFunction("read_in_module_thread", secret));
+        # sandboxed, the module thread runs it under the caller's sandbox
+        Program p = getRestricted(0);
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("read_in_module_thread", secret));
+    }
+
+    testLimitModes() {
+        hash<string, ExecMode> modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+        foreach string name in (keys modes) {
+            Program p = getRestricted(2, modes{name});
+            Queue gate();
+            list<auto> l;
+            # the threads that started are released and waited for however the call ends
+            on_exit {
+                release(gate, 2);
+                joinAll(l);
+            }
+            l = p.callFunction("start", 3, gate);
+            assertEq(3, l.size(), name);
+            assertEq(NT_INT, l[0].typeCode(), name);
+            assertEq(NT_INT, l[1].typeCode(), name);
+            assertEq(refused(2), l[2], name);
+        }
+    }
+
+    testRelease() {
+        Program p = getRestricted(2);
+        # several rounds: each round can start as many threads as the limit allows only if all threads of the
+        # previous round stopped counting when they ended
+        for (int round = 0; round < 3; ++round) {
+            Queue gate();
+            Queue result();
+            list<auto> l;
+            on_exit {
+                release(gate, 2);
+                joinAll(l);
+            }
+            l = p.callFunction("start", 3, gate, result);
+            assertEq(NT_INT, l[0].typeCode(), "round " + round);
+            assertEq(NT_INT, l[1].typeCode(), "round " + round);
+            assertEq(refused(2), l[2], "round " + round);
+            release(gate, 2);
+            joinAll(l);
+            l = ();
+            assertEq((True, True), (result.get(), result.get()), "round " + round);
+        }
+    }
+
+    testReleaseCancelled() {
+        Program p = getRestricted(1);
+        Queue gate();
+        Queue result();
+        list<auto> l = p.callFunction("start", 2, gate, result);
+        assertEq(NT_INT, l[0].typeCode());
+        assertEq(refused(1), l[1]);
+        # the host cancels the thread; the closure sees the cancellation and the thread ends
+        assertTrue(cancel_thread(l[0], "cancelled by the host"));
+        assertEq("THREAD-CANCELLED", result.get(60s));
+        assertTrue(thread_join(l[0], 60s));
+        # its slot is free
+        l = p.callFunction("start", 1, gate);
+        on_exit {
+            release(gate, 1);
+            joinAll(l);
+        }
+        assertEq(NT_INT, l[0].typeCode());
+    }
+
+    testAsync() {
+        Program p = getRestricted(1);
+        Queue gate();
+        list<auto> l = p.callFunction("start_async", 2, gate);
+        on_exit release(gate, 1);
+        assertEq(2, l.size());
+        assertTrue(l[0] instanceof Future);
+        assertEq(refused(1), l[1]);
+        gate.push("done");
+        assertEq("done", l[0].get(60s));
+    }
+
+    testNested() {
+        Program p = getRestricted(2);
+        Queue result();
+        Queue outer_gate();
+        Queue inner_gate();
+        int outer = p.callFunction("start_nested", result, outer_gate, inner_gate);
+        auto inner;
+        # the threads are released and waited for however the test ends
+        on_exit {
+            outer_gate.push(True);
+            inner_gate.push(True);
+            joinAll((outer, inner));
+        }
+        inner = result.get(60s);
+        # the outer module thread and the inner thread it started both count
+        assertEq(NT_INT, inner.typeCode());
+        assertEq((refused(2),), p.callFunction("start", 1, new Queue()));
+
+        # with a limit of 1, the outer thread takes the only slot and the inner thread is refused in the outer thread
+        Program p1 = getRestricted(1);
+        Queue result1();
+        Queue outer_gate1();
+        int outer1 = p1.callFunction("start_nested", result1, outer_gate1, new Queue());
+        on_exit {
+            outer_gate1.push(True);
+            joinAll((outer1,));
+        }
+        assertEq(refused(1), result1.get(60s));
+    }
+
+    testModuleFunction() {
+        # a module function runs in the Program of its caller, here the restricted Program, which cannot start a
+        # thread with its own code
+        Program p = getRestricted(2);
+        Queue gate();
+        list<auto> l = p.callFunction("start_with_function", 3, gate);
+        on_exit {
+            release(gate, 2);
+            joinAll(l);
+        }
+        assertEq(3, l.size());
+        assertEq(NT_INT, l[0].typeCode());
+        assertEq(NT_INT, l[1].typeCode());
+        assertEq(refused(2), l[2]);
+    }
+
+    # PO_NO_THREAD_CONTROL does not refuse the ThreadPool class (its workers count against the sandbox of the Program
+    # that creates the pool; see thread-pool-thread-limit.qtest); PO_NO_THREAD_CLASSES does
+    testThreadPoolOption() {
+        string src = "int sub f() { ThreadPool tp(1); tp.stopWait(); return 1; }";
+        Program p(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+        p.parse(src, "no-thread-control");
+        assertEq(1, p.callFunction("f"));
+        Program p2(PO_NEW_STYLE | PO_NO_THREAD_CONTROL | PO_NO_THREAD_CLASSES);
+        assertThrows("ILLEGAL-CLASS-INSTANTIATION", "ThreadPool", \p2.parse(), (src, "no-thread-classes"));
+    }
+
+    testUnsandboxed() {
+        Program p = getRestrictedProgram("unsandboxed");
+        Queue gate();
+        list<auto> l = p.callFunction("start", 5, gate);
+        on_exit {
+            release(gate, 5);
+            joinAll(l);
+        }
+        assertEq(5, (select l, $1.typeCode() == NT_INT).size());
+    }
+}

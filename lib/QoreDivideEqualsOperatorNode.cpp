@@ -48,6 +48,8 @@ QoreValue QoreDivideEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSin
     if (!v)
         return QoreValue();
 
+    // the result is the value the lvalue holds afterwards, as for an assignment (x /= y gives what x = x / y gives):
+    // the lvalue's type can convert the value computed (a softint lvalue stores 2.8 as 2)
     // is either side a number?
     if (res->getType() == NT_NUMBER || v.getType() == NT_NUMBER) {
         // check for divide by zero
@@ -64,17 +66,15 @@ QoreValue QoreDivideEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSin
             xsink->raiseException("DIVISION-BY-ZERO", "division by zero in floating-point expression");
             return QoreValue();
         }
-        return v.divideEqualsFloat(val, "</= operator>");
+        v.divideEqualsFloat(val, "</= operator>");
     } else { // do integer divide equals
         int64 val = res->getAsBigInt();
         if (!val) {
             xsink->raiseException("DIVISION-BY-ZERO", "division by zero in integer expression");
             return QoreValue();
         }
-        // get new value if necessary
-        return v.divideEqualsBigInt(val, "</= operator>");
+        v.divideEqualsBigInt(val, "</= operator>");
     }
 
-    // reference return value and return
-    return ref_rv ? v.getReferencedValue() : QoreValue();
+    return ref_rv && !*xsink ? v.getReferencedValue() : QoreValue();
 }

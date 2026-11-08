@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
 
 %modern
 %no-child-restrictions
@@ -62,28 +63,9 @@ class CompoundAssignmentUnassignedTest inherits QUnit::Test {
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
 
-        addTestCase("the AST interpreter's -= on unassigned lvalues", \testAstMinusEquals());
         addTestCase("every execution mode gives the AST result", \testMatrix());
 
         set_return_value(main());
-    }
-
-    #! -= assigns an unassigned lvalue of an arithmetic type, but not a hash that it removes keys from
-    testAstMinusEquals() {
-        code id = auto sub (auto v) { return v; };
-        int s;
-        s -= id(0);
-        assertEq(0, s);
-        assertEq("integer", s.type());
-        hash<auto> h;
-        h -= id("x");
-        assertEq(NOTHING, h);
-        float f;
-        f -= id(1);
-        assertEq(-1.0, f);
-        hash<auto> m = {};
-        m.v += id(NOTHING);
-        assertEq(NOTHING, m.v);
     }
 
     testMatrix() {

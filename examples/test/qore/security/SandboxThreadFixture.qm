@@ -1,0 +1,72 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+
+#! Test-only module that starts threads for its callers
+/** @section sandboxthreadfixtureintro Introduction
+    Module code that runs the code of its callers on threads that it starts, as modules that call back their callers
+    do (pollers, servers, event callbacks).  A caller that may not start threads itself
+    (@ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") can still cause threads through this module; those
+    threads are governed by the caller's sandbox, including its thread limit.
+*/
+module SandboxThreadFixture {
+    version = "1.0";
+    desc = "Sandbox thread limit fixture: module code that starts threads for its callers";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace SandboxThreadFixture {
+    #! Starts threads for its callers; its methods run in the module's Program
+    public class Runner {
+        #! Runs the caller's code in a new thread with the background operator
+        /** @return the TID of the new thread
+        */
+        static int start(code c) {
+            return background c();
+        }
+
+        #! Runs the caller's code in a new thread with call_async() through a closure of the module
+        /** call_async() refuses the code of a caller that may not control threads, but not a closure of the module
+            that calls it
+        */
+        static Future startAsync(code c) {
+            return call_async(auto sub () { return c(); });
+        }
+
+        #! Starts a thread that starts another thread for the caller's code
+        /** @param c the caller's code, run in the inner thread
+            @param result receives the TID of the inner thread, or the exception that refused to start it, as
+            \c "err: desc"
+            @param gate the outer thread waits for an element before it ends
+
+            @return the TID of the outer thread
+        */
+        static int startNested(code c, Queue result, Queue gate) {
+            code outer = sub () {
+                try {
+                    result.push(background c());
+                } catch (hash<ExceptionInfo> ex) {
+                    result.push(sprintf("%s: %s", ex.err, ex.desc));
+                }
+                gate.get(60s);
+            };
+            return background outer();
+        }
+
+        #! Creates a ThreadPool in the module's Program
+        /** Its threads count against the sandbox of the module's Program, which is the sandbox of the Program that
+            loaded the module, if it has one
+        */
+        static ThreadPool makePool(int max_threads) {
+            return new ThreadPool(max_threads);
+        }
+    }
+
+    #! Runs the caller's code in a new thread; a module function runs in the Program of its caller
+    /** @return the TID of the new thread
+    */
+    public int sub start_thread(code c) {
+        return background c();
+    }
+}

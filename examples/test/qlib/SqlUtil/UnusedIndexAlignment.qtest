@@ -17,6 +17,8 @@
 %requires Sqlite3SqlUtil
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
 
 %try-module pgsql
 %define NO_PGSQL
@@ -62,6 +64,7 @@ class UnusedIndexAlignmentTest inherits QUnit::Test {
 
     globalTearDown() {
         PgsqlRunSchema::teardown();
+        MysqlRunDatabase::teardown();
     }
 
     #! Returns the description of the parent table: its indexes are the given ones and the one of the template
@@ -184,7 +187,9 @@ class UnusedIndexAlignmentTest inherits QUnit::Test {
             testSkip("QORE_DB_CONNSTR_MYSQL is not set");
         }
         skipIfNoConnection(ENV.QORE_DB_CONNSTR_MYSQL);
-        checkDatabase(new Datasource(ENV.QORE_DB_CONNSTR_MYSQL));
+        # the run's own database: tests that run at the same time do not share the tables of this one
+        string connstr = MysqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_MYSQL, "UnusedIndexAlignment");
+        checkDatabase(new Datasource(connstr));
     }
 
     #! Skips the test case if the server of a connection string cannot be reached
@@ -210,7 +215,9 @@ class UnusedIndexAlignmentTest inherits QUnit::Test {
             testSkip("QORE_DB_CONNSTR_FREETDS is not set");
         }
         skipIfNoConnection(ENV.QORE_DB_CONNSTR_FREETDS);
-        Datasource ds(ENV.QORE_DB_CONNSTR_FREETDS);
+        # the run's own database: tests that run at the same time do not share the objects of this one
+        string connstr = MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS, "UnusedIndexAlignment");
+        Datasource ds(connstr);
         if (MssqlDatabase::isSybase(ds)) {
             testSkip("the database is Sybase, not SQL Server");
         }
