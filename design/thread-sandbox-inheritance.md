@@ -79,6 +79,42 @@ A counted thread stops counting when its work ends (`QoreInheritedSandbox::relea
 thread's Program sees it end, so code waiting for a Program's threads to finish can rely on the slots being freed.
 Lowering the limit does not affect threads already running.
 
+### Restricted callers and module code
+
+`PO_NO_THREAD_CONTROL` restricts the code of the Program that has it, when that code is parsed; it does not stop
+module code that the Program calls from starting threads, including threads that run the Program's own closures (a
+module function or method doing `background c()` with a closure that the caller passed in). The `background` operator
+in module code is checked against the module's own parse options only. Such threads inherit the caller's sandbox and
+count against its thread limit like any other thread started on the sandboxed code's behalf, so the sandbox thread
+limit is what bounds the threads that restricted code can cause. The `MODULE_OWNED` builtins (`call_async()`,
+`parallel_map()`, `parallel_foreach()`, the `AsyncIoController` timer and task submitters) additionally refuse to run
+the code of a caller that may not control threads; a module's own closure that calls the caller's code is accepted, and
+its thread is counted as well.
+
+A blanket run-time refusal of `background` in module code for restricted callers is deliberately not implemented:
+many modules run their callers' code on their own threads (pollers calling subclass methods, `HttpServer` handlers,
+WebSocket event callbacks, logger appenders), and the sandbox already governs those threads.
+
+Tests: `examples/test/qore/security/module-thread-limit.qtest` (a real user module, `SandboxThreadFixture.qm`, running
+the closures of a `PO_NO_THREAD_CONTROL` caller) and `examples/test/qore/security/thread-sandbox-inheritance.qtest`.
+
+### Default limit
+
+A `QoreSandboxManager` has no thread limit (0) unless one is set, and this default is kept deliberately (qore#5635):
+
+- no single number suits every host: a pipeline or service host legitimately runs many threads per sandbox, while a
+  preview or tenant host needs a small bound;
+- a non-zero default would silently limit every existing sandbox, including those a host creates only for a
+  filesystem or network policy, and the members of a composed sandbox, whose tightest positive limit applies;
+- the process-wide thread table (`MAX_QORE_THREADS`) still bounds all threads, and the presets `createLockdown()` (1)
+  and `createWebSafe()` (4) set a limit.
+
+Without a limit, sandboxed code can exhaust the process's threads for the host and for other sandboxes, so the
+documentation (`SandboxManager::setMaxThreads()`, the sandboxing guide's resource limits, best practices and security
+checklist) states that a host running untrusted code must set one. In Qorus, every tenant and interface sandbox should
+get a limit with a configurable default and an administrator override; this is host configuration, not a libqore
+change.
+
 ## C++ API
 
 | Symbol | Header | Purpose |

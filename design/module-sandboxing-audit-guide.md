@@ -593,6 +593,38 @@ if (!buf) {
 Code that runs too long is stopped by the time limits or by an interrupt (`requestInterrupt()`), which a module
 honors by checking for cancellation and waiting interruptibly (see the interrupt sections of this guide).
 
+#### Threads started for restricted callers
+
+`PO_NO_THREAD_CONTROL` (and the other thread parse options) restrict the code of the Program that has them, and are
+checked when that code is parsed. Module code keeps its own parse options, so a module can start threads for a caller
+that may not start threads itself, including threads that run the caller's own closures or the methods that the
+caller's subclass overrides (pollers, server handlers, WebSocket event callbacks, logger appenders). A restricted
+Program can therefore cause concurrent execution through module code. What bounds and governs those threads:
+
+- A thread started on behalf of a sandboxed caller (`background`, `q_start_thread()`, `call_async()`,
+  `parallel_map()`, `parallel_foreach()`) inherits the caller's `QoreSandboxManager`: filesystem and network policy,
+  interrupts, cancellation scope and the thread limit (see [thread-sandbox-inheritance.md](thread-sandbox-inheritance.md)).
+- Only `SandboxManager::setMaxThreads()` bounds how many threads sandboxed code causes. A sandbox has no thread limit
+  unless the host sets one, so hosts that run sandboxed code must set it.
+- Builtins with the `MODULE_OWNED` flag (`call_async()`, `parallel_map()`, `parallel_foreach()`,
+  `AsyncIoController::addTimer()` / `submitTask()`, `defer_thread_cancel()`) refuse to run the code of a caller that
+  may not control threads. The `background` operator in module code is not checked at run time: a run-time refusal
+  would break every module that runs its callers' code on its own threads, while the sandbox already governs those
+  threads.
+
+Guidance for module authors:
+
+- Run caller-supplied code asynchronously through the documented mechanisms: `call_async()` or `AsyncIoController`
+  (which apply the caller's restrictions and sandbox), a `ThreadPool` (which applies the submitter's sandbox per
+  task), or `q_start_thread()` in C++ (which inherits the starter's sandbox). Never start a native thread
+  (`pthread_create`, `std::thread`) that runs Qore code without the sandbox handling described in
+  [thread-sandbox-inheritance.md](thread-sandbox-inheritance.md).
+- A thread that serves many callers must not inherit the sandbox of the caller that happened to start it: start it
+  with `QTF_NO_SANDBOX_INHERIT` and apply each submitter's capture around its work (`QoreSandboxCapture` /
+  `QoreSandboxCaptureHelper`).
+- Expect `THREAD-CREATION-FAILURE` when starting a thread for a sandboxed caller and let it reach the caller, which
+  can handle it; do not retry in a loop.
+
 ### 3.2 Audit Checklist - Resource Consumption
 
 #### C++ Modules
@@ -601,7 +633,7 @@ honors by checking for cancellation and waiting interruptibly (see the interrupt
 |-----------------|---------|
 | Tight loops that never check for an interrupt | Cannot be interrupted |
 | `sleep()`, blocking syscalls | Cannot be interrupted unless the wait is interruptible |
-| `pthread_create` | May bypass thread limits |
+| `pthread_create`, `std::thread` | Bypasses the thread limit and sandbox inheritance; use `q_start_thread()` |
 | Large `malloc()` / `realloc()` buffers for a caller | Not counted against the memory limit; use `q_sb_malloc()` |
 | Native recursion over untrusted data | May exhaust the stack; call `q_check_stack()` |
 
@@ -609,7 +641,8 @@ honors by checking for cancellation and waiting interruptibly (see the interrupt
 
 | Pattern to Find | Concern |
 |-----------------|---------|
-| `background` statements | Thread creation |
+| `background` operator | Thread creation; counted against the caller's sandbox thread limit and governed by its sandbox, also for callers with `PO_NO_THREAD_CONTROL` |
+| `background` running caller-supplied code | Runs a restricted caller's code concurrently; prefer `call_async()` / `AsyncIoController` (`MODULE_OWNED` checks) where the caller's restrictions must apply |
 
 ### 3.3 Implementation Pattern - Resource Awareness
 

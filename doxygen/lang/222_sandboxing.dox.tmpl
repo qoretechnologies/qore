@@ -125,8 +125,42 @@ Program p(opts);
       was given off the network or the filesystem, give it a @ref Qore::SandboxManager "SandboxManager" with a
       default deny policy (see @ref sandbox_net_rules and @ref sandbox_fs_policy); the other restrictions of the
       %Program apply to the module code that it calls (see @ref user_module_runtime_context)
+    - <b>Threads started by module code</b>: @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and the other
+      thread parse options are checked when the code of the %Program is parsed, so they do not guarantee that the
+      %Program cannot cause concurrent execution; see @ref sandbox_po_threads
 
     For these advanced use cases, use the @ref Qore::SandboxManager "SandboxManager" class.
+
+    @subsection sandbox_po_threads Thread Parse Options and Module Code
+
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" restricts the code of the %Program itself: its code cannot
+    use the @ref background "background" operator, the @ref thread_exit "thread_exit" statement or the builtins of the
+    \c THREAD_CONTROL functional domain, which is checked when the code is parsed.  Module code that the %Program
+    calls keeps its own parse options, and it can start threads, including threads that run the %Program's own code:
+    for example, a module that calls back its caller from a thread of its own (a poller calling the methods of a
+    subclass, a server handler, a WebSocket event callback, a logger appender) runs a closure or a method of the
+    restricted %Program in another thread.  A Program with
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" can therefore cause concurrent execution of its code.
+
+    What the %Program's restrictions do guarantee when module code is involved:
+    - the restrictions of the %Program apply to the builtins that module code calls for it, as described in
+      @ref user_module_runtime_context; a builtin that runs code asynchronously, such as
+      @ref Qore::call_async() "call_async()", @ref Qore::parallel_map() "parallel_map()" or
+      @ref Qore::AsyncIoController::addTimer() "AsyncIoController::addTimer()", refuses to run the code of a caller that
+      may not control threads (see @ref MODULE_OWNED), but the @ref background "background" operator in module code is
+      checked against the module's own parse options only, and module code can always run its own closures, which can
+      call the caller's code
+    - a thread that module code starts on behalf of a sandboxed caller inherits the caller's
+      @ref Qore::SandboxManager "SandboxManager": its filesystem and network policy, its interrupts, its cancellation
+      scope and its thread limit apply to the thread as they apply to the caller (see @ref sandbox_resources)
+    - the number of threads that sandboxed code causes, through module code or otherwise, is bounded only by
+      @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()"; a
+      @ref Qore::SandboxManager "SandboxManager" has no thread limit unless one is set
+
+    To bound the threads of restricted code, give its %Program a @ref Qore::SandboxManager "SandboxManager" with a
+    thread limit.  A run-time refusal of the @ref background "background" operator in module code for restricted
+    callers would break the modules that run their callers' code on their own threads, while the sandbox already
+    governs those threads.
 
     @section sandbox_manager SandboxManager Class
 
@@ -571,7 +605,17 @@ sm.setMaxStackSize(1024 * 1024);
     implemented in %Qore (\c continuePoll() and \c onComplete()), so an asynchronous HTTP request follows a redirect
     or retries a connection only to an address that the sandbox allows.
     @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()" limits the number of such threads
-    running at once; starting another one raises \c THREAD-CREATION-FAILURE.
+    running at once; starting another one raises \c THREAD-CREATION-FAILURE in the code that starts it, which is module
+    code when module code starts the thread for the sandboxed code.  A thread stops counting when its work ends.
+    This applies also to a %Program with @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL", whose code cannot
+    start threads itself but can cause threads through module code (see @ref sandbox_po_threads).
+
+    A @ref Qore::SandboxManager "SandboxManager" has no thread limit by default, as no single limit suits every host
+    and a default limit would restrict every sandbox that a host creates for other purposes, such as a filesystem
+    policy.  Without a limit, sandboxed code is bounded only by the maximum number of threads of the process, which it
+    can then exhaust for the host and for other sandboxes.  A host that runs untrusted code should therefore always set
+    a thread limit for its sandbox; the presets @ref Qore::SandboxManager::createLockdown() "createLockdown()" and
+    @ref Qore::SandboxManager::createWebSafe() "createWebSafe()" set one.
 
     @subsection sandbox_resource_limits Wall Time Limit
 
@@ -884,7 +928,9 @@ hash<auto> net_config = sm.getNetworkConfiguration();
        - Blocks access to internal services
 
     3. <b>Limit threads and stop runaway code</b>
-       - Thread limits prevent fork bombs
+       - Thread limits prevent fork bombs; a SandboxManager has no thread limit unless one is set
+       - Set a thread limit also for Programs with @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL", as module
+         code that they call can start threads for them (see @ref sandbox_po_threads)
        - @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()" stops code that runs too long
 
     4. <b>Use deny-by-default policies</b>
@@ -908,7 +954,9 @@ hash<auto> net_config = sm.getNetworkConfiguration();
 
     Before deploying sandboxed code execution:
 
-    - [ ] Define the maximum number of threads
+    - [ ] Define the maximum number of threads with
+      @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()", also for Programs with
+      @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" (there is no limit by default)
     - [ ] Block private networks if any network access is allowed
     - [ ] Use deny-by-default for filesystem access
     - [ ] Implement timeout monitoring with interrupt handling

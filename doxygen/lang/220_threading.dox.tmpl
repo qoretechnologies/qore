@@ -22,6 +22,17 @@
     To terminate a thread, the @ref thread_exit "thread_exit statement" should be called, as calling the
     @ref Qore::exit() "exit()" function will terminate the entire process (and therefore all threads) immediately.
 
+    @subsection thread_restrictions_and_modules Threads, Restricted Programs and Module Code
+
+    A @ref Qore::Program "Program" with @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" cannot start threads
+    with its own code, but module code that it calls can start threads, including threads that run the
+    %Program's own closures and methods (a module calling back its caller from a thread of its own); such a
+    %Program can therefore cause concurrent execution of its code.  A thread started on behalf of sandboxed code
+    inherits the caller's @ref Qore::SandboxManager "SandboxManager" (filesystem and network policy, interrupts,
+    cancellation scope and thread limit), and
+    @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()" bounds the number of such threads;
+    see @ref sandbox_po_threads.
+
     @anchor background_object_lifetime
     @subsection background_and_object_lifetime Object Lifetime and Background Threads
 
