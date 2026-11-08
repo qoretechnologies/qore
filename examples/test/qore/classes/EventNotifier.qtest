@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - EventNotifier wakeups via kqueue EVFILT_USER/pipes instead of eventfd, in the EventLoop
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 

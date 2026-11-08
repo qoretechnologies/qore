@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - mkdir() with modes, parent creation and errno-based failures on the file system
 
 %modern
 

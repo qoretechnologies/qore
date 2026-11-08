@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - server-sent event framing read from TCP sockets by Socket::readServerSentEvent()
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 #
 # A server-sent event stream is framed as the WHATWG HTML event stream format requires, by every reader: one leading

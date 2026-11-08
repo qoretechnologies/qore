@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - CJK multi-byte encodings (Shift_JIS, CP932, GB18030, Big5) as the system iconv supports
 
 # Copyright 2026 Qore Technologies, s.r.o.
 

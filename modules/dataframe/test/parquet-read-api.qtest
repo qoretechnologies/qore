@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - reading parquet tables and row groups with the Arrow/Parquet libraries built on macOS
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 %modern

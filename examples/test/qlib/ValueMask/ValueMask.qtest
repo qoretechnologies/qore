@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - named time zones from zoneinfo (DST, region name validation) in date parsing/formatting
 # Copyright 2026 Qore Technologies, s.r.o.
 
 %modern

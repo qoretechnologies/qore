@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - pthread condition timed waits racing broadcasts in the two-level mutex
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 

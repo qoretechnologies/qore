@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - regular files and closed or reused descriptors in the kqueue-based EventLoop
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

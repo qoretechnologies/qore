@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - QUIC bidirectional streams over loopback UDP with flow-control backpressure
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved

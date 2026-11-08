@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - TLS tunnels through CONNECT proxies and TLS inside TLS through an HTTPS proxy
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved

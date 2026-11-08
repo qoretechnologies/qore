@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - on-demand dylib loading and run-time symbol resolution between two binary modules
 
 /*  module-cpp-api.qtest Copyright 2026 Qore Technologies, s.r.o.
 

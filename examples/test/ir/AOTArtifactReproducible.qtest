@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - byte-identical qmods from repeated qcc compiles with the system toolchain and linker
 
 # Copyright 2026 Qore Technologies, s.r.o.
 

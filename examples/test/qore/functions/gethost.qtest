@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - gethostbyname/gethostbyaddr through the system resolver and hosts file
 
 %modern
 

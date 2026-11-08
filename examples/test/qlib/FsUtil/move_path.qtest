@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - rename() of files, trees and symlinks, and renames the file system refuses
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - module path trust with source and AOT dylib modules, loads through symlinks, child qore
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 

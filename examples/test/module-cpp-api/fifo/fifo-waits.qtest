@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - named pipe opens, reads and writes with timeouts and cancellation, non-blocking waits
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

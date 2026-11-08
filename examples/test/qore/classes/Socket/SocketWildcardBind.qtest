@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - dual-stack wildcard binds versus IPv4 listeners and kernel port assignment, TIME_WAIT
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved

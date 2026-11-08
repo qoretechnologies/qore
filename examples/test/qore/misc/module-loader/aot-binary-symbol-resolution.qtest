@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - dlopen of AOT qmods with unresolved symbols under dyld, -undefined dynamic_lookup linking
 
 # Copyright 2026 Qore Technologies, s.r.o.
 

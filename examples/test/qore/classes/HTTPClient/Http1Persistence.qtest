@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - HTTP/1.x keep-alive and reconnects on the connection layer over loopback sockets
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"

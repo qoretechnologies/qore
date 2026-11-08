@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - UDP sendto/recvfrom over IPv4 and IPv6 with poll, the EventLoop and AsyncIoController
 
 %modern
 

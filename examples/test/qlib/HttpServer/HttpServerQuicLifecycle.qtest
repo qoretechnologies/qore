@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - QUIC listener stop releasing its UDP port for rebind, timeouts against a silent server
 
 /*  HttpServerQuicLifecycle.qtest Copyright 2026 Qore Technologies, s.r.o.
 

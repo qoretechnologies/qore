@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - OpenSSL parsing of PEM certificates and of a BF-CBC encrypted legacy private key
 
 %modern
 

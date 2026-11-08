@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - directory creation, listing, stat info, chdir and removal through the Dir class
 
 %modern
 

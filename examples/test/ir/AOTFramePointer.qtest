@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - frame-pointer prologue of qcc native code on arm64, checked with otool disassembly
 
 %modern
 %no-child-restrictions

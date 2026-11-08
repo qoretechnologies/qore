@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP and SSE over UNIX domain sockets in temp dirs, missing socket paths, timeouts
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
