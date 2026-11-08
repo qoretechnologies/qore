@@ -1302,10 +1302,18 @@ public class TableMapperTest inherits QUnit::Test {
                     }
                     hash<auto> row = map {$1: {"id": iop_seq("seq_table_mapper_test"), "a": "x", "b": 1}{$1}},
                         i.value;
-                    assertEq(t.insertWithInfo(row).args, t.getInsertArgs(row), label + ": row args");
+                    hash<SqlResultInfo> info = t.insertWithInfo(row);
+                    assertEq(info.args, t.getInsertArgs(row), label + ": row args");
+                    # the arguments are those of the SQL's placeholders: the SQL runs with them
+                    ds.vexec(info.sql, t.getInsertArgs(row));
                     hash<auto> block = map {$1: {"id": iop_seq("seq_table_mapper_test"), "a": ("x", "y"),
                         "b": constant ? 1 : (1, 2)}{$1}}, i.value;
-                    assertEq(t.insertWithInfo(block).args, t.getInsertArgs(block), label + ": block args");
+                    info = t.insertWithInfo(block);
+                    assertEq(info.args, t.getInsertArgs(block), label + ": block args");
+                    # a block's lists are bound as arrays where the driver binds them
+                    if (t.hasArrayBind()) {
+                        ds.vexec(info.sql, t.getInsertArgs(block));
+                    }
                     ds.rollback();
                 }
             }
