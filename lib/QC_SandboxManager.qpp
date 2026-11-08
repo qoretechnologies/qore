@@ -884,6 +884,10 @@ static code SandboxManager::createSystemPolicyCall(code call) [dom=UNCONTROLLED_
       caller reaches the thread; work for it must arrive through the module's own state, such as a queue that the
       module created during its initialization
 
+    Anyone who can read the capability can start threads that no sandbox governs: keep it where no other code can read
+    it, as in an internal member (\c private:internal), never in a public or \c private member, which a subclass,
+    possibly a sandboxed one, can read, nor in a global variable.
+
     The thread is counted as any other thread: the library waits for it to end before the process ends, so the module
     stops it from an exit hook (see register_exit_hook()).  No thread is started once the exit hooks of the process
     have started, so the hook that stops the thread always runs after it was started.
@@ -900,12 +904,32 @@ static code SandboxManager::createSystemPolicyCall(code call) [dom=UNCONTROLLED_
 
     @par Example:
     @code{.py}
-# in a module's initialization: the worker reads its work from the module's own queue
-our Queue jobs();
-our code start_worker = SandboxManager::createSystemThreadCall(\worker_main());
-register_exit_hook(sub () { jobs.push(NOTHING); });
-# later, also while serving a sandboxed caller:
-start_worker();
+class Worker {
+    private:internal {
+        # the work, which reaches the thread only through the module's own state
+        static Queue jobs();
+        # created when the module is loaded; internal, so that no other code, not even a subclass, can read it
+        static code start = Worker::init();
+    }
+
+    # also while serving a sandboxed caller
+    static submit(string job) {
+        jobs.push(job);
+        code c = start;
+        c();
+    }
+
+    private:internal static code init() {
+        register_exit_hook(sub () { Worker::jobs.push(NOTHING); });
+        return SandboxManager::createSystemThreadCall(\Worker::run());
+    }
+
+    private:internal static run() {
+        while (*string job = jobs.get()) {
+            # ... the module's fixed work
+        }
+    }
+}
     @endcode
 
     @note Restricted to @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS" and

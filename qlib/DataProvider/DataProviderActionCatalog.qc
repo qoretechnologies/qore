@@ -1168,7 +1168,7 @@ public class DataProviderActionCatalog {
         };
     }
 
-    private {
+    private:internal {
         #! Static builder callback that constructs the framework-injected <tt>make-api-call</tt> action info hash
         /** Signature: <tt>hash<DataProviderActionInfo> sub (hash<DataProviderAppInfo> app)</tt>. The builder is
             normally registered once by the @c RestClientDataProvider module's init block via
@@ -1890,7 +1890,7 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
     }
 
     #! Releases the catalog lock and delivers the changes made while it was held to the catalog change listeners
-    private static unlockCatalog() {
+    private:internal static unlockCatalog() {
         lck.unlock();
         DataProviderActionCatalog::deliverCatalogChanges();
     }
@@ -1898,7 +1898,7 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
     #! Calls the catalog change listeners if the revision advanced since the last delivery; never throws
     /** Does nothing while this thread holds the catalog lock: the section that releases it delivers.
     */
-    private static deliverCatalogChanges() {
+    private:internal static deliverCatalogChanges() {
         if (lck.lockOwner()) {
             return;
         }
@@ -1945,7 +1945,7 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
     }
 
     #! Records the start of a listener call unless the listener was removed; never throws
-    private static bool beginListenerCall(string id, int tid) {
+    private:internal static bool beginListenerCall(string id, int tid) {
         AutoLock al(listener_lck);
         if (!listeners{id} || listeners{id}.removed) {
             return False;
@@ -1956,7 +1956,7 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
     }
 
     #! Records the end of a listener call, and its failure; never throws
-    private static endListenerCall(string id, int tid, int revision, *hash<ExceptionInfo> failure) {
+    private:internal static endListenerCall(string id, int tid, int revision, *hash<ExceptionInfo> failure) {
         AutoLock al(listener_lck);
         if (failure && failure.err != "OBJECT-ALREADY-DELETED") {
             listener_failures += <DataProviderCatalogChangeListenerFailureInfo>{
@@ -2326,7 +2326,7 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
     }
 
     #! Adds one pending registration identity to every applicable open discovery session
-    private static addOpenDiscoveryExpectedIdentity(string app,
+    private:internal static addOpenDiscoveryExpectedIdentity(string app,
             *string action) {
         string identity_key = app + "/" + (action ?? "");
         foreach hash<auto> entry in (discovery_map.pairIterator()) {
@@ -2353,7 +2353,7 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
     }
 
     #! Validates and coalesces exact discovery identities
-    private static list<hash<DataProviderDiscoveryExpectedIdentityInfo>>
+    private:internal static list<hash<DataProviderDiscoveryExpectedIdentityInfo>>
             normalizeDiscoveryExpectedInventory(
                 list<hash<DataProviderDiscoveryExpectedIdentityInfo>> expected) {
         hash<string, bool> seen;
@@ -3523,7 +3523,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Replaces an action that a stopped run of the lazy registration running now registered; lck is held
-    private static replaceAction(hash<DataProviderAppInfo> app, string key, hash<DataProviderActionInfo> action,
+    private:internal static replaceAction(hash<DataProviderAppInfo> app, string key, hash<DataProviderActionInfo> action,
             bool has_get_output_type) {
         top_actionmap{key} = action;
         app_actionmap{action.app}{action.action} = action;
@@ -4591,7 +4591,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Returns a normalized path to ensure that comparisons always work
-    private static string normalizePath(string path) {
+    private:internal static string normalizePath(string path) {
         # ensure that "/" characters are never duplicated
         if (path =~ /\/\//) {
             throw "ACTION-ERROR", sprintf("%y: illegal consecutive \"/\" characters", path);
@@ -4622,7 +4622,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @throw ACTION-OUTPUT-TYPE-ERROR (only if @p scoped is @ref True) the output type of an action in scope cannot
         be built; the exception argument is the list of the failures (hash<DataProviderInitializationFailureInfo>)
     */
-    private static resolveOutputTypes(*softlist<string> scope_apps, *string scope_action, bool scoped = False) {
+    private:internal static resolveOutputTypes(*softlist<string> scope_apps, *string scope_action, bool scoped = False) {
         hash<string, bool> app_filter = scope_apps ? map {$1: True}, scope_apps.iterator() : {};
         # identities attempted by this call, so a callback that registers further actions is attempted once
         hash<string, bool> attempted = {};
@@ -4706,7 +4706,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     #! Publishes a resolved output type; the catalog lock must be held
     /** Nothing is published into an action that was resolved, removed or replaced while its callback ran.
     */
-    private static publishOutputType(string app, string action, code get_output_type,
+    private:internal static publishOutputType(string app, string action, code get_output_type,
             *AbstractDataProviderType output_type) {
         string key = app + "/" + action;
         *hash<DataProviderActionInfo> top_action = top_actionmap{key};
@@ -4746,7 +4746,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     /** @return the failure retained, or @ref nothing if the action was resolved, removed or replaced while its
         callback ran, in which case the failure no longer describes the action
     */
-    private static *hash<DataProviderInitializationFailureInfo> recordOutputTypeFailure(string app, string action,
+    private:internal static *hash<DataProviderInitializationFailureInfo> recordOutputTypeFailure(string app, string action,
             code get_output_type, hash<ExceptionInfo> ex) {
         *hash<DataProviderActionInfo> app_action = app_actionmap{app}{action};
         if (!app_action || app_action.get_output_type != get_output_type) {
@@ -4823,7 +4823,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Returns true when a registration-context path identifies the requested module
-    private static bool modulePathsContain(*hash<string, bool> paths,
+    private:internal static bool modulePathsContain(*hash<string, bool> paths,
             string module_name) {
         foreach string path in (keys paths) {
             string context_name = basename(path);
@@ -4859,7 +4859,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @return the active module path, the deferred initializer path, or
         @ref NOTHING outside a module-owned registration
     */
-    private static *string registrationModulePath() {
+    private:internal static *string registrationModulePath() {
         *string path = get_module_context_path();
         if (exists _mod_init_ctx && path == _mod_init_load_ctx) {
             return _mod_init_ctx;
@@ -4868,7 +4868,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Makes the framework-injected generic API action part of every app owner's presentation catalog
-    private static setGenericApiCallActionOwners(string app) {
+    private:internal static setGenericApiCallActionOwners(string app) {
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -4885,7 +4885,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Clears retained failure and pending-declaration state after the same identity succeeds
-    private static clearSuccessfulInitializationState(string app,
+    private:internal static clearSuccessfulInitializationState(string app,
             *string action) {
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
@@ -4920,7 +4920,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     /** Like registrationModulePath(): the module being loaded, or, in a deferred initialization that loads no
         other module, the module that registered it, if it was recorded (see registerLazyAppActions())
     */
-    private static *string registrationModuleName() {
+    private:internal static *string registrationModuleName() {
         if (exists _mod_init_name && get_module_context_path() == _mod_init_load_ctx) {
             return _mod_init_name;
         }
@@ -4932,14 +4932,14 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         application's registrations from the map, so an application whose registrations have just been taken is
         returned while they run, and the caller waits for them in initPending()
     */
-    private static list<string> getInitApps(hash<auto> pending) {
+    private:internal static list<string> getInitApps(hash<auto> pending) {
         list<string> rv = (keys pending) ?? ();
         rv += (keys init_owners) ?? ();
         return rv;
     }
 
     #! Runs every pending app registration, then every pending action registration, then every lazy registration
-    private static initAllPending() {
+    private:internal static initAllPending() {
         foreach string app in (DataProviderActionCatalog::getInitApps(initmap)) {
             DataProviderActionCatalog::initPending(app, InitPendingApp);
         }
@@ -4951,7 +4951,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Runs the lazy action registrations of every application
-    private static initAllLazyActions() {
+    private:internal static initAllLazyActions() {
         foreach string app in (DataProviderActionCatalog::getInitApps(lazyactionmap)) {
             DataProviderActionCatalog::initPending(app, InitLazyActions);
         }
@@ -4960,7 +4960,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     #! Runs the pending app registrations whose names match, and the pending and lazy actions of matching apps
     /** @param match called with the app's name and, for a registered app, its description
     */
-    private static initMatchingApps(code<bool(string, *string)> match) {
+    private:internal static initMatchingApps(code<bool(string, *string)> match) {
         foreach string app in (DataProviderActionCatalog::getInitApps(initmap)) {
             # a pending app has no description yet
             if (match(app)) {
@@ -4979,7 +4979,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     #! Runs the lazy action registrations of the applications in the scope of a discovery generation
     /** Does nothing if the generation is not open; the caller then raises the error
     */
-    private static initDiscoveryLazyActions(DataProviderDiscoverySession session) {
+    private:internal static initDiscoveryLazyActions(DataProviderDiscoverySession session) {
         *hash<string, bool> scope;
         {
             DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
@@ -5012,7 +5012,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         Each pending registration runs once, and an exception it raises is retained as an initialization failure (see
         doInit()); lazy registrations run as runLazy() describes.
     */
-    private static initPending(string app, int what, *string action) {
+    private:internal static initPending(string app, int what, *string action) {
         # nothing to do when nothing is pending and no thread is initializing the app
         if (!DataProviderActionCatalog::isInitPending(app, what, action) || lck.lockOwner()) {
             return;
@@ -5030,7 +5030,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Runs deferred registrations of an app as the thread that initializes it; see initPending()
-    private static runGated(string app, int what, *string action) {
+    private:internal static runGated(string app, int what, *string action) {
         if (!DataProviderActionCatalog::isInitPending(app, what, action)) {
             return;
         }
@@ -5097,7 +5097,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @throw DATA-PROVIDER-LAZY-INIT-ERROR a sandboxed reader is loading a module, or there is no worker
         @throw DATA-PROVIDER-LAZY-WORKER-STOPPED the worker was stopped before it initialized the app
     */
-    private static runLazy(string app) {
+    private:internal static runLazy(string app) {
         if (!exists lazyactionmap{app} && !exists init_owners{app}) {
             return;
         }
@@ -5120,7 +5120,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Builds a lazy value unless it is built; see getLazyValue()
-    private static buildLazyValue(string key) {
+    private:internal static buildLazyValue(string key) {
         hash<auto> v = lazy_values{key};
         AutoLock al(v.lock);
         if (lazy_values{key}.built) {
@@ -5132,7 +5132,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Returns @ref True if the current thread is the catalog worker
-    private static bool isLazyWorker() {
+    private:internal static bool isLazyWorker() {
         return lazy_worker_tid && gettid() == lazy_worker_tid && lazy_worker_pid == getpid();
     }
 
@@ -5143,7 +5143,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @throw DATA-PROVIDER-LAZY-INIT-ERROR there is no worker and none can be started
         @throw DATA-PROVIDER-LAZY-WORKER-STOPPED the worker was stopped before it ran the job
     */
-    private static runOnWorker(hash<auto> job) {
+    private:internal static runOnWorker(hash<auto> job) {
         string id;
         {
             AutoLock al(lazy_worker_lck);
@@ -5191,7 +5191,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Describes a job of the catalog worker for an error message
-    private static string describeJob(hash<auto> job) {
+    private:internal static string describeJob(hash<auto> job) {
         return exists job.app
             ? sprintf("the actions of application %y", job.app)
             : sprintf("lazy value %d", job.value);
@@ -5237,7 +5237,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
         @return the capability, or @ref NOTHING if there is no worker
     */
-    private static *code initLazyWorker() {
+    private:internal static *code initLazyWorker() {
         if (!sandbox_apis) {
             return;
         }
@@ -5252,7 +5252,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Returns @ref True if the module can use the sandbox APIs; see @ref sandbox_apis
-    private static bool checkSandboxApis() {
+    private:internal static bool checkSandboxApis() {
         try {
             call_static_method("SandboxManager", "isGoverned");
             return True;
@@ -5264,7 +5264,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     #! Returns @ref True if a sandbox governs the current thread's code (Qore::SandboxManager::isGoverned())
     /** @ref False when the module cannot use the sandbox APIs; see @ref sandbox_apis
     */
-    private static bool isGoverned() {
+    private:internal static bool isGoverned() {
         return sandbox_apis && call_static_method("SandboxManager", "isGoverned");
     }
 
@@ -5274,7 +5274,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
         @return @ref True if the worker runs
     */
-    private static bool startLazyWorker() {
+    private:internal static bool startLazyWorker() {
         int pid = getpid();
         if (lazy_worker_tid && lazy_worker_pid == pid) {
             return True;
@@ -5298,7 +5298,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Returns the TID of the catalog worker running in this process, or @ref NOTHING; for the cycle check of waits
-    private static *int lazyWorkerTid() {
+    private:internal static *int lazyWorkerTid() {
         if (lazy_worker_tid && lazy_worker_pid == getpid()) {
             return lazy_worker_tid;
         }
@@ -5311,7 +5311,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         registration ends its thread, every job still queued ends with \c DATA-PROVIDER-LAZY-WORKER-STOPPED, so that
         no reader waits for it.
     */
-    private static lazyWorkerMain() {
+    private:internal static lazyWorkerMain() {
         int tid = gettid();
         on_exit {
             DataProviderActionCatalog::endLazyWorker(tid);
@@ -5337,7 +5337,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Delivers the result of a job to its reader, if it still waits
-    private static finishJob(string id, *hash<ExceptionInfo> error) {
+    private:internal static finishJob(string id, *hash<ExceptionInfo> error) {
         AutoLock al(lazy_worker_lck);
         if (lazy_job_waiting{id}) {
             lazy_job_results{id} = {"error": error};
@@ -5346,7 +5346,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Returns the error of a job that the catalog worker did not run to its end
-    private static hash<ExceptionInfo> stoppedError(hash<auto> job) {
+    private:internal static hash<ExceptionInfo> stoppedError(hash<auto> job) {
         return <ExceptionInfo>{
             "err": "DATA-PROVIDER-LAZY-WORKER-STOPPED",
             "desc": sprintf("the catalog worker ended before it initialized %s",
@@ -5355,7 +5355,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Ends the catalog worker: no job is queued for it any more, and the jobs still queued fail
-    private static endLazyWorker(int tid) {
+    private:internal static endLazyWorker(int tid) {
         AutoLock al(lazy_worker_lck);
         if (lazy_worker_tid == tid) {
             lazy_worker_tid = 0;
@@ -5374,7 +5374,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         \c DATA-PROVIDER-LAZY-WORKER-STOPPED for their readers, and no worker is started afterwards: a later sandboxed
         reader is refused (see runLazy())
     */
-    private static stopLazyWorker() {
+    private:internal static stopLazyWorker() {
         AutoLock al(lazy_worker_lck);
         lazy_worker_shutdown = True;
         if (lazy_worker_tid && lazy_worker_pid == getpid()) {
@@ -5387,7 +5387,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         dropped, and the lazy registrations that those initializations had taken are restored, so that the child
         runs them again
     */
-    private static checkFork() {
+    private:internal static checkFork() {
         int pid = getpid();
         if (init_pid == pid) {
             return;
@@ -5410,19 +5410,19 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Completes the deferred initialization of an app: a pending app, its pending actions and its lazy actions
-    private static initApp(string app) {
+    private:internal static initApp(string app) {
         DataProviderActionCatalog::initPending(app, InitAll);
     }
 
     #! Completes the deferred initialization of an action: a pending app, the pending action and lazy actions
-    private static initAppAction(string app, string action) {
+    private:internal static initAppAction(string app, string action) {
         DataProviderActionCatalog::initPending(app, InitPendingApp | InitPendingAction | InitLazyActions, action);
     }
 
     #! Returns @ref True if a deferred registration of the app is pending, or a thread is initializing the app
     /** The registrations are read before the running initializations; see getInitApps()
     */
-    private static bool isInitPending(string app, int what, *string action) {
+    private:internal static bool isInitPending(string app, int what, *string action) {
         return ((what & InitPendingApp) && exists initmap{app})
             || ((what & InitPendingActions) && exists initactionmap{app})
             || ((what & InitPendingAction) && exists action && exists initactionmap{app}{action})
@@ -5445,7 +5445,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         An exception, as when the thread is interrupted while it waits, leaves the initialization to the thread
         running it, and this thread owns nothing
     */
-    private static *Counter enterInit(string app, int what) {
+    private:internal static *Counter enterInit(string app, int what) {
         int tid = gettid();
         string tkey = tid.toString();
         while (True) {
@@ -5472,7 +5472,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Returns @ref True if waiting for the initialization of the app would close a cycle of waits; init_lck is held
-    private static bool initWaitCycle(string app, int tid) {
+    private:internal static bool initWaitCycle(string app, int tid) {
         hash<string, bool> seen = {};
         *int owner = init_owners{app}.tid;
         while (exists owner) {
@@ -5498,7 +5498,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     /** Takes no lock and raises no exception, so that the initialization ends also for a thread that is interrupted,
         cancelled, over a sandbox limit or exits
     */
-    private static exitInit(string app, Counter done) {
+    private:internal static exitInit(string app, Counter done) {
         if (init_owners{app}.done == done) {
             remove init_owners{app};
         }
@@ -5510,7 +5510,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         actions it registers would have been when the module was loaded; any other registration runs only for code
         that no sandbox governs; see runLazy()
     */
-    private static code makeLazyCall(code init) {
+    private:internal static code makeLazyCall(code init) {
         return DataProviderActionCatalog::isGoverned() ? SandboxManager::bindCall(init) : init;
     }
 
@@ -5518,7 +5518,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     /** Such a failure belongs to the reader, not to the registration, which is therefore run again by the next
         reader instead of being retained
     */
-    private static bool isTransientFailure(hash<ExceptionInfo> ex) {
+    private:internal static bool isTransientFailure(hash<ExceptionInfo> ex) {
         return TransientFailures{ex.err} ?? False;
     }
 
@@ -5526,7 +5526,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     /** Takes no lock and raises no exception; a registration of an app that was deregistered, or deregistered and
         registered again, meanwhile is dropped
     */
-    private static restoreLazy(list<hash<auto>> registrations) {
+    private:internal static restoreLazy(list<hash<auto>> registrations) {
         list<hash<auto>> keep = ();
         foreach hash<auto> h in (registrations) {
             if (exists h.serial && app_serials{h.app} == h.serial) {
@@ -5546,7 +5546,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         app was deregistered meanwhile.  A registration that ends without either, as when its thread exits, is
         restored as well.
     */
-    private static doLazyInit(hash<auto> h) {
+    private:internal static doLazyInit(hash<auto> h) {
         bool settled;
         on_exit {
             if (!settled) {
@@ -5573,7 +5573,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Forgets the actions that an ended lazy registration registered; takes no lock and raises no exception
-    private static endLazyActionRegs(string app, int reg_id) {
+    private:internal static endLazyActionRegs(string app, int reg_id) {
         foreach hash<auto> i in (lazy_action_regs{app}.pairIterator()) {
             if (i.value == reg_id) {
                 remove lazy_action_regs{app}{i.key};
@@ -5585,7 +5585,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Runs initialization and catches exceptions
-    private static doInit(hash<auto> h) {
+    private:internal static doInit(hash<auto> h) {
         try {
             DataProviderActionCatalog::doInitIntern(h);
         } catch (hash<ExceptionInfo> ex) {
@@ -5595,7 +5595,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Runs initialization in the registration context of its module
-    private static doInitIntern(hash<auto> h) {
+    private:internal static doInitIntern(hash<auto> h) {
         *string save = _mod_init_ctx;
         *string save_load = _mod_init_load_ctx;
         *string save_name = _mod_init_name;

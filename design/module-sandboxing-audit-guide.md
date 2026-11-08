@@ -203,6 +203,14 @@ its initialization (for example, the registrations that trusted modules made), n
 such thread starts once the exit hooks have started; the module stops it from its exit hook. The DataProvider catalog
 worker is the reference user (`design/data-provider-rest-schema-apps.md`).
 
+**Store a capability where no other code can read it.** Anyone who can read a `createSystemThreadCall()` or
+`createSystemPolicyCall()` capability can use it, and Qore's `private` members are visible to subclasses: a sandboxed
+`class Evil inherits TrustedClass` can read and call a capability kept in a `private` static member, and assign the
+state that the trusted thread trusts (its queue, its flags, its TID). Keep capabilities, and all state that a
+trusted thread or a trusted decision relies on, in `private:internal` members (not visible to subclasses), never in
+public or `private` members or in global variables. Audit every trusted class that sandboxed code can subclass for
+such state.
+
 ##### Methods that a sandboxed subclass inherits from a trusted class
 
 An object that sandboxed code creates carries the creating Program's sandbox as its provenance, also when its class

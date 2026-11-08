@@ -29,7 +29,7 @@ public class Worker {
         static code deleted_program_cap;
     }
 
-    private {
+    private:internal {
         #! the capability that starts a worker
         static code starter;
         #! the module's file, which a worker reads
@@ -91,13 +91,13 @@ public class Worker {
     }
 
     #! The exit hook: stops every worker started
-    private static stop() {
+    private:internal static stop() {
         AutoLock al(lck);
         map jobs.push(NOTHING), xrange(started);
     }
 
     #! A worker: runs the operations it is given until it is stopped
-    private static run() {
+    private:internal static run() {
         while (*string op = jobs.get()) {
             switch (op) {
                 case "probe": {
@@ -129,7 +129,7 @@ public class Worker {
     }
 
     #! Tries to create a capability; returns the error
-    private static string tryCreate(code c) {
+    private:internal static string tryCreate(code c) {
         try {
             code cap = SandboxManager::createSystemThreadCall(c);
             return cap ? "created" : "none";
@@ -139,7 +139,7 @@ public class Worker {
     }
 
     #! Returns a callback that sandboxed code created
-    private static code sandboxedCallback() {
+    private:internal static code sandboxedCallback() {
         SandboxManager sm();
         Program p(PO_NEW_STYLE, True);
         p.parse("code sub get() { return sub () {}; }", "sandboxed-callback");
@@ -148,7 +148,7 @@ public class Worker {
     }
 
     #! Returns a capability that a Program created during this initialization, and that was deleted then
-    private static code createInDeletedProgram() {
+    private:internal static code createInDeletedProgram() {
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
         p.parse("code sub create() { return SandboxManager::createSystemThreadCall(sub () {}); }\n", "deleted");
         code cap = p.callFunction("create");
@@ -157,7 +157,7 @@ public class Worker {
     }
 
     #! Returns what sandboxed code gets when it creates a capability
-    private static string createGoverned() {
+    private:internal static string createGoverned() {
         SandboxManager sm();
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
         p.parse("string sub create() {\n"

@@ -63,6 +63,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
     }
 
     constructor() : Test("DataProvider lazy action registration safety", "1.0") {
+        addTestCase("a subclass of the catalog cannot reach its internal state", \subclassTest());
         addTestCase("NoInit getters never run a lazy registration", \noInitNeverRunsTest());
         addTestCase("NoInit getters never wait for another thread's initialization", \noInitNeverWaitsTest());
         addTestCase("a thread holding the catalog lock does not run a lazy registration", \lockHolderTest());
@@ -90,6 +91,32 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("a Program that may not use the sandbox APIs loads the module; registrations run at once",
             \restrictedLoaderTest());
         set_return_value(main());
+    }
+
+    subclassTest() {
+        # code that sandboxed code could run in a subclass: none of it may reach the worker, its capability or the
+        # catalog's state
+        list<string> snippets = (
+            "code c = DataProviderActionCatalog::lazy_worker_start; c();",
+            "code c = lazy_worker_start; c();",
+            "DataProviderActionCatalog::lazy_worker_tid = gettid();",
+            "DataProviderActionCatalog::lazy_worker_shutdown = True;",
+            "DataProviderActionCatalog::lazy_values = {};",
+            "DataProviderActionCatalog::lazyactionmap = {};",
+            "remove DataProviderActionCatalog::appcache;",
+            "DataProviderActionCatalog::lazyWorkerMain();",
+            "DataProviderActionCatalog::runGated(\"x\", 1);",
+        );
+        foreach string snippet in (snippets) {
+            Program p(PO_NEW_STYLE, True);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("%requires DataProvider\n"
+                "class Evil inherits DataProviderActionCatalog {\n"
+                "    static f() { " + snippet + " }\n"
+                "}\n", "subclass"), snippet);
+        }
+        # the class can still be subclassed
+        Program p(PO_NEW_STYLE, True);
+        p.parse("%requires DataProvider\nclass Plain inherits DataProviderActionCatalog {}\n", "plain");
     }
 
     noInitNeverRunsTest() {
