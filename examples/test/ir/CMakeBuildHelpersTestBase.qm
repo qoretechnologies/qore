@@ -32,7 +32,7 @@ module CMakeBuildHelpersTestBase {
     license = "MIT";
 }
 
-%requires(reexport) ../../../qlib/QUnit.qm
+%requires(reexport) QUnit
 
 /** The tests of the exported CMake build helpers build CMake projects with the cmake in the PATH and the Qore under
     test:

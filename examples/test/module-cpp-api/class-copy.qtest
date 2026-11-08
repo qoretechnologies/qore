@@ -10,7 +10,7 @@
 
 %requires cppapiuser
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires ../../../qlib/QUnit.qm
+%requires QUnit
 
 %exec-class ClassCopyTest
 
