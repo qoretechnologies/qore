@@ -3721,9 +3721,17 @@ static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_
         const ProgramThreadCountContextHelper* barrier_ctx = (policy && td->sandbox_policy_barrier)
             ? td->sandbox_policy_barrier_ctx.back()
             : nullptr;
+        // without a manager of the context, the Program whose sandbox is reported is the innermost one that
+        // contributes a manager, so a manager is never reported with Program ID 0
+        auto note_pgm = [&](QoreProgram* p) {
+            if (pgm_id && !policy && !*pgm_id) {
+                *pgm_id = p->getProgramId();
+            }
+        };
         if (td->current_pgm) {
             if (QoreSandboxManager* m = qore_program_private::get(*td->current_pgm)->getSandboxManagerRef()) {
                 inner.push_back(m);
+                note_pgm(td->current_pgm);
             }
         }
         for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx;
@@ -3732,6 +3740,7 @@ static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_
             if (p) {
                 if (QoreSandboxManager* m = qore_program_private::get(*p)->getSandboxManagerRef()) {
                     inner.push_back(m);
+                    note_pgm(p);
                 }
             }
         }
@@ -3849,6 +3858,12 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(qore_program_i
 QoreSandboxManager* qore_find_thread_sandbox_manager_ref() {
     return find_thread_sandbox_manager_ref_intern();
 }
+
+#ifdef DEBUG
+QoreSandboxManager* qore_dbg_find_thread_sandbox_manager_ref(qore_program_id_t* pgm_id) {
+    return find_thread_sandbox_manager_ref_intern(pgm_id);
+}
+#endif
 
 QoreModuleLifecycleBarrierHelper::QoreModuleLifecycleBarrierHelper() {
     ThreadData* td = thread_data.get();

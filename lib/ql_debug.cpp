@@ -8218,6 +8218,39 @@ static void ut_callback_caller_parse_options(UnitTestCounters& c, QoreProgram* p
     UT_ASSERT(c, !xsink, "the Programs are destroyed");
 }
 
+#ifdef DEBUG
+//! a context applied without a sandbox does not hide the Program whose sandbox governs inside it: the manager found
+//! for a sandboxed Program entered in the context's scope is reported with that Program's ID, as a context captured
+//! there needs it (QoreSandboxContext::pgm_id)
+static void ut_sandbox_context_inner_program_id(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    QoreProgram* sandboxed = parent
+        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS)
+        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS);
+    QoreSandboxManager* sm = new QoreSandboxManager;
+    sandboxed->setSandboxManager(sm);
+    sm->deref(nullptr);
+    {
+        // captured with no sandbox, as for a task of unsandboxed code
+        QoreSandboxContext ctx;
+        UT_ASSERT(c, !ctx.manager && !ctx.pgm_id, "the context has no sandbox");
+        QoreSandboxContextHelper sch(ctx);
+        ProgramThreadCountContextHelper tch(&xsink, sandboxed, true);
+        UT_ASSERT(c, !xsink, "the sandboxed Program is entered");
+        qore_program_id_t pgm_id = 0;
+        QoreSandboxManager* found = qore_dbg_find_thread_sandbox_manager_ref(&pgm_id);
+        UT_ASSERT(c, found, "the sandboxed Program's sandbox governs");
+        UT_ASSERT_EQ(c, static_cast<int64>(sandboxed->getProgramId()), static_cast<int64>(pgm_id),
+            "the manager is reported with the ID of the Program it was found on");
+        if (found) {
+            found->deref(nullptr);
+        }
+    }
+    sandboxed->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "the Program is destroyed");
+}
+#endif
+
 //! records the line of every statement step and raises an exception at the step of one line, once
 class StepExceptionDebugProgram : public QoreDebugProgram {
 public:
@@ -14526,6 +14559,9 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_debug_step_every_statement(c, rc.getProgram());
     ut_callback_caller_parse_options(c, rc.getProgram());
+#ifdef DEBUG
+    ut_sandbox_context_inner_program_id(c, rc.getProgram());
+#endif
     return make_unit_test_result(c, xsink);
 }
 
@@ -14545,6 +14581,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_debug_step_every_statement(c, rc.getProgram());
     ut_callback_caller_parse_options(c, rc.getProgram());
+#ifdef DEBUG
+    ut_sandbox_context_inner_program_id(c, rc.getProgram());
+#endif
     ut_event_loop_remove_recycled_fd(c);
     ut_event_loop_sub_ms_timer_wakeups(c);
     ut_event_loop_registrations(c);
