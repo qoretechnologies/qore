@@ -165,6 +165,12 @@ int QoreSquareBracketsRangeOperatorNode::parseInitImpl(QoreValue& val, QoreParse
     return err;
 }
 
+void QoreSquareBracketsRangeOperatorNode::holdBorrowedSequence(ValueEvalRefHolder& seq) const {
+    if (!seq.isTemp() && seq->hasNode() && (e[1].needsEval() || e[2].needsEval())) {
+        seq.ensureReferencedValue();
+    }
+}
+
 QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
@@ -176,6 +182,11 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
     if (*xsink) {
         return QoreValue();
     }
+    // a sequence read from a variable is borrowed; the indexes are evaluated after it and can assign the variable
+    // another value (l[0..(l = x).size()]), which releases the only reference to the sequence before it is read, so a
+    // borrowed sequence gets a reference of its own while the indexes need evaluation: the slice is made from the
+    // sequence that the expression gave, as in every other execution mode
+    holdBorrowedSequence(seq);
 
     QoreParseOptions po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
     bool broken_list_range = static_cast<bool>(po & PO_BROKEN_LIST_RANGE);
@@ -285,6 +296,8 @@ FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalI
     ValueEvalRefHolder seq(rc, e[0], xsink);
     if (*xsink)
         return nullptr;
+    // the iterator made below keeps the sequence, which the indexes can release (see evalImpl())
+    holdBorrowedSequence(seq);
 
     if (seq->getType() == NT_LIST || seq->getType() == NT_BUFFER) {
         QoreParseOptions po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();

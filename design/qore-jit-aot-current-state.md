@@ -643,6 +643,15 @@ Native code takes a reference of its own for each of them (`overwritten_local_re
 as a temporary's, and the IR interpreter borrows none of them as a method base. The AST interpreter
 holds a reference to a receiver read from a variable or a container while the call's arguments
 need evaluation (`QoreDotEvalOperatorNode::evalImpl()`). `LocalReadOverwrittenBeforeUse.qtest`.
+In the same way it holds a reference to a callable read from a variable while the arguments of a
+call through it need evaluation (`CallReferenceCallNode::evalImpl()`: `c(c = NOTHING)`,
+`c(c = other)`), and to a list or hash read from a variable while the index or key of `[]` or `{}`
+needs evaluation (`QoreSquareBracketsOperatorNode::evalImpl()`,
+`QoreHashObjectDereferenceOperatorNode::evalImpl()`: `l[(l = x).size() - 1]`,
+`h{(h = x).firstKey()}`), and to a sequence read from a variable while the indexes of a slice
+need evaluation (`QoreSquareBracketsRangeOperatorNode`: `l[0..(l = x).size()]`, also as the source
+of a functional operator); the compiled modes evaluate these operands into values of their own.
+`OperandAssignedByArgument.qtest`.
 
 The AST interpreter gives the temporary arguments of a call to the callee's parameters, which
 it releases last parameter first when the callee returns. The compiled modes release the

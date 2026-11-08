@@ -1518,6 +1518,12 @@
       variable read for an earlier argument (ex: <tt>f(t = new T("a"), t = new T("b"))</tt>, <tt>f(t, t = x)</tt>)
       could crash the program in the JIT and tiered execution modes and in AOT-compiled code; the call now runs with
       the values read before the assignment, which live until the call returns
+    - with the AST interpreter, a call through a variable whose argument assigns the variable another value (ex:
+      <tt>c(c = NOTHING)</tt>, <tt>c(c = other)</tt>), and the \c [] and \c {} operators on a variable that the index
+      or key expression assigns or removes (ex: <tt>l[(l = x).size() - 1]</tt>, <tt>h{(h = x).firstKey()}</tt>,
+      <tt>l[0..(l = x).size()]</tt>), could crash the program; the call now runs the closure or call reference that
+      the variable held, and the operators read the list or hash that the variable held, as in every other execution
+      mode
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the arguments of a
       call are now destroyed last argument first when the call returns, as with the AST interpreter (they were
       destroyed first argument first in calls of closures, of static methods and from top-level code, and of
