@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires Util
+%requires FsUtil
 
 %exec-class QlibRequiresByNameTest
 
@@ -33,7 +34,7 @@ hashdecl QlibRequiresByPathInfo {
 class QlibRequiresByNameTest inherits QUnit::Test {
     public {
         #! the directories scanned, relative to the repository root
-        const ScanDirs = ("examples", "modules", "qlib", "bin", "doxygen");
+        const ScanDirs = ("examples", "modules", "qlib", "bin", "bench", "tools", "doxygen");
 
         #! the extensions of the files scanned
         const Extensions = {
@@ -53,6 +54,7 @@ class QlibRequiresByNameTest inherits QUnit::Test {
 
     constructor() : Test("qlib modules are required by name", "1.0") {
         addTestCase("the scanner finds directives requiring qlib modules by path", \scannerTest());
+        addTestCase("a Qore script without an extension is scanned", \scriptTest());
         addTestCase("no source requires a qlib module by path", \repositoryTest());
         set_return_value(main());
     }
@@ -67,13 +69,17 @@ class QlibRequiresByNameTest inherits QUnit::Test {
             "%try-module (ex) ../../../../qlib/Mime.qm",
             "%try-module(ex) ../../../../qlib/Logger.qm",
             "%requires (reexport) ../../../../qlib/Mapper.qm",
+            "%try-child-module ../../../../qlib/Child.qm",
+            "%module-cmd(../../../../qlib/Cmd.qm) import x",
+            "%requires \"../../../../qlib/Quoted.qm\"",
             "%requires QUnit",
             "%requires ./LocalHelper.qm",
             "%requires ../other/qlib/Foreign.qm",
             "# %requires ../../../../qlib/Commented.qm",
             "%prepend-module-path \"${SCRIPT_DIR}/../../../../qlib\"",
         );
-        assertEq((1, 2, 3, 4, 5, 6, 7), map $1.line, scanLines(dir, "examples/test/qlib/Example/x.qtest", lines));
+        assertEq((1, 2, 3, 4, 5, 6, 7, 8, 9, 10), map $1.line, scanLines(dir, "examples/test/qlib/Example/x.qtest",
+            lines));
         assertEq("%requires ../../../../qlib/QUnit.qm",
             scanLines(dir, "examples/test/qlib/Example/x.qtest", lines)[0].directive);
         # a directive whose preceding line says why it needs the path is allowed it; the reason covers that line only
@@ -85,6 +91,21 @@ class QlibRequiresByNameTest inherits QUnit::Test {
             "%requires ../../../../qlib/Mime.qm",
         );
         assertEq((3, 5), map $1.line, scanLines(dir, "examples/test/qlib/Example/x.qtest", allowed));
+    }
+
+    scriptTest() {
+        string dir = make_tmp_dir("qlib-requires-");
+        on_exit remove_tree(dir);
+        map QlibRequiresByNameTest::writeFile(dir + "/" + $1.key, $1.value), {
+            "qore-script": "#!/usr/bin/env qore\n%requires ../qlib/Util.qm\n",
+            "qr-script": "#!/usr/bin/env qr\n",
+            "shell-script": "#!/bin/sh\n%requires ../qlib/Util.qm\n",
+            "empty": "",
+        }.pairIterator();
+        assertTrue(QlibRequiresByNameTest::isQoreScript(dir + "/qore-script"));
+        assertTrue(QlibRequiresByNameTest::isQoreScript(dir + "/qr-script"));
+        assertFalse(QlibRequiresByNameTest::isQoreScript(dir + "/shell-script"));
+        assertFalse(QlibRequiresByNameTest::isQoreScript(dir + "/empty"));
     }
 
     repositoryTest() {
@@ -112,7 +133,7 @@ class QlibRequiresByNameTest inherits QUnit::Test {
         }
         foreach string name in (d.listFiles() ?? ()) {
             *string ext = (name =~ x/\.([^.]+)$/)[0];
-            if (!exists ext || !Extensions{ext}) {
+            if (exists ext ? !Extensions{ext} : !QlibRequiresByNameTest::isQoreScript(path + "/" + name)) {
                 continue;
             }
             rv += scanLines(path, rel + "/" + name, ReadOnlyFile::readTextFile(path + "/" + name).split("\n"));
@@ -120,20 +141,54 @@ class QlibRequiresByNameTest inherits QUnit::Test {
         return rv;
     }
 
+    #! Writes a file of the test
+    private static writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+        f.close();
+    }
+
+    #! Returns @ref True if a file without an extension is a Qore script, as the scripts in bin/ are
+    private static bool isQoreScript(string path) {
+        ReadOnlyFile f(path);
+        *string first = f.readLine();
+        return exists first && first =~ /^#!.*\bq(ore|r)\b/;
+    }
+
+    #! Returns the module spec of a directive that loads a module, or @ref NOTHING if the line has none
+    /** The directives that load a module: \c %requires, \c %try-module, \c %try-reexport-module and
+        \c %try-child-module, with an option in parentheses or not, and \c %module-cmd, whose module is given in
+        parentheses; a quoted spec is unquoted
+    */
+    static *string getModuleSpec(string line) {
+        *list<*string> m = (line =~ x/^\s*%(?:requires|try-module|try-reexport-module|try-child-module)(?:\s*\([^)]*\))?\s+(\S+)/);
+        if (!m) {
+            m = (line =~ x/^\s*%module-cmd\s*\(\s*([^)\s]+)\s*\)/);
+        }
+        if (!m) {
+            return;
+        }
+        string spec = m[0];
+        if (*list<*string> q = (spec =~ x/^["'](.*)["']$/)) {
+            spec = q[0];
+        }
+        return spec;
+    }
+
     #! Returns the directives of a file's lines that require a module of the repository's qlib by path
     private list<hash<QlibRequiresByPathInfo>> scanLines(string dir, string file, list<string> lines) {
         list<hash<QlibRequiresByPathInfo>> rv = ();
         string qlib = root + "/qlib";
         foreach string line in (lines) {
-            *list<*string> m = (line =~ x/^\s*%(?:requires|try-module|try-reexport-module)(?:\s*\([^)]*\))?\s+(\S+)/);
-            if (!m) {
+            *string spec = QlibRequiresByNameTest::getModuleSpec(line);
+            if (!spec) {
                 continue;
             }
             # the line before says why this directive needs the path
             if ($# && lines[$# - 1] =~ /^\s*#\s*qlib-requires-by-path:\s*\S/) {
                 continue;
             }
-            string spec = m[0];
             if (spec !~ /\// || spec =~ /^\$/) {
                 continue;
             }
