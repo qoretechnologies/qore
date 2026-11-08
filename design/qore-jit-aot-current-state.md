@@ -735,7 +735,13 @@ references are their only ones. The value of a functional operator can be its so
 value `map` gives `$1` and `select` the value itself, the same IR value) or one of its elements (the
 accumulator of a fold), so when the source is not known to be a list, and for every fold, the
 operator's value gets a reference of its own (RefSelf) before the source is released
-(`lowerWithSourceRelease()`). The IR interpreter releases the last element of an iterator loop when
+(`lowerWithSourceRelease()`); a value of a type that is never a node (`int`, `float`, `bool`) gets
+none, as it holds no reference to the source (a string or a date can be the source's own node). The
+elements that a fold's accumulator has passed are still released when the statement ends (the first
+element the accumulator takes and the accumulator Phi are temporaries of the statement), which can
+change the exception a caller catches: in `f((foldl $2, mk()), thr())` where the destructor of the
+first element throws, the AST interpreter catches the destructor's exception and the compiled modes
+`thr()`'s. The IR interpreter releases the last element of an iterator loop when
 the iterator is exhausted, as native code does (the next `qore_rt_iterator_next()` call releases the
 previous element and stores NOTHING when it is done). An exception that leaves a fused pipeline for a
 handler of the function releases the pipeline's iterator and base source in a cleanup block before

@@ -282,7 +282,8 @@ public:
     QoreIRValue lowerHashMapSelectImpl(const QoreValue& expr, std::string& error);
     //! Lowers a functional operator and releases its source, if it is a temporary, once the operator has run
     template <typename F>
-    QoreIRValue lowerWithSourceRelease(const QoreValue& source, const QoreProgramLocation* loc, bool always_ref,
+    QoreIRValue lowerWithSourceRelease(const QoreValue& expr, const QoreValue& source,
+            const QoreProgramLocation* loc, bool always_ref,
             std::string& error, F&& lower);
     //! Sets the source of the functional operator being lowered to the base source of its fused pipeline
     void setFunctionalBaseSource(const QoreValue& base_source);
