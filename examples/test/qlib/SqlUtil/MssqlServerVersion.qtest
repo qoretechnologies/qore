@@ -28,6 +28,13 @@ class VersionDatasource inherits Datasource {
         return version;
     }
 
+    # the database product, as the jdbc driver gives it
+    string getDriverRealName() {
+        return getDriverName() == "jdbc"
+            ? (version.typeCode() == NT_HASH ? version.name : "Microsoft SQL Server")
+            : getDriverName();
+    }
+
     auto select(string sql, ...) {
         return {};
     }

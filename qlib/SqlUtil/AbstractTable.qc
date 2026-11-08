@@ -1640,7 +1640,7 @@ list<auto> changes = source_table.getAlignSql(target);
         # add current table to cache
         opt.table_cache.add(name, self);
 
-        string drv = ds.getDriverName();
+        list<string> drv = getDriverOptionKeys();
 
         # extract column options
         *hash<auto> oc = opt.(copt.keys());
@@ -1652,11 +1652,14 @@ list<auto> changes = source_table.getAlignSql(target);
             supported
         */
         if (desc.columns.driver) {
-            *hash<auto> h = remove desc.columns.driver{SqlUtilDrivers};
+            *hash<auto> h = remove desc.columns.driver{SqlUtilDrivers + drv};
             if (h) {
                 # if we have driver-specific info, add it to the columns hash
-                if (h{drv})
-                    desc.columns += h{drv};
+                foreach string key in (drv) {
+                    if (h{key}) {
+                        desc.columns += h{key};
+                    }
+                }
                 # if there is no column information, then delete the "driver" key
                 if (!desc.columns.driver)
                     delete desc.columns.driver;
@@ -1672,8 +1675,14 @@ list<auto> changes = source_table.getAlignSql(target);
         # structural driver configuration returned by introspection.  Apply an override only when the active
         # datasource driver is explicitly present and the selected hash contains standard strategy keys;
         # otherwise preserve the structural configuration.
-        *hash<auto> strategy_driver = desc.partition_strategy && desc.partition_strategy.driver
-            ? desc.partition_strategy.driver{drv} : NOTHING;
+        *hash<auto> strategy_driver;
+        if (desc.partition_strategy && desc.partition_strategy.driver) {
+            foreach string key in (drv) {
+                if (desc.partition_strategy.driver{key}) {
+                    strategy_driver += desc.partition_strategy.driver{key};
+                }
+            }
+        }
         if (strategy_driver && (exists strategy_driver.method || exists strategy_driver.columns
                 || exists strategy_driver.auto || exists strategy_driver.driver)) {
             *hash<auto> structural_driver = strategy_driver.driver;
@@ -9693,6 +9702,10 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
             cacheUnlocked();
         }
 
+        # driver-specific options are described under the key of the database's native driver, which a connection
+        # through a generic driver (ex: jdbc) also applies
+        string drv = getDriverOptionKeys()[0];
+
         # get column descriptions
         rv.columns = map {$1.key: $1.value.getDescriptionHash()}, columns.pairIterator();
 
@@ -9704,7 +9717,7 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
             };
             *hash<auto> driver_opt = getPrimaryKeyDescriptionOptionsImpl(primaryKey);
             if (driver_opt) {
-                rv.primary_key.driver{ds.getDriverName()} = driver_opt;
+                rv.primary_key.driver{drv} = driver_opt;
             }
         }
 
@@ -9717,7 +9730,7 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
                 };
                 *hash<auto> driver_opt = getIndexDescriptionOptionsImpl(i.value);
                 if (driver_opt) {
-                    ix.driver{ds.getDriverName()} = driver_opt;
+                    ix.driver{drv} = driver_opt;
                 }
                 rv.indexes{i.key} = ix;
             }
@@ -9733,7 +9746,7 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
                 desc.columns = uk.keys();
                 *hash<auto> driver_opt = getUniqueConstraintDescriptionOptionsImpl(uk);
                 if (driver_opt) {
-                    desc.driver = {ds.getDriverName(): driver_opt};
+                    desc.driver = {drv: driver_opt};
                 }
                 rv.unique_constraints{uk.getName()} = desc;
             }
@@ -12863,8 +12876,7 @@ on_exit printf("SQL> %s\n", sql);
     private list<auto> getCreateSqlUnlocked(*hash<auto> opt, bool cache = True) {
         # make sure driver options take precedence over generic options
         if (opt) {
-            string dn = getDriverName();
-            AbstractDatabase::checkDriverOptions(\opt, dn);
+            AbstractDatabase::checkDriverOptions(\opt, getDriverOptionKeys());
         }
 
         # mark in options that the entire table is being created

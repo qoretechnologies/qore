@@ -154,6 +154,16 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - the driver-specific options of a description under the key of a database's native driver (ex: \c "oracle",
+      \c "pgsql" or \c "freetds") apply also on a connection to that database through a generic driver such as
+      \c jdbc or \c odbc, followed by the options under the generic driver's own name, which take precedence; they
+      were ignored, so, for example, a column default given for Oracle was not created on a \c jdbc connection to
+      Oracle.  A description of a table on such a connection gives its driver-specific options under the native
+      key.  Added @ref SqlUtil::AbstractSqlUtilBase::getDriverOptionKeys() "AbstractSqlUtilBase::getDriverOptionKeys()",
+      @ref SqlUtil::AbstractSqlUtilBase::getDatasourceDriverOptionKeys() "getDatasourceDriverOptionKeys()",
+      @ref SqlUtil::AbstractSqlUtilBase::getDriverValue() "getDriverValue()" and
+      @ref SqlUtil::DriverOptionFamilyKeys "DriverOptionFamilyKeys"; @ref SqlUtil::AbstractDatabase::checkDriverOptions()
+      "AbstractDatabase::checkDriverOptions()" accepts a list of keys
     - fixed @ref SqlUtil::AbstractDatabase::getDropFunctionSqlIfExists() "AbstractDatabase::getDropFunctionSqlIfExists()",
       @ref SqlUtil::AbstractDatabase::getDropProcedureSqlIfExists() "getDropProcedureSqlIfExists()" and
       @ref SqlUtil::AbstractDatabase::getDropSequenceSqlIfExists() "getDropSequenceSqlIfExists()", which returned no
@@ -7674,6 +7684,25 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         "freetds",
         "sybase",
     );
+
+    #! the keys of the driver-specific options of the native driver of a database reached through a generic driver
+    /** The key is the first word of @ref Qore::SQL::AbstractDatasource::getDriverRealName()
+        "AbstractDatasource::getDriverRealName()" in lower case; see
+        @ref SqlUtil::AbstractSqlUtilBase::getDatasourceDriverOptionKeys() "getDatasourceDriverOptionKeys()"
+
+        @since SqlUtil 3.11.0
+    */
+    public const hash<string, string> DriverOptionFamilyKeys = {
+        "oracle": "oracle",
+        "postgresql": "pgsql",
+        "microsoft": "freetds",
+        "adaptive": "sybase",
+        "sybase": "sybase",
+        "mysql": "mysql",
+        "mariadb": "mysql",
+        "firebird": "firebird",
+        "sqlite": "sqlite3",
+    };
 
     # private variable to store the closure used to deserialize datasources (if any)
     our *code ds_get;

@@ -74,6 +74,59 @@ public class AbstractSqlUtilBase inherits Qore::Serializable {
         dsdesc = AbstractSqlUtilBase::makeDatasourceDesc(ds);
     }
 
+    #! returns the keys of the driver-specific options that apply to this connection, in the order they are applied
+    /** @see getDatasourceDriverOptionKeys()
+
+        @since SqlUtil 3.11.0
+    */
+    list<string> getDriverOptionKeys() {
+        return AbstractSqlUtilBase::getDatasourceDriverOptionKeys(ds);
+    }
+
+    #! returns the keys of the driver-specific options that apply to a connection, in the order they are applied
+    /** Driver-specific options in a description (under a \c "driver" key) are keyed by the name of a native driver
+        (see @ref SqlUtil::SqlUtilDrivers "SqlUtilDrivers"); a generic driver such as \c jdbc or \c odbc also
+        applies the options of the native driver of the database it is connected to, which are followed by the options
+        under its own name, so that these take precedence.  The database is identified by
+        @ref Qore::SQL::AbstractDatasource::getDriverRealName() "AbstractDatasource::getDriverRealName()".
+
+        For example, a \c jdbc connection to an Oracle database applies the options under \c "oracle" and then the
+        options under \c "jdbc"; an \c oracle connection applies the options under \c "oracle" only.
+
+        @param ds the datasource
+
+        @return the keys of the driver-specific options in the order they are applied
+
+        @since SqlUtil 3.11.0
+    */
+    static list<string> getDatasourceDriverOptionKeys(AbstractDatasource ds) {
+        string drv = ds.getDriverName();
+        # a native driver applies only its own options
+        if (inlist(drv, SqlUtilDrivers)) {
+            return (drv,);
+        }
+        string real = ds.getDriverRealName().lwr();
+        *string family = DriverOptionFamilyKeys{(real =~ x/^([^ ]+)/)[0] ?? ""};
+        return (family && family != drv) ? (family, drv) : (drv,);
+    }
+
+    #! returns the driver-specific value for the most specific of the given keys
+    /** @param h a hash of values keyed by driver (ex: SQL for each driver)
+        @param key_list the keys of the driver-specific options in the order they are applied (see
+        getDriverOptionKeys()): the value under the last key that has one is returned
+
+        @return the value under the last key of \a key_list that has a value in \a h, or no value if there is none
+
+        @since SqlUtil 3.11.0
+    */
+    static auto getDriverValue(*hash<auto> h, list<string> key_list) {
+        foreach string key in (reverse(key_list)) {
+            if (exists h{key}) {
+                return h{key};
+            }
+        }
+    }
+
     static string makeDatasourceDesc(AbstractDatasource ds) {
         string dsdesc = sprintf("%s:%s@%s", ds.getDriverName(), ds.getUserName(), ds.getDBName());
         if (ds.getHostName())
@@ -200,7 +253,7 @@ string id = AbstractSqlUtilBase::getDelimitedIdentifier("a\"b", "\"", "\"", "pgs
     */
     private validateOptionsIntern(string err, hash<auto> ropt, reference<hash<auto>> opt0, string tag) {
         # make sure driver-specific options take precedence over generic options
-        string dn = getDriverName();
+        list<string> dn = getDriverOptionKeys();
         # make sure types can be converted
         hash<auto> opt += opt0;
         AbstractDatabase::checkDriverOptions(\opt, dn);
