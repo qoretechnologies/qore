@@ -626,7 +626,8 @@ private:
         none of the allocas that the local's stores register later (local_cleanup_allocas, the reload tracker and the
         deferred reload value), whose references then outlived the local's value, so that the destructor of an
         object it held ran after those of locals declared before it.  finalizeDeferredLocalReleases() releases them
-        there once the function is lowered.
+        there once the function is lowered; they are all allocas of the entry block, which dominates every release
+        point (a debug build asserts it).
     */
     struct DeferredLocalRelease {
         //! the local

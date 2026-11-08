@@ -4249,8 +4249,12 @@ void QoreIRToLLVM::finalizeDeferredLocalReleases(llvm::Module& module) {
             if (std::find(rel.released.begin(), rel.released.end(), value) != rel.released.end()) {
                 continue;
             }
-            // only an alloca of the entry block dominates the release point
+            // every alloca holding a reference to a local's value is created in the entry block (the cleanup allocas
+            // of trackResultForCleanup(), promoteSsaEntryToAlloca() and the StoreLocal coercions, the reload trackers
+            // and the deferred reload values), which dominates the release point; a value of any other kind would
+            // not dominate it and is never released here
             auto* alloca = llvm::dyn_cast<llvm::AllocaInst>(value);
+            assert(alloca && alloca->getParent() == &entry);
             if (!alloca || alloca->getParent() != &entry) {
                 continue;
             }
