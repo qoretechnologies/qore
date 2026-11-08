@@ -903,6 +903,62 @@ def contains_identity(path, identity):
 # ---------------------------------------------------------------------------------------------------------------------
 # the cache directory
 
+HEX64 = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _is_str_list(v):
+    return isinstance(v, list) and all(isinstance(x, str) for x in v)
+
+
+def _is_candidates(v):
+    return isinstance(v, list) and all(isinstance(c, list) and len(c) == 2 and _is_str_list(c) for c in v)
+
+
+def entry_problem(entry, key):
+    """Returns why an entry read from the cache is not one this tool wrote for @p key, or None
+
+    Every field a lookup reads is checked for its type, so that a damaged or forged entry (any valid JSON) is a miss,
+    never an exception in the build.
+    """
+    if not isinstance(entry, dict):
+        return "the entry is no object"
+    if entry.get("schema") != SCHEMA:
+        return "the entry has another schema"
+    if entry.get("key") != key or not HEX64.match(key):
+        return "the entry is not the one of its key"
+    if not isinstance(entry.get("base_key"), str) or not HEX64.match(entry["base_key"]):
+        return "the entry has no base key"
+    deps = entry.get("deps")
+    if not isinstance(deps, list):
+        return "the entry has no dependency list"
+    for d in deps:
+        if (not isinstance(d, dict) or not isinstance(d.get("path"), str) or not isinstance(d.get("sha256"), str)
+                or d.get("kind") not in ("own", "module", "file")):
+            return "the entry has an invalid dependency"
+        if d["kind"] == "module" and (not isinstance(d.get("module_root"), str)
+                                       or not isinstance(d.get("module_key"), str)):
+            return "the entry has an invalid module dependency"
+    optional = entry.get("optional")
+    if not isinstance(optional, list) or not all(
+            isinstance(o, dict) and isinstance(o.get("spec"), str) and isinstance(o.get("name"), str)
+            and _is_candidates(o.get("candidates")) for o in optional):
+        return "the entry has an invalid optional module list"
+    resolution = entry.get("resolution")
+    if not isinstance(resolution, list) or not all(
+            isinstance(r, dict) and isinstance(r.get("name"), str) and _is_candidates(r.get("candidates"))
+            for r in resolution):
+        return "the entry has an invalid resolution list"
+    files = entry.get("files")
+    if not isinstance(files, dict) or not all(isinstance(files.get(k), str) and HEX64.match(files[k])
+                                              for k in ("qmod", ".d", ".d.fingerprints")):
+        return "the entry has invalid file digests"
+    if not isinstance(entry.get("mode"), int) or isinstance(entry.get("mode"), bool):
+        return "the entry has no file mode"
+    if "signature" in entry and not isinstance(entry["signature"], str):
+        return "the entry has an invalid signature"
+    return None
+
+
 class Cache:
     """The cache directory: <dir>/<SCHEMA>/entries/<base key>/<result key>.json and objects/<result key>/
 
@@ -945,8 +1001,12 @@ class Cache:
         except OSError:
             return None
 
-    def candidates(self, base):
-        """Returns the entries stored under a base key, most recently used first"""
+    def candidates(self, base, remove_invalid=False):
+        """Returns the valid entries stored under a base key, most recently used first
+
+        An entry that cannot be read or that entry_problem() refuses is left out, and removed with @p remove_invalid
+        (a cache this job writes to).
+        """
         d = os.path.join(self.entries, base)
         try:
             names = [n for n in os.listdir(d) if n.endswith(".json")]
@@ -955,12 +1015,20 @@ class Cache:
         rv = []
         for n in names:
             p = os.path.join(d, n)
+            key = n[:-5]
             try:
                 with open(p, "r", encoding="utf-8") as f:
                     entry = json.load(f)
-                rv.append((self.last_use(p, n[:-5]), p, entry))
-            except (OSError, ValueError):
+            except OSError:
                 continue
+            except ValueError:
+                entry = None
+            problem = entry_problem(entry, key) if entry is not None else "the entry is no JSON"
+            if problem or entry.get("base_key") != base:
+                if remove_invalid:
+                    self.remove(p, key)
+                continue
+            rv.append((self.last_use(p, key), p, entry))
         rv.sort(key=lambda e: e[0], reverse=True)
         return [(p, e) for _, p, e in rv]
 
@@ -1036,7 +1104,7 @@ class Cache:
         try:
             with open(os.path.join(self.entries, base, key + ".json"), "r", encoding="utf-8") as f:
                 entry = json.load(f)
-            if entry.get("key") != key or check_signature(entry, signing_key):
+            if entry_problem(entry, key) or check_signature(entry, signing_key):
                 return False
             obj = self.object_dir(key)
             return all(sha256_file(os.path.join(obj, "qmod" + suffix)) == entry["files"][suffix or "qmod"]
@@ -1181,15 +1249,12 @@ class Module:
         """
         if readonly is None:
             readonly = self.readonly
-        cands = cache.candidates(self.base)
+        cands = cache.candidates(self.base, remove_invalid=not readonly)
         if not cands:
             return None, "no entry"
         reason = None
         for path, entry in cands:
-            key = entry.get("key")
-            if entry.get("schema") != SCHEMA or entry.get("base_key") != self.base or not key:
-                reason = "invalid entry"
-                continue
+            key = entry["key"]
             reason = check_signature(entry, self.signing_key)
             if reason:
                 continue
@@ -1366,8 +1431,9 @@ def cmd_exec(args):
         for c, ro in [(cache, None)] + [(c, True) for c in read_caches]:
             try:
                 entry, r = mod.try_hit(c, ro)
-            except (OSError, ValueError, KeyError, CacheError) as e:
-                entry, r = None, "lookup failed: %s" % e
+            except Exception as e:
+                # whatever a cache holds, a lookup that fails is a miss, never a failed build
+                entry, r = None, "lookup failed: %s: %s" % (e.__class__.__name__, e)
             if entry:
                 hit_cache, hit_readonly = c, ro or readonly
                 break

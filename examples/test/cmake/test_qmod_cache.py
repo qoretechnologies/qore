@@ -164,6 +164,34 @@ class IncludeTest(unittest.TestCase):
             qc.check_includes_listed(str(mod), [str(mod), str(part)])
 
 
+class EntryProblemTest(unittest.TestCase):
+    def valid(self):
+        return {"schema": qc.SCHEMA, "key": "a" * 64, "base_key": "b" * 64,
+                "deps": [{"path": "/s/M.qm", "kind": "own", "sha256": "c"},
+                         {"path": "/s/U.qm", "kind": "module", "sha256": "d", "module_root": "/s/U.qm",
+                          "module_key": "e"}],
+                "optional": [{"spec": "xml", "name": "xml", "candidates": [["/m/x", "f"]]}],
+                "resolution": [{"name": "U", "candidates": [["/s/U.qm", "/s/U.qm"]]}],
+                "files": {"qmod": "1" * 64, ".d": "2" * 64, ".d.fingerprints": "3" * 64}, "mode": 0o755}
+
+    def test_entry_problem(self):
+        self.assertIsNone(qc.entry_problem(self.valid(), "a" * 64))
+        for bad in ([], "x", None, 1, {}):
+            self.assertIsNotNone(qc.entry_problem(bad, "a" * 64), bad)
+        self.assertIsNotNone(qc.entry_problem(self.valid(), "f" * 64))
+        for field, value in (("deps", None), ("deps", ["x"]), ("deps", [{"path": 1}]), ("optional", None),
+                             ("optional", [{"spec": "x"}]), ("resolution", {"a": 1}),
+                             ("resolution", [{"name": "U", "candidates": [["a"]]}]), ("files", []),
+                             ("files", {"qmod": "x"}), ("mode", "755"), ("mode", True), ("signature", 1),
+                             ("base_key", None), ("schema", "other")):
+            e = self.valid()
+            e[field] = value
+            self.assertIsNotNone(qc.entry_problem(e, "a" * 64), (field, value))
+        e = self.valid()
+        e["deps"][1].pop("module_key")
+        self.assertIsNotNone(qc.entry_problem(e, "a" * 64))
+
+
 class CacheStoreTest(unittest.TestCase):
     """Cache.store(): collisions, replaced objects, and the entries kept under a base key"""
 
@@ -181,33 +209,34 @@ class CacheStoreTest(unittest.TestCase):
             rv[suffix] = str(p)
         return rv
 
-    def entry(self, key, files, signing_key=None):
-        e = {"key": key, "files": {(s or "qmod"): qc.sha256_file(p) for s, p in files.items()}}
+    def entry(self, key, files, signing_key=None, base="b" * 64):
+        e = {"schema": qc.SCHEMA, "key": key, "base_key": base, "deps": [], "optional": [], "resolution": [],
+             "mode": 0o755, "files": {(s or "qmod"): qc.sha256_file(p) for s, p in files.items()}}
         if signing_key:
             e["signature"] = qc.entry_signature(e, signing_key)
         return e
 
     def test_collision(self):
         f1 = self.files(b"one")
-        self.cache.store("b" * 64, "k" * 64, self.entry("k" * 64, f1), f1)
+        self.cache.store("b" * 64, "c" * 64, self.entry("c" * 64, f1), f1)
         # the same files again: fine
-        self.cache.store("b" * 64, "k" * 64, self.entry("k" * 64, f1), f1)
+        self.cache.store("b" * 64, "c" * 64, self.entry("c" * 64, f1), f1)
         f2 = self.files(b"two")
         with self.assertRaises(qc.KeyCollision):
-            self.cache.store("b" * 64, "k" * 64, self.entry("k" * 64, f2), f2)
+            self.cache.store("b" * 64, "c" * 64, self.entry("c" * 64, f2), f2)
 
     def test_invalid_object_is_replaced(self):
         f1 = self.files(b"one")
-        self.cache.store("b" * 64, "k" * 64, self.entry("k" * 64, f1), f1)
+        self.cache.store("b" * 64, "c" * 64, self.entry("c" * 64, f1), f1)
         # damaged: replaced by the new files
-        (Path(self.cache.object_dir("k" * 64)) / "qmod").write_bytes(b"damaged")
+        (Path(self.cache.object_dir("c" * 64)) / "qmod").write_bytes(b"damaged")
         f2 = self.files(b"two")
-        self.cache.store("b" * 64, "k" * 64, self.entry("k" * 64, f2), f2)
-        self.assertEqual(b"two", (Path(self.cache.object_dir("k" * 64)) / "qmod").read_bytes())
+        self.cache.store("b" * 64, "c" * 64, self.entry("c" * 64, f2), f2)
+        self.assertEqual(b"two", (Path(self.cache.object_dir("c" * 64)) / "qmod").read_bytes())
         # unsigned for a cache whose entries are signed: replaced
         f3 = self.files(b"three")
-        self.cache.store("b" * 64, "k" * 64, self.entry("k" * 64, f3, "key"), f3, "key")
-        self.assertEqual(b"three", (Path(self.cache.object_dir("k" * 64)) / "qmod").read_bytes())
+        self.cache.store("b" * 64, "c" * 64, self.entry("c" * 64, f3, "key"), f3, "key")
+        self.assertEqual(b"three", (Path(self.cache.object_dir("c" * 64)) / "qmod").read_bytes())
 
     def test_least_recently_used_entries_of_a_base_go(self):
         base = "b" * 64
@@ -807,6 +836,36 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         for suffix in qc.STORED_SUFFIXES:
             entry["files"][suffix or "qmod"] = qc.sha256_file(str(obj / ("qmod" + suffix)))
         return entry_path, entry
+
+    def test_malformed_entries_are_misses(self):
+        """An entry that is valid JSON but not an entry this tool wrote is a miss and is removed; the build never
+        fails for it"""
+        self.build_all()
+        paths = self.entries()
+        self.assertEqual(4, len(paths))
+        def deps_null(e):
+            e["deps"] = None
+        def deps_strings(e):
+            e["deps"] = ["x"]
+        def files_list(e):
+            e["files"] = []
+        def resolution_dict(e):
+            e["resolution"] = {"a": 1}
+        mutators = [deps_null, deps_strings, files_list, resolution_dict]
+        for i, path in enumerate(paths):
+            if i % 2 == 0:
+                path.write_text(["[]", "\"x\"", "{}", "{\"broken"][i // 2 % 4])
+            else:
+                entry = json.loads(path.read_text())
+                mutators[i // 2 % 4](entry)
+                path.write_text(json.dumps(entry))
+        self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all())
+        self.assertNotIn("Traceback", self.output)
+        # the malformed entries are gone, and the new ones are used
+        self.assertEqual([], self.build_all())
+        for path in paths:
+            if path.exists():
+                self.assertIsNone(qc.entry_problem(json.loads(path.read_text()), path.stem))
 
     def test_changed_binary_module_dependency(self):
         self.build_all()
