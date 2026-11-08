@@ -44,6 +44,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
+#include "qore/intern/QC_Http1ClientPollOperationBase.h"
 
 #include <map>
 #include <memory>
@@ -8912,6 +8913,167 @@ static ssize_t ut_read_request_headers(int fd, char* buf, size_t max) {
     return -1;
 }
 
+#ifdef DEBUG
+//! Makes the read/write race deterministic without sockets, timing assumptions, or controller hooks.
+class Http1BufferedSendFailureTest {
+    class ReceiveOp : public SocketPollOperationBase {
+    public:
+        explicit ReceiveOp(bool fail) : fail(fail) {
+        }
+
+        QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+            if (++calls <= 2) {
+                ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+                info->setKeyValue("events", SOCK_POLLIN, xsink);
+                return info.release();
+            }
+            if (fail) {
+                xsink->raiseException("SOCKET-CLOSED", "incomplete response");
+            }
+            return nullptr;
+        }
+
+        bool goalReached() const override {
+            return calls > 2 && !fail;
+        }
+
+        QoreValue getOutput() const override {
+            SimpleRefHolder<BinaryNode> body(new BinaryNode);
+            body->append("fault", 5);
+            return body.release();
+        }
+
+        void abort(ExceptionSink* xsink) override {
+        }
+
+    protected:
+        const char* getStateImpl() const override {
+            return "test-receive";
+        }
+
+    private:
+        bool fail;
+        int calls = 0;
+    };
+
+    class SendOp : public SocketPollOperationBase {
+    public:
+        QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+            xsink->raiseException("SOCKET-SEND-ERROR", "test broken pipe");
+            return nullptr;
+        }
+
+        bool goalReached() const override {
+            return false;
+        }
+
+        void abort(ExceptionSink* xsink) override {
+        }
+
+    protected:
+        const char* getStateImpl() const override {
+            return "test-send";
+        }
+    };
+
+    struct Result {
+        int delivered = 0;
+        int errors = 0;
+        int status = 0;
+        std::string body;
+        std::string err;
+        std::string desc;
+    };
+
+    class Action : public AbstractAsyncAction {
+    public:
+        explicit Action(Result& result) : result(result) {
+        }
+
+        void execute(QoreValue output, ExceptionSink* xsink) override {
+            ValueHolder holder(output, xsink);
+            ++result.delivered;
+            if (output.getType() == NT_HASH) {
+                const QoreHashNode* response = output.get<const QoreHashNode>();
+                result.status = static_cast<int>(response->getKeyValue("status_code").getAsBigInt());
+                QoreValue body = response->getKeyValue("body");
+                if (body.getType() == NT_BINARY) {
+                    const BinaryNode* data = body.get<const BinaryNode>();
+                    result.body.assign(static_cast<const char*>(data->getPtr()), data->size());
+                }
+            }
+        }
+
+        void executeError(const char* err, const char* desc, ExceptionSink* xsink) override {
+            ++result.errors;
+            result.err = err;
+            result.desc = desc;
+        }
+
+        void cleanup(ExceptionSink* xsink) override {
+        }
+
+    private:
+        Result& result;
+    };
+
+public:
+    static void run(UnitTestCounters& c) {
+        for (bool buffered : {true, false}) {
+            for (bool failed_response : {false, true}) {
+                ExceptionSink xsink;
+                Result result;
+                ReferenceHolder<Http1ClientPollOperationPriv> op(new Http1ClientPollOperationPriv(nullptr,
+                    nullptr, false, "localhost", 80, nullptr), &xsink);
+                op->h1_state = Http1ClientPollOperationPriv::H1State::READING;
+                op->req_state = Http1ClientPollOperationPriv::ReqState::RECV_BODY_LENGTH;
+                op->send_state = Http1ClientPollOperationPriv::SendState::SENDING;
+                op->send_buffered_body = buffered;
+                op->current_op = new ReceiveOp(failed_response);
+                op->send_op = new SendOp;
+                op->stream_action = new Action(result);
+                op->active_stream_count = 1;
+                op->active_sid = 1;
+                op->response_status_code = 413;
+                op->setDecodeBody(false);
+
+                ReferenceHolder<QoreHashNode> info(op->handleFullDuplex(&xsink), &xsink);
+                UT_ASSERT(c, !xsink, "duplex failure is delivered through the request action");
+                if (buffered) {
+                    UT_ASSERT(c, info && !result.errors && op->send_failure_pending,
+                        "a buffered send failure keeps the pending response alive");
+                    if (!info || result.errors) {
+                        xsink.clear();
+                        continue;
+                    }
+                    UT_ASSERT_EQ(c, SOCK_POLLIN, info->getKeyValue("events").getAsBigInt(),
+                        "after a send failure only read readiness is requested");
+                    UT_ASSERT(c, !op->send_op && op->current_op,
+                        "the failed writer is released and the existing reader is preserved");
+                    // A second incomplete read must neither retry the failed writer nor lose partial input.
+                    info = op->handleFullDuplex(&xsink);
+                    UT_ASSERT(c, info && !xsink && !result.errors && !result.delivered,
+                        "recovery survives another incomplete read without writing again");
+                    info = op->handleFullDuplex(&xsink);
+                    UT_ASSERT(c, !info && !xsink, "recovery finishes and closes the connection");
+                }
+                if (buffered && !failed_response) {
+                    UT_ASSERT(c, result.delivered == 1 && !result.errors && result.status == 413
+                        && result.body == "fault", "the complete response is delivered exactly once");
+                } else {
+                    UT_ASSERT(c, !result.delivered && result.errors == 1
+                        && result.err == "SOCKET-SEND-ERROR" && result.desc == "test broken pipe",
+                        "an incomplete response or chunked send reports the original send error once");
+                }
+                UT_ASSERT(c, op->h1_state == Http1ClientPollOperationPriv::H1State::CLOSED
+                    && !op->active_stream_count, "a failed upload cannot leave a reusable connection");
+                xsink.clear();
+            }
+        }
+    }
+};
+#endif
+
 static void ut_http1_connection_simple_request(UnitTestCounters& c) {
     ExceptionSink xsink;
 
@@ -14402,6 +14564,16 @@ static QoreValue f_dbg_run_llvm_target_init_tests(const QoreListNode* params, Ru
 }
 #endif
 
+#ifdef DEBUG
+//! Debug-only: exercises response recovery after a concurrent buffered request write fails.
+static QoreValue f_dbg_run_http1_duplex_tests(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    Http1BufferedSendFailureTest::run(c);
+    return make_unit_test_result(c, xsink);
+}
+#endif
+
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
     ut_qorevalue_operator_bool_null(c);
@@ -14517,6 +14689,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_promise_action_execute_error(c);
     ut_promise_notifier_action_lifetime(c);
     ut_http1_connection_simple_request(c);
+#ifdef DEBUG
+    Http1BufferedSendFailureTest::run(c);
+#endif
     ut_http1_connection_timeout(c);
     ut_http1_connection_connect_refused(c);
     ut_http1_submit_after_ssl_error_preserves_error(c);
@@ -16546,6 +16721,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("run_unit_tests", f_run_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_llvm_target_init_tests", f_dbg_run_llvm_target_init_tests, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_run_http1_duplex_tests", f_dbg_run_http1_duplex_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_run_method_cache_lifetime_tests", f_dbg_run_method_cache_lifetime_tests,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
