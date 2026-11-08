@@ -46,7 +46,8 @@ qc = load_tool()
 
 
 def ed25519_keys(directory, name):
-    """Returns (private, public) PEM texts of a new Ed25519 key pair, or None without OpenSSL 3"""
+    """Returns (the private key's file, the public key's PEM text) of a new Ed25519 key pair, or None without
+    OpenSSL 3"""
     openssl = qc.find_openssl(os.environ)
     if not openssl:
         return None
@@ -54,8 +55,16 @@ def ed25519_keys(directory, name):
     pub = os.path.join(str(directory), name + ".pub.pem")
     subprocess.run([openssl, "genpkey", "-algorithm", "ed25519", "-out", priv], check=True, capture_output=True)
     subprocess.run([openssl, "pkey", "-in", priv, "-pubout", "-out", pub], check=True, capture_output=True)
-    with open(priv) as f1, open(pub) as f2:
-        return f1.read(), f2.read()
+    with open(pub) as f:
+        return priv, f.read()
+
+
+def sign_build(cache, build, key_path, env=None):
+    """Runs "sign" for a build, with the private key's file path on stdin, as qore_qmod_cache_finish does"""
+    full = {k: v for k, v in os.environ.items() if not k.startswith("QORE_QMOD_CACHE_")}
+    full.update(env or {})
+    return subprocess.run([sys.executable, str(TOOL), "sign", "--cache-dir", str(cache), "--build-dir", str(build)],
+                          input=key_path + "\n", capture_output=True, text=True, timeout=120, env=full)
 
 
 def qami_record(name, deps=(), optional=(), compiled_with=None, prepend=(), append=()):
@@ -324,14 +333,26 @@ class CacheStoreTest(unittest.TestCase):
         keys = ed25519_keys(self.root, "k")
         if not keys:
             self.skipTest("OpenSSL 3 is required for signed entries")
-        signer = qc.Signer({"QORE_QMOD_CACHE_SIGNING_KEY": keys[0]})
+        signer = qc.Signer({"QORE_QMOD_CACHE_VERIFY_KEY": keys[1]})
         self.addCleanup(signer.close)
         f3 = self.files(b"three")
         e3 = self.entry("c" * 64, f3)
-        e3["signature"] = signer.sign(e3)
+        e3["signature"] = qc.sign_entry(signer.openssl, keys[0], e3, {}, str(self.root))
         self.cache.store("b" * 64, "c" * 64, e3, f3, signer)
         self.assertEqual(b"three", (Path(self.cache.object_dir("c" * 64)) / "qmod").read_bytes())
         self.assertTrue(self.cache.valid_object("b" * 64, "c" * 64, signer))
+        # an unsigned entry, stored to be signed after the build, is valid for a job that signs after its build, but
+        # not one with another signature
+        e4 = self.entry("c" * 64, f3)
+        (Path(self.cache.entries) / ("b" * 64) / ("c" * 64 + ".json")).write_text(json.dumps(e4))
+        self.assertFalse(self.cache.valid_object("b" * 64, "c" * 64, signer))
+        self.assertTrue(self.cache.valid_object("b" * 64, "c" * 64, signer, allow_unsigned=True))
+        e4["signature"] = e3["signature"]
+        (Path(self.cache.entries) / ("b" * 64) / ("c" * 64 + ".json")).write_text(json.dumps(e4))
+        self.assertTrue(self.cache.valid_object("b" * 64, "c" * 64, signer, allow_unsigned=True))
+        e4["mode"] = 0o700
+        (Path(self.cache.entries) / ("b" * 64) / ("c" * 64 + ".json")).write_text(json.dumps(e4))
+        self.assertFalse(self.cache.valid_object("b" * 64, "c" * 64, signer, allow_unsigned=True))
 
     def test_unreadable_entry(self):
         """Any exception while an entry is read makes it invalid: left out (removed from a writable cache), never
@@ -579,6 +600,8 @@ from pathlib import Path
 here = Path(__file__).parent
 args = sys.argv[1:]
 leaked = sorted(k for k in os.environ if k.startswith("QORE_QMOD_CACHE_"))
+if (here / "probe-env.txt").exists():
+    leaked += sorted(k for k, v in os.environ.items() if "PRIVATE KEY" in v or v.endswith(".pem"))
 if leaked:
     with open(here / "qcc-env.txt", "a") as log:
         log.write(" ".join(leaked) + "\n")
@@ -1253,8 +1276,14 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
     def test_signed_entries(self):
         priv1, pub1 = self.key_pair("k1")
         priv2, pub2 = self.key_pair("k2")
-        writer = {"QORE_QMOD_CACHE_SIGNING_KEY": priv1}
+        writer = {"QORE_QMOD_CACHE_VERIFY_KEY": pub1, "QORE_QMOD_CACHE_SIGN_AFTER_BUILD": "1"}
         self.build_all(env=writer)
+        # unsigned until the build is signed: no job uses them
+        self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all(env=writer))
+        self.assertIn("stored (signed after the build)", self.output)
+        res = sign_build(self.cache, self.build, priv1)
+        self.assertEqual(0, res.returncode, res.stderr)
+        self.assertIn("signed 4 entries that this build stored", res.stderr)
         self.assertEqual([], self.build_all(env=writer))
         # a job of another ref verifies with the public key: every entry is used, and nothing is written
         before = sorted((str(p), p.stat().st_mtime_ns) for p in self.cache.rglob("*"))
@@ -1282,6 +1311,7 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertNotIn(b"EVILQMOD", self.qmod("Mid").read_bytes())
         # nor does a writer, which replaces it
         self.assertEqual(["Mid"], self.build_all(env=writer))
+        self.assertEqual(0, sign_build(self.cache, self.build, priv1).returncode)
         self.assertEqual([], self.build_all(env={"QORE_QMOD_CACHE_VERIFY_KEY": pub1}))
         # entries written with another key, or without one, are not used
         self.assertEqual(["Base", "Mid", "Other", "Top"],
@@ -1292,10 +1322,11 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
                          self.build_all(cache=unsigned, env={"QORE_QMOD_CACHE_VERIFY_KEY": pub1}))
 
     def test_keys_without_openssl(self):
-        priv, _ = self.key_pair("k")
+        _, pub = self.key_pair("k")
         self.build_all()
         # with a key but no OpenSSL 3, nothing is taken from the cache nor written to it
-        env = {"QORE_QMOD_CACHE_SIGNING_KEY": priv, "QORE_QMOD_CACHE_OPENSSL": "/nonexistent/openssl"}
+        env = {"QORE_QMOD_CACHE_VERIFY_KEY": pub, "QORE_QMOD_CACHE_SIGN_AFTER_BUILD": "1",
+               "QORE_QMOD_CACHE_OPENSSL": "/nonexistent/openssl"}
         entries = self.entries()
         self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all(env=env))
         self.assertIn("signed entries need OpenSSL 3", self.output)
@@ -1318,11 +1349,112 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertIn("its signature cannot be checked without OpenSSL 3", res.stderr)
 
     def test_qcc_gets_no_cache_settings(self):
-        priv, pub = self.key_pair("k")
-        self.build_all(env={"QORE_QMOD_CACHE_SIGNING_KEY": priv, "QORE_QMOD_CACHE_VERIFY_KEY": pub,
+        _, pub = self.key_pair("k")
+        self.build_all(env={"QORE_QMOD_CACHE_VERIFY_KEY": pub, "QORE_QMOD_CACHE_SIGN_AFTER_BUILD": "1",
                             "QORE_QMOD_CACHE_AUDIT": "0"})
         self.assertFalse((self.source / "qcc-env.txt").exists(),
                          (self.source / "qcc-env.txt").read_text() if (self.source / "qcc-env.txt").exists() else "")
+
+    def test_private_key_in_the_build_environment(self):
+        """The private key is only for "sign", after the build: a build with it in its environment (a script that did
+        not take it out) uses no cache, and qcc does not get it"""
+        priv, pub = self.key_pair("k")
+        self.build_all()
+        self.assertEqual(["Base", "Mid", "Other", "Top"],
+                         self.build_all(env={"QORE_QMOD_CACHE_SIGNING_KEY": priv, "QORE_QMOD_CACHE_VERIFY_KEY": pub}))
+        self.assertIn("QORE_QMOD_CACHE_SIGNING_KEY is in the environment of the build", self.output)
+        self.assertFalse((self.source / "qcc-env.txt").exists())
+
+    def test_sign_only_what_the_build_stored(self):
+        """"sign" signs an entry only when the cache has the entry and files that the build stored; a private key
+        that is no file is refused"""
+        priv, pub = self.key_pair("k")
+        writer = {"QORE_QMOD_CACHE_VERIFY_KEY": pub, "QORE_QMOD_CACHE_SIGN_AFTER_BUILD": "1"}
+        self.build_all(env=writer)
+        keys = self.keys()
+        # another entry for Mid's key, and another module for Top's
+        entry_path = [e for e in self.entries() if e.stem == keys["Mid"]][0]
+        entry = json.loads(entry_path.read_text())
+        entry["env_names"] = entry["env_names"] + ["X"]
+        entry_path.write_text(json.dumps(entry))
+        top = Path(qc.Cache(str(self.cache)).object_dir(keys["Top"])) / "qmod"
+        top.write_bytes(top.read_bytes() + b"x")
+        with open(priv) as f:
+            pem = f.read()
+        res = sign_build(self.cache, self.build, pem.splitlines()[0])
+        self.assertEqual(1, res.returncode)
+        self.assertIn("the private key is not a file", res.stderr)
+        self.assertNotIn(pem.splitlines()[1], res.stderr)
+        res = sign_build(self.cache, self.build, priv)
+        self.assertEqual(0, res.returncode, res.stderr)
+        self.assertIn("signed 2 entries that this build stored, 2 failed", res.stderr)
+        self.assertIn("the cache does not have the entry this build stored", res.stderr)
+        self.assertIn("stored file 'qmod' is not the one this build stored", res.stderr)
+        self.assertEqual(["Mid", "Top"], self.build_all(env={"QORE_QMOD_CACHE_VERIFY_KEY": pub}))
+
+    def test_ci_scripts_never_show_the_private_key(self):
+        """A job of a protected ref, run with "set -x" from setup to finish: neither the trace nor the environment of
+        any process of the build (qcc, the build tools) nor of openssl has the private key or its file path; the
+        entries the build stored are signed after the guard"""
+        priv, pub = self.key_pair("k")
+        with open(priv) as f:
+            pem = f.read()
+        material = [line for line in pem.splitlines() if line and not line.startswith("-----")]
+        self.assertTrue(material)
+        mount = self.root / "mount"
+        (mount / "protected" / "build-x").mkdir(parents=True)
+        real = qc.find_openssl(os.environ)
+        log_dir = self.root / "openssl-log"
+        log_dir.mkdir()
+        wrapper = self.root / "openssl-wrapper"
+        wrapper.write_text('#!/bin/sh\nenv > "%s/env.$$"\necho "$@" > "%s/argv.$$"\nexec "%s" "$@"\n'
+                           % (log_dir, log_dir, real))
+        wrapper.chmod(0o755)
+        (self.source / "probe-env.txt").write_text("1")
+        script = self.root / "job.sh"
+        script.write_text("""set -ex
+. "{script}"
+qore_qmod_cache_setup "{root}"
+cmake -G "Unix Makefiles" -S "{source}" -B "{build}" "-DPython3_EXECUTABLE={python}" ${{QMOD_CACHE_ARG:+"${{QMOD_CACHE_ARG}}"}}
+ln -sf "{source}/qcc" "{build}/qcc"
+cmake --build "{build}"
+env > "{after}"
+qore_qmod_cache_finish "{root}" "{build}"
+env > "{finished}"
+""".format(script=CiScriptTest.SCRIPT, root=ROOT, source=self.source, build=self.build, python=sys.executable,
+           after=self.root / "env-after-build.txt", finished=self.root / "env-after-finish.txt"))
+        env = {k: v for k, v in os.environ.items() if not k.startswith(("QORE_QMOD_CACHE_", "CI_"))}
+        env.update({"QORE_QMOD_CACHE_DIR": str(mount), "CI_COMMIT_REF_PROTECTED": "true", "CI_JOB_NAME": "build-x",
+                    "CI_PROJECT_DIR": str(self.root), "QORE_QMOD_CACHE_SIGNING_KEY": priv,
+                    "QORE_QMOD_CACHE_OPENSSL": str(wrapper)})
+        for shell in [sh for sh in ("sh", "dash", "bash") if shutil.which(sh)]:
+            shutil.rmtree(str(self.build), ignore_errors=True)
+            for p in log_dir.iterdir():
+                p.unlink()
+            res = subprocess.run([shell, str(script)], capture_output=True, text=True, timeout=600, env=env)
+            out = res.stdout + res.stderr
+            self.assertEqual(0, res.returncode, out)
+            self.assertIn("qmod-cache: signed 4 entries that this build stored", out)
+            for text, what in [(out, "the trace of " + shell)] + [
+                    (p.read_text(), p.name) for p in [self.root / "env-after-build.txt",
+                                                      self.root / "env-after-finish.txt"]
+                    + sorted(log_dir.glob("env.*"))]:
+                self.assertNotIn(priv, text, what)
+                for line in material:
+                    self.assertNotIn(line, text, what)
+            # openssl got the key's path as an argument, and only to sign
+            argv = [p.read_text() for p in log_dir.glob("argv.*")]
+            self.assertTrue([a for a in argv if "-sign" in a and priv in a], argv)
+            self.assertFalse([a for a in argv if priv in a and "-sign" not in a and "pkey -in" not in a], argv)
+            # no process of the build got the key's path
+            self.assertFalse((self.source / "qcc-env.txt").exists(),
+                             (self.source / "qcc-env.txt").read_text() if (self.source / "qcc-env.txt").exists()
+                             else "")
+            # the entries are signed: a job of another ref uses them
+            shutil.rmtree(str(self.build), ignore_errors=True)
+            self.assertEqual([], self.build_all(env={"QORE_QMOD_CACHE_VERIFY_KEY": pub},
+                                                cache=mount / "protected" / "build-x"))
+            shutil.rmtree(str(mount / "protected" / "build-x" / qc.SCHEMA))
 
     def test_read_cache_of_a_trusted_level(self):
         protected = self.root / "protected"
@@ -1551,6 +1683,14 @@ class CiScriptTest(unittest.TestCase):
         self.addCleanup(d.cleanup)
         self.root = Path(d.name)
 
+    def keys(self):
+        """(private key file, public key text)"""
+        if not hasattr(self, "_keys"):
+            self._keys = ed25519_keys(self.root, "k")
+            if not self._keys:
+                self.skipTest("OpenSSL 3 is required for signed entries")
+        return self._keys
+
     def run_sh(self, cmd, **env):
         full = {k: v for k, v in os.environ.items() if not k.startswith(("QORE_QMOD_CACHE", "CI_"))}
         full.update(env)
@@ -1560,19 +1700,24 @@ class CiScriptTest(unittest.TestCase):
     def setup(self, **env):
         """Runs qore_qmod_cache_setup and returns its variables"""
         res = self.run_sh('qore_qmod_cache_setup "%s"; echo "ARG=$QMOD_CACHE_ARG"; echo "PRUNE=$QMOD_CACHE_PRUNE_DIR"; '
-                          'echo "RO=${QORE_QMOD_CACHE_READONLY:-}"; echo "KEY=${QORE_QMOD_CACHE_SIGNING_KEY:-}"' % ROOT,
-                          **env)
+                          'echo "RO=${QORE_QMOD_CACHE_READONLY:-}"; echo "KEY=${QORE_QMOD_CACHE_SIGNING_KEY:-}"; '
+                          'echo "SIGN=${QORE_QMOD_CACHE_SIGN_AFTER_BUILD:-}"; echo "HELD=${_qmc_key:+held}"; '
+                          'echo "EXPORTED=$(env | grep -c "^_qmc_key=")"' % ROOT, **env)
         self.assertEqual(0, res.returncode, res.stderr)
-        rv = {"out": res.stdout}
+        rv = {"out": res.stdout + res.stderr}
         for line in res.stdout.splitlines():
             k, sep, v = line.partition("=")
-            if sep and k in ("ARG", "PRUNE", "RO", "KEY"):
+            if sep and k in ("ARG", "PRUNE", "RO", "KEY", "SIGN", "HELD", "EXPORTED"):
                 rv[k] = v
+        # the private key's path never stays in the environment, nor gets into it
+        self.assertEqual("", rv["KEY"])
+        self.assertEqual("0", rv["EXPORTED"])
         return rv
 
     def test_without_cache(self):
-        r = self.setup()
+        r = self.setup(QORE_QMOD_CACHE_SIGNING_KEY="/k.pem")
         self.assertEqual("", r["ARG"])
+        self.assertEqual("", r["HELD"])
         self.assertIn("QORE_QMOD_CACHE_DIR is not set", r["out"])
         r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root / "missing"))
         self.assertEqual("", r["ARG"])
@@ -1581,6 +1726,7 @@ class CiScriptTest(unittest.TestCase):
         r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="true", CI_JOB_NAME="b",
                        QORE_QMOD_CACHE_SIGNING_KEY="k")
         self.assertEqual("", r["ARG"])
+        self.assertEqual("", r["HELD"])
         # finishing without the cache does nothing, but unsets the private key
         res = self.run_sh('qore_qmod_cache_finish /nowhere /nowhere && echo "done ${QORE_QMOD_CACHE_SIGNING_KEY:-}"',
                           QORE_QMOD_CACHE_SIGNING_KEY="k")
@@ -1593,22 +1739,45 @@ class CiScriptTest(unittest.TestCase):
         r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="true", CI_JOB_NAME="build x")
         self.assertEqual("", r["ARG"])
         self.assertIn("without QORE_QMOD_CACHE_SIGNING_KEY", r["out"])
+        priv, pub = self.keys()
         r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="true", CI_JOB_NAME="build x",
-                       QORE_QMOD_CACHE_SIGNING_KEY="k")
+                       QORE_QMOD_CACHE_SIGNING_KEY=priv)
         self.assertEqual("-DQORE_QMOD_CACHE_DIR=%s" % own, r["ARG"])
         self.assertEqual(str(own), r["PRUNE"])
         self.assertEqual("", r["RO"])
-        self.assertEqual("k", r["KEY"])
+        self.assertEqual("1", r["SIGN"])
+        self.assertEqual("held", r["HELD"])
+        # the private key is a file: its text is not accepted
+        with open(priv) as f:
+            pem = f.read()
+        for value in (pem, "/nonexistent/key.pem"):
+            r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="true",
+                           CI_JOB_NAME="build x", QORE_QMOD_CACHE_SIGNING_KEY=value)
+            self.assertEqual("", r["ARG"])
+            self.assertEqual("", r["HELD"])
+            self.assertIn("the signing key cannot be used", r["out"])
+            self.assertNotIn(pem.splitlines()[1], r["out"])
+        # a public key that is not the private key's
+        _, other = ed25519_keys(self.root, "other")
+        r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="true", CI_JOB_NAME="build x",
+                       QORE_QMOD_CACHE_SIGNING_KEY=priv, QORE_QMOD_CACHE_VERIFY_KEY=other)
+        self.assertEqual("", r["ARG"])
+        self.assertIn("is not the public key of QORE_QMOD_CACHE_SIGNING_KEY", r["out"])
+        r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="true", CI_JOB_NAME="build x",
+                       QORE_QMOD_CACHE_SIGNING_KEY=priv, QORE_QMOD_CACHE_VERIFY_KEY=pub)
+        self.assertEqual("-DQORE_QMOD_CACHE_DIR=%s" % own, r["ARG"])
         # a runner that mounts the protected cache read-only: read only, never pruned
         os.chmod(str(self.root / "protected"), 0o555)
         try:
             if os.access(str(self.root / "protected"), os.W_OK):
                 self.skipTest("running as root")
             r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="true",
-                           CI_JOB_NAME="build x", QORE_QMOD_CACHE_SIGNING_KEY="k")
+                           CI_JOB_NAME="build x", QORE_QMOD_CACHE_SIGNING_KEY=priv)
             self.assertEqual("-DQORE_QMOD_CACHE_DIR=%s" % own, r["ARG"])
             self.assertEqual("1", r["RO"])
             self.assertEqual("", r["PRUNE"])
+            self.assertEqual("", r["SIGN"])
+            self.assertEqual("", r["HELD"])
         finally:
             os.chmod(str(self.root / "protected"), 0o755)
 
@@ -1620,16 +1789,23 @@ class CiScriptTest(unittest.TestCase):
         self.assertEqual("", r["ARG"])
         self.assertIn("no QORE_QMOD_CACHE_VERIFY_KEY", r["out"])
         # with it: the protected cache, read only, and no writable cache of its own; the private key is dropped
+        priv, pub = self.keys()
         r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="false", CI_JOB_NAME="build-x",
-                       CI_COMMIT_REF_SLUG="feature-y", QORE_QMOD_CACHE_VERIFY_KEY="pub",
-                       QORE_QMOD_CACHE_SIGNING_KEY="leaked")
+                       CI_COMMIT_REF_SLUG="feature-y", QORE_QMOD_CACHE_VERIFY_KEY=pub,
+                       QORE_QMOD_CACHE_SIGNING_KEY=priv)
         self.assertEqual("-DQORE_QMOD_CACHE_DIR=%s" % (self.root / "protected" / "build-x"), r["ARG"])
         self.assertEqual("1", r["RO"])
         self.assertEqual("", r["PRUNE"])
-        self.assertEqual("", r["KEY"])
-        self.assertEqual(["protected"], sorted(p.name for p in self.root.iterdir()))
+        self.assertEqual("", r["SIGN"])
+        self.assertEqual("", r["HELD"])
+        self.assertEqual(["k.pem", "k.pub.pem", "protected"], sorted(p.name for p in self.root.iterdir()))
+        # a public key that is none
+        r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="false", CI_JOB_NAME="build-x",
+                       QORE_QMOD_CACHE_VERIFY_KEY="pub")
+        self.assertEqual("", r["ARG"])
+        self.assertIn("QORE_QMOD_CACHE_VERIFY_KEY cannot be used", r["out"])
         # a job name the protected jobs have not built yet: no cache
-        r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_JOB_NAME="build-z", QORE_QMOD_CACHE_VERIFY_KEY="pub")
+        r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_JOB_NAME="build-z", QORE_QMOD_CACHE_VERIFY_KEY=pub)
         self.assertEqual("", r["ARG"])
 
     def test_without_openssl(self):
@@ -1649,7 +1825,7 @@ class CiScriptTest(unittest.TestCase):
         project = self.root / "project"
         project.mkdir()
         r = self.setup(QORE_QMOD_CACHE_DIR=str(mount), CI_COMMIT_REF_PROTECTED="true", CI_JOB_NAME="test-macos",
-                       CI_PROJECT_DIR=str(project), QORE_QMOD_CACHE_SIGNING_KEY="k")
+                       CI_PROJECT_DIR=str(project), QORE_QMOD_CACHE_SIGNING_KEY=self.keys()[0])
         self.assertEqual("-DQORE_QMOD_CACHE_DIR=%s/.qmod-cache" % project, r["ARG"])
         self.assertEqual(str(mount / "protected" / "test-macos"), os.readlink(str(project / ".qmod-cache")))
 
@@ -1677,14 +1853,17 @@ class CiScriptTest(unittest.TestCase):
         # this job's own cache is pruned by qore_qmod_cache_finish, with its size limit too
         self.assertEqual(["c" * 64 + ".json"], left("this-job"))
 
-    def test_finish_unsets_the_private_key(self):
+    def test_finish_forgets_the_private_key(self):
         (self.root / "protected").mkdir()
-        res = self.run_sh('qore_qmod_cache_setup "%s" >/dev/null; qore_qmod_cache_finish "%s" "%s" >/dev/null 2>&1; '
-                          'echo "rc=$? key=${QORE_QMOD_CACHE_SIGNING_KEY:-}"' % (ROOT, ROOT, self.root / "no-build"),
+        res = self.run_sh('qore_qmod_cache_setup "%s" >/dev/null; echo "held=${_qmc_key:+1}"; '
+                          'qore_qmod_cache_finish "%s" "%s" >/dev/null 2>&1; '
+                          'echo "rc=$? key=${QORE_QMOD_CACHE_SIGNING_KEY:-}${_qmc_key:-}"'
+                          % (ROOT, ROOT, self.root / "no-build"),
                           QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="true", CI_JOB_NAME="b",
-                          QORE_QMOD_CACHE_SIGNING_KEY="k")
-        # the guard fails for a build tree that does not exist, and the key is unset all the same
-        self.assertEqual("rc=1 key=\n", res.stdout)
+                          QORE_QMOD_CACHE_SIGNING_KEY=self.keys()[0])
+        # the guard fails for a build tree that does not exist (nothing is signed), and the key is forgotten all the
+        # same
+        self.assertEqual("held=1\nrc=1 key=\n", res.stdout)
 
 
 def find_build_dir():

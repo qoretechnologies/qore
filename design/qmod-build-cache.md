@@ -236,10 +236,10 @@ Whoever can write to a cache directory can make a build use a module that qcc ne
 entry only prove that its files were not changed after the entry was written.  So only the jobs of protected refs
 write the CI cache, and every job checks that an entry was written by one of them:
 
-- `protected/<job name>`: written only by the jobs of protected refs (`CI_COMMIT_REF_PROTECTED=true`).  They sign each
-  entry (the entry with the digests of its files) with the Ed25519 private key `QORE_QMOD_CACHE_SIGNING_KEY`, a
-  protected CI variable that only they get, and use only entries that verify.  Without the key, a job of a protected
-  ref builds without the cache, so it never writes or accepts an unsigned entry.
+- `protected/<job name>`: written only by the jobs of protected refs (`CI_COMMIT_REF_PROTECTED=true`).  Each entry
+  they store (the entry with the digests of its files) is signed with the Ed25519 private key
+  `QORE_QMOD_CACHE_SIGNING_KEY`, a protected CI variable that only they get, and they use only entries that verify.
+  Without the key, a job of a protected ref builds without the cache, so it never accepts an unsigned entry.
 - The jobs of other refs only read it: their runner mounts `protected/` read-only (and runs no privileged pods, which
   could mount it again), and they use only entries that the public key `QORE_QMOD_CACHE_VERIFY_KEY` (not secret)
   verifies: with the public key a job can check an entry but cannot sign one, so an entry that anyone without the
@@ -255,8 +255,33 @@ the cache: `qore_qmod_cache_setup` checks for the command (`check-openssl`) and 
 compiles every module without it.  The guard checks the signatures of the entries the cache supplied; without
 OpenSSL 3 it treats the build as one without the cache, and fails only for a module that the cache supplied all the
 same (its signature cannot be checked).  qcc gets none of the cache's settings
-(`QORE_QMOD_CACHE_*`) in its environment, and `qore_qmod_cache_finish` unsets the private key, so that nothing run after
-the build (the tests of `test-macos.sh`) has it.
+(`QORE_QMOD_CACHE_*`) in its environment, nor does any other command the cache runs (openssl, the compiler and linker
+whose versions are in the context).
+
+### The private key
+
+The private key is only ever used after the build, so that no process of the build can see it:
+
+- `QORE_QMOD_CACHE_SIGNING_KEY` is the path of the key's file (a CI variable of type File); key text in the variable
+  is not accepted.
+- `qore_qmod_cache_setup` takes it out of the environment before anything else, into an unexported shell variable, so
+  that make, the compilers, bison, qcc and qore never get the key or its path; `signer-check` (which gets the path on
+  its stdin) checks that it is an Ed25519 key that signs, that its public key verifies the signature and that it is
+  `QORE_QMOD_CACHE_VERIFY_KEY` when that is set (else the public key is exported for the build).  A key that does
+  not pass leaves the job without the cache.
+- During the build, `exec` stores entries unsigned (`QORE_QMOD_CACHE_SIGN_AFTER_BUILD=1`); an unsigned entry is a miss
+  for every job, and `exec` refuses to use the cache at all when `QORE_QMOD_CACHE_SIGNING_KEY` is in its environment.
+- `qore_qmod_cache_finish` runs the guard, and only when it passes, `sign`: it reads the key's path on stdin, and
+  signs each entry the build stored (by its sidecars) when the cache still has that entry with those files; openssl
+  gets the path as its `-inkey` argument (no copy of the key is made) and none of the cache's settings in its
+  environment.  Then the path is forgotten, whether the guard passed or not, so nothing run after the build (the
+  tests of `test-macos.sh`) has it.
+- The value is never expanded on a command line: it is tested with `${VAR:+set}` and passed in here-documents, so
+  that `set -x` does not print it (`test_ci_scripts_never_show_the_private_key` runs the setup, a build and the finish
+  under `set -x` with sh, dash and bash and checks the trace, the environment of qcc, of openssl and of the shell
+  after the build).
+
+Signing after the guard also means that a build whose guard fails never publishes an entry.
 
 A job of a protected ref on a runner that mounts `protected/` read-only uses it read-only
 (`QORE_QMOD_CACHE_READONLY=1`).
@@ -301,8 +326,9 @@ which `verify`, `stats` and `prune` read.
 |`QORE_QMOD_CACHE_DISABLE=1`|compile every module and store nothing
 |`QORE_QMOD_CACHE_READONLY=1`|look modules up, store nothing
 |`QORE_QMOD_CACHE_AUDIT=<rate>[:<seed>]`|audit a sample of the hits (see above)
-|`QORE_QMOD_CACHE_SIGNING_KEY=<key>`|the Ed25519 private key (a file, PEM text or base64 of it): sign the entries stored, and use only signed entries (see "Trust levels")
-|`QORE_QMOD_CACHE_VERIFY_KEY=<key>`|the public key: use only entries signed with the private key; a job without the private key writes nothing
+|`QORE_QMOD_CACHE_VERIFY_KEY=<key>`|the Ed25519 public key (a file or PEM text): use only entries signed with the private key; write nothing, unless:
+|`QORE_QMOD_CACHE_SIGN_AFTER_BUILD=1`|store entries unsigned, for `sign` to sign after the build (see "The private key")
+|`QORE_QMOD_CACHE_SIGNING_KEY`|must not be set: `exec` then uses no cache (only `sign` uses the private key, whose file path it reads on stdin)
 |`QORE_QMOD_CACHE_OPENSSL=<path>`|the OpenSSL 3 command for the signatures
 |`QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE=1\|.d\|.d.fingerprints`|for the tests only: a restored file is damaged after the copy
 

@@ -37,6 +37,8 @@ Commands:
 - context: writes the build context (run by the build before any qmod)
 - exec: compiles one module through the cache (the build's qmod rule)
 - verify: the CI guard; checks every qmod of a build tree that the cache supplied, and the identity of every qmod
+- sign: signs the entries that a build stored, after the guard passed (the private key's file path on stdin)
+- signer-check, check-openssl: check the keys and the OpenSSL 3 command of a job before its build
 - stats: prints the hits, misses and cache size of a build
 - prune: removes cache entries not used since a time, then the oldest ones above a size limit
 
@@ -46,10 +48,11 @@ Environment (read by "exec"; never part of a key):
 - QORE_QMOD_CACHE_AUDIT=<rate>[:<seed>]: on a hit, also compile a sample of the modules (a rate from 0 to 1 of
   them, chosen by their key and the seed) and fail the build unless qcc writes the same module byte for byte; a
   failure quarantines the cache the job writes to
-- QORE_QMOD_CACHE_SIGNING_KEY=<key>: the Ed25519 private key (a file, PEM text or base64 of it) with which the
-  entries stored are signed; only the jobs of protected refs have it
-- QORE_QMOD_CACHE_VERIFY_KEY=<key>: the public key; with either key, only entries signed with the private key are
-  used, and a job with the public key only writes nothing
+- QORE_QMOD_CACHE_VERIFY_KEY=<key>: the Ed25519 public key (a file or PEM text); only entries signed with the
+  private key are used, and the job writes nothing unless QORE_QMOD_CACHE_SIGN_AFTER_BUILD is set
+- QORE_QMOD_CACHE_SIGN_AFTER_BUILD=1: with the public key, store the entries unsigned; "sign" signs them after the
+  build, with the private key, whose file path it reads from stdin (only the jobs of protected refs have it, and the
+  build never does: QORE_QMOD_CACHE_SIGNING_KEY in the environment of "exec" disables the cache)
 - QORE_QMOD_CACHE_OPENSSL=<path>: the OpenSSL 3 command for the signatures
 - QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE=1|.d|.d.fingerprints: for the tests only, a restored file (the module, its
   depfile or its fingerprints) is damaged after the copy
@@ -452,8 +455,10 @@ def module_candidates(name, dirs, content=True):
 # the build context
 
 def run_capture(argv, env=None):
+    """Runs a command and returns its output; the command gets none of the cache's settings (child_environment())"""
     try:
-        res = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, timeout=120)
+        res = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             env=child_environment(os.environ if env is None else env), timeout=120)
     except (OSError, subprocess.SubprocessError) as e:
         return "ERROR: %s" % e.__class__.__name__
     return res.stdout.decode("utf-8", "replace")
@@ -820,7 +825,7 @@ def find_openssl(env):
     for c in cands:
         if not c or not os.path.isfile(c):
             continue
-        m = re.match(r"^OpenSSL ([0-9]+)\.", run_capture([c, "version"]))
+        m = re.match(r"^OpenSSL ([0-9]+)\.", run_capture([c, "version"], env=child_environment(env)))
         if m and int(m.group(1)) >= 3:
             found = c
             break
@@ -828,85 +833,55 @@ def find_openssl(env):
     return found
 
 
-def _key_file(value, directory, name):
-    """Writes a key given as a file path (a GitLab file variable), PEM text or base64 of PEM text to a 0600 file"""
-    if os.path.isfile(value):
-        with open(value, "rb") as f:
-            data = f.read()
-    elif value.lstrip().startswith("-----BEGIN"):
-        data = value.encode("ascii")
-    else:
-        try:
-            data = base64.b64decode(value.encode("ascii"), validate=True)
-        except (ValueError, UnicodeEncodeError):
-            raise CacheError("%s is neither a file, a PEM key nor base64 of one" % name)
-    path = os.path.join(directory, name)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "wb") as f:
-        f.write(data)
-    return path
+def child_environment(env):
+    """The environment of every process the cache runs (qcc, openssl): without the cache's settings, among them the
+    keys"""
+    return {k: v for k, v in env.items() if not k.startswith("QORE_QMOD_CACHE_")}
+
+
+def signed_data(entry):
+    """The bytes an entry's signature covers: the entry without its signature"""
+    return json.dumps({k: v for k, v in entry.items() if k != "signature"}, sort_keys=True,
+                      separators=(",", ":")).encode("utf-8")
 
 
 class Signer:
-    """Signs entries with an Ed25519 private key and verifies them with the public key (OpenSSL 3)
+    """Checks the signatures of entries with the Ed25519 public key QORE_QMOD_CACHE_VERIFY_KEY (OpenSSL 3)
 
-    QORE_QMOD_CACHE_SIGNING_KEY is the private key: only the jobs of protected refs have it (a protected CI
-    variable).  QORE_QMOD_CACHE_VERIFY_KEY is the public key, which every job can have: a job without the private key
-    can check that an entry was written by a job with it, but cannot write one that passes.  With the private key
-    alone, the public key is derived from it.
+    The public key is not secret: every job can check that an entry was signed with the private key, which only the
+    "sign" command uses, after the build (see sign_entries()).  The key is a file or PEM text.
     """
 
     def __init__(self, env):
         self.openssl = find_openssl(env)
         if not self.openssl:
             raise NoOpenSSL("signed entries need OpenSSL 3 (set QORE_QMOD_CACHE_OPENSSL)")
-        self.dir = tempfile.mkdtemp(prefix="qmod-cache-keys.")
+        self.env = child_environment(env)
+        self.dir = tempfile.mkdtemp(prefix="qmod-cache-verify.")
         atexit.register(self.close)
-        self.private = None
-        if env.get("QORE_QMOD_CACHE_SIGNING_KEY"):
-            self.private = _key_file(env["QORE_QMOD_CACHE_SIGNING_KEY"], self.dir, "private.pem")
-        if env.get("QORE_QMOD_CACHE_VERIFY_KEY"):
-            self.public = _key_file(env["QORE_QMOD_CACHE_VERIFY_KEY"], self.dir, "public.pem")
-        else:
+        value = env["QORE_QMOD_CACHE_VERIFY_KEY"]
+        if os.path.isfile(value):
+            self.public = value
+        elif value.lstrip().startswith("-----BEGIN"):
             self.public = os.path.join(self.dir, "public.pem")
-            res = subprocess.run([self.openssl, "pkey", "-in", self.private, "-pubout", "-out", self.public],
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if res.returncode:
-                raise CacheError("QORE_QMOD_CACHE_SIGNING_KEY is no private key")
+            with open(self.public, "w", encoding="ascii") as f:
+                f.write(value)
+        else:
+            raise CacheError("QORE_QMOD_CACHE_VERIFY_KEY is neither a file nor a PEM public key")
 
     @staticmethod
     def from_env(env):
-        """A signer for the keys in the environment, or None without keys"""
-        if env.get("QORE_QMOD_CACHE_SIGNING_KEY") or env.get("QORE_QMOD_CACHE_VERIFY_KEY"):
+        """A verifier for the public key in the environment, or None without one
+
+        The private key must not be in the environment of the build: the setup takes it out (see qmod-cache.sh), and
+        only "sign" gets its file, after the build.
+        """
+        if env.get("QORE_QMOD_CACHE_SIGNING_KEY"):
+            raise CacheError("QORE_QMOD_CACHE_SIGNING_KEY is in the environment of the build; only 'sign' may use the "
+                             "private key, after the build (see test/docker_test/qmod-cache.sh)")
+        if env.get("QORE_QMOD_CACHE_VERIFY_KEY"):
             return Signer(env)
         return None
-
-    def can_sign(self):
-        return self.private is not None
-
-    def _data(self, entry):
-        fd, path = tempfile.mkstemp(dir=self.dir)
-        with os.fdopen(fd, "wb") as f:
-            f.write(json.dumps({k: v for k, v in entry.items() if k != "signature"}, sort_keys=True,
-                               separators=(",", ":")).encode("utf-8"))
-        return path
-
-    def sign(self, entry):
-        data = self._data(entry)
-        sig = data + ".sig"
-        try:
-            res = subprocess.run([self.openssl, "pkeyutl", "-sign", "-inkey", self.private, "-rawin", "-in", data,
-                                  "-out", sig], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-            if res.returncode:
-                raise CacheError("cannot sign the entry: %s" % res.stderr.decode("utf-8", "replace").strip())
-            with open(sig, "rb") as f:
-                return base64.b64encode(f.read()).decode("ascii")
-        finally:
-            for p in (data, sig):
-                try:
-                    os.unlink(p)
-                except OSError:
-                    pass
 
     def verify(self, entry):
         sig_b64 = entry.get("signature")
@@ -916,13 +891,16 @@ class Signer:
             raw = base64.b64decode(sig_b64.encode("ascii"), validate=True)
         except (ValueError, UnicodeEncodeError):
             return False
-        data = self._data(entry)
+        fd, data = tempfile.mkstemp(dir=self.dir)
         sig = data + ".sig"
         try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(signed_data(entry))
             with open(sig, "wb") as f:
                 f.write(raw)
             res = subprocess.run([self.openssl, "pkeyutl", "-verify", "-pubin", "-inkey", self.public, "-rawin",
-                                  "-in", data, "-sigfile", sig], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                  "-in", data, "-sigfile", sig], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                 env=self.env)
             return res.returncode == 0
         finally:
             for p in (data, sig):
@@ -935,6 +913,38 @@ class Signer:
         shutil.rmtree(self.dir, ignore_errors=True)
 
 
+def read_key_path(stream):
+    """Reads the file path of the private key from @p stream (one line; never from the environment or the command
+    line, see qmod-cache.sh); the file must be a regular file"""
+    path = stream.readline().rstrip("\n")
+    if not path:
+        raise CacheError("no private key file given")
+    if not os.path.isfile(path):
+        raise CacheError("the private key is not a file (QORE_QMOD_CACHE_SIGNING_KEY must be a file variable)")
+    return path
+
+
+def sign_entry(openssl, key_path, entry, env, tmpdir):
+    """Returns the signature of an entry, made with the private key in the file @p key_path"""
+    fd, data = tempfile.mkstemp(dir=tmpdir)
+    sig = data + ".sig"
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(signed_data(entry))
+        res = subprocess.run([openssl, "pkeyutl", "-sign", "-inkey", key_path, "-rawin", "-in", data, "-out", sig],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=env)
+        if res.returncode:
+            raise CacheError("cannot sign the entry: %s" % res.stderr.decode("utf-8", "replace").strip())
+        with open(sig, "rb") as f:
+            return base64.b64encode(f.read()).decode("ascii")
+    finally:
+        for p in (data, sig):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+
+
 def check_signature(entry, signer):
     """Returns None if the entry is signed with the signing key (or no key is set), else the reason"""
     if signer is None:
@@ -945,8 +955,8 @@ def check_signature(entry, signer):
 
 
 def qcc_environment(env):
-    """The environment of qcc: without the cache's settings, among them the signing key"""
-    return {k: v for k, v in env.items() if not k.startswith("QORE_QMOD_CACHE_")}
+    """The environment of qcc: without the cache's settings, among them the keys"""
+    return child_environment(env)
 
 
 def module_include_files(source_root, deps):
@@ -1495,12 +1505,15 @@ class Cache:
             remove_path(p)
         return True
 
-    def valid_object(self, base, key, signer=None):
+    def valid_object(self, base, key, signer=None, allow_unsigned=False):
         """True if the object of a key is backed by a valid entry: one that exists, is signed with the signing key
-        (when one is set) and has the digests of the object's files"""
+        (when one is set; with @p allow_unsigned, an entry without a signature, which a job stored to sign it after
+        its build, is valid too, but not one with another signature) and has the digests of the object's files"""
         try:
             entry = self.read_entry(base, key)
-            if entry_problem(entry, key) or check_signature(entry, signer):
+            if entry_problem(entry, key):
+                return False
+            if (not allow_unsigned or "signature" in entry) and check_signature(entry, signer):
                 return False
             return all(self.file_sha256("objects", key, "qmod" + suffix) == entry["files"][suffix or "qmod"]
                        for suffix in STORED_SUFFIXES)
@@ -1508,7 +1521,7 @@ class Cache:
             # any exception reading the entry or its files (see candidates()) makes it invalid
             return False
 
-    def store(self, base, key, entry, files, signer=None):
+    def store(self, base, key, entry, files, signer=None, allow_unsigned=False):
         """Stores the files of a compiled module
 
         An object that no valid entry backs (a damaged or forged one, an interrupted store, a link) is replaced.  When
@@ -1517,7 +1530,7 @@ class Cache:
         """
         obj = self.object_dir(key)
         entry_path = os.path.join(self.entries, base, key + ".json")
-        if os.path.lexists(obj) and not self.valid_object(base, key, signer):
+        if os.path.lexists(obj) and not self.valid_object(base, key, signer, allow_unsigned):
             if not self.remove(entry_path, key):
                 raise OSError("the invalid entry %s is being read by another job" % key)
         fd = self.open_lock(key)
@@ -1620,19 +1633,23 @@ class Module:
         self.default_dirs = args.default_module_dir
         # a cache that this job does not write: no store, no last-use mark, no removal
         self.readonly = env.get("QORE_QMOD_CACHE_READONLY") in ("1", "true", "yes")
-        # the keys with which the entries this job writes are signed and the entries it reads are verified (see
-        # design/qmod-build-cache.md "Trust levels"); a job that can only verify never writes
+        # the public key with which the entries this job reads are verified (see design/qmod-build-cache.md "Trust
+        # levels"); a job with it writes only when its entries are signed after the build (QORE_QMOD_CACHE_SIGN_AFTER_
+        # BUILD, set by qore_qmod_cache_setup for a job with the private key): it stores them unsigned, and "sign"
+        # signs them once the guard passed
         self.signer = Signer.from_env(env)
-        if self.signer and not self.signer.can_sign():
+        self.sign_after_build = env.get("QORE_QMOD_CACHE_SIGN_AFTER_BUILD") in ("1", "true", "yes")
+        if self.signer and not self.sign_after_build:
             self.readonly = True
         self.base = base_key(self.context["digest"], self.argv, self.cwd, env, self.source_root, self.extra)
 
     def files(self):
         return {"": self.out, ".d": self.out + ".d", ".d.fingerprints": self.out + ".d.fingerprints"}
 
-    def sidecar(self, origin, key, entry=None):
+    def sidecar(self, origin, key, entry=None, stored=False):
         rec = {"schema": SCHEMA, "name": self.name, "origin": origin, "base_key": self.base, "key": key,
-               "context": self.context["digest"], "identity": self.identity, "source_root": self.source_root}
+               "context": self.context["digest"], "identity": self.identity, "source_root": self.source_root,
+               "stored": stored}
         if os.path.isfile(self.out):
             rec["qmod_sha256"] = sha256_file(self.out)
         if entry is not None:
@@ -1822,8 +1839,6 @@ class Module:
             },
             "created": time.time(),
         }
-        if self.signer and self.signer.can_sign():
-            entry["signature"] = self.signer.sign(entry)
         return key, entry
 
     def audit(self, entry):
@@ -1921,15 +1936,15 @@ def cmd_exec(args):
     stored = ""
     if not disabled and not readonly:
         try:
-            cache.store(mod.base, key, entry, mod.files(), mod.signer)
-            stored = "; stored"
+            cache.store(mod.base, key, entry, mod.files(), mod.signer, allow_unsigned=mod.sign_after_build)
+            stored = "; stored" + (" (signed after the build)" if mod.sign_after_build else "")
         except KeyCollision as e:
             return fail_key_hole(mod, cache, False, "KEY COLLISION: %s" % e)
         except Exception as e:
             # whatever the cache holds, a store that fails leaves the compiled module, never a failed build
             stored = "; not stored: %s: %s" % (e.__class__.__name__, e)
     log("miss %s (%s)%s" % (mod.name, reason, stored))
-    mod.sidecar("miss", key, entry)
+    mod.sidecar("miss", key, entry, stored=stored.startswith("; stored"))
     write_index(mod.build_dir, mod.source_root, mod.out, key)
     return 0
 
@@ -2323,6 +2338,144 @@ def cmd_prune(args):
     return 0
 
 
+def comparable_entry(entry):
+    """An entry without what "sign" changes, and without the time it was stored (another job that stored the same key
+    wrote the same entry at another time)"""
+    return {k: v for k, v in entry.items() if k not in ("signature", "created")}
+
+
+def cmd_sign(args):
+    """Signs the entries that a build stored, after its guard passed (qore_qmod_cache_finish)
+
+    The file path of the private key is read from stdin: the key is never in the environment of the build, nor on a
+    command line (see qmod-cache.sh); openssl gets the path as its -inkey argument, and none of the cache's settings
+    in its environment.  An entry is signed only when the cache still has the entry this build stored (by the build's
+    sidecars), with the stored files' digests.  Failures are reported, not fatal: an unsigned entry is a miss for
+    every job.
+    """
+    try:
+        key_path = read_key_path(sys.stdin)
+    except CacheError as e:
+        log("not signing: %s" % e)
+        return 1
+    env = dict(os.environ)
+    openssl = find_openssl(env)
+    if not openssl:
+        log("not signing: no OpenSSL 3 command (set QORE_QMOD_CACHE_OPENSSL)")
+        return 1
+    cache = Cache(args.cache_dir)
+    child_env = child_environment(env)
+    tmpdir = tempfile.mkdtemp(prefix="qmod-cache-sign.")
+    signed = 0
+    failed = 0
+    try:
+        for sc in find_sidecars(os.path.abspath(args.build_dir)):
+            try:
+                with open(sc, "r", encoding="utf-8") as f:
+                    rec = json.load(f)
+                if rec.get("origin") != "miss" or rec.get("stored") is not True:
+                    continue
+                ours = rec["entry"]
+                key, base = rec["key"], rec["base_key"]
+                if entry_problem(ours, key) or ours.get("base_key") != base:
+                    raise CacheError("the sidecar has no valid entry")
+                fd = cache.open_lock(key)
+                if fd is None:
+                    raise CacheError("cannot open the lock file of the entry")
+                try:
+                    # shared: not removed while it is signed
+                    fcntl.flock(fd, fcntl.LOCK_SH)
+                    entry = cache.read_entry(base, key)
+                    if entry_problem(entry, key) or comparable_entry(entry) != comparable_entry(ours):
+                        raise CacheError("the cache does not have the entry this build stored")
+                    for suffix in STORED_SUFFIXES:
+                        if cache.file_sha256("objects", key, "qmod" + suffix) != entry["files"][suffix or "qmod"]:
+                            raise CacheError("stored file 'qmod%s' is not the one this build stored" % suffix)
+                    entry["signature"] = sign_entry(openssl, key_path, entry, child_env, tmpdir)
+                    cache.write_file((json.dumps(entry, sort_keys=True, indent=1) + "\n").encode(), "entries", base,
+                                     key + ".json")
+                finally:
+                    os.close(fd)
+                signed += 1
+            except Exception as e:
+                failed += 1
+                log("not signed: %s: %s: %s" % (sc[:-len(SIDECAR_SUFFIX)], e.__class__.__name__, e))
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+    log("signed %d entries that this build stored%s" % (signed, ", %d failed (they are misses for every job)" % failed
+                                                          if failed else ""))
+    return 0
+
+
+def cmd_signer_check(args):
+    """Checks the keys of a job before its build (qore_qmod_cache_setup)
+
+    With --verify-only: OpenSSL 3 and the public key QORE_QMOD_CACHE_VERIFY_KEY.  Otherwise the private key, whose
+    file path is read from stdin: it must sign, its public key must verify the signature, and it must be the public key
+    QORE_QMOD_CACHE_VERIFY_KEY when that is set; the public key is printed (PEM), so that the job can verify with it.
+    Nothing of the private key is printed.
+    """
+    env = dict(os.environ)
+    env.pop("QORE_QMOD_CACHE_SIGNING_KEY", None)
+    openssl = find_openssl(env)
+    if not openssl:
+        log("no OpenSSL 3 command (Ed25519 with -rawin); set QORE_QMOD_CACHE_OPENSSL")
+        return 1
+    child_env = child_environment(env)
+    tmpdir = tempfile.mkdtemp(prefix="qmod-cache-keys.")
+    try:
+        def public_pem(argv):
+            res = subprocess.run([openssl, "pkey"] + argv + ["-pubout"], stdout=subprocess.PIPE,
+                                 stderr=subprocess.DEVNULL, env=child_env)
+            text = res.stdout.decode("ascii", "replace")
+            return text if not res.returncode and text.startswith("-----BEGIN PUBLIC KEY-----") else None
+        given = None
+        if env.get("QORE_QMOD_CACHE_VERIFY_KEY"):
+            try:
+                verifier = Signer(env)
+            except CacheError as e:
+                log(str(e))
+                return 1
+            given = public_pem(["-pubin", "-in", verifier.public])
+            if not given:
+                log("QORE_QMOD_CACHE_VERIFY_KEY is no public key")
+                return 1
+        if args.verify_only:
+            if not given:
+                log("no QORE_QMOD_CACHE_VERIFY_KEY")
+                return 1
+            return 0
+        try:
+            key_path = read_key_path(sys.stdin)
+        except CacheError as e:
+            log(str(e))
+            return 1
+        derived = public_pem(["-in", key_path])
+        if not derived:
+            log("QORE_QMOD_CACHE_SIGNING_KEY is no private key")
+            return 1
+        if given and given != derived:
+            log("QORE_QMOD_CACHE_VERIFY_KEY is not the public key of QORE_QMOD_CACHE_SIGNING_KEY")
+            return 1
+        # an Ed25519 key: a signature that the public key verifies
+        probe = {"probe": "qmod-cache"}
+        try:
+            probe["signature"] = sign_entry(openssl, key_path, probe, child_env, tmpdir)
+        except CacheError:
+            log("QORE_QMOD_CACHE_SIGNING_KEY cannot sign (an Ed25519 key is needed)")
+            return 1
+        pub = os.path.join(tmpdir, "public.pem")
+        with open(pub, "w", encoding="ascii") as f:
+            f.write(derived)
+        if not Signer(dict(env, QORE_QMOD_CACHE_VERIFY_KEY=pub)).verify(probe):
+            log("the signature of QORE_QMOD_CACHE_SIGNING_KEY does not verify")
+            return 1
+        sys.stdout.write(derived)
+        return 0
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 def cmd_check_openssl(args):
     """Exits with 0 when an OpenSSL 3 command for the signatures is there (see find_openssl())"""
     openssl = find_openssl(os.environ)
@@ -2361,6 +2514,11 @@ def main(argv=None):
     s.add_argument("--cache-dir", required=True)
     s.add_argument("--build-dir")
     sub.add_parser("check-openssl", help="check that there is an OpenSSL 3 command for the signatures")
+    g = sub.add_parser("sign", help="sign the entries a build stored (the private key's file path on stdin)")
+    g.add_argument("--cache-dir", required=True)
+    g.add_argument("--build-dir", required=True)
+    k = sub.add_parser("signer-check", help="check the keys of a job (the private key's file path on stdin)")
+    k.add_argument("--verify-only", action="store_true", help="check only OpenSSL and the public key")
     r = sub.add_parser("prune", help="remove old cache entries")
     r.add_argument("--cache-dir", required=True)
     r.add_argument("--max-age-days", type=float, help="remove the entries not used for this many days")
@@ -2371,7 +2529,8 @@ def main(argv=None):
     if args.command == "exec" and args.qcc_argv and args.qcc_argv[0] == "--":
         args.qcc_argv = args.qcc_argv[1:]
     handlers = {"context": cmd_context, "exec": cmd_exec, "verify": cmd_verify, "stats": cmd_stats,
-                "prune": cmd_prune, "check-openssl": cmd_check_openssl}
+                "prune": cmd_prune, "check-openssl": cmd_check_openssl, "sign": cmd_sign,
+                "signer-check": cmd_signer_check}
     if args.command not in handlers:
         p.print_help()
         return 2
