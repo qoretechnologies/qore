@@ -78,6 +78,10 @@
 #include <set>
 #include <string>
 #include <sys/stat.h>
+#ifndef _Q_WINDOWS
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 #include <sys/types.h>
 #include <vector>
 #ifndef _Q_WINDOWS
@@ -92,6 +96,38 @@ static const qore_mod_api_compat_s qore_mod_api_list_l[] = {
 // public symbols
 const qore_mod_api_compat_s* qore_mod_api_list = qore_mod_api_list_l;
 const unsigned qore_mod_api_list_len = QORE_MOD_API_LEN;
+
+//! Opens a file for reading only if it is a regular file; returns nullptr otherwise or if it cannot be opened
+/** The module loader reads files that it finds next to a module (a dependency file, a fingerprint file, sources):
+    opening a FIFO or a device with that name would block or read without end, so the file is opened without blocking
+    and refused unless it is a regular file, before anything is read from it
+*/
+static FILE* qore_open_regular_file(const char* path) {
+#ifdef _Q_WINDOWS
+    return fopen(path, "rb");
+#else
+    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) {
+        return nullptr;
+    }
+    struct stat sb;
+    if (fstat(fd, &sb) || !S_ISREG(sb.st_mode)) {
+        close(fd);
+        return nullptr;
+    }
+    // reads of a regular file do not block anyway; the flag is cleared so that the stream behaves as fopen()'s
+    int flags = fcntl(fd, F_GETFL);
+    if (flags < 0 || fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
+        close(fd);
+        return nullptr;
+    }
+    FILE* fp = fdopen(fd, "rb");
+    if (!fp) {
+        close(fd);
+    }
+    return fp;
+#endif
+}
 
 const pthread_mutexattr_t* qore_module_manager_mutex_attr() {
 #ifdef DEBUG
@@ -522,7 +558,7 @@ static bool qore_module_source_changed(const std::string& path, const QoreAOTMod
     @return false if the file cannot be read, or has no rule or a rule without a target
 */
 static bool qore_read_module_depfile(const std::string& path, std::string& target, std::vector<std::string>& deps) {
-    FILE* fp = fopen(path.c_str(), "rb");
+    FILE* fp = qore_open_regular_file(path.c_str());
     if (!fp) {
         return false;
     }
@@ -611,7 +647,7 @@ static bool qore_read_module_depfile(const std::string& path, std::string& targe
 #endif
 
 bool qore_aot_file_content_hash(const char* path, uint64_t& hash, ExceptionSink* xsink) {
-    std::unique_ptr<FILE, int (*)(FILE*)> fp(fopen(path, "rb"), fclose);
+    std::unique_ptr<FILE, int (*)(FILE*)> fp(qore_open_regular_file(path), fclose);
     if (!fp) {
         return false;
     }
@@ -705,7 +741,7 @@ bool qore_aot_write_module_source_fingerprints(const std::string& depfile, const
 
 bool qore_aot_read_module_source_fingerprints(const std::string& path,
         std::map<std::string, QoreAOTModuleSourceFingerprint>& fingerprints) {
-    std::unique_ptr<FILE, int (*)(FILE*)> fp(fopen(path.c_str(), "rb"), fclose);
+    std::unique_ptr<FILE, int (*)(FILE*)> fp(qore_open_regular_file(path.c_str()), fclose);
     if (!fp) {
         return false;
     }
