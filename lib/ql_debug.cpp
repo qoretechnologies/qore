@@ -14800,7 +14800,7 @@ static void ut_quic_send_batch_take_back(UnitTestCounters& c) {
     socklen_t rlen = sizeof(raddr);
     // a datagram that is not delivered fails the test instead of blocking it
     struct timeval tv = {30, 0};
-    if (rfd < 0 || sfd < 0 || bind(rfd, reinterpret_cast<struct sockaddr*>(&raddr), sizeof(raddr))
+    if (rfd < 0 || sfd < 0 || ::bind(rfd, reinterpret_cast<struct sockaddr*>(&raddr), sizeof(raddr))
             || getsockname(rfd, reinterpret_cast<struct sockaddr*>(&raddr), &rlen)
             || setsockopt(rfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))) {
         UT_ASSERT(c, false, "QUIC send take-back: the UDP sockets are made");
