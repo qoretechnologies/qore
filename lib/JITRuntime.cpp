@@ -200,6 +200,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_value_is_reference", reinterpret_cast<void*>(&qore_rt_value_is_reference) },
     { "qore_rt_read_reference_local", reinterpret_cast<void*>(&qore_rt_read_reference_local) },
     { "qore_rt_reference_slot_write", reinterpret_cast<void*>(&qore_rt_reference_slot_write) },
+    { "qore_rt_element_local_replace", reinterpret_cast<void*>(&qore_rt_element_local_replace) },
     { "qore_rt_reload_local_if_stale_raw", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_raw) },
     { "qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local) },
     { "qore_rt_binary_op", reinterpret_cast<void*>(&qore_rt_binary_op) },
@@ -2065,6 +2066,30 @@ extern "C" DLLEXPORT void qore_rt_reference_slot_write(uint64_t ref, uint64_t va
     lvh.assign(val.release(), "<lvalue>");
 }
 
+//! Stores an element to the native cache of the IR-only variable of a foreach loop, which holds \a old_value
+/** The AST interpreter assigns each element to the variable of a foreach loop as an assignment does
+    (ForEachStatement::execImpl()): if the variable holds a reference, given by an earlier element, the element is
+    assigned to the referenced lvalue and the variable keeps the reference.  Otherwise the value the cache holds is
+    released and the element takes its place.
+
+    @param old_value the value the cache holds, with its reference
+    @param value the element, whose reference is taken
+    @param xsink for an exception raised by the assignment of the referenced lvalue (a type error)
+
+    @return the value of the cache after the store: \a old_value if the element was assigned through it, otherwise
+    \a value
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_element_local_replace(uint64_t old_value, uint64_t value,
+        ExceptionSink* xsink) {
+    QoreValue ov = fromBits(old_value);
+    if (ov.hasNode() && ov.getInternalNode()->getType() == NT_REFERENCE) {
+        qore_rt_reference_slot_write(old_value, value, xsink);
+        return old_value;
+    }
+    ov.discard(xsink);
+    return value;
+}
+
 //! As qore_rt_reload_local_if_stale(), loading the value with qore_rt_load_local_raw()
 /** @return 1 if the value in the cache, reloaded or not, is a reference, 0 otherwise: the variable's reference flag,
     returned rather than written through a pointer so that native code keeps the flag in a register
@@ -2189,7 +2214,36 @@ extern "C" DLLEXPORT void qore_rt_uninstantiate_local(LocalVar* var, ExceptionSi
 
 // --- Generic opcode dispatch helpers ---
 
+//! Returns true for the compound assignment opcodes whose operands are the values the operation takes as they are
+/** The value of a compound assignment is computed as the AST interpreter computes it on the lvalue
+    (qore_compound_assign_value()), with the operand as it was evaluated: a reference that it gives (an element holding
+    \c \\x) is not read, as <tt>auto t; t += h.r;</tt> assigns the reference itself (see doPlusEqualsOnLValue())
+*/
+static bool qore_rt_binary_op_takes_operands_as_is(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::AddAssignAny:
+        case QoreIROpcode::SubAssignAny:
+        case QoreIROpcode::MulAssignAny:
+        case QoreIROpcode::DivAssignAny:
+        case QoreIROpcode::ModAssignAny:
+        case QoreIROpcode::AndAssignAny:
+        case QoreIROpcode::OrAssignAny:
+        case QoreIROpcode::XorAssignAny:
+        case QoreIROpcode::ShlAssignAny:
+        case QoreIROpcode::ShrAssignAny:
+            return true;
+        default:
+            return false;
+    }
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_binary_op(int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreIROpcode op = static_cast<QoreIROpcode>(opcode);
+    // the same as the native implementations of these opcodes (ex: qore_rt_add_assign_any())
+    if (qore_rt_binary_op_takes_operands_as_is(op)) {
+        return toBits(QoreIRInterpreter::evalBinary(op, fromBits(left), fromBits(right), xsink));
+    }
+
     ValueEvalOptimizedRefHolder lv(fromBits(left), xsink);
     if (xsink && *xsink) {
         return toBits(QoreValue());
@@ -2200,7 +2254,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_binary_op(int opcode, uint64_t left, uint6
         return toBits(QoreValue());
     }
 
-    QoreValue result = QoreIRInterpreter::evalBinary(static_cast<QoreIROpcode>(opcode), *lv, *rv, xsink);
+    QoreValue result = QoreIRInterpreter::evalBinary(op, *lv, *rv, xsink);
     return toBits(result);
 }
 
@@ -2472,9 +2526,21 @@ static void qore_rt_store_global_impl(Var* var, uint64_t value, ExceptionSink* x
     }
     QoreValue stored = val.needsRef() ? val.refSelf() : val;
     LValueHelper helper(xsink);
-    if (!var->getLValue(helper, false)) {
-        helper.assign(stored);
+    if (var->getLValue(helper, false)) {
+        // the value is released by the helper
+        helper.saveTempRef(stored);
+        return;
     }
+    // a global variable holding a reference is assigned through it, as LValueHelper::doLValue() resolves the
+    // variable of an assignment in the AST interpreter
+    if (const ReferenceNode* ref = helper.getReference()) {
+        helper.clearPtr();
+        if (helper.doLValue(ref, false)) {
+            helper.saveTempRef(stored);
+            return;
+        }
+    }
+    helper.assign(stored);
 }
 
 extern "C" DLLEXPORT void qore_rt_store_global(Var* var, uint64_t value, ExceptionSink* xsink) {
@@ -13545,6 +13611,12 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
 
 QoreValue qore_compound_assign_value(LVCompoundOp op, const QoreValue& left, const QoreValue& right,
         ExceptionSink* xsink) {
+    // += on an "auto" lvalue with no value assigns the value added as it is (doPlusEqualsOnLValue()), which can be a
+    // reference, while the assignment to the temporary lvalue below would store the referenced value; the native
+    // fast path gives the same (QoreIRToLLVM::emitAnyCompoundAssignFastPath())
+    if (op == LVCompoundOp::AddAssign && left.isNullOrNothing() && !right.isNothing()) {
+        return right.refSelf();
+    }
     // += takes the operand's reference when it stores the value; the holder must be declared before the
     // LValueHelper (see qore_rt_apply_lvalue_compound())
     ValueHolder rhs_holder(right.refSelf(), xsink);

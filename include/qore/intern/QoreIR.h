@@ -3624,6 +3624,17 @@ public:
     */
     std::unordered_set<const void*> reference_store_locals;
 
+    //! The values known never to be a reference, indexed by value id (1 if known; see computeReferenceStoreLocals())
+    /** A value not marked here can be a reference (or is not known, as the value of a parameter); the engines use it
+        to skip checking a value stored to a local that can hold a reference
+    */
+    std::vector<uint8_t> non_reference_values;
+
+    //! Returns true if a value is known never to be a reference (see non_reference_values)
+    bool valueNeverReference(QoreIRValue value) const {
+        return value.isValid() && value.id < non_reference_values.size() && non_reference_values[value.id];
+    }
+
     //! Locals in reference_store_locals that keep their value in IR storage, as IR-only locals do
     /** A body local that would be IR-only but for a store of a value that can be a reference: the reference it holds,
         if one arrives, is the value in its storage (the slot of the IR interpreter, the native cache), and a read

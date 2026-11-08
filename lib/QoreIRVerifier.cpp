@@ -1711,9 +1711,10 @@ static bool qore_ir_opcode_never_gives_reference(QoreIROpcode op) {
         case QoreIROpcode::IncrementLocalInt:
         case QoreIROpcode::AddAssignLocalInt:
         // compound assignments computing a variable's new value from the value loaded, which is dereferenced
+        // (AddAssignAny is not listed: += on a variable with no value assigns the value added as it is, which can
+        // be a reference; see doPlusEqualsOnLValue() and qore_ir_opcode_forwarded_operand())
         case QoreIROpcode::AddAssignInt:
         case QoreIROpcode::AddAssignFloat:
-        case QoreIROpcode::AddAssignAny:
         case QoreIROpcode::SubAssignInt:
         case QoreIROpcode::SubAssignFloat:
         case QoreIROpcode::SubAssignAny:
@@ -1814,9 +1815,29 @@ static bool qore_ir_opcode_never_gives_reference(QoreIROpcode op) {
     }
 }
 
+//! Returns the index of the operand whose value an instruction with this opcode can give as its own, or -1
+/** The value of such an instruction is a reference if that operand is one: a phi gives one of its incoming values
+    (handled separately), a guard its operand, and AddAssignAny (<tt>x += y</tt> computed as a value to store) gives
+    its right operand as it is when the variable has no value, as doPlusEqualsOnLValue() assigns it, so that
+    <tt>auto t; t += h.r;</tt> makes \c t hold the reference in \c h.r, as in the AST interpreter.
+*/
+static int qore_ir_opcode_forwarded_operand(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::GuardType:
+        case QoreIROpcode::GuardNotNothing:
+        case QoreIROpcode::RefSelf:
+            return 0;
+        case QoreIROpcode::AddAssignAny:
+            return 1;
+        default:
+            return -1;
+    }
+}
+
 // documented in QoreIR.h
 void QoreIRFunction::computeReferenceStoreLocals() {
     reference_store_locals.clear();
+    non_reference_values.clear();
     // the instruction that defines each value
     std::unordered_map<uint32_t, const QoreIRInstruction*> defs;
     for (const auto& block : blocks) {
@@ -1829,18 +1850,22 @@ void QoreIRFunction::computeReferenceStoreLocals() {
     // the values that can be a reference: a fixed point, as a phi or a guard gives a reference if one of its
     // operands can (a value with no definition, such as a parameter value, can be one)
     std::unordered_set<uint32_t> may_ref;
-    std::vector<const QoreIRInstruction*> forwarders;
+    // the instructions whose value is a reference if one of their operands is one, with the index of that operand
+    // (-1 for a phi, whose incoming values are its operands)
+    std::vector<std::pair<const QoreIRInstruction*, int>> forwarders;
     for (const auto& [id, def] : defs) {
-        if (def->opcode == QoreIROpcode::Phi || def->opcode == QoreIROpcode::GuardType
-                || def->opcode == QoreIROpcode::GuardNotNothing || def->opcode == QoreIROpcode::RefSelf) {
-            forwarders.push_back(def);
-        } else {
-            // an instruction that can throw in a try block is an invoke, whose value is that of its operation
-            QoreIROpcode op = def->opcode == QoreIROpcode::Invoke
-                ? static_cast<const QoreIRInvokeInstruction*>(def)->invoke_opcode : def->opcode;
-            if (!qore_ir_opcode_never_gives_reference(op)) {
-                may_ref.insert(id);
-            }
+        if (def->opcode == QoreIROpcode::Phi) {
+            forwarders.emplace_back(def, -1);
+            continue;
+        }
+        // an instruction that can throw in a try block is an invoke, whose value is that of its operation
+        QoreIROpcode op = def->opcode == QoreIROpcode::Invoke
+            ? static_cast<const QoreIRInvokeInstruction*>(def)->invoke_opcode : def->opcode;
+        int forwarded = qore_ir_opcode_forwarded_operand(op);
+        if (forwarded >= 0) {
+            forwarders.emplace_back(def, forwarded);
+        } else if (!qore_ir_opcode_never_gives_reference(op)) {
+            may_ref.insert(id);
         }
     }
     auto may_be_reference = [&](uint32_t id) -> bool {
@@ -1848,12 +1873,12 @@ void QoreIRFunction::computeReferenceStoreLocals() {
     };
     for (bool changed = true; changed;) {
         changed = false;
-        for (const QoreIRInstruction* def : forwarders) {
+        for (const auto& [def, forwarded] : forwarders) {
             if (may_ref.count(def->result.id)) {
                 continue;
             }
             bool any = false;
-            if (def->opcode == QoreIROpcode::Phi) {
+            if (forwarded < 0) {
                 for (const auto& in : static_cast<const QoreIRPhiInstruction*>(def)->incoming) {
                     if (may_be_reference(in.value.id)) {
                         any = true;
@@ -1861,7 +1886,9 @@ void QoreIRFunction::computeReferenceStoreLocals() {
                     }
                 }
             } else {
-                any = def->operands.empty() || may_be_reference(def->operands.front().id);
+                // an operand that is missing is unknown
+                any = def->operands.size() <= static_cast<size_t>(forwarded)
+                    || may_be_reference(def->operands[forwarded].id);
             }
             if (any) {
                 may_ref.insert(def->result.id);
@@ -1869,24 +1896,52 @@ void QoreIRFunction::computeReferenceStoreLocals() {
             }
         }
     }
+    // the values known never to be a reference, for the engines (see non_reference_values)
+    for (const auto& [id, def] : defs) {
+        if (!may_ref.count(id)) {
+            if (non_reference_values.size() <= id) {
+                non_reference_values.resize(static_cast<size_t>(id) + 1, 0);
+            }
+            non_reference_values[id] = 1;
+        }
+    }
+    // the variables of foreach loops that can be given a reference element, and the locals that a store other
+    // than that of a foreach loop assigns
+    std::unordered_set<const void*> reference_element_locals;
+    std::unordered_set<const void*> normal_store_locals;
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {
             if (inst->opcode != QoreIROpcode::StoreLocal || inst->operands.empty()) {
                 continue;
             }
             const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst.get());
-            // a weak or opaque store assigns no reference, and the variable of a foreach loop, assigned each
-            // element as it is (AssignmentMode::Element), reads a reference element through its own mechanism (see
-            // QoreIRToLLVM::loadLocalCacheValue() and IRLocalSlotCache)
-            if (!linst->local || linst->mode != AssignmentMode::Normal
+            // a weak or opaque store assigns no reference
+            if (!linst->local || (linst->mode != AssignmentMode::Normal && linst->mode != AssignmentMode::Element)
                     || !qore_ir_local_may_hold_reference(linst->local)
                     || QoreTypeInfo::isReference(linst->local->getTypeInfo())) {
                 continue;
             }
             const void* key = reinterpret_cast<const void*>(linst->local);
-            if (!reference_store_locals.count(key) && may_be_reference(inst->operands.front().id)) {
+            bool may_be_ref = may_be_reference(inst->operands.front().id);
+            if (linst->mode == AssignmentMode::Element) {
+                if (may_be_ref) {
+                    reference_element_locals.insert(key);
+                }
+                continue;
+            }
+            normal_store_locals.insert(key);
+            if (may_be_ref) {
                 reference_store_locals.insert(key);
             }
+        }
+    }
+    // the variable of a foreach loop, assigned each element as it is (AssignmentMode::Element), reads a reference
+    // element through its own mechanism (see QoreIRToLLVM::loadLocalCacheValue() and IRLocalSlotCache), but a store
+    // to it in the loop (v = 5) assigns the referenced lvalue, as in the AST interpreter, so such a variable is one
+    // that a store can give a reference
+    for (const void* key : reference_element_locals) {
+        if (normal_store_locals.count(key)) {
+            reference_store_locals.insert(key);
         }
     }
 }

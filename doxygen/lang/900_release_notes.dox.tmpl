@@ -1470,6 +1470,16 @@
       passed to a parameter of no reference type) read as the value that the referenced lvalue had when the variable
       was assigned or the function entered, and an assignment to the variable could be lost instead of writing the
       referenced lvalue; the variable now reads and writes the referenced lvalue, as with the AST interpreter
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, a reference that arrives as a value (ex: an
+      element <tt>h.r</tt> holding <tt>\\x</tt>) is now handled as with the AST interpreter in these cases: added to
+      a variable of no type with no value (<tt>auto t; t += h.r;</tt>), where it could read as the reference itself
+      or a later assignment could replace it instead of assigning the referenced lvalue, also in a \c try block; as
+      the value of an assignment (<tt>auto r = (t = h.r); r = 5;</tt>, also with \c +=), which was the referenced
+      value instead of the reference; as an element of a list iterated by \c foreach, where an assignment to the
+      loop variable and the assignment of the following elements now assign the referenced lvalue, and where
+      <tt>s += v</tt> on an \c int local read the element as \c 0 in AOT-compiled code; and held by a global
+      variable, which read as the reference itself in the IR execution mode and which an assignment replaced instead
+      of assigning the referenced lvalue
     - in the IR execution mode and wherever the JIT and tiered execution modes run a function with the IR
       interpreter, the first call of a large function in a thread with a pending cancellation (ex: in code that
       caught a \c THREAD-CANCELLED exception) raised the exception before the function ran; it is now raised at the

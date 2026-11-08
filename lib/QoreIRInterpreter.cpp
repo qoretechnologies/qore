@@ -1935,6 +1935,14 @@ static QoreValue assignGlobalVarValueStored(Var* var, const QoreValue& value, Ex
     if (var->getLValue(helper, false)) {
         return QoreValue();
     }
+    // a global variable holding a reference is assigned through it, as LValueHelper::doLValue() resolves the
+    // variable of an assignment in the AST interpreter
+    if (const ReferenceNode* ref = helper.getReference()) {
+        helper.clearPtr();
+        if (helper.doLValue(ref, false)) {
+            return QoreValue();
+        }
+    }
     QoreValue stored = value.needsRef() ? value.refSelf() : value;
     if (helper.assign(stored)) {
         return QoreValue();
@@ -11060,13 +11068,18 @@ load_local_done:
                         && local_inst->slot_id < locals_slot_cache.size()) {
                     // a local whose slot holds a reference (see QoreIRFunction::reference_slot_locals): a store
                     // that is not its declaration assigns the referenced lvalue, and the local keeps the
-                    // reference, as LocalVarValue::getLValue() resolves an assignment to a variable holding one
-                    // (raw slot: the reference itself is checked)
-                    if (store_mode == AssignmentMode::Normal && !local_inst->initial_assignment
-                            && local_inst->slot_id < func.interpreter_reference_slots.size()
-                            && func.interpreter_reference_slots[local_inst->slot_id]
-                            && qore_ir_value_node_type(locals_slot_cache.storage(local_inst->slot_id))
-                                == NT_REFERENCE) {
+                    // reference, as LocalVarValue::getLValue() resolves an assignment to a variable holding one;
+                    // the variable of a foreach loop that holds a reference, given by an earlier element, assigns
+                    // each element to the referenced lvalue in the same way, as ForEachStatement::execImpl() assigns
+                    // it
+                    // raw slot: the reference itself is checked
+                    bool slot_holds_reference
+                        = qore_ir_value_node_type(locals_slot_cache.storage(local_inst->slot_id)) == NT_REFERENCE;
+                    if (slot_holds_reference
+                            && ((store_mode == AssignmentMode::Normal && !local_inst->initial_assignment
+                                && local_inst->slot_id < func.interpreter_reference_slots.size()
+                                && func.interpreter_reference_slots[local_inst->slot_id])
+                            || local_inst->mode == AssignmentMode::Element)) {
                         {
                             // raw slot: the reference is assigned through
                             LValueHelper lvh(*reinterpret_cast<const ReferenceNode*>(
@@ -11125,6 +11138,14 @@ load_local_done:
                         cleanupLocalCaches();
                         return false;
                     }
+                    // a reference is stored to an IR-only local only if the IR finds that the store can give it one
+                    // (QoreIRFunction::computeReferenceStoreLocals()), which makes the local a reference slot local,
+                    // or as an element given to the variable of a foreach loop, which reads it through; an opcode
+                    // wrongly listed as never giving a reference (qore_ir_opcode_never_gives_reference()) would
+                    // leave a reference here that every read would give as a value
+                    assert(local_inst->mode != AssignmentMode::Normal || qore_ir_value_node_type(stored) != NT_REFERENCE
+                        || (local_inst->slot_id < func.interpreter_reference_slots.size()
+                            && func.interpreter_reference_slots[local_inst->slot_id]));
                     locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
                     locals_slot_cache.storage(local_inst->slot_id) = stored;
                     if (local_inst->slot_id < locals_instantiated.size()) {
@@ -11860,6 +11881,25 @@ load_local_done:
                 auto* var_inst = static_cast<QoreIRVarInstruction*>(inst);
                 // the value is read from the variable every time: other threads can change it
                 QoreValue out = var_inst->var->eval();
+                // a reference that the variable holds reads as the referenced lvalue, as VarRefNode::evalImpl()
+                // reads it
+                if (qore_ir_value_node_type(out) == NT_REFERENCE) {
+                    ValueHolder ref(out, xsink);
+                    bool nd = true;
+                    out = reinterpret_cast<ReferenceNode*>(ref->getInternalNode())->eval(nd, xsink);
+                    if (!nd && out.needsRef()) {
+                        out = out.refSelf();
+                    }
+                    if (xsink && *xsink) {
+                        out.discard(xsink);
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                }
                 setValueSlot(values, var_inst->result.id, out, xsink);
                 if (out.needsRef()) {
                     cleanup.push_back(var_inst->result.id);

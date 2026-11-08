@@ -15328,6 +15328,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // the value of the assignment is the value assigned (the operand, which its own owner keeps)
                     reference_slot_store_value = boxed;
                     owned_boxed = cache_val;
+                } else if (element_store && !QoreTypeInfo::hasType(local_ti)) {
+                    // the variable of a foreach loop that holds a reference, given by an earlier element, assigns
+                    // the element to the referenced lvalue and keeps the reference, as the AST interpreter assigns
+                    // it (see qore_rt_element_local_replace()), which also releases the value it replaces
+                    // raw local cache: the value held is the reference or the value released
+                    llvm::Value* old_val = builder->CreateLoad(i64_type, it->second.storage());
+                    auto replace_fn = module.getOrInsertFunction("qore_rt_element_local_replace",
+                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+                    llvm::Value* cache_val = builder->CreateCall(replace_fn, {old_val, owned_boxed, xsink_arg});
+                    // the referenced lvalue can be a variable whose value another cache holds
+                    llvm::Value* wrote_through = builder->CreateICmpNE(cache_val, owned_boxed);
+                    llvm::AllocaInst* epoch_alloca = getOrCreateLocalReloadEpoch(llvm_func);
+                    builder->CreateStore(builder->CreateAdd(builder->CreateLoad(i64_type, epoch_alloca),
+                        builder->CreateZExt(wrote_through, i64_type)), epoch_alloca);
+                    emitExceptionCheck(module, llvm_func, inst);
+                    if (!fast_entry_param_allocas_by_local.count(key)
+                            && owned_ir_local_alloca_keys.insert(key).second) {
+                        if (auto* local_ai = llvm::dyn_cast<llvm::AllocaInst>(it->second.storage())) {
+                            owned_ir_local_allocas.push_back(local_ai);
+                        }
+                    }
+                    owned_boxed = cache_val;
                 } else {
                     // Fast-entry params and pure IR-only body locals own the value
                     // directly in the local alloca.  Take the new ref before

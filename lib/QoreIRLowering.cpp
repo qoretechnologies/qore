@@ -7955,6 +7955,11 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
     if (left_var && left_var->getType() == VT_IMMEDIATE) {
         left_var = nullptr;
     }
+    // the value of an assignment that can be a reference the variable now holds is given by the lvalue path, as the
+    // AST interpreter gives it (see assignmentValueMayBeReference())
+    if (left_var && !is_weak && assign->needsReturnValue() && assignmentValueMayBeReference(left_var, right_expr)) {
+        left_var = nullptr;
+    }
     if (left_var) {
         QoreIRValue store_result;
         if (!storeVarRef(left_var, right, error, "assignment", &right_expr, nullptr, assign_mode,
@@ -8153,6 +8158,11 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     }
     // a variable that other threads can change is changed in one operation; see isSharedVar()
     if (changesThroughLValue(left_var)) {
+        left_var = nullptr;
+    }
+    // += on a variable with no value assigns the value added as it is, and the value of the operation is the value
+    // the variable holds then, which can be a reference (see assignmentValueMayBeReference())
+    if (left_var && op->needsReturnValue() && assignmentValueMayBeReference(left_var, right_expr)) {
         left_var = nullptr;
     }
     if (!left_var) {
@@ -13181,6 +13191,34 @@ bool QoreIRLowering::callArgumentMayPassReference(const QoreValue& arg) const {
         return QoreTypeInfo::parseReturns(analysis.known_type, NT_REFERENCE) != QTI_NOT_EQUAL;
     }
 
+    return true;
+}
+
+// documented in QoreIRLowering.h
+bool QoreIRLowering::assignmentValueMayBeReference(const VarRefNode* var, const QoreValue& right) const {
+    // a variable of a type other than a reference type never holds a reference; a reference-typed variable is
+    // assigned through its lvalue path
+    if (!var || QoreTypeInfo::hasType(var->getTypeInfo())) {
+        return false;
+    }
+    if (right.getType() == NT_REFERENCE || right.getType() == NT_PARSEREFERENCE) {
+        return true;
+    }
+    if (!right.hasNode()) {
+        return false;
+    }
+    const AbstractQoreNode* node = right.getInternalNode();
+    if (dynamic_cast<const ParseReferenceNode*>(node)) {
+        return true;
+    }
+    // a value, or a read of a variable, which reads a reference that the variable holds as the referenced value
+    if (!dynamic_cast<const ParseNode*>(node) || dynamic_cast<const VarRefNode*>(node)) {
+        return false;
+    }
+    QoreParseAnalysis analysis;
+    if (getAnalysis(right, analysis) && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo) && analysis.known_type) {
+        return QoreTypeInfo::parseReturns(analysis.known_type, NT_REFERENCE) != QTI_NOT_EQUAL;
+    }
     return true;
 }
 

@@ -419,6 +419,8 @@ uint64_t qore_rt_load_local_raw(LocalVar* var, ExceptionSink* xsink);
 uint64_t qore_rt_read_reference_local(uint64_t value, ExceptionSink* xsink);
 //! Assigns a value (whose reference is taken) through the reference in the native cache of an IR-only local
 void qore_rt_reference_slot_write(uint64_t ref, uint64_t value, ExceptionSink* xsink);
+//! Stores an element to the native cache of the IR-only variable of a foreach loop; returns the value of the cache
+uint64_t qore_rt_element_local_replace(uint64_t old_value, uint64_t value, ExceptionSink* xsink);
 
 //! As qore_rt_reload_local_if_stale(), loading the value with qore_rt_load_local_raw(); returns the reference flag
 uint8_t qore_rt_reload_local_if_stale_raw(LocalVar* var, uint64_t* cache, uint64_t* tracker,

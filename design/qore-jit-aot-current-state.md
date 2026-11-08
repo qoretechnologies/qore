@@ -579,11 +579,29 @@ hold a reference (`examples/test/ir/ReferenceLocalReach.qtest`,
   may give a reference: a stored value whose definition is not an opcode that never gives
   one (`qore_ir_opcode_never_gives_reference()`: constants, loads of variables, new
   containers and objects, arithmetic, comparisons, conversions, `ListPush`...; an `Invoke` is
-  judged by its opcode), followed through `Phi`, guards and `RefSelf`. They are
+  judged by its opcode), followed through `Phi`, guards, `RefSelf` and `AddAssignAny`, whose
+  value is its right operand as it is when the variable has no value (`auto t; t += h.r;`,
+  `doPlusEqualsOnLValue()`; `qore_ir_opcode_forwarded_operand()`). They are
   reference-capable (`localMayHoldReference()`, the `is_ref` of their instructions), which
   keeps the optimizations keyed on `is_ref` away from them. Adding an opcode that can give a
   reference to the never-gives list is a correctness defect; leaving one out only costs
-  speed.
+  speed. A debug build of the IR interpreter asserts that a plain store to an IR-only local
+  that is not a reference slot local never stores a reference, which catches such a defect
+  in the IR test suite. The values that the analysis finds never to be a reference
+  (`non_reference_values`) let native code skip checking the value stored to a local with a
+  reference flag (ex: a string constant).
+- The variable of a foreach loop is given each element as it is (`AssignmentMode::Element`);
+  an element can be a reference, which the variable reads through. As in the AST
+  interpreter (`ForEachStatement`), the assignment of an element to a variable that holds a
+  reference, given by an earlier element, assigns the referenced lvalue, in the IR
+  interpreter and in native code (`qore_rt_element_local_replace()`). A loop variable that
+  is also assigned in the loop is in `reference_store_locals` if an element can be a
+  reference, and stays on the runtime stack.
+- The value of an assignment or of `+=` to a variable of no type is the value the variable
+  holds afterwards, as it is, which is the reference that a reference value made it hold;
+  reading the variable again gives the referenced value instead. Such an assignment whose
+  value is used is lowered as an lvalue path operation when the value assigned can be a
+  reference (`QoreIRLowering::assignmentValueMayBeReference()`).
 - A body local of `reference_store_locals` that would otherwise be IR-only, in a function
   that creates no reference, is a reference slot local (`reference_slot_locals`): it keeps
   its value in IR storage as an IR-only local does (the slot of the IR interpreter, the

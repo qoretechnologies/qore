@@ -443,6 +443,17 @@ private:
     bool lowerCallArgs(const QoreParseListNode* parse_args, const QoreListNode* args,
         std::vector<QoreIRValue>& lowered, std::string& error);
     bool callArgumentMayPassReference(const QoreValue& arg) const;
+    //! Returns true if the value of an assignment to a variable can be a reference that the variable now holds
+    /** The value of <tt>t = v</tt> and <tt>t += v</tt> in the AST interpreter is the value the lvalue holds
+        afterwards, taken as it is (LValueHelper::getReferencedValue()): if \a v is a reference that a variable of
+        no type now holds (an element <tt>h.r</tt> holding <tt>\x</tt>, the value of a call), the value is the
+        reference, so that <tt>auto r = (t = h.r); r = 5;</tt> assigns \c x.  Reading the variable again gives the
+        referenced value instead, so such an assignment whose value is used is lowered as an lvalue path operation,
+        which gives the value as the AST interpreter does.
+        @param var the variable assigned
+        @param right the value assigned or added
+    */
+    bool assignmentValueMayBeReference(const VarRefNode* var, const QoreValue& right) const;
     bool callArgsMayPassReferences(const QoreParseListNode* parse_args, const QoreListNode* args) const;
     bool markReferenceArgumentAssignmentsUnknown(const QoreParseListNode* parse_args,
         const QoreListNode* args, std::string& error);
