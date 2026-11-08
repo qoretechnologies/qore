@@ -13764,6 +13764,30 @@ static QoreValue f_dbg_quic_advance_clock(const QoreListNode* params, RuntimeCon
 }
 
 //! Debug-only: the number of QUIC packets processed by client and server connections: {"client": int, "server": int}
+//! Debug-only: starts counting the datagrams of the QUIC connections of the process; see qore_quic_test_count_datagrams()
+static QoreValue f_dbg_quic_count_datagrams(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    qore_quic_test_count_datagrams();
+    return QoreValue();
+}
+
+//! Debug-only: the datagrams sent to and received from each address; see qore_quic_test_datagram_totals()
+static QoreValue f_dbg_quic_datagram_totals(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_quic_test_datagram_totals();
+}
+
+//! Debug-only: waits for datagrams from an address; see qore_quic_test_wait_received_from()
+static QoreValue f_dbg_quic_wait_received_from(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* addr = get_param_value(params, 0).get<const QoreStringNode>();
+    int64 count = get_param_value(params, 1).getAsBigInt();
+    int64 timeout_ms = get_param_value(params, 2).getAsBigInt();
+    if (timeout_ms < 0 || timeout_ms > std::numeric_limits<int>::max()) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "invalid timeout " QLLD " ms", timeout_ms);
+        return QoreValue();
+    }
+    return qore_quic_test_wait_received_from(addr->c_str(), count, static_cast<int>(timeout_ms));
+}
+
 static QoreValue f_dbg_quic_packets_received(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     int64_t client, server;
     qore_quic_test_packets_received(client, server);
@@ -16856,6 +16880,15 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_quic_advance_clock", f_dbg_quic_advance_clock,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
+    qns.addBuiltinVariant("dbg_quic_count_datagrams", f_dbg_quic_count_datagrams,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_datagram_totals", f_dbg_quic_datagram_totals,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_wait_received_from", f_dbg_quic_wait_received_from,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 3,
+        stringTypeInfo, QORE_PARAM_NO_ARG, "addr",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_quic_packets_received", f_dbg_quic_packets_received,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_wait_again_poll_operation", f_dbg_wait_again_poll_operation,

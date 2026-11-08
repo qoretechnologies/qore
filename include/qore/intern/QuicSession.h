@@ -2106,6 +2106,28 @@ DLLLOCAL void qore_quic_test_packets_received(int64_t& client, int64_t& server);
 */
 DLLLOCAL void qore_quic_test_note_receive_fd(int fd);
 
+//! Debug-only: starts counting the datagrams sent and received by the QUIC connections of the process
+/** The first advance of the QUIC test clock starts it too; see qore_quic_test_datagram_totals()
+*/
+DLLLOCAL void qore_quic_test_count_datagrams();
+
+//! Debug-only: the datagrams sent and received by the QUIC connections of the process since they are counted
+/** @return <tt>{"sent_to": {"address:port": count, ...}, "received_from": {"address:port": count, ...}}</tt>: the
+    datagrams sent to each address and received from each address.  A test whose QUIC peer runs in another process
+    exchanges these totals with it to advance the QUIC test clocks of both processes in steps, each step after both
+    have read what the other sent (see qore_quic_test_wait_received_from())
+*/
+DLLLOCAL QoreHashNode* qore_quic_test_datagram_totals();
+
+//! Debug-only: waits until at least @p count datagrams have been received from @p addr since they are counted
+/** @param addr \c "address:port"; an empty string or nullptr counts the datagrams received from every address
+    @param count the number of datagrams
+    @param timeout_ms the maximum time to wait
+
+    @return true if they have been received, false on timeout
+*/
+DLLLOCAL bool qore_quic_test_wait_received_from(const char* addr, int64_t count, int timeout_ms);
+
 #endif
 
 #endif // _QORE_INTERN_QUICSESSION_H
