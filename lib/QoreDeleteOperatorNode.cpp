@@ -60,7 +60,7 @@ int QoreDeleteOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
         err = parse_init_value(exp, parse_context);
         operand_analysis = parse_context.analysis;
     }
-    if (!err && exp && checkLValue(exp, parse_context.pflag, true, true)) {
+    if (!err && exp && checkLValue(exp, parse_context.pflag, true, qore_lvalue_use_e::REMOVE)) {
         err = -1;
     }
 

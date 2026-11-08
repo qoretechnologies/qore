@@ -1449,6 +1449,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a @ref cast "cast" as the lvalue of @ref remove "remove" or @ref delete "delete" (ex: <tt>remove cast<int>(x)</tt>)
+      or in the lvalue of a @ref lvalue_references "reference" aborted debug builds or gave wrong results; it is now a
+      parse error, as a cast is not storage that can be removed or referred to
     - a separated module required by the path of its <tt>.qm</tt> file
       (<tt>%requires ../lib/ModuleName/ModuleName.qm</tt>) was loaded without its other files, so its classes and
       functions were missing; the whole module is loaded, as with the path of its directory (see

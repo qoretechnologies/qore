@@ -1,0 +1,214 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: parent - parses the rejected expressions in Programs of its own process in every execution mode
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class RemoveDeleteCastTest
+
+#! issue #5640: a cast is not storage that remove or delete can remove, so a cast cannot be their lvalue; a cast in a
+#! container step of their lvalue, or the lvalue of an assignment, still checks the value of the lvalue inside it
+class RemoveDeleteCastTest inherits QUnit::Test {
+    public {
+        #! the part of the parse error that every rejected remove or delete expression raises
+        const ErrorText = "a cast cannot be the lvalue of the remove or delete operators";
+
+        #! the part of the parse error that every rejected reference raises
+        const ReferenceErrorText = "a cast cannot be in the lvalue of a reference";
+
+        #! declarations used by the rejected expressions
+        const Prefix = "%modern\n"
+            "class C { public { auto m = 1; static auto s = 1; } }\n"
+            "our int g;\n";
+
+        #! expressions with a cast as the lvalue of remove or delete: label -> code
+        const Rejected = {
+            "remove of a cast of a local variable": "int x = 1; auto v = remove cast<int>(x);",
+            "delete of a cast of a local variable": "int x = 1; delete cast<int>(x);",
+            "remove of a cast of a global variable": "auto v = remove cast<int>(g);",
+            "delete of a cast of a global variable": "delete cast<int>(g);",
+            "remove of a cast of a static class variable": "auto v = remove cast<int>(C::s);",
+            "remove of a cast of a reference": "sub f(reference<auto> r) { auto v = remove cast<int>(r); }",
+            "delete of a cast of a reference": "sub f(reference<auto> r) { delete cast<int>(r); }",
+            "remove of a cast of a cast": "int x = 1; auto v = remove cast<int>(cast<int>(x));",
+            "delete of a cast of an object": "C o(); delete cast<C>(o);",
+            "remove of a cast of a hash member": "hash<auto> h = {\"a\": 1}; auto v = remove cast<int>(h.a);",
+            "remove of a cast of a list element": "list<auto> l = (1,); auto v = remove cast<int>(l[0]);",
+            "remove of a cast of an object member": "C o(); auto v = remove cast<int>(o.m);",
+            "remove of a cast in a closure": "int x = 1; code c = sub () { remove cast<int>(x); };",
+        };
+
+        #! references with a cast in their lvalue, whose variables and selectors the reference cannot evaluate when it is
+        #! made: label -> code
+        const RejectedReferences = {
+            "reference to a cast of a local variable": "int x = 1; reference<auto> r = \\cast<int>(x);",
+            "reference argument to a cast of a local variable":
+                "int x = 1; sub (reference<auto> r) { remove r; }(\\cast<int>(x));",
+            "reference to a cast of a global variable": "reference<auto> r = \\cast<int>(g);",
+            "reference to a cast of an object member": "C o(); reference<auto> r = \\cast<int>(o.m);",
+            "reference to a cast of a cast": "int x = 1; reference<auto> r = \\cast<int>(cast<int>(x));",
+            "reference to a member through a cast": "C o(); reference<auto> r = \\cast<C>(o).m;",
+            "returned reference to a member through a cast":
+                "reference<auto> sub make() { object o = new C(); return \\cast<C>(o).m; }",
+            "reference to a list element through a cast":
+                "list<auto> l = (new C(),); int i = 0; reference<auto> r = \\cast<C>(l[i]).m;",
+            "reference to an element of a cast": "auto l = (1, 2); reference<auto> r = \\cast<list<int>>(l)[0];",
+            "reference in foreach to a cast": "auto l = (1, 2); foreach int v in (\\cast<list<int>>(l)) {}",
+        };
+
+        #! remove, delete and assignment with a cast as a step of their lvalue; must give the same output in every
+        #! execution mode and with AOT
+        const AcceptedFunction = "%modern
+class A { public { hash<auto> h = {\"a\": 1, \"b\": 2, \"c\": 3}; auto m = 4; } }
+list<auto> sub run() {
+    object o = new A();
+    auto r1 = remove cast<A>(o).h.a;
+    delete cast<A>(o).m;
+    auto l = (5, 6);
+    auto r2 = remove cast<list<int>>(l)[0];
+    auto h = {\"x\": 7, \"y\": 8, \"z\": 9};
+    auto r3 = remove cast<hash<string, int>>(h).(\"x\", \"y\");
+    int i = 10;
+    cast<int>(i) = 11;
+    return (r1, cast<A>(o).h, cast<A>(o).m, r2, l, r3, h, i);
+}
+";
+
+        #! a script that prints the result of AcceptedFunction
+        const Accepted = AcceptedFunction + "printf(\"%y\\n\", run());\n";
+
+        #! the output of Accepted
+        const AcceptedResult = (1, {"b": 2, "c": 3}, NOTHING, 5, (NOTHING, 6), {"x": 7, "y": 8}, {"z": 9}, 11);
+
+        #! the output of Accepted
+        const AcceptedOutput = sprintf("%y\n", AcceptedResult);
+
+        #! a script with a rejected expression for child processes
+        const RejectedScript = Prefix + "int x = 1;\nauto v = remove cast<int>(x);\n"
+            "reference<auto> r = \\cast<int>(x);\nprintf(\"ran: %y %y\\n\", x, v);\n";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("remove and delete of a cast", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("a cast as the lvalue of remove or delete is a parse error", \rejectedTest());
+        addTestCase("a cast in the lvalue of a reference is a parse error", \rejectedReferenceTest());
+        addTestCase("a cast inside the lvalue of remove, delete and assignment", \acceptedInProcessTest());
+        addTestCase("execution modes reject a cast as the lvalue", \rejectedModesTest());
+        addTestCase("execution modes run a cast inside the lvalue", \acceptedModesTest());
+        addTestCase("qcc rejects a cast as the lvalue and compiles a cast inside it", \aotTest());
+        set_return_value(main());
+    }
+
+    rejectedTest() {
+        foreach ExecMode mode in ((EM_AST, EM_IR, EM_JIT)) {
+            foreach hash<auto> i in (Rejected.pairIterator()) {
+                Program p();
+                p.setExecMode(mode);
+                string label = sprintf("%s (exec mode %s)", i.key, mode);
+                try {
+                    # the test's own Program forbids top-level statements in its child Programs
+                    p.parse(Prefix + (i.value =~ /^sub / ? i.value : "sub t() { " + i.value + " }"), label);
+                    fail(label + ": no parse error");
+                } catch (hash<ExceptionInfo> ex) {
+                    assertEq("PARSE-EXCEPTION", ex.err, label);
+                    assertRegex(ErrorText, ex.desc, label);
+                }
+            }
+        }
+    }
+
+    rejectedReferenceTest() {
+        foreach ExecMode mode in ((EM_AST, EM_IR, EM_JIT)) {
+            foreach hash<auto> i in (RejectedReferences.pairIterator()) {
+                Program p();
+                p.setExecMode(mode);
+                string label = sprintf("%s (exec mode %s)", i.key, mode);
+                try {
+                    # the test's own Program forbids top-level statements in its child Programs
+                    p.parse(Prefix + (i.value =~ /^reference<auto> sub / ? i.value : "sub t() { " + i.value + " }"),
+                        label);
+                    fail(label + ": no parse error");
+                } catch (hash<ExceptionInfo> ex) {
+                    assertEq("PARSE-EXCEPTION", ex.err, label);
+                    assertRegex(ReferenceErrorText, ex.desc, label);
+                }
+            }
+        }
+    }
+
+    acceptedInProcessTest() {
+        foreach ExecMode mode in ((EM_AST, EM_IR, EM_JIT)) {
+            Program p();
+            p.setExecMode(mode);
+            p.parse(AcceptedFunction, "accepted");
+            assertEq(AcceptedResult, p.callFunction("run"), sprintf("exec mode %s", mode));
+        }
+    }
+
+    private string writeScript(TmpDir dir, string name, string code) {
+        string path = dir.path + "/" + name;
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(code);
+        f.close();
+        return path;
+    }
+
+    rejectedModesTest() {
+        TmpDir dir("remove-delete-cast-");
+        string path = writeScript(dir, "rejected.q", RejectedScript);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s; echo rc=$?", env, qore_bin, mode,
+                path), NativeCheck::None);
+            assertRegex(ErrorText, out, mode);
+            assertRegex(ReferenceErrorText, out, mode);
+            assertRegex("rc=[1-9]", out, mode);
+            assertNRegex("ran:", out, mode + ": the script must not run");
+        }
+    }
+
+    acceptedModesTest() {
+        TmpDir dir("remove-delete-cast-");
+        string path = writeScript(dir, "accepted.q", Accepted);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(AcceptedOutput, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                path), NativeCheck::Jit), mode);
+        }
+    }
+
+    aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("remove-delete-cast-aot-");
+        string rejected = writeScript(dir, "rejected.q", RejectedScript);
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s/rejected %s; echo rc=$?", env, qcc_bin,
+            dir.path, rejected));
+        assertRegex(ErrorText, out, "qcc reports the parse error for remove");
+        assertRegex(ReferenceErrorText, out, "qcc reports the parse error for the reference");
+        assertRegex("rc=[1-9]", out, "qcc fails");
+        assertFalse(is_file(dir.path + "/rejected"), "qcc writes no executable");
+
+        string accepted = writeScript(dir, "accepted.q", Accepted);
+        string exe = dir.path + "/accepted";
+        out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, accepted));
+        assertTrue(is_file(exe), "qcc compiles the accepted script: " + out);
+        assertEq(AcceptedOutput, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT");
+    }
+}
