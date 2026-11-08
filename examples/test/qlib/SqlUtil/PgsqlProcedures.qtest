@@ -45,6 +45,7 @@ class PgsqlProceduresTest inherits QUnit::Test {
         addTestCase("procedures and functions are listed as procedures", \listProcedures());
         addTestCase("makeProcedure() makes a procedure or a function", \makeProcedure());
         addTestCase("a schema with a procedure is aligned", \alignSchema());
+        addTestCase("functions and procedures are renamed", \rename());
         set_return_value(main());
     }
 
@@ -197,6 +198,41 @@ class PgsqlProceduresTest inherits QUnit::Test {
             assertEq((), db.getAlignSql(schema), i.key);
             ds.execRaw("drop procedure qtest_pp_a(integer)");
             ds.commit();
+        }
+    }
+
+    #! the SQL renaming a function or a procedure gave the argument list after the new name, which PostgreSQL refuses
+    private rename() {
+        skipIfNone();
+        foreach hash<auto> i in (conns.pairIterator()) {
+            Database db = getDatabase(i.value);
+            AbstractDatasource ds = db.getDatasource();
+            ds.execRaw("drop procedure if exists qtest_pp_p2(integer)");
+            ds.execRaw("drop function if exists qtest_pp_f2(integer)");
+            ds.commit();
+            on_exit {
+                ds.rollback();
+                ds.execRaw("drop procedure if exists qtest_pp_p2(integer)");
+                ds.execRaw("drop function if exists qtest_pp_f2(integer)");
+                ds.commit();
+            }
+            foreach list<string> r in ((("function", "qtest_pp_f", "qtest_pp_f2"),
+                    ("procedure", "qtest_pp_p", "qtest_pp_p2"))) {
+                AbstractFunction f = r[0] == "function" ? db.getFunction(r[1]) : db.getProcedure(r[1]);
+                list<string> sql = f.getRenameSql(r[2]);
+                assertEq(1, sql.size(), i.key + ": " + r[0]);
+                assertRegex(sprintf("^alter %s %s\\(a integer\\) rename to %s$", r[0], r[1], r[2]), sql[0],
+                    i.key + ": " + r[0]);
+                # the server renames it
+                map ds.execRaw($1), sql;
+                ds.commit();
+                *AbstractFunction g = r[0] == "function" ? db.getFunction(r[2]) : db.getProcedure(r[2]);
+                assertEq(f.className(), g.className(), i.key + ": " + r[0] + " renamed");
+                assertNothing(r[0] == "function" ? db.getFunction(r[1]) : db.getProcedure(r[1]),
+                    i.key + ": " + r[0] + " old name");
+                # an argument list given with the new name is ignored
+                assertEq(sql, f.getRenameSql(r[2] + "(a integer)"), i.key + ": " + r[0] + " with arguments");
+            }
         }
     }
 }

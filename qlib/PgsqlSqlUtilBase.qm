@@ -235,6 +235,8 @@ $function$
 
 
     @section pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - fixed the SQL that renames a function or a procedure (\c getRenameSql()), which gave the argument list after
+      the new name (<tt>rename to g(args)</tt>), which PostgreSQL refuses
     - fixed @ref SqlUtil::AbstractDatabase::getSequence() "getSequence()" on a connection of the \c jdbc driver, which
       gives the server version as a hash: the sequence was read as before PostgreSQL 10, which raised an error
     - added support for the procedures of PostgreSQL 11 and later (@ref PgsqlSqlUtilBase::PgsqlProcedure
@@ -1891,7 +1893,10 @@ public class PgsqlFunction inherits SqlUtil::AbstractFunction {
         @param opt this argument is ignored
     */
     softlist<string> getRenameSql(string new_name, *hash opt) {
-        return sprintf("alter %s %s rename to %s(%s)", type, name, new_name, args);
+        # RENAME TO takes the new name only: the argument list, which identifies the function, is that of the name
+        # renamed; an argument list given with the new name is ignored
+        *string bare = (new_name =~ x/^([^(]+)\(/)[0];
+        return sprintf("alter %s %s rename to %s", type, name, pgsql_get_sql_identifier(trim(bare ?? new_name)));
     }
 
     #! sets the new name of the function
