@@ -220,10 +220,11 @@ class DbViewDataProviderTest inherits QUnit::Test {
     }
 
     #! returns the name of a test object as the database lists it
+    /** SqlUtil lists the names of every database in lower case: Oracle's, which the catalog has in upper case, too,
+        unless the database object has the \c native_case option
+    */
     private string objName(string label, string suffix) {
-        string name = prefix + suffix;
-        # Oracle lists unquoted names in upper case
-        return label == "oracle" ? name.upr() : name;
+        return prefix + suffix;
     }
 
     #! returns the names in the given list as a set
@@ -311,7 +312,8 @@ class DbViewDataProviderTest inherits QUnit::Test {
         # the record type is the view's columns, with the types of the table's columns that they select
         hash<string, AbstractDataField> rec_type = view.getRecordType();
         assertEq(("id", "name", "amount"), keys rec_type);
-        assertEq(NT_INT, rec_type.id.getType().getBaseTypeCode());
+        # Oracle has no integer type: an integer column is a NUMBER(38), which can hold more than an int
+        assertEq(label == "oracle" ? NT_NUMBER : NT_INT, rec_type.id.getType().getBaseTypeCode());
         hash<string, AbstractDataField> table_type = dp.getChildProviderPath("tables/" + objName(label, "t"))
             .getRecordType();
         foreach string field in (keys rec_type) {
@@ -340,7 +342,8 @@ class DbViewDataProviderTest inherits QUnit::Test {
         # bulk read
         AbstractDataProviderBulkRecordInterface bulk = view.searchRecordsBulk(10, NOTHING, {"orderby": "id"});
         hash<auto> block = bulk.getValue();
-        assertEq((1, 2), block.id);
+        # a bulk read gives each column the type of the record type's field: number for Oracle's NUMBER(38)
+        assertEq(label == "oracle" ? (1n, 2n) : (1, 2), block.id);
         assertEq(("alpha", "beta"), block.name);
         assertNothing(bulk.getValue());
 
