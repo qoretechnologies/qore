@@ -145,7 +145,7 @@ public class OracleRunSchema {
     /** The first call for a datasource string creates the user; a later call returns the same datasource string.
 
         @param connstr the datasource string of the test's database; returned as it is when it is not set or not for
-        the \c oracle driver
+        the \c oracle driver or the \c jdbc driver with an Oracle URL (whose user and password are the run's user's)
         @param suite the name of the test, used in the name of the user
         @param tag a suffix of the user's name for another user of the run, such as one whose tables the test reads
         from the first one's schema: its letters and digits, at most 8 of them
@@ -159,7 +159,7 @@ public class OracleRunSchema {
             return connstr;
         }
         hash<auto> config = parse_datasource(connstr);
-        if (config.type != "oracle") {
+        if (config.type != "oracle" && !OracleRunSchema::isOracleJdbc(config)) {
             return connstr;
         }
         lck.lock();
@@ -247,6 +247,16 @@ public class OracleRunSchema {
         }
         ds.commit();
         return True;
+    }
+
+    #! Returns True if a parsed datasource string is for the jdbc driver with an Oracle URL
+    private static bool isOracleJdbc(hash<auto> config) {
+        if (config.type != "jdbc") {
+            return False;
+        }
+        string url = config.options.url ?? config.db ?? "";
+        url =~ s/^jdbc://;
+        return url.lwr().startsWith("oracle:");
     }
 
     #! Holds the lock of the tests on this host that use the given datasource string without a schema of their own
