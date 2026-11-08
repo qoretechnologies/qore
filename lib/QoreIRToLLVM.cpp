@@ -2276,6 +2276,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     block_scoped_locals.clear();
     current_body_locals.clear();
     local_cleanup_allocas.clear();
+    deferred_local_releases.clear();
     closure_pre_inst_flags.clear();
     operand_remaining_uses.clear();
     value_def_block.clear();
@@ -4045,6 +4046,64 @@ llvm::BasicBlock* QoreIRToLLVM::createPerInvokeCleanupLP(llvm::Module& module,
         builder->SetInsertPoint(saved_insert, saved_ip);
     }
     return lp_bb;
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::finalizeDeferredLocalReleases(llvm::Module& module) {
+    if (deferred_local_releases.empty()) {
+        return;
+    }
+    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    llvm::IRBuilder<> rb(ctx);
+    for (const DeferredLocalRelease& rel : deferred_local_releases) {
+        if (!rel.block || !rel.block->getParent()) {
+            continue;
+        }
+        llvm::BasicBlock& entry = rel.block->getParent()->getEntryBlock();
+        // the allocas holding references to the local's value now known, in the order the UninstantiateLocal
+        // releases them
+        std::vector<llvm::Value*> current;
+        auto cleanup_it = local_cleanup_allocas.find(rel.key);
+        if (cleanup_it != local_cleanup_allocas.end()) {
+            current.insert(current.end(), cleanup_it->second.begin(), cleanup_it->second.end());
+        }
+        auto tracker_it = local_reload_trackers.find(rel.key);
+        if (tracker_it != local_reload_trackers.end()) {
+            current.push_back(tracker_it->second);
+        }
+        auto deferred_it = local_reload_deferred.find(rel.key);
+        if (deferred_it != local_reload_deferred.end()) {
+            current.push_back(deferred_it->second);
+        }
+        bool positioned = false;
+        for (llvm::Value* value : current) {
+            if (std::find(rel.released.begin(), rel.released.end(), value) != rel.released.end()) {
+                continue;
+            }
+            // only an alloca of the entry block dominates the release point
+            auto* alloca = llvm::dyn_cast<llvm::AllocaInst>(value);
+            if (!alloca || alloca->getParent() != &entry) {
+                continue;
+            }
+            if (!positioned) {
+                if (rel.after && rel.after->getNextNode()) {
+                    rb.SetInsertPoint(rel.after->getNextNode());
+                } else if (!rel.after) {
+                    rb.SetInsertPoint(rel.block, rel.block->getFirstInsertionPt());
+                } else if (llvm::Instruction* term = qoreGetTerminator(*rel.block)) {
+                    rb.SetInsertPoint(term);
+                } else {
+                    rb.SetInsertPoint(rel.block);
+                }
+                positioned = true;
+            }
+            llvm::Value* old_val = rb.CreateLoad(i64_type, alloca);
+            rb.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
+            rb.CreateCall(decref_fn, {old_val, xsink_arg});
+        }
+    }
+    deferred_local_releases.clear();
 }
 
 void QoreIRToLLVM::finalizeFunctionCommonCleanup(llvm::Module& module) {
@@ -12922,6 +12981,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         builder->CreateRet(getNothingReturnValue());
     }
 
+    // every instruction of the body is lowered: the allocas registered for a local after an UninstantiateLocal of it
+    // was lowered are released there too
+    finalizeDeferredLocalReleases(module);
+
     // C++ EH prototype: finalize the shared function-level unwind landing pad
     // if any invoke emitted during body lowering needed it.
     finalizeFunctionUnwindLP(module);
@@ -15733,6 +15796,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // independently generate decref code for the cleanup allocas.  At
                 // runtime, only one path executes, and the alloca is reset to NOTHING
                 // after decref, so duplicate paths (if somehow both reached) are safe.
+                // the allocas released here; those registered by code lowered after this instruction are released
+                // here too when the function is lowered (see DeferredLocalRelease)
+                std::vector<llvm::Value*> released;
                 auto cleanup_it = local_cleanup_allocas.find(key);
                 if (cleanup_it != local_cleanup_allocas.end()) {
                     for (llvm::Value* cleanup_alloca : cleanup_it->second) {
@@ -15740,6 +15806,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         builder->CreateStore(
                                 llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup_alloca);
                         builder->CreateCall(decref_fn, {old_val, xsink_arg});
+                        released.push_back(cleanup_alloca);
                     }
                 }
 
@@ -15755,6 +15822,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateStore(
                             llvm::ConstantInt::get(i64_type, VAL_NOTHING), tracker_it->second);
                     builder->CreateCall(decref_fn, {old_tracker, xsink_arg});
+                    released.push_back(tracker_it->second);
                 }
                 auto deferred_it = local_reload_deferred.find(key);
                 if (deferred_it != local_reload_deferred.end()) {
@@ -15762,6 +15830,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateStore(
                             llvm::ConstantInt::get(i64_type, VAL_NOTHING), deferred_it->second);
                     builder->CreateCall(decref_fn, {old_deferred, xsink_arg});
+                    released.push_back(deferred_it->second);
+                }
+                // the point the releases of allocas registered later are inserted at: after the last instruction
+                // emitted so far in the block, before the release of the local's value emitted below
+                {
+                    llvm::BasicBlock* release_block = builder->GetInsertBlock();
+                    deferred_local_releases.push_back({key, release_block,
+                        release_block && !release_block->empty() ? &release_block->back() : nullptr,
+                        std::move(released)});
                 }
 
                 // IR-only locals are not necessarily represented on the runtime

@@ -619,6 +619,28 @@ private:
     // are destroyed, preventing deferred-to-exit cleanup from keeping objects alive.
     std::unordered_map<const void*, std::vector<llvm::Value*>> local_cleanup_allocas;
 
+    //! The release of a local at an UninstantiateLocal lowered before the code that registers some of the allocas
+    //! holding references to its value
+    /** Blocks are lowered in layout order, and a block's exception cleanup (block.lvars.exception.cleanup.cont) is
+        laid out before the statements of the block: its UninstantiateLocal of a local declared in the block finds
+        none of the allocas that the local's stores register later (local_cleanup_allocas, the reload tracker and the
+        deferred reload value), whose references then outlived the local's value, so that the destructor of an
+        object it held ran after those of locals declared before it.  finalizeDeferredLocalReleases() releases them
+        there once the function is lowered.
+    */
+    struct DeferredLocalRelease {
+        //! the local
+        const void* key;
+        //! the block of the UninstantiateLocal
+        llvm::BasicBlock* block;
+        //! the instruction the releases are inserted after (null: at the start of \a block), which the release of
+        //! the local's value follows
+        llvm::Instruction* after;
+        //! the allocas released when the UninstantiateLocal was lowered
+        std::vector<llvm::Value*> released;
+    };
+    std::vector<DeferredLocalRelease> deferred_local_releases;
+
     // Phase 2B — SSA-direct cleanup tracking.  An alternative to the flat
     // cleanup-alloca forest: when a refcounted temp would normally be
     // tracked via invoke_result_allocas, it can instead be tracked as an
@@ -1398,6 +1420,10 @@ private:
     // then the shared tail (on_block_exit, iterators, preinstantiated
     // locals, invoke allocas, local uninstantiation) and resume().
     void finalizeFunctionCommonCleanup(llvm::Module& module);
+
+    //! Releases the allocas registered for a local after an UninstantiateLocal of it was lowered (see
+    //! DeferredLocalRelease), before the release of the local's value there
+    void finalizeDeferredLocalReleases(llvm::Module& module);
 
     // Phase 2B — emit decrefs for every pending_ssa_cleanup entry whose
     // def_bb dominates the current insert block.  Used by Return /
