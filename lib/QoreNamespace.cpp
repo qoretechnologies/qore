@@ -3131,7 +3131,7 @@ void qore_ns_private::clearData(ExceptionSink* xsink) {
     // clear/finalize global variables
     var_list.clearAll(xsink);
     // clear/finalize static class vars
-    classList.clear(xsink);
+    classList.clear(xsink, getProgram());
 
     nsl.clearData(xsink);
 }

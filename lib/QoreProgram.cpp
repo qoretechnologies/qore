@@ -542,11 +542,16 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     copyExternalData();
 }
 
-bool qore_program_private::runWithRegisteredPrograms(const std::vector<const QoreProgram*>& pgms,
-        const std::function<bool()>& f) {
+#ifdef DEBUG
+std::atomic<qore_program_private_base::dbg_teardown_hook_t> qore_program_private_base::dbg_teardown_hook{nullptr};
+#endif
+
+bool qore_program_private::runWithRegisteredPrograms(
+        const std::vector<std::pair<const QoreProgram*, qore_program_id_t>>& pgms, const std::function<bool()>& f) {
     QoreAutoRWReadLocker al(&lck_programMap);
-    for (const QoreProgram* p : pgms) {
-        if (qore_program_set.find(const_cast<QoreProgram*>(p)) == qore_program_set.end()) {
+    for (const auto& p : pgms) {
+        programid_to_program_map_t::const_iterator i = programid_to_program_map.find(p.second);
+        if (i == programid_to_program_map.end() || i->second != p.first) {
             return false;
         }
     }
@@ -1732,12 +1737,22 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     // otherwise workers on other threads fail with PROGRAM-ERROR.
     if (need_cleanup) {
         qore_call_program_cleanup_callback(pgm);
+#ifdef DEBUG
+        if (dbg_teardown_hook_t hook = dbg_teardown_hook.load()) {
+            hook(pgm, DbgTeardownPoint::AfterCleanupCallback);
+        }
+#endif
     }
 
     if (need_cleanup) {
         AutoLocker al(plock);
         // mark the program so that only code from this thread can run during data destruction
         ptid = q_gettid();
+#ifdef DEBUG
+        if (dbg_teardown_hook_t hook = dbg_teardown_hook.load()) {
+            hook(pgm, DbgTeardownPoint::BeforeFinalWait);
+        }
+#endif
         // threads could enter the Program while the cleanup callback ran (ptid was not set yet): wait for them to
         // leave it, as its data is destroyed below; no other thread can enter it now
         waitForAllThreadsToTerminateIntern();

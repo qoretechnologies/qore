@@ -91,6 +91,9 @@
 
 #include <atomic>
 #include <cassert>
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
 #include <cerrno>
 #include <map>
 
@@ -1324,6 +1327,41 @@ void ThreadProgramData::del(ExceptionSink* xsink) {
 
 #ifdef DEBUG
 std::atomic<ThreadProgramData::dbg_after_unlist_t> ThreadProgramData::dbg_after_unlist{nullptr};
+
+namespace {
+//! the number of ThreadProgramData objects; see ThreadProgramData::dbgLiveCount()
+struct ThreadProgramDataLiveCount {
+    std::mutex m;
+    std::condition_variable cond;
+    int64 count = 0;
+};
+
+ThreadProgramDataLiveCount& tpd_live_count() {
+    // not destroyed, as threads can exit while static objects are destroyed
+    static ThreadProgramDataLiveCount* c = new ThreadProgramDataLiveCount;
+    return *c;
+}
+}
+
+void ThreadProgramData::dbgLiveCountChanged(int64 delta) {
+    ThreadProgramDataLiveCount& c = tpd_live_count();
+    std::lock_guard<std::mutex> l(c.m);
+    c.count += delta;
+    assert(c.count >= 0);
+    c.cond.notify_all();
+}
+
+int64 ThreadProgramData::dbgLiveCount() {
+    ThreadProgramDataLiveCount& c = tpd_live_count();
+    std::lock_guard<std::mutex> l(c.m);
+    return c.count;
+}
+
+bool ThreadProgramData::dbgWaitLiveCount(int64 count, int64 timeout_ms) {
+    ThreadProgramDataLiveCount& c = tpd_live_count();
+    std::unique_lock<std::mutex> l(c.m);
+    return c.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&c, count]() { return c.count <= count; });
+}
 #endif
 
 int ThreadProgramData::gettid() {
@@ -3243,7 +3281,12 @@ CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, 
     // #3390).  AOTSmoke (221/221) and the IR suite (49/49) confirm ca3139789's AOT protection
     // lives in its getProgram() change, not in this gating.
     QoreProgram* call_program_context;
-    QoreProgram* class_spgm = c ? c->spgm.load() : nullptr;
+    // the class's source Program is kept for the frame unless the thread runs in it already
+    bool class_spgm_referenced = false;
+    QoreProgram* class_spgm = c ? c->getSourceProgramForCall(class_spgm_referenced) : nullptr;
+    if (class_spgm_referenced) {
+        referenced_class_pgm = class_spgm;
+    }
     if (class_spgm) {
         call_program_context = class_spgm;
     } else if (obj) {
@@ -3276,6 +3319,11 @@ CodeContextHelperBase::~CodeContextHelperBase() {
         RuntimeConfig& rc = rc_get_tls_ref();
         rc.setObject(old_rc_obj);
         rc.setClass(old_rc_class);
+    }
+    // released once the frame no longer refers to it
+    if (referenced_class_pgm) {
+        assert(xsink);
+        referenced_class_pgm->deref(xsink);
     }
 }
 

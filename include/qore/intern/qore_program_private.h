@@ -633,6 +633,21 @@ public:
     */
     bool bg_compile_closed = false;
 
+#ifdef DEBUG
+    //! the points in waitForTerminationAndClear() where dbg_teardown_hook is called
+    enum class DbgTeardownPoint {
+        //! after the cleanup callback and before the Program is marked as being torn down by the thread; no lock is
+        //! held, and the hook can wait
+        AfterCleanupCallback,
+        //! the Program is marked, and the thread waits for the threads that entered it to leave; the Program's lock
+        //! is held, and the hook must not wait
+        BeforeFinalWait,
+    };
+    //! debug-only hook called while a Program is torn down, before its data is deleted
+    typedef void (*dbg_teardown_hook_t)(QoreProgram* pgm, DbgTeardownPoint point);
+    DLLLOCAL static std::atomic<dbg_teardown_hook_t> dbg_teardown_hook;
+#endif
+
     //! set once the Program's constructor has run to completion
     /** QoreProgram::priv is published, and the Program's namespace tree is created and owned by the
         new Program, from qore_program_private_base's constructor - before any member of the derived
@@ -1660,8 +1675,10 @@ public:
     DLLLOCAL void waitForAllThreadsToTerminateIntern() {
         int tid = q_gettid();
 
+        // the calling thread does not wait for itself: all of its entries are discounted, as it can be in the
+        // Program's code more than once (nested calls)
         ptid_map_t::iterator i = tidmap.find(tid);
-        unsigned adj = (i != tidmap.end() ? 1 : 0);
+        unsigned adj = (i != tidmap.end() ? i->second : 0);
 
         while ((thread_count - adj) || parse_count) {
             ++thread_waiting;
@@ -3425,14 +3442,15 @@ public:
         pgm.priv->runtimeImportSystemApi(xsink);
     }
 
-    //! Runs \a f while the given Programs cannot be destroyed, if all of them still exist
-    /** The Programs are looked up in the registry under its read lock, which is held while \a f runs, so that \a f
-        can use their private data; a Program is removed from the registry when it is destroyed
+    //! Runs \a f while the given Programs cannot be destroyed, if all of them still have references
+    /** The Programs are looked up by ID in the registry under its read lock, which is held while \a f runs, so that
+        \a f can use their private data; a Program leaves the ID registry when its last reference is released, and
+        the ID also tells a Program from a later one at the same address
 
-        @return the return value of \a f, or false if a Program does not exist anymore
+        @return the return value of \a f, or false if a Program has no reference anymore
     */
-    DLLLOCAL static bool runWithRegisteredPrograms(const std::vector<const QoreProgram*>& pgms,
-            const std::function<bool()>& f);
+    DLLLOCAL static bool runWithRegisteredPrograms(
+            const std::vector<std::pair<const QoreProgram*, qore_program_id_t>>& pgms, const std::function<bool()>& f);
 
     DLLLOCAL static qore_program_private* get(QoreProgram& pgm) {
         return pgm.priv;

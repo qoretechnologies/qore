@@ -2571,47 +2571,6 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
     return eligible_state;
 }
 
-//! Holds a reference to the Program in which an inlined method runs, for the whole inlined call
-/** The method's code, its IR and the thread-local data that it runs on belong to the Program of its class, which can be
-    deleted in another thread while a Program sharing the class calls the method: the reference keeps the Program
-    allocated, and entering it (ProgramThreadCountContextHelper) fails once its teardown has started, so the call is
-    refused with an exception instead of running on a deleted Program.  Declared before the
-    ProgramThreadCountContextHelper, so that the Program is released after the thread has left it.
-*/
-class QoreIRInlineMethodProgramHolder {
-public:
-    //! takes a reference to the source Program of the method's class; see qore_class_private::getReferencedSourceProgram()
-    DLLLOCAL QoreIRInlineMethodProgramHolder(const QoreMethod* method, ExceptionSink* xsink) : xsink(xsink) {
-        const QoreClass* qc = method ? method->getClass() : nullptr;
-        const qore_class_private* qcp = qc ? qore_class_private::get(*qc) : nullptr;
-        pgm = qcp ? qcp->getReferencedSourceProgram() : nullptr;
-    }
-
-    DLLLOCAL ~QoreIRInlineMethodProgramHolder() {
-        if (pgm) {
-            if (xsink) {
-                pgm->deref(xsink);
-            } else {
-                ExceptionSink local_xsink;
-                pgm->deref(&local_xsink);
-            }
-        }
-    }
-
-    QoreIRInlineMethodProgramHolder(const QoreIRInlineMethodProgramHolder&) = delete;
-    QoreIRInlineMethodProgramHolder& operator=(const QoreIRInlineMethodProgramHolder&) = delete;
-
-    //! the Program, or nullptr if the class has no source Program, which has released it or is deleted: the method is
-    //! then not inlined, and the call takes the regular path, which reports it
-    DLLLOCAL QoreProgram* get() const {
-        return pgm;
-    }
-
-private:
-    QoreProgram* pgm;
-    ExceptionSink* xsink;
-};
-
 class QoreIRInlineCallStackLocation : public QoreStackLocation {
 public:
     DLLLOCAL QoreIRInlineCallStackLocation(const QoreProgramLocation* loc, std::string call_name,
@@ -4134,7 +4093,11 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
-    QoreIRInlineMethodProgramHolder exec_pgm_holder(method, xsink);
+    // the method's code belongs to the Program of its class, which is kept for the whole inlined call (see
+    // QoreSourceProgramHolder); a class without a source Program is not inlined: the regular call path reports it
+    const QoreClass* method_class = method ? method->getClass() : nullptr;
+    QoreSourceProgramHolder exec_pgm_holder(method_class ? qore_class_private::get(*method_class) : nullptr,
+        xsink);
     QoreProgram* exec_pgm = exec_pgm_holder.get();
     if (!exec_pgm) {
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
@@ -4407,7 +4370,11 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
-    QoreIRInlineMethodProgramHolder exec_pgm_holder(inst->method, xsink);
+    // the method's code belongs to the Program of its class, which is kept for the whole inlined call (see
+    // QoreSourceProgramHolder); a class without a source Program is not inlined: the regular call path reports it
+    const QoreClass* method_class = inst->method ? inst->method->getClass() : nullptr;
+    QoreSourceProgramHolder exec_pgm_holder(method_class ? qore_class_private::get(*method_class) : nullptr,
+        xsink);
     QoreProgram* exec_pgm = exec_pgm_holder.get();
     if (!exec_pgm) {
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);

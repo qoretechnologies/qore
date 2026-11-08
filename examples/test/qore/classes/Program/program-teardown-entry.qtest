@@ -1,0 +1,185 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ProgramTeardownEntryTest
+
+#! threads and background JIT compiles that use a Program while it is deleted
+/** A Program that is deleted runs its cleanup callback (which cancels its asynchronous I/O) before it marks itself
+    as being torn down, so other threads can enter it while the callback runs; the teardown then waits for them to
+    leave before it deletes its data.  The background JIT compiler takes no more work for a Program once the Program
+    waits for the compiles of its code, and it tells a Program from a later one at the same address by its ID.
+
+    The debug build holds the teardown between the callback and the mark, so a thread enters the Program at exactly
+    that point on every run.  Each case runs in a child process so that a crash fails an assertion rather than the
+    test run.
+*/
+class ProgramTeardownEntryTest inherits QUnit::Test {
+    public {
+        #! milliseconds to wait for each step of the child
+        const StepTimeout = 60000;
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("ProgramTeardownEntryTest", "1.0") {
+        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("a thread entering a Program while its cleanup callback runs", \enterDuringCleanup());
+        addTestCase("teardown hold usage errors", \holdErrors());
+        addTestCase("a background compile for a Program being deleted is refused", \bgCompileRefused());
+        addTestCase("a Program is identified by its ID as well as its address", \programId());
+        set_return_value(main());
+    }
+
+    #! the teardown waits for a thread that entered the Program before it was marked, and its data stays valid
+    enterDuringCleanup() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the teardown hold requires a debug build");
+        }
+        hash<auto> r = runChild("%modern
+%no-child-restrictions
+
+Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+t.parse(\"our *hash<auto> data; our *Queue entered; our *Queue release;
+sub init(Queue e, Queue r) { data = {\\\"a\\\": 1}; entered = e; release = r; }
+auto sub enter() { entered.push(1); release.get(); return data.a; }
+code sub get_enter() { return \\\\enter(); }\", \"t\");
+Queue entered();
+Queue release();
+t.callFunction(\"init\", entered, release);
+code enter = t.callFunction(\"get_enter\");
+call_function(\"dbg_hold_program_teardown\", t);
+Counter deleted(1);
+background sub () {
+    delete t;
+    deleted.dec();
+}();
+bool held = call_function(\"dbg_wait_program_teardown_held\", " + StepTimeout + ");
+*int rv;
+Counter returned(1);
+background sub () {
+    rv = enter();
+    returned.dec();
+}();
+# the thread is in the Program
+entered.get();
+# the teardown marks the Program and waits for the thread to leave it
+bool waiting = call_function(\"dbg_continue_program_teardown\", " + StepTimeout + ");
+int pending = deleted.getCount();
+release.push(1);
+returned.waitForZero();
+deleted.waitForZero();
+printf(\"held=%y waiting=%y pending=%d rv=%y\\n\", held, waiting, pending, rv);
+");
+        assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
+        assertRegex("held=True waiting=True pending=1 rv=1", r.output,
+            sprintf("the teardown waited for the thread, which read the Program's data: %s", r.output));
+    }
+
+    #! continuing without a held teardown, and arming two holds, are errors
+    holdErrors() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the teardown hold requires a debug build");
+        }
+        assertThrows("DBG-ARGUMENT-ERROR", "no Program teardown is held",
+            sub () { call_function("dbg_continue_program_teardown", 100); });
+        assertFalse(call_function("dbg_wait_program_teardown_held", 0), "no teardown is held without a hold");
+        hash<auto> r = runChild("%modern
+%no-child-restrictions
+
+Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+call_function(\"dbg_hold_program_teardown\", t);
+try {
+    call_function(\"dbg_hold_program_teardown\", t);
+    printf(\"second=ok\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"second=%s\\n\", ex.err);
+}
+Counter deleted(1);
+background sub () {
+    delete t;
+    deleted.dec();
+}();
+bool held = call_function(\"dbg_wait_program_teardown_held\", " + StepTimeout + ");
+bool waiting = call_function(\"dbg_continue_program_teardown\", " + StepTimeout + ");
+deleted.waitForZero();
+printf(\"held=%y waiting=%y\\n\", held, waiting);
+");
+        assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
+        assertRegex("second=DBG-ARGUMENT-ERROR", r.output, sprintf("a second hold is refused: %s", r.output));
+        assertRegex("held=True waiting=True", r.output, sprintf("the armed hold held the teardown: %s", r.output));
+    }
+
+    #! once a Program waits for the background compiles of its code, a compile of its code is refused
+    /** The functions of the tiered Programs are promoted to the JIT tier at their first call; the closed Program's
+        function stays in the IR tier and gives the same results
+    */
+    bgCompileRefused() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("closing a Program's background compiles requires a debug build");
+        }
+        hash<auto> r = runChild("%modern
+%no-child-restrictions
+
+Program open(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+open.setExecMode(EM_TIERED);
+open.parse(\"int sub g(int x) { return x + 1; }\", \"open\");
+Program closed(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+closed.setExecMode(EM_TIERED);
+closed.parse(\"int sub f(int x) { return x + 1; }\", \"closed\");
+int before = call_function(\"dbg_get_bg_compile_refused_count\");
+int sum = 0;
+for (int i = 0; i < 5; ++i) {
+    sum += open.callFunction(\"g\", i);
+}
+int after_open = call_function(\"dbg_get_bg_compile_refused_count\");
+call_function(\"dbg_close_program_bg_compile\", closed);
+for (int i = 0; i < 5; ++i) {
+    sum += closed.callFunction(\"f\", i);
+}
+int after_closed = call_function(\"dbg_get_bg_compile_refused_count\");
+printf(\"sum=%d open=%d closed=%y\\n\", sum, after_open - before, after_closed > after_open);
+", "", "QORE_JIT_THRESHOLD=1 QORE_JIT_TIMING=1");
+        assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
+        assertRegex("sum=30 open=0 closed=True", r.output,
+            sprintf("only the compile for the closed Program was refused: %s", r.output));
+        assertRegex("\\[BG-JIT\\] enqueued compilation of '[^']*g", r.output,
+            sprintf("the compile for the open Program was enqueued: %s", r.output));
+        assertNRegex("\\[BG-JIT\\] enqueued compilation of '[^']*\\bf\\b", r.output,
+            sprintf("no compile for the closed Program was enqueued: %s", r.output));
+    }
+
+    #! a Program is found by the background compiler only with its own ID
+    programId() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the Program lookup requires a debug build");
+        }
+        Program t(PO_NEW_STYLE);
+        assertTrue(call_function("dbg_program_registered_with_id", t, 0), "the Program is found with its ID");
+        assertFalse(call_function("dbg_program_registered_with_id", t, 1),
+            "the Program is not found with another ID");
+    }
+
+    private hash<auto> runChild(string code, string opts = "", string env = "") {
+        TmpDir tmp("qore-program-teardown-entry-");
+        string script = tmp.path + "/child.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(code);
+        f.close();
+        string output = backquote(sprintf("%s %s %s %s 2>&1; echo \"rc=$?\"", env.empty() ? "" : "env " + env,
+            qore_bin, opts, script));
+        *list<*string> rc = (output =~ x/rc=([0-9]+)\s*$/);
+        return {"rc": rc[0], "output": output};
+    }
+}

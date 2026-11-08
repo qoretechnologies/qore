@@ -5629,6 +5629,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     func->source_variant = variant;
     // Owning program for the per-Program background-compile drain (set unconditionally).
     func->pgm = pgm;
+    func->pgm_id = pgm->getProgramId();
     // Debug-step hook context (issue #5352): record the top-level StatementBlock and
     // the owning program's attached-debugger pointer slot so the JIT lowering can bake
     // the per-statement dbgStep hook (blockStatement context + cheap inline attach gate).

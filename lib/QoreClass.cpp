@@ -94,12 +94,17 @@ static QoreProgram* qore_check_pgm_context(QoreProgram* pgm) {
     return (pgm && qore_program_private::isConstructed(*pgm)) ? pgm : nullptr;
 }
 
-static QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreProgram* explicit_pgm = nullptr) {
+//! Returns the Program that a method of the class runs in; \a holder keeps the source Program for the call
+/** The holder must be declared before the CodeEvaluationHelper that enters the Program; see QoreSourceProgramHolder
+*/
+static QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgramHolder& holder,
+        QoreProgram* explicit_pgm = nullptr) {
     const qore_class_private* c = qore_class_private::get(cls);
     if (!c) {
         return qore_check_pgm_context(explicit_pgm);
     }
-    QoreProgram* spgm = c->spgm;
+    holder.set(c);
+    QoreProgram* spgm = holder.get();
     if (spgm) {
         return qore_check_pgm_context(spgm);
     }
@@ -128,8 +133,9 @@ QoreValue qore_method_private::evalNormalVariant(QoreObject* self, RuntimeConfig
         const QoreTypeParamInstantiation* explicit_type_param_instantiation,
         const QoreTypeInfo* receiver_type_info) const {
     const AbstractQoreFunctionVariant* variant = reinterpret_cast<const AbstractQoreFunctionVariant*>(ev);
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, getFunction(), variant, getName(), args, self, parent_class->priv,
-        CT_UNUSED, false, nullptr, qore_get_method_pgm_context(*parent_class), receiver_type_info,
+        CT_UNUSED, false, nullptr, qore_get_method_pgm_context(*parent_class, spgm_holder), receiver_type_info,
         explicit_type_param_instantiation);
     if (*xsink) return QoreValue();
 
@@ -6986,9 +6992,10 @@ void ConstructorMethodFunction::evalConstructor(const AbstractQoreFunctionVarian
         const QoreClass& thisclass, QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal,
         RuntimeConfig& rc, ExceptionSink* xsink) const {
     // setup call, save runtime position, and evaluate arguments
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "constructor", args, self,
         qore_class_private::get(thisclass), CT_UNUSED, false, nullptr,
-        qore_get_method_pgm_context(thisclass));
+        qore_get_method_pgm_context(thisclass, spgm_holder));
     if (*xsink) {
         printd(5, "ConstructorMethodFunction::evalConstructor() %s variant=%p args=%p nargs=%d EXCEPTION in CEH\n",
             thisclass.getName(), static_cast<const void*>(variant), static_cast<const void*>(args),
@@ -7007,8 +7014,9 @@ void CopyMethodFunction::evalCopy(const QoreClass& thisclass, QoreObject* self, 
     qore_call_t ct = variant->getCallType();
 
     // setup call, save runtime position
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "copy", (QoreListNode*)nullptr, self,
-        qore_class_private::get(thisclass), ct, true, nullptr, qore_get_method_pgm_context(thisclass));
+        qore_class_private::get(thisclass), ct, true, nullptr, qore_get_method_pgm_context(thisclass, spgm_holder));
     if (*xsink) return;
 
     COPYMV_const(variant)->evalCopy(thisclass, self, old, ceh, scl, xsink);
@@ -7024,8 +7032,10 @@ void DestructorMethodFunction::evalDestructor(const QoreClass& thisclass, QoreOb
     // setup call, save runtime position
     //printd(5, "DestructorMethodFunction::evalDestructor() %s::%s() o: %p, v: %d, ct: %d\n", getClassName(),
     //  getName(), self, self->isValid(),ct);
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "destructor", (QoreListNode*)nullptr, self,
-        qore_class_private::get(thisclass), ct, false, nullptr, qore_get_method_pgm_context(thisclass));
+        qore_class_private::get(thisclass), ct, false, nullptr,
+        qore_get_method_pgm_context(thisclass, spgm_holder));
     if (*xsink) return;
 
     DESMV_const(variant)->evalDestructor(thisclass, self, rc, xsink);
@@ -7041,8 +7051,9 @@ QoreValue NormalMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& 
     const char* mname = getName();
     //printd(5, "NormalMethodFunction::evalMethod() %s::%s() v: %d\n", cname, mname, self->isValid());
     const qore_class_private* method_qc = qore_class_private::get(*qc);
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, self, method_qc, CT_UNUSED, false, cctx,
-        qore_get_method_pgm_context(*qc, pgm_ctx), nullptr, explicit_type_param_instantiation);
+        qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx), nullptr, explicit_type_param_instantiation);
     if (*xsink)
         return QoreValue();
 
@@ -7073,8 +7084,9 @@ QoreValue NormalMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeC
     //printd(5, "NormalMethodFunction::evalMethod() %s::%s() v: %d\n", cname, mname, self->isValid());
 
     const qore_class_private* method_qc = qore_class_private::get(*qc);
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, self, method_qc, CT_UNUSED, false, cctx,
-        qore_get_method_pgm_context(*qc), nullptr, explicit_type_param_instantiation);
+        qore_get_method_pgm_context(*qc, spgm_holder), nullptr, explicit_type_param_instantiation);
     if (*xsink)
         return QoreValue();
 
@@ -7106,8 +7118,9 @@ QoreValue NormalMethodFunction::evalPseudoMethod(ExceptionSink* xsink, RuntimeCo
     //printd(5, "NormalMethodFunction::evalPseudoMethod() '%s' cctx: '%s'\n", mname,
     //    cctx ? cctx->name.c_str() : "n/a");
     const qore_class_private* method_qc = qc ? qore_class_private::get(*qc) : nullptr;
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, nullptr, method_qc,
-        CT_UNUSED, false, cctx, qc ? qore_get_method_pgm_context(*qc) : nullptr);
+        CT_UNUSED, false, cctx, qc ? qore_get_method_pgm_context(*qc, spgm_holder) : nullptr);
     if (*xsink)
         return QoreValue();
 
@@ -7121,8 +7134,9 @@ QoreValue StaticMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& 
         QoreProgram* pgm_ctx, const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
     const char* mname = getName();
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, nullptr, qore_class_private::get(*qc),
-        CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc, pgm_ctx), receiver_type_info,
+        CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx), receiver_type_info,
         explicit_type_param_instantiation);
     if (*xsink) {
         return QoreValue();
@@ -7140,8 +7154,9 @@ QoreValue StaticMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeC
         const QoreTypeParamInstantiation* explicit_type_param_instantiation,
         const AbstractQoreFunctionVariant** resolved_variant) const {
     const char* mname = getName();
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, nullptr, qore_class_private::get(*qc),
-        CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc), receiver_type_info,
+        CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc, spgm_holder), receiver_type_info,
         explicit_type_param_instantiation);
     if (*xsink)
         return QoreValue();
@@ -7480,6 +7495,19 @@ int QoreVarInfo::parseInit(const char* name) {
         }
     }
     return err;
+}
+
+int QoreVarInfo::checkOwnerReleased(const char* name, ExceptionSink* xsink) const {
+    const QoreProgram* owner = released_by_owner.load(std::memory_order_acquire);
+    if (!owner || owner == getProgram()) {
+        return 0;
+    }
+    if (xsink) {
+        xsink->raiseException("PROGRAM-ERROR", "cannot access static variable '%s::%s'; the Program object that owns "
+            "class '%s' has already been deleted and therefore cannot be accessed at runtime", owner_class_name, name,
+            owner_class_name);
+    }
+    return -1;
 }
 
 int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink, bool defer_pending) {

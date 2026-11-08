@@ -30,16 +30,19 @@ sub del_elsewhere(Program p) {
 
 background worker();
 {
-    Program child(PO_NEW_STYLE);
-    child.importGlobalVariable("kept");
-    child.importFunction("del_elsewhere");
-    child.parse(ReadOnlyFile::readTextFile(get_script_dir() + "xthread-child.qinc"), "child");
-    delete child;
+    # the worker stops in any case, so that an exception does not keep the script from exiting
+    on_exit work.push({});
+    {
+        Program child(PO_NEW_STYLE);
+        child.importGlobalVariable("kept");
+        child.importFunction("del_elsewhere");
+        child.parse(ReadOnlyFile::readTextFile(get_script_dir() + "xthread-child.qinc"), "child");
+        delete child;
+    }
+    printf("after delete: kept %d\n", kept.size());
+    foreach Program p in (kept) {
+        del_elsewhere(p);
+    }
+    kept = ();
 }
-printf("after delete: kept %d\n", kept.size());
-foreach Program p in (kept) {
-    del_elsewhere(p);
-}
-kept = ();
-work.push({});
 printf("main done\n");

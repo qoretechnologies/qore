@@ -283,13 +283,20 @@ class Marker {
 public class Shared {
     public {
         static int v = 5;
+        static hash<auto> h = {\"a\": 1};
         static Marker m = new Marker();
+    }
+
+    static string hello() {
+        return \"hello\";
     }
 }
 
 Program sub make() {
     Program c(PO_NEW_STYLE);
-    c.parse(\"auto sub v() { return Shared::v; }\", \"child\");
+    c.parse(\"auto sub v() { return Shared::v; } int sub tv() { int x = Shared::v; return x; } \"
+        \"int sub w() { Shared::v = 7; return 7; } auto sub hello() { return Shared::hello(); } \"
+        \"auto sub h() { return Shared::h.a; }\", \"child\");
     return c;
 }
 
@@ -338,8 +345,8 @@ int sub get() {
         #! the code of the in-process Program whose Program created by the guard's destructor is kept in a static
         #! variable of a public class that it shares, whose values have not been released yet (Xray)
         /** The Program created while the values are released does not share them: it reads Xray's value before the
-            values are released and Alpha's (already released) as NOTHING, and keeping it in Xray's static variable
-            does not keep Xray's values, nor itself, alive
+            values are released, and reading Alpha's (already released) raises PROGRAM-ERROR; keeping it in Xray's
+            static variable does not keep Xray's values, nor itself, alive
         */
         const CycleSrc = "
 public class Alpha {
@@ -351,8 +358,8 @@ public class Alpha {
 public class Guard {
     destructor() {
         Program p(PO_NEW_STYLE);
-        p.parse(\"int sub get() { return Holder::value(); } *int sub xray() { return Xray::z; } *int sub alpha() { return Alpha::v; }\", \"guard\");
-        svr_report(sprintf(\"guard Program: %d %y %y\", p.callFunction(\"get\"), p.callFunction(\"xray\"),
+        p.parse(\"int sub get() { return Holder::value(); } *int sub xray() { return Xray::z; } string sub alpha() { try { return sprintf(\\\"%y\\\", Alpha::v); } catch (hash<ExceptionInfo> ex) { return ex.err; } }\", \"guard\");
+        svr_report(sprintf(\"guard Program: %d %y %s\", p.callFunction(\"get\"), p.callFunction(\"xray\"),
             p.callFunction(\"alpha\")));
         Xray::kept = p;
     }
@@ -477,10 +484,11 @@ int sub get() {
         assertEq(1, Results::kept.size());
         # the Program created by the destructor still shares the class; the code of the class cannot run, as its
         # Program has been deleted
-        assertThrows("PROGRAM-ERROR", "already been deleted", \Results::kept[0].callFunction(), "get");
-        # its own code still reads the static variables, which have no values now: the Program of the class did not
-        # delete them, as the kept Program still shares the class (see qore_class_private::data_refs)
-        assertEq(NOTHING, Results::kept[0].callFunction("before"));
+        assertThrows("PROGRAM-ERROR", "already been deleted", sub () { Results::kept[0].callFunction("get"); });
+        # neither can its static variables be accessed: their values have been released by the Program of the class
+        # (which did not delete them, as the kept Program still shares the class; see qore_class_private::data_refs)
+        assertThrows("PROGRAM-ERROR", "cannot access static variable 'Holder::before'",
+            sub () { Results::kept[0].callFunction("before"); });
         # deleting it releases the static variables
         delete Results::kept[0];
         Results::kept = ();
@@ -514,7 +522,7 @@ int sub get() {
             delete p;
         }
         # the kept Program and the values of Xray's static variables are released with the Program
-        assertEq(("guard Program: 42 7 null", "marker released"), Results::reports);
+        assertEq(("guard Program: 42 7 PROGRAM-ERROR", "marker released"), Results::reports);
     }
 
     #! The Program that defines a class releases the values of its static variables when it is deleted
@@ -530,16 +538,29 @@ int sub get() {
         assertEq(("marker released",), Results::reports);
     }
 
-    #! A child Program that shares the values of a class's static variables sees NOTHING once the Program that
-    #! defines the class is deleted
+    #! A child Program that shares the static variables of a class cannot access them once the Program that defines
+    #! the class is deleted, as it cannot call the methods of the class
     deletedProgramChildReaderTest() {
         Results::reports = ();
         Program p = getProgram(False, ChildReaderSrc);
         Program c = p.callFunction("make");
         assertEq(5, c.callFunction("v"));
+        assertEq(5, c.callFunction("tv"));
+        assertEq(1, c.callFunction("h"));
+        assertEq("hello", c.callFunction("hello"));
         delete p;
         assertEq(("marker released",), Results::reports);
-        assertEq(NOTHING, c.callFunction("v"));
+        # a read, a typed read, a read of an element and an assignment raise the error that a method call raises
+        assertThrows("PROGRAM-ERROR", "cannot access static variable 'Shared::v'",
+            sub () { c.callFunction("v"); });
+        assertThrows("PROGRAM-ERROR", "cannot access static variable 'Shared::v'",
+            sub () { c.callFunction("tv"); });
+        assertThrows("PROGRAM-ERROR", "cannot access static variable 'Shared::h'",
+            sub () { c.callFunction("h"); });
+        assertThrows("PROGRAM-ERROR", "cannot access static variable 'Shared::v'",
+            sub () { c.callFunction("w"); });
+        assertThrows("PROGRAM-ERROR", "already been deleted",
+            sub () { c.callFunction("hello"); });
         delete c;
         assertEq(("marker released",), Results::reports);
     }

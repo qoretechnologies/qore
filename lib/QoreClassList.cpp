@@ -337,7 +337,7 @@ void QoreClassList::clearConstants(ExceptionSink* xsink) {
 }
 
 // clears static class vars
-void QoreClassList::clear(ExceptionSink* xsink) {
+void QoreClassList::clear(ExceptionSink* xsink, const QoreProgram* pgm) {
     ns_vars = true;
     for (auto& i : hm) {
         if (i.second.vars) {
@@ -345,7 +345,7 @@ void QoreClassList::clear(ExceptionSink* xsink) {
             qore_class_private* qc = qore_class_private::get(*i.second.cls);
             // the Program that defines the class (its declaring namespace holds the wrapper that created it) releases
             // the values even if other Programs share them; see qore_class_private::var_refs
-            qc->clear(xsink, i.second.cls == qc->cls);
+            qc->clear(xsink, i.second.cls == qc->cls ? pgm : nullptr);
         }
     }
 }

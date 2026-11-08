@@ -10,16 +10,21 @@ public class Alpha {
     }
 }
 
+#! the read function of the guard Programs: -1 if the variable cannot be read, as the Program of its class has released
+#! its value
+const ReadSrc = "int sub read(code c) { try { return c(); } catch (hash<ExceptionInfo> ex) { if (ex.err != \"PROGRAM-ERROR\") { rethrow; } return -1; } } ";
+
 public class Guard {
     destructor() {
         {
             Program p(PO_NEW_STYLE);
-            p.parse("int sub get() { return Alpha::v ?? -1; }", "guard");
+            p.parse(ReadSrc + "int sub get() { return read(int sub () { return Alpha::v; }); }", "guard");
             printf("guard Program result: %y\n", p.callFunction("get"));
             del_elsewhere(p);
         }
         Program p2(PO_NEW_STYLE);
-        p2.parse("int sub getz() { return Zed::z ?? -1; } int sub geta() { return Alpha::v ?? -1; }", "guard2");
+        p2.parse(ReadSrc + "int sub getz() { return read(int sub () { return Zed::z; }); } "
+            "int sub geta() { return read(int sub () { return Alpha::v; }); }", "guard2");
         printf("guard p2 z: %y a: %y\n", p2.callFunction("getz"), p2.callFunction("geta"));
         kept += p2;
         printf("guard done\n");

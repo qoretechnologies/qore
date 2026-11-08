@@ -162,7 +162,8 @@ public:
     }
 
     // clears static class vars
-    DLLLOCAL void clear(ExceptionSink* xsink);
+    //! releases the static variable values of the classes; \a pgm is the Program owning the list
+    DLLLOCAL void clear(ExceptionSink* xsink, const QoreProgram* pgm);
     DLLLOCAL void clearConstants(QoreListNode& l);
     DLLLOCAL void clearConstants(ExceptionSink* xsink);
     //! releases the class data held by the Program whose namespace is deleted; see qore_class_private::deleteClassData()

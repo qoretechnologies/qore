@@ -2007,7 +2007,6 @@ void QoreJIT::finishBgCompileWork(BgCompileWork& work) {
         std::lock_guard<std::mutex> lock(bg_queue_mutex);
         bg_in_progress = nullptr;
         bg_in_progress_pgms.clear();
-        bg_in_progress_any_pgm = false;
     }
     // Always notify: both the shutdown waiter (queue empty && active_work == 0)
     // and per-Program waiters (in-progress no longer references their Program)
@@ -2047,9 +2046,7 @@ void QoreJIT::bgCompileThreadLoop() {
             // atomically with the pop and cannot race past an in-flight compile of
             // its Program.  Cleared in finishBgCompileWork() on every exit path.
             bg_in_progress = &work;
-            bg_in_progress_pgms.clear();
-            bg_in_progress_any_pgm = false;
-            collectWorkPgms(work, bg_in_progress_pgms, bg_in_progress_any_pgm);
+            bg_in_progress_pgms = work.pgms;
         }
 
         // Acquire compile lock (blocking is OK here — this is a dedicated background thread)
@@ -2239,10 +2236,42 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
     work.deopt_ptr = deopt_counter;
     work.variant_refs.reserve(1 + (callees ? callees->size() : 0));
     work.variant_refs.push_back(const_cast<AbstractQoreFunctionVariant*>(variant)->ref());
+    // the work is only accepted while the Programs whose code it lowers exist and do not wait for their background
+    // compiles to delete their data (see qore_program_private::bg_compile_closed): the code of a Program can be called
+    // by a Program sharing one of its classes in another thread while the Program is deleted.  The Programs are
+    // identified by their IDs as well, as a deleted Program's address can be reused.  An IR function without a
+    // Program (IR built by AOT code) belongs to the Program of its variant; work with code whose Program is unknown
+    // is refused, as it could not be drained when that Program is deleted.
+    std::vector<std::pair<const QoreProgram*, qore_program_id_t>> work_pgms;
+    bool pgms_known = true;
+    auto add_pgm = [&work, &work_pgms, &pgms_known](const QoreIRFunction* f, const AbstractQoreFunctionVariant* v) {
+        const QoreProgram* p;
+        qore_program_id_t id;
+        if (f && f->pgm) {
+            p = f->pgm;
+            id = f->pgm_id;
+        } else {
+            const UserVariantBase* vb = v ? v->getUserVariantBase() : nullptr;
+            if (!vb || !vb->pgm) {
+                pgms_known = false;
+                return;
+            }
+            p = vb->pgm;
+            id = vb->pgm->getProgramId();
+        }
+        if (std::find(work.pgms.begin(), work.pgms.end(), p) == work.pgms.end()) {
+            work.pgms.push_back(p);
+        }
+        if (std::find(work_pgms.begin(), work_pgms.end(), std::make_pair(p, id)) == work_pgms.end()) {
+            work_pgms.emplace_back(p, id);
+        }
+    };
+    add_pgm(work.ir_func, variant);
     if (callees) {
         work.callees = *callees;
         work.has_callees = true;
         for (const auto& callee : work.callees) {
+            add_pgm(callee.ir_func, callee.variant);
             if (callee.variant) {
                 work.variant_refs.push_back(const_cast<AbstractQoreFunctionVariant*>(callee.variant)->ref());
             }
@@ -2251,19 +2280,17 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
         work.has_callees = false;
     }
 
-    // the work is only accepted while the Programs whose code it lowers exist and do not wait for their background
-    // compiles to delete their data (see qore_program_private::bg_compile_closed): the code of a Program can be called
-    // by a Program sharing one of its classes in another thread while the Program is deleted
-    std::vector<const QoreProgram*> work_pgms;
-    bool work_any_pgm = false;
-    collectWorkPgms(work, work_pgms, work_any_pgm);
-    bool accepted = qore_program_private::runWithRegisteredPrograms(work_pgms, [&]() -> bool {
+    bool accepted = pgms_known
+        && qore_program_private::runWithRegisteredPrograms(work_pgms, [&]() -> bool {
         std::lock_guard<std::mutex> lock(bg_queue_mutex);
         if (!bg_accept_work.load(std::memory_order_relaxed)) {
             return false;
         }
-        for (const QoreProgram* p : work_pgms) {
-            if (qore_program_private::get(*const_cast<QoreProgram*>(p))->bg_compile_closed) {
+        for (const auto& p : work_pgms) {
+            if (qore_program_private::get(*const_cast<QoreProgram*>(p.first))->bg_compile_closed) {
+#ifdef DEBUG
+                ++dbg_bg_compile_refused_closed;
+#endif
                 return false;
             }
         }
@@ -2312,38 +2339,10 @@ void QoreJIT::waitForBgCompileQueue() {
     });
 }
 
-void QoreJIT::collectWorkPgms(const BgCompileWork& work, std::vector<const QoreProgram*>& pgms, bool& any_pgm) {
-    // a null ir_func->pgm is treated as referring to any Program; see workReferencesPgm()
-    auto add = [&pgms, &any_pgm](const QoreIRFunction* f) {
-        if (!f) {
-            return;
-        }
-        if (!f->pgm) {
-            any_pgm = true;
-        } else if (std::find(pgms.begin(), pgms.end(), f->pgm) == pgms.end()) {
-            pgms.push_back(f->pgm);
-        }
-    };
-    add(work.ir_func);
-    for (const auto& callee : work.callees) {
-        add(callee.ir_func);
-    }
-}
-
 bool QoreJIT::workReferencesPgm(const BgCompileWork& work, const QoreProgram* pgm) {
-    // A null ir_func->pgm means the owning Program of this work item is unknown (e.g. closure IR
-    // funcs created without a pgm binding). Such items must be treated as referencing ANY program
-    // so they are always drained before any Program tears down (and frees) its source IR; otherwise
-    // a background lowering can race a use-after-free on the source QoreIR being compiled.
-    if (work.ir_func && (work.ir_func->pgm == pgm || !work.ir_func->pgm)) {
-        return true;
-    }
-    for (const auto& callee : work.callees) {
-        if (callee.ir_func && (callee.ir_func->pgm == pgm || !callee.ir_func->pgm)) {
-            return true;
-        }
-    }
-    return false;
+    // every Program whose code the work lowers is in work.pgms, as work is accepted only when each one is known
+    // (see enqueueBgCompile())
+    return std::find(work.pgms.begin(), work.pgms.end(), pgm) != work.pgms.end();
 }
 
 void QoreJIT::waitForBgCompileQueue(QoreProgram* pgm) {
@@ -2379,9 +2378,9 @@ void QoreJIT::waitForBgCompileQueue(QoreProgram* pgm) {
         // it does not hold bg_queue_mutex while compiling, so this cannot deadlock.
         bg_queue_empty_cv.wait(lock, [this, pgm]() {
             // the copy taken at the claim is used: the item itself can have been released already
-            return !bg_in_progress || !(bg_in_progress_any_pgm
+            return !bg_in_progress
                 || std::find(bg_in_progress_pgms.begin(), bg_in_progress_pgms.end(), pgm)
-                    != bg_in_progress_pgms.end());
+                    == bg_in_progress_pgms.end();
         });
     }
     // Release refs (which may destroy the now-orphaned variants) outside the lock.
@@ -2495,7 +2494,6 @@ void QoreJIT::forkChild(bool compile_lock_acquired) noexcept {
     bg_compile_thread.abandonAfterFork();
     bg_in_progress = nullptr;
     bg_in_progress_pgms.clear();
-    bg_in_progress_any_pgm = false;
     // only the queued work is pending in the child
     bg_active_work.store(static_cast<int>(bg_compile_queue.size()), std::memory_order_relaxed);
 }
