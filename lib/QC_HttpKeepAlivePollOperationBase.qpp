@@ -92,7 +92,8 @@ bool HttpKeepAlivePollOperationPriv::transitionState(State from, State to, const
     bool rv = op_state.compare_exchange_strong(expected, to, std::memory_order_acq_rel, std::memory_order_acquire);
 #ifdef DEBUG
     if (hook_fired) {
-        PollStateCloseHook::fired(op_state.load(std::memory_order_acquire) == State::CLOSED);
+        // whether the abort's close was kept: the store did not replace it
+        PollStateCloseHook::fired(!rv && op_state.load(std::memory_order_acquire) == State::CLOSED);
     }
 #endif
     return rv;
@@ -100,8 +101,40 @@ bool HttpKeepAlivePollOperationPriv::transitionState(State from, State to, const
 
 void HttpKeepAlivePollOperationPriv::abort(ExceptionSink* xsink) {
     op_state = State::CLOSED;
-    if (header_op) {
-        header_op->abort(xsink);
+    // abort() runs on any thread: the header operation is created and released meanwhile, so it is referenced under
+    // op_lock
+    SocketReadHttpHeaderPollOperation* op;
+    {
+        AutoLocker al(op_lock);
+        op = header_op;
+        if (op) {
+            op->ref();
+        }
+    }
+    if (op) {
+        op->abort(xsink);
+        op->deref(xsink);
+    }
+}
+
+void HttpKeepAlivePollOperationPriv::releaseHeaderOp(ExceptionSink* xsink) {
+    SocketReadHttpHeaderPollOperation* op;
+    {
+        AutoLocker al(op_lock);
+        op = header_op;
+        header_op = nullptr;
+    }
+#ifdef DEBUG
+    // what another thread's abort() does while the operation is released
+    if (op && PollStateCloseHook::take(this, "release-header-op")) {
+        ExceptionSink abort_xsink;
+        abort(&abort_xsink);
+        abort_xsink.clear();
+        PollStateCloseHook::fired(op_state.load(std::memory_order_acquire) == State::CLOSED);
+    }
+#endif
+    if (op) {
+        op->deref(xsink);
     }
 }
 
@@ -129,14 +162,21 @@ QoreValue HttpKeepAlivePollOperationPriv::getOutput() const {
 }
 
 void HttpKeepAlivePollOperationPriv::resetForIdle() {
-    phase = Phase::IDLE;
-    op_state = State::IDLE;
+    // CLOSED is final: an operation that abort() closed (any thread) or whose connection was closed is not made idle
+    // again; it only releases its header state
+    State cur = op_state.load(std::memory_order_acquire);
+    bool reset;
+    while ((reset = (cur != State::CLOSED))
+            && !op_state.compare_exchange_weak(cur, State::IDLE, std::memory_order_acq_rel, std::memory_order_acquire)) {
+    }
+    if (reset) {
+        phase = Phase::IDLE;
+    }
     deadline_us = nowUs() + ttl_us;
     header_deadline_us = 0;
-    if (header_op) {
+    {
         ExceptionSink xsink;
-        header_op->deref(&xsink);
-        header_op = nullptr;
+        releaseHeaderOp(&xsink);
     }
     if (header_output) {
         header_output->deref(nullptr);
@@ -145,10 +185,7 @@ void HttpKeepAlivePollOperationPriv::resetForIdle() {
 }
 
 void HttpKeepAlivePollOperationPriv::cleanup(ExceptionSink* xsink) {
-    if (header_op) {
-        header_op->deref(xsink);
-        header_op = nullptr;
-    }
+    releaseHeaderOp(xsink);
     if (header_output) {
         header_output->deref(xsink);
         header_output = nullptr;
@@ -221,12 +258,16 @@ QoreHashNode* HttpKeepAlivePollOperationPriv::transitionToHeaderPhase(ExceptionS
 
     // Create the inner header read operation — ref the socket for it
     sock_obj->ref();
-    header_op = new SocketReadHttpHeaderPollOperation(xsink, sock_obj);
+    {
+        // set with op_lock held: abort() reads it from other threads
+        SocketReadHttpHeaderPollOperation* op = new SocketReadHttpHeaderPollOperation(xsink, sock_obj);
+        AutoLocker al(op_lock);
+        header_op = op;
+    }
     if (*xsink) {
         // Construction failed; the SocketReadHttpHeaderPollOperation constructor
         // handles socket cleanup on error internally
-        header_op->deref(xsink);
-        header_op = nullptr;
+        releaseHeaderOp(xsink);
         transitionState(State::HEADER_READING, State::CLOSED, "header-op-error");
         return nullptr;
     }
@@ -234,12 +275,25 @@ QoreHashNode* HttpKeepAlivePollOperationPriv::transitionToHeaderPhase(ExceptionS
     // can resolve the "sock" member for poll info hashes
     assert(self);
     header_op->setSelf(*self);
+#ifdef DEBUG
+    // what another thread's abort() does after the header phase started
+    if (PollStateCloseHook::take(this, "header-op-created")) {
+        ExceptionSink abort_xsink;
+        abort(&abort_xsink);
+        abort_xsink.clear();
+        PollStateCloseHook::fired(op_state.load(std::memory_order_acquire) == State::CLOSED);
+    }
+#endif
 
     // Immediately continue the header poll to drive it forward
     return continueHeaderPoll(xsink);
 }
 
 QoreHashNode* HttpKeepAlivePollOperationPriv::continueHeaderPoll(ExceptionSink* xsink) {
+    // an operation aborted (any thread) after it entered the header phase reads no more
+    if (op_state.load(std::memory_order_acquire) != State::HEADER_READING) {
+        return nullptr;
+    }
     // Enforce header read timeout to prevent slow-loris on keep-alive connections
     if (nowUs() > header_deadline_us) {
         transitionState(State::HEADER_READING, State::TIMEOUT, "header-timeout");

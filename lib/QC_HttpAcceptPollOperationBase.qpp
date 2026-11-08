@@ -165,19 +165,38 @@ bool HttpAcceptPollOperationPriv::enterSslHandshake(const char* site) {
         std::memory_order_acquire);
 #ifdef DEBUG
     if (hook_fired) {
-        PollStateCloseHook::fired(accept_state.load(std::memory_order_acquire) == AcceptState::COMPLETE);
+        // whether the abort's completion was kept: the store did not replace it
+        PollStateCloseHook::fired(!rv && accept_state.load(std::memory_order_acquire) == AcceptState::COMPLETE);
     }
 #endif
     return rv;
 }
 
 void HttpAcceptPollOperationPriv::abort(ExceptionSink* xsink) {
-    if (current_op) {
-        current_op->abort(xsink);
+    // abort() runs on any thread: the I/O thread sets and releases the operation and the client socket meanwhile, so
+    // they are referenced under op_lock
+    SocketPollOperationBase* op;
+    QoreSocketObject* sock;
+    {
+        AutoLocker al(op_lock);
+        op = current_op;
+        if (op) {
+            op->ref();
+        }
+        sock = client_sock_obj ? client_sock : nullptr;
+        if (sock) {
+            sock->ref();
+        }
+        aborted = true;
     }
-    if (client_sock_obj) {
+    if (op) {
+        op->abort(xsink);
+        op->deref(xsink);
+    }
+    if (sock) {
         // Close via the QoreSocketObject to ensure proper cleanup
-        client_sock->closeIo(xsink);
+        sock->closeIo(xsink);
+        sock->deref(xsink);
     }
     accept_state = AcceptState::COMPLETE;
 }
@@ -186,12 +205,9 @@ QoreValue HttpAcceptPollOperationPriv::getOutput() const {
     ExceptionSink xsink;
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
 
-    if (client_sock_obj) {
-        client_sock_obj->ref();
-        h->setKeyValue("sock", client_sock_obj, &xsink);
-    } else {
-        h->setKeyValue("sock", QoreValue(), &xsink);
-    }
+    // called from other threads too: the socket object is referenced under op_lock
+    QoreObject* sock_obj = getReferencedClientSocketObj();
+    h->setKeyValue("sock", sock_obj, &xsink);
     h->setKeyValue("ssl", ssl, &xsink);
     h->setKeyValue("secure", secure, &xsink);
     h->setKeyValue("is_http2", is_http2, &xsink);
@@ -226,13 +242,22 @@ void HttpAcceptPollOperationPriv::cleanup(ExceptionSink* xsink) {
         socket_info = nullptr;
     }
 
-    if (client_sock) {
-        client_sock->deref(xsink);
-        client_sock = nullptr;
-    }
-    if (client_sock_obj) {
-        client_sock_obj->deref(xsink);
-        client_sock_obj = nullptr;
+    {
+        QoreSocketObject* sock;
+        QoreObject* sock_obj;
+        {
+            AutoLocker al(op_lock);
+            sock = client_sock;
+            sock_obj = client_sock_obj;
+            client_sock = nullptr;
+            client_sock_obj = nullptr;
+        }
+        if (sock) {
+            sock->deref(xsink);
+        }
+        if (sock_obj) {
+            sock_obj->deref(xsink);
+        }
     }
     if (listener_sock) {
         listener_sock->deref(xsink);
@@ -264,19 +289,49 @@ QoreHashNode* HttpAcceptPollOperationPriv::handleAcceptComplete(ExceptionSink* x
     // The accept op returns a QoreObject wrapping a Socket
     // CRITICAL: We must keep the QoreObject alive — the Socket destructor closes
     // the file descriptor, so if the QoreObject is destroyed, the socket is closed.
-    client_sock_obj = output.getType() == NT_OBJECT
+    QoreObject* sock_obj = output.getType() == NT_OBJECT
         ? output.get<QoreObject>() : nullptr;
-    if (!client_sock_obj) {
+    if (!sock_obj) {
         accept_state = AcceptState::COMPLETE;
         return nullptr;
     }
 
     // Extract the QoreSocketObject from the Socket QoreObject
-    client_sock = reinterpret_cast<QoreSocketObject*>(
-        client_sock_obj->getReferencedPrivateData(CID_SOCKET, xsink));
-    if (*xsink || !client_sock) {
-        client_sock_obj->deref(xsink);
-        client_sock_obj = nullptr;
+    QoreSocketObject* sock = reinterpret_cast<QoreSocketObject*>(
+        sock_obj->getReferencedPrivateData(CID_SOCKET, xsink));
+    if (*xsink || !sock) {
+        sock_obj->deref(xsink);
+        accept_state = AcceptState::COMPLETE;
+        return nullptr;
+    }
+#ifdef DEBUG
+    bool hook_fired = false;
+    if (PollStateCloseHook::take(this, "accept-complete")) {
+        // what another thread's abort() does at this moment, before the accepted connection is recorded
+        ExceptionSink abort_xsink;
+        abort(&abort_xsink);
+        abort_xsink.clear();
+        hook_fired = true;
+    }
+#endif
+    // set with op_lock held: abort() and getOutput() read them from other threads; a connection accepted after an
+    // abort(), which could not close it, is closed here
+    bool was_aborted;
+    {
+        AutoLocker al(op_lock);
+        client_sock_obj = sock_obj;
+        client_sock = sock;
+        was_aborted = aborted;
+    }
+    if (was_aborted) {
+        client_sock->closeIo(xsink);
+    }
+#ifdef DEBUG
+    if (hook_fired) {
+        PollStateCloseHook::fired(was_aborted && !client_sock->isOpen());
+    }
+#endif
+    if (was_aborted) {
         accept_state = AcceptState::COMPLETE;
         return nullptr;
     }
@@ -400,8 +455,11 @@ int HttpAcceptPollOperationPriv::startSslHandshake(ExceptionSink* xsink) {
     }
 
     // Wrap in a QoreObject for DGC visibility
-    current_op_obj = new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), ssl_op);
-    ssl_op->setSelf(current_op_obj);
+    QoreObject* ssl_op_obj = new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), ssl_op);
+    ssl_op->setSelf(ssl_op_obj);
+    // set with op_lock held: abort() reads them from other threads
+    AutoLocker al(op_lock);
+    current_op_obj = ssl_op_obj;
     current_op = ssl_op;
 
     return 0;
@@ -447,15 +505,32 @@ QoreListNode* HttpAcceptPollOperationPriv::buildAlpnList() const {
 }
 
 void HttpAcceptPollOperationPriv::releaseCurrentOp(ExceptionSink* xsink) {
-    if (current_op) {
-        // current_op was obtained via getReferencedPrivateData() which adds
-        // an independent ref — must deref it separately from the QoreObject
-        current_op->deref(xsink);
+    // nulled with op_lock held before the references are released: abort() takes its own reference under the lock
+    SocketPollOperationBase* op;
+    QoreObject* op_obj;
+    {
+        AutoLocker al(op_lock);
+        op = current_op;
+        op_obj = current_op_obj;
         current_op = nullptr;
-    }
-    if (current_op_obj) {
-        current_op_obj->deref(xsink);
         current_op_obj = nullptr;
+    }
+#ifdef DEBUG
+    // what another thread's abort() does while the operation is released
+    if (op && PollStateCloseHook::take(this, "release-current-op")) {
+        ExceptionSink abort_xsink;
+        abort(&abort_xsink);
+        abort_xsink.clear();
+        PollStateCloseHook::fired(accept_state.load(std::memory_order_acquire) == AcceptState::COMPLETE);
+    }
+#endif
+    // current_op was obtained via getReferencedPrivateData() which adds an independent ref — it is released
+    // separately from the QoreObject
+    if (op) {
+        op->deref(xsink);
+    }
+    if (op_obj) {
+        op_obj->deref(xsink);
     }
 }
 

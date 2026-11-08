@@ -151,6 +151,17 @@ private:
 
     QoreSocketObject* sock_obj;                     //!< ref'd socket
     SocketReadHttpHeaderPollOperation* header_op;    //!< ref'd inner op for header phase
+
+    //! Protects the @ref header_op pointer
+    /** The I/O thread creates the operation and reads it without the lock; resetForIdle() (the owner's thread) and
+        cleanup() release it; abort() runs on any thread (the Qore-level abort() method, or a timeout's worker abort)
+        and takes a reference under the lock.  So the pointer is written with the lock held and nulled before its
+        reference is released (see releaseHeaderOp()).
+    */
+    mutable QoreThreadLock op_lock;
+
+    //! Nulls @ref header_op with @ref op_lock held, then releases it
+    DLLLOCAL void releaseHeaderOp(ExceptionSink* xsink);
     QoreHashNode* header_output;                     //!< ref'd result from header read
     Phase phase;
     //! the state; atomic: abort() sets it from any thread (see transitionState())

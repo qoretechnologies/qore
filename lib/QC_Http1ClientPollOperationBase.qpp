@@ -725,8 +725,12 @@ QoreHashNode* Http1ClientPollOperationPriv::startBufferedFullDuplex(ExceptionSin
     // Hand the partially-written request over to the concurrent send side.  The operation already holds the
     // whole remainder of the request, so unlike a chunked streaming send there is no queue behind it: when it
     // reaches its goal the request body is complete.
-    setSendOp(current_op);
-    setCurrentOp(read_op);
+    // one change: abort() never sees the operation as both, or as neither
+    {
+        AutoLocker al(op_lock);
+        send_op = current_op;
+        current_op = read_op;
+    }
     send_state = SendState::SENDING;
     send_buffered_body = true;
     send_final_pending = false;

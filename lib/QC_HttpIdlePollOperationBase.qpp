@@ -113,7 +113,8 @@ bool HttpIdlePollOperationPriv::finish(IdleState s, const char* site) {
     bool rv = idle_state.compare_exchange_strong(expected, s, std::memory_order_acq_rel, std::memory_order_acquire);
 #ifdef DEBUG
     if (hook_fired) {
-        PollStateCloseHook::fired(idle_state.load(std::memory_order_acquire) == IdleState::CLOSED);
+        // whether the abort's close was kept: the store did not replace it
+        PollStateCloseHook::fired(!rv && idle_state.load(std::memory_order_acquire) == IdleState::CLOSED);
     }
 #endif
     return rv;
