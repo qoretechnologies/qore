@@ -1805,15 +1805,21 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     if (auto* do_stmt = dynamic_cast<const DoWhileStatement*>(stmt)) {
         QoreIRBasicBlock* body_block = createBlock("do.body");
         QoreIRBasicBlock* cond_block = createBlock("do.cond");
+        QoreIRBasicBlock* latch_block = createBlock("do.latch");
         QoreIRBasicBlock* exit_block = createBlock("do.exit");
-        if (!body_block || !cond_block || !exit_block) {
+        if (!body_block || !cond_block || !latch_block || !exit_block) {
             error = "IR builder failed to create blocks for do-while";
             return false;
         }
         // Mark condition block as loop header for OSR detection
         cond_block->is_loop_header = true;
+        // the statement checks for cancellation at the start of every iteration, before the body, as in the AST
+        // interpreter: on the branch that enters the loop and on the branch from the latch, which the condition
+        // takes for the next iteration, as only unconditional branches enter a block with loop_cancel
+        body_block->loop_cancel = QoreIRLoopCancel::DoWhile;
         if (!blockHasTerminator(builder.getBlock())) {
-            builder.createBranch(body_block);
+            auto* br = builder.createBranch(body_block);
+            setLoopCheckpointExceptionTarget(br, body_block);
         }
 
         builder.setBlock(body_block);
@@ -1856,7 +1862,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (condition_needs_cleanup) {
             createDiscardTemps(stmt->loc);
         }
-        builder.createBranchIf(cond_bool, body_block, exit_block);
+        builder.createBranchIf(cond_bool, latch_block, exit_block);
+        builder.setBlock(latch_block);
+        {
+            auto* br = builder.createBranch(body_block);
+            setLoopCheckpointExceptionTarget(br, body_block);
+        }
 
         // Move exit_block to end so LLVM lowering processes it after any
         // invoke.cont blocks created during the do-while body lowering.
@@ -1882,6 +1893,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // Mark condition block as loop header for OSR detection
         cond_block->is_loop_header = true;
+        // the statement checks for cancellation at the start of every iteration, as in the AST interpreter
+        cond_block->loop_cancel = QoreIRLoopCancel::While;
         QoreIRLoopInvariantHoists invariant_hoists;
         if (!blockHasTerminator(builder.getBlock())) {
             invariant_hoists = qoreIrHoistLoopInvariantValues(*this, builder, while_stmt->getCond(),
@@ -2000,6 +2013,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // Mark condition block as loop header for OSR detection
         cond_block->is_loop_header = true;
+        // the statement checks for cancellation at the start of every iteration, as in the AST interpreter
+        cond_block->loop_cancel = QoreIRLoopCancel::For;
         QoreValue init = for_stmt->getAssignment();
         if (init && !init.isNothing()) {
             // the value of the initializer is not used: it and its temps are released before the loop runs, as in
@@ -2245,6 +2260,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 return false;
             }
             header_block->is_loop_header = true;
+            // the statement checks for cancellation at the start of every iteration, as in the AST interpreter
+            header_block->loop_cancel = QoreIRLoopCancel::Foreach;
 
             // Preheader: initialize index counter
             builder.createBranch(preheader_block, stmt->loc);
@@ -2508,6 +2525,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // Mark header block as loop header for OSR detection
         header_block->is_loop_header = true;
+        // the statement checks for cancellation at the start of every iteration, as in the AST interpreter
+        header_block->loop_cancel = QoreIRLoopCancel::Foreach;
 
         if (guard_typed_list) {
             // A declared list lvalue can still be unassigned. Preserve foreach
@@ -7760,7 +7779,8 @@ QoreIRBasicBlock* QoreIRLowering::getGuardExceptionTarget() const {
 
 void QoreIRLowering::setLoopCheckpointExceptionTarget(QoreIRInstruction* inst, QoreIRBasicBlock* target,
         QoreIRBasicBlock* handler) {
-    if (inst && target && target->is_loop_header) {
+    // only a branch into a block that starts an iteration of a loop statement checks for cancellation
+    if (inst && target && target->loop_cancel != QoreIRLoopCancel::None) {
         inst->exception_target = handler ? handler : getCurrentExceptionTarget();
     }
 }
@@ -19405,6 +19425,8 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         return false;
     }
     header_block->is_loop_header = true;
+    // the statement checks for cancellation at the start of every iteration, as in the AST interpreter
+    header_block->loop_cancel = QoreIRLoopCancel::Foreach;
 
     QoreIRValue zero = builder.createConstInt(0, loc)->result;
     QoreIRValue is_null = builder.createBinaryOp(QoreIROpcode::EqInt, iter_val, zero, loc)->result;

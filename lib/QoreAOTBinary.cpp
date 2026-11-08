@@ -14686,7 +14686,9 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
     // 5. Serialize blocks
     for (auto& block : func.blocks) {
         writer.writeStringRef(block->name.c_str());
-        writer.writeU8(block->is_loop_header ? 1 : 0);
+        // bit 0: is_loop_header; bits 1-3: loop_cancel (see deserializeIRFunction())
+        writer.writeU8(static_cast<uint8_t>((block->is_loop_header ? 1 : 0)
+            | (static_cast<uint8_t>(block->loop_cancel) << 1)));
         writer.writeU16(static_cast<uint16_t>(block->instructions.size()));
 
         for (size_t inst_idx = 0; inst_idx < block->instructions.size(); ++inst_idx) {

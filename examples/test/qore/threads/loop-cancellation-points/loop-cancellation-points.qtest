@@ -1,0 +1,173 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class LoopCancellationPointsTest
+
+#! issue #5641: only the loop statements are cancellation points, in every execution mode and with AOT
+/** The AST interpreter checks for cancellation at the start of every iteration of a while, do-while, for and foreach
+    statement, with the label of the statement, and not in the loops of expressions such as map, select or foldl
+    (design/cooperative-cancellation.md, "Loop Statements").  The IR interpreter, native code and AOT checked at the
+    header of every loop that the IR lowering makes, with the label "IR loop", so a map in the on_exit block of a
+    cancelled thread raised THREAD-CANCELLED; a do-while statement checked only after its first iteration.
+*/
+class LoopCancellationPointsTest inherits QUnit::Test {
+    public {
+        #! the class that runs each kind of loop in the on_exit block of a cancelled thread
+        const RunnerClass = "class Runner {
+    static string run(string kind) {
+        hash<string, Queue> qs = {\"a\": new Queue(), \"b\": new Queue()};
+        Queue res(); Counter started(1); Counter block(1);
+        int tid = background sub () {
+            # declared outside the on_exit block: a referenced local declared in an on_exit block that runs while an
+            # exception unwinds is not instantiated with IR execution (a separate defect)
+            list<Queue> ql = qs.values();
+            on_exit {
+                try {
+                    switch (kind) {
+                        case \"map-list\": map $1.push(True), ql; break;
+                        case \"map-iterator\": map $1.push(True), qs.iterator(); break;
+                        case \"map-filter\": map $1.push(True), ql, True; break;
+                        case \"select\": auto s = select ql, $1.push(True) || True; break;
+                        case \"foldl\": auto f = foldl ($1.push(True), $2.push(True), $2), ql; break;
+                        case \"hmap\": hash<auto> hm = map {$1: qs{$1}.push(True)}, (\"a\", \"b\"); break;
+                        case \"while\": { int i = 0; while (i < 2) { ql[i].push(True); ++i; } } break;
+                        case \"do-while\": { int i = 0; do { ql[i].push(True); ++i; } while (i < 2); } break;
+                        case \"for\": for (int i = 0; i < 2; ++i) { ql[i].push(True); } break;
+                        case \"foreach\": foreach Queue q in (ql) { q.push(True); } break;
+                        case \"foreach-ref\": foreach Queue q in (\\ql) { q.push(True); } break;
+                        case \"foreach-range\": foreach int i in (xrange(2)) { ql[i].push(True); } break;
+                    }
+                    res.push(\"ok\");
+                } catch (hash<ExceptionInfo> ex) { res.push(ex.err + \": \" + ex.desc); }
+            }
+            started.dec();
+            block.waitForZero();
+        }();
+        started.waitForZero();
+        cancel_thread(tid, \"t\");
+        string r = res.get();
+        thread_join(tid);
+        r =~ s/thread [0-9]+ //;
+        return sprintf(\"%s -> %s; queued=%y\", kind, r, (map $1.size(), qs.iterator()));
+    }
+}";
+
+        #! runs every kind of loop and prints the result of each
+        const Main = "map printf(\"%s\\n\", Runner::run($1)), (\"map-list\", \"map-iterator\", \"map-filter\", \"select\", \"foldl\", \"hmap\", \"while\",
+    \"do-while\", \"for\", \"foreach\", \"foreach-ref\", \"foreach-range\");\n";
+
+        #! the result of the AST interpreter, which every other execution mode and AOT must give
+        const Expected = "map-list -> ok; queued=[1, 1]
+map-iterator -> ok; queued=[1, 1]
+map-filter -> ok; queued=[1, 1]
+select -> ok; queued=[1, 1]
+foldl -> ok; queued=[1, 1]
+hmap -> ok; queued=[1, 1]
+while -> THREAD-CANCELLED: while loop: cancelled: t; queued=[0, 0]
+do-while -> THREAD-CANCELLED: do-while loop: cancelled: t; queued=[0, 0]
+for -> THREAD-CANCELLED: for loop: cancelled: t; queued=[0, 0]
+foreach -> THREAD-CANCELLED: foreach loop: cancelled: t; queued=[0, 0]
+foreach-ref -> THREAD-CANCELLED: foreach loop: cancelled: t; queued=[0, 0]
+foreach-range -> THREAD-CANCELLED: foreach loop: cancelled: t; queued=[0, 0]
+";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("loop cancellation points", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("IR tier", \irTierTest());
+        addTestCase("AOT executable", \aotExecutableTest());
+        addTestCase("AOT module", \aotModuleTest());
+        set_return_value(main());
+    }
+
+    #! the results that the script prints on stdout, without the unhandled exceptions of the cancelled threads
+    private string results(string out) {
+        list<string> l = select out.split("\n"), $1 =~ /^[a-z-]+ -> /;
+        return l ? (foldl $1 + "\n" + $2, l) + "\n" : "";
+    }
+
+    private string writeFile(TmpDir dir, string name, string code) {
+        string path = dir.path + "/" + name;
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(code);
+        f.close();
+        return path;
+    }
+
+    private string script() {
+        return "%modern\n" + RunnerClass + "\n" + Main;
+    }
+
+    modesTest() {
+        TmpDir dir("loop-cancellation-points-");
+        string path = writeFile(dir, "loops.q", script());
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, results(ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                path), NativeCheck::Jit)), mode);
+        }
+    }
+
+    irTierTest() {
+        TmpDir dir("loop-cancellation-points-");
+        string path = writeFile(dir, "loops.q", script());
+        assertEq(Expected, results(ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            path))), ExecModeHarness::IRTierName);
+    }
+
+    aotExecutableTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("loop-cancellation-points-aot-");
+        string path = writeFile(dir, "loops.q", script());
+        string exe = dir.path + "/loops";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, path));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        assertEq(Expected, results(ExecModeHarness::run_any(sprintf("%s %s", env, exe))), "AOT executable");
+    }
+
+    #! the loops in an AOT module, as in the issue
+    aotModuleTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("loop-cancellation-points-aot-");
+        string mod_dir = dir.path + "/modules";
+        mkdir(mod_dir);
+        string module_code = "%modern\nmodule LoopCancelPoints { version = \"1.0\"; desc = \"loop cancellation points\"; "
+            "author = \"Qore Technologies, s.r.o.\"; license = \"MIT\"; }\n"
+            "public namespace LoopCancelPoints {\npublic " + RunnerClass + "\n}\n";
+        string src = writeFile(dir, "LoopCancelPoints.qm", module_code);
+        string qmod = mod_dir + "/LoopCancelPoints.qmod";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -m %s -o %s", env, qcc_bin, src, qmod));
+        assertTrue(is_file(qmod), "qcc compiles the module: " + out);
+        writeFile(dir, "modules/LoopCancelPoints.qm", module_code);
+        string main_code = Main;
+        main_code =~ s/Runner::run/LoopCancelPoints::Runner::run/;
+        string path = writeFile(dir, "loops.q", "%modern\n%requires LoopCancelPoints\n" + main_code);
+        assertEq(Expected, results(ExecModeHarness::run_any(sprintf("%s QORE_MODULE_DIR=%s %s %s", env, mod_dir,
+            qore_bin, path))), "AOT module");
+    }
+}

@@ -1088,6 +1088,32 @@ struct QoreIRConstant {
     const QoreEnumMember* enum_member = nullptr;
 };
 
+//! The loop statement whose iterations a block starts, for cancellation checks (see QoreIRBasicBlock::loop_cancel)
+enum class QoreIRLoopCancel : uint8_t {
+    None = 0,
+    While = 1,
+    DoWhile = 2,
+    For = 3,
+    Foreach = 4,
+};
+
+//! The largest QoreIRLoopCancel value
+constexpr uint8_t QORE_IR_LOOP_CANCEL_MAX = static_cast<uint8_t>(QoreIRLoopCancel::Foreach);
+
+//! Returns the operation that a cancellation raised at the start of an iteration of the loop names
+/** The labels are those of the AST interpreter's loop statements (ex: WhileStatement::execImpl())
+*/
+inline const char* qore_ir_loop_cancel_operation(QoreIRLoopCancel kind) {
+    switch (kind) {
+        case QoreIRLoopCancel::While: return "while loop";
+        case QoreIRLoopCancel::DoWhile: return "do-while loop";
+        case QoreIRLoopCancel::For: return "for loop";
+        case QoreIRLoopCancel::Foreach: return "foreach loop";
+        case QoreIRLoopCancel::None: break;
+    }
+    return nullptr;
+}
+
 class QoreIRBasicBlock;
 struct QoreIRPhiIncoming;
 
@@ -3344,6 +3370,14 @@ public:
     //! True if this block is a loop header (condition block for while/for/do-while).
     //! Used by the IR interpreter for loop-aware JIT promotion (OSR).
     bool is_loop_header = false;
+
+    //! The loop statement whose iterations start in this block, which checks for cancellation when entered
+    /** Set only for the loop statements, which the AST interpreter checks at the start of every iteration
+        (design/cooperative-cancellation.md, "Loop Statements"); the loops that expressions such as map, select or
+        foldl make are not cancellation points.  Only unconditional branches (Br) enter such a block, and the IR
+        interpreter and native code check on them with the label of the statement, as the AST interpreter does.
+    */
+    QoreIRLoopCancel loop_cancel = QoreIRLoopCancel::None;
 
     //! Exit block of the innermost while/for/do-while loop whose body contains this
     //! block (nullptr if this block is not inside such a loop body).  Set during

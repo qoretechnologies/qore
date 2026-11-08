@@ -8815,18 +8815,21 @@ next_instruction:
                         printd(2, "QoreIRInterpreter: OSR triggered for '%s' "
                             "(loop iterations=%u)\n", func.name.c_str(), loop_iterations);
                     }
-                    // Check for thread cancellation or program interrupt at loop headers
-                    if (qore_check_cancel(xsink, "IR loop")) {
-                        if (br->exception_target) {
-                            cleanupToTempScope(br->temp_scope_id, true, false, true);
-                            block = br->exception_target;
-                            ip = 0;
-                            break;
-                        }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                }
+                // a loop statement checks for thread cancellation or a program interrupt at the start of every
+                // iteration, with the statement's label, as the AST interpreter does; only unconditional branches
+                // enter such a block (see QoreIRBasicBlock::loop_cancel), as the native code checks only on them
+                if (block->loop_cancel != QoreIRLoopCancel::None
+                        && qore_check_cancel(xsink, qore_ir_loop_cancel_operation(block->loop_cancel))) {
+                    if (br->exception_target) {
+                        cleanupToTempScope(br->temp_scope_id, true, false, true);
+                        block = br->exception_target;
+                        ip = 0;
+                        break;
                     }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
                 break;
             }
@@ -8857,18 +8860,6 @@ next_instruction:
                         func.osr_jit_requested.store(true, std::memory_order_relaxed);
                         printd(2, "QoreIRInterpreter: OSR triggered for '%s' "
                             "(loop iterations=%u)\n", func.name.c_str(), loop_iterations);
-                    }
-                    // Check for thread cancellation or program interrupt at loop headers
-                    if (qore_check_cancel(xsink, "IR loop")) {
-                        if (br->exception_target) {
-                            cleanupToTempScope(br->temp_scope_id, true, false, true);
-                            block = br->exception_target;
-                            ip = 0;
-                            break;
-                        }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
                     }
                 }
                 break;
@@ -10222,18 +10213,6 @@ load_local_done:
                         func.osr_jit_requested.store(true, std::memory_order_relaxed);
                         printd(2, "QoreIRInterpreter: OSR triggered for '%s' "
                             "(loop iterations=%u)\n", func.name.c_str(), loop_iterations);
-                    }
-                    // Check for thread cancellation or program interrupt at loop headers
-                    if (qore_check_cancel(xsink, "IR loop")) {
-                        if (fused_inst->exception_target) {
-                            cleanupToTempScope(fused_inst->temp_scope_id, true, false, true);
-                            block = fused_inst->exception_target;
-                            ip = 0;
-                            break;
-                        }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
                     }
                 }
                 break;

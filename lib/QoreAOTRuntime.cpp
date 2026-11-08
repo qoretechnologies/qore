@@ -8346,11 +8346,19 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             return nullptr;
         }
         const char* block_name = reader.readStringRef(ptr);
-        bool is_loop_header = QoreAOTBinaryReader::readU8(ptr) != 0;
+        // bit 0: is_loop_header; bits 1-3: loop_cancel (see serializeIRFunction())
+        uint8_t block_flags = QoreAOTBinaryReader::readU8(ptr);
+        uint8_t loop_cancel = static_cast<uint8_t>(block_flags >> 1);
+        if (loop_cancel > QORE_IR_LOOP_CANCEL_MAX) {
+            error = "invalid loop cancellation kind " + std::to_string(loop_cancel) + " in block "
+                + std::to_string(i) + " of function " + func->name;
+            return nullptr;
+        }
         uint16_t num_insts = QoreAOTBinaryReader::readU16(ptr);
 
         func->blocks[i]->name = block_name ? block_name : "";
-        func->blocks[i]->is_loop_header = is_loop_header;
+        func->blocks[i]->is_loop_header = (block_flags & 1) != 0;
+        func->blocks[i]->loop_cancel = static_cast<QoreIRLoopCancel>(loop_cancel);
 
         for (int j = 0; j < num_insts; ++j) {
             if (checkCancel()) {

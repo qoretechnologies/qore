@@ -16681,10 +16681,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 error = "branch target block not found";
                 return false;
             }
-            if (br->target && br->target->is_loop_header) {
+            // a loop statement checks for cancellation at the start of every iteration with its own label, as the
+            // AST interpreter does; the loops of expressions such as map do not (see QoreIRBasicBlock::loop_cancel)
+            if (br->target && br->target->loop_cancel != QoreIRLoopCancel::None) {
                 auto check_cancel = module.getOrInsertFunction("qore_rt_check_cancel",
                         llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-                llvm::Value* operation = builder->CreateGlobalString("IR loop", "loop_cancel_operation");
+                llvm::Value* operation = builder->CreateGlobalString(
+                    qore_ir_loop_cancel_operation(br->target->loop_cancel), "loop_cancel_operation");
                 builder->CreateCall(check_cancel, {xsink_arg, operation});
                 emitExceptionCheck(module, llvm_func, inst);
             }
