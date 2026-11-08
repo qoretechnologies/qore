@@ -70,6 +70,9 @@ public class DataProviderRetryUtil {
         #! The default unit of transport retry delays
         const DefaultTransportRetryDelayUnit = 1s;
 
+        #! The longest transport retry delay (see @ref getTransportRetryDelay())
+        const MaxTransportRetryDelay = 24h;
+
         #! The thread-local data key that holds the number of active @ref runWithoutRetries() calls
         const SuppressRetriesKey = "_DataProvider_DataProviderRetryUtil_suppress_retries";
     }
@@ -162,17 +165,35 @@ public class DataProviderRetryUtil {
         a unit of zero retries without waiting.  Delays advised by the server, such as the \c Retry-After header of a
         rate-limited response, are not affected.
 
-        @param unit the new unit as a relative date/time value (for example \c 10ms); must not be negative
+        As the setting applies to the whole process, the caller must not be restricted with
+        @ref Qore::PO_NO_PROCESS_CONTROL.
 
-        @throw TRANSPORT-RETRY-DELAY-ERROR the unit is negative
+        @param unit the new unit as a relative date/time value (for example \c 10ms); must not be negative or
+        longer than @ref DefaultTransportRetryDelayUnit
+
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+        @throw TRANSPORT-RETRY-DELAY-ERROR the unit is an absolute date/time value, is negative, or is longer than
+        @ref DefaultTransportRetryDelayUnit
 
         @since DataProvider 3.11
     */
     static setTransportRetryDelayUnit(date unit) {
+        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+            throw "PERMISSION-DENIED", "Cannot change the transport retry delay unit of the process from a context "
+                "with restricted process control";
+        }
+        if (!unit.relative()) {
+            throw "TRANSPORT-RETRY-DELAY-ERROR", sprintf("the transport retry delay unit must be a relative date/time "
+                "value; got the absolute date/time value %y", unit);
+        }
         int unit_us = get_duration_microseconds(unit);
         if (unit_us < 0) {
             throw "TRANSPORT-RETRY-DELAY-ERROR", sprintf("the transport retry delay unit must not be negative; got "
                 "%y", unit);
+        }
+        if (unit_us > get_duration_microseconds(DefaultTransportRetryDelayUnit)) {
+            throw "TRANSPORT-RETRY-DELAY-ERROR", sprintf("the transport retry delay unit must not be longer than "
+                "the default unit of %y; got %y", DefaultTransportRetryDelayUnit, unit);
         }
         transport_retry_delay_unit_us = unit_us;
     }
@@ -190,7 +211,7 @@ public class DataProviderRetryUtil {
     #! Returns the delay for the given number of units of the transport retry delay
     /** @param units the delay in units of @ref getTransportRetryDelayUnit(); a negative number gives no delay
 
-        @return the delay
+        @return the delay; at most @ref MaxTransportRetryDelay
 
         @since DataProvider 3.11
     */
@@ -198,7 +219,11 @@ public class DataProviderRetryUtil {
         if (units <= 0) {
             return 0s;
         }
-        return microseconds((units * transport_retry_delay_unit_us).toInt());
+        # the delay is limited, also so that a huge number of units cannot give a delay that cannot be represented,
+        # which would wrap around to a negative delay
+        number us = units * transport_retry_delay_unit_us;
+        int max_us = get_duration_microseconds(MaxTransportRetryDelay);
+        return microseconds(us >= max_us ? max_us : us.toInt());
     }
 
     #! Waits before a transport retry for the given number of units of the transport retry delay
