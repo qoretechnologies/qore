@@ -635,12 +635,19 @@ public hashdecl WscAsyncIoResources {
     \c start_thread hook can run the code inline, also nested), so the client's destructor can wait for all threads
     but the one it runs on.  Once closed (by the destructor), no thread can be started.
 
+    The bookkeeping is done in synchronized methods and waited for with a Queue: it runs also in cleanup on a
+    cancelled thread (a thread's end, the release of a start's code), and neither the lock of a synchronized method
+    nor a Queue push is a cancellation point, while a Mutex lock is, which would skip the bookkeeping and leave the
+    destructor waiting (see design/cooperative-cancellation.md, "Cleanup Critical Sections").
+
     @since WebSocketClient 2.5
 */
 public class WscLibraryThreads {
     private {
-        Mutex m();
-        Condition cond();
+        #! wakes a thread in waitOthers() when a counted start ends; pushed only while a thread waits
+        Queue wake();
+        #! the number of threads in waitOthers()
+        int waiters = 0;
         #! the tokens counted
         hash<string, bool> live = {};
         #! the tokens whose thread started
@@ -656,8 +663,7 @@ public class WscLibraryThreads {
     #! Counts a thread about to be started and returns its token
     /** @throw WEBSOCKET-ERROR the client is being destroyed
     */
-    int starting() {
-        AutoLock al(m);
+    synchronized int starting() {
         if (closed) {
             throw "WEBSOCKET-ERROR", "the client is being destroyed; no thread can be started";
         }
@@ -671,39 +677,36 @@ public class WscLibraryThreads {
     /** A thread that starts after its start was reported failed is not counted (the count is never raised again
         after it went down): a \c start_thread hook must not throw once it has started the thread.
     */
-    startFailed(int token) {
-        AutoLock al(m);
+    synchronized startFailed(int token) {
         if (!entered{token} && remove live{token}) {
             failed{token} = True;
-            cond.broadcast();
+            notifyUnlocked();
         }
     }
 
     #! Records the calling thread as running the given start, unless its start was reported failed
-    enter(int token) {
-        AutoLock al(m);
+    synchronized bool enter(int token) {
         if (failed{token}) {
-            return;
+            return False;
         }
         entered{token} = True;
         ++tids{gettid()};
+        return True;
     }
 
     #! Uncounts a start whose code was released without being run: no thread can run it any more
     /** Called when the code given to the thread (or to a \c start_thread hook) is released; a start whose thread
         entered it is not affected.
     */
-    abandon(int token) {
-        AutoLock al(m);
+    synchronized abandon(int token) {
         remove failed{token};
         if (!entered{token} && remove live{token}) {
-            cond.broadcast();
+            notifyUnlocked();
         }
     }
 
     #! Records the end of the given start on the calling thread and uncounts it
-    leave(int token) {
-        AutoLock al(m);
+    synchronized leave(int token) {
         if (remove failed{token}) {
             return;
         }
@@ -713,46 +716,104 @@ public class WscLibraryThreads {
         }
         remove live{token};
         remove entered{token};
-        cond.broadcast();
+        notifyUnlocked();
     }
 
     #! Closes the object: no thread can be started from now on
-    close() {
-        AutoLock al(m);
+    synchronized close() {
         closed = True;
     }
 
-    #! Returns @ref True if a counted start does not run on the calling thread; must be called with the lock held
+    #! Returns @ref True if a counted start does not run on the calling thread; called in a synchronized method
     private bool othersUnlocked() {
         return live.size() > (tids{gettid()} ?? 0);
     }
 
     #! Returns @ref True if a counted start does not run on the calling thread
-    bool hasOthers() {
-        AutoLock al(m);
+    synchronized bool hasOthers() {
         return othersUnlocked();
     }
 
     #! Waits until every counted start runs on the calling thread or ended
     waitOthers() {
-        AutoLock al(m);
-        while (othersUnlocked()) {
-            cond.wait(m);
+        while (beginWait()) {
+            on_exit endWait();
+            # each counted start that ends meanwhile pushes a wakeup, so none is lost
+            wake.get();
+        }
+    }
+
+    #! Registers the calling thread as waiting, unless no counted start runs on another thread
+    private synchronized bool beginWait() {
+        if (!othersUnlocked()) {
+            return False;
+        }
+        ++waiters;
+        return True;
+    }
+
+    #! Ends a wait started with beginWait()
+    private synchronized endWait() {
+        --waiters;
+    }
+
+    #! Wakes the threads in waitOthers(); called in a synchronized method
+    private notifyUnlocked() {
+        if (waiters) {
+            wake.push(True);
         }
     }
 
     #! Returns the number of starts reported failed whose thread may still run (and is then not counted)
     /** An entry is removed when the thread ends or when the start's code is released without having been run.
     */
-    int getFailedCount() {
-        AutoLock al(m);
+    synchronized int getFailedCount() {
         return failed.size();
     }
 
     #! Returns the number of counted starts
-    int getCount() {
-        AutoLock al(m);
+    synchronized int getCount() {
         return live.size();
+    }
+}
+
+#! The handoff of an action from connectAsync() to its worker; internal to WebSocketClient
+/** Decided once: the worker takes the action over (in acquireActionUnlocked(), with the client's lock held, as its
+    connect's action), or abandons it (it ended before, e.g. cancelled, or its code was released unrun), and then the
+    caller still owns the action and releases it.  The state is changed in synchronized methods and reported with a
+    Queue push, neither of which is a cancellation point, so a cancelled worker abandons it too.
+
+    @since WebSocketClient 2.5
+*/
+public class WscActionHandoff {
+    private {
+        #! "taken" or "abandoned" once decided
+        *string state;
+        #! gets True when the worker took the action over, False when it abandoned it
+        Queue result();
+    }
+
+    #! Takes the action over; returns @ref False if the handoff was abandoned
+    synchronized bool take() {
+        if (state) {
+            return False;
+        }
+        state = "taken";
+        result.push(True);
+        return True;
+    }
+
+    #! Abandons the handoff unless the action was taken over
+    synchronized abandon() {
+        if (!state) {
+            state = "abandoned";
+            result.push(False);
+        }
+    }
+
+    #! Waits for the decision: @ref True if the worker took the action over
+    bool wait() {
+        return result.get();
     }
 }
 
@@ -768,23 +829,28 @@ public class WscStartTicket {
         WscLibraryThreads lt;
         int token;
         bool entered = False;
+        #! the handoff of the action to the thread, if any: abandoned with the code
+        *WscActionHandoff handoff;
     }
 
-    constructor(WscLibraryThreads lt, int token) {
+    constructor(WscLibraryThreads lt, int token, *WscActionHandoff handoff) {
         self.lt = lt;
         self.token = token;
+        self.handoff = handoff;
     }
 
     destructor() {
         if (!entered) {
             lt.abandon(token);
+            if (handoff) {
+                handoff.abandon();
+            }
         }
     }
 
-    #! Records the calling thread as running the start
+    #! Records the calling thread as running the start, unless the start was reported failed
     enter() {
-        entered = True;
-        lt.enter(token);
+        entered = lt.enter(token);
     }
 }
 
@@ -1086,13 +1152,6 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         /** @since WebSocketClient 2.5
         */
         hash<string, Condition> action_waiters();
-
-        #! The threads that an action was handed over to and that have not started it yet; protected by \c m
-        /** See connectAsync().
-
-            @since WebSocketClient 2.5
-        */
-        hash<string, bool> action_handed_over();
 
         #! The number of calls of each thread that act without the action; protected by \c m
         /** See acquireActionUnlocked().
@@ -1750,7 +1809,7 @@ ws.connect();
         acquireActionUnlocked(getConnectActionTimeout());
         # released here unless handed over to the background thread
         bool handed_over = False;
-        on_exit if (!handed_over) {
+        on_exit if (!handed_over && locked) {
             releaseActionUnlocked();
         }
 
@@ -1773,13 +1832,19 @@ ws.connect();
         #
         # The action is handed over to the background thread, so calls made after this method returns run after the
         # connect.
-        Counter taken(1);
-        startLibraryThread(sub () { connectAsyncWorker(opts, ready_queue, taken); });
-        # the worker takes the action over; this call returns once it did, without waiting for the connect
-        handed_over = True;
+        WscActionHandoff handoff();
+        startLibraryThread(sub () { connectAsyncWorker(opts, ready_queue, handoff); }, NOTHING, handoff);
+        # the worker takes the action over as its connect's action, with the lock held; this call returns once it
+        # did, without waiting for the connect
         locked = False;
         m.unlock();
-        taken.waitForZero();
+        if (handoff.wait()) {
+            handed_over = True;
+            return;
+        }
+        # the worker ended without taking it over (e.g. it was cancelled): this call still owns the action
+        m.lock();
+        locked = True;
     }
 
     #! Worker for connectAsync — runs the HCIO connect on a background thread
@@ -1792,32 +1857,16 @@ ws.connect();
 
         @param opts the connection options
         @param ready_queue optional Queue that receives the connect result hash or an exception hash
-        @param taken when set, the worker takes over the action of connectAsync() and releases this Counter
+        @param handoff when set, the worker takes over the action of connectAsync() as its connect's action
 
         @since WebSocketClient 2.5
     */
-    private connectAsyncWorker(*hash<auto> opts, *Queue ready_queue, *Counter taken) {
-        if (taken) {
-            {
-                on_exit taken.dec();
-                AutoLock al(m);
-                # take over the action started by connectAsync(); connectIntern() starts it as its own, so it ends
-                # it before reporting a replaced connection closed
-                action_tid = gettid();
-                action_count = 1;
-                action_handed_over{gettid()} = True;
-            }
-        }
-        on_exit if (taken && self) {
-            AutoLock al(m);
-            # the action is still held if connectIntern() did not start it
-            if (action_tid == gettid()) {
-                remove action_handed_over{gettid()};
-                releaseActionUnlocked();
-            }
-        }
+    private connectAsyncWorker(*hash<auto> opts, *Queue ready_queue, *WscActionHandoff handoff) {
+        # the action is taken over by connectIntern(), which then releases it as its own; if this thread ends before
+        # (e.g. it is cancelled), the thread's end abandons the handoff (see startLibraryThread()), and connectAsync()
+        # releases the action
         try {
-            hash<auto> result = connectIntern(opts);
+            hash<auto> result = connectIntern(opts, NOTHING, NOTHING, handoff);
             if (ready_queue) {
                 ready_queue.push(result);
             }
@@ -2190,7 +2239,8 @@ ws.connect();
     }
 
     #! Connects to the websocket server
-    private hash<auto> connectIntern(*hash<auto> opts, *reference<hash<auto>> info, *bool reconnecting) {
+    private hash<auto> connectIntern(*hash<auto> opts, *reference<hash<auto>> info, *bool reconnecting,
+            *WscActionHandoff handoff) {
         if (opts.hdr && opts.hdr.typeCode() != NT_HASH) {
             raiseError("option hash to WebSocketClient::connect() 'hdr' key not assigned to a hash; type "
                 "received: %y", opts.hdr.fullType());
@@ -2212,7 +2262,7 @@ ws.connect();
             m.lock();
             on_exit m.unlock();
 
-            acquireActionUnlocked(getConnectActionTimeout());
+            acquireActionUnlocked(getConnectActionTimeout(), handoff);
             on_exit releaseActionUnlocked();
 
             if (!reconnecting) {
@@ -3450,18 +3500,22 @@ ws.setEventQueue();
         controller never start an action, so an action never waits for them; user callbacks run outside actions.
 
         @param to the longest time to wait for an action in progress to end
+        @param handoff the handoff of an action from connectAsync() to this thread, if any
 
         @throw WEBSOCKET-ACTION-TIMEOUT the action in progress did not end within \a to
 
         @since WebSocketClient 2.5
     */
-    private acquireActionUnlocked(timeout to) {
+    private acquireActionUnlocked(timeout to, *WscActionHandoff handoff) {
         int tid = gettid();
+        # an action handed over to this thread (see connectAsync()) becomes this call's action, unless the handoff
+        # was abandoned
+        if (handoff && handoff.take()) {
+            action_tid = tid;
+            action_count = 1;
+            return;
+        }
         if (action_tid == tid) {
-            # an action handed over to this thread (see connectAsync()) becomes this call's action
-            if (remove action_handed_over{tid}) {
-                return;
-            }
             ++action_count;
             return;
         }
@@ -4180,14 +4234,22 @@ ws.setEventQueue();
     */
     /** @throw WEBSOCKET-ERROR the client is being destroyed
     */
-    private int startLibraryThread(code body, *bool use_start_thread) {
+    private int startLibraryThread(code body, *bool use_start_thread, *WscActionHandoff handoff) {
         WscLibraryThreads lt = lib_threads;
         int token = lt.starting();
-        # released with the code: a start whose code is released without being run is not waited for
-        WscStartTicket ticket(lt, token);
+        # released with the code: a start whose code is released without being run is not waited for, and abandons
+        # the action handed over to it
+        WscStartTicket ticket(lt, token, handoff);
         code run = sub () {
             ticket.enter();
-            on_exit lt.leave(token);
+            # neither call is a cancellation point: done also when the thread is cancelled
+            on_exit {
+                lt.leave(token);
+                # an action handed over to this thread and not taken over is abandoned (see connectAsync())
+                if (handoff) {
+                    handoff.abandon();
+                }
+            }
             body();
         };
         try {

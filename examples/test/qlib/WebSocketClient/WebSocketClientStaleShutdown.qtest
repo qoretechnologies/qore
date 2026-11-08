@@ -170,10 +170,10 @@ class LifecycleWsClient inherits WebSocketClient {
         Counter release_tunnel_read(1);
         #! report each HTTP/1.1 Upgrade connect, and the destructor's cancel of the handshakes
         bool report_h1_upgrade = False;
-        #! the next connectAsync() returns only once its worker holds the next tunnel read (see hold_tunnel_read)
-        bool defer_taken = False;
-        #! the Counter that the deferred connectAsync() waits for
-        *Counter deferred_taken;
+        #! hold the next connectAsync() worker before it takes the action over
+        bool hold_worker = False;
+        #! released by the test to let the held worker go on
+        Counter release_worker(1);
 
         #! hold the next connect of a reconnect thread in its handshake, with the client's lock held
         bool hold_reconnect_handshake = False;
@@ -324,24 +324,33 @@ class LifecycleWsClient inherits WebSocketClient {
         WebSocketClient::runInitialDrain(c);
     }
 
-    private connectAsyncWorker(*hash<auto> opts, *Queue ready_queue, *Counter taken) {
-        if (taken && defer_taken) {
-            defer_taken = False;
-            deferred_taken = taken;
-            Counter inner(1);
-            WebSocketClient::connectAsyncWorker(opts, ready_queue, inner);
-            return;
+    private connectAsyncWorker(*hash<auto> opts, *Queue ready_queue, *WscActionHandoff handoff) {
+        if (hold_worker && handoff) {
+            hold_worker = False;
+            Queue q = events;
+            q.push("worker-held:" + gettid());
+            release_worker.waitForZero(HandoffTimeout);
         }
-        WebSocketClient::connectAsyncWorker(opts, ready_queue, taken);
+        WebSocketClient::connectAsyncWorker(opts, ready_queue, handoff);
+    }
+
+    #! starts a thread of the client running @a body; @a tid gets the TID that the start returns
+    int startLibraryThreadForTest(code body, *bool use_start_thread, *Queue tid) {
+        int rv = startLibraryThread(body, use_start_thread);
+        if (tid) {
+            tid.push(rv);
+        }
+        return rv;
+    }
+
+    #! returns the number of counted starts of threads of the client
+    int libraryThreadCountForTest() {
+        return lib_threads.getCount();
     }
 
     private auto readHandshakeResponse() {
         if (hold_tunnel_read && !(hcio_stream instanceof HttpClientIo::Http1ClientStreamHandle)) {
             hold_tunnel_read = False;
-            # connectAsync() returns only now, while this thread holds the client's lock
-            if (deferred_taken) {
-                (remove deferred_taken).dec();
-            }
             events.push("tunnel-read-held");
             if (release_tunnel_read.waitForZero(HandoffTimeout)) {
                 events.push("tunnel-read-expired");
@@ -503,13 +512,13 @@ class LifecycleWsClient inherits WebSocketClient {
         return rv;
     }
 
-    private acquireActionUnlocked(timeout to) {
-        if (report_action_wait && action_tid && action_tid != gettid()) {
+    private acquireActionUnlocked(timeout to, *WscActionHandoff handoff) {
+        if (report_action_wait && action_tid && action_tid != gettid() && !handoff) {
             events.push("action-wait");
         }
         bool reentry = action_tid == gettid();
-        bool handed = action_handed_over{gettid()} ?? False;
-        WebSocketClient::acquireActionUnlocked(to);
+        bool handed = exists handoff;
+        WebSocketClient::acquireActionUnlocked(to, handoff);
         if ((gate_mode == "action" && !reentry) || (gate_mode == "handover" && handed)) {
             remove gate_mode;
             gateUnlocked();
@@ -694,8 +703,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             addTestCase(proto + ": stale teardown after the next connect", \staleTeardownAfterConnectTest(), proto);
             addTestCase(proto + ": teardown in progress across the next connect", \teardownAcrossConnectTest(), proto);
             addTestCase(proto + ": destructor in the closing callback", \destructorInClosingCallbackTest(), proto);
-            addTestCase(proto + ": destructor on the delivery task waits for a reconnect's thread",
-                \destructorOnDeliveryWithReconnectTest(), proto);
+            addTestCase(proto + ": destructor on the delivery task waits for a thread of the client",
+                \destructorOnDeliveryWithThreadTest(), proto);
             addTestCase(proto + ": destructor during a teardown", \destructorDuringTeardownTest(), proto);
             addTestCase(proto + ": destructor of an open connection", \destructorOpenTest(), proto);
             addTestCase(proto + ": disconnect in progress while the closing callback connects",
@@ -811,6 +820,12 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         addTestCase("Discord: a failing closing step does not skip the heartbeat stop", \discordClosingStepsGuardedTest());
         addTestCase("library thread accounting", \libraryThreadAccountingTest());
         addTestCase("no library thread is started once the destructor runs", \noLibraryThreadOnDestroyTest());
+        addTestCase("a cancelled thread of the client is not waited for", \cancelledLibraryThreadTest());
+        addTestCase("a cancelled thread whose code the hook deferred is not waited for", \cancelledDeferredThreadTest());
+        addTestCase("Discord: a cancelled heartbeat thread is not waited for", \cancelledHeartbeatThreadTest());
+        addTestCase("Discord: a heartbeat wait of less than a millisecond does not wait for a wakeup",
+            \heartbeatShortSleepTest());
+        addTestCase("a cancelled connectAsync() worker does not keep the action", \cancelledConnectAsyncWorkerTest());
         addTestCase("Discord: a destructor on another thread waits for a heartbeat thread reconnecting itself",
             \discordDeleteDuringInlineReconnectTest());
         addTestCase("Discord: a destructor on another thread waits for a heartbeat thread that stopped its own record",
@@ -1026,36 +1041,159 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertEq(1, ctx.closed.getCount(), "the connection is reported closed once");
     }
 
-    #! The last reference is released in the closing callback, on the delivery task, while the automatic reconnect's
-    #! thread is deferred by the start_thread hook: the destructor, on the delivery task, waits for that thread, and
-    #! not for itself
-    destructorOnDeliveryWithReconnectTest(string proto) {
+    #! The last reference is released in the closing callback, on the delivery task, while a thread of the client is
+    #! deferred by the start_thread hook: the destructor, on the delivery task, waits for that thread, and not for
+    #! itself
+    destructorOnDeliveryWithThreadTest(string proto) {
         GatedStarter starter();
         on_exit starter.dropPending();
-        LifecycleCtx ctx = makeCtx(proto, {"reconnect": True, "start_thread": \starter.start()});
+        LifecycleCtx ctx = makeCtx(proto, {"start_thread": \starter.start()});
         connectChecked(ctx, proto);
+        Queue events = ctx.wsc.events;
+        # a thread of the client whose code the hook defers
         starter.gate_next = True;
+        Queue ran();
+        ctx.wsc.startLibraryThreadForTest(sub () { ran.push(True); }, True);
+        starter.started.waitForZero(LifecycleWsClient::HandoffTimeout);
         Queue deleted();
-        Counter sent(1);
-        on_exit if (sent.getCount()) {
-            sent.dec();
-        }
         ctx.on_closed = sub (int n) {
-            sent.waitForZero(LifecycleWsClient::HandoffTimeout);
-            # the reconnect's thread was started (deferred) before the connection is reported closed
-            starter.started.waitForZero(LifecycleWsClient::HandoffTimeout);
             *LifecycleWsClient c = remove ctx.wsc;
             delete c;
             deleted.push(gettid());
         };
         ctx.wsc.send("bye");
-        sent.dec();
-        starter.started.waitForZero(LifecycleWsClient::HandoffTimeout);
-        # the destructor waits for the deferred reconnect: nothing is deleted until it runs
+        # the destructor, on the delivery task, waits for the deferred thread
+        getEventsSkipping(events, "waiting-threads");
+        assertEq(0, deleted.size(), "the destructor waits while the thread has not run");
         starter.startPending();
+        assertTrue(ran.get(LifecycleWsClient::HandoffTimeout), "the deferred thread ran");
+        getEventsSkipping(events, "threads-done");
         int tid = deleted.get(LifecycleWsClient::HandoffTimeout);
-        assertTrue(tid > 0, "the client is destroyed on the delivery task once the reconnect's thread ended");
+        assertTrue(tid > 0, "the client is destroyed on the delivery task once the thread ended");
         assertEq(1, ctx.closed.getCount(), "the connection is reported closed once");
+    }
+
+    #! gets events until @a ev, ignoring the others
+    private getEventsSkipping(Queue events, string ev) {
+        while (True) {
+            if (events.get(LifecycleWsClient::HandoffTimeout) == ev) {
+                return;
+            }
+        }
+    }
+
+    #! A thread of the client is cancelled: it is uncounted when it ends, so the destructor does not wait for it
+    cancelledLibraryThreadTest() {
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://localhost:" + ports.h1, "logger": logger});
+        Counter running(1);
+        Counter block(1);
+        on_exit if (block.getCount()) {
+            block.dec();
+        }
+        Queue ended();
+        int tid = c.startLibraryThreadForTest(sub () {
+            on_exit ended.push(True);
+            running.dec();
+            # a cancellation point: the cancellation ends it with THREAD-CANCELLED
+            block.waitForZero(LifecycleWsClient::HandoffTimeout);
+        });
+        running.waitForZero(LifecycleWsClient::HandoffTimeout);
+        cancel_thread(tid, "test");
+        assertTrue(ended.get(LifecycleWsClient::HandoffTimeout), "the thread ended");
+        thread_join(tid);
+        assertEq(0, c.libraryThreadCountForTest(), "the cancelled thread is uncounted");
+        destroyChecked(c);
+    }
+
+    #! The thread of a start whose code the hook deferred is cancelled before it ran the code, which it releases: the
+    #! start is uncounted
+    cancelledDeferredThreadTest() {
+        GatedStarter starter();
+        on_exit starter.dropPending();
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://localhost:" + ports.h1, "logger": logger,
+            "start_thread": \starter.start()});
+        starter.gate_next = True;
+        Queue started_tid();
+        c.startLibraryThreadForTest(sub () {}, True, started_tid);
+        starter.started.waitForZero(LifecycleWsClient::HandoffTimeout);
+        int tid = started_tid.get(LifecycleWsClient::HandoffTimeout);
+        assertEq(1, c.libraryThreadCountForTest(), "the deferred start is counted");
+        cancel_thread(tid, "test");
+        thread_join(tid);
+        assertEq(0, c.libraryThreadCountForTest(), "the start whose code was released unrun is uncounted");
+        destroyChecked(c);
+    }
+
+    #! The heartbeat thread is cancelled: it reports its end, so the destructor does not wait for it
+    cancelledHeartbeatThreadTest() {
+        Queue tids();
+        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger,
+            "start_thread": int sub (code c) {
+                int t = background TestThreads::run(c);
+                tids.push(t);
+                return t;
+            }});
+        d.connect();
+        d.startHeartbeatForTest(45000);
+        assertEq("hb-started:" + d.getCurrentConnectionId(), d.events.get(LifecycleWsClient::HandoffTimeout));
+        DiscordHeartbeat rec = d.hbRecordForTest();
+        int tid = tids.get(LifecycleWsClient::HandoffTimeout);
+        cancel_thread(tid, "test");
+        thread_join(tid);
+        assertTrue(rec.ended, "the cancelled heartbeat thread reported its end");
+        assertEq(0, rec.running.getCount());
+        destroyChecked(d);
+    }
+
+    #! The heartbeat thread's wait for its next beat with less than a millisecond left: a timeout of 0 ms would wait
+    #! without a limit, so the beat would never be made
+    heartbeatShortSleepTest() {
+        DiscordHeartbeat rec(1, 1, 100);
+        Queue returned();
+        background TestThreads::run(sub () {
+            rec.sleep(0);
+            returned.push(True);
+        });
+        assertTrue(returned.get(LifecycleWsClient::HandoffTimeout), "the wait returned at once");
+    }
+
+    #! The worker of connectAsync() is cancelled before it took the action over: connectAsync() releases the action,
+    #! so the next action does not wait for it
+    cancelledConnectAsyncWorkerTest() {
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://localhost:" + ports.h1, "logger": logger,
+            "connect_timeout": LifecycleWsClient::HandoffTimeout});
+        Queue events = c.events;
+        Counter release = c.release_worker;
+        on_exit if (release.getCount()) {
+            release.dec();
+        }
+        c.hold_worker = True;
+        Queue returned();
+        background TestThreads::run(sub () {
+            c.connectAsync();
+            returned.push(True);
+        });
+        string ev = events.get(LifecycleWsClient::HandoffTimeout);
+        assertTrue(ev =~ /^worker-held:/, ev);
+        int tid = ev.split(":")[1].toInt();
+        cancel_thread(tid, "test");
+        thread_join(tid);
+        assertTrue(returned.get(LifecycleWsClient::HandoffTimeout), "connectAsync() returned");
+        # the action was released: a connect does not time out waiting for it
+        c.connect();
+        assertTrue(c.isOpen(), "the next connect was made");
+        c.disconnect();
+        destroyChecked(c);
+    }
+
+    #! deletes the client on another thread and checks that the destructor returns
+    private destroyChecked(WebSocketClient c) {
+        Queue deleted();
+        background TestThreads::run(sub () {
+            delete c;
+            deleted.push(True);
+        });
+        assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout), "the destructor returned");
     }
 
     #! The client is destroyed on another thread while the delivery task tears its connection down
@@ -2198,7 +2336,6 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         }
         c.hold_tunnel_read = True;
         c.report_h1_upgrade = True;
-        c.defer_taken = True;
         Queue ready();
         # connectAsync() returns while its worker, holding the client's lock, waits for the handshake response
         c.connectAsync(NOTHING, ready);
@@ -3864,11 +4001,11 @@ class WdDiscord inherits DiscordWebSocketClient {
         DiscordWebSocketClient::startAsyncIo();
     }
 
-    private acquireActionUnlocked(timeout to) {
-        if (report_action_wait && action_tid && action_tid != gettid()) {
+    private acquireActionUnlocked(timeout to, *WscActionHandoff handoff) {
+        if (report_action_wait && action_tid && action_tid != gettid() && !handoff) {
             events.push("action-wait");
         }
-        DiscordWebSocketClient::acquireActionUnlocked(to);
+        DiscordWebSocketClient::acquireActionUnlocked(to, handoff);
     }
 
     #! holds the action in another thread, without the client's lock, until release_action is released
@@ -4024,6 +4161,8 @@ class GatedStarter {
 
     #! runs the deferred code once released
     private runPending() {
+        # the code is released also when the wait is cancelled
+        on_exit remove pending;
         gate.waitForZero(LifecycleWsClient::HandoffTimeout);
         *code c = remove pending;
         if (c) {
@@ -4074,6 +4213,10 @@ class TestThreads {
 
     #! records an exception that ended a thread
     static report(hash<ExceptionInfo> ex) {
+        # the tests cancel threads on purpose
+        if (ex.err == "THREAD-CANCELLED") {
+            return;
+        }
         TestThreads::errors.push(get_exception_string(ex));
     }
 }

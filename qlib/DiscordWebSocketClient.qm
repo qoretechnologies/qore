@@ -316,33 +316,39 @@ public class DiscordHeartbeat {
         #! The ID of the connection whose HELLO started the heartbeat
         int cid;
 
-        #! The heartbeat interval in ms
+        #! The heartbeat interval in ms; written with setInterval()
         int interval;
 
         #! The TID of the heartbeat thread, once started
         int tid;
 
-        #! Set when the thread must stop; protected by \c lock
+        #! Set when the thread must stop; written with requestStop()
         bool stop = False;
 
-        #! The number of running heartbeat threads of the record (0 or 1); the stoppers wait until it is 0
+        #! The number of running heartbeat threads of the record (0 or 1)
         Counter running();
-
-        #! Protects \c stop and \c interval for the thread's waits
-        Mutex lock();
-
-        #! Signaled when \c stop or \c interval changes
-        Condition cond();
 
         #! The client, by a weak reference: the heartbeat thread never keeps its client alive
         *DiscordWebSocketClient client;
 
-        #! Set when the heartbeat thread ended; protected by \c lock
+        #! Set when the heartbeat thread ended; written with markEnded()
         bool ended = False;
 
         #! Set when the heartbeat thread runs the client's destructor and is told to stop without being waited for;
-        #! protected by \c lock
+        #! written with requestStop()
         bool detached = False;
+    }
+
+    private {
+        #! Wakes the heartbeat thread's wait for its next beat (a stop or a new interval)
+        Queue wake();
+
+        #! Raised when the thread is started; reaches zero once the thread ended or was detached, or its start failed:
+        #! what stoppers wait for (a record whose thread was never started has nothing to wait for)
+        Counter done();
+
+        #! Set once the thread ended or was detached, or its start failed
+        bool finished = False;
     }
 
     #! Creates the record
@@ -350,6 +356,82 @@ public class DiscordHeartbeat {
         self.seq = seq;
         self.cid = cid;
         self.interval = interval;
+    }
+
+    # The state is changed in synchronized methods and waited for with a Queue and a Counter: the changes are made
+    # also by cleanup on a cancelled thread (the heartbeat thread's end, a destructor), and neither a synchronized
+    # method nor a Queue push nor a Counter decrement is a cancellation point, while a Mutex lock is (see
+    # design/cooperative-cancellation.md "Cleanup Critical Sections")
+
+    #! Returns @ref True if the thread must stop
+    synchronized bool isStopped() {
+        return stop;
+    }
+
+    #! Returns the interval in ms
+    synchronized int getInterval() {
+        return interval;
+    }
+
+    #! Sets the interval in ms and wakes the thread
+    synchronized setInterval(int interval) {
+        self.interval = interval;
+        wake.push(True);
+    }
+
+    #! Tells the thread to stop, and wakes it
+    /** @param detach the thread is not waited for: stoppers waiting for it go on
+    */
+    synchronized requestStop(*bool detach) {
+        stop = True;
+        if (detach && !detached) {
+            detached = True;
+            finishUnlocked();
+        }
+        wake.push(True);
+    }
+
+    #! Records that the thread is about to be started: stoppers wait for it from now on
+    synchronized starting() {
+        running.inc();
+        if (!finished) {
+            done.inc();
+        }
+    }
+
+    #! Records the end of the thread, or the failure of its start
+    synchronized markEnded() {
+        ended = True;
+        finishUnlocked();
+    }
+
+    #! Waits until the thread ended or was detached, or its start failed
+    waitEndedOrDetached() {
+        done.waitForZero();
+    }
+
+    #! Waits for a wakeup of the thread, at most for the given number of milliseconds (more than 0)
+    sleep(int remaining) {
+        # a timeout of 0 would wait without a limit
+        if (remaining <= 0) {
+            return;
+        }
+        try {
+            wake.get(remaining);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "QUEUE-TIMEOUT") {
+                rethrow;
+            }
+        }
+    }
+
+    private finishUnlocked() {
+        if (!finished) {
+            finished = True;
+            if (done.getCount()) {
+                done.dec();
+            }
+        }
     }
 }
 
@@ -1242,9 +1324,7 @@ hash<auto> h = ws.getInfo();
                 }
             } else if (hb.cid == ecid && hb.interval != hbi) {
                 # in case we get a HELLO message while the connection is still up (should not happen)
-                AutoLock al1(hb.lock);
-                hb.interval = hbi;
-                hb.cond.broadcast();
+                hb.setInterval(hbi);
             }
         }
         if (session_id && last_sequence) {
@@ -1303,9 +1383,11 @@ hash<auto> h = ws.getInfo();
         # the thread refers to the client only by a weak reference, and takes a strong one only while it beats, so
         # dropping the last reference to the client destroys (and disconnects) it
         h.client := self;
-        h.running.inc();
+        h.starting();
         on_error {
             h.running.dec();
+            # no thread to wait for
+            h.markEnded();
             remove hb;
         }
         # the heartbeat thread sets the record's TID itself
@@ -1334,12 +1416,8 @@ hash<auto> h = ws.getInfo();
     /** @since DiscordWebSocketClient 1.2
     */
     private static waitHeartbeatEndedOrDetached(DiscordHeartbeat h) {
-        AutoLock al(h.lock);
-        # a record whose thread was never started (or whose start failed) has no thread to wait for: running is
-        # incremented before the thread starts and decremented after it set ended
-        while (!h.ended && !h.detached && h.running.getCount()) {
-            h.cond.wait(h.lock);
-        }
+        # a record whose start failed is marked ended (see startHeartbeatThreadIntern())
+        h.waitEndedOrDetached();
     }
 
     #! Sets the stop flag of a heartbeat record and wakes its thread
@@ -1347,12 +1425,8 @@ hash<auto> h = ws.getInfo();
         @param detach mark the record detached (its thread is not waited for)
     */
     private static stopHeartbeatRecord(DiscordHeartbeat h, *bool detach) {
-        AutoLock al(h.lock);
-        h.stop = True;
-        if (detach) {
-            h.detached = True;
-        }
-        h.cond.broadcast();
+        # not a cancellation point: a destructor on a cancelled thread stops the record too
+        h.requestStop(detach);
     }
 
     #! Stops a heartbeat thread and waits until it ended
@@ -1420,41 +1494,36 @@ hash<auto> h = ws.getInfo();
         @since DiscordWebSocketClient 1.2
     */
     private static heartbeatMain(DiscordHeartbeat h) {
+        # reported also when the thread is cancelled: neither call is a cancellation point
         on_exit {
-            {
-                AutoLock al(h.lock);
-                h.ended = True;
-                h.cond.broadcast();
-            }
+            h.markEnded();
             h.running.dec();
         }
         h.tid = gettid();
 
         bool running;
         while (True) {
-            {
-                AutoLock al(h.lock);
-                if (h.stop) {
+            if (h.isStopped()) {
+                break;
+            }
+            int sleep = h.getInterval();
+            # calculate the first sleep with the heartbeat interval * jitter
+            if (!running) {
+                sleep = (float("0." + rand()) * sleep).toInt();
+                running = True;
+            }
+            # woken by a stop or an interval change; a wakeup before the time only checks for a stop
+            date target = now_us() + milliseconds(sleep);
+            while (!h.isStopped()) {
+                # in whole milliseconds: a wait of 0 ms would not end before a wakeup
+                int remaining = (target - now_us()).durationMilliseconds();
+                if (remaining <= 0) {
                     break;
                 }
-                int sleep = h.interval;
-                # calculate the first sleep with the heartbeat interval * jitter
-                if (!running) {
-                    sleep = (float("0." + rand()) * sleep).toInt();
-                    running = True;
-                }
-                # use a predicate loop to handle spurious wakeups and interval changes
-                date target = now_us() + milliseconds(sleep);
-                while (!h.stop) {
-                    date remaining = target - now_us();
-                    if (remaining <= 0s) {
-                        break;
-                    }
-                    h.cond.wait(h.lock, remaining);
-                }
-                if (h.stop) {
-                    break;
-                }
+                h.sleep(remaining);
+            }
+            if (h.isStopped()) {
+                break;
             }
             # a strong reference only while beating
             *DiscordWebSocketClient c = h.client;

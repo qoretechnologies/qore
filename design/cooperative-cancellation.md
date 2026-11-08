@@ -790,6 +790,45 @@ It carries the `THREAD_CONTROL` functional domain, like `clear_thread_cancel()`,
 `PO_NO_THREAD_CONTROL` program cannot defer at all.  In C++, use the header-inline RAII
 `QoreCancelDeferralHelper` rather than the raw push/pop.
 
+#### Without thread control: synchronized state
+
+Code that must also run under `PO_NO_THREAD_CONTROL` (a module whose user may be sandboxed) cannot call
+`defer_thread_cancel()`.  It keeps the state its cleanup changes in **`synchronized` methods** and
+wakes its waiters with a **`Queue` push or a `Counter` decrement**: none of these is a cancellation
+point (the lock of a `synchronized` method is a `VRMutex` acquired without a `VLockCancellationPoint`,
+and `Queue::push()` and `Counter::dec()` never wait), so the cleanup completes on a cancelled
+thread.  Only the *waits* (`Queue::get()`, `Counter::waitForZero()`) are cancellation points, which
+is what the waiter wants.  A waiter registers itself in a synchronized method before it waits and
+the cleanup pushes only while a waiter is registered, so no wakeup is lost and the queue does not
+grow without one:
+
+```qore
+synchronized leave(int token) {
+    remove live{token};
+    if (waiters) {
+        wake.push(True);    # not a cancellation point
+    }
+}
+
+waitOthers() {
+    while (beginWait()) {   # synchronized: false once nothing is left; registers the waiter
+        on_exit endWait();  # synchronized
+        wake.get();         # the cancellation point is the wait itself
+    }
+}
+```
+
+`WebSocketClient`'s thread accounting (`WscLibraryThreads`), its handoff of an action to a
+`connectAsync()` worker (`WscActionHandoff`), and the Discord heartbeat record (`DiscordHeartbeat`)
+use this pattern.
+
+A libqore primitive for "cleanup-only" lock acquisition that is not a cancellation point is not
+added: a `synchronized` method already is one, it cannot be held past its method (so it cannot be
+used to evade cancellation outside the method), and C++ module code takes `QoreThreadLock`
+(`pthread_mutex_t`), which is never a cancellation point.  A primitive on `Mutex` itself could not
+tell cleanup from ordinary code, so it would let any code block uninterruptibly on a contended
+lock.
+
 The deferral is only for cleanup that runs **while the cancelled code is still on the stack**.
 Cleanup the runtime runs *after* that code has returned uses the stronger rule below.
 
