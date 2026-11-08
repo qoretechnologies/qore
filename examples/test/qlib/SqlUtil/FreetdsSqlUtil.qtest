@@ -202,9 +202,105 @@ class FreetdsTest inherits SqlTestBase {
             addTestCase("create as select", \createAsSelectTest());
             addTestCase("drop table options", \dropTableOptionsTest());
             addTestCase("default values in the form SQL Server returns them", \defaultValueFormTest());
+            addTestCase("insert returning with the OUTPUT clause", \insertReturningTest());
+            addTestCase("column comments", \columnCommentTest());
         }
+        addTestCase("the OUTPUT clause's place in an insert", \outputPlaceTest());
 
         set_return_value(main());
+    }
+
+    #! An insert returns the values of the inserted row that the "returning" option names, from SQL Server's OUTPUT
+    #! clause
+    private insertReturningTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+        AbstractDatasource ds = table.getDatasource();
+        on_exit ds.rollback();
+        Database db(ds);
+        string name = "mssql_returning_t";
+        {
+            *AbstractTable old = db.getTable(name);
+            if (old) {
+                old.dropCommit();
+            }
+        }
+        AbstractTable t = db.makeTable(name, {"columns": {
+            "id": {"qore_type": Type::Int, "notnull": True},
+            "name": {"qore_type": Type::String, "size": 20},
+            "created": {"qore_type": Type::Int, "notnull": True, "default_value": 42},
+        }});
+        t.create();
+        ds.commit();
+        on_exit t.dropCommit();
+
+        assertTrue(t.hasReturning());
+        # a column of the row, and one that the server fills in from its default
+        assertEq({"id": 1, "created": 42}, t.insert({"id": 1, "name": "one"}, {"returning": ("id", "created")}));
+        assertEq({"name": "two"}, t.insert({"id": 2, "name": "two"}, {"returning": ("name",)}));
+        assertEq(2, t.selectRows().size());
+    }
+
+    #! The comments of columns are their MS_Description extended properties: created with the table, described,
+    #! changed, dropped and added by alignment
+    private columnCommentTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+        AbstractDatasource ds = table.getDatasource();
+        on_exit ds.rollback();
+        Database db(ds);
+        string name = "mssql_comment_t";
+        {
+            *AbstractTable old = db.getTable(name);
+            if (old) {
+                old.dropCommit();
+            }
+        }
+        hash<auto> desc = {"columns": {
+            "id": {"qore_type": Type::Int, "notnull": True, "comment": "the id's comment"},
+            "a": {"qore_type": Type::String, "size": 20, "comment": "a comment"},
+            "b": {"qore_type": Type::String, "size": 20},
+        }};
+        AbstractTable t = db.makeTable(name, desc);
+        t.create();
+        ds.commit();
+        on_exit db.getTable(name).dropCommit();
+
+        AbstractTable actual = db.getTable(name);
+        assertEq("the id's comment", actual.describe().id.comment);
+        assertEq("a comment", actual.describe().a.comment);
+        assertNothing(actual.describe().b.comment);
+        # the table aligns with its template without SQL
+        assertEq((), actual.getAlignSql(t));
+
+        # a changed comment, a dropped one and a new one
+        desc.columns.id.comment = "another comment";
+        desc.columns.a -= "comment";
+        desc.columns.b.comment = "b comment";
+        desc.columns.c = {"qore_type": Type::Int, "comment": "c comment"};
+        AbstractTable t2 = db.makeTable(name, desc);
+        list<auto> sql = actual.getAlignSql(t2);
+        map ds.execRaw($1), sql;
+        ds.commit();
+        actual = db.getTable(name);
+        Columns cols = actual.describe();
+        assertEq("another comment", cols.id.comment);
+        assertNothing(cols.a.comment);
+        assertEq("b comment", cols.b.comment);
+        assertEq("c comment", cols.c.comment);
+        assertEq((), actual.getAlignSql(t2));
+    }
+
+    #! The OUTPUT clause goes before the VALUES clause that ends the column list, not before a ") values (" that is part
+    #! of a bracketed name
+    private outputPlaceTest() {
+        string v = ") values (";
+        assertEq(31, MssqlSqlUtilBase::MssqlTable::findOutsideBrackets("insert into t ([a) values (b],c) values (%v,%v)",
+            v));
+        assertEq(16, MssqlSqlUtilBase::MssqlTable::findOutsideBrackets("insert into t (a) values (%v)", v));
+        assertEq(-1, MssqlSqlUtilBase::MssqlTable::findOutsideBrackets("insert into t ([a]] ) values (]) values", v));
     }
 
     private cleanupDropOptionsTest(AbstractDatasource ds) {

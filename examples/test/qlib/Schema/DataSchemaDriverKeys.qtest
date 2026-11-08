@@ -1,0 +1,196 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Schema
+%requires SqlUtil
+%requires ../SqlUtil/TestRunIsolation.qm
+%requires ../SqlUtil/PgsqlTestIsolation.qm
+%requires ../SqlUtil/OracleTestIsolation.qm
+%requires ../SqlUtil/MssqlTestIsolation.qm
+
+%exec-class DataSchemaDriverKeysTest
+
+#! A data schema on a connection of the jdbc driver: the automatic triggers of a table and the SQL of a populated
+#! column are those of the database's native driver
+/** The automatic triggers were generated for the driver's name, "jdbc", which raised AUTO-TRIGGER-ERROR, and the SQL
+    of a populated column was looked up under "jdbc" only, which raised POPULATE-ERROR; the description of a table
+    gave its driver-specific options under "jdbc", which no connection to the database applied as the native ones
+*/
+class DataSchemaDriverKeysTest inherits QUnit::Test {
+    private {
+        #! connection label -> the native driver key, the environment variable and the SQL of the populated column
+        const Connections = {
+            "jdbc pgsql": ("pgsql", "QORE_DB_CONNSTR_JDBC_PGSQL"),
+            "jdbc oracle": ("oracle", "QORE_DB_CONNSTR_JDBC_ORACLE"),
+            "jdbc mssql": ("freetds", "QORE_DB_CONNSTR_JDBC_MSSQL"),
+        };
+
+        #! the SQL of the populated column under each native driver key
+        const PopulateSql = {
+            "pgsql": "upper(name) || '-pg'",
+            "oracle": "upper(name) || '-ora'",
+            "freetds": "upper(name) + '-ms'",
+        };
+
+        #! the value of the populated column on each database
+        const PopulateValue = {
+            "pgsql": "ONE-pg",
+            "oracle": "ONE-ora",
+            "freetds": "ONE-ms",
+        };
+
+        # label -> datasource string of the run's schema or database
+        hash<string, string> conns;
+    }
+
+    constructor() : Test("DataSchemaDriverKeysTest", "1.0", \ARGV) {
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            *string connstr = ENV{i.value[1]};
+            if (!connstr.val()) {
+                continue;
+            }
+            try {
+                Datasource ds(connstr);
+                ds.open();
+            } catch (hash<ExceptionInfo> ex) {
+                # a server that cannot be reached: its cases are skipped
+                continue;
+            }
+            switch (i.value[0]) {
+                case "pgsql":
+                    PgsqlRunSchema::setup(connstr, "DataSchemaDriverKeys");
+                    conns{i.key} = PgsqlRunSchema::getConnectionString(connstr);
+                    break;
+                case "oracle":
+                    conns{i.key} = OracleRunSchema::getConnectionString(connstr, "DataSchemaDriverKeys");
+                    break;
+                case "freetds":
+                    conns{i.key} = MssqlRunDatabase::getConnectionString(connstr, "DataSchemaDriverKeys");
+                    break;
+            }
+        }
+        addTestCase("auto triggers and populate SQL of the native driver", \nativeKeys());
+        addTestCase("a description gives the driver options under the native key", \descriptionKeys());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        PgsqlRunSchema::teardown();
+        OracleRunSchema::teardown();
+        MssqlRunDatabase::teardown();
+    }
+
+    private skipIfNone() {
+        if (!conns) {
+            testSkip("no jdbc connection available");
+        }
+    }
+
+    #! returns the definition of the schema, with a populated column from version 2.0
+    private hash<auto> definition(string name, string version) {
+        hash<auto> columns = {
+            "id": {"type": "int", "notnull": True},
+            "name": {"type": "varchar", "size": 40},
+            "created": {"type": "timestamp"},
+            "modified": {"type": "timestamp"},
+        };
+        if (version != "1.0") {
+            columns.code = {"type": "varchar", "size": 40, "populate": {"sql": PopulateSql}};
+        }
+        return Schema::DataSchemaLoader::loadHash({
+            "schema": {"name": name, "version": version, "version_table": name + "_v",
+                "version_column": "version", "version_where": {"name": name}},
+            "tables": {
+                name + "_v": {"columns": {"name": {"type": "varchar", "size": 80},
+                    "version": {"type": "varchar", "size": 20}}},
+                name: {
+                    "columns": columns,
+                    "primary_key": {"name": "pk_" + name, "columns": ("id",)},
+                    "auto_triggers": {"created": True, "modified": True},
+                },
+            },
+        });
+    }
+
+    private nativeKeys() {
+        skipIfNone();
+        foreach hash<auto> i in (conns.pairIterator()) {
+            string key = Connections{i.key}[0];
+            Datasource ds(i.value);
+            string name = TestRun::makeName("dsk");
+            # an Oracle name has at most 30 characters on old servers; the name is short enough for its version
+            # table and keys
+            Schema::DataSchema v1(ds, definition(name, "1.0"));
+            on_exit {
+                ds.rollback();
+                map ds.execRaw("drop table " + $1), (name, name + "_v");
+                ds.commit();
+            }
+            v1.align(True, -1);
+            AbstractTable t = new Table(ds, name).getTable();
+            t.insert({"id": 1, "name": "one"});
+            ds.commit();
+            # the trigger set the creation time
+            hash<auto> row = t.selectRow({"where": {"id": 1}});
+            assertEq(Type::Date, row.created.type(), i.key + ": created");
+
+            Schema::DataSchema v2(ds, definition(name, "2.0"));
+            v2.align(True, -1);
+            t = new Table(ds, name).getTable();
+            assertEq(PopulateValue{key}, t.selectRow({"where": {"id": 1}}).code, i.key + ": populated");
+        }
+    }
+
+    private descriptionKeys() {
+        skipIfNone();
+        foreach hash<auto> i in (conns.pairIterator()) {
+            string key = Connections{i.key}[0];
+            Datasource ds(i.value);
+            Database db(ds);
+            string name = TestRun::makeName("dsd");
+            hash<auto> desc = {
+                "columns": {
+                    "id": {"qore_type": "integer", "notnull": True},
+                    "v": {"qore_type": "string", "size": 20},
+                },
+                "primary_key": {"name": "pk_" + name, "columns": ("id",)},
+            };
+            hash<auto> ix = {};
+            ix.columns = ("v",);
+            if (key == "pgsql") {
+                ix.driver = {"pgsql": {"method": "hash"}};
+            }
+            desc.indexes = {"ix_" + name: ix};
+            AbstractTable t = db.makeTable(name, desc);
+            t.create();
+            ds.commit();
+            on_exit {
+                ds.rollback();
+                ds.execRaw("drop table " + name);
+                ds.commit();
+            }
+            hash<auto> dh = db.getTable(name).getDescriptionHash();
+            # every driver-specific option of the description is under the native key
+            list<auto> driver_keys = (keys dh.primary_key.driver) ?? ();
+            map driver_keys += (keys $1.driver) ?? (), dh.indexes.iterator();
+            map driver_keys += (keys $1.driver) ?? (), dh.unique_constraints.iterator();
+            assertFalse(inlist("jdbc", driver_keys), i.key + ": " + driver_keys.join(","));
+            assertEq((), (select driver_keys, $1 != key) ?? (), i.key + ": " + driver_keys.join(","));
+            if (key == "pgsql") {
+                assertEq("hash", dh.indexes{"ix_" + name}.driver.pgsql.method, i.key);
+            }
+            if (key == "oracle") {
+                assertTrue(exists dh.primary_key.driver.oracle, i.key);
+            }
+            # the description makes the same table on the connection
+            assertEq((), db.getTable(name).getAlignSql(db.makeTable(name, dh)), i.key);
+        }
+    }
+}
