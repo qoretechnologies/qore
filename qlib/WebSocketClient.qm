@@ -332,6 +332,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
 
     @section wsc_v2_5 v2.5
+    - a thread of the client that is cancelled (e.g. with \c cancel_thread() or
+      @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()") is no longer waited for by
+      the destructor, and a cancelled @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" worker
+      does not keep the client's action
     - @ref WebSocketClient::WebSocketClient::connect() "connect()",
       @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()",
       @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()",

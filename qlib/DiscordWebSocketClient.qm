@@ -80,6 +80,8 @@ module DiscordWebSocketClient {
     @section discordwebsocketclientrelnotes Release Notes
 
     @subsection discordwebsocketclientv1_2 DiscordWebSocketClient v1.2
+    - fixed a heartbeat that could stall when its next beat was due in less than a millisecond; a cancelled heartbeat
+      thread reports its end, so a disconnect or the destructor does not wait for it forever
     - an automatic reconnect stops the heartbeat and switches to the resume gateway URL only if no connection was
       opened after the connection it was started for ended; before, it could stop the heartbeat of the new
       connection and change the URL while it was being connected
