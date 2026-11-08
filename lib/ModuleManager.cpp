@@ -1210,7 +1210,8 @@ bool QoreModuleManager::checkAOTModuleDependencyFiles(ExceptionSink& xsink, cons
         // a module that is loaded is used as it is; one that is not is found as loadModuleIntern() would find it
         std::string file;
         bool is_aot = false;
-        if (QoreAbstractModule* m = findModuleUnlocked(name.c_str())) {
+        QoreAbstractModule* m = findModuleUnlocked(name.c_str());
+        if (m) {
             const char* fn = m->getFileName();
             // a builtin module has no file
             if (!fn || !*fn || *fn == '<') {
@@ -1223,19 +1224,20 @@ bool QoreModuleManager::checkAOTModuleDependencyFiles(ExceptionSink& xsink, cons
             if (file.empty()) {
                 continue;
             }
-            if (file.size() > 5 && !file.compare(file.size() - 5, 5, ".qmod")) {
-                QoreAOTModuleFileInfo info;
-                std::string error;
-                is_aot = qoreAOTReadModuleInfo(file, info, error) == QoreAOTModuleInfoStatus::FOUND;
-            }
         }
         char* r = realpath(file.c_str(), nullptr);
         if (r) {
             file = r;
             free(r);
         }
+        // a file the sandbox does not let the loader read is neither read nor checked
         if (!allowed(file)) {
             continue;
+        }
+        if (!m && file.size() > 5 && !file.compare(file.size() - 5, 5, ".qmod")) {
+            QoreAOTModuleFileInfo info;
+            std::string error;
+            is_aot = qoreAOTReadModuleInfo(file, info, error) == QoreAOTModuleInfoStatus::FOUND;
         }
         if (!qore_aot_dependency_is_compiled_one(name, file, is_aot, compiled_against, fingerprints, allowed)) {
             stale_desc = std::string("it was compiled against other files of module '") + name + "' than '" + file

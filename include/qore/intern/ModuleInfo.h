@@ -1037,7 +1037,8 @@ protected:
 
         @param stale_desc set to why the AOT module is out of date
 
-        @return true if the AOT module is out of date (or an exception was raised for cancellation)
+        @return true if the AOT module is out of date; false if it is not, if it is not checked, or if the check was
+        cancelled (an exception is then raised in \a xsink, which the caller must check)
     */
     DLLLOCAL bool checkAOTModuleDependencyFiles(ExceptionSink& xsink, const char* path, const char* feature,
             const std::vector<std::string>& dependencies, QoreProgram* pgm, std::string& stale_desc);

@@ -53,6 +53,7 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         addTestCase("another build of a native module is a different module unless it is an identical copy",
             \nativeModuleTest());
         addTestCase("a module compiled with a relative output path is checked", \relativeOutputTest());
+        addTestCase("a module file the sandbox does not let the loader read is not read", \sandboxDeniedTest());
         set_return_value(main());
     }
 
@@ -366,5 +367,71 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         touchLater(src_dir + "/Rel.qm");
         out = runRequires(module_path, tmp.path, "Rel", "Rel::value()");
         assertEq("v2 Rel.qm", out.split("\n").last(), out);
+    }
+
+    #! sets the access time of a file to one before its modification time, so that reading it changes it
+    private setOldAccessTime(string path) {
+        assertEq(0, system(sprintf("TZ=%s touch -a -t 200101010000 '%s'", TestFileTime::TouchZone, path)));
+    }
+
+    sandboxDeniedTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        string denied_dir = tmp.path + "/denied";
+        string shadow_dir = tmp.path + "/shadow";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        mkdir(denied_dir);
+        mkdir(shadow_dir);
+
+        # reading a file must change its access time here, or what the module check reads cannot be seen
+        string control = tmp.path + "/control";
+        write(control, "control\n");
+        setOldAccessTime(control);
+        date old_atime = hstat(control).atime;
+        ReadOnlyFile::readTextFile(control);
+        if (hstat(control).atime == old_atime) {
+            testSkip("reading a file does not change its access time on this filesystem");
+        }
+
+        # Mid re-exports Base, which is loaded after Mid's module check, and requires Zed
+        writeModule(src_dir, "Base", "", "public namespace Base { public string sub value() { return \"base\"; } }");
+        writeModule(src_dir, "Zed", "", "public namespace Zed { public string sub value() { return \"zed\"; } }");
+        writeModule(src_dir, "Mid", "%requires(reexport) Base\n%requires Zed", "public namespace Mid { public string "
+            "sub value() { return Base::value() + Zed::value(); } }");
+        string module_path = qmod_dir + ":" + src_dir;
+        foreach string name in ("Base", "Zed", "Mid") {
+            compile(module_path, src_dir, qmod_dir, name);
+        }
+        # Base's AOT module in a directory that the sandbox of the Program denies, another Zed in a directory searched
+        # next, and no source of Mid: Mid is out of date, so Base is never loaded
+        assertEq(0, system(sprintf("cp '%s/Base.qmod' '%s/Base.qmod'", qmod_dir, denied_dir)));
+        writeModule(shadow_dir, "Zed", "", "public namespace Zed { public string sub value() { return \"other\"; } "
+            "}");
+        string denied_qmod = denied_dir + "/Base.qmod";
+        setOldAccessTime(denied_qmod);
+        old_atime = hstat(denied_qmod).atime;
+
+        string script = tmp.path + "/sandbox.q";
+        write(script, sprintf("%%modern
+Program p(PO_NEW_STYLE);
+SandboxManager m();
+m.setFilesystemDefaultPolicy(True);
+m.addFilesystemDeniedPath(%y);
+p.setSandboxManager(m);
+try {
+    p.parse(\"%%requires Mid\\n\", \"probe\");
+    print(\"loaded\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%%s: %%s\\n\", ex.err, ex.desc);
+}
+", realpath(denied_dir)));
+        string out = trim(run(sprintf("%s QORE_MODULE_DIR=%s:%s:%s %s %s", env, denied_dir, shadow_dir, qmod_dir,
+            qore_bin, script)));
+        assertRegex("AOT module '.*/Mid\\.qmod' for feature 'Mid' is out of date: it was compiled against other "
+            "files of module 'Zed' than '.*/shadow/Zed\\.qm'", out);
+        # the module check did not read the file the sandbox denies
+        assertEq(old_atime, hstat(denied_qmod).atime, out);
     }
 }
