@@ -1595,10 +1595,13 @@ list<hash<auto>> l = getaddrinfo("localhost");
     @par Name lookup errors
     A \c QOREADDRINFO-GETINFO-ERROR exception raised for the answer of the resolver has a hash argument with the key
     \c status, the resolver's status: \c "ENOTFOUND" (the name does not exist), \c "ENODATA" (the name has no address
-    of the requested family) and \c "EBADNAME" (the name is not a valid name) are definite answers, which another
+    of the requested family), \c "EBADNAME" (the name is not a valid name), \c "ENONAME" (the name is not a numeric
+    address, with \c AI_NUMERICHOST) and \c "ESERVICE" (the service is not known) are definite answers, which another
     lookup gives again; others, such as \c "ETIMEOUT", \c "ESERVFAIL", \c "EREFUSED" and \c "ECONNREFUSED" (no DNS
-    server answered, or one failed), can be temporary.  An error that is not an answer of the resolver, such as a
-    resolver that could not be initialized, has no \c status.
+    server answered, or one failed), can be temporary.  A lookup of both address families (\c AF_UNSPEC) fails with
+    \c "ENOTFOUND" or \c "ENODATA" only if the answers for both families are definite; if one is not, the lookup
+    fails with its status.  An error that is not an answer of the resolver, such as a resolver that could not be
+    initialized, has no \c status.
 
     @note A localhost name (\c "localhost" or a name ending in \c ".localhost"; RFC 6761) resolves to the addresses
     that the hosts file gives it, as with the system resolver; in an address family that the hosts file does not give
@@ -1642,6 +1645,10 @@ list<hash<auto>> l = f.get();
     @endcode
 
     @throw ASYNC-IO-ERROR the lookup could not be submitted to the global async I/O controller
+
+    @par Name lookup errors
+    The Future raises a \c QOREADDRINFO-GETINFO-ERROR exception for an answer of the resolver with the same argument
+    as @ref Qore::getaddrinfo() "getaddrinfo()": a hash with the resolver's \c status
 
     @since %Qore 3.0
  */

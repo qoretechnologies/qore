@@ -55,6 +55,8 @@
 #include <map>
 #include <condition_variable>
 #include <chrono>
+#include <functional>
+#include <memory>
 #include <poll.h>
 #include <arpa/inet.h>
 
@@ -367,6 +369,7 @@ static void quic_test_count_rx(bool is_server) {
 
 static bool quic_test_pending_input();
 static bool quic_test_undelivered(std::vector<int>& fds);
+static bool quic_test_undelivered_locked(std::vector<int>& fds);
 static bool quic_test_wait_delivered(int timeout_ms);
 static std::string quic_test_describe_undelivered();
 
@@ -553,27 +556,115 @@ static std::string quic_test_addr_key(const struct sockaddr* addr) {
     return key;
 }
 
-void qore_quic_test_note_sent(int fd, const struct sockaddr* addr, socklen_t addrlen, int count) {
-    if (!quic_test_clock_used.load(std::memory_order_acquire)) {
-        return;
-    }
+//! Adds @p count to the datagrams sent to an address; returns false if the address has no key
+/** @param addr the destination address, or nullptr for the peer of the connected socket @p fd
+*/
+static bool quic_test_add_sent(int fd, const struct sockaddr* addr, int count) {
     struct sockaddr_storage peer;
     if (!addr) {
         // a connected socket sends to its peer
         socklen_t len = sizeof(peer);
         if (getpeername(fd, reinterpret_cast<struct sockaddr*>(&peer), &len)) {
-            return;
+            return false;
         }
         addr = reinterpret_cast<const struct sockaddr*>(&peer);
     }
     std::string key = quic_test_addr_key(addr);
     if (key.empty()) {
-        return;
+        return false;
     }
     std::string str = quic_test_addr_str(addr);
     std::lock_guard<std::mutex> g(quic_test_fds_m);
     quic_test_addr_counts[key].sent += count;
     quic_test_sent_to_total[str] += count;
+    if (count < 0) {
+        // datagrams taken back: a wait for the datagrams sent to be read can be over
+        quic_test_received_cv.notify_all();
+    }
+    return true;
+}
+
+bool qore_quic_test_note_sent(int fd, const struct sockaddr* addr, socklen_t addrlen, int count) {
+    assert(count > 0);
+    if (!quic_test_clock_used.load(std::memory_order_acquire)) {
+        return false;
+    }
+    return quic_test_add_sent(fd, addr, count);
+}
+
+void qore_quic_test_take_back_sent(int fd, const struct sockaddr* addr, socklen_t addrlen, int count) noexcept {
+    assert(count > 0);
+    // not checked against quic_test_clock_used: the datagrams were counted
+    try {
+        quic_test_add_sent(fd, addr, -count);
+    } catch (const std::exception& e) {
+        // called by a destructor; the test clock then waits for the datagrams until its timeout and raises an error
+        printd(0, "qore_quic_test_take_back_sent(): %s\n", e.what());
+    }
+}
+
+//! Set while a test hook makes sends fail; see qore_quic_test_set_send_hook()
+static std::atomic<bool> quic_test_send_hook_set{false};
+static std::mutex quic_test_send_hook_m;
+//! The test hook; shared, as a send can call it while it is replaced
+static std::shared_ptr<const std::function<int(int)>> quic_test_send_hook;
+
+int qore_quic_test_send_error(int fd) {
+    if (!quic_test_send_hook_set.load(std::memory_order_acquire)) {
+        return 0;
+    }
+    std::shared_ptr<const std::function<int(int)>> hook;
+    {
+        std::lock_guard<std::mutex> g(quic_test_send_hook_m);
+        hook = quic_test_send_hook;
+    }
+    return hook ? (*hook)(fd) : 0;
+}
+
+void qore_quic_test_set_send_hook(std::function<int(int)> hook) {
+    std::shared_ptr<const std::function<int(int)>> h;
+    if (hook) {
+        h = std::make_shared<const std::function<int(int)>>(std::move(hook));
+    }
+    std::lock_guard<std::mutex> g(quic_test_send_hook_m);
+    quic_test_send_hook = std::move(h);
+    quic_test_send_hook_set.store(static_cast<bool>(quic_test_send_hook), std::memory_order_release);
+}
+
+bool qore_quic_test_set_counting(bool on) {
+    return quic_test_clock_used.exchange(on, std::memory_order_acq_rel);
+}
+
+int64_t qore_quic_test_undelivered_to(const struct sockaddr* addr) {
+    std::string key = quic_test_addr_key(addr);
+    std::lock_guard<std::mutex> g(quic_test_fds_m);
+    auto i = quic_test_addr_counts.find(key);
+    return i == quic_test_addr_counts.end() ? 0 : i->second.sent - i->second.received;
+}
+
+void qore_quic_test_forget_receive_fd(int fd) {
+    std::lock_guard<std::mutex> g(quic_test_fds_m);
+    quic_test_fds.erase(fd);
+}
+
+bool qore_quic_test_wait_delivered_woken(int timeout_ms, const std::function<void()>& waiting) {
+    std::unique_lock<std::mutex> g(quic_test_fds_m);
+    std::vector<int> fds;
+    if (!quic_test_undelivered_locked(fds)) {
+        return true;
+    }
+    // called with the lock held: what the caller does next to wake this wait cannot happen before it waits
+    waiting();
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (true) {
+        if (quic_test_received_cv.wait_until(g, deadline) == std::cv_status::timeout) {
+            return false;
+        }
+        fds.clear();
+        if (!quic_test_undelivered_locked(fds)) {
+            return true;
+        }
+    }
 }
 
 void qore_quic_test_note_received(int fd, const struct sockaddr* src, int count) {
