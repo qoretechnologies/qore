@@ -262,8 +262,11 @@ ws.send("Hello from HTTP/3!");
     connect, disconnect or reconnect end at once with \c WEBSOCKET-ERROR, and a handshake in progress is canceled; a
     close handshake ends at the latest at its close timeout.  User code these threads run (callbacks, observers, the
     logger, a \c start_thread hook, subclass hooks) must therefore not block on anything the thread destroying the
-    client holds, and a \c start_thread hook must run the code it is given and must not raise an exception once it
-    has started the thread (the client then takes the start for failed and does not wait for that thread).
+    client holds, and a \c start_thread hook must not raise an exception once it has started the thread (the client
+    then takes the start for failed and does not wait for that thread).  A thread whose code is released without
+    having been run (e.g. by a \c start_thread hook that drops it, or a thread that ends before it runs it) is not
+    waited for; one whose code is still held, e.g. deferred by the hook, is waited for until the code runs and ends,
+    or is released.
 
     Each connection is reported open exactly once
     (@ref WebSocketClient::EVENT_WS_CONNECTED "EVENT_WS_CONNECTED" for
@@ -686,6 +689,18 @@ public class WscLibraryThreads {
         ++tids{gettid()};
     }
 
+    #! Uncounts a start whose code was released without being run: no thread can run it any more
+    /** Called when the code given to the thread (or to a \c start_thread hook) is released; a start whose thread
+        entered it is not affected.
+    */
+    abandon(int token) {
+        AutoLock al(m);
+        remove failed{token};
+        if (!entered{token} && remove live{token}) {
+            cond.broadcast();
+        }
+    }
+
     #! Records the end of the given start on the calling thread and uncounts it
     leave(int token) {
         AutoLock al(m);
@@ -730,6 +745,38 @@ public class WscLibraryThreads {
     int getCount() {
         AutoLock al(m);
         return live.size();
+    }
+}
+
+#! The start of a thread of a client, held by the code that the thread runs
+/** When the code is released without having been run (e.g. a \c start_thread hook that dropped it, or a thread that
+    ended before it ran it), the start is uncounted, so the client's destructor does not wait for a thread that will
+    never run it.
+
+    @since WebSocketClient 2.5
+*/
+public class WscStartTicket {
+    private {
+        WscLibraryThreads lt;
+        int token;
+        bool entered = False;
+    }
+
+    constructor(WscLibraryThreads lt, int token) {
+        self.lt = lt;
+        self.token = token;
+    }
+
+    destructor() {
+        if (!entered) {
+            lt.abandon(token);
+        }
+    }
+
+    #! Records the calling thread as running the start
+    enter() {
+        entered = True;
+        lt.enter(token);
     }
 }
 
@@ -4119,8 +4166,10 @@ ws.setEventQueue();
     private int startLibraryThread(code body, *bool use_start_thread) {
         WscLibraryThreads lt = lib_threads;
         int token = lt.starting();
+        # released with the code: a start whose code is released without being run is not waited for
+        WscStartTicket ticket(lt, token);
         code run = sub () {
-            lt.enter(token);
+            ticket.enter();
             on_exit lt.leave(token);
             body();
         };

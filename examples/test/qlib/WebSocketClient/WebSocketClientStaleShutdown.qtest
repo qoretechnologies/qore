@@ -780,6 +780,10 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         addTestCase("Discord: a failing closing step does not skip the heartbeat stop", \discordClosingStepsGuardedTest());
         addTestCase("library thread accounting", \libraryThreadAccountingTest());
         addTestCase("no library thread is started once the destructor runs", \noLibraryThreadOnDestroyTest());
+        addTestCase("Discord: the destructor does not wait for a forced reconnect whose code the hook dropped",
+            \discordDroppedStartTest());
+        addTestCase("Discord: the destructor on the heartbeat thread does not wait for a forced reconnect whose code "
+            "was released unrun", \discordDestructorOnHeartbeatDroppedReconnectTest());
         addTestCase("an action wait ends when the client is destroyed", \actionWaitEndsOnDestroyTest());
         addTestCase("a handshake in progress is canceled when the client is destroyed",
             \handshakeCanceledOnDestroyTest());
@@ -2988,6 +2992,57 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertEq("threads-done", lifecycle.get(LifecycleWsClient::HandoffTimeout), "then the destructor goes on");
     }
 
+    #! A start_thread hook that returns without running the code it was given: the destructor does not wait for a
+    #! thread that will never run it
+    discordDroppedStartTest() {
+        Queue dropped();
+        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger,
+            "start_thread": int sub (code c) { dropped.push(True); return 0; }});
+        d.connect();
+        d.triggerZombieForTest(d.getCurrentConnectionId());
+        assertTrue(dropped.get(LifecycleWsClient::HandoffTimeout), "the forced reconnect's code was dropped");
+        Queue deleted();
+        background TestThreads::run(sub () {
+            delete d;
+            deleted.push(True);
+        });
+        assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout), "the client is destroyed");
+    }
+
+    #! The heartbeat thread releases the last reference while the forced reconnect's code is deferred by the hook;
+    #! the hook's thread then ends without running it: the destructor, on the heartbeat thread, does not wait for it
+    discordDestructorOnHeartbeatDroppedReconnectTest() {
+        GatedStarter starter();
+        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger,
+            "start_thread": \starter.start()});
+        Queue events = d.events;
+        Queue lifecycle = d.lifecycle;
+        Counter release_zombie = d.release_zombie;
+        on_exit {
+            if (release_zombie.getCount()) {
+                release_zombie.dec();
+            }
+            starter.dropPending();
+        }
+        d.connect();
+        d.hold_zombie = True;
+        d.startHeartbeatForTest(100);
+        assertEq("hb-started:" + d.getCurrentConnectionId(), events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq("zombie-held", events.get(LifecycleWsClient::HandoffTimeout));
+        starter.gate_next = True;
+        # the heartbeat thread now holds the only reference
+        remove d;
+        release_zombie.dec();
+        starter.started.waitForZero(LifecycleWsClient::HandoffTimeout);
+        string destroyed = lifecycle.get(LifecycleWsClient::HandoffTimeout);
+        assertTrue(destroyed =~ /^destroyed:/, destroyed);
+        assertEq("waiting-threads", lifecycle.get(LifecycleWsClient::HandoffTimeout));
+        # the destructor waits for the deferred start; the hook's thread ends without running the code
+        assertEq(0, lifecycle.size(), "the destructor waits while the code may still run");
+        starter.dropPending();
+        assertEq("threads-done", lifecycle.get(LifecycleWsClient::HandoffTimeout), "then the destructor goes on");
+    }
+
     #! A step of the closing callback that fails does not keep the heartbeat from being stopped
     discordClosingStepsGuardedTest() {
         HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
@@ -3060,6 +3115,25 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertFalse(lt.hasOthers());
         lt.leave(t4);
         assertEq(0, lt.getCount(), "the count never goes below zero");
+
+        # the code of a start is released without being run: the start is uncounted, the ticket keeps it counted
+        # until then
+        int t5 = lt.starting();
+        {
+            WscStartTicket ticket(lt, t5);
+            assertTrue(lt.hasOthers(), "counted while its code exists");
+        }
+        assertEq(0, lt.getCount(), "uncounted when its code is released unrun");
+        assertFalse(lt.hasOthers());
+        # a start whose code ran is not uncounted by the release of the code
+        int t6 = lt.starting();
+        {
+            WscStartTicket ticket(lt, t6);
+            ticket.enter();
+        }
+        assertEq(1, lt.getCount(), "a start that ran is counted until it leaves");
+        lt.leave(t6);
+        assertEq(0, lt.getCount());
 
         # closed: no start
         lt.close();
@@ -3771,6 +3845,12 @@ class GatedStarter {
         } catch (hash<ExceptionInfo> ex) {
             TestThreads::report(ex);
         }
+    }
+
+    #! releases the deferred code without running it, and ends the thread that waits for it
+    dropPending() {
+        remove pending;
+        startPending();
     }
 
     #! releases the deferred code
