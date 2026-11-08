@@ -424,9 +424,14 @@ public class TableauDataProviderTest inherits QUnit::Test {
     #! Trigger example data tests
     triggerExampleDataTests() {
         checkJson();
+        # the polling triggers request their example data from a local server that closes each connection, so they
+        # fall back to generated example data without a request to Tableau
+        ClosingTestServer server();
+        on_exit server.stop();
         TableauDataProvider::TableauDataProvider prov({
             "tableaurestclient_options": {
-                "subdomain": "fake-pod",
+                "url": sprintf("https://127.0.0.1:%d/api/3.27", server.getPort()),
+                "protocol": "h1",
                 "token_name": "fake-token-name",
                 "token_secret": "fake-token-secret",
             },
@@ -491,6 +496,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
                     "watch-projects example should have 'name' field");
             }
         }
+        assertGt(0, server.getConnections(), "the polling triggers requested their example data from the local server");
     }
 
     #! Negative tests - test error handling and invalid inputs

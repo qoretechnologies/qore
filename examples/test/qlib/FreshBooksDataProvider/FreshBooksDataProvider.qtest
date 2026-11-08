@@ -38,6 +38,7 @@
 %requires FreshBooksDataProvider
 %requires HttpServerUtil
 %requires HttpServer
+%requires ../../ClosingTestServer.qm
 
 %exec-class FreshBooksDataProviderTest
 
@@ -591,24 +592,19 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
     #! Trigger example data tests - verify getExampleEventData() for all triggers
     triggerExampleDataTests() {
         checkJson();
-        FreshBooksDataProvider::FreshBooksDataProvider prov;
-        try {
-            prov = new FreshBooksDataProvider::FreshBooksDataProvider({
-                "freshbooksrestclient_options": {
-                    "token": "fake-token",
-                    "account_id": "fake-account",
-                    "business_id": "fake-business",
-                },
-            });
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "OAUTH2-ERROR") {
-                testSkip("OAuth2 requires manual authorization - skipping trigger tests");
-            }
-            if (ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
-                testSkip("no network connection - skipping trigger tests");
-            }
-            rethrow;
-        }
+        # the triggers request their example data from a local server that closes each connection, so they fall back
+        # to fake example data without a request to FreshBooks
+        ClosingTestServer server();
+        on_exit server.stop();
+        FreshBooksDataProvider::FreshBooksDataProvider prov({
+            "freshbooksrestclient_options": {
+                "url": sprintf("https://127.0.0.1:%d", server.getPort()),
+                "protocol": "h1",
+                "token": "fake-token",
+                "account_id": "fake-account",
+                "business_id": "fake-business",
+            },
+        });
 
         AbstractDataProvider events = prov.getChildProvider("events");
         list<string> triggerNames = (
@@ -670,6 +666,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
         assertTrue(estimateExample.hasKey("estimateid"), "Estimate example should have estimateid");
         assertTrue(estimateExample.hasKey("estimate_number"),
             "Estimate example should have estimate_number");
+        assertGt(0, server.getConnections(), "the triggers requested their example data from the local server");
     }
 
     #! Negative tests - test error handling and invalid inputs
