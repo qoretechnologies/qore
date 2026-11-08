@@ -186,6 +186,8 @@ hash<auto> desc = {
     schema alignment.
 
     @subsection MssqlSqlUtilBasev11 MssqlSqlUtilBase v1.1
+    - fixed the server version of a connection of the \c jdbc driver, which gives it as a hash: \c MERGE (upserts)
+      and sequences were not used, as the version was taken for an unknown one
     - names of tables, columns, indexes, constraints, sequences, views, triggers, schemas, filegroups, partition
       functions and schemes, savepoints and aliases are quoted in SQL when they are not ordinary names, so that a
       name from untrusted data can never change an SQL statement; reserved words are now quoted in brackets in all
@@ -399,9 +401,35 @@ string sub mssql_drop_constraint_sql(string table_name, string name) {
     return sprintf("alter table %s drop constraint %s", table_name, mssql_get_sql_identifier(name));
 }
 
-#! returns the SQL Server major version year, or 0 for non-SQL Server / unknown version strings
+#! the release year of each SQL Server major version, as the jdbc driver gives the version by its number
+const MssqlMajorVersionYears = {
+    "8": 2000,
+    "9": 2005,
+    "10": 2008,
+    "11": 2012,
+    "12": 2014,
+    "13": 2016,
+    "14": 2017,
+    "15": 2019,
+    "16": 2022,
+    "17": 2025,
+};
+
+#! returns the SQL Server major version year, or 0 for non-SQL Server / unknown versions
+/** The freetds driver gives the server's version as a string, such as "Microsoft SQL Server 2022 (RTM) ...", and the
+    jdbc driver as a hash with the product name and the major version number; a major version after the newest known
+    one is taken for the newest known one's year
+*/
 int sub get_mssql_server_major_year(AbstractDatasource ds) {
-    *string ver = (ds.getServerVersion() =~ x/Microsoft SQL Server ([0-9]+)/)[0];
+    auto version = ds.getServerVersion();
+    if (version.typeCode() == NT_HASH) {
+        if (version.name !~ /^Microsoft SQL Server/) {
+            return 0;
+        }
+        int major = version.major_version.toInt();
+        return MssqlMajorVersionYears{major} ?? (major > 17 ? MssqlMajorVersionYears."17" : 0);
+    }
+    *string ver = (version =~ x/Microsoft SQL Server ([0-9]+)/)[0];
     return ver ? ver.toInt() : 0;
 }
 
@@ -1745,8 +1773,11 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
 
     #! returns @ref True if the DB is a Sybase database
     static bool isSybase(AbstractDatasource ds) {
-        return ds.getServerVersion() =~ /Adaptive Server/;
+        auto version = ds.getServerVersion();
+        # the jdbc driver gives the version as a hash with the product name
+        return (version.typeCode() == NT_HASH ? version.name : version) =~ /Adaptive Server/;
     }
+
 
     #! returns a string that can be used to create the schema in the database
     static string getCreateSql(list l) {

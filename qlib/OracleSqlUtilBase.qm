@@ -382,6 +382,8 @@ hash schema = (
 /** @page ora_relnotes Release Notes
 
     @section oracle17 OracleSqlUtilBase v1.7
+    - fixed the server version of a connection of the \c jdbc driver, which gives it as a hash: runtime temporary
+      tables were refused, interval partitioning was not used and row limits were taken for Oracle 11g ones
     - added @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()" with
       \c DBMS_MVIEW.REFRESH, with the \c method (\c complete, \c fast or \c force) and \c atomic_refresh options;
       as \c DBMS_MVIEW.REFRESH commits implicitly, a refresh is refused in a transaction
@@ -587,6 +589,17 @@ string sub oracle_get_sql_object_name(string name) {
         return oracle_get_sql_identifier(l[0]) + "." + oracle_get_sql_identifier(l[1]);
     }
     return oracle_get_sql_identifier(name);
+}
+
+# returns the major version of the Oracle server of a connection (ex: 19, 23): the oracle driver gives the server's
+# version as a string, such as "Oracle Database 23ai Free Release 23.0.0.0.0", and the jdbc driver as a hash with its
+# major_version
+int sub oracle_get_server_major_version(AbstractDatasource ds) {
+    auto version = ds.getServerVersion();
+    if (version.typeCode() == NT_HASH) {
+        return version.major_version.toInt();
+    }
+    return (version =~ x/([0-9]+)/)[0].toInt();
 }
 
 # returns a database link name for SQL, where it is not quoted: letters, digits, underscores, dollar and pound signs,
@@ -2558,7 +2571,7 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
             return name;
         }
         # runtime temporary tables require Oracle 18c+ private temporary tables
-        int major = (ds.getServerVersion() =~ x/([0-9]+)/)[0].toInt();
+        int major = oracle_get_server_major_version(ds);
         if (major < 18) {
             throw "TEMP-TABLE-ERROR", sprintf("cannot create temporary table %y at runtime: the Oracle server "
                 "(major version %d) does not support private temporary tables (Oracle 18c or later is required); "
@@ -4035,7 +4048,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                 get_module_hash().oracle.version);
         }
 
-        ora_major = (nds.getServerVersion() =~ x/([0-9]+)/)[0].toInt();
+        ora_major = oracle_get_server_major_version(nds);
 
         introspectSystemViews();
     }
@@ -5518,7 +5531,7 @@ group by p.index_name", schema.upr(), name.upr());
     /** @since OracleSqlUtilBase 1.6
     */
     private int getOracleServerMajorVersion() {
-        return (ds.getServerVersion() =~ x/([0-9]+)/)[0].toInt();
+        return oracle_get_server_major_version(ds);
     }
 
     private bool createPartitionsInCreateTableImpl() {
