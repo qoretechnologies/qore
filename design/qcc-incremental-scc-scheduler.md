@@ -1795,8 +1795,14 @@ which two builders can still race to restore.
   left, that code a preloaded sibling runs at parse commit finds what it calls -- a static
   method, a function and a construction -- after its caller was compiled standalone, and that a
   partial parse's constant initializers run a preloaded provider's body on every build, not every
-  other one, and that a changed member initializer rebuilds the script aggregate, not the
-  consumers, and the linked program sees the new default
+  other one
+- `examples/test/ir/CMakeBuildHelpers-generic-*.qtest` — the incremental life of one object group
+  of 24 sources through the CMake helpers, one scenario per file, each on a baseline built for it
+  (`CMakeBuildHelpersTestBase.qm`): module, sibling and symbol rebuilds and adopting the object
+  tree (`-rebuild`), qcc context transitions, the frozen graph and a broad recovery (`-context`),
+  single-component compiles and sources moved during publication (`-incremental`), the generation
+  map and the relinks it drives (`-generation`), and that a changed member initializer rebuilds the
+  script aggregate, not the consumers, and the linked program sees the new default (`-defaults`)
 - `examples/test/ir/AOTAggregateContractDefaults.qtest` — which of a source object's contracts a
   member initializer, a static or hashdecl default, a default argument, a base class constructor
   argument, a member type, a new member and a method body move

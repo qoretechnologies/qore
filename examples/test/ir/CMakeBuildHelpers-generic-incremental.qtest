@@ -1,0 +1,234 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/FsUtil.qm
+%requires ./CMakeBuildHelpersTestBase.qm
+
+%exec-class CMakeGenericIncrementalTest
+
+#! Generic qcc objects: single-component compiles
+/** One scenario of the incremental life of the generic qcc object helper project of CMakeBuildHelpersTestBase.qm,
+    on a baseline built for it.  Each scenario is a file of its own, so that none comes near the time limit of a
+    test and test shards run them side by side.
+*/
+class CMakeGenericIncrementalTest inherits CMakeBuildHelpersTestBase::GenericQccObjectTest {
+    constructor() : GenericQccObjectTest("CMakeGenericIncrementalTest", "1.0", \ARGV) {
+        addTestCase("generic qcc objects: timestamp and comment edits, and sources moved during a "
+            "component's publication", \testSingleComponentCompiles());
+        set_return_value(main());
+    }
+
+    #! Timestamp-only and comment-only edits, and provider sources moved while a component is published
+    /** Setup: the tree is current (@ref settleGenericBaseline()); the objects of the provider, its consumer and
+        the child class are still the ones the baseline's shared parse published, which the batch-to-single steps
+        compare a single-component compile with.
+
+        Steps, each on the tree the step before it left:
+        - the provider's depfile names its source by content; touching the provider rebuilds nothing
+        - a comment in the provider, then in the child class: the single-component compile publishes the contracts
+          the batch published, and the aggregate is kept
+        - another comment in the provider, now compiled alone (steady state), with the lock file a previous build
+          leaves: one generation is published; the next build converges
+        - the provider's free function body changed (A), and B written while it is published: the component is
+          rebuilt once
+        - A, B and A again: B is the body the previous step wrote, changed
+    */
+    testSingleComponentCompiles() {
+        TmpDir tmp("qore-cmake-qcc-incremental-");
+        hash<GenericQccProject> project = buildGenericBaseline(tmp.path);
+        settleGenericBaseline(project);
+
+        string src_dir = project.src_dir;
+        string build_dir = project.build_dir;
+        string provider = project.provider;
+        string child = project.child;
+        string source_runner = project.source_runner;
+        string source_qore = project.source_qore;
+        list<string> object_paths = project.object_paths;
+        string provider_object = project.provider_object;
+
+        string provider_depfile = read(provider_object + ".d");
+        assertTrue(provider_depfile.find("/source-content/") != -1,
+            "object depfile records a source-content digest: " + provider_depfile);
+        assertEq(-1, provider_depfile.find(provider),
+            "object depfile does not retain the raw primary source path: "
+                + provider_depfile);
+        hash<string, date> object_mtimes = {};
+        foreach string object_path in (object_paths) {
+            object_mtimes{object_path} = mtime(object_path);
+        }
+        run(sprintf("cmake -E touch %s", provider));
+        string timestamp_only = run(buildCommand(build_dir));
+        assertTrue(timestamp_only.find("qcc -c:") == -1
+                && timestamp_only.find("qcc: scanning") == -1,
+            "timestamp-only source change stops after content validation: "
+                + timestamp_only);
+        foreach string object_path in (object_paths) {
+            assertEq(object_mtimes{object_path}, mtime(object_path),
+                "timestamp-only source change preserves object: " + object_path);
+        }
+
+        string consumer_object = object_paths[1];
+        date batch_consumer_mtime = mtime(consumer_object);
+        string batch_provider_contract = read(
+            provider_object + ".compile-contract.stamp");
+        string batch_provider_aggregate_contract = read(
+            provider_object + ".aggregate-contract.stamp");
+        date script_aggregate_mtime = mtime(build_dir + "/script-aggregate.qo");
+        write(provider, read(provider) + "# compile-contract no-op\n");
+        string batch_to_single = run(buildCommand(build_dir));
+        assertEq(batch_provider_contract,
+            read(provider_object + ".compile-contract.stamp"),
+            "batch and single compilation publish the same provider contract: "
+                + batch_to_single);
+        assertEq(batch_provider_aggregate_contract,
+            read(provider_object + ".aggregate-contract.stamp"),
+            "batch and single compilation publish the same aggregate contract: "
+                + batch_to_single);
+        assertEq(script_aggregate_mtime, mtime(build_dir + "/script-aggregate.qo"),
+            "comment-only edit does not regenerate the script aggregate: "
+                + batch_to_single);
+        assertEq(batch_consumer_mtime, mtime(consumer_object),
+            "batch-to-single provider rebuild preserves the unqualified caller: "
+                + batch_to_single);
+
+        string child_object = object_paths[3];
+        string batch_child_aggregate_contract = read(
+            child_object + ".aggregate-contract.stamp");
+        date child_script_aggregate_mtime = mtime(build_dir + "/script-aggregate.qo");
+        write(child, read(child) + "# inherited-class aggregate no-op\n");
+        string child_batch_to_single = run(buildCommand(build_dir));
+        assertEq(batch_child_aggregate_contract,
+            read(child_object + ".aggregate-contract.stamp"),
+            "batch and single compilation publish the same inherited-class "
+                "aggregate contract: " + child_batch_to_single);
+        assertEq(child_script_aggregate_mtime,
+            mtime(build_dir + "/script-aggregate.qo"),
+            "inherited-class comment edit does not regenerate the script aggregate: "
+                + child_batch_to_single);
+
+        date consumer_mtime = mtime(consumer_object);
+        write(provider, read(provider) + "# second compile-contract no-op\n");
+        # The build unit is the provider's strongly connected component, so the
+        # lock that serializes its publication is the component generation lock.
+        string provider_lock = componentLock(build_dir, provider_object);
+        # An empty regular file at the lock path is what a previous build leaves
+        # behind: the lock is an fcntl lock, taken on this file and released by the
+        # kernel when its holder exits, so nothing removes it and nothing has to.
+        # Writing one here stands in for that, and for the empty file the flock(1)
+        # protocol used to leave -- neither is an obstacle, and neither carries any
+        # ownership for a later builder to interpret.
+        write(provider_lock, "");
+        string semantic_no_op = run(buildCommand(build_dir));
+        assertEq(consumer_mtime, mtime(consumer_object),
+            "steady-state comment-only provider edit preserves the consumer object: "
+                + semantic_no_op);
+        assertEq(1, semantic_no_op.split("qcc: script-context .qo").size() - 1,
+            "concurrent provider requests publish exactly one object generation: "
+                + semantic_no_op);
+        assertTrue(exists hlstat(provider_lock),
+            "the lock file survives the build it serialised: an fcntl lock belongs "
+            "to the open file description rather than to the path, so unlinking it "
+            "would let the next waiter lock a new inode and run alongside a holder");
+        string validated_no_op = run(buildCommand(build_dir));
+        assertTrue(validated_no_op.find("qcc -c:") == -1,
+            "provider validation converges without repeated qcc recipes: "
+                + validated_no_op);
+
+        string transient_provider = replace(read(provider),
+            "return CMakeQoProvider::label();",
+            "return \"transient-body\";");
+        string final_provider = replace(transient_provider,
+            "return \"transient-body\";", "return \"changed-body\";");
+        write(provider, transient_provider);
+        string replacement = src_dir + "/provider-replacement.qc";
+        string validation_marker = build_dir + "/qcc-input-validation.marker";
+        write(replacement, final_provider);
+        # No lock is fabricated here.  The previous protocol published a DIRECTORY
+        # with a `pid` file in it, and this case used to plant one so the builder had
+        # to reclaim it; an fcntl lock has no such shape and nothing reclaims one, so
+        # planting it now only collides with the real lock file.  What this case is
+        # actually about is below: a provider source edited while qcc is publishing
+        # is rebuilt exactly once.
+        string contract_change = run(sprintf(
+            "(i=0; while [ ! -f %s ] && [ $i -lt 500 ]; do sleep 0.01; i=$((i + 1)); done; "
+            "[ -f %s ] && cp %s %s) & watcher=$!; "
+            "QORE_QCC_TEST_INPUT_VALIDATION_MARKER=%s "
+            "QORE_QCC_TEST_INPUT_VALIDATION_SOURCE=%s "
+            "QORE_QCC_TEST_INPUT_VALIDATION_DELAY_MS=500 "
+            "cmake --build %s -- -j%d; rc=$?; wait $watcher || rc=$?; exit $rc",
+            validation_marker, validation_marker, replacement, provider,
+            validation_marker, provider, build_dir, buildJobs()));
+        # The planner announces the per-component path itself.  Matching the source name instead
+        # does not test this: that name reaches the output from the separate qo-objects target's
+        # "qcc -c:" recipe, which only echoes when that target happens to have work to do, so the
+        # assertion passed while the plan fell back to the shared-parse batch and failed where
+        # qo-objects was already up to date.
+        assertTrue(contract_change.find("stale component(s) incrementally") != -1,
+            "provider body change runs the precise incremental path: "
+                + contract_change);
+        assertTrue(contract_change.find(
+                "moved during compilation; rebuilding the component once") != -1,
+            "provider edit during qcc publication rebuilds the component once: "
+                + contract_change);
+        assertEq(-1, contract_change.find("retrying ("),
+            "a moved provider source never enters a retry loop: " + contract_change);
+        assertTrue(exists hlstat(provider_lock),
+            "an interrupted compile leaves its lock file behind and that is correct: "
+            "the lock was released by the kernel when the process ended, and the "
+            "path carries no ownership for the next builder to reclaim");
+        string changed_source_out = run(sprintf("cd %s && %s %s",
+            src_dir, source_qore, source_runner));
+        string changed_static_out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
+            qore_build_dir, build_dir + "/late-modules", build_dir + "/qo-static-host"));
+        assertEq(changed_source_out, changed_static_out,
+            "one-pass native-body incremental rebuild remains load-equivalent");
+
+        string aba_provider = read(provider) + "# stable A after transient B\n";
+        string aba_transient_provider = replace(aba_provider,
+            "return \"changed-body\";", "return \"transient-aba-body\";");
+        string aba_provider_copy = src_dir + "/provider-aba-final.qc";
+        string aba_transient_copy = src_dir + "/provider-aba-transient.qc";
+        string snapshot_marker = build_dir + "/qcc-after-input-snapshot.marker";
+        string aba_validation_marker = build_dir + "/qcc-aba-input-validation.marker";
+        write(provider, aba_provider);
+        write(aba_provider_copy, aba_provider);
+        write(aba_transient_copy, aba_transient_provider);
+        string aba_change = run(sprintf(
+            "(i=0; while [ ! -f %s ] && [ $i -lt 500 ]; do sleep 0.01; i=$((i + 1)); done; "
+            "[ -f %s ] && cp %s %s; "
+            "i=0; while [ ! -f %s ] && [ $i -lt 1000 ]; do sleep 0.01; i=$((i + 1)); done; "
+            "[ -f %s ] && cp %s %s) & watcher=$!; "
+            "QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_MARKER=%s "
+            "QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_DELAY_MS=500 "
+            "QORE_QCC_TEST_INPUT_VALIDATION_MARKER=%s "
+            "QORE_QCC_TEST_INPUT_VALIDATION_SOURCE=%s "
+            "QORE_QCC_TEST_INPUT_VALIDATION_DELAY_MS=500 "
+            "cmake --build %s -- -j%d; rc=$?; wait $watcher || rc=$?; exit $rc",
+            snapshot_marker, snapshot_marker, aba_transient_copy, provider,
+            aba_validation_marker, aba_validation_marker, aba_provider_copy, provider,
+            snapshot_marker, aba_validation_marker, provider, build_dir, buildJobs()));
+        assertTrue(aba_change.find(
+                "qcc parsed input changed after its initial snapshot") == -1,
+            "a successful A -> B -> A rebuild suppresses the superseded qcc error: "
+                + aba_change);
+        assertTrue(aba_change.find(
+                "moved during compilation; rebuilding the component once") != -1,
+            "A -> B -> A source transition rebuilds the component once: "
+                + aba_change);
+        assertEq(-1, aba_change.find("retrying ("),
+            "an A -> B -> A transition never enters a retry loop: " + aba_change);
+        string aba_source_out = run(sprintf("cd %s && %s %s",
+            src_dir, source_qore, source_runner));
+        string aba_static_out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
+            qore_build_dir, build_dir + "/late-modules", build_dir + "/qo-static-host"));
+        assertEq(aba_source_out, aba_static_out,
+            "the A -> B -> A component rebuild publishes native output for final A");
+    }
+}

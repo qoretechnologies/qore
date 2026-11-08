@@ -31,6 +31,8 @@ print_usage () {
   echo "  QORE_PERF_TESTS_ONLY    Set to '1' to run only performance tests (same as -P)."
   echo "  QORE_TEST_QMOD_DIR       Directory with AOT qmods to prefer before ./qlib."
   echo "  QORE_TEST_SOURCE_MODULES Set to '1' to ignore the default build qmod directory."
+  echo "  QORE_TEST_BUILD_JOBS     Jobs a test that builds a CMake project runs (default: the number of CPUs, at"
+  echo "                           least 2), e.g. examples/test/ir/CMakeBuildHelpers*.qtest."
   echo "  QORE_TEST_PRESERVE_PROVIDER_ENV"
   echo "                           Set to '1' to preserve external provider discovery env vars."
 }
