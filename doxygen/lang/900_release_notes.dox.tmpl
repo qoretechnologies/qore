@@ -537,6 +537,13 @@
     call into the module; every call into it is governed by its caller.  A module loaded by path or through a
     %Program's own module paths is still initialized under the loader's sandbox (see @ref sandbox_module_init)
 
+    @par Sandboxed Module Loads Cannot Replace Library Modules
+    Code that a sandbox governs, and code whose parse options restrict a functional domain, can no longer load a module
+    from outside the process-wide module path under the name of a module in the module path, which replaced the
+    library module for every later user of the process; the load raises \c LOAD-MODULE-ERROR naming the module, its
+    path and the module it would replace.  A module that such code loads from outside the module path under another
+    name is not given to code that is neither sandboxed nor restricted (see @ref sandbox_module_init)
+
     @par Reflection Member Access
     Code that a sandbox governs, and code whose parse options restrict a functional domain, may use the
     \c private and \c private:internal elements of a class through the @ref reflectionintro "reflection" module

@@ -733,14 +733,19 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         assertThrows("DATA-PROVIDER-LAZY-VALUE-ERROR", \sandboxed.callFunction(), ("reg",));
         # a module that sandboxed code loads: its value is built while it is loaded
         Program loader(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
-        loader.parse("sub load(string path) { load_module(path); }\n", "lazy-governed-value-loader");
+        loader.parse("sub load(string path) { load_module(path); }\n"
+            "auto sub get(string m) { return call_static_method(\"LazyAppActionsGovernedValues::GovernedValues\", m); }\n",
+            "lazy-governed-value-loader");
         loader.setSandboxManager(new SandboxManager());
-        loader.callFunction("load", get_script_dir() + "/LazyAppActionsGovernedValues.qm");
-        load_module(get_script_dir() + "/LazyAppActionsGovernedValues.qm");
-        assertEq(1, call_static_method("LazyAppActionsGovernedValues::GovernedValues", "getRuns"));
-        int id = call_static_method("LazyAppActionsGovernedValues::GovernedValues", "getId");
+        string path = get_script_dir() + "/LazyAppActionsGovernedValues.qm";
+        loader.callFunction("load", path);
+        # a module that sandboxed code chose is not given to trusted code
+        assertThrows("LOAD-MODULE-ERROR", "loaded from outside the module path by code that a sandbox governs",
+            \load_module(), (path,));
+        assertEq(1, loader.callFunction("get", "getRuns"));
+        int id = loader.callFunction("get", "getId");
         assertEq("governed", DataProviderActionCatalog::getLazyValue(id));
-        assertEq(1, call_static_method("LazyAppActionsGovernedValues::GovernedValues", "getRuns"));
+        assertEq(1, loader.callFunction("get", "getRuns"));
     }
 
     valueCycleTest() {
@@ -1453,17 +1458,22 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         assertEq(0, r.rc, r.output);
         # from the module path: library code, initialized with no sandbox provenance, which sets them
         assertLines(("callbacks: True True True",), r.output);
-        # a copy that sandboxed code loads by path from elsewhere is governed by its sandbox, and sets none
+        # sandboxed code cannot load a copy from elsewhere by path in place of the module in the module path, so it
+        # sets none of them
         string dir = make_tmp_dir("lazy-safety-copy-");
         on_exit remove_tree(dir);
         assertEq(0, system(sprintf("cp -R '%s' '%s'", get_script_dir() + "/../../../../qlib/ConnectionProvider", dir)));
         r = runChild("sandboxed-callback-copy", "Program loader(PO_NEW_STYLE, True);\n"
             "loader.parse(\"sub load(string path) { load_module(path); }\", \"loader\");\n"
             "loader.setSandboxManager(new SandboxManager());\n"
-            "loader.callFunction(\"load\", " + sprintf("%y", dir + "/ConnectionProvider") + ");\n"
+            "try {\n"
+            "    loader.callFunction(\"load\", " + sprintf("%y", dir + "/ConnectionProvider") + ");\n"
+            "} catch (hash<ExceptionInfo> ex) {\n"
+            "    printf(\"load: %s\\n\", ex.err);\n"
+            "}\n"
             "printf(\"callbacks: %y\\n\", DataProviderActionCatalog::hasSchemeLookupCallback());\n");
         assertEq(0, r.rc, r.output);
-        assertLines(("callbacks: False",), r.output);
+        assertLines(("load: LOAD-MODULE-ERROR", "callbacks: False"), r.output);
     }
 
     governedActionCallbacksTest() {

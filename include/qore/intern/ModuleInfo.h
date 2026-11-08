@@ -43,6 +43,7 @@ extern "C" {
 
 #include <string>
 #include <map>
+#include <set>
 #include <deque>
 #include <memory>
 #include <mutex>
@@ -726,6 +727,37 @@ public:
     */
     DLLLOCAL bool isTrustedModulePath(const char* path) const;
 
+    //! Returns the path of a module with the name given in the process-wide module path, or an empty string
+    /** Looks for a user module (\c name.qm, a separated module directory \c name/name.qm), an AOT module
+        (\c name.qmod) and a binary module (\c name-api-*.qmod) in each directory of the process-wide module path
+    */
+    DLLLOCAL std::string findTrustedModule(const char* name) const;
+
+    //! Checks a load of a module that is not in the process-wide module path for code that is not trusted
+    /** Sandboxed code, and code whose parse options restrict a functional domain, may not load a module by path, or
+        through module paths that its Program added, under the name of a module in the process-wide module path:
+        feature names are process-wide, so such a module would replace the library module for every later user.
+
+        @param path the module's file
+        @param feature the module's feature name
+        @param trusted the result of isTrustedModulePath() for \a path
+        @param tenant_chosen set to true if the load is for such code and is allowed, and the feature was not
+        recorded already: the feature is then recorded (see isTenantChosen()), and the caller removes the record with
+        clearTenantChosen() if the load fails
+
+        @return 0 if the load is allowed, -1 if \c LOAD-MODULE-ERROR was raised
+    */
+    DLLLOCAL int checkShadowingLoad(ExceptionSink& xsink, const char* path, const char* feature, bool trusted,
+            bool& tenant_chosen);
+
+    //! Removes the record of a feature made by checkShadowingLoad() when the load fails, unless the module is registered
+    /** must be called with the module manager's mutex held
+    */
+    DLLLOCAL void clearTenantChosen(const char* feature);
+
+    //! Returns true if a feature was loaded by code that is not trusted, from outside the process-wide module path
+    DLLLOCAL bool isTenantChosen(const char* feature) const;
+
     DLLLOCAL void addModuleDir(const char* dir) {
         AutoLocker al(mutex);
         moduleDirList.push_back(dir);
@@ -972,6 +1004,12 @@ protected:
 
     // list of module directories
     UniqueDirectoryList moduleDirList;
+
+    //! the features that code that is not trusted loaded from outside the process-wide module path; see
+    //! checkShadowingLoad()
+    std::set<std::string> tenant_features;
+    //! guards tenant_features
+    mutable std::mutex tenant_features_lck;
 
     DLLLOCAL QoreAbstractModule* loadModuleIntern(const char* name, QoreProgram* pgm, ExceptionSink& xsink) {
         AutoLocker sl(mutex); // make sure checking and loading are atomic

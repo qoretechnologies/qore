@@ -66,6 +66,14 @@ public class Probe {
         return SandboxManager::isSandboxed();
     }
 
+    static bool staticSandboxed() {
+        return static_sandboxed;
+    }
+
+    static bool initSandboxed() {
+        return init_sandboxed;
+    }
+
     #! True if the module was parsed with the parse define that the loader sets
 %ifdef ProbeLoaderDefine
     static bool loaderDefine() {
@@ -92,20 +100,41 @@ public class Probe {
 ";
 
         #! the child: loads the module first from a sandboxed or restricted Program, then probes it
+        /** ARGV: how the loader is restricted, what it loads, a file to read, and a directory that the loader adds to
+            its module path (\c "-" for none)
+        */
         const ChildSource = "%modern
 %no-child-restrictions
 string how = ARGV[0];
 string what = ARGV[1];
 string data = ARGV[2];
+string own_path = ARGV[3];
 SandboxManager sm();
-# restricted: also restricted with a functional domain that the module does not use
-Program loader(PO_NEW_STYLE | (how == \"restricted\" ? PO_NO_PROCESS_CONTROL : 0), True);
-loader.parse(\"%define ProbeLoaderDefine\\nsub load(string what) { load_module(what); }\", \"loader\");
-loader.setSandboxManager(sm);
-loader.callFunction(\"load\", what);
+# restricted: also restricted with a functional domain that the module does not use; restricted-only: restricted
+# with no sandbox
+Program loader(PO_NEW_STYLE | (how =~ /^restricted/ ? PO_NO_PROCESS_CONTROL : 0), True);
+loader.parse((own_path != \"-\" ? sprintf(\"%%prepend-module-path %s\\n\", own_path) : \"\")
+    + \"%define ProbeLoaderDefine\\nsub load(string what) { load_module(what); }
+auto sub get(string m) { return call_static_method(\\\"ModuleInitProbe::Probe\\\", m); }\", \"loader\");
+if (how != \"restricted-only\") {
+    loader.setSandboxManager(sm);
+}
+try {
+    loader.callFunction(\"load\", what);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"loader load: %s: %s\\n\", ex.err, ex.desc);
+    return;
+}
+map printf(\"loader %s: %y\\n\", $1, loader.callFunction(\"get\", $1)), (\"staticSandboxed\", \"initSandboxed\",
+    \"loaderDefine\");
 # trusted code
 Program trusted(PO_NEW_STYLE, True);
-trusted.loadModule(\"ModuleInitProbe\");
+try {
+    trusted.loadModule(\"ModuleInitProbe\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"trusted load: %s: %s\\n\", ex.err, ex.desc);
+    return;
+}
 trusted.parse(\"auto sub get(string m) { return call_static_method(\\\"ModuleInitProbe::Probe\\\", m); }
 string sub use(string what) {
     try {
@@ -157,6 +186,8 @@ printf(\"trusted read: %s\\n\", trusted.callFunction(\"read\", data));
         string trusted_dir;
         #! a directory outside the module path, from which a caller loads the module by path
         string other_dir;
+        #! an empty directory, the module path of the children that load a module that is not in it
+        string empty_dir;
         #! a file that the probes read
         string data_path;
     }
@@ -177,8 +208,10 @@ printf(\"trusted read: %s\\n\", trusted.callFunction(\"read\", data));
             libqore_dir, libqore_dir);
         trusted_dir = tmp.path + DirSep + "trusted";
         other_dir = tmp.path + DirSep + "other";
+        empty_dir = tmp.path + DirSep + "empty";
         mkdir(trusted_dir);
         mkdir(other_dir);
+        mkdir(empty_dir);
         data_path = tmp.path + DirSep + "data.txt";
         write(data_path, "data");
         write(tmp.path + DirSep + "child.q", ChildSource);
@@ -186,74 +219,155 @@ printf(\"trusted read: %s\\n\", trusted.callFunction(\"read\", data));
         addTestCase("from source, loaded first by sandboxed code from the module path", \sourceSandboxedTest());
         addTestCase("from source, loaded first by restricted sandboxed code from the module path", \sourceRestrictedTest());
         addTestCase("from source, loaded by sandboxed code by path from elsewhere", \sourcePathTest());
+        addTestCase("from source, loaded by restricted code by path from elsewhere", \sourceRestrictedPathTest());
+        addTestCase("from source, a sandboxed path load shadowing the module path", \sourceShadowTest());
+        addTestCase("from source, a restricted path load shadowing the module path", \sourceRestrictedShadowTest());
+        addTestCase("from source, a sandboxed load through its own module path shadowing the module path",
+            \sourceOwnPathShadowTest());
         addTestCase("AOT, loaded first by sandboxed code from the module path", \aotSandboxedTest());
         addTestCase("AOT, loaded first by restricted sandboxed code from the module path", \aotRestrictedTest());
         addTestCase("AOT, loaded by sandboxed code by path from elsewhere", \aotPathTest());
+        addTestCase("AOT, a sandboxed path load shadowing the module path", \aotShadowTest());
+        addTestCase("AOT, a sandboxed source path load shadowing an AOT module in the module path",
+            \aotLibrarySourceShadowTest());
         set_return_value(main());
     }
 
     sourceSandboxedTest() {
-        checkTrusted(run("sandboxed", ModuleName, sourceIn(trusted_dir)));
+        sourceIn(trusted_dir);
+        checkTrusted(run("sandboxed", ModuleName, trusted_dir));
     }
 
     sourceRestrictedTest() {
-        checkTrusted(run("restricted", ModuleName, sourceIn(trusted_dir)));
+        sourceIn(trusted_dir);
+        checkTrusted(run("restricted", ModuleName, trusted_dir));
     }
 
     sourcePathTest() {
         string path = sourceIn(other_dir);
-        string out = run("sandboxed", path, path);
-        checkGoverned(out);
-        # a module that a caller chose is parsed with the caller's parse defines
-        assertEq(1, ModuleInitProvenanceTest::count(("loader define: True",), out), out);
+        checkGoverned(run("sandboxed", path, empty_dir), True, True);
+    }
+
+    sourceRestrictedPathTest() {
+        string path = sourceIn(other_dir);
+        checkGoverned(run("restricted-only", path, empty_dir), False, True);
+    }
+
+    sourceShadowTest() {
+        string library = sourceIn(trusted_dir);
+        string path = sourceIn(other_dir);
+        checkShadowRefused(run("sandboxed", path, trusted_dir), path, library);
+    }
+
+    sourceRestrictedShadowTest() {
+        string library = sourceIn(trusted_dir);
+        string path = sourceIn(other_dir);
+        checkShadowRefused(run("restricted-only", path, trusted_dir), path, library);
+    }
+
+    sourceOwnPathShadowTest() {
+        string library = sourceIn(trusted_dir);
+        string path = sourceIn(other_dir);
+        checkShadowRefused(run("sandboxed", ModuleName, trusted_dir, other_dir), path, library);
     }
 
     aotSandboxedTest() {
         *string qmod = aotIn(trusted_dir);
         if (qmod) {
-            checkTrusted(run("sandboxed", ModuleName, qmod));
+            checkTrusted(run("sandboxed", ModuleName, trusted_dir));
         }
     }
 
     aotRestrictedTest() {
         *string qmod = aotIn(trusted_dir);
         if (qmod) {
-            checkTrusted(run("restricted", ModuleName, qmod));
+            checkTrusted(run("restricted", ModuleName, trusted_dir));
         }
     }
 
     aotPathTest() {
         *string qmod = aotIn(other_dir);
         if (qmod) {
-            checkGoverned(run("sandboxed", qmod, qmod));
+            # an AOT module was compiled without the loader's parse defines
+            checkGoverned(run("sandboxed", qmod, empty_dir), True, False);
+        }
+    }
+
+    aotShadowTest() {
+        *string library = aotIn(trusted_dir);
+        *string qmod = aotIn(other_dir);
+        if (library && qmod) {
+            checkShadowRefused(run("sandboxed", qmod, trusted_dir), qmod, library);
+        }
+    }
+
+    aotLibrarySourceShadowTest() {
+        *string library = aotIn(trusted_dir);
+        if (library) {
+            string path = sourceIn(other_dir);
+            checkShadowRefused(run("sandboxed", path, trusted_dir), path, library);
         }
     }
 
     #! A module from the module path: its initialization and what it created belong to no sandbox
     private checkTrusted(string out) {
         # library code is not shaped by the parse defines of sandboxed code that loads it
-        assertLines(("static: False", "init: False", "trusted call: False", "loader define: False", "static_obj: worked",
+        assertLines(("loader staticSandboxed: False", "loader initSandboxed: False", "loader loaderDefine: False",
+            "static: False", "init: False", "trusted call: False", "loader define: False", "static_obj: worked",
             "init_obj: worked", "init_cb: called", "tenant call: True", "tenant read: FILESYSTEM-ACCESS-DENIED",
             "trusted read: data"), out);
     }
 
-    #! A module that sandboxed code loaded by path: its initialization and what it created belong to the sandbox
-    private checkGoverned(string out) {
-        assertLines(("static: True", "init: True", "static_obj: PROGRAM-INTERRUPTED",
-            "init_obj: PROGRAM-INTERRUPTED", "init_cb: PROGRAM-INTERRUPTED", "tenant call: True",
-            "tenant read: FILESYSTEM-ACCESS-DENIED"), out);
+    #! A module that sandboxed or restricted code loaded by path
+    /** Its initialization belongs to the loader's sandbox, if any; it is parsed with the loader's parse defines, and
+        it does not satisfy trusted code, which would otherwise use a module and its state chosen by that code
+
+        @param out the child's output
+        @param sandboxed if the loader is sandboxed
+        @param source if the module was loaded from source, so that the loader's parse defines apply
+    */
+    private checkGoverned(string out, bool sandboxed, bool source) {
+        assertLines((sprintf("loader staticSandboxed: %y", sandboxed), sprintf("loader initSandboxed: %y", sandboxed),
+            sprintf("loader loaderDefine: %y", source)), out);
+        assertRegex("^trusted load: LOAD-MODULE-ERROR: cannot use module 'ModuleInitProbe' \\(.*" + ModuleName
+            + "\\.qmo?d?\\): it was loaded from outside the module path by code that a sandbox governs or whose "
+            "functional domains are restricted", ModuleInitProvenanceTest::line("trusted load:", out) ?? "", out);
+        assertNothing(ModuleInitProvenanceTest::line("static:", out), out);
+    }
+
+    #! A load by code that is not trusted of a module from elsewhere that has the name of a module in the module path
+    private checkShadowRefused(string out, string path, string library) {
+        string expected = sprintf("loader load: LOAD-MODULE-ERROR: cannot load module '%s' from path '%s': code that a "
+            "sandbox governs or whose functional domains are restricted cannot load a module outside the module path "
+            "under the name of module '%s' in the module path, which it would replace for every later user",
+            ModuleName, path, library);
+        assertEq(expected, ModuleInitProvenanceTest::line("loader load:", out), out);
+        assertNothing(ModuleInitProvenanceTest::line("loader staticSandboxed:", out), out);
     }
 
     #! Runs the child with the module path given; returns its output
-    private string run(string how, string what, string module_file) {
-        string module_dir = dirname(module_file);
+    /** @param how how the loader is restricted: \c sandboxed, \c restricted (and sandboxed) or \c restricted-only
+        @param what what the loader loads, a module name or a path
+        @param module_path the child's process-wide module path
+        @param own_path a directory that the loader adds to its own module path, or \c "-" for none
+    */
+    private string run(string how, string what, string module_path, string own_path = "-") {
         string output = tmp.path + DirSep + "output.txt";
-        string cmd = sprintf("%s QORE_MODULE_DIR='%s' '%s' '%s' '%s' '%s' '%s' > '%s' 2>&1", env, trusted_dir,
-            qore_bin, tmp.path + DirSep + "child.q", how, what, data_path, output);
+        string cmd = sprintf("%s QORE_MODULE_DIR='%s' '%s' '%s' '%s' '%s' '%s' '%s' > '%s' 2>&1", env, module_path,
+            qore_bin, tmp.path + DirSep + "child.q", how, what, data_path, own_path, output);
         int rc = system(cmd);
         string out = ReadOnlyFile::readTextFile(output);
         assertEq(0, rc, out);
         return out;
+    }
+
+    #! Returns the first line of the output that starts with the prefix given, trimmed, or NOTHING
+    private static *string line(string prefix, string output) {
+        foreach string line in (map trim($1), output.split("\n")) {
+            if (line.equalPartial(prefix)) {
+                return line;
+            }
+        }
     }
 
     #! Writes the module source into a directory, removing an AOT module there; returns the source's path
@@ -286,17 +400,6 @@ printf(\"trusted read: %s\\n\", trusted.callFunction(\"read\", data));
             unlink(dir_src);
         }
         return qmod;
-    }
-
-    #! Returns how many of the lines given are lines of the output, in that order
-    private static int count(list<string> expected, string output) {
-        int i = 0;
-        foreach string line in (map trim($1), output.split("\n")) {
-            if (i < expected.size() && line == expected[i]) {
-                ++i;
-            }
-        }
-        return i;
     }
 
     #! Asserts that the lines given are lines of the output, in that order

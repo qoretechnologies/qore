@@ -220,6 +220,17 @@ authenticate();
     \c %prepend-module-path or \c %append-module-path, is not library code: it is initialized under the sandbox of
     the code that loads it, and a source module's %Program keeps that sandbox, as before.
 
+    Module names are process-wide: once a module is loaded, every later request for its name gets that module.  So
+    that code that is not trusted cannot replace a library module, or hand trusted code a module of its own choosing,
+    loads by code that a sandbox governs, and by code whose parse options restrict a functional domain, are limited:
+    - such code cannot load a module from outside the process-wide module path (by path, through a module path that
+      its %Program added, or from source) under the name of a module in the process-wide module path; the load
+      raises \c LOAD-MODULE-ERROR, naming the module, the path it was loaded from and the module in the module path
+      that it would replace
+    - a module that such code loaded from outside the process-wide module path under any other name is not given to
+      other code: a later request for its name from code that is neither sandboxed nor restricted, including a
+      reload, raises \c LOAD-MODULE-ERROR, naming the module and its file
+
     @section sandbox_filesystem Filesystem Security
 
     The filesystem security system controls which paths can be accessed by sandboxed code. It supports:

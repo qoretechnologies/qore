@@ -96,6 +96,18 @@ its caller.
 A module loaded by path, or through a Program's own `%prepend-module-path` / `%append-module-path`, is chosen by its
 caller: it is initialized under the loader's sandbox, and a source module's Program keeps the loader's manager.
 
+Feature names are process-wide (`QoreModuleManager::map`), so a module chosen by code that is not trusted (sandboxed,
+or with restricting runtime parse options) is fenced off in both orders (`QoreModuleManager::checkShadowingLoad()`):
+
+- such code cannot load a module from outside the module path (by path, through its own module paths, or from
+  source) under the name of a module in the module path (`findTrustedModule()`: `name.qm`, `name.qmod`,
+  `name/name.qm`, `name-api-*.qmod` in each module path directory); the load raises `LOAD-MODULE-ERROR`;
+- a module that such code did load from outside the module path is recorded (`tenant_features`, recorded before the
+  load and removed again if it fails without registering the module), and a later request for its name from code
+  that is not sandboxed and not restricted, a reload included, raises `LOAD-MODULE-ERROR` in `loadModuleIntern()`.
+
+Other code that is not trusted still gets such a module by name, as before: module names are not per sandbox.
+
 What this means for an audit:
 
 - a module's initialization may build shared state (registries, factories, types, worker capabilities) without
