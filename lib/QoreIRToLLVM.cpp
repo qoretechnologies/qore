@@ -15401,6 +15401,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     auto replace_fn = module.getOrInsertFunction("qore_rt_element_local_replace",
                         llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
                     llvm::Value* cache_val = builder->CreateCall(replace_fn, {old_val, owned_boxed, xsink_arg});
+                    // the cache takes its value before the exception check: the helper released the value it
+                    // replaced, whose destructor can raise an exception, and the exit release of the cache must not
+                    // release it again
+                    // raw local cache: the value after the store
+                    builder->CreateStore(cache_val, it->second.storage());
                     // the referenced lvalue can be a variable whose value another cache holds
                     llvm::Value* wrote_through = builder->CreateICmpNE(cache_val, owned_boxed);
                     llvm::AllocaInst* epoch_alloca = getOrCreateLocalReloadEpoch(llvm_func);
