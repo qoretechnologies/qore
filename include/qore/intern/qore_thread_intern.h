@@ -404,6 +404,12 @@ DLLLOCAL RuntimeLocationCache get_runtime_location_cache();
     sandboxed application program inherits the caller's sandbox. */
 DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_manager_ref();
 
+#ifdef DEBUG
+//! Debug-only: like qore_find_thread_sandbox_manager_ref(), and sets @a pgm_id to the ID of the Program the manager
+//! was found on (0 if none); for the unit tests
+DLLLOCAL QoreSandboxManager* qore_dbg_find_thread_sandbox_manager_ref(qore_program_id_t* pgm_id);
+#endif
+
 //! Returns whether target is an enclosing caller reached only through user-module contexts.
 /** Starts at the captured caller, ignoring context switches made by the reflection API itself.
     The first non-module Program is included but is never crossed. Cancellation is reported in xsink.
@@ -634,6 +640,8 @@ public:
 };
 
 //! Makes the sandbox manager lookups of the current thread return a captured context while the object exists
+class ProgramThreadCountContextHelper;
+
 class QoreSandboxContextHelper {
 public:
     //! Applies the context; the context must remain valid while the helper exists
@@ -646,6 +654,7 @@ public:
 
 private:
     const QoreSandboxContext* old_ctx = nullptr;
+    const ProgramThreadCountContextHelper* old_pgm_ctx = nullptr;
     bool active = false;
 };
 

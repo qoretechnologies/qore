@@ -1,0 +1,432 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  RestClientIoPingOAuth2Race.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The OAuth2 token endpoint of a polling ping, reached through the race of automatic protocol selection.
+
+    The token endpoint is a TLS server whose UDP port number refuses datagrams, so the HTTP/3 candidate of the race is
+    refused (ICMP port unreachable) and closes after the refusal grace period, while the HTTP/2 candidate is held
+    before its TLS handshake: the race is unresolved when the closed HTTP/3 candidate is reported to the ping.  Every
+    proof is a state that was reached, not a time measured.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires RestClient
+%requires RestClientIo
+%requires json
+%requires ../../TestCertificates.qm
+
+%exec-class RestClientIoPingOAuth2RaceTest
+
+#! An OAuth2 token endpoint over TLS that offers only HTTP/1.1 with ALPN; its UDP port number refuses datagrams
+/** Every response closes its connection, so the number of connections accepted is the number of TCP connection
+    attempts that the client made.  A connection can be held before its TLS handshake (see @ref hold()), so that it
+    cannot settle until it is released.
+
+    QUIC datagrams sent to the port number of the listener must be refused (ICMP port unreachable), so no socket may
+    receive them, and the port number must stay so while the server runs.  It is held for UDP by a socket that is
+    connected to another UDP socket of the server: a connected UDP socket receives only the datagrams of its peer, so
+    a datagram from the client finds no socket and is refused, while the port stays bound:
+    - on Linux, no other socket can be bound to the port number on 127.0.0.1, 0.0.0.0 or the IPv6 wildcard address
+      while the socket holds it, and the system does not assign it to another socket
+    - on macOS, the same holds for a socket that does not set \c SO_REUSEADDR or \c SO_REUSEPORT, and the system
+      does not assign the port number to another socket either; a program that sets one of these options and binds
+      the port number explicitly can share it, on 127.0.0.1 or a wildcard address, and would receive the datagrams.
+      No socket state prevents that on macOS and still refuses the datagrams: an unconnected socket on 127.0.0.1 or
+      on a wildcard address would receive them itself, a socket on 127.0.0.1 does not keep such a program off the
+      wildcard addresses, and connecting a socket on a wildcard address binds it to the address of its route
+*/
+class TokenServer {
+    public {
+        #! The fail-safe bound of the waits of the server for an event that is due
+        const EventTimeout = 20s;
+
+        #! The number of port numbers tried when another program uses the port number of the UDP socket for TCP
+        const MaxPortAttempts = 20;
+
+        #! The access token returned
+        const AccessToken = "raced-access-token";
+    }
+
+    private {
+        #! The TLS listener
+        Socket listener;
+
+        #! The port of the listener
+        int port;
+
+        #! The UDP socket that holds the port number of the listener, connected to @ref udp_peer
+        *Socket udp_guard;
+
+        #! The UDP socket that @ref udp_guard is connected to; it never sends a datagram
+        Socket udp_peer();
+
+        #! Guards the members below
+        Mutex m();
+
+        #! The number of TCP connections accepted
+        int connection_count = 0;
+
+        #! The paths of the requests answered
+        list<string> requests = ();
+
+        #! True once the server is stopping
+        bool stopping = False;
+
+        #! Connection number -> the gate that its TLS handshake waits for
+        hash<string, Counter> holds = {};
+
+        #! The accept loop
+        Counter running(1);
+
+        #! The connection handlers in progress
+        Counter handlers();
+    }
+
+    #! Creates the server and starts accepting connections
+    constructor() {
+        # the UDP socket that holds the port number gets its port from the system, and the listener is bound to the
+        # same port number for TCP; another port number is used if another program uses the port number for TCP
+        udp_peer.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+        int peer_port = udp_peer.getSocketInfo().port;
+        for (int attempt = 1; ; ++attempt) {
+            Socket u();
+            u.connectINET("127.0.0.1", peer_port, EventTimeout, AF_INET, SOCK_DGRAM);
+            int p = u.getSocketInfo().port;
+            Socket tcp();
+            tcp.setCertificate(new SSLCertificate(TestCertificates::CertPem));
+            tcp.setPrivateKey(new SSLPrivateKey(TestCertificates::KeyPem));
+            try {
+                tcp.bindINET("127.0.0.1", string(p), True);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "SOCKET-BIND-ERROR" || attempt == MaxPortAttempts) {
+                    rethrow;
+                }
+                continue;
+            }
+            if (tcp.listen()) {
+                if (attempt == MaxPortAttempts) {
+                    throw "SOCKET-LISTEN-ERROR", sprintf("cannot listen on 127.0.0.1:%d: %s", p, strerror(errno()));
+                }
+                continue;
+            }
+            udp_guard = u;
+            listener = tcp;
+            port = p;
+            break;
+        }
+        background serve();
+    }
+
+    destructor() {
+        stop();
+    }
+
+    #! Returns the port number of the token endpoint, for TCP and UDP
+    int getPort() {
+        return port;
+    }
+
+    #! Returns the URL of the token endpoint
+    string getTokenUrl() {
+        return sprintf("https://127.0.0.1:%d/oauth/token", port);
+    }
+
+    #! Returns the number of TCP connections accepted
+    int getConnectionCount() {
+        AutoLock al(m);
+        return connection_count;
+    }
+
+    #! Returns the paths of the requests answered
+    list<string> getRequests() {
+        AutoLock al(m);
+        return requests;
+    }
+
+    #! Holds the TLS handshake of the given connection until @ref release() is called
+    /** @param n the number of the connection, counting from 1; it must not have been accepted yet
+    */
+    hold(int n) {
+        AutoLock al(m);
+        @assert(n > connection_count);
+        holds{n} = new Counter(1);
+    }
+
+    #! Releases a connection held with @ref hold()
+    release(int n) {
+        *Counter gate;
+        {
+            AutoLock al(m);
+            gate = remove holds{n};
+        }
+        if (gate) {
+            gate.dec();
+        }
+    }
+
+    #! Stops the server: releases held connections, ends the accept loop and waits for all connection handlers
+    /** The accept loop is unblocked with a throwaway connection rather than a timed wait, so teardown is
+        deterministic
+    */
+    stop() {
+        list<Counter> gates;
+        {
+            AutoLock al(m);
+            if (stopping) {
+                return;
+            }
+            stopping = True;
+            gates = holds.values() ?? ();
+            holds = {};
+        }
+        foreach Counter gate in (gates) {
+            gate.dec();
+        }
+        try {
+            Socket s();
+            s.connect(sprintf("127.0.0.1:%d", port));
+            s.close();
+        } catch (hash<ExceptionInfo> ex) {
+            # the accept loop has already exited
+        }
+        running.waitForZero();
+        handlers.waitForZero();
+        try { listener.close(); } catch () {}
+        try { udp_guard.close(); } catch () {}
+        try { udp_peer.close(); } catch () {}
+    }
+
+    #! Accepts connections until the server stops
+    private serve() {
+        on_exit running.dec();
+        while (True) {
+            Socket client;
+            try {
+                client = listener.accept();
+            } catch (hash<ExceptionInfo> ex) {
+                break;
+            }
+            *Counter gate;
+            {
+                AutoLock al(m);
+                if (stopping) {
+                    try { client.close(); } catch () {}
+                    break;
+                }
+                gate = holds{++connection_count};
+            }
+            handlers.inc();
+            background handleConnection(client, gate);
+        }
+    }
+
+    #! Answers one HTTP/1.1 request over TLS with a token, offering only HTTP/1.1 with ALPN
+    private handleConnection(Socket client, *Counter gate) {
+        on_exit handlers.dec();
+        try {
+            if (gate) {
+                gate.waitForZero();
+            }
+            client.setAlpnProtocols(("http/1.1",));
+            client.upgradeServerToSSL(EventTimeout);
+            # an HTTP/2 client closes the connection here, since HTTP/1.1 was selected, so a failure to read is an
+            # expected outcome, not a failure of the test
+            hash<auto> hdr = client.readHTTPHeader(EventTimeout);
+            int len = (hdr."content-length" ?? 0).toInt();
+            if (len > 0) {
+                client.recvBinary(len, EventTimeout);
+            }
+            {
+                AutoLock al(m);
+                requests += hdr.path;
+            }
+            string body = make_json({
+                "access_token": AccessToken,
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            });
+            client.send(sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %d\r\n"
+                "Connection: close\r\n\r\n%s", body.size(), body));
+        } catch (hash<ExceptionInfo> ex) {
+            # the peer went away
+        }
+        try { client.close(); } catch () {}
+    }
+}
+
+#! The ping target: answers every request and records its Authorization header
+class PingHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! The Authorization headers of the requests received, in order
+        list<*string> authorizations = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        authorizations += hdr.authorization;
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"ok": True}),
+        };
+    }
+}
+
+#! A polling ping that gives the test the connection to the token endpoint that it tracks, and that client
+class TestPingOp inherits RestClientIoPingPollOperation {
+    constructor(RestClient::RestConnection conn, hash<auto> ping_opts)
+            : RestClientIoPingPollOperation(conn, ping_opts) {
+    }
+
+    #! Returns the connection to the OAuth2 token endpoint whose failure the ping tracks, if any
+    *HttpClientIo::HttpClientConnection getTrackedOAuth2Connection() {
+        return oauth2_connection_ready_conn;
+    }
+
+    #! Returns the client for the OAuth2 token endpoint, if a token request was started
+    *RestClientIo getOAuth2Client() {
+        return oauth2_rcio;
+    }
+
+    #! Returns the client for the ping target
+    RestClientIo getClient() {
+        return rcio;
+    }
+}
+
+public class RestClientIoPingOAuth2RaceTest inherits QUnit::Test {
+    constructor() : Test("RestClientIoPingOAuth2RaceTest", "1.0") {
+        addTestCase("a losing HTTP/3 candidate of the token endpoint is not a failed connection attempt",
+            \losingH3TokenCandidateTest());
+        set_return_value(main());
+    }
+
+    #! The ping refreshes its token although the HTTP/3 candidate of the token endpoint fails
+    /** The HTTP/3 candidate of the token endpoint is refused and closes while the race is unresolved: the HTTP/2
+        candidate is held until then.  The ping tolerates no failed connection attempt (MaxConnectAttempts is 1), so
+        counting the closed candidate as one would end it with the refusal; the race instead goes on with HTTP/2,
+        which is refused via ALPN, and HTTP/1.1, which wins.
+    */
+    losingH3TokenCandidateTest() {
+        HttpServer ping_server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit ping_server.stop();
+        int ping_port = ping_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        PingHandler ping_handler();
+        ping_server.setHandler("ping", "", NOTHING, ping_handler);
+        ping_server.setDefaultHandler("ping", ping_handler);
+
+        TokenServer token_server();
+        on_exit token_server.stop();
+        # the UDP port number of the token endpoint stays held: no other socket can be bound to it and receive the
+        # QUIC datagrams of the client instead of the system refusing them
+        foreach string addr in ("127.0.0.1", "0.0.0.0") {
+            assertThrows("SOCKET-BIND-ERROR", sub () {
+                Socket s();
+                s.bindINET(addr, string(token_server.getPort()), False, AF_INET, SOCK_DGRAM);
+            }, NOTHING, addr);
+        }
+        # connection 1 is the HTTP/2 candidate of the race; HTTP/3 does not connect over TCP
+        token_server.hold(1);
+
+        # the token expires soon, so the ping refreshes it before the first request
+        RestConnection rc("ping-oauth2-race", "ping-oauth2-race", sprintf("http://127.0.0.1:%d", ping_port), {}, {
+            "data": "json",
+            "ping_method": "GET",
+            "ping_path": "/ping",
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "test-client-id",
+            "oauth2_client_secret": "test-client-secret",
+            "oauth2_token_url": token_server.getTokenUrl(),
+            "token": "initial-access-token",
+            "token_type": "Bearer",
+            "oauth2_refresh_token": "initial-refresh-token",
+            "oauth2_token_expiry": now_us() + 5s,
+        });
+        TestPingOp op(rc, {"ping_method": "GET", "ping_path": "/ping"});
+        on_exit op.abort();
+
+        # the token endpoint is reached through a race of automatic protocol selection, whose HTTP/3 candidate the
+        # ping tracks; it belongs to the race of the token endpoint's client, not of the ping target's client
+        *RestClientIo token_client = op.getOAuth2Client();
+        assertTrue(exists token_client, "the token request was started");
+        *HttpClientIo::HttpClientConnection h3 = op.getTrackedOAuth2Connection();
+        assertEq("h3", h3.getProtocol(), "the ping tracks the HTTP/3 candidate of the race");
+        assertTrue(token_client.getConnectionManager().isUnresolvedRaceLeg(h3),
+            "the HTTP/3 candidate is a leg of the race of the token endpoint's client");
+        assertFalse(op.getClient().getConnectionManager().isUnresolvedRaceLeg(h3),
+            "the HTTP/3 candidate is not a leg of a race of the ping target's client");
+
+        *hash<ExceptionInfo> ex = drive(op, h3, token_server);
+        on_error if (ex) {
+            printf("ping error: %s: %s\n", ex.err, ex.desc);
+        }
+        assertNothing(ex, "the ping succeeds");
+        assertTrue(op.goalReached(), "the ping succeeds");
+
+        # the HTTP/3 candidate failed (it was refused) while the race was unresolved
+        assertTrue(h3.isClosed(), "the HTTP/3 candidate is closed");
+        assertEq("QUIC-CONNECT-REFUSED", h3.getPollOperation().getError().err, "the HTTP/3 candidate was refused");
+        # HTTP/2 was refused via ALPN and HTTP/1.1 won: the token was requested once, on the HTTP/1.1 connection
+        assertEq(2, token_server.getConnectionCount(), "the HTTP/2 candidate and the HTTP/1.1 candidate");
+        assertEq(("/oauth/token",), token_server.getRequests());
+        # the ping was made with the new token
+        assertEq(("Bearer " + TokenServer::AccessToken,), ping_handler.authorizations);
+    }
+
+    #! Drives the ping until it ends, releasing the HTTP/2 candidate of the token endpoint once HTTP/3 has closed
+    /** The race cannot resolve while the HTTP/2 candidate is held, and it only advances when the ping acquires the
+        connection again, so the ping is told about the closed HTTP/3 candidate while the race is unresolved
+
+        @return the exception that ended the ping, if any
+    */
+    private *hash<ExceptionInfo> drive(TestPingOp op, HttpClientIo::HttpClientConnection h3, TokenServer server) {
+        bool released = False;
+        try {
+            while (True) {
+                if (!released && h3.isClosed()) {
+                    server.release(1);
+                    released = True;
+                }
+                *hash<SocketPollInfo> info = op.continuePoll();
+                if (!info) {
+                    return;
+                }
+                # waits for the notifier of the ping; the bound is a fail-safe, and the ping handles a wakeup without
+                # a notification like its own poll timeout
+                Socket::poll((info,), TokenServer::EventTimeout);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+}

@@ -1,0 +1,263 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class AppNamesNoInitTest
+
+#! Verifies DataProviderActionCatalog::getAppNamesNoInit()
+/** The names of registered and pending applications are returned without initializing any pending application,
+    in their original case; an application whose deferred initialization is running is listed, one whose
+    initialization failed and one that was deregistered are not.
+*/
+public class AppNamesNoInitTest inherits QUnit::Test {
+    constructor() : Test("DataProviderActionCatalog::getAppNamesNoInit()", "1.0") {
+        addTestCase("registered and pending apps are listed, and no pending app is initialized", \listTest());
+        addTestCase("an app whose initialization is running in another thread is listed throughout",
+            \initializingTest());
+        addTestCase("an app whose initialization failed or that was deregistered is not listed", \goneTest());
+        addTestCase("an app deregistered while its initialization runs is not listed", \deregisterInitializingTest());
+        addTestCase("an app whose initializer registers nothing is not listed until it is registered again",
+            \initializerRegistersNothingTest());
+        addTestCase("a pending action of an app that is not registered lists no app", \pendingActionTest());
+        addTestCase("an initializer can read the names", \reentrantTest());
+        addTestCase("concurrent registration and initialization never hide a listed app", \concurrencyTest());
+        set_return_value(main());
+    }
+
+    private static hash<DataProviderAppInfo> appInfo(string app) {
+        return <DataProviderAppInfo>{
+            "name": app,
+            "display_name": app,
+            "short_desc": "app names test",
+            "desc": "app names test",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": "image/svg+xml",
+            "logo_file_name": "test.svg",
+            "dynamic": True,
+        };
+    }
+
+    private static string newName(string prefix) {
+        return prefix + "_" + get_random_string(8);
+    }
+
+    private static hash<string, bool> names() {
+        return map {$1: True}, DataProviderActionCatalog::getAppNamesNoInit();
+    }
+
+    private listTest() {
+        # names in mixed case: the case is kept
+        string registered = newName("AppNamesRegistered_MixedCase");
+        string pending = newName("AppNamesPending_MixedCase");
+        DataProviderActionCatalog::registerApp(appInfo(registered));
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(registered);
+        Counter initialized();
+        DataProviderActionCatalog::registerPendingApp(pending, sub () {
+            initialized.inc();
+            DataProviderActionCatalog::registerApp(appInfo(pending));
+        });
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(pending);
+
+        int revision = DataProviderActionCatalog::getCatalogRevision();
+        list<string> l = DataProviderActionCatalog::getAppNamesNoInit();
+        assertTrue(inlist(registered, l), "a registered app is listed");
+        assertTrue(inlist(pending, l), "a pending app is listed");
+        assertFalse(inlist(registered.lwr(), l), "the name keeps its case");
+        assertEq(sort(l), l, "the names are sorted");
+        assertEq(l.size(), (map {$1: True}, l).size(), "each name is listed once");
+        assertEq(0, initialized.getCount(), "the pending app is not initialized");
+        assertEq(revision, DataProviderActionCatalog::getCatalogRevision(), "reading the names changes nothing");
+        assertFalse(inlist(pending, map $1.name, DataProviderActionCatalog::getAllAppsNoInit()),
+            "the pending app is still pending");
+
+        # once initialized, it is listed once
+        assertEq(pending, DataProviderActionCatalog::getApp(pending).name);
+        assertEq(1, initialized.getCount());
+        l = DataProviderActionCatalog::getAppNamesNoInit();
+        assertEq(1, (select l, $1 == pending).size(), "the initialized app is listed once");
+    }
+
+    private initializingTest() {
+        string app = newName("AppNamesInitializing");
+        Queue entered();
+        Queue release();
+        DataProviderActionCatalog::registerPendingApp(app, sub () {
+            entered.push(True);
+            # waits until the main thread has read the names while the initializer runs
+            release.get();
+            DataProviderActionCatalog::registerApp(appInfo(app));
+        });
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        assertTrue(names().hasKey(app), "listed while pending");
+
+        Queue done();
+        background sub () {
+            try {
+                done.push(DataProviderActionCatalog::getApp(app).name);
+            } catch (hash<ExceptionInfo> ex) {
+                done.push(ex);
+            }
+        }();
+        on_exit {
+            # never leave the initializer waiting, also when an assertion below fails
+            release.push(True);
+        }
+        entered.get();
+        # the initializer has been removed from the pending map and has not registered the app yet
+        assertFalse(inlist(app, map $1.name, DataProviderActionCatalog::getAllAppsNoInit()),
+            "the app is not registered yet");
+        assertTrue(names().hasKey(app), "listed while its initialization runs");
+        release.push(True);
+        assertEq(app, done.get(), "the initialization registered the app");
+        assertTrue(names().hasKey(app), "listed once registered");
+    }
+
+    private goneTest() {
+        string failing = newName("AppNamesFailing");
+        DataProviderActionCatalog::registerPendingApp(failing, sub () {
+            throw "TEST-ERROR", "initialization fails";
+        });
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(failing);
+        assertTrue(names().hasKey(failing), "listed while pending");
+        assertEq(NOTHING, DataProviderActionCatalog::getApp(failing), "no getter returns the failed app");
+        assertEq(failing, (select DataProviderActionCatalog::getInitializationFailures((failing,)),
+            $1.kind == "app")[0].app, "the failure is retained");
+        assertFalse(names().hasKey(failing), "an app whose initialization failed is not listed");
+
+        string removed = newName("AppNamesRemoved");
+        DataProviderActionCatalog::registerApp(appInfo(removed));
+        assertTrue(names().hasKey(removed));
+        DataProviderActionCatalog::deregisterDynamicApp(removed);
+        assertFalse(names().hasKey(removed), "a deregistered app is not listed");
+
+        string removed_pending = newName("AppNamesRemovedPending");
+        DataProviderActionCatalog::registerPendingApp(removed_pending, sub () {
+            DataProviderActionCatalog::registerApp(appInfo(removed_pending));
+        });
+        assertTrue(names().hasKey(removed_pending));
+        DataProviderActionCatalog::deregisterDynamicApp(removed_pending);
+        assertFalse(names().hasKey(removed_pending), "a deregistered pending app is not listed");
+    }
+
+    private deregisterInitializingTest() {
+        string app = newName("AppNamesDeregisterInitializing");
+        Queue entered();
+        Queue release();
+        DataProviderActionCatalog::registerPendingApp(app, sub () {
+            entered.push(True);
+            release.get();
+        });
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+
+        Queue done();
+        background sub () {
+            try {
+                done.push(DataProviderActionCatalog::getApp(app) ?? "none");
+            } catch (hash<ExceptionInfo> ex) {
+                done.push(ex);
+            }
+        }();
+        on_exit {
+            # never leave the initializer waiting, also when an assertion below fails
+            release.push(True);
+        }
+        entered.get();
+        assertTrue(names().hasKey(app), "listed while its initialization runs");
+        DataProviderActionCatalog::deregisterDynamicApp(app);
+        assertFalse(names().hasKey(app), "not listed once deregistered, while its initialization still runs");
+        release.push(True);
+        assertEq("none", done.get(), "the initializer registered nothing");
+        assertFalse(names().hasKey(app), "not listed after its initialization ends");
+    }
+
+    private initializerRegistersNothingTest() {
+        string app = newName("AppNamesRegistersNothing");
+        DataProviderActionCatalog::registerPendingApp(app, sub () {});
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        assertTrue(names().hasKey(app), "listed while pending");
+        assertEq(NOTHING, DataProviderActionCatalog::getApp(app), "no getter returns the app");
+        assertFalse(names().hasKey(app), "not listed: its initializer registered nothing");
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)), "it is not a failure");
+
+        # registered pending again, it is listed again, and once registered it stays listed
+        DataProviderActionCatalog::registerPendingApp(app, sub () {
+            DataProviderActionCatalog::registerApp(appInfo(app));
+        });
+        assertTrue(names().hasKey(app), "listed again when registered pending again");
+        assertEq(app, DataProviderActionCatalog::getApp(app).name);
+        assertTrue(names().hasKey(app), "listed once registered");
+    }
+
+    private pendingActionTest() {
+        string app = newName("AppNamesActionOnly");
+        DataProviderActionCatalog::registerPendingAppAction(app, "action", sub () {});
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        assertFalse(names().hasKey(app), "a pending action does not register its app");
+    }
+
+    private reentrantTest() {
+        string app = newName("AppNamesReentrant");
+        *list<string> seen;
+        DataProviderActionCatalog::registerPendingApp(app, sub () {
+            DataProviderActionCatalog::registerApp(appInfo(app));
+            seen = DataProviderActionCatalog::getAppNamesNoInit();
+        });
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        assertEq(app, DataProviderActionCatalog::getApp(app).name);
+        assertTrue(inlist(app, seen), "the initializer sees the app it registered");
+    }
+
+    #! Registers a pending app once \a go is released, then initializes it
+    private static registerAndInitialize(string app, Counter started, Counter go, Counter finished) {
+        on_exit finished.dec();
+        started.dec();
+        go.waitForZero();
+        DataProviderActionCatalog::registerPendingApp(app, sub () {
+            DataProviderActionCatalog::registerApp(AppNamesNoInitTest::appInfo(app));
+        });
+        DataProviderActionCatalog::getApp(app);
+    }
+
+    private concurrencyTest() {
+        int count = 20;
+        list<string> apps = map newName("AppNamesConcurrent" + $1), xrange(count);
+        on_exit {
+            map DataProviderActionCatalog::deregisterDynamicApp($1), apps;
+        }
+        Counter started(count);
+        Counter go(1);
+        Counter finished(count);
+        foreach string app in (apps) {
+            # the app name is passed as an argument: a closure would see the loop variable change
+            background registerAndInitialize(app, started, go, finished);
+        }
+        started.waitForZero();
+        go.dec();
+        # an app once listed stays listed: it is pending, initializing or registered from then on
+        hash<string, bool> seen = {};
+        code check = sub () {
+            hash<string, bool> now = names();
+            foreach string app in (keys seen) {
+                if (!now{app}) {
+                    fail(sprintf("app %y was listed and then hidden", app));
+                }
+            }
+            map seen{$1} = True, apps, now{$1};
+        };
+        # snapshots taken while the threads register and initialize their apps
+        map check(), xrange(200);
+        finished.waitForZero();
+        check();
+        assertEq(count, seen.size(), "every app is listed");
+        hash<string, bool> registered = map {$1.name: True}, DataProviderActionCatalog::getAllAppsNoInit();
+        assertEq(count, (select apps, registered{$1}).size(), "every app was initialized");
+    }
+}

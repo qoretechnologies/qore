@@ -38,6 +38,8 @@
 %requires TableauDataProvider
 %requires HttpServerUtil
 %requires HttpServer
+%requires ../../DnsTestServer.qm
+%requires ../../ClosingTestServer.qm
 
 %exec-class TableauDataProviderTest
 
@@ -110,6 +112,37 @@ class FakeTableauHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! A Tableau REST client that counts the requests made through it
+class CountingTableauRestClientIo inherits TableauRestClient::TableauRestClientIo {
+    public {
+        #! the number of requests made
+        int requests = 0;
+    }
+
+    constructor(hash<auto> opts) : TableauRestClient::TableauRestClientIo(opts) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        ++requests;
+        return TableauRestClient::TableauRestClientIo::restDoRequest(method, path, body, hdr);
+    }
+}
+
+#! A Tableau data provider that records its waits for the rate limit instead of waiting
+class RecordingTableauDataProvider inherits TableauDataProvider::TableauDataProvider {
+    public {
+        #! the waits for the rate limit, in order
+        list<date> waits = ();
+    }
+
+    constructor(TableauRestClient::TableauRestClientIo rest) : TableauDataProvider(rest) {
+    }
+
+    private waitForRateLimit(date delay) {
+        waits += delay;
+    }
+}
+
 public class TableauDataProviderTest inherits QUnit::Test {
     private {
         #! Tableau REST client for integration tests
@@ -149,6 +182,9 @@ public class TableauDataProviderTest inherits QUnit::Test {
         addTestCase("local server tests", \localServerTests());
         addTestCase("url option tests", \urlOptionTests());
         addTestCase("connection url tests", \connectionUrlTests());
+        addTestCase("transport retry tests", \transportRetryTests());
+        addTestCase("example data request tests", \exampleDataRequestTests());
+        addTestCase("name resolution tests", \nameResolutionTests());
 
         # Integration tests (require Tableau credentials)
         addTestCase("integration tests", \integrationTests());
@@ -403,9 +439,14 @@ public class TableauDataProviderTest inherits QUnit::Test {
     #! Trigger example data tests
     triggerExampleDataTests() {
         checkJson();
+        # the polling triggers request their example data from a local server that closes each connection, so they
+        # fall back to generated example data without a request to Tableau
+        ClosingTestServer server();
+        on_exit server.stop();
         TableauDataProvider::TableauDataProvider prov({
             "tableaurestclient_options": {
-                "subdomain": "fake-pod",
+                "url": sprintf("https://127.0.0.1:%d/api/3.27", server.getPort()),
+                "protocol": "h1",
                 "token_name": "fake-token-name",
                 "token_secret": "fake-token-secret",
             },
@@ -470,6 +511,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
                     "watch-projects example should have 'name' field");
             }
         }
+        assertGt(0, server.getConnections(), "the polling triggers requested their example data from the local server");
     }
 
     #! Negative tests - test error handling and invalid inputs
@@ -849,6 +891,114 @@ public class TableauDataProviderTest inherits QUnit::Test {
         assertEq(({"url": "tableaures://pod.online.tableau.com/api/3.24"},), updates);
     }
 
+    #! Transport errors are retried after the configured delay
+    transportRetryTests() {
+        date orig_unit = DataProviderRetryUtil::getTransportRetryDelayUnit();
+        on_exit DataProviderRetryUtil::setTransportRetryDelayUnit(orig_unit);
+        # retries do not wait
+        DataProviderRetryUtil::setTransportRetryDelayUnit(0s);
+
+        # a failed connection is retried
+        ClosingTestServer server();
+        on_exit server.stop();
+        CountingTableauRestClientIo rest = getClosingClient(server);
+        AbstractDataProvider projects = new TableauDataProvider::TableauDataProvider({"tableaurestclient": rest})
+            .getChildProviderEx("projects");
+        try {
+            projects.searchRecords();
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(TableauDataProvider::RetrySet{ex.err}, ex.err);
+            assertFalse(DataProviderRetryUtil::isNameResolutionError(ex));
+        }
+        assertEq(TableauDataProvider::MaxRetries + 1, rest.requests);
+    }
+
+    #! Example data is requested once, and the fake data is returned when the request fails
+    exampleDataRequestTests() {
+        date orig_unit = DataProviderRetryUtil::getTransportRetryDelayUnit();
+        on_exit DataProviderRetryUtil::setTransportRetryDelayUnit(orig_unit);
+        # retries do not wait
+        DataProviderRetryUtil::setTransportRetryDelayUnit(0s);
+
+        ClosingTestServer server();
+        on_exit server.stop();
+        CountingTableauRestClientIo rest = getClosingClient(server);
+        TableauDataProvider::TableauDataProvider provider({"tableaurestclient": rest});
+        foreach string event in ("watch-projects", "watch-datasources") {
+            rest.requests = 0;
+            auto example = provider.getChildProviderPath("events/" + event).getExampleEventData(event);
+            assertTrue(example.name.val(), event);
+            assertEq(1, rest.requests, event);
+        }
+
+        # retries are suppressed only while the example data is requested
+        assertFalse(DataProviderRetryUtil::retriesSuppressed());
+        rest.requests = 0;
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \provider.getChildProviderEx("projects").searchRecords());
+        assertEq(TableauDataProvider::MaxRetries + 1, rest.requests);
+    }
+
+    #! A name that does not exist or is not valid is not retried; a failure of name resolution that can be temporary is
+    #! retried
+    nameResolutionTests() {
+        date orig_unit = DataProviderRetryUtil::getTransportRetryDelayUnit();
+        on_exit DataProviderRetryUtil::setTransportRetryDelayUnit(orig_unit);
+        # retries do not wait
+        DataProviderRetryUtil::setTransportRetryDelayUnit(0s);
+
+        # a name with an empty label is not a valid name, which the resolver refuses itself, without a DNS query
+        # (c-ares: EBADNAME), so it is checked in every build
+        string malformed = "bad..tableau-retry-test.";
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            # a local DNS server gives each answer without the network (see DnsTestServer)
+            DnsTestServer dns();
+            on_exit dns.stop();
+            string servers = call_function("dbg_cares_set_servers", dns.getServer());
+            on_exit call_function("dbg_cares_set_servers", servers);
+            checkNameResolution("nx.tableau-retry-test.", 1);
+            checkNameResolution("servfail.tableau-retry-test.", TableauDataProvider::MaxRetries + 1);
+            checkNameResolution(malformed, 1);
+            # the resolver refused the malformed name without a query, so its lookup needs no DNS server in a build
+            # without debugging either
+            assertEq(0, dns.getQueries("bad"), "the malformed name was not sent to the DNS server");
+        } else {
+            # a temporary failure of name resolution needs an answer from a DNS server, which only a debug build can
+            # send its lookups to (dbg_cares_set_servers()), so only the definite answer for a malformed name is
+            # checked
+            checkNameResolution(malformed, 1);
+        }
+    }
+
+    #! Checks the requests made for a host name that cannot be resolved
+    private checkNameResolution(string host, int requests) {
+        CountingTableauRestClientIo rest({
+            "token_name": "pat-name",
+            "token_secret": "pat-secret",
+            "url": "http://" + host + "/api/3.27",
+        });
+        AbstractDataProvider projects = new TableauDataProvider::TableauDataProvider({"tableaurestclient": rest})
+            .getChildProviderEx("projects");
+        try {
+            projects.searchRecords();
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err, host);
+            assertEq(requests == 1, DataProviderRetryUtil::isNameResolutionError(ex), host);
+        }
+        assertEq(requests, rest.requests, host);
+    }
+
+    #! Returns a counting client for a server that closes each connection at once
+    private static CountingTableauRestClientIo getClosingClient(ClosingTestServer server) {
+        return new CountingTableauRestClientIo({
+            "token_name": "pat-name",
+            "token_secret": "pat-secret",
+            "url": sprintf("https://127.0.0.1:%d/api/3.27", server.getPort()),
+            "protocol": "h1",
+        });
+    }
+
     #! Requests against a local server
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
@@ -905,13 +1055,16 @@ public class TableauDataProviderTest inherits QUnit::Test {
         assertEq("api/3.27/auth/signin", handler.requests[1].path);
         assertEq("session-2", handler.requests[2].auth);
 
-        # a rate-limited request is retried after the time given by the server
+        # a rate-limited request is retried after the time given by the server; a provider that records its waits
+        # instead of waiting makes the request with the same client
+        RecordingTableauDataProvider recording(rest);
         handler.requests = ();
         handler.rate_limited = 1;
-        recs = map $1, projects.searchRecords();
-        assertEq(({"id": "p1", "name": "Default"},), recs);
+        assertEq(({"id": "p1", "name": "Default"},), recording.doGet("projects").projects.project);
         assertEq(2, handler.requests.size());
+        assertEq("api/3.27/sites/site-1/projects", handler.requests[1].path);
         assertEq("session-2", handler.requests[1].auth);
+        assertEq((1s,), recording.waits);
 
         # an error response is raised with the response
         try {

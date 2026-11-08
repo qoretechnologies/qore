@@ -1,5 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
 
@@ -21,6 +23,9 @@
 %requires ../SqlUtil/PgsqlTestIsolation.qm
 # the test runs against every database connection that is configured
 %requires ../../DbTestConnections.qm
+%requires ../SqlUtil/MysqlTestIsolation.qm
+%requires ../SqlUtil/OracleTestIsolation.qm
+%requires ../SqlUtil/MssqlTestIsolation.qm
 
 #! a connection of the test, and its schema and tables
 class TableMapperContext {
@@ -28,8 +33,11 @@ class TableMapperContext {
         #! the connection
         hash<DbTestConnection> conn;
 
-        #! the reason the connection's test cases are skipped if its schema could not be created
+        #! the reason the connection's test cases are skipped if the connection could not be opened
         string skip_reason = "the connection is not open";
+
+        #! the error that made the test schema fail to be created on the open connection; the test cases fail with it
+        *hash<ExceptionInfo> setup_error;
 
         #! the test schema, or @ref nothing if it could not be created
         *AbstractSchema schema;
@@ -65,7 +73,9 @@ public class TableMapperTestSchema inherits AbstractSchema {
         const T_TableMapperUpsertTest = (
             "columns": (
                 "id": c_int(True, "test"),
-                "string": c_varchar(50, C_NOT_NULL),
+                # the upserts have Czech and Spanish strings: an nvarchar on SQL Server, whose varchar keeps only the
+                # characters of its collation's code page
+                "string": c_varchar(50, C_NOT_NULL) + {"driver": {"freetds": {"native_type": "nvarchar"}}},
             ),
             "primary_key": ("name": "pk_table_mapper_upsert_test", "columns": "id"),
             "indexes": (
@@ -390,6 +400,12 @@ public class TableMapperTest inherits QUnit::Test {
         # on PostgreSQL, every connection of the run uses the run's own schema; this is set up before any
         # connection is opened
         map PgsqlRunSchema::setup($1.conn.connstr, "TableMapper"), contexts;
+        # on MySQL, Oracle and SQL Server, the run's own database or schema
+        foreach TableMapperContext ctx in (contexts) {
+            ctx.conn.connstr = MysqlRunDatabase::getConnectionString(ctx.conn.connstr, "TableMapper");
+            ctx.conn.connstr = OracleRunSchema::getConnectionString(ctx.conn.connstr, "TableMapper");
+            ctx.conn.connstr = MssqlRunDatabase::getConnectionString(ctx.conn.connstr, "TableMapper");
+        }
         map setUpContext($1), contexts;
 
         # add test cases
@@ -404,15 +420,26 @@ public class TableMapperTest inherits QUnit::Test {
             addTestCase(ctx.name("InboundTableMapper upsert"), \inboundTableMapperUpsertTest(), ctx);
             addTestCase(ctx.name("OutputTableMapper"), \outputTableMapperTest(), ctx);
             addTestCase(ctx.name("OutputTableMapper"), \rawOutputTableMapperTest(), ctx);
+            addTestCase(ctx.name("InboundTableMapper sequence column positions"), \sequencePositionTest(), ctx);
         }
         set_return_value(main());
     }
 
-    #! opens the connection and creates its schema; the connection's test cases are skipped if it fails
+    #! opens the connection and creates its schema; the connection's test cases are skipped if the connection
+    #! cannot be opened, and fail if the schema cannot be created
     private setUpContext(TableMapperContext ctx) {
+        Datasource ds;
         try {
-            Datasource ds(ctx.conn.connstr);
+            ds = new Datasource(ctx.conn.connstr);
             ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            ctx.skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+            if (m_options.verbose) {
+                printf("%s: %s\n", ctx.conn.label, ctx.skip_reason);
+            }
+            return;
+        }
+        try {
             # create the test schema
             # the schema is kept before it is aligned, so that what the alignment created is dropped if it fails
             ctx.schema = new TableMapperTestSchema(ds);
@@ -421,15 +448,21 @@ public class TableMapperTest inherits QUnit::Test {
             ctx.table = (new Table(ds, "table_mapper_test")).getTable();
             ctx.upsert_table = (new Table(ds, "table_mapper_upsert_test")).getTable();
         } catch (hash<ExceptionInfo> ex) {
-            ctx.skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+            # an error of the schema or of its tables is an error of each test case of the connection
+            ctx.setup_error = ex;
             if (m_options.verbose) {
-                printf("%s: %s\n", ctx.conn.label, ctx.skip_reason);
+                printf("%s: cannot create the test schema: %s\n", ctx.conn.label, get_exception_string(ex));
             }
         }
     }
 
-    #! makes the connection's schema and tables those of the test case, or skips it if there are none
+    #! makes the connection's schema and tables those of the test case; skips it if the connection could not be
+    #! opened, and raises the error that made its schema fail to be created
     private useContext(TableMapperContext ctx) {
+        if (ctx.setup_error) {
+            throw ctx.setup_error.err, sprintf("%s: the test schema could not be created: %s", ctx.conn.label,
+                ctx.setup_error.desc), ctx.setup_error.arg;
+        }
         if (!ctx.table) {
             testSkip(ctx.skip_reason);
         }
@@ -454,6 +487,9 @@ public class TableMapperTest inherits QUnit::Test {
         }
         # drop the run's schema on PostgreSQL
         PgsqlRunSchema::teardown();
+        MysqlRunDatabase::teardown();
+        OracleRunSchema::teardown();
+        MssqlRunDatabase::teardown();
     }
 
     private usageIntern() {
@@ -1217,6 +1253,96 @@ public class TableMapperTest inherits QUnit::Test {
         return cast<hash>(h);
     }
 
+    #! A mapper inserts rows with a sequence column first, in the middle or last, with and without a column of a
+    #! constant value, row by row (a statement prepared with the first row's SQL inserts the others) and in blocks
+    #! (each block after the first with the first block's SQL), with the arguments that the table binds
+    sequencePositionTest(TableMapperContext ctx) {
+        useContext(ctx);
+        AbstractDatasource ds = table.getDatasource();
+        Database db(ds);
+        hash<string, list<string>> orders = {
+            "first": ("id", "a", "b"),
+            "middle": ("a", "id", "b"),
+            "last": ("a", "b", "id"),
+        };
+        hash<auto> col_desc = {
+            "id": {"qore_type": Type::Number, "size": 14, "notnull": True},
+            "a": {"qore_type": Type::String, "size": 20},
+            "b": {"qore_type": Type::Int},
+        };
+        list<hash<auto>> input = ();
+        foreach int n in (range(1, 6)) {
+            input += {"a": sprintf("row%d", n), "b": n};
+        }
+        foreach hash<auto> i in (orders.pairIterator()) {
+            foreach bool constant in ((False, True)) {
+                foreach bool bulk in ((False, True)) {
+                    string label = sprintf("sequence %s, %s, %s", i.key, constant ? "constant b" : "b mapped",
+                        bulk ? "blocks" : "rows");
+                    string name = sprintf("tm_pos_%s_%d%d", i.key, constant.toInt(), bulk.toInt());
+                    {
+                        *AbstractTable old = db.getTable(name);
+                        if (old) {
+                            old.dropCommit();
+                        }
+                    }
+                    AbstractTable t = db.makeTable(name, {"columns": map {$1: col_desc{$1}}, i.value});
+                    t.create();
+                    ds.commit();
+                    on_exit {
+                        ds.rollback();
+                        db.getTable(name).dropCommit();
+                    }
+                    hash<auto> fmap = {
+                        "id": {"sequence": "seq_table_mapper_test"},
+                        "a": True,
+                        "b": constant ? {"constant": 7} : True,
+                    };
+                    # blocks of two rows; with "rows", each row is inserted when it is given (insertRow())
+                    InboundTableMapper mapper(t, fmap, {"insert_block": 2});
+                    if (bulk) {
+                        foreach hash<auto> rec in (input) {
+                            mapper.queueData(rec);
+                        }
+                        mapper.flush();
+                    } else {
+                        map mapper.insertRow($1), input;
+                    }
+                    mapper.commit();
+
+                    list<hash<auto>> rows = t.selectRows({"orderby": "a"});
+                    assertEq(input.size(), rows.size(), label);
+                    assertEq((map $1.a, input), (map $1.a, rows), label);
+                    assertEq(constant ? (map 7, input) : (map $1.b, input), (map $1.b.toInt(), rows), label);
+                    # every row has an id of its own from the sequence
+                    assertEq(rows.size(), (map {$1.id.toString(): True}, rows).size(), label);
+
+                    # getInsertArgs() gives the arguments of the SQL that insert() runs, for a row and for a block
+                    # (the row's values in the table's column order); with a sequence's insert operator, on a
+                    # database with sequences (MySQL's are emulated, and a mapper gets their values itself)
+                    if (!db.supportsSequences()) {
+                        continue;
+                    }
+                    hash<auto> row = map {$1: {"id": iop_seq("seq_table_mapper_test"), "a": "x", "b": 1}{$1}},
+                        i.value;
+                    hash<SqlResultInfo> info = t.insertWithInfo(row);
+                    assertEq(info.args, t.getInsertArgs(row), label + ": row args");
+                    # the arguments are those of the SQL's placeholders: the SQL runs with them
+                    ds.vexec(info.sql, t.getInsertArgs(row));
+                    hash<auto> block = map {$1: {"id": iop_seq("seq_table_mapper_test"), "a": ("x", "y"),
+                        "b": constant ? 1 : (1, 2)}{$1}}, i.value;
+                    info = t.insertWithInfo(block);
+                    assertEq(info.args, t.getInsertArgs(block), label + ": block args");
+                    # a block's lists are bound as arrays where the driver binds them
+                    if (t.hasArrayBind()) {
+                        ds.vexec(info.sql, t.getInsertArgs(block));
+                    }
+                    ds.rollback();
+                }
+            }
+        }
+    }
+
     outputTableMapperTest(TableMapperContext ctx) {
         useContext(ctx);
 
@@ -1269,7 +1395,9 @@ public class TableMapperTest inherits QUnit::Test {
     # FIXME this is very ad-hoc checking - 'ol' used only
     # when the actual value ('l') is present in mapped result.
     # No check if 'l' is empty, for example.
-    checkMap(list l, list ol) {
+    #! checks the rows of a select, which are no value with some drivers (the freetds driver) when there are none
+    checkMap(*list l, list ol) {
+        l = l ?? ();
         foreach hash h in (l) {
             assertEq(Type::Int, h.id.type(), "id type for row " + $#);
             any hval = h.string === NULL ? NOTHING : h.string;

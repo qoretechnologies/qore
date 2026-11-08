@@ -181,6 +181,8 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
 
     @section connectionprovider_3_1 ConnectionProvider 3.1
+    - added @ref ConnectionProvider::PollingConnectionMonitor::startPollConnect() "PollingConnectionMonitor::startPollConnect()",
+      which a subclass can override to decide how the monitor opens the connection of a ping
     - added source-owned connection presentation and catalogs for shared scheme options and setup messages;
       see @ref connectionprovider_presentation
     - the errors of invalid connections, of connection URLs with control characters and of inaccessible filesystem

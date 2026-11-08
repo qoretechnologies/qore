@@ -4572,7 +4572,10 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     }
 
     #! Returns example data for the given observable event
-    /** @param event_id the event ID of the event
+    /** Requests that a data provider makes for the example data are made once, without retries
+        (see @ref DataProviderRetryUtil::runWithoutRetries() and @ref dataprovider_retries)
+
+        @param event_id the event ID of the event
 
         @return example data for the given observable event
 
@@ -4583,28 +4586,35 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     */
     auto getExampleEventData(string event_id) {
         checkObservable();
-        if (exists (auto v = getExampleEventDataImpl(event_id))) {
-            return v;
-        }
-        if (*AbstractDataProviderType rt = getEventInfoImpl(event_id).type) {
-            return rt.getExampleValue();
-        }
+        return DataProviderRetryUtil::runWithoutRetries(auto sub () {
+            if (exists (auto v = getExampleEventDataImpl(event_id))) {
+                return v;
+            }
+            if (*AbstractDataProviderType rt = getEventInfoImpl(event_id).type) {
+                return rt.getExampleValue();
+            }
+        });
     }
 
     #! Returns example data for the record type
-    /** @return example data for the record type
+    /** Requests that a data provider makes for the example data are made once, without retries
+        (see @ref DataProviderRetryUtil::runWithoutRetries() and @ref dataprovider_retries)
+
+        @return example data for the record type
 
         @since DataProvider 3.0
     */
     hash<auto> getExampleRecordData() {
         checkRead();
-        if (exists (auto v = getExampleRecordDataImpl())) {
-            return v;
-        }
-        if (*hash<string, AbstractDataField> rt = getRecordTypeImpl()) {
-            return generateExampleData(rt);
-        }
-        return {};
+        return DataProviderRetryUtil::runWithoutRetries(hash<auto> sub () {
+            if (exists (auto v = getExampleRecordDataImpl())) {
+                return v;
+            }
+            if (*hash<string, AbstractDataField> rt = getRecordTypeImpl()) {
+                return generateExampleData(rt);
+            }
+            return {};
+        });
     }
 
     #! Returns example data for a request message in the context of the given option data
@@ -4666,7 +4676,10 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     }
 
     #! Returns example data for the given observable event in the context of the given option data
-    /** @param options option data that can be used to determine the final type
+    /** Requests that a data provider makes for the example data are made once, without retries
+        (see @ref DataProviderRetryUtil::runWithoutRetries() and @ref dataprovider_retries)
+
+        @param options option data that can be used to determine the final type
         @param event_id the event ID of the event
 
         @return example data for the given observable event in the context of the given option data
@@ -4678,16 +4691,21 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     */
     auto getExampleEventDataWithOptions(string event_id, *hash<auto> options) {
         checkObservable();
-        if (exists (auto v = getExampleEventDataWithOptionsImpl(event_id, options))) {
-            return v;
-        }
-        if (*AbstractDataProviderType rt = getEventInfoWithOptionsImpl(event_id, options).type) {
-            return rt.getExampleValue();
-        }
+        return DataProviderRetryUtil::runWithoutRetries(auto sub () {
+            if (exists (auto v = getExampleEventDataWithOptionsImpl(event_id, options))) {
+                return v;
+            }
+            if (*AbstractDataProviderType rt = getEventInfoWithOptionsImpl(event_id, options).type) {
+                return rt.getExampleValue();
+            }
+        });
     }
 
     #! Returns example data for the record type in the context of the given option data
-    /** @param options option data that can be used to determine the final type
+    /** Requests that a data provider makes for the example data are made once, without retries
+        (see @ref DataProviderRetryUtil::runWithoutRetries() and @ref dataprovider_retries)
+
+        @param options option data that can be used to determine the final type
 
         @return example data for the record type in the context of the given option data
 
@@ -4695,13 +4713,15 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     */
     hash<auto> getExampleRecordDataWithOptions(*hash<auto> options) {
         checkRead();
-        if (exists (auto v = getExampleRecordDataWithOptionsImpl(options))) {
-            return v;
-        }
-        if (*hash<string, AbstractDataField> rt = getRecordTypeWithOptionsImpl(options)) {
-            return generateExampleData(rt);
-        }
-        return {};
+        return DataProviderRetryUtil::runWithoutRetries(hash<auto> sub () {
+            if (exists (auto v = getExampleRecordDataWithOptionsImpl(options))) {
+                return v;
+            }
+            if (*hash<string, AbstractDataField> rt = getRecordTypeWithOptionsImpl(options)) {
+                return generateExampleData(rt);
+            }
+            return {};
+        });
     }
 
     #! Returns simulated response data for a request without side effects
@@ -8892,7 +8912,10 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
             # its example.  (Returning the missing record here violated the
             # return type outside this try block, so the fallback was never
             # reached and simulating a write to an empty table failed.)
-            *hash<auto> first = searchFirstRecord({});
+            # the example record is requested once, without retries (see DataProviderRetryUtil::runWithoutRetries())
+            *hash<auto> first = DataProviderRetryUtil::runWithoutRetries(*hash<auto> sub () {
+                return searchFirstRecord({});
+            });
             if (first) {
                 return first;
             }

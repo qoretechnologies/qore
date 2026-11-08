@@ -1518,6 +1518,10 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             && !q_env_is_set("QORE_DISABLE_JIT_AGGREGATE_RETURN_PROJECTION")) {
         size_t projections = qore_ir_fuse_batch_aggregate_return_projections(
             *rewrite_root, batch_callee_map);
+        // the projected values can show that a local that a store was taken to give a reference is given none
+        if (projections) {
+            rewrite_root->refineReferenceLocalsFromFacts();
+        }
         size_t late_specializations = 0;
         if (projections
                 && !q_env_is_set("QORE_DISABLE_JIT_LATE_SPECIALIZATION")) {

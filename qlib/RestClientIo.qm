@@ -27,6 +27,7 @@
 %allow-weak-references
 
 %requires Logger
+%requires DataProvider
 %requires(reexport) RestClient >= 2.4
 %requires(reexport) HttpClientIo
 %requires(reexport) HttpClientStreamingIo
@@ -118,6 +119,9 @@ hash<RestResponseInfo> resp2 = f2.get(30s);
     Only explicitly transient HTTP and transport errors are retried. Cancellation interrupts backoff
     and pending response waits; final request exceptions retain their original error and add an
     attempts count to their argument. Observers receive metadata only, without request content.
+    No request is retried while
+    @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed" in the calling
+    thread, as while a data provider requests example data.
 
     @code{.py}
     RestRetryPolicy policy(<RestRetryOptions>{"max_retries": 2, "timeout": 5s});
@@ -292,6 +296,11 @@ public namespace RestClientIo {
         of one logical operation. Attempts are counted per execute() call. Create a new policy for each
         new operation. Retry state is local, so concurrent calls do not change each other's options.
 
+        No request is retried while
+        @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed" in the calling
+        thread (see @ref DataProvider::DataProviderRetryUtil::runWithoutRetries() "runWithoutRetries()"), as while
+        a data provider requests example data: the first error is raised with \c arg.attempts set to 1.
+
         @note Only opt in for operations that are safe to replay; the client cannot infer POST idempotency.
         Final request errors preserve their code/description and arguments, adding \c arg.attempts.
         Non-hash arguments are preserved in \c arg.original_arg. Cancellation is never retried.
@@ -371,7 +380,10 @@ public namespace RestClientIo {
                     hash<auto!> arg = ex.arg.typeCode() == NT_HASH ? {} + ex.arg
                         : (exists ex.arg ? {"original_arg": ex.arg} : {});
                     arg.attempts = attempts;
-                    bool retryable = isRetryableError(ex);
+                    # nothing is retried while a data provider requests example data in this thread (see
+                    # DataProvider::DataProviderRetryUtil::runWithoutRetries())
+                    bool retryable = !DataProvider::DataProviderRetryUtil::retriesSuppressed()
+                        && isRetryableError(ex);
                     remaining = (deadline_us - retryNow()) / 1000;
                     *int advised = retryAfter(ex);
                     int delay = advised ?? retryJitter(backoff);
@@ -5790,7 +5802,12 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         # Let synchronous preparation errors, such as signer failures, propagate
         # from the public async call before a Future is returned.
         prepareAttempt();
-        *hash<SocketPollInfo> poll_info = continuePollIntern();
+        # The first step can complete the whole request: a response that has already arrived when it is checked,
+        # as a fast response on a loopback connection can, is processed in this call, and so are the redirects it
+        # leads to.  Every error from here on, a failed redirect for example, is reported with the Future, as when
+        # the controller drives the operation, so whether an error is raised by the public async call or by the
+        # Future does not depend on how fast the server answers.
+        *hash<SocketPollInfo> poll_info = continuePoll();
         if (!poll_info) {
             return;
         }
@@ -7312,8 +7329,13 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
 
     #! Records a connect failure for a closed tracked connection and counts the attempt
     /** Only an actually closed/failed connection is recorded and counted; a connection
-        that is still establishing returns @ref False without touching the counter, so
-        the caller keeps waiting instead of consuming the attempt budget.  Never throws.
+        that is still establishing, or a closed candidate of an unresolved happy-eyeballs
+        race, returns @ref False without touching the counter, so the caller keeps waiting
+        instead of consuming the attempt budget.  Never throws.
+
+        @param tracked_conn the connection handed back by the last acquisition step, if any
+        @param oauth2 @ref True if the connection is to the OAuth2 token endpoint, acquired with
+        the client of the token endpoint, @ref False if it is to the ping target
 
         @return @ref True if @a tracked_conn was closed (failure recorded), @ref False
         otherwise
@@ -7323,12 +7345,17 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         if (!tracked_conn || !tracked_conn.isClosed()) {
             return False;
         }
-        # A happy-eyeballs race connects over HTTP/3 and HTTP/2 in parallel; while it is unresolved, a
-        # candidate closing says nothing about the endpoint.  An HTTP/3 leg failing against a host that
-        # does not serve HTTP/3 is the expected outcome and the race still wins over HTTP/2, so counting
-        # it as a failed connection attempt would fail the ping of every "auto" connection to such a host.
-        # Re-driving the acquisition lets the race start the other protocol.
-        if (rcio.getConnectionManager().isUnresolvedRaceLeg(tracked_conn)) {
+        # A happy-eyeballs race of the connection manager connects over HTTP/3 and HTTP/2 in parallel, and over
+        # HTTP/1.1 as soon as the server refuses HTTP/2 via ALPN, and keeps the candidate that connects first;
+        # while the race is unresolved, a candidate closing says nothing about the endpoint.  An HTTP/3 candidate
+        # failing against a host that does not serve HTTP/3 is the expected outcome and the race goes on with the
+        # other candidates, so counting it as a failed connection attempt would fail the ping of every "auto"
+        # connection to such a host.  Nothing is recorded for such a candidate: the caller acquires the
+        # connection again, which lets the race start its next candidate or hand back the winner.  The race
+        # belongs to the connection manager of the client that acquired the connection: the OAuth2 token
+        # endpoint is reached with a client and a connection manager of its own (see doStartOAuth2Refresh()).
+        *RestClientIo owner = oauth2 ? oauth2_rcio : rcio;
+        if (owner && owner.getConnectionManager().isUnresolvedRaceLeg(tracked_conn)) {
             return False;
         }
         *hash<auto> err = tracked_conn.getPollOperation().getError();

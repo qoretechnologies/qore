@@ -4,6 +4,7 @@
 
 %modern
 
+%requires ../../../DnsTestServer.qm
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 
@@ -19,20 +20,25 @@
 
     The defect itself happens for about one query in 65536, so the debug hook dbg_cares_lose_query() makes the next
     checks find the query lost; the test only runs against a debug build.  Only lookups that wait for a DNS answer
-    are checked for a lost query, so the lookups are of names in the reserved "invalid" domain and of a
-    documentation address: if the host has no DNS server to ask and a lookup ends without waiting, the case is
-    skipped.
+    are checked for a lost query, so the lookups ask a local DNS server that drops every query
+    (DnsTestServer, dbg_cares_set_servers()), and each query is tried once with a short timeout: no lookup asks the
+    DNS servers of the host, and every lookup waits.
 */
 class CaresLostQueryTest inherits QUnit::Test {
     private {
         #! the number of times a lookup starts again before it fails
         const MaxRestarts = 3;
 
-        #! a name that no DNS server resolves (RFC 6761)
-        const InvalidName = "qore-cares-lost-query.invalid";
+        #! a name that the local DNS server is asked for
+        const InvalidName = "qore-cares-lost-query.invalid.";
 
         #! an address from the documentation range (RFC 5737), with no reverse mapping
         const DocAddress = "192.0.2.1";
+
+        #! the local DNS server, which drops every query
+        *DnsTestServer dns;
+        string old_servers;
+        hash<auto> old_options;
     }
 
     constructor() : QUnit::Test("c-ares lost query", "1.0", \ARGV) {
@@ -43,6 +49,24 @@ class CaresLostQueryTest inherits QUnit::Test {
         addTestCase("getnameinfo_async() recovers from a lost query", \getnameinfoRecovers());
         addTestCase("getnameinfo_async() fails after too many lost queries", \getnameinfoGivesUp());
         set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        dns = new DnsTestServer(True);
+        old_servers = call_function("dbg_cares_set_servers", dns.getServer());
+        # a lookup waits for its query once, until it times out
+        old_options = call_function("dbg_cares_set_query_options", {"tries": 1, "timeout_ms": 200});
+    }
+
+    globalTearDown() {
+        if (dns) {
+            call_function("dbg_cares_set_query_options", old_options);
+            call_function("dbg_cares_set_servers", old_servers);
+            dns.stop();
+        }
     }
 
     getaddrinfoRecovers() {
@@ -114,9 +138,7 @@ class CaresLostQueryTest inherits QUnit::Test {
         }
         string expected = lookup();
         *string recovered = lookupLosing(1, lookup);
-        if (!exists recovered) {
-            testSkip(label + " ended without waiting for a DNS answer");
-        }
+        assertTrue(exists recovered, label + " checked for a lost query");
         assertEq(expected, recovered, label + " started again and gave the result it gives without the loss");
     }
 
@@ -126,9 +148,7 @@ class CaresLostQueryTest inherits QUnit::Test {
             testSkip("the debug hook that loses a query is only in debug builds");
         }
         *string result = lookupLosing(MaxRestarts + 1, lookup);
-        if (!exists result) {
-            testSkip(label + " ended without waiting for a DNS answer");
-        }
+        assertTrue(exists result, label + " checked for a lost query");
         assertEq(err, result, label + " fails after losing its query " + (MaxRestarts + 1) + " times");
     }
 }

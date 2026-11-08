@@ -244,7 +244,7 @@ public class GrokDataProviderCommon inherits DataProvider::AbstractDataProvider 
 
     #! Returns True if the error indicates that the operation should be retried
     private bool retry(hash<ExceptionInfo> ex, reference<int> retries) {
-        if (RetrySet{ex.err}) {
+        if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet)) {
             if (++retries == MaxIoRetries) {
                 LoggerWrapper::error(sprintf("Maximum retries exceeded (%d)", retries));
                 return False;

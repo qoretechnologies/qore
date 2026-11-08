@@ -10,6 +10,7 @@
 %requires SqlUtil
 %requires MssqlSqlUtilBase
 %requires FreetdsSqlUtil
+%requires ./MssqlTestIsolation.qm
 
 %try-module freetds
 %define NO_FREETDS
@@ -204,7 +205,8 @@ class MssqlIdentifierQuotingTest inherits QUnit::Test {
         MssqlTrigger trig("trig x", "on dbo.t after insert as begin set nocount on end");
         assertEq(("create trigger [trig x] on dbo.t after insert as begin set nocount on end",),
             trig.getCreateSql("dbo.t"));
-        assertEq(("drop trigger [trig x]",), trig.getDropSql("dbo.t"));
+        # a trigger is dropped in the schema of its table
+        assertEq(("drop trigger dbo.[trig x]",), trig.getDropSql("dbo.t"));
         MssqlView v("v x", "select 1 a");
         assertEq("create view [v x] as select 1 a", v.getCreateSql());
         assertEq("drop view [v x]", v.getDropSql());
@@ -390,7 +392,9 @@ class MssqlIdentifierQuotingTest inherits QUnit::Test {
         if (!ENV.QORE_DB_CONNSTR_FREETDS) {
             testSkip("QORE_DB_CONNSTR_FREETDS is not set");
         }
-        Datasource ds(ENV.QORE_DB_CONNSTR_FREETDS);
+        # the run's own database: tests that run at the same time do not share the objects of this one
+        string connstr = MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS, "MssqlIdentQuoting");
+        Datasource ds(connstr);
         try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {

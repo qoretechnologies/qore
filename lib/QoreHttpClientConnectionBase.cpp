@@ -319,7 +319,8 @@ bool HttpClientConnectionBase::waitForReadyOrError(int64_t timeout_ms, Exception
                 desc_str = desc_storage.c_str();
             }
         }
-        xsink->raiseException(err_str, "%s", desc_str);
+        // the argument of the connection's error is kept, for example the resolver's status of a name lookup error
+        xsink->raiseExceptionArg(err_str, err ? err->getKeyValue("arg").refSelf() : QoreValue(), "%s", desc_str);
         return false;
     }
 
@@ -359,7 +360,8 @@ void HttpClientConnectionBase::raiseClosedSubmitError(const char* fallback_desc,
             desc_storage = desc_val->c_str();
             desc_str = desc_storage.c_str();
         }
-        xsink->raiseException(err_str, "%s", desc_str);
+        // the argument of the connection's error is kept, for example the resolver's status of a name lookup error
+        xsink->raiseExceptionArg(err_str, err->getKeyValue("arg").refSelf(), "%s", desc_str);
         return;
     }
     xsink->raiseException("HTTPCLIENT-STATE-ERROR", "%s", fallback_desc);

@@ -38,13 +38,18 @@ done
 
 # never trace a token
 set +x
+# a response is written only when its request succeeded, so that the partial output of a failed request is never
+# read as a pipeline list
 pipelines() {
     url="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/pipelines?sha=$1&status=success&per_page=20"
-    if [ -n "${CI_JOB_TOKEN:-}" ] && curl -sf --max-time 30 --header "JOB-TOKEN: ${CI_JOB_TOKEN}" "$url"; then
+    if [ -n "${CI_JOB_TOKEN:-}" ] \
+        && body=$(curl -sf --max-time 30 --header "JOB-TOKEN: ${CI_JOB_TOKEN}" "$url"); then
+        printf '%s' "$body"
         return 0
     fi
     if [ -n "${QORE_CI_READ_API_TOKEN:-}" ] \
-        && curl -sf --max-time 30 --header "PRIVATE-TOKEN: ${QORE_CI_READ_API_TOKEN}" "$url"; then
+        && body=$(curl -sf --max-time 30 --header "PRIVATE-TOKEN: ${QORE_CI_READ_API_TOKEN}" "$url"); then
+        printf '%s' "$body"
         return 0
     fi
     return 1

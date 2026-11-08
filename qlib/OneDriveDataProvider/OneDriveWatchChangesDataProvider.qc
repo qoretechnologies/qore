@@ -201,7 +201,10 @@ public class OneDriveWatchChangesDataProvider inherits OneDriveDataProviderBase,
     #! Returns example event data
     private auto getExampleEventDataImpl(string event_id) {
         try {
-            hash<auto> response = doRestCommand("GET", getDriveBasePath() + "/root/children?$top=1");
+            # the example data is requested once, without retries
+            hash<auto> response = DataProviderRetryUtil::runWithoutRetries(hash<auto> sub () {
+                return doRestCommand("GET", getDriveBasePath() + "/root/children?$top=1");
+            });
             if (response.body.value) {
                 return response.body.value[0];
             }

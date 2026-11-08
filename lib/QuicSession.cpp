@@ -51,6 +51,14 @@
 #include "qore/intern/QoreForkHandlers.h"
 
 #include <unordered_set>
+#include <set>
+#include <map>
+#include <condition_variable>
+#include <chrono>
+#include <functional>
+#include <memory>
+#include <poll.h>
+#include <arpa/inet.h>
 
 #include <algorithm>
 #include <cassert>
@@ -344,6 +352,506 @@ std::string QuicSession::getCipherVersion() const {
 
 // ===== Timestamp helper =====
 
+#ifdef DEBUG
+//! The total advance of the QUIC test clock in nanoseconds; see qore_quic_test_advance_clock()
+static std::atomic<int64_t> quic_test_clock_offset_ns{0};
+
+//! The QUIC packets processed by client and server connections; see qore_quic_test_packets_received()
+static std::mutex quic_test_rx_m;
+static int64_t quic_test_rx_client = 0;
+static int64_t quic_test_rx_server = 0;
+
+//! Counts a packet processed by a connection
+static void quic_test_count_rx(bool is_server) {
+    std::lock_guard<std::mutex> g(quic_test_rx_m);
+    ++(is_server ? quic_test_rx_server : quic_test_rx_client);
+}
+
+static bool quic_test_pending_input();
+static bool quic_test_undelivered(std::vector<int>& fds);
+static bool quic_test_undelivered_locked(std::vector<int>& fds);
+static bool quic_test_wait_delivered(int timeout_ms);
+static std::string quic_test_describe_undelivered();
+
+//! Set by the first advance of the QUIC test clock: datagrams are counted from then on (see quic_test_undelivered())
+static std::atomic<bool> quic_test_clock_used{false};
+
+int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink) {
+    if (ms < 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the QUIC test clock only goes forward; got %lld ms",
+            (long long)ms);
+        return -1;
+    }
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return -1;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return -1;
+    }
+    // the packets already received are processed on the current clock first: a packet processed after the advance
+    // would be taken as received now, and an acknowledgement in it would give an RTT sample as large as the advance,
+    // which raises the loss detection timers (and the idle timeout, at least 3 PTOs) by as much; the operations of
+    // the sockets are woken, and the wait ends when they have run
+    // - the operations implemented in Qore (a WebSocketClient's, an HttpServer's) and their onComplete() callbacks
+    //   run in worker threads, which waitForProcessing() does not wait for: a pass also waits for them, and then for
+    //   the I/O threads again, which register the operations that the callbacks submitted again; without this the
+    //   clock advanced while a connection whose operation was between two submissions could not read what it was
+    //   sent, so it saw its peer silent, and the connection was closed for its idle timeout
+    // - the packets that the processing sends to other connections of the process are received in turn, and an
+    //   operation submitted again during a pass reads what it was sent in the next one, so this is repeated until a
+    //   pass processes no packet and completes no operation, and no socket of the connections has a packet to read
+    //   (the I/O thread of the receiving connection sees a datagram in its socket at its next poll, which no wait
+    //   above covers)
+    // - a datagram sent to a socket of the process is not always in it when the send returns: macOS delivers
+    //   loopback datagrams in its network input thread, which can run after the sender has returned, so a pass is
+    //   quiet only when every datagram sent to a socket of the process has been read from it (see
+    //   quic_test_undelivered()), and the next pass waits until those still on their way have been read
+    quic_test_clock_used.store(true, std::memory_order_release);
+    // waits for the I/O threads to process the commands given to them so far; a controller with no running I/O
+    // thread has no operation to wait for
+    auto wait_io = [&]() -> int {
+        if (ctrl->waitForProcessing(30000, xsink)) {
+            return 0;
+        }
+        if (*xsink) {
+            return -1;
+        }
+        if (!ctrl->running()) {
+            return 0;
+        }
+        xsink->raiseException("DBG-QUIC-CLOCK-ERROR", "the I/O threads of the async I/O controller did not process "
+            "their commands within 30 seconds; the QUIC test clock was not advanced");
+        return -1;
+    };
+    bool quiet = false;
+    for (int pass = 0; pass < 100 && !quiet; ++pass) {
+        int64_t client_before, server_before;
+        qore_quic_test_packets_received(client_before, server_before);
+        int64_t completed_before;
+        if (!ctrl->dbgWaitWorkersIdle(30000, completed_before)) {
+            xsink->raiseException("DBG-QUIC-CLOCK-ERROR", "the worker threads of the async I/O controller did not "
+                "become idle within 30 seconds; the QUIC test clock was not advanced");
+            return -1;
+        }
+        ctrl->dbgWakeAllSockets();
+        if (wait_io()) {
+            return -1;
+        }
+        int64_t completed_after;
+        if (!ctrl->dbgWaitWorkersIdle(30000, completed_after)) {
+            xsink->raiseException("DBG-QUIC-CLOCK-ERROR", "the worker threads of the async I/O controller did not "
+                "become idle within 30 seconds; the QUIC test clock was not advanced");
+            return -1;
+        }
+        if (wait_io()) {
+            return -1;
+        }
+        int64_t client_after, server_after;
+        qore_quic_test_packets_received(client_after, server_after);
+        std::vector<int> undelivered;
+        bool in_flight = quic_test_undelivered(undelivered);
+        quiet = client_after == client_before && server_after == server_before && completed_after == completed_before
+            && !in_flight && !quic_test_pending_input();
+        // waits until the datagrams that are still on their way have been read by the connections they were sent to;
+        // the I/O threads read a datagram when it is in its socket, so the next pass sees what it caused
+        if (!quiet && in_flight && !quic_test_wait_delivered(30000)) {
+            xsink->raiseException("DBG-QUIC-CLOCK-ERROR", "datagrams sent to sockets of the process were not read "
+                "within 30 seconds (%s); the QUIC test clock was not advanced",
+                quic_test_describe_undelivered().c_str());
+            return -1;
+        }
+    }
+    if (!quiet) {
+        xsink->raiseException("DBG-QUIC-CLOCK-ERROR", "the connections still processed packets after 100 passes; the "
+            "QUIC test clock was not advanced");
+        return -1;
+    }
+    int64_t total = quic_test_clock_offset_ns.fetch_add(ms * 1000000LL, std::memory_order_acq_rel)
+        + ms * 1000000LL;
+    // the operations of the connections handle the timers that are due on the new clock now
+    ctrl->dbgWakeAllSockets();
+    return total / 1000000LL;
+}
+
+void qore_quic_test_packets_received(int64_t& client, int64_t& server) {
+    std::lock_guard<std::mutex> g(quic_test_rx_m);
+    client = quic_test_rx_client;
+    server = quic_test_rx_server;
+}
+
+//! The UDP sockets that QUIC connections of the process have received packets on; see qore_quic_test_note_receive_fd()
+static std::mutex quic_test_fds_m;
+static std::set<int> quic_test_fds;
+
+void qore_quic_test_note_receive_fd(int fd) {
+    std::lock_guard<std::mutex> g(quic_test_fds_m);
+    quic_test_fds.insert(fd);
+}
+
+//! The datagrams sent to and received at an address of the process; see quic_test_undelivered()
+struct QuicTestAddrCounts {
+    int64_t sent = 0;
+    int64_t received = 0;
+};
+
+//! The datagrams sent to and received at addresses, by address (see quic_test_addr_key()); under quic_test_fds_m
+static std::map<std::string, QuicTestAddrCounts> quic_test_addr_counts;
+
+//! Signaled when datagrams have been received; see quic_test_wait_delivered()
+static std::condition_variable quic_test_received_cv;
+
+//! The datagrams sent to each address, by "address:port", never forgotten; under quic_test_fds_m
+/** See qore_quic_test_datagram_totals(): a test whose peer runs in another process exchanges these totals with it
+*/
+static std::map<std::string, int64_t> quic_test_sent_to_total;
+
+//! The datagrams received from each address, by "address:port", never forgotten; under quic_test_fds_m
+static std::map<std::string, int64_t> quic_test_received_from_total;
+
+//! Returns "address:port" for an address, with an IPv4-mapped IPv6 address as IPv4; an empty string for another family
+static std::string quic_test_addr_str(const struct sockaddr* addr) {
+    char buf[INET6_ADDRSTRLEN] = "";
+    int port;
+    if (addr->sa_family == AF_INET) {
+        const struct sockaddr_in* a = reinterpret_cast<const struct sockaddr_in*>(addr);
+        inet_ntop(AF_INET, &a->sin_addr, buf, sizeof(buf));
+        port = ntohs(a->sin_port);
+    } else if (addr->sa_family == AF_INET6) {
+        const struct sockaddr_in6* a = reinterpret_cast<const struct sockaddr_in6*>(addr);
+        if (IN6_IS_ADDR_V4MAPPED(&a->sin6_addr)) {
+            inet_ntop(AF_INET, reinterpret_cast<const char*>(&a->sin6_addr) + 12, buf, sizeof(buf));
+        } else {
+            inet_ntop(AF_INET6, &a->sin6_addr, buf, sizeof(buf));
+        }
+        port = ntohs(a->sin6_port);
+    } else {
+        return std::string();
+    }
+    QoreStringMaker str("%s:%d", buf, port);
+    return str.c_str();
+}
+
+//! Returns the key of an address: its family, IP address and port, with an IPv4-mapped IPv6 address as IPv4
+static std::string quic_test_addr_key(const struct sockaddr* addr) {
+    std::string key;
+    if (addr->sa_family == AF_INET) {
+        const struct sockaddr_in* a = reinterpret_cast<const struct sockaddr_in*>(addr);
+        key.assign("4");
+        key.append(reinterpret_cast<const char*>(&a->sin_addr), sizeof(a->sin_addr));
+        key.append(reinterpret_cast<const char*>(&a->sin_port), sizeof(a->sin_port));
+    } else if (addr->sa_family == AF_INET6) {
+        const struct sockaddr_in6* a = reinterpret_cast<const struct sockaddr_in6*>(addr);
+        if (IN6_IS_ADDR_V4MAPPED(&a->sin6_addr)) {
+            key.assign("4");
+            key.append(reinterpret_cast<const char*>(&a->sin6_addr) + 12, 4);
+        } else {
+            key.assign("6");
+            key.append(reinterpret_cast<const char*>(&a->sin6_addr), sizeof(a->sin6_addr));
+        }
+        key.append(reinterpret_cast<const char*>(&a->sin6_port), sizeof(a->sin6_port));
+    }
+    return key;
+}
+
+//! Adds @p count to the datagrams sent to an address; returns false if the address has no key
+/** @param addr the destination address, or nullptr for the peer of the connected socket @p fd
+*/
+static bool quic_test_add_sent(int fd, const struct sockaddr* addr, int count) {
+    struct sockaddr_storage peer;
+    if (!addr) {
+        // a connected socket sends to its peer
+        socklen_t len = sizeof(peer);
+        if (getpeername(fd, reinterpret_cast<struct sockaddr*>(&peer), &len)) {
+            return false;
+        }
+        addr = reinterpret_cast<const struct sockaddr*>(&peer);
+    }
+    std::string key = quic_test_addr_key(addr);
+    if (key.empty()) {
+        return false;
+    }
+    std::string str = quic_test_addr_str(addr);
+    std::lock_guard<std::mutex> g(quic_test_fds_m);
+    quic_test_addr_counts[key].sent += count;
+    quic_test_sent_to_total[str] += count;
+    if (count < 0) {
+        // datagrams taken back: a wait for the datagrams sent to be read can be over
+        quic_test_received_cv.notify_all();
+    }
+    return true;
+}
+
+bool qore_quic_test_note_sent(int fd, const struct sockaddr* addr, socklen_t addrlen, int count) {
+    assert(count > 0);
+    if (!quic_test_clock_used.load(std::memory_order_acquire)) {
+        return false;
+    }
+    return quic_test_add_sent(fd, addr, count);
+}
+
+void qore_quic_test_take_back_sent(int fd, const struct sockaddr* addr, socklen_t addrlen, int count) noexcept {
+    assert(count > 0);
+    // not checked against quic_test_clock_used: the datagrams were counted
+    try {
+        quic_test_add_sent(fd, addr, -count);
+    } catch (const std::exception& e) {
+        // called by a destructor; the test clock then waits for the datagrams until its timeout and raises an error
+        printd(0, "qore_quic_test_take_back_sent(): %s\n", e.what());
+    }
+}
+
+//! Set while a test hook makes sends fail; see qore_quic_test_set_send_hook()
+static std::atomic<bool> quic_test_send_hook_set{false};
+static std::mutex quic_test_send_hook_m;
+//! The test hook; shared, as a send can call it while it is replaced
+static std::shared_ptr<const std::function<int(int)>> quic_test_send_hook;
+
+int qore_quic_test_send_error(int fd) {
+    if (!quic_test_send_hook_set.load(std::memory_order_acquire)) {
+        return 0;
+    }
+    std::shared_ptr<const std::function<int(int)>> hook;
+    {
+        std::lock_guard<std::mutex> g(quic_test_send_hook_m);
+        hook = quic_test_send_hook;
+    }
+    return hook ? (*hook)(fd) : 0;
+}
+
+void qore_quic_test_set_send_hook(std::function<int(int)> hook) {
+    std::shared_ptr<const std::function<int(int)>> h;
+    if (hook) {
+        h = std::make_shared<const std::function<int(int)>>(std::move(hook));
+    }
+    std::lock_guard<std::mutex> g(quic_test_send_hook_m);
+    quic_test_send_hook = std::move(h);
+    quic_test_send_hook_set.store(static_cast<bool>(quic_test_send_hook), std::memory_order_release);
+}
+
+bool qore_quic_test_set_counting(bool on) {
+    return quic_test_clock_used.exchange(on, std::memory_order_acq_rel);
+}
+
+int64_t qore_quic_test_undelivered_to(const struct sockaddr* addr) {
+    std::string key = quic_test_addr_key(addr);
+    std::lock_guard<std::mutex> g(quic_test_fds_m);
+    auto i = quic_test_addr_counts.find(key);
+    return i == quic_test_addr_counts.end() ? 0 : i->second.sent - i->second.received;
+}
+
+void qore_quic_test_forget_receive_fd(int fd) {
+    std::lock_guard<std::mutex> g(quic_test_fds_m);
+    quic_test_fds.erase(fd);
+}
+
+bool qore_quic_test_wait_delivered_woken(int timeout_ms, const std::function<void()>& waiting) {
+    std::unique_lock<std::mutex> g(quic_test_fds_m);
+    std::vector<int> fds;
+    if (!quic_test_undelivered_locked(fds)) {
+        return true;
+    }
+    // called with the lock held: what the caller does next to wake this wait cannot happen before it waits
+    waiting();
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (true) {
+        if (quic_test_received_cv.wait_until(g, deadline) == std::cv_status::timeout) {
+            return false;
+        }
+        fds.clear();
+        if (!quic_test_undelivered_locked(fds)) {
+            return true;
+        }
+    }
+}
+
+void qore_quic_test_note_received(int fd, const struct sockaddr* src, int count) {
+    if (!quic_test_clock_used.load(std::memory_order_acquire)) {
+        return;
+    }
+    struct sockaddr_storage local;
+    socklen_t len = sizeof(local);
+    if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local), &len)) {
+        return;
+    }
+    std::string key = quic_test_addr_key(reinterpret_cast<const struct sockaddr*>(&local));
+    if (key.empty()) {
+        return;
+    }
+    std::string from = quic_test_addr_str(src);
+    std::lock_guard<std::mutex> g(quic_test_fds_m);
+    quic_test_addr_counts[key].received += count;
+    quic_test_received_from_total[from] += count;
+    quic_test_received_cv.notify_all();
+}
+
+//! Returns true if a datagram sent to a socket of the process has not been read from it yet
+/** The sockets of the process are those that QUIC connections have received datagrams on (see
+    qore_quic_test_note_receive_fd()); \a fds gets those that are still to receive datagrams sent to them.  The
+    datagrams sent to an address that no socket of the process has (one in another process, or a socket that was
+    closed) are not waited for, and are forgotten.  Datagrams received beyond those counted as sent (sent before the
+    datagrams were counted) are not counted against later ones; a datagram is counted as sent before it is sent (see
+    sendQuicPacketsBatch()), so that one that its receiver reads before the sender has returned is not taken for
+    one of them, which left a datagram counted as sent and never as read.
+*/
+static bool quic_test_undelivered_locked(std::vector<int>& fds) {
+    // the addresses of the sockets of the process
+    std::map<std::string, int> fd_by_key;
+    for (int fd : quic_test_fds) {
+        struct sockaddr_storage local;
+        socklen_t len = sizeof(local);
+        if (!getsockname(fd, reinterpret_cast<struct sockaddr*>(&local), &len)) {
+            std::string key = quic_test_addr_key(reinterpret_cast<const struct sockaddr*>(&local));
+            if (!key.empty()) {
+                fd_by_key[key] = fd;
+            }
+        }
+    }
+    for (auto i = quic_test_addr_counts.begin(); i != quic_test_addr_counts.end();) {
+        auto fi = fd_by_key.find(i->first);
+        if (fi == fd_by_key.end()) {
+            i = quic_test_addr_counts.erase(i);
+            continue;
+        }
+        if (i->second.received > i->second.sent) {
+            i->second.received = i->second.sent;
+        } else if (i->second.received < i->second.sent) {
+            fds.push_back(fi->second);
+        }
+        ++i;
+    }
+    return !fds.empty();
+}
+
+static bool quic_test_undelivered(std::vector<int>& fds) {
+    std::lock_guard<std::mutex> g(quic_test_fds_m);
+    return quic_test_undelivered_locked(fds);
+}
+
+//! Describes the addresses that datagrams were sent to and not read from: "address:port (fd N): sent S, read R"
+static std::string quic_test_describe_undelivered() {
+    std::lock_guard<std::mutex> g(quic_test_fds_m);
+    std::string desc;
+    std::vector<int> fds;
+    quic_test_undelivered_locked(fds);
+    for (int fd : fds) {
+        struct sockaddr_storage local;
+        socklen_t len = sizeof(local);
+        if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local), &len)) {
+            continue;
+        }
+        auto i = quic_test_addr_counts.find(quic_test_addr_key(reinterpret_cast<const struct sockaddr*>(&local)));
+        if (i == quic_test_addr_counts.end()) {
+            continue;
+        }
+        char addr[INET6_ADDRSTRLEN] = "?";
+        int port = 0;
+        if (local.ss_family == AF_INET) {
+            const struct sockaddr_in* a = reinterpret_cast<const struct sockaddr_in*>(&local);
+            inet_ntop(AF_INET, &a->sin_addr, addr, sizeof(addr));
+            port = ntohs(a->sin_port);
+        } else if (local.ss_family == AF_INET6) {
+            const struct sockaddr_in6* a = reinterpret_cast<const struct sockaddr_in6*>(&local);
+            inet_ntop(AF_INET6, &a->sin6_addr, addr, sizeof(addr));
+            port = ntohs(a->sin6_port);
+        }
+        if (!desc.empty()) {
+            desc += "; ";
+        }
+        // whether the socket is a client's (connected) and has a datagram that no one has read, as when its
+        // connection no longer reads it
+        struct sockaddr_storage peer;
+        socklen_t peer_len = sizeof(peer);
+        bool connected = !getpeername(fd, reinterpret_cast<struct sockaddr*>(&peer), &peer_len);
+        struct pollfd pfd = {fd, POLLIN, 0};
+        bool pending = ::poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN);
+        QoreStringMaker item("%s:%d (fd %d, %s, %s): sent %lld, read %lld", addr, port, fd,
+            connected ? "connected" : "not connected", pending ? "a datagram waits to be read" : "nothing to read",
+            static_cast<long long>(i->second.sent), static_cast<long long>(i->second.received));
+        desc += item.c_str();
+    }
+    return desc.empty() ? std::string("no address") : desc;
+}
+
+//! Waits until every datagram sent to a socket of the process has been read from it; false on timeout
+/** The wait ends when the datagrams have been counted as received (see qore_quic_test_note_received()), not when
+    they are in their sockets: the I/O thread of the receiving connection can read one before this function would
+    see it in its socket
+*/
+static bool quic_test_wait_delivered(int timeout_ms) {
+    std::unique_lock<std::mutex> g(quic_test_fds_m);
+    return quic_test_received_cv.wait_for(g, std::chrono::milliseconds(timeout_ms), []() {
+        std::vector<int> fds;
+        return !quic_test_undelivered_locked(fds);
+    });
+}
+
+void qore_quic_test_count_datagrams() {
+    quic_test_clock_used.store(true, std::memory_order_release);
+}
+
+QoreHashNode* qore_quic_test_datagram_totals() {
+    ReferenceHolder<QoreHashNode> sent(new QoreHashNode(bigIntTypeInfo), nullptr);
+    ReferenceHolder<QoreHashNode> received(new QoreHashNode(bigIntTypeInfo), nullptr);
+    {
+        std::lock_guard<std::mutex> g(quic_test_fds_m);
+        for (const auto& [addr, n] : quic_test_sent_to_total) {
+            sent->setKeyValue(addr.c_str(), n, nullptr);
+        }
+        for (const auto& [addr, n] : quic_test_received_from_total) {
+            received->setKeyValue(addr.c_str(), n, nullptr);
+        }
+    }
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    h->setKeyValue("sent_to", sent.release(), nullptr);
+    h->setKeyValue("received_from", received.release(), nullptr);
+    return h;
+}
+
+bool qore_quic_test_wait_received_from(const char* addr, int64_t count, int timeout_ms) {
+    std::unique_lock<std::mutex> g(quic_test_fds_m);
+    return quic_test_received_cv.wait_for(g, std::chrono::milliseconds(timeout_ms), [addr, count]() {
+        int64_t received = 0;
+        if (addr && *addr) {
+            auto i = quic_test_received_from_total.find(addr);
+            if (i != quic_test_received_from_total.end()) {
+                received = i->second;
+            }
+        } else {
+            for (const auto& [a, n] : quic_test_received_from_total) {
+                received += n;
+            }
+        }
+        return received >= count;
+    });
+}
+
+//! Returns true if a UDP socket that QUIC connections of the process receive packets on has a packet to read
+/** A number that is no longer a datagram socket (it was closed, or given to another kind of descriptor) is forgotten
+*/
+static bool quic_test_pending_input() {
+    std::lock_guard<std::mutex> g(quic_test_fds_m);
+    bool pending = false;
+    for (auto i = quic_test_fds.begin(); i != quic_test_fds.end();) {
+        int type = 0;
+        socklen_t len = sizeof(type);
+        if (getsockopt(*i, SOL_SOCKET, SO_TYPE, &type, &len) || type != SOCK_DGRAM) {
+            i = quic_test_fds.erase(i);
+            continue;
+        }
+        struct pollfd pfd = {*i, POLLIN, 0};
+        if (::poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN)) {
+            pending = true;
+        }
+        ++i;
+    }
+    return pending;
+}
+
+#endif
+
 ngtcp2_tstamp QuicSession::timestamp() {
     struct timespec tp;
 #if defined(DARWIN) && defined(CLOCK_MONOTONIC_RAW)
@@ -357,8 +865,12 @@ ngtcp2_tstamp QuicSession::timestamp() {
 #else
     clock_gettime(CLOCK_MONOTONIC, &tp);
 #endif
-    return static_cast<ngtcp2_tstamp>(tp.tv_sec) * NGTCP2_SECONDS
+    ngtcp2_tstamp ts = static_cast<ngtcp2_tstamp>(tp.tv_sec) * NGTCP2_SECONDS
          + static_cast<ngtcp2_tstamp>(tp.tv_nsec);
+#ifdef DEBUG
+    ts += static_cast<ngtcp2_tstamp>(quic_test_clock_offset_ns.load(std::memory_order_acquire));
+#endif
+    return ts;
 }
 
 ngtcp2_tstamp QuicSession::nowLocked() const {
@@ -1548,6 +2060,9 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
     // generates ACK frames that need to be sent.  Skipping this would cause
     // delayed ACKs and potential retransmissions from the peer.
     pending_write_.store(true, std::memory_order_release);
+#ifdef DEBUG
+    quic_test_count_rx(is_server_);
+#endif
 
     return 0;
 }
@@ -1660,6 +2175,9 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
                 i, count, ngtcp2_strerror(rv), rv);
             continue;
         }
+#ifdef DEBUG
+        quic_test_count_rx(is_server_);
+#endif
     }
 
     // Signal pending write once for the entire batch
@@ -5854,7 +6372,9 @@ void QuicSession::cleanupStreamInputStreams(ExceptionSink* xsink) {
 void QuicSession::getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     for (auto& [stream_id, info] : stream_input_streams_) {
-        if (!info.eof && info.is_pollable && info.stream_fd >= 0) {
+        // a regular file is always ready, so waiting for it would wake the operation at once while the stream cannot
+        // send; it is read when the operation runs, as a stream that is not pollable (see processStreamInputStreams())
+        if (!info.eof && info.is_pollable && info.stream_fd >= 0 && !info.is_regular_file) {
             extra_fds.push_back({info.stream_fd, SOCK_POLLIN});
         }
     }

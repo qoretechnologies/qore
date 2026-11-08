@@ -5192,8 +5192,9 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
         ir->computeIROnlyLocals();
 
         if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
-            if (!ir->ir_only_locals.empty()) {
+            if (!ir->ir_only_locals.empty() || !ir->reference_slot_locals.empty()) {
                 ir->ir_only_locals.clear();
+                ir->reference_slot_locals.clear();
                 ir->ast_visible_body_locals = ir->all_body_locals;
             }
         }
@@ -5802,8 +5803,9 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     // When debugger is enabled, all locals must be on the TLS stack so
     // get_local_vars() and set_local_var_value() can access them
     if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
-        if (!func->ir_only_locals.empty()) {
+        if (!func->ir_only_locals.empty() || !func->reference_slot_locals.empty()) {
             func->ir_only_locals.clear();
+            func->reference_slot_locals.clear();
             func->ast_visible_body_locals = func->all_body_locals;
         }
     }
@@ -6644,6 +6646,18 @@ void UserVariantBase::recordFastCallExecution() const {
     }
 }
 
+//! Reports a call that tiered execution runs on the AST tier, if QORE_IR_TRACE_AST_TIER is set
+/** So that a test that must run code on the IR tier can prove it did (see ExecModeHarness::run_ir_tier() in the
+    tests); every path of a user function call that runs its AST body in tiered mode calls this
+*/
+static void qore_trace_ast_tier(const char* name) {
+    static constinit QoreEnvFlag trace_ast_tier("QORE_IR_TRACE_AST_TIER");
+    if (trace_ast_tier.get()) {
+        fprintf(stderr, "[ir-ast-tier] %s\n", name ? name : "<unknown>");
+        fflush(stderr);
+    }
+}
+
 QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
         ExceptionSink* xsink, bool caller_has_frame_boundary) const {
     assert(pgm);
@@ -7040,6 +7054,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     }
 
     // Check for IR promotion
+    // whether this call promotes the function from the AST tier: it then runs on the IR tier itself (below)
+    const bool promotable = current_tier.load(std::memory_order_acquire) == TIER_AST;
     if (count >= QoreJIT::getIRThreshold() && !ir_lower_failed) {
         // Re-read rather than reuse the entry-time value: another thread may have
         // published a body since this call started, and that body must promote the tier.
@@ -7053,10 +7069,19 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 attemptIRLowering(name);
             });
         }
-        // If promotion succeeded, the next call will use IR tier
+    }
+    // the call that promotes the function to the IR tier runs on it, as the following calls do: a function that is
+    // not lowered when its Program is committed (ex: a closure) would otherwise run its first call on the AST tier
+    // with an IR threshold of 1; the call is counted once.  A call that runs on the AST tier for another reason (an
+    // attached debugger, a generic specialization that is not available) finds the function promoted already and
+    // stays here
+    if (promotable && current_tier.load(std::memory_order_acquire) == TIER_IR) {
+        exec_count.fetch_sub(1, std::memory_order_relaxed);
+        return evalTiered(name, argv, self, xsink, caller_has_frame_boundary);
     }
 
     // Fall through to AST execution (bypass the tiered check)
+    qore_trace_ast_tier(name);
     QoreValue val{};
     if (self && signature.selfid) {
         signature.selfid->instantiateSelf(self);
@@ -7139,6 +7164,10 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
                     return evalTiered(name, argv, self, xsink, true);
                 }
             }
+        }
+        // a function that tiered execution cannot run on the IR tier (ex: one that is not %modern) runs its AST body
+        if (statements && pgm->getExecMode() == QEM_TIERED) {
+            qore_trace_ast_tier(name);
         }
     }
 

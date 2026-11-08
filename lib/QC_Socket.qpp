@@ -2013,6 +2013,10 @@ hashdecl Qore::SocketPollInfo {
         main pollable object.  When any extra fd becomes ready, the operation's continuePoll() is called.  Used for
         InputStream and OutputStream fds during streaming operations.
 
+        A regular file is always ready; the I/O controller does not wait for one in \c extra_fds, as it would run the
+        operation at once every time it waits: the operation uses the file when it runs for its main object or another
+        descriptor.  @ref Qore::Socket::poll() "Socket::poll()" reports one ready at once.
+
         @since %Qore 3.0
     */
     *list<hash<ExtraPollFdInfo>> extra_fds;
@@ -6182,6 +6186,36 @@ int Socket::shutdown() {
     return s->shutdown();
 }
 
+//! Shuts down the sending side of the connection only (a half-close)
+/** The peer receives the end of the stream after the data already sent (a TCP \c FIN, RFC 9293 section 3.6), while
+    this side can still receive data, for example the response to a request that the peer reads to the end of the
+    stream.  A secure connection sends its TLS \c close_notify alert first, as RFC 8446 section 6.1 requires before
+    the write side of a connection is closed; the peer's alert is not waited for.  The socket stays open: close it with
+    close() when it is no longer needed.  Data cannot be sent on the connection afterwards.
+
+    A %Qore TLS peer closes its connection when it receives the \c close_notify alert, so with TLS a %Qore peer
+    cannot send a response after it has read the end of the stream: it must send its response before it reads the
+    end of the stream, or the half-close only works with a peer that keeps its connection open after the alert.
+
+    @par Example:
+    @code{.py}
+sock.send("GET / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n");
+# the server sees the end of the request stream; the response can still be read
+sock.shutdownWrite();
+hash<auto> hdr = sock.readHTTPHeader(10s);
+    @endcode
+
+    @throw SOCKET-NOT-OPEN the socket is not open
+    @throw SOCKET-SHUTDOWN-ERROR the system refused the shutdown; the description has the error
+
+    @see shutdown()
+
+    @since %Qore 3.0
+*/
+nothing Socket::shutdownWrite() [dom=NETWORK] {
+    s->shutdownWrite(xsink);
+}
+
 //! Shuts down the SSL connection on a secure connection
 /** If any errors occur, an exception is raised
 
@@ -7358,6 +7392,19 @@ int Socket::getHttp2MaxRequestBodySize() [flags=CONSTANT] {
     @throw QOREADDRINFO-GETINFO-ERROR error looking up either nodename or servicename (or not known), or the node or
     service name contains a NUL character
     @throw ASYNC-IO-ERROR called from the async I/O thread or the global async I/O controller is unavailable
+
+    @par Name lookup errors
+    A \c QOREADDRINFO-GETINFO-ERROR exception raised for the answer of the resolver has a hash argument with the key
+    \c status, the resolver's status: \c "ENOTFOUND" (the name does not exist), \c "ENODATA" (the name has no address
+    of the requested family), \c "EBADNAME" (the name is not a valid name), \c "ENONAME" (the name is not a numeric
+    address, with \c AI_NUMERICHOST) and \c "ESERVICE" (the service is not known) are definite answers, which another
+    lookup gives again; others, such as \c "ETIMEOUT", \c "ESERVFAIL", \c "EREFUSED" and \c "ECONNREFUSED" (no DNS
+    server answered, or one failed), can be temporary.  A lookup of both address families (\c AF_UNSPEC) fails with
+    \c "ENOTFOUND" or \c "ENODATA" only if the answers for both families are definite; if one is not, the lookup
+    fails with its status.  A single-label name (one without a dot), which is also looked up with the search domains
+    of the host, fails with \c "ESERVFAIL" or \c "EREFUSED" if the DNS server failed or refused the name itself,
+    though a search domain gave a definite answer.  An error that is not an answer of the resolver, such as a
+    resolver that could not be initialized, has no \c status.
 
     @since %Qore 3.0
  */

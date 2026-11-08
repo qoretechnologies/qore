@@ -113,7 +113,7 @@ class CiBuildImageCheckTest(unittest.TestCase):
         # each script that tests a build artifact runs the check before it installs or tests anything, and stops when
         # the check fails
         for name, first in (("test-ubuntu.sh", "setup_postgres_on_host"), ("test-alpine.sh", "setup_postgres_on_host"),
-                            ("test-perf.sh", "cmake --install"), ("test-cmake.sh", "unittest discover")):
+                            ("test-perf.sh", "./run_tests.sh -P"), ("test-cmake.sh", "unittest discover")):
             with self.subTest(script=name):
                 text = (DOCKER_TEST / name).read_text()
                 call = re.search(r'ci-build-image-check\.sh"\s*\\?\s*"\$\{[A-Z_]+\}/(?:build/)?'

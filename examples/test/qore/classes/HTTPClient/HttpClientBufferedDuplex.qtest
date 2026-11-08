@@ -39,6 +39,7 @@
 */
 
 %modern
+
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 
@@ -343,6 +344,121 @@ class BufferedDuplexPeer {
     }
 }
 
+#! How an @ref EarlyAnswerPeer ends the connection after it has answered
+enum EarlyClose : string {
+    #! closes at once with the request unread, which resets the connection
+    Reset = "reset",
+
+    #! shuts the connection down before it closes it, so a FIN reaches the client ahead of the reset
+    /** The client's connection has been half-closed by the peer when the reset arrives, as with a peer that closes
+        gracefully and only then finds request data it did not read.
+    */
+    FinThenReset = "fin-then-reset",
+}
+
+#! A raw peer that answers a request while the client is still writing its header block
+/** The request header block is larger than the socket buffers, so the client's first write cannot take all of it,
+    and the peer reads only @ref ReadSize bytes of it before it answers (or not) and closes.  The client therefore
+    sees its write fail before it has written the whole header block - and, depending on the platform, without
+    having been told how much of it went out: a BSD-derived stack (macOS) reports a write that a reset interrupts as
+    a failure, discarding the count of bytes it had already transmitted.
+*/
+class EarlyAnswerPeer {
+    public {
+        #! upper bound on any blocking peer-side operation; reaching it fails the test
+        const PeerTimeout = 60s;
+
+        #! request bytes the peer reads before it answers: a small part of the request header block
+        const ReadSize = 1024;
+    }
+
+    private {
+        Socket listener();
+        int port;
+        Queue observed();
+        Counter done(1);
+        *hash<ExceptionInfo> peer_ex;
+    }
+
+    #! Starts the peer
+    /** @param how how the peer ends the connection of the first exchange
+        @param fault_size the size of the body of the 431 response the peer writes before it closes; no value: the
+        peer closes without answering
+    */
+    constructor(EarlyClose how, *int fault_size) {
+        listener.bind("localhost:0", True);
+        listener.listen();
+        port = listener.getPort();
+        background serve(how, fault_size);
+    }
+
+    string getUrl() {
+        return sprintf("http://localhost:%d", port);
+    }
+
+    #! Returns the request line of the first exchange, then the path of the request on the second connection
+    string getObserved() {
+        return observed.get(PeerTimeout);
+    }
+
+    #! Waits for the peer thread to finish and rethrows anything it caught
+    stopAndCheck() {
+        if (done.waitForZero(PeerTimeout)) {
+            throw "PEER-ERROR", "the raw peer did not finish";
+        }
+        if (peer_ex) {
+            throw "PEER-ERROR", sprintf("the raw peer failed: %s: %s", peer_ex.err, peer_ex.desc);
+        }
+    }
+
+    private serve(EarlyClose how, *int fault_size) {
+        on_exit done.dec();
+        on_exit {
+            try { listener.close(); } catch (hash<ExceptionInfo> ex) {}
+        }
+        try {
+            {
+                Socket conn = listener.accept(PeerTimeout);
+                on_exit {
+                    try { conn.close(); } catch (hash<ExceptionInfo> ex) {}
+                }
+                string start = conn.recvBinary(ReadSize, PeerTimeout).toString();
+                observed.push((start =~ x/^([^\r\n]*)/)[0] ?? start);
+                if (exists fault_size) {
+                    conn.send(sprintf("HTTP/1.1 431 Request Header Fields Too Large\r\n"
+                        "Content-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n", fault_size),
+                        PeerTimeout);
+                    if (fault_size) {
+                        conn.send(BufferedDuplexPeer::makeBody(fault_size), PeerTimeout);
+                    }
+                }
+                if (how == EarlyClose::FinThenReset) {
+                    conn.shutdown();
+                }
+                # the rest of the request is unread: the close resets the connection
+                conn.close();
+            }
+
+            # the client must not reuse the connection: the recovery request comes on a new one
+            Socket conn = listener.accept(PeerTimeout);
+            on_exit {
+                try { conn.close(); } catch (hash<ExceptionInfo> ex) {}
+            }
+            hash<auto> hdr = conn.readHTTPHeader(PeerTimeout);
+            int len = hdr."content-length" ? hdr."content-length".toInt() : 0;
+            if (len) {
+                conn.recvBinary(len, PeerTimeout);
+            }
+            conn.send("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", PeerTimeout);
+            observed.push(hdr.path);
+        } catch (hash<ExceptionInfo> ex) {
+            peer_ex = ex;
+            # unblock a test waiting for an exchange that will never be observed
+            observed.push(sprintf("%s: %s", ex.err, ex.desc));
+        }
+    }
+}
+
 public class HttpClientBufferedDuplexTest inherits QUnit::Test {
     public {
         #! Request body size
@@ -368,6 +484,12 @@ public class HttpClientBufferedDuplexTest inherits QUnit::Test {
             can be cut short by the reset however the client behaves.
         */
         const FaultResponseSize = 2 * 1024;
+
+        #! The size of the request header that an @ref EarlyAnswerPeer answers before it has read it
+        /** Larger than the client's send buffer plus the peer's receive buffer, so the client's write of the header
+            block is still unfinished when the peer stops reading.
+        */
+        const LargeHeaderSize = 8 * 1024 * 1024;
     }
 
     private {
@@ -400,6 +522,14 @@ public class HttpClientBufferedDuplexTest inherits QUnit::Test {
             \earlyFaultStopsUploadTest());
         addTestCase("an early fault is delivered whenever the peer closes during the first write of the upload",
             \repeatedEarlyFaultTest());
+        addTestCase("a fault answered during the write of the request headers is delivered after a reset",
+            \earlyFaultDuringHeaderWriteResetTest());
+        addTestCase("a fault answered during the write of the request headers is delivered after a FIN and a reset",
+            \earlyFaultDuringHeaderWriteFinTest());
+        addTestCase("a fault answered during the write of a bodyless request is delivered",
+            \earlyFaultDuringBodylessRequestTest());
+        addTestCase("a peer that resets during the write of the request headers without answering reports the send "
+            "error", \resetWithoutAnswerDuringHeaderWriteTest());
         addTestCase("100 Continue responses during the upload are discarded",
             \interimResponsesDuringUploadTest());
         addTestCase("peer EOF during the upload is reported and recovered from", \peerEofDuringUploadTest());
@@ -420,8 +550,13 @@ public class HttpClientBufferedDuplexTest inherits QUnit::Test {
 
     #! Builds a client for @a peer
     private HTTPClient client(BufferedDuplexPeer peer, timeout to = ClientTimeout) {
+        return clientForUrl(peer.getUrl(), to);
+    }
+
+    #! Builds a client for the given peer URL
+    private HTTPClient clientForUrl(string url, timeout to = ClientTimeout) {
         return new HTTPClient({
-            "url": peer.getUrl(),
+            "url": url,
             "timeout": to,
             "connect_timeout": 15s,
             "error_passthru": True,
@@ -589,6 +724,78 @@ public class HttpClientBufferedDuplexTest inherits QUnit::Test {
             assertEq(FaultResponseSize, response.body.size(),
                 sprintf("the fault response body is delivered (run %d)", i));
         }
+    }
+
+    #! Runs one exchange against an @ref EarlyAnswerPeer and returns the response or the error the client raised
+    /** @param how how the peer ends the connection
+        @param fault_size the size of the fault body the peer answers with; no value: the peer does not answer
+        @param method the request method; a \c "GET" request has no body
+    */
+    private hash<auto> earlyAnswerExchange(EarlyClose how, *int fault_size, string method = "POST") {
+        EarlyAnswerPeer peer(how, fault_size);
+        on_exit peer.stopAndCheck();
+
+        HTTPClient hc = clientForUrl(peer.getUrl());
+        on_exit hc.disconnect();
+
+        hash<auto> hdr = {
+            "Content-Type": "application/octet-stream",
+            "X-Large": strmul("h", LargeHeaderSize),
+        };
+        *data body = method == "GET" ? NOTHING : "x";
+
+        hash<auto> rv;
+        try {
+            rv.response = hc.send(body, method, "/large-header", hdr, True);
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+        }
+
+        assertEq(method + " /large-header HTTP/1.1", peer.getObserved(),
+            "the peer read the start of the request before it closed");
+
+        # the connection carried a half-written request: the next request must open a new one
+        hash<auto> second = hc.send("x", "POST", "/after", {"Content-Type": "application/octet-stream"}, True);
+        assertEq(200, second.status_code, "the same client recovers on a fresh connection");
+        assertEq("/after", peer.getObserved(), "the recovery request reaches the peer on a new connection");
+        return rv;
+    }
+
+    #! Asserts that @a rv carries the 431 fault an @ref EarlyAnswerPeer answered with
+    private checkEarlyFault(hash<auto> rv) {
+        assertEq(NOTHING, rv.err, sprintf("no send error is raised (got %y: %y)", rv.err, rv.desc));
+        assertEq(431, rv.response.status_code, "the peer's fault is delivered rather than the write error it caused");
+        assertEq(FaultResponseSize, rv.response.body.size(), "the fault response body is delivered");
+    }
+
+    #! The peer answers and resets the connection while the client is still writing the request header block
+    /** The client's write fails before it has written the header block, with EPIPE when the write starts after the
+        reset (seen on Linux and macOS) or ECONNRESET when the reset interrupts it; on macOS the failed write also
+        reports none of the bytes it transmitted.  The peer's answer is in the client's receive buffer either way, and
+        it is what the caller gets.
+    */
+    earlyFaultDuringHeaderWriteResetTest() {
+        checkEarlyFault(earlyAnswerExchange(EarlyClose::Reset, FaultResponseSize));
+    }
+
+    #! The same where a FIN reaches the client before the reset
+    earlyFaultDuringHeaderWriteFinTest() {
+        checkEarlyFault(earlyAnswerExchange(EarlyClose::FinThenReset, FaultResponseSize));
+    }
+
+    #! The same for a request without a body, whose header block is the whole request
+    earlyFaultDuringBodylessRequestTest() {
+        checkEarlyFault(earlyAnswerExchange(EarlyClose::Reset, FaultResponseSize, "GET"));
+    }
+
+    #! A peer that resets without answering leaves the client with the send error, not the receive error after it
+    resetWithoutAnswerDuringHeaderWriteTest() {
+        hash<auto> rv = earlyAnswerExchange(EarlyClose::Reset);
+        assertEq(NOTHING, rv.response, "no response is invented");
+        assertEq("SOCKET-SEND-ERROR", rv.err, sprintf("the write error is reported (got %y: %y)", rv.err, rv.desc));
+        assertTrue(rv.desc =~ /(Connection reset by peer|Broken pipe)/,
+            sprintf("the error names the reset (got %y)", rv.desc));
     }
 
     #! "100 Continue" responses arriving mid-upload are discarded and the final response is delivered

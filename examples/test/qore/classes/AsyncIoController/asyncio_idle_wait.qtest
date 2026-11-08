@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AsyncIoIdleWaitTest
+
+#! A poll operation that waits for events of an object, with optional extra descriptors, and counts its calls
+class CountingWaitOperation inherits AbstractPollOperation<auto> {
+    public {
+        #! the number of continuePoll() calls
+        int calls = 0;
+    }
+
+    private {
+        AbstractPollableIoObjectBase obj;
+        int events;
+        *list<hash<ExtraPollFdInfo>> extra_fds;
+    }
+
+    constructor(AbstractPollableIoObjectBase obj, int events, *list<hash<ExtraPollFdInfo>> extra_fds) {
+        self.obj = obj;
+        self.events = events;
+        self.extra_fds = extra_fds;
+    }
+
+    string getGoal() {
+        return "wait";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    #! waits for the object every time: the operation never progresses, as one waiting for data that does not come
+    *hash<SocketPollInfo> continuePoll() {
+        ++calls;
+        hash<SocketPollInfo> rv = <SocketPollInfo>{"socket": obj, "events": events};
+        if (extra_fds) {
+            rv.extra_fds = extra_fds;
+        }
+        return rv;
+    }
+
+    auto getOutput() {
+    }
+
+    abort() {
+    }
+}
+
+#! An operation that waits on an idle socket does not keep its I/O thread busy
+/** - on macOS, a descriptor registered only for writing (a socket's connect) was left in the kqueue when it was
+      removed, so every kevent() of the I/O thread returned at once and the thread spun for as long as any operation
+      waited (a CPU core during the whole wait); the event loop's count of system events that matched no registration
+      shows it
+    - a regular file is always ready; an operation that waits for its socket with a regular file as an extra
+      descriptor, without reading the file, was run again at every poll of its I/O thread (about 100,000 times in 3 s);
+      the I/O controller does not wait for a regular file given as an extra descriptor, so the operation runs when it
+      is submitted and at its timeout
+*/
+class AsyncIoIdleWaitTest inherits QUnit::Test {
+    public {
+        #! the timeout of the operations, which wait for data that does not come
+        const WaitTimeout = 500ms;
+    }
+
+    constructor() : QUnit::Test("AsyncIoIdleWait", "1.0") {
+        addTestCase("an idle wait leaves no stale system event", \idleWaitTest());
+        addTestCase("a regular file as an extra descriptor does not spin the operation", \regularFileExtraFdTest());
+        set_return_value(main());
+    }
+
+    idleWaitTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_event_loop_unmatched_kernel_events() is only registered in a library-debug build");
+        }
+        hash<auto> pair = makeConnection();
+        Socket idle = pair.server;
+        on_exit {
+            pair.client.close();
+            idle.close();
+        }
+        int unmatched = call_function("dbg_event_loop_unmatched_kernel_events");
+        CountingWaitOperation op(idle, SOCK_POLLIN);
+        hash<SocketPollResultInfo> result = runOperation(idle, op);
+        assertEq("SOCKET-TIMEOUT", result.ex.err, "the wait for data that does not come times out");
+        assertEq(unmatched, call_function("dbg_event_loop_unmatched_kernel_events"),
+            "no system event of a removed registration woke the I/O thread");
+        assertLe(2, op.calls, "the operation ran when it was submitted and at its timeout only");
+    }
+
+    regularFileExtraFdTest() {
+        hash<auto> pair = makeConnection();
+        Socket idle = pair.server;
+        on_exit {
+            pair.client.close();
+            idle.close();
+        }
+        TmpFile tmp("qore-asyncio-idle-");
+        tmp.file.write("data");
+        CountingWaitOperation op(idle, SOCK_POLLIN, (<ExtraPollFdInfo>{
+            "fd": tmp.file.getPollableDescriptor(),
+            "events": SOCK_POLLIN,
+        },));
+        hash<SocketPollResultInfo> result = runOperation(idle, op);
+        assertEq("SOCKET-TIMEOUT", result.ex.err, "the wait for data that does not come times out");
+        # when it was submitted, and at its timeout
+        assertLe(2, op.calls, "the operation was not run for the file");
+    }
+
+    #! Returns a connected socket pair: {"client": Socket, "server": Socket}
+    private hash<auto> makeConnection() {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+        Socket client();
+        client.connect("127.0.0.1:" + listener.getSocketInfo().port, 10s);
+        Socket server = listener.accept(10s);
+        return {"client": client, "server": server};
+    }
+
+    #! Runs the operation with the async I/O controller until its timeout
+    private hash<SocketPollResultInfo> runOperation(Socket sock, CountingWaitOperation op) {
+        return AsyncIoController::exec(<SocketPollOperationInfo>{
+            "sock": sock,
+            "spop": op,
+            "to": WaitTimeout,
+            "owner": "asyncio-idle-wait-test",
+        });
+    }
+}

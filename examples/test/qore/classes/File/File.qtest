@@ -14,6 +14,55 @@
 
 %exec-class FileTest
 
+#! A poll operation that waits for events of a pollable object a given number of times, and then reaches its goal
+/** It does nothing with the events reported to it, as an operation that is reported ready before it can use it (the
+    operation of Socket::poll() before its caller waits for the result)
+*/
+class WaitOncePollOperation inherits AbstractPollOperation<auto> {
+    public {
+        #! the number of continuePoll() calls
+        int calls;
+    }
+
+    private {
+        AbstractPollableIoObjectBase obj;
+        int events;
+        int waits;
+        bool done;
+    }
+
+    constructor(AbstractPollableIoObjectBase obj, int events, int waits = 1) {
+        self.obj = obj;
+        self.events = events;
+        self.waits = waits;
+    }
+
+    string getGoal() {
+        return "wait-once";
+    }
+
+    string getState() {
+        return done ? "done" : (calls ? "waiting" : "start");
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (calls++ < waits) {
+            return <SocketPollInfo>{"socket": obj, "events": events};
+        }
+        done = True;
+    }
+
+    auto getOutput() {
+    }
+
+    abort() {
+    }
+}
+
 class FileTest inherits QUnit::Test {
     public {
         const Data = "äsdfaä";
@@ -31,6 +80,8 @@ class FileTest inherits QUnit::Test {
         addTestCase("a closed file has no descriptor", \closedFileDescriptorTest());
         # writei8() and writei8LSB() wrote only 4 of the 8 bytes of the integer
         addTestCase("8-byte integers are written whole", \int8WriteTest());
+        addTestCase("a regular file is always ready for a poll", \regularFilePollTest());
+        addTestCase("a regular file is reported to each wait for it", \regularFileWaitAgainTest());
         set_return_value(main());
     }
 
@@ -229,6 +280,100 @@ class FileTest inherits QUnit::Test {
         assertEq(0x0102030405060708, r.readi8LSB(), "readi8LSB() reads the integer written by writei8LSB()");
         assertEq(-2, r.readi8(), "readi8() reads the negative integer");
         assertEq(NOTHING, r.readi8(), "the end of the file");
+    }
+
+    #! A regular file is reported ready at once for reading and writing, as poll(2) does
+    /** epoll refuses to wait for a regular file (EPERM), and kqueue reports one readable only before its end, so a wait
+        for one lasted until its timeout: on Linux, a non-blocking read of a regular file waited for the poll timeout
+        between its reads
+    */
+    regularFilePollTest() {
+        TmpFile tmp("qore-File-");
+        # the I/O controller runs an operation that waits for a regular file as soon as it is submitted; the timeout
+        # is only reached, and the operation fails with it, if the file is not reported ready
+        tmp.file.write("data");
+        ReadOnlyFile file(tmp.path);
+        foreach bool at_end in ((True, False)) {
+            file.setPos(at_end ? 4 : 0);
+            foreach int events in ((SOCK_POLLIN, SOCK_POLLOUT, SOCK_POLLIN | SOCK_POLLOUT)) {
+                string label = sprintf("I/O controller: file %s, events %d", at_end ? "at its end" : "at its start",
+                    events);
+                WaitOncePollOperation op(file, events);
+                hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+                    "sock": file,
+                    "spop": op,
+                    "to": 30s,
+                    "owner": "file-poll-test",
+                });
+                assertNothing(result.ex, label + ": no error");
+                assertTrue(op.goalReached(), label + ": the operation was run when the file was ready");
+            }
+        }
+
+        # Socket::poll() reports the file ready without waiting for its timeout, which is only reached if the file is
+        # not reported ready
+        timeout poll_timeout = 10s;
+        hash<string, ReadOnlyFile> files = {"read-write": tmp.file, "read-only": file};
+        foreach hash<auto> i in (files.pairIterator()) {
+            # at the end of the file, and before it
+            foreach bool at_end in ((True, False)) {
+                i.value.setPos(at_end ? 4 : 0);
+                foreach int events in ((SOCK_POLLIN, SOCK_POLLOUT, SOCK_POLLIN | SOCK_POLLOUT)) {
+                    string label = sprintf("Socket::poll(): %s file %s, events %d", i.key,
+                        at_end ? "at its end" : "at its start", events);
+                    list<hash<SocketPollInfo>> ready = Socket::poll((<SocketPollInfo>{
+                        "socket": i.value,
+                        "events": events,
+                    },), poll_timeout);
+                    assertEq(1, ready.size(), label + ": reported ready");
+                    assertEq(events, ready[0].events & (SOCK_POLLIN | SOCK_POLLOUT), label + ": events");
+                }
+            }
+        }
+    }
+
+    #! A regular file is reported ready to each wait of an operation, as poll(2) reports it
+    /** An operation run on the I/O thread that waited again for a regular file after it was reported ready, without
+        reading from it, was not reported it again, as the I/O thread kept its registration as it was, and waited until
+        its timeout: Socket::poll() of a regular file returned only at its timeout when the I/O thread reported the
+        file before Socket::poll() waited for the result.  An operation run in a worker thread is registered again at
+        each step.
+    */
+    regularFileWaitAgainTest() {
+        TmpFile tmp("qore-File-");
+        tmp.file.write("data");
+        ReadOnlyFile file(tmp.path);
+        foreach int events in ((SOCK_POLLIN, SOCK_POLLOUT, SOCK_POLLIN | SOCK_POLLOUT)) {
+            # waits three times: the first two reports are not used
+            WaitOncePollOperation op(file, events, 3);
+            runWaitAgain(file, op, sprintf("an operation in a worker thread, events %d", events));
+            assertEq(4, op.calls, sprintf("an operation in a worker thread, events %d: it ran at its start and once "
+                "for each of its three waits", events));
+            if (Option::HAVE_LIBRARY_DEBUGGING) {
+                # an operation run on the I/O thread
+                SocketPollOperation iop = call_function("dbg_wait_again_poll_operation", file, events, 3);
+                runWaitAgain(file, iop, sprintf("an operation on the I/O thread, events %d", events));
+                assertEq(4, iop.getOutput(), sprintf("an operation on the I/O thread, events %d: it ran at its start "
+                    "and once for each of its three waits", events));
+            }
+        }
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_wait_again_poll_operation() is only registered in a library-debug build");
+        }
+    }
+
+    #! Runs an operation that waits for a regular file several times
+    private runWaitAgain(AbstractPollableIoObjectBase file, AbstractPollOperation op,
+            string label) {
+        # the timeout is only reached, and the operation fails with it, if a wait is not reported
+        hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+            "sock": file,
+            "spop": op,
+            "to": 30s,
+            "owner": "file-wait-again-test",
+        });
+        assertNothing(result.ex, label + ": no error");
+        assertTrue(op.goalReached(), label + ": the operation reached its goal");
     }
 
     closedFileDescriptorTest() {

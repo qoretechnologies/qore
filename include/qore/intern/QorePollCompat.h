@@ -46,6 +46,7 @@
 
 #ifdef HAVE_POLL
 #include <poll.h>
+#include <sys/stat.h>
 
 //! Returns true if the descriptor is a named pipe on a platform where poll(2) and kqueue miss its hang-up (Darwin)
 /** A named pipe and an anonymous pipe are both S_IFIFO; on Darwin, an anonymous pipe has no device (st_dev == 0),
@@ -55,6 +56,11 @@
     Always false on other platforms.
 */
 DLLLOCAL bool qore_fd_poll_misses_hangup(int fd);
+
+//! Returns true if the descriptor with the given status is one that qore_fd_poll_misses_hangup() reports
+/** For a caller that has the status of the descriptor already; always false on other platforms than Darwin
+*/
+DLLLOCAL bool qore_stat_poll_misses_hangup(const struct stat& st);
 
 //! Returns true if a wait on these descriptors must use qore_select_poll() (see qore_fd_poll_misses_hangup())
 DLLLOCAL bool qore_poll_needs_select(const struct pollfd* fds, nfds_t nfds);

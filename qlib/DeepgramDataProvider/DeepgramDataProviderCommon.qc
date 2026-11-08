@@ -177,7 +177,7 @@ public class DeepgramDataProviderCommon inherits DataProvider::AbstractDataProvi
     }
 
     private bool retry(hash<ExceptionInfo> ex, reference<int> retries) {
-        if (RetrySet{ex.err}) {
+        if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet)) {
             if (++retries == MaxIoRetries) {
                 return False;
             }

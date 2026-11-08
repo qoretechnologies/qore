@@ -1,0 +1,248 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires MssqlSqlUtilBase
+%requires ./TestRunIsolation.qm
+%requires ./MssqlTestIsolation.qm
+
+%try-module freetds
+%define NoFreetds
+%endtry
+
+%exec-class MssqlInsertReturningTest
+
+#! A datasource that does not connect, for a server of the given version
+class OfflineDatasource inherits Datasource {
+    private {
+        string version;
+    }
+
+    constructor(string version) : Datasource("freetds:user/pass@db") {
+        self.version = version;
+    }
+
+    auto getServerVersion() {
+        return version;
+    }
+
+    string getDriverRealName() {
+        return "freetds";
+    }
+
+    auto select(string sql, ...) {
+        return {};
+    }
+
+    auto selectRow(string sql, ...) {
+        return {"schema": "dbo"};
+    }
+
+    auto selectRows(string sql, ...) {
+        return ();
+    }
+
+    auto exec(string sql, ...) {
+        throw "OFFLINE-ERROR", "the datasource does not connect";
+    }
+}
+
+#! A datasource that does not connect, for SQL Server: an insert gives the result that SQL Server gives the batch of
+#! an insert with the "returning" option: the row count of the insert and the rows of the select of the table variable
+class BatchDatasource inherits OfflineDatasource {
+    public {
+        list<string> sql = ();
+        list<auto> args = ();
+    }
+
+    private {
+        int id = 0;
+    }
+
+    constructor() : OfflineDatasource("Microsoft SQL Server 2022 (RTM) - 16.0.1000.6") {
+    }
+
+    auto exec(string sql, ...) {
+        return vexec(sql, argv);
+    }
+
+    auto vexec(string sql, *softlist<auto> args) {
+        self.sql += sql;
+        self.args += (args,);
+        return {"query0": 1, "query1": {"id": (++id,), "name": (args[1],)}};
+    }
+}
+
+#! The "returning" insert option on SQL Server, with the freetds driver and the jdbc driver
+/** The values were output with an OUTPUT clause without INTO, which SQL Server refuses on a table with an enabled
+    trigger (server message 334), such as a table with the automatic triggers of SqlUtil
+*/
+class MssqlInsertReturningTest inherits QUnit::Test {
+    constructor() : Test("MssqlInsertReturningTest", "1.0", \ARGV) {
+        addTestCase("returning with the freetds driver", \freetdsReturning());
+        addTestCase("returning with the jdbc driver", \jdbcReturning());
+        addTestCase("the types of the table variable", \returningTypes());
+        addTestCase("Sybase has no OUTPUT clause", \sybase());
+        addTestCase("the batch of each row of a bulk insert", \bulkBatch());
+        addTestCase("a column given twice is returned once", \duplicateColumns());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        MssqlRunDatabase::teardown();
+    }
+
+    private freetdsReturning() {
+%ifdef NoFreetds
+        testSkip("freetds module unavailable");
+%endif
+        checkReturning("QORE_DB_CONNSTR_FREETDS");
+    }
+
+    private jdbcReturning() {
+        checkReturning("QORE_DB_CONNSTR_JDBC_MSSQL");
+    }
+
+    #! inserts rows with the "returning" option into a table without and with a trigger
+    private checkReturning(string var) {
+        Datasource ds = datasource(var);
+        on_exit ds.rollback();
+        Database db(ds);
+        string name = TestRun::makeName("mssql_ret");
+        hash<auto> desc = {"columns": {
+            "id": {"qore_type": Type::Int, "notnull": True},
+            "name": {"native_type": "nvarchar", "size": 20},
+            # a name that is quoted in SQL
+            "select": {"qore_type": Type::Int},
+            "created": {"qore_type": Type::Int, "notnull": True, "default_value": 42},
+            "notes": {"native_type": "ntext"},
+            "ts": {"native_type": "datetime2", "default_value": "sysdatetime()", "default_value_native": True},
+        }};
+        AbstractTable t = db.makeTable(name, desc);
+        t.create();
+        ds.commit();
+        on_exit {
+            ds.rollback();
+            ds.exec("drop table " + name);
+            ds.commit();
+        }
+        t = db.getTable(name);
+        assertTrue(t.hasReturning());
+
+        code check = sub (string label) {
+            int base = label == "trigger" ? 10 : 0;
+            # a column of the row, and one that the server fills in from its default
+            assertEq({"id": base + 1, "created": 42}, t.insert({"id": base + 1, "name": "jedna"},
+                {"returning": ("id", "created")}), label);
+            hash<auto> rv = t.insert({"id": base + 2, "name": "dva ř", "select": 5, "notes": "poznámka"},
+                {"returning": ("name", "select", "notes", "ts")});
+            assertEq({"name": "dva ř", "select": 5, "notes": "poznámka"}, rv - "ts", label);
+            assertEq(Type::Date, rv.ts.type(), label);
+            # the returned values are those of the row in the table
+            assertEq(rv.ts, t.selectRow({"columns": "ts", "where": {"id": base + 2}}).ts, label);
+            ds.commit();
+        };
+        check("no trigger");
+
+        # a trigger that changes another column of the inserted row
+        ds.execRaw(sprintf("create trigger %s_trg on %s after insert as begin set nocount on; update t set "
+            "created = t.created + 1 from %s t join inserted i on i.id = t.id end", name, name, name));
+        ds.commit();
+        check("trigger");
+        # the trigger ran
+        assertEq(43, t.selectRow({"columns": "created", "where": {"id": 11}}).created);
+        assertEq(4, t.selectRows().size());
+
+        # a bulk insert into the table with the trigger
+        assertEq({"id": (21, 22, 23), "created": (42, 42, 42)}, t.insert({"id": (21, 22, 23),
+            "name": ("a", "b", "c")}, {"returning": ("id", "created")}));
+        ds.commit();
+        assertEq(7, t.selectRows().size());
+    }
+
+    #! the types of the columns of the table variable: those of the table, but for the types that a table variable
+    #! cannot have
+    private returningTypes() {
+        foreach hash<auto> i in ({
+                "nvarchar(20)": ("nvarchar", 20),
+                "int": ("int", 0),
+                "varchar(max)": ("text", 0),
+                "nvarchar(max)": ("ntext", 0),
+                "varbinary(max)": ("image", 0),
+                "binary(8)": ("timestamp", 0),
+            }.pairIterator()) {
+            MssqlColumn c("c", i.value[0], "string", i.value[1], True);
+            assertEq(i.key, MssqlTable::getReturningType(c), i.value[0]);
+        }
+    }
+
+    #! Sybase has no OUTPUT clause: the option is refused before the insert is executed
+    private sybase() {
+%ifdef NoFreetds
+        testSkip("freetds module unavailable");
+%endif
+        OfflineDatasource ds("Adaptive Server Enterprise/16.0 SP04");
+        MssqlTable t(ds, "t");
+        t.setupTable({"columns": {"id": {"qore_type": Type::Int}}});
+        assertThrows("UNIMPLEMENTED", "Sybase", \t.insert(), ({"id": 1}, {"returning": ("id",)}));
+    }
+
+    #! a bulk insert of a driver without array binds inserts each row with the batch made for the first row: the rows
+    #! after the first gave the result of the batch as it is ("query0" and "query1")
+    private bulkBatch() {
+%ifdef NoFreetds
+        testSkip("freetds module unavailable");
+%endif
+        BatchDatasource ds();
+        MssqlTable t(ds, "t");
+        t.setupTable({"columns": {"id": {"qore_type": Type::Int}, "name": {"qore_type": Type::String, "size": 20}}});
+        assertEq({"id": (1, 2, 3), "name": ("a", "b", "c")}, t.insert({"id": (1, 2, 3), "name": ("a", "b", "c")},
+            {"returning": ("id", "name")}));
+        assertEq(3, ds.sql.size());
+        # each row is inserted with the same batch
+        assertEq(1, (map {$1: True}, ds.sql).size());
+        assertRegex("^declare @qore_returning table ", ds.sql[0]);
+        assertEq(((1, "a"), (2, "b"), (3, "c")), ds.args);
+    }
+
+    #! a column given more than once is output once
+    private duplicateColumns() {
+%ifdef NoFreetds
+        testSkip("freetds module unavailable");
+%endif
+        BatchDatasource ds();
+        MssqlTable t(ds, "t");
+        t.setupTable({"columns": {"id": {"qore_type": Type::Int}, "name": {"qore_type": Type::String, "size": 20}}});
+        assertEq({"id": 1, "name": "a"}, t.insert({"id": 1, "name": "a"}, {"returning": ("id", "name", "id")}));
+        assertRegex("output inserted\\.id, inserted\\.name into @qore_returning", ds.sql[0]);
+        assertRegex("^declare @qore_returning table \\(id bigint, name varchar\\(20\\)\\); ", ds.sql[0]);
+    }
+
+    #! returns the datasource of the run's database on SQL Server, or skips the test case if there is none
+    private Datasource datasource(string var) {
+        if (!ENV{var}.val()) {
+            testSkip(var + " is not set");
+        }
+        try {
+            Datasource ds(ENV{var});
+            ds.open();
+            if (MssqlDatabase::isSybase(ds)) {
+                testSkip("the database is Sybase, not SQL Server");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "TEST-SKIPPED-EXCEPTION") {
+                rethrow;
+            }
+            testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
+        }
+        Datasource ds(MssqlRunDatabase::getConnectionString(ENV{var}, "MssqlInsertReturning"));
+        ds.open();
+        return ds;
+    }
+}

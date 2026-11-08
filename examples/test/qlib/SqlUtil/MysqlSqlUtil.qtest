@@ -17,6 +17,7 @@
 %requires ../../../../qlib/MysqlSqlUtil.qmod
 
 %requires ./SqlUtilTestBase.qm
+%requires ./MysqlTestIsolation.qm
 
 %try-module mysql
 %define NoMysql
@@ -783,6 +784,8 @@ class MysqlTest inherits SqlTestBase {
     Datasource getDatasource() {
         if (!m_options.connstr)
             m_options.connstr = ENV.QORE_DB_CONNSTR_MYSQL;
+        # the run's own database: tests that run at the same time do not share the tables of this one
+        m_options.connstr = MysqlRunDatabase::getConnectionString(m_options.connstr, "MysqlSqlUtil");
         Datasource ds(m_options.connstr);
         if (ds.getDriverName() != "mysql")
             throw "MYSQL-ERROR", sprintf("cannot execute the mysql tests on a connection using driver %y", ds.getDriverName());

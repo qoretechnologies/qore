@@ -35,6 +35,7 @@ class SqlUtilOptionValidationTest inherits QUnit::Test {
         addTestCase("validated options have the types of the options", \convertedTypes());
         addTestCase("column numbers given as strings are numbers", \columnNumbers());
         addTestCase("a select orders by a column number given as a string", \selectColumnNumber());
+        addTestCase("a native type that is not in the type map is a column error", \unknownNativeType());
         set_return_value(main());
     }
 
@@ -112,5 +113,20 @@ class SqlUtilOptionValidationTest inherits QUnit::Test {
         assertEq((2, 1, 3), (map $1.id, t.selectRows({"orderby": "2"})));
         assertEq((3, 1, 2), (map $1.id, t.selectRows({"orderby": "2", "desc": True})));
         assertEq((1, 2, 3), (map $1.id, t.selectRows({"orderby": ("1",)})));
+    }
+
+    #! a column with a qore type and a native type that the database's type map does not have raised a
+    #! RUNTIME-TYPE-ERROR instead of the COLUMN-ERROR that names the column and the type
+    private unknownNativeType() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Sqlite3Table t(new Datasource("sqlite3:@:memory:"), "t");
+        assertThrows("COLUMN-ERROR", "column \"c\": native type \"no_such_type\" .*not registered", \t.setupTable(),
+            {"columns": {"c": {"qore_type": "string", "size": 10, "native_type": "no_such_type"}}});
+        # without a qore type, a native type that is not in the map is a column of any type, as before
+        t = new Sqlite3Table(new Datasource("sqlite3:@:memory:"), "t");
+        t.setupTable({"columns": {"c": {"native_type": "no_such_type"}}});
+        assertEq("any", t.describe().c.qore_type);
     }
 }

@@ -328,8 +328,17 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      locations as constants in its image and stores their addresses as the runtime location, so nothing read
 //!      the table; a v9-v20 record's table is skipped.  The PC-to-location maps that AOT artifacts carried in a
 //!      trailer and in a `qore_aot_pcloc` section are no longer written or read either.
+//! v22: a class record has a class-flags byte after its base classes; bit 0 (QORE_AOT_CLASS_FLAG_PUBLIC_MEMDECL)
+//!      records a public member declaration in the class or a class it inherits, whatever the declaration holds
+//!      (members, static variables, constants or nothing), so that the class refuses undeclared members as it does
+//!      when parsed.  A v9-v21 record has no such byte: the class gets the flag only from its public members, as
+//!      before.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 21;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 22;
+//! First format version whose class records have a class-flags byte (see v22 above).
+constexpr uint16_t QORE_AOT_CLASS_FLAGS_VERSION = 22;
+//! Class-flags bit: the class has a public member declaration in its hierarchy (has_public_memdecl)
+constexpr uint8_t QORE_AOT_CLASS_FLAG_PUBLIC_MEMDECL = 0x01;
 //! First format version whose function records have no location table (see v21 above).
 constexpr uint16_t QORE_AOT_NO_LOCATION_TABLE_VERSION = 21;
 //! First format version in which a serialized background instruction can be of the helper kind.

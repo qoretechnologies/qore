@@ -1421,6 +1421,13 @@ public class DataProviderActionCatalog {
         */
         static hash<string, hash<string, bool>> expected_initialization_map = {};
 
+        #! Apps whose deferred initializer returned without registering the app or raising an error
+        /** Their pending declaration is kept for discovery (\c expected_initialization_map), but no application
+            getter returns them, so getAppNamesNoInit() leaves them out.  An app leaves the map when it is
+            registered, registered pending again, or deregistered.
+        */
+        static hash<string, bool> unregistered_init_map = {};
+
         #! Retained initialization failures: app -> action (or an empty key for the app) -> failure
         static hash<string, hash<string, hash<DataProviderInitializationFailureInfo>>> initialization_failure_map = {};
 
@@ -1565,6 +1572,7 @@ public class DataProviderActionCatalog {
             "governed": DataProviderActionCatalog::isGoverned(),
         };
         expected_initialization_map{app}{""} = True;
+        remove unregistered_init_map{app};
         DataProviderActionCatalog::addOpenDiscoveryExpectedIdentity(app,
             NOTHING);
         ++catalog_revision;
@@ -3545,6 +3553,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         remove initmap{name};
         remove initialization_failure_map{name};
         remove expected_initialization_map{name};
+        remove unregistered_init_map{name};
         # remove the app's actions from both maps together; removing app_actionmap{name} on its
         # own here (and leaving the top_actionmap cleanup to deregisterAppIntern below) left the
         # top_actionmap entries - and their option/data-type graphs - leaked in the static map
@@ -3908,6 +3917,66 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     */
     static *list<hash<DataProviderAppInfo>> getAllAppsNoInit() {
         return appcache.values();
+    }
+
+    #! Returns the names of all registered applications, including pending ones, without initializing any
+    /** An application registered with @ref registerPendingApp() is initialized when it is first used, so
+        @ref getAllAppsNoInit() leaves it out until then, and @ref getAllApps() initializes every pending application
+        to list it.  This returns the names of both kinds without initializing anything:
+        - the applications registered with @ref registerApp()
+        - the applications pending initialization
+        - the applications whose deferred initialization is running
+        - the applications with lazy action registrations, without running those registrations: such an
+          application is registered, so it is listed with the others
+
+        An application whose deferred initialization failed, or ended without registering the application or
+        raising an error, is left out, as no application getter returns it; so is a deregistered application, also
+        one deregistered while its initialization runs.
+
+        The names are read from one consistent state of the catalog, so an application that another thread is
+        initializing meanwhile is included, whether it is still pending, initializing, or registered.
+
+        @return the application names, each once, in their original case, sorted; empty if no application is
+        registered
+
+        @par Example
+        @code{.py}
+# initialize only the applications that the provider index does not describe
+foreach string app in (DataProviderActionCatalog::getAppNamesNoInit()) {
+    if (!ProviderIndexUtil::tryGetAppInfo(app)) {
+        *hash<DataProviderAppInfo> info = DataProviderActionCatalog::getApp(app);
+    }
+}
+        @endcode
+
+        @note @ref getApp() initializes a pending application and returns it
+
+        @since %DataProvider 3.11
+    */
+    static list<string> getAppNamesNoInit() {
+        hash<string, bool> names = {};
+        {
+            bool needs_lock = !lck.lockOwner();
+            if (needs_lock) {
+                lck.lock();
+            }
+            on_exit if (needs_lock) {
+                DataProviderActionCatalog::unlockCatalog();
+            }
+            map names{$1} = True, keys appcache;
+            map names{$1} = True, keys initmap;
+            # an app whose deferred initialization is running is in neither map: its initializer is removed from
+            # initmap before it is called, and the app enters appcache when the initializer registers it; its
+            # pending declaration is kept until then, a failure is retained if the initializer fails, and an
+            # initializer that registers nothing is recorded when it returns
+            foreach hash<auto> i in (expected_initialization_map.pairIterator()) {
+                if (exists i.value{""} && !exists initialization_failure_map{i.key}{""}
+                        && !unregistered_init_map{i.key}) {
+                    names{i.key} = True;
+                }
+            }
+        }
+        return sort(keys names);
     }
 
     #! Returns all applications in the cache
@@ -5101,6 +5170,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         remove app_serials{name};
         remove initialization_failure_map{name};
         remove expected_initialization_map{name};
+        remove unregistered_init_map{name};
         remove resolve_output_types{name};
         remove resolved_output_type_callbacks{name};
         remove appmodmap{name};
@@ -5197,6 +5267,9 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         string failure_key = action ?? "";
         bool changed;
+        if (!exists action) {
+            remove unregistered_init_map{app};
+        }
         if (exists expected_initialization_map{app}{failure_key}) {
             remove expected_initialization_map{app}{failure_key};
             if (!expected_initialization_map{app}) {
@@ -6100,6 +6173,28 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         # closure below can be told apart from this one and own what it registers itself
         _mod_init_load_ctx = get_module_context_path();
         h.init();
+        if (h.kind == "app") {
+            DataProviderActionCatalog::checkAppInitialized(h.app);
+        }
+    }
+
+    #! Records an app whose deferred initializer returned without registering it or raising an error
+    /** Such an app stays declared for discovery, but no application getter returns it; see
+        @ref getAppNamesNoInit()
+    */
+    private static checkAppInitialized(string app) {
+        bool needs_lock = !lck.lockOwner();
+        if (needs_lock) {
+            lck.lock();
+        }
+        on_exit if (needs_lock) {
+            DataProviderActionCatalog::unlockCatalog();
+        }
+        # an initializer can also register the app pending again, or fail and have the failure retained
+        if (!appcache{app} && !initmap{app} && exists expected_initialization_map{app}{""}
+                && !exists initialization_failure_map{app}{""}) {
+            unregistered_init_map{app} = True;
+        }
     }
 }
 }

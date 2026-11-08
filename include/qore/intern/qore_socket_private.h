@@ -634,6 +634,21 @@ struct QoreHostsFileAddress {
     unsigned char addr[16] = {};
 };
 
+//! Returns the name of a c-ares status as given in the \c status key of a name lookup error's argument
+/** For example \c "ENOTFOUND" for \c ARES_ENOTFOUND; \c "EUNKNOWN" for a status that has no name here
+*/
+DLLLOCAL const char* qore_cares_status_name(int status);
+
+//! Returns the argument of a name lookup error that failed with the given c-ares status: <tt>{"status": name}</tt>
+/** See qore_cares_status_name(); the caller owns the reference
+*/
+DLLLOCAL QoreHashNode* qore_cares_error_arg(int status);
+
+//! Returns true if a c-ares status is a definite answer about a name: \c ENOTFOUND or \c ENODATA
+/** These are the answers that can differ by address family; see QoreCaresAddrInfoResolver::complete()
+*/
+DLLLOCAL bool qore_cares_status_is_definite(int status);
+
 class QoreCaresAddrInfoResolver {
 public:
     DLLLOCAL QoreCaresAddrInfoResolver(std::string host, std::string service, int family, int type, int protocol,
@@ -655,6 +670,8 @@ public:
     DLLLOCAL int getPollTimeoutMs() const;
 
 private:
+    friend class QoreCaresCheckTest;
+
     DLLLOCAL int start(ExceptionSink* xsink);
     //! Answers a numeric address without creating a c-ares channel; returns false if c-ares must resolve the host
     /** An IPv4 or IPv6 address literal with a numeric port (or none) needs no lookup, and creating a channel reads
@@ -668,12 +685,64 @@ private:
     DLLLOCAL int restart(ExceptionSink* xsink);
     DLLLOCAL void process(ExceptionSink* xsink);
     DLLLOCAL void updateFd(ares_socket_t socket_fd, int readable, int writable);
+    //! Records the result of the lookup
+    /** A definite failure (see qore_cares_status_is_definite()) of a lookup during which a query failed (a SERVFAIL,
+        NOTIMP or REFUSED answer, a timeout or a connection error; see serverStateCallback()) is checked (see
+        Check):
+        - a lookup of both address families (\c AF_UNSPEC) is confirmed by a lookup of each family: c-ares gives the
+          status of the family whose query finished last, which hid a failure of the other family that might not
+          happen again
+        - a lookup of a single-label name, which c-ares looks up with the search domains, asks for the name itself
+          (see startProbe()): c-ares goes on to the next name after a SERVFAIL or REFUSED answer for a single-label
+          name (c-ares issue #852, for systemd-resolved, which refuses or fails single-label names by policy), so a
+          later definite answer for a search domain hid it; a single-label name that such a server fails or refuses
+          by policy then fails with that status, which is not a definite answer about the name
+
+        A lookup during which no query failed is definite as c-ares gives it, with no other query.
+    */
     DLLLOCAL void complete(int new_status, struct ares_addrinfo* res);
+    //! Decides what follows a definite failure or a finished check, after c-ares has returned
+    /** c-ares 1.34.9 reports the failed queries (serverStateCallback()) when its public call returns, after the
+        callbacks of the lookups, and a check takes the environment lock that the start of a lookup holds, so neither
+        is done in a callback
+    */
+    DLLLOCAL void advance();
+    //! Starts the check that pending_check names
+    DLLLOCAL void startCheck();
+    //! Starts the lookup of each address family that confirms the definite failure of a lookup of both
+    DLLLOCAL void startConfirmation();
+    //! Starts the queries for a single-label name itself, without the search domains
+    DLLLOCAL void startProbe();
+    //! Starts the lookup again once, after a check found that the name has addresses after all
+    /** The addresses are those of a lookup, in the order that c-ares gives them (RFC 6724), not those of the checks;
+        if it fails with a definite status after the check saw a temporary failure, it fails with that failure (see
+        repeat_failure); a definite failure during which one of its own queries failed is checked again, and if that
+        check finds an address again, the lookup fails with the check's temporary status, or ESERVFAIL
+    */
+    DLLLOCAL void startRepeat();
+    //! Records the result of a lookup or query of a check
+    /** @param new_status the status of the lookup or query
+        @param found true if it found an address or a record
+    */
+    DLLLOCAL void checked(int new_status, bool found);
+    //! Ends a check whose lookups and queries have all finished
+    DLLLOCAL void finishCheck();
+    //! Adds the addresses of a c-ares result
+    DLLLOCAL void addAddresses(const struct ares_addrinfo* res);
+    //! Drops the check of a failure
+    DLLLOCAL void resetCheck() noexcept;
+    //! Returns true if the host is a single label, which c-ares looks up with the search domains
+    DLLLOCAL bool singleLabel() const;
     //! Removes the loopback addresses that c-ares added to the hosts file's answer for a localhost name
     DLLLOCAL void keepHostsFileAddresses() noexcept;
     DLLLOCAL int raiseError(ExceptionSink* xsink) const;
 
     DLLLOCAL static void callback(void* arg, int status, int, struct ares_addrinfo* res);
+    DLLLOCAL static void confirmCallback(void* arg, int status, int, struct ares_addrinfo* res);
+    DLLLOCAL static void probeCallback(void* arg, ares_status_t status, size_t timeouts,
+            const ares_dns_record_t* dnsrec);
+    //! Counts the queries that failed; see complete()
+    DLLLOCAL static void serverStateCallback(const char* server, ares_bool_t success, int flags, void* data);
     DLLLOCAL static void sockStateCallback(void* arg, ares_socket_t socket_fd, int readable, int writable);
 
     std::string host;
@@ -691,6 +760,40 @@ private:
     std::vector<QoreHostsFileAddress> hosts_file_addrs;
     std::unordered_map<int, int> fd_events;
     int status = ARES_SUCCESS;
+    //! the hints of the lookup
+    struct ares_addrinfo_hints hints = {};
+    //! The checks of a definite failure; see complete()
+    enum class Check {
+        None,
+        //! a lookup of each address family
+        Confirm,
+        //! the queries for a single-label name itself
+        Probe,
+        //! the lookup again, as a check found an address
+        Repeat,
+    };
+    //! the check to start after c-ares has returned
+    Check pending_check = Check::None;
+    //! the last check started
+    Check running_check = Check::None;
+    //! set when the lookup failed with a definite status, which advance() decides on
+    bool lookup_definite = false;
+    //! set when the lookups or queries of the running check have finished, which advance() decides on
+    bool check_finished = false;
+    //! the lookups or queries of the running check that have not finished
+    int check_remaining = 0;
+    //! the status of a checked failure: definite unless a lookup or query of the check fails otherwise
+    int check_status = ARES_SUCCESS;
+    //! set if a lookup or query of the check found an address or a record
+    bool check_found = false;
+    //! the queries that failed on the channel (see serverStateCallback())
+    unsigned server_failures = 0;
+    //! the queries that had failed when the running check started
+    unsigned check_failures_start = 0;
+    //! set when the lookup was started again (see startRepeat()), whose result is not checked again
+    bool repeated = false;
+    //! the temporary failure that the check before the lookup was started again saw, or ARES_SUCCESS
+    int repeat_failure = ARES_SUCCESS;
     //! the number of times the lookup was started again after c-ares lost its query
     unsigned lost_query_restarts = 0;
     bool started = false;
@@ -1580,6 +1683,29 @@ struct qore_socket_private : public QoreReferenceCounter {
     //! Debug-only: true while @ref dbg_before_ssl_io is set, so the I/O calls of other sockets do not lock
     std::atomic<bool> dbg_before_ssl_io_set{false};
 
+    //! Debug-only: when set, closing the socket resets the connection at once (\c SO_LINGER with a zero timeout)
+    /** The TLS close_notify alert and the shutdown that a close makes first are skipped: the shutdown of the read
+        side discards unread data on macOS, so the close would end the connection with a FIN instead of a reset.
+        Tests use it to have a peer reset a connection deterministically; set by dbg_reset_socket().
+    */
+    std::atomic<bool> dbg_abortive_close{false};
+
+    //! Debug-only: the next SSL write fails with SSL_ERROR_SSL while errno holds a peer-close error (a stale errno);
+    //! one-shot, set with QoreSocketObject::dbgForceSslErrorSslAtNextWrite()
+    std::atomic<bool> dbg_force_ssl_error_ssl{false};
+
+    //! Debug-only: prepares an abortive close if one was requested; returns true if so (close_m held)
+    DLLLOCAL bool dbgAbortiveCloseLocked() {
+        if (!dbg_abortive_close.load(std::memory_order_acquire)) {
+            return false;
+        }
+        struct linger l;
+        l.l_onoff = 1;
+        l.l_linger = 0;
+        setsockopt(sock, SOL_SOCKET, SO_LINGER, reinterpret_cast<const char*>(&l), sizeof l);
+        return true;
+    }
+
     //! Debug-only: sets the hook run once at the start of the next SSL I/O call on the socket
     DLLLOCAL void dbgSetBeforeSslIo(std::function<void()> hook) {
         std::lock_guard<std::mutex> g(dbg_close_lock_m);
@@ -2333,6 +2459,11 @@ public:
         // connection that no call is using sends its close_notify alert first.
         CloseLockHelper cl(*this);
         if (sock != QORE_INVALID_SOCKET) {
+#ifdef DEBUG
+            if (dbgAbortiveCloseLocked()) {
+                return;
+            }
+#endif
             sendTlsCloseNotifyLocked();
             ::shutdown(sock, SHUTDOWN_ARG);
         }
@@ -2542,16 +2673,21 @@ public:
                 // EVP_CIPHER_CTX_get0_cipher under H2 teardown load, CI jobs 170545, 170659).  The other threads
                 // take their references with this lock held, so none can start an SSL call while it runs.  A
                 // connection that another thread uses is closed without the alert, which could not be sent then.
-                sendTlsCloseNotifyLocked();
+#ifdef DEBUG
+                if (!dbgAbortiveCloseLocked())
+#endif
+                {
+                    sendTlsCloseNotifyLocked();
 
-                // Cancel any in-flight I/O on this socket: a TCP-level shutdown(SHUT_RDWR) makes an I/O call in
-                // progress on another thread fail and return.  It does not wait for that call to return, so the
-                // call can still be using the descriptor and the TLS connection: both are released by the call's
-                // IoUseHelper when it is still in progress (see SharedDescriptor and getSsl()).
-                //
-                // Ignore errors from the shutdown syscall: already-shutdown sockets
-                // return ENOTCONN, and we only need best-effort cancellation here.
-                ::shutdown(sock, SHUTDOWN_ARG);
+                    // Cancel any in-flight I/O on this socket: a TCP-level shutdown(SHUT_RDWR) makes an I/O call in
+                    // progress on another thread fail and return.  It does not wait for that call to return, so the
+                    // call can still be using the descriptor and the TLS connection: both are released by the call's
+                    // IoUseHelper when it is still in progress (see SharedDescriptor and getSsl()).
+                    //
+                    // Ignore errors from the shutdown syscall: already-shutdown sockets
+                    // return ENOTCONN, and we only need best-effort cancellation here.
+                    ::shutdown(sock, SHUTDOWN_ARG);
+                }
 
                 // release the TLS connection, if any; releasing it runs no Qore code
                 if (SSLSocketHelper* old_ssl = ssl.load(std::memory_order_relaxed)) {
@@ -3219,6 +3355,10 @@ public:
 
     DLLLOCAL void resetCloseInterrupt() {
         pre_close_interrupt_fired.store(false, std::memory_order_release);
+#ifdef DEBUG
+        // a reset requested for the previous connection does not apply to the new one
+        dbg_abortive_close.store(false, std::memory_order_release);
+#endif
     }
 
     //! Sets the destination that the next connection, which is made to a proxy, is made for

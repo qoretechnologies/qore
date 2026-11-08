@@ -773,8 +773,12 @@ public:
     //! @param steps array of LVPathStep describing the navigation
     //! @param num_steps number of steps in the array
     //! @param for_remove true if navigating for a remove operation
+    //! @param remove_root true for the remove or delete of the root variable itself (a path of one step): a global,
+    //! thread_local or static class variable holding a reference then gives its own value, as Var::remove() and
+    //! StaticClassVarRefNode::remove() do in the AST interpreter, instead of the referenced lvalue
     //! @return 0 on success, -1 on error (exception raised in vl.xsink)
-    DLLLOCAL int navigatePath(const struct LVPathStep* steps, uint32_t num_steps, bool for_remove);
+    DLLLOCAL int navigatePath(const struct LVPathStep* steps, uint32_t num_steps, bool for_remove,
+            bool remove_root = false);
 
     DLLLOCAL int doLValue(const ReferenceNode* ref, bool for_remove);
     DLLLOCAL int doLValue(const QoreValue& exp, RuntimeConfig& rc, bool for_remove);

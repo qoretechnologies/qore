@@ -191,13 +191,29 @@ SandboxManager::copy() {
     self->setPrivate(CID_SANDBOXMANAGER, sm->copy());
 }
 
-//! Sets maximum number of threads
-/** @param max_threads Maximum number of threads (0 = unlimited)
+//! Sets the maximum number of threads that code governed by the sandbox may have running at once
+/** The limit counts the threads started on behalf of the sandboxed code: with the @ref background "background"
+    operator, @ref Qore::call_async() "call_async()", the workers of @ref Qore::parallel_map() "parallel_map()" and
+    @ref Qore::parallel_foreach() "parallel_foreach()", and the threads that module code starts for the sandboxed code,
+    also for a Program with @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL", whose code cannot start threads
+    itself (see @ref sandbox_po_threads).  The threads of a @ref Qore::Thread::ThreadPool "ThreadPool" (its own thread
+    and its workers, also idle ones) count against the limit of the sandbox of the Program that created the pool.  The
+    thread that calls into the sandbox, the threads of the async I/O controller and the threads of a pool created by a
+    Program without a sandbox manager are not counted.
+
+    Starting a thread at the limit raises \c THREAD-CREATION-FAILURE in the code that starts it; a thread stops
+    counting when its work ends.  Lowering the limit does not affect threads already running.
+
+    @param max_threads the maximum number of threads; 0 or a negative value means no limit, which is the default
 
     @par Example:
     @code{.py}
 sm.setMaxThreads(max_threads: 4);
     @endcode
+
+    @note A SandboxManager has no thread limit unless one is set, so sandboxed code is bounded only by the maximum
+    number of threads of the process; a host that runs untrusted code should always set a limit (see
+    @ref sandbox_resources)
 */
 nothing SandboxManager::setMaxThreads(int max_threads) [flags=NAMED_ARGS] {
     sm->setMaxThreads(max_threads);

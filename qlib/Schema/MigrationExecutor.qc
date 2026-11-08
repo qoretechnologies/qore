@@ -750,12 +750,17 @@ public class MigrationExecutor {
         *list<string> stmts;
         string drv = ds.getDriverName();
 
-        # Check for driver-specific overrides
-        if (step.driver{drv}) {
-            stmts = step.driver{drv};
-        } else {
-            stmts = step.statements;
+        # Check for driver-specific overrides: under the driver's own name, else under the key of the database's
+        # native driver (ex: "oracle" for a jdbc connection to Oracle); an empty list is no override
+        list<string> drv_keys = SqlUtil::AbstractSqlUtilBase::getDatasourceDriverOptionKeys(ds);
+        # the keys are in order of precedence from the lowest
+        for (int i = drv_keys.size() - 1; i >= 0; --i) {
+            if (step.driver{drv_keys[i]}) {
+                stmts = step.driver{drv_keys[i]};
+                break;
+            }
         }
+        stmts = stmts ?? step.statements;
 
         if (!stmts) {
             throw "MIGRATION-ERROR", sprintf("migration step %y action 'sql' has no SQL statements "

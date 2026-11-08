@@ -229,7 +229,12 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
     #! Runs a callable with exponential-backoff retry on rate-limit and transient errors
     /** Retries up to @ref MaxRetries times with 1s/2s/4s sleep between attempts. Retries on:
         - <tt>BASELINKER-API-ERROR</tt> whose <tt>error_code</tt> matches a known rate-limit code
-        - socket-level errors from @ref RetrySet
+        - socket-level errors from @ref RetrySet, unless the name of the server cannot be resolved; the delays of these
+          retries are in units of the
+          @ref DataProvider::DataProviderRetryUtil::getTransportRetryDelayUnit() "transport retry delay"
+
+        Nothing is retried while
+        @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed".
     */
     auto retryRequest(code func) {
         int retries = 0;
@@ -237,12 +242,14 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
             try {
                 return func();
             } catch (hash<ExceptionInfo> ex) {
-                if (retries >= MaxRetries) {
+                if (retries >= MaxRetries || DataProviderRetryUtil::retriesSuppressed()) {
                     rethrow;
                 }
                 bool do_retry = False;
+                bool transport = False;
                 if (RetrySet{ex.err}) {
-                    do_retry = True;
+                    # a name that cannot be resolved is not retried
+                    do_retry = transport = DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet);
                 } else if (ex.err == "BASELINKER-API-ERROR") {
                     *string code_str = ex.arg.error_code;
                     if (code_str) {
@@ -263,7 +270,11 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
                     rethrow;
                 }
                 ++retries;
-                sleep(pow(2, retries - 1) * 1000ms);
+                if (transport) {
+                    DataProviderRetryUtil::waitTransportRetry(pow(2, retries - 1));
+                } else {
+                    sleep(pow(2, retries - 1) * 1000ms);
+                }
             }
         }
     }

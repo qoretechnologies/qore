@@ -226,6 +226,13 @@ WKEuKQ7xuGuAiIESuSDBsSg=
     }
 
     globalSetUp() {
+        # several cases make QUIC connections to a UDP port where nothing receives datagrams (an address of
+        # "localhost" in another family than the listener's, or a free port); such a connection fails after a grace
+        # period of 1.5 seconds following the ICMP "port unreachable", which the DEBUG-only hook sets to 0, so each
+        # attempt fails at once in the same way
+        if (inlist("debug", get_feature_list())) {
+            setenv("QORE_QUIC_TEST_ECONNREFUSED_GRACE_MS", "0");
+        }
         tmp = new TmpDir("tls-verify-");
         ca_file = tmp.path + "/ca.pem";
         File f();
@@ -265,6 +272,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
     }
 
     globalTearDown() {
+        unsetenv("QORE_QUIC_TEST_ECONNREFUSED_GRACE_MS");
         if (server) {
             server.stop();
         }
@@ -638,6 +646,10 @@ WKEuKQ7xuGuAiIESuSDBsSg=
             } catch (hash<ExceptionInfo> ex) {
                 assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err, api + ": " + ex.desc);
                 assertRegex("^QUIC-", ex.arg.err, api);
+                if (inlist("debug", get_feature_list())) {
+                    # the refusal ended the attempt after the grace period set by the test hook
+                    assertRegex("did not recover within 0 ms", ex.desc, api + ": " + ex.desc);
+                }
             }
             assertEq(2, mgr.getConnections().size(), api + ": one retry");
         }

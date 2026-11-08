@@ -389,6 +389,21 @@ public:
     */
     DLLLOCAL void waitForIdle();
 
+#ifdef DEBUG
+    //! Debug-only: waits until no item is queued or being processed, continuePoll() calls included
+    /** Unlike waitForIdle(), this waits for continuePoll() calls too, which can block; it is meant for tests that
+        need every operation of the controller to have run (see qore_quic_test_advance_clock())
+
+        @return true if the dispatcher is idle, false if it was not when \a timeout_ms elapsed
+    */
+    DLLLOCAL bool dbgWaitAllIdle(int timeout_ms);
+
+    //! Debug-only: the number of onComplete() calls dispatched so far
+    DLLLOCAL int64_t dbgOnCompleteDispatched() const {
+        return dbg_on_complete_dispatched.load(std::memory_order_acquire);
+    }
+#endif
+
     //! Mark a program as shutting down so workers skip callbacks for it
     /** Called at the start of cancelByProgram(), before any I/O thread commands.
         Workers that pick up items for this program will silently discard them
@@ -490,6 +505,10 @@ private:
         blocked ping continuePoll wedge HttpServer::stop()->flushCallbacks()
         forever (qorus-core shutdown deadlock). */
     int active_continue_poll = 0;
+#ifdef DEBUG
+    //! Debug-only: the number of onComplete() calls dispatched so far (see dbgOnCompleteDispatched())
+    std::atomic<int64_t> dbg_on_complete_dispatched{0};
+#endif
     int max_workers;                        //!< Maximum workers
     bool stopping = false;                  //!< Set during shutdown
     AsyncIoControllerPriv* ctrl = nullptr;  //!< Owning controller for logging (not ref'd — controller outlives dispatcher)
@@ -741,6 +760,29 @@ public:
     /** @param sock_hash the socket hash identifying the target operation
     */
     DLLLOCAL void wakeSocket(const std::string& sock_hash);
+
+#ifdef DEBUG
+    //! Debug-only: wakes the operations of every socket that has a route to an I/O thread
+    /** Each operation runs again and computes its timers anew; used after the QUIC test clock has been advanced
+        (see qore_quic_test_advance_clock()), so that timers that are due on the new clock are handled at once instead
+        of when the wait computed with the old clock ends
+
+        @return the number of sockets woken
+    */
+    DLLLOCAL size_t dbgWakeAllSockets();
+
+    //! Debug-only: waits until the worker threads have run every item they were given (see dbgWaitAllIdle())
+    /** The operations implemented in %Qore, and their onComplete() callbacks, run in worker threads, which
+        waitForProcessing() does not wait for: it covers the commands given to the I/O threads only
+
+        @param timeout_ms the maximum time to wait
+        @param on_complete_dispatched set to the number of onComplete() calls dispatched so far, with which a caller
+        sees whether an operation completed (and could have been submitted again) while it waited
+
+        @return true if the worker threads are idle, false if they were not when \a timeout_ms elapsed
+    */
+    DLLLOCAL bool dbgWaitWorkersIdle(int timeout_ms, int64_t& on_complete_dispatched);
+#endif
 
     //! Wakes a socket operation by QoreObject identity
     /** Looks up the socket's registered hash from registered_sockets to find the
@@ -1845,7 +1887,26 @@ public:
     */
     DLLLOCAL static void dbgHoldOffIoThreadReleases(bool hold, ExceptionSink* xsink);
 
+    //! Debug-only: holds the callbacks of timers that fire from now on, instead of dispatching them
+    /** Called by the dbg_async_io_hold_timer_callbacks() test hook, so that a test can run the callback of a timer
+        that fired before the timer's owner stopped it, after the owner has stopped it (see
+        dbgReleaseHeldTimerCallbacks()); with @a hold = false, fired timers are dispatched again, and the callbacks
+        already held stay held until they are released
+    */
+    DLLLOCAL static void dbgHoldTimerCallbacks(bool hold);
+
+    //! Debug-only: waits until at least @p count timer callbacks are held; returns false if the wait timed out
+    DLLLOCAL static bool dbgWaitHeldTimerCallbacks(size_t count, int64_t timeout_ms);
+
+    //! Debug-only: dispatches the timer callbacks held and waits for them to complete; returns their number
+    DLLLOCAL static size_t dbgReleaseHeldTimerCallbacks(ExceptionSink* xsink);
+
 private:
+    //! Debug-only: holds the callback of a fired timer if timer callbacks are held; returns true if it was held
+    /** The reference of @p code is taken over when it is held
+    */
+    DLLLOCAL bool dbgHoldTimerCallback(ResolvedCallReferenceNode* code, const std::string& owner,
+            AsyncIoSandboxContext& sandbox_ctx);
 #endif
 
     //! Start the I/O thread (caller must hold lock)
@@ -2156,6 +2217,15 @@ private:
         the object's any more; a close made by another thread meanwhile closes the descriptor now
     */
     DLLLOCAL void eraseRegisteredFd(IoThreadContext& t, const std::string& sock_hash);
+
+    //! Reports the registered descriptor of the object with the given hash ready again if it is a regular file
+    /** Called when an operation starts or resumes waiting for the object: poll(2) reports a regular file ready to
+        every wait, and the event loop reports one only when it is rearmed (see QoreEventLoop::rearmAlwaysReady()), so
+        an operation that waits for a regular file after its readiness was reported (to it, or to another operation
+        that waits for the same object) is reported it again instead of waiting until its timeout.  Does nothing for
+        any other descriptor, and costs one test when the I/O thread's loop has no regular file.
+    */
+    DLLLOCAL void rearmIfAlwaysReady(IoThreadContext& t, const std::string& sock_hash);
 
     //! Compute the event union for a socket
     DLLLOCAL int computeEventUnion(const IoThreadContext& t, const std::string& sock_hash) const;

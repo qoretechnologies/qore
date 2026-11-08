@@ -150,7 +150,8 @@ public class DataSchema inherits AbstractVersionedSchema {
         }
 
         if (!expanded_tables) {
-            string driver = getDatasource().getDriverName();
+            # the triggers of the database's native driver, also through a generic driver (ex: jdbc)
+            string driver = SqlUtil::AbstractSqlUtilBase::getDatasourceDriverOptionKeys(getDatasource())[0];
             expanded_tables = DataSchemaLoader::expandAutoTriggers(schema_data.tables, driver);
             # extract populate metadata and prepare columns for safe DDL addition
             pending_populates = extractPopulateColumns(\expanded_tables);
@@ -556,7 +557,9 @@ public class DataSchema inherits AbstractVersionedSchema {
             string driver = getDatasource().getDriverName();
             *string raw_sql;
             if (ph.sql.typeCode() == NT_HASH) {
-                raw_sql = ph.sql{driver};
+                # the SQL under the driver's own name, else under the key of the database's native driver
+                raw_sql = SqlUtil::AbstractSqlUtilBase::getDriverValue(ph.sql,
+                    SqlUtil::AbstractSqlUtilBase::getDatasourceDriverOptionKeys(getDatasource()));
             } else if (ph.sql.typeCode() == NT_STRING) {
                 raw_sql = ph.sql;
             }
