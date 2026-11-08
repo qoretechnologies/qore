@@ -3888,6 +3888,28 @@ table.insert(row);
         return insertIntern(row, \sql, opt);
     }
 
+    #! Returns the values that an insert of the given row binds, in the order of the placeholders of its SQL
+    /** The SQL of an insert of a row with the same columns and @ref sql_iop_funcs, such as the SQL that
+        @ref SqlUtil::AbstractTable::insert() "insert()" gives in its \c sql reference, has the placeholders of these
+        values, so a statement prepared with that SQL inserts another such row with these values as its arguments.
+
+        An insert operator binds its argument when the database takes it as a value, such as the sequence name of
+        @ref SqlUtil::iop_seq() "iop_seq()" on PostgreSQL (\c "nextval(%v)"), and binds nothing when the database
+        takes it in the SQL, such as the same operator on Oracle (\c "seq.nextval").
+
+        @param row a hash representing the row to insert, as given to @ref SqlUtil::AbstractTable::insert() "insert()"
+
+        @return the values bound to the placeholders of the insert's SQL, in their order; the output placeholders
+        of a \c "returning" option follow them
+
+        @throw INSERT-OPERATOR-ERROR an unknown insert operator or an invalid argument to one was given
+
+        @since SqlUtil 3.11
+    */
+    list<auto> getInsertArgs(hash<auto> row) {
+        return getPlaceholdersAndValues(row).values ?? ();
+    }
+
     #! Inserts a row or a hash-of-lists row batch without transaction management
     /** This method is a generic bulk insert hook. The default implementation delegates to
         @ref SqlUtil::AbstractTable::insert() so all drivers support it; driver-specific

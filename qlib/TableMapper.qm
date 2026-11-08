@@ -219,6 +219,10 @@ on_error table1.rollback();
 
 
     @section tablemapperv1_3_1 TableMapper v1.3.1
+    - fixed @ref TableMapper::InboundTableMapper "InboundTableMapper" inserts of rows after the first with a
+      sequence column on Oracle, whose sequence is part of the SQL, and with a sequence column that is not the first
+      column: the arguments of the insert are the ones that the table binds
+      (@ref SqlUtil::AbstractTable::getInsertArgs() "AbstractTable::getInsertArgs()")
     - fixed @ref TableMapper::InboundTableMapper::queueData() "InboundTableMapper::queueData()" to accept a record set
       whose values all have the same type, such as a literal <tt>{"a": ("1", "2")}</tt>; adding a constant value from
       the second argument raised \c RUNTIME-TYPE-ERROR
@@ -346,9 +350,6 @@ public namespace TableMapper {
 
             #! extra arguments for sequence output binds
             list<auto> out_args = ();
-
-            #! sequence bind arguments for prepared statement reuse (sequence names for nextval(%v))
-            list<auto> seq_bind_args = ();
 
             #! "unstable input" option for non-optimized inserts/upserts (~33% performance reduction in insert/upsert speed)
             bool unstable_input = False;
@@ -683,17 +684,16 @@ InboundTableMapper mapper(table, DbMapper);
                     # when executing for the first time on stable input data, get an AbstractSQLStatement for the SQL used to insert
                     if (!stmt) {
                         string sql;
-                        # save sequence bind args (sequence names) for prepared statement reuse
-                        seq_bind_args = map h{$1}.arg, ret_args;
+                        # the sequence columns are the same in every row; the table gives the values bound for them
                         out_args = map Type::Number, ret_args;
                         rh = table.insert(h, \sql, ("returning": getReturning()));
                         stmt = table.getDatasource().getSQLStatement();
                         stmt.prepare(sql);
                     } else {
-                        # remove sequence columns from data hash (their bind values are constant)
-                        map remove h.$1, ret_args;
-                        # execute with: sequence names + data values + output type placeholders
-                        stmt.execArgs(seq_bind_args + h.values() + out_args);
+                        # the values that the insert's SQL binds, in its order (a sequence's name where the database
+                        # binds it, as PostgreSQL's nextval(%v) does, and nothing where it is in the SQL, as Oracle's
+                        # seq.nextval is), then the output placeholders of the "returning" clause
+                        stmt.execArgs(table.getInsertArgs(h) + out_args);
                         rh = stmt.getOutput();
                         # unwrap single-row RETURNING output (values come back as single-element lists)
                         if (rh) {
@@ -1201,18 +1201,15 @@ on_error table_mapper.rollback();
                         if (ret_args && hbuf{ret_args[0]}.typeCode() == NT_LIST) {
                             map hbuf.$1 = hbuf.$1[0], ret_args;
                         }
-                        # save sequence bind args (sequence names) for prepared statement reuse
-                        seq_bind_args = map hbuf{$1}.arg, ret_args;
+                        # the sequence columns are the same in every row; the table gives the values bound for them
                         out_args = map Type::Number, ret_args;
                         rh = table.insert(hbuf, \sql, ("returning": getReturning()));
                         # create the statement for future inserts
                         stmt = table.getDatasource().getSQLStatement();
                         stmt.prepare(sql);
                     } else {
-                        # remove sequence columns from data hash (their bind values are constant)
-                        map remove hbuf.$1, ret_args;
-                        # execute with: sequence names + data values + output type placeholders
-                        stmt.execArgs(seq_bind_args + hbuf.values() + out_args);
+                        # the values that the insert's SQL binds, in its order (see insertRow())
+                        stmt.execArgs(table.getInsertArgs(hbuf) + out_args);
                         # get sequence values
                         rh = stmt.getOutput();
                         # unwrap single-row RETURNING output (values come back as single-element lists)
