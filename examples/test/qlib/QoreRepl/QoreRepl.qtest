@@ -1130,26 +1130,20 @@ public class QoreReplTest inherits QUnit::Test {
     testLoadWithActiveThreads() {
         QoreRepl repl();
 
-        # Start a background thread
-        repl.eval("our bool stop = False;");
-        repl.eval("sub worker() { while (!stop) usleep(10ms); }");
-        repl.eval("background worker();");
-
-        # Wait for thread to start
+        repl.eval("our Counter entered; our Counter gate;");
+        Counter entered(1); Counter gate(1); bool released = False;
         Program pgm = repl.getProgram();
-        while (pgm.getThreadCount() == 0) usleep(10ms);
+        pgm.setGlobalVarValue("entered", entered); pgm.setGlobalVarValue("gate", gate);
+        on_exit { if (!released) { gate.dec(); } pgm.waitForThreads(); }
+        repl.eval("background sub () { entered.dec(); gate.waitForZero(); }()");
+        entered.waitForZero();
         assertTrue(pgm.getThreadCount() > 0, "Thread should be running");
-
-        # Try to /load a file - should fail with helpful message
         *hash<auto> result = repl.eval("/load /nonexistent/file.q");
         assertTrue(exists result, "Should return result");
         assertTrue(exists result.error, "Should have error");
-        assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
-        assertRegex("background threads", result.error.desc, "Should mention background threads");
-
-        # Stop the thread
-        repl.getProgram().setGlobalVarValue("stop", True);
-        while (pgm.getThreadCount() > 0) usleep(10ms);
+        assertEq("REPL-THREADS-ACTIVE", result.error.err);
+        assertRegex("Running threads", result.error.desc);
+        gate.dec(); released = True; pgm.waitForThreads();
     }
 
     #! Test negative max_connections validation
