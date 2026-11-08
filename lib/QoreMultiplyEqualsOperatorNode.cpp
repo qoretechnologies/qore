@@ -48,28 +48,26 @@ QoreValue QoreMultiplyEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
     if (!v)
         return QoreValue();
 
+    // the result is the value the lvalue holds afterwards, as for an assignment (x *= y gives what x = x * y gives):
+    // the lvalue's type can convert the value computed (a softint lvalue stores 17.5 as 17)
     // is either side a number?
     if (v.getType() == NT_NUMBER || res->getType() == NT_NUMBER) {
         v.multiplyEqualsNumber(*res, "<*= operator>");
-        if (ref_rv && !*xsink)
-            return v.getReferencedValue();
+    } else if (v.getType() == NT_FLOAT || res->getType() == NT_FLOAT) {
+        // is either side a float?
+        v.multiplyEqualsFloat(res->getAsFloat(), "<*= operator>");
+    } else {
+        // get operand
+        int64 y = res->getAsBigInt();
 
-        return QoreValue();
+        // do integer multiply equals
+        if (!v.getAsBigInt() || !y) {
+            // no need to multiply something by zero
+            v.assign(0ll);
+        } else {
+            v.multiplyEqualsBigInt(y, "<*= operator>");
+        }
     }
 
-    // is either side a float?
-    if (v.getType() == NT_FLOAT || res->getType() == NT_FLOAT)
-        return v.multiplyEqualsFloat(res->getAsFloat(), "<*= operator>");
-
-    // get operand
-    int64 y = res->getAsBigInt();
-
-    // do integer multiply equals
-    if (!v.getAsBigInt() || !y) {
-        // no need to multiply something by zero
-        v.assign(0ll);
-        return 0ll;
-    }
-
-    return v.multiplyEqualsBigInt(res->getAsBigInt(), "<*= operator>");
+    return ref_rv && !*xsink ? v.getReferencedValue() : QoreValue();
 }

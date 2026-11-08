@@ -175,11 +175,14 @@ public class GrokResponseStreamDataProvider inherits GrokDataProviderCommon, Dat
         try {
             *RestClientIo::RestClientIo rest_client = getRestClient();
             if (rest_client) {
-                hash<auto> result = doRestCommand("POST", "responses", {
-                    "model": model.id ?? "grok-3",
-                    "input": "Reply with exactly one word: hello",
-                    "max_output_tokens": 50,
-                }).body;
+                # the example data is requested once, without retries
+                hash<auto> result = DataProviderRetryUtil::runWithoutRetries(hash<auto> sub () {
+                    return doRestCommand("POST", "responses", {
+                        "model": model.id ?? "grok-3",
+                        "input": "Reply with exactly one word: hello",
+                        "max_output_tokens": 50,
+                    }).body;
+                });
                 if (result) {
                     return {
                         "type": "response.completed",

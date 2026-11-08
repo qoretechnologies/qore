@@ -238,5 +238,13 @@ the request header block is still being written (and a reset with no answer, whi
 request timeout, caller cancellation, same-client recovery after each of those, and a small
 request that must still go out in one write and leave the connection poolable.
 
+In debug builds, `Http1BufferedSendFailureTest` also injects a write failure of the send side,
+buffered or streamed, between incomplete reads of a response whose final header has arrived. It
+verifies that the failed writer is released and nothing more is written, that the existing reader
+and its partial response survive multiple cycles, that a complete `413` body is delivered exactly
+once, and that a response cut short reports the receive error (the send error is not armed again
+after the final response header), always leaving the connection closed. These state transitions
+require no sleeps or thread scheduling assumptions.
+
 The chunked full-duplex path keeps its own acceptance gate in
 `examples/test/qlib/HttpClientIo/HttpClientIo.qtest` (`FullDuplexEchoRawServer`).

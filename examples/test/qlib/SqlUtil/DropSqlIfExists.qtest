@@ -29,8 +29,8 @@ class DropSqlIfExistsTest inherits QUnit::Test {
             "pgsql": {
                 "function": "create function qtest_dsie_f() returns integer as $$ begin return 1; end; $$ "
                     "language plpgsql",
-                # PgsqlSqlUtil takes a PostgreSQL function for a procedure (getProcedure())
-                "procedure": "create function qtest_dsie_p() returns void as $$ begin null; end; $$ language plpgsql",
+                # a procedure of PostgreSQL 11 and later: PgsqlSqlUtil raised FUNCTION-ERROR for it
+                "procedure": "create procedure qtest_dsie_p() language plpgsql as $$ begin null; end; $$",
             },
             "oracle": {
                 "function": "create function qtest_dsie_f return number as begin return 1; end;",
@@ -98,9 +98,7 @@ class DropSqlIfExistsTest inherits QUnit::Test {
         };
         foreach hash<auto> i in (drop_sql.pairIterator()) {
             *string sql = i.value(names{i.key}, opt);
-            # a PostgreSQL "procedure" is a function
-            assertRegex("^drop " + (conn.driver == "pgsql" && i.key == "procedure" ? "function" : i.key) + " ",
-                sql ?? "", i.key);
+            assertRegex("^drop " + i.key + " ", sql ?? "", i.key);
             assertEq(sql, called.last(), i.key + ": callback");
             ds.execRaw(sql);
             ds.commit();

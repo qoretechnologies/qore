@@ -1,0 +1,201 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class PendingCancellationFirstCallTest
+
+#! Regression test: a pending cancellation is raised at the program's check points, not by a function's first IR call
+/** A thread can go on running after it catches a THREAD-CANCELLED exception, with the cancellation still pending
+    (as cleanup code does); the exception is raised again at the next check point of the program, such as a loop.
+    The IR interpreter analyses a function the first time it runs it on the IR tier, and the analysis checked for
+    cancellation, so the entry of a large function was a check point on the IR tier only: such a function raised the
+    exception before running, while the AST interpreter ran it to the next check point.  The analysis has no check
+    point any more.
+
+    The script cancels a thread blocked in Counter::waitForZero(), and the thread then calls a function of more than
+    a hundred IR instructions for the first time and runs a loop, in every execution mode, on the IR tier of tiered
+    execution and as a qcc executable (see ExecModeOutputTest).
+*/
+class PendingCancellationFirstCallTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# a pending cancellation is raised at the check points of the program, not by the first call of a function
+int sub big(int a) {
+    int x = a;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 0;
+    return x;
+}
+Counter ready(1);
+Counter blocked(1);
+Counter done(1);
+int tid;
+string r;
+background sub () {
+    tid = gettid();
+    string first;
+    try {
+        ready.dec();
+        blocked.waitForZero();
+        first = "not cancelled";
+    } catch (hash<ExceptionInfo> ex) {
+        first = ex.err;
+    }
+    # the cancellation is still pending: the call runs to the first check point of the program, the loop
+    string second;
+    try {
+        second = sprintf("%d", big(1));
+        for (int i = 0; i < 10; ++i) {
+        }
+        second += " not cancelled";
+    } catch (hash<ExceptionInfo> ex) {
+        second += " " + ex.err;
+    }
+    r = first + " | " + second;
+    done.dec();
+}();
+ready.waitForZero();
+cancel_thread(tid, "test");
+done.waitForZero();
+printf("%s\n", r);
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "THREAD-CANCELLED | 358 THREAD-CANCELLED",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("PendingCancellationFirstCall", Script, (map $1 + "\n", Expected).join(""),
+            "raises a pending cancellation at the program's check points") {
+    }
+}

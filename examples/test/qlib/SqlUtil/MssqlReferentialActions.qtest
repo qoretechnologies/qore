@@ -526,7 +526,8 @@ class CatalogDatasource inherits Datasource {
             return sequences{argv[1]};
         }
         # the existence of a table
-        if (s =~ /from sysobjects/) {
+        # the existence of a table in its schema
+        if (s =~ /from sys\.tables t join sys\.schemas s/) {
             return columns{argv[1]} ? {"name": argv[1]} : NOTHING;
         }
         if (s =~ /constraint_type = 'PRIMARY KEY'/) {

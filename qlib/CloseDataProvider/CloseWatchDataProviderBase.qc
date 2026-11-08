@@ -114,7 +114,10 @@ public class CloseWatchDataProviderBase inherits CloseDataProviderBase,
                 "date_updated__gte": since_str,
                 "_limit": 1,
             };
-            hash<auto> response = doGet("event", params);
+            # the example data is requested once, without retries
+            hash<auto> response = DataProviderRetryUtil::runWithoutRetries(hash<auto> sub () {
+                return doGet("event", params);
+            });
             if (response.data && response.data.size() > 0) {
                 return response.data[0];
             }

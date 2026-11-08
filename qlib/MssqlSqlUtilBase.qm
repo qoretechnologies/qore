@@ -186,6 +186,25 @@ hash<auto> desc = {
     schema alignment.
 
     @subsection MssqlSqlUtilBasev11 MssqlSqlUtilBase v1.1
+    - the triggers of a table on SQL Server are read from the database: a table with triggers is aligned with no
+      change, and a changed trigger, or an encrypted one, whose definition cannot be read, is dropped and created;
+      each alignment created the triggers again, which failed as they existed.  A trigger of the table that the
+      template does not have is now dropped, as on Oracle and PostgreSQL; the \c "triggers" value of the \c "omit"
+      alignment option keeps the triggers of a table as they are.  A trigger is dropped in the schema of its table
+    - fixed the existence of a table on SQL Server, which was a table of its name in any schema
+    - added SQL Server's Unicode string types \c nchar, \c nvarchar, \c nvarchar(max) and \c ntext, and
+      \c varchar(max); a column of one of them raised an error
+    - a \c varchar(max), \c nvarchar(max) or \c varbinary(max) column is described with that type, and a \c text,
+      \c ntext or \c image column without a size; they were described with the size -1 or the size of the largest
+      value, so each alignment altered them, also the columns of the @ref SqlUtil::BLOB and @ref SqlUtil::CLOB types
+    - the comments of columns are kept on SQL Server, as the \c MS_Description extended properties of the columns:
+      they are created with a table or column, aligned, and described; they were ignored before
+    - implemented the \c "returning" insert option (@ref SqlUtil::AbstractTable::InsertOptions) with SQL Server's
+      \c OUTPUT clause into a table variable, so also for a table with triggers, and for each row of a bulk insert; a
+      column named more than once is returned once; it raised \c UNIMPLEMENTED before, as it still does on Sybase,
+      which has no \c OUTPUT clause
+    - fixed the server version of a connection of the \c jdbc driver, which gives it as a hash: \c MERGE (upserts)
+      and sequences were not used, as the version was taken for an unknown one
     - names of tables, columns, indexes, constraints, sequences, views, triggers, schemas, filegroups, partition
       functions and schemes, savepoints and aliases are quoted in SQL when they are not ordinary names, so that a
       name from untrusted data can never change an SQL statement; reserved words are now quoted in brackets in all
@@ -345,6 +364,30 @@ string sub mssql_get_string_literal(string str) {
     return "'" + replace(str, "'", "''") + "'";
 }
 
+# returns a string for a Unicode SQL string literal: N and the string in single quotes, with each single quote doubled
+string sub mssql_get_unicode_string_literal(string str) {
+    return "N'" + replace(str, "'", "''") + "'";
+}
+
+# returns a name in brackets, with each "]" doubled, without any other check of the name
+string sub mssql_bracket_identifier(string name) {
+    return "[" + replace(name, "]", "]]") + "]";
+}
+
+# returns the name that an SQL identifier gives: a bracketed identifier without its brackets and with each "]]" as
+# "]", a double-quoted one without its quotes and with each doubled quote as one, and any other as it is
+string sub mssql_unquote_identifier(string id) {
+    *string bracketed = (id =~ x/^\[((?:[^\]]|\]\])*+)\]$/s)[0];
+    if (exists bracketed) {
+        return replace(bracketed, "]]", "]");
+    }
+    *string dquoted = (id =~ x/^"((?:[^"]|"")*+)"$/s)[0];
+    if (exists dquoted) {
+        return replace(dquoted, "\"\"", "\"");
+    }
+    return id;
+}
+
 # returns the new name of an object for sp_rename, which takes it as given and not as SQL, as a string literal; the
 # name must be one that mssql_get_sql_identifier() accepts
 string sub mssql_get_new_name_literal(string new_name) {
@@ -399,9 +442,35 @@ string sub mssql_drop_constraint_sql(string table_name, string name) {
     return sprintf("alter table %s drop constraint %s", table_name, mssql_get_sql_identifier(name));
 }
 
-#! returns the SQL Server major version year, or 0 for non-SQL Server / unknown version strings
+#! the release year of each SQL Server major version, as the jdbc driver gives the version by its number
+const MssqlMajorVersionYears = {
+    "8": 2000,
+    "9": 2005,
+    "10": 2008,
+    "11": 2012,
+    "12": 2014,
+    "13": 2016,
+    "14": 2017,
+    "15": 2019,
+    "16": 2022,
+    "17": 2025,
+};
+
+#! returns the SQL Server major version year, or 0 for non-SQL Server / unknown versions
+/** The freetds driver gives the server's version as a string, such as "Microsoft SQL Server 2022 (RTM) ...", and the
+    jdbc driver as a hash with the product name and the major version number; a major version after the newest known
+    one is taken for the newest known one's year
+*/
 int sub get_mssql_server_major_year(AbstractDatasource ds) {
-    *string ver = (ds.getServerVersion() =~ x/Microsoft SQL Server ([0-9]+)/)[0];
+    auto version = ds.getServerVersion();
+    if (version.typeCode() == NT_HASH) {
+        if (version.name !~ /^Microsoft SQL Server/) {
+            return 0;
+        }
+        int major = version.major_version.toInt();
+        return MssqlMajorVersionYears{major} ?? (major > 17 ? MssqlMajorVersionYears."17" : 0);
+    }
+    *string ver = (version =~ x/Microsoft SQL Server ([0-9]+)/)[0];
     return ver ? ver.toInt() : 0;
 }
 
@@ -663,7 +732,12 @@ list l = col.getAddColumnSql(t);
         @param t the SqlUtil::AbstractTable object to modify
         */
     softlist getAddColumnSql(AbstractTable t) {
-        return sprintf("alter table %s add %s", t.getSqlName(), AbstractColumn::getCreateSql(t));
+        list<string> l = (sprintf("alter table %s add %s", t.getSqlName(), AbstractColumn::getCreateSql(t)),);
+        # the comment of the column: its MS_Description extended property (SQL Server; Sybase has none)
+        if (comment && t instanceof MssqlTable && !cast<MssqlTable>(t).is_sybase) {
+            l += cast<MssqlTable>(t).getColumnCommentSql(name, "sp_addextendedproperty", comment);
+        }
+        return l;
     }
 
     #! returns a list of sql strings that can be used to modify the column to the new definition; if the column definitions are identical then an empty list is returned
@@ -712,6 +786,17 @@ list l = col.getModifySql(t, newcol);
             }
             if (nullable != c.nullable) {
                 l += sprintf("alter table %s alter column %s %s %snull", t.getSqlName(), ddl_name, nts, c.nullable ? "" : "not ");
+            }
+        }
+
+        # the comment of the column: its MS_Description extended property (SQL Server; Sybase has none)
+        if ((comment ?? "") != (c.comment ?? "") && t instanceof MssqlTable && !cast<MssqlTable>(t).is_sybase) {
+            MssqlTable mt = cast<MssqlTable>(t);
+            if (!c.comment) {
+                l += mt.getColumnCommentSql(name, "sp_dropextendedproperty");
+            } else {
+                l += mt.getColumnCommentSql(name, comment ? "sp_updateextendedproperty" : "sp_addextendedproperty",
+                    c.comment);
             }
         }
 
@@ -1253,23 +1338,74 @@ public class MssqlView inherits SqlUtil::AbstractView {
 
 #! represents a Mssql-specific trigger
 public class MssqlTrigger inherits SqlUtil::AbstractTrigger {
+    public {
+        #! True if the definition of the trigger could not be read (an encrypted trigger)
+        /** @since MssqlSqlUtilBase 1.1
+        */
+        bool unreadable;
+    }
+
     #! creates the object and sets its name and the trigger source
-    constructor(string n, string n_src) : AbstractTrigger(n, n_src) {
+    /** @param n the name of the trigger
+        @param n_src the source of the trigger
+        @param unreadable True if the definition of the trigger in the database could not be read: the trigger is
+        never equal to another, so that alignment drops it and creates the trigger of the template
+
+        @since MssqlSqlUtilBase 1.1 the \a unreadable argument
+    */
+    constructor(string n, string n_src, bool unreadable = False) : AbstractTrigger(n, n_src) {
+        self.unreadable = unreadable;
     }
 
     #! returns a string that can be used to create the trigger in the database
+    /** @throw TRIGGER-ERROR the definition of the trigger could not be read from the database
+    */
     softlist getCreateSql(string table_name, *hash opt) {
+        if (unreadable) {
+            throw "TRIGGER-ERROR", sprintf("the definition of trigger %y of table %y cannot be read (an encrypted "
+                "trigger), so it cannot be created", name, table_name);
+        }
         return sprintf("create trigger %s %s", mssql_get_sql_identifier(name), src);
     }
 
     #! returns a string that can be used to drop the trigger from the database
+    /** The trigger is in the schema of its table: its name is qualified with the schema of the table's name.  A name
+        that cannot be an SQL identifier (see @ref mssql_identifiers), which a trigger created outside SqlUtil may have,
+        is given to the statement in a string literal
+
+        @param table_name the name of the table, with its schema
+    */
     softlist getDropSql(string table_name) {
-        return sprintf("drop trigger %s", mssql_get_sql_identifier(name));
+        *string schema = mssql_get_sql_name_schema(table_name);
+        string id;
+        try {
+            id = mssql_get_sql_identifier(name);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "IDENTIFIER-ERROR") {
+                rethrow;
+            }
+            # the statement is run by the server from a string literal, in which the names are bracketed
+            string sql = "drop trigger " + (schema ? mssql_bracket_identifier(mssql_unquote_identifier(schema)) + "."
+                : "") + mssql_bracket_identifier(name);
+            return sprintf("exec sp_executesql %s", mssql_get_unicode_string_literal(sql));
+        }
+        return sprintf("drop trigger %s%s", schema ? schema + "." : "", id);
+    }
+
+    #! returns the source for comparisons: lines end with a newline, and the source has no space around it
+    /** SQL Server keeps the definition of a trigger as it was sent, which may end its lines with \c "\r\n"
+    */
+    string getNormalizedSource(string src) {
+        src =~ s/\r\n/\n/g;
+        trim src;
+        return AbstractFunctionBase::getNormalizedSource(src);
     }
 
     #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
+    /** A trigger whose definition could not be read is never equal to another
+    */
     private bool equalImpl(AbstractFunctionBase t) {
-        return True;
+        return !unreadable && !cast<MssqlTrigger>(t).unreadable;
     }
 
     #! returns the SQL that renames the trigger with sp_rename
@@ -1745,7 +1881,9 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
 
     #! returns @ref True if the DB is a Sybase database
     static bool isSybase(AbstractDatasource ds) {
-        return ds.getServerVersion() =~ /Adaptive Server/;
+        auto version = ds.getServerVersion();
+        # the jdbc driver gives the version as a hash with the product name
+        return (version.typeCode() == NT_HASH ? version.name : version) =~ /Adaptive Server/;
     }
 
     #! returns a string that can be used to create the schema in the database
@@ -1960,6 +2098,14 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
             "char varying": ("qore": Type::String, "size": SZ_OPT),
             "character varying": ("qore": Type::String, "size": SZ_OPT),
             "varchar": ("qore": Type::String, "size": SZ_OPT, "default_size": 80),
+            "varchar(max)": ("qore": Type::String,),
+
+            # Unicode strings (SQL Server); the size is in byte pairs: 1 - 4000, or "max"
+            "nchar": ("qore": Type::String, "size": SZ_OPT),
+            "nvarchar": ("qore": Type::String, "size": SZ_OPT, "default_size": 80),
+            "nvarchar(max)": ("qore": Type::String,),
+            # deprecated in SQL Server
+            "ntext": ("qore": Type::String,),
 
             # The following uni* types are used in Sybase Adaptive Server
             "unichar": ("qore": Type::String, "size": SZ_MAND,),
@@ -2811,9 +2957,14 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
     }
 
     private bool checkExistenceImpl() {
-        *hash qh = ds.selectRow("select name from sysobjects where type = %v and name = %v", "U", name);
-        #*hash qh = ds.selectRow("select * from information_schema.tables where table_schema = %v and
-        #   table_name = %v", schema, name);
+        *hash<auto> qh;
+        if (is_sybase) {
+            qh = ds.selectRow("select name from sysobjects where type = %v and name = %v", "U", name);
+        } else {
+            # the table of the name in its schema: a table of the same name in another schema is another table
+            qh = ds.selectRow("select t.name from sys.tables t join sys.schemas s on s.schema_id = t.schema_id "
+                "where s.name = %v and t.name = %v", schema, name);
+        }
         if (qh)
             return inDb = True;
         return False;
@@ -2884,9 +3035,16 @@ so.name = %v", name);
         hash rv;
         foreach hash<auto> row in (qh.contextIterator()) {
             row.column_name = row.column_name.lwr();
+            # a varchar(max), nvarchar(max) or varbinary(max) column has the length -1: it is a type of its own, as
+            # the column is declared, so that it is aligned with no change
+            if (row.character_maximum_length == -1 && MssqlTypeMap{row.data_type + "(max)"}) {
+                row.data_type += "(max)";
+                row.character_maximum_length = NOTHING;
+            }
             *hash th = MssqlTypeMap.(row.data_type);
             *softint size = row.character_maximum_length ? row.character_maximum_length : row.numeric_precision;
-            if (!exists size) {
+            # a type without a size (ex: text, ntext, image) has the length of its largest value
+            if (!exists size || (th && !th.size && !row.numeric_precision)) {
                 size = 0;
             }
             switch (th.qore) {
@@ -2923,6 +3081,20 @@ so.name = %v", name);
             *MssqlColumn c = rv{row.column_name.lwr()};
             if (c) {
                 c.default_constraint = row.constraint_name;
+            }
+        }
+
+        # the comments of the columns: their MS_Description extended properties
+        *hash<auto> cmh = ds.select("select c.name column_name, cast(ep.value as nvarchar(4000)) column_comment "
+            "from sys.extended_properties ep "
+            "join sys.tables t on t.object_id = ep.major_id "
+            "join sys.schemas s on s.schema_id = t.schema_id "
+            "join sys.columns c on c.object_id = ep.major_id and c.column_id = ep.minor_id "
+            "where ep.class = 1 and ep.name = 'MS_Description' and s.name = %v and t.name = %v", schema, name);
+        foreach hash<auto> row in (cmh.contextIterator()) {
+            *MssqlColumn c = rv{row.column_name.lwr()};
+            if (c && row.column_comment.val()) {
+                c.comment = row.column_comment;
             }
         }
 
@@ -3215,8 +3387,49 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         return c;
     }
 
+    #! returns the triggers of the table, read from the database on SQL Server
+    /** Sybase's triggers are not read: a table on Sybase has no triggers in its description
+    */
     private Triggers getTriggersImpl() {
-        return new Triggers();
+        Triggers rv();
+        if (is_sybase) {
+            return rv;
+        }
+        *hash<auto> qh = ds.select("select tr.name, object_definition(tr.object_id) as definition "
+            "from sys.triggers tr "
+            "join sys.tables t on t.object_id = tr.parent_id "
+            "join sys.schemas s on s.schema_id = t.schema_id "
+            "where tr.parent_class = 1 and tr.is_ms_shipped = 0 and s.name = %v and t.name = %v order by tr.name",
+            schema, name);
+        foreach hash<auto> row in (qh.contextIterator()) {
+            # the definition of an encrypted trigger cannot be read: the trigger is never equal to the trigger of a
+            # template, which replaces it
+            if (!row.definition.val()) {
+                rv.add(row.name, new MssqlTrigger(row.name, "", True));
+                continue;
+            }
+            rv.add(row.name, new MssqlTrigger(row.name, MssqlTable::getTriggerSource(row.definition)));
+        }
+        return rv;
+    }
+
+    #! returns the source of a trigger as MssqlTrigger has it: its definition after the trigger's name
+    /** SQL Server keeps the definition of a trigger as it was created (\c "CREATE TRIGGER name ON ..."), with any
+        comments before it; the source of a trigger in a table description is the part after the name, from \c ON
+
+        @param definition the definition of the trigger as \c OBJECT_DEFINITION() gives it
+
+        @return the source of the trigger, or the definition if it does not begin with \c "CREATE TRIGGER" and a
+        name
+    */
+    static string getTriggerSource(string definition) {
+        # a name part is a bracketed name ("]]" is a "]" of the name), a double-quoted name or an ordinary name; a
+        # name can be qualified with its schema
+        *string src = (definition =~ x/^(?:\s|--[^\n]*(?:\n|$)|\/\*.*?\*\/)*create\s+(?:or\s+alter\s+)?trigger\s+(?:(?:\[(?:[^\]]|\]\])*\]|"[^"]*"|[^\s.\["]+)\.)?(?:\[(?:[^\]]|\]\])*\]|"[^"]*"|[^\s.\["]+)\s+(.*)$/is)[0];
+        if (!src) {
+            return definition;
+        }
+        return trim(src);
     }
 
     #! returns a string that can be used to create the table in the database
@@ -3247,6 +3460,37 @@ tc.constraint_name, c1.ordinal_position", schema, name);
     }
 
     private *list getCreateMiscSqlImpl(*hash opt, bool cache) {
+        # Sybase has no extended properties
+        if (is_sybase) {
+            return;
+        }
+        if (cache) {
+            getColumnsUnlocked();
+        }
+        # the comments of the columns: their MS_Description extended properties
+        return map AbstractDatabase::doCallback(opt, getColumnCommentSql($1.name, "sp_addextendedproperty",
+            $1.comment), AbstractDatabase::AC_Add, "column comment", $1.name, name), columns.iterator(), $1.comment;
+    }
+
+    #! Returns the SQL that adds, changes or drops the comment of a column of the table
+    /** SQL Server keeps the comment of a column as its \c MS_Description extended property
+
+        @param column the name of the column
+        @param proc \c "sp_addextendedproperty", \c "sp_updateextendedproperty" or \c "sp_dropextendedproperty"
+        @param comment the comment (not used to drop it)
+
+        @return the SQL that calls the procedure
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    string getColumnCommentSql(string column, string proc, *string comment) {
+        string sql = sprintf("exec %s @name = N'MS_Description', ", proc);
+        if (proc != "sp_dropextendedproperty") {
+            sql += sprintf("@value = N%s, ", mssql_get_string_literal(comment ?? ""));
+        }
+        return sql + sprintf("@level0type = N'SCHEMA', @level0name = N%s, @level1type = N'TABLE', "
+            "@level1name = N%s, @level2type = N'COLUMN', @level2name = N%s", mssql_get_string_literal(schema),
+            mssql_get_string_literal(name), mssql_get_string_literal(column));
     }
 
     private *list getAlignSqlImpl(AbstractTable table, *hash opt) {
@@ -4049,15 +4293,96 @@ tc.constraint_name, c1.ordinal_position", schema, name);
             if (!c)
                 throw "COLUMN-ERROR", sprintf("%s.%s is not a valid column for the \"returning\" option (valid "
                     "columns: %y)", name, rh.key, columns.keys());
-            l += rh.key;
-            args += rh.type ?* c.qore_type ?* Type::String;
+            # a column given more than once is returned once, in the place of its first mention
+            if (!inlist(rh.key, l)) {
+                l += rh.key;
+            }
         }
         if (l) {
-            throw "UNIMPLEMENTED", "output not yet implemented";
+            if (is_sybase) {
+                throw "UNIMPLEMENTED", sprintf("%s: the \"returning\" option is not supported on Sybase, which has "
+                    "no OUTPUT clause", getSqlName());
+            }
+            # SQL Server gives the values of the inserted row with the OUTPUT clause, which comes before the VALUES
+            # clause of the insert, with no placeholders; the values are output into a table variable, which is then
+            # selected, as an OUTPUT clause without INTO is refused on a table with an enabled trigger (server message
+            # 334)
+            list<string> names = map getColumnSqlName($1), l;
+            string decl = "declare @qore_returning table ("
+                + (foldl $1 + ", " + $2, (map names[$#] + " " + MssqlTable::getReturningType(columns{$1}), l))
+                + "); ";
+            string output = "output " + (foldl $1 + ", " + $2, (map "inserted." + $1, names))
+                + " into @qore_returning";
+            # the first ") values (" outside of a quoted (bracketed) name ends the insert's column list
+            int i = MssqlTable::findOutsideBrackets(sql, ") values (");
+            if (i < 0) {
+                throw "RETURNING-ERROR", sprintf("cannot add the OUTPUT clause to the insert %y", sql);
+            }
+            sql = decl + sql.substr(0, i + 2) + output + sql.substr(i + 1) + "; select "
+                + (foldl $1 + ", " + $2, names) + " from @qore_returning";
+            *hash<auto> h = execReturningImpl(opt, sql, args);
+            return h ? map {$1.key: $1.value.typeCode() == NT_LIST ? $1.value[0] : $1.value}, h.pairIterator() : h;
         }
 
         *hash<auto> h = execData(opt, sql, args);
-        return h ? map {$1.key: $1.value[0]}, h.pairIterator() : h;
+        return h ? map {$1.key: $1.value.typeCode() == NT_LIST ? $1.value[0] : $1.value}, h.pairIterator() : h;
+    }
+
+    #! executes the batch of an insert with the \c "returning" option that doReturningImpl() made
+    /** @return the values of the inserted row's columns that the option names, each in a list of one value
+    */
+    private *hash<auto> execReturningImpl(hash<auto> opt, string sql, list<auto> args) {
+        *hash<auto> h = execData(opt, sql, args);
+        # the batch gives the result of each statement that has one, as "query0", "query1", ...: the row count of the
+        # insert and the rows of the select, which is the last one
+        if (h && h.hasKey("query0")) {
+            h = h{"query" + (h.size() - 1)};
+        }
+        return h;
+    }
+
+    #! returns the type of a column of the table variable that the values of the \c "returning" option are output to
+    /** A table variable cannot have the deprecated large object types, and a \c timestamp (\c rowversion) value is
+        kept as its binary value
+    */
+    static string getReturningType(MssqlColumn c) {
+        switch (c.native_type.lwr()) {
+            case "text": return "varchar(max)";
+            case "ntext": return "nvarchar(max)";
+            case "image": return "varbinary(max)";
+            case "timestamp":
+            case "rowversion": return "binary(8)";
+        }
+        return c.getNativeTypeString();
+    }
+
+    #! returns the offset of the first occurrence of a string in SQL outside of a bracketed name, or -1 if none
+    /** In a bracketed name, \c "]]" is a \c "]" of the name
+    */
+    static int findOutsideBrackets(string sql, string str) {
+        bool quoted;
+        int len = sql.length();
+        for (int i = 0; i < len; ++i) {
+            string c = sql[i];
+            if (quoted) {
+                if (c == "]") {
+                    if (i + 1 < len && sql[i + 1] == "]") {
+                        ++i;
+                    } else {
+                        quoted = False;
+                    }
+                }
+                continue;
+            }
+            if (c == "[") {
+                quoted = True;
+                continue;
+            }
+            if (sql.substr(i, str.length()) == str) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private softbool tryUpdate(string sql, hash<auto> row, Columns cols, list updc) {

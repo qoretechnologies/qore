@@ -469,7 +469,7 @@ list l = db.getAlignSql(schema_hash);
 
         list l = ();
 
-        string drv = getDriverName();
+        list<string> drv = getDriverOptionKeys();
         AbstractDatabase::checkDriverOptions(\schema_hash, drv);
         AbstractDatabase::checkDriverOptions(\schema_hash.sequence_map, drv);
         AbstractDatabase::checkDriverOptions(\schema_hash.sequences, drv);
@@ -632,7 +632,7 @@ list l = db.getDropSchemaSql(schema_hash);
 
         list l = ();
 
-        string drv = getDriverName();
+        list<string> drv = getDriverOptionKeys();
         AbstractDatabase::checkDriverOptions(\schema_hash, drv);
 
         # call driver-specific align schema sql function (start)
@@ -683,7 +683,7 @@ list l = db.getDropSchemaSql(schema_hash);
             string make_arg_type) {
         list l = ();
         hash copt = getCreationOptions();
-        string drv = getDriverName();
+        list<string> drv = getDriverOptionKeys();
 
         # drop objects
         reference<hash> fmap = \schema_hash{type + "s"};
@@ -710,7 +710,7 @@ list l = db.getDropSchemaSql(schema_hash);
             string make_arg_type) {
         list l = ();
         hash copt = getCreationOptions();
-        string drv = getDriverName();
+        list<string> drv = getDriverOptionKeys();
 
         hash code_cache;
 
@@ -1737,7 +1737,8 @@ db.refreshMaterializedView("mv_sales_by_region", {"concurrent": True});
         string mn = AbstractDatabase::loadModule(nds, \drv);
 
         if (opts) {
-            AbstractDatabase::checkDriverOptions(\opts, drv);
+            AbstractDatabase::checkDriverOptions(\opts,
+                AbstractSqlUtilBase::getDatasourceDriverOptionKeys(nds));
         }
 
         # try to get AbstractDatabase object
@@ -1789,12 +1790,25 @@ db.refreshMaterializedView("mv_sales_by_region", {"concurrent": True});
         return AbstractDatabase::getDatabase(nds, opts);
     }
 
-    static checkDriverOptions(reference<hash<auto>> h, string drv) {
+    #! applies the driver-specific options under the given keys, in order, and removes the \c "driver" key
+    /** @param h the description or options; the hash under each key of \a drv in its \c "driver" hash is added to
+        it, so that the options under a later key take precedence
+        @param drv the keys of the driver-specific options to apply, in order; see
+        @ref SqlUtil::AbstractSqlUtilBase::getDriverOptionKeys() "getDriverOptionKeys()"
+
+        @since SqlUtil 3.11.0 accepts a list of keys
+    */
+    static checkDriverOptions(reference<hash<auto>> h, softlist<string> drv) {
         if (h.driver) {
-            if (h.driver{drv}) {
-                hash<auto> nh = h + h.driver{drv};
-                h = nh;
+            # a copy that takes values of any type: the hash may be narrowed (ex: hash<string, hash<auto>> for the
+            # columns of a description), and an option of another type could not be added to it
+            hash<auto> nh = {} + h;
+            foreach string key in (drv) {
+                if (h.driver{key}) {
+                    nh += h.driver{key};
+                }
             }
+            h = nh;
             delete h.driver;
         }
     }

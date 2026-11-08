@@ -251,6 +251,80 @@ inline bool buildSendCmsg(const struct sockaddr* local_addr, socklen_t local_add
     return false;
 }
 
+#ifdef DEBUG
+//! Debug-only: counts datagrams sent to an address for the QUIC test clock (see qore_quic_test_advance_clock())
+/** @param fd the socket the datagrams were sent with
+    @param addr the destination address, or nullptr for the peer of a connected socket
+    @param addrlen the length of \a addr
+    @param count the number of datagrams to be sent; datagrams are counted before they are sent, and those that
+    were not sent are taken back with qore_quic_test_take_back_sent()
+
+    @return true if the datagrams were counted: only while datagrams are counted (see
+    qore_quic_test_count_datagrams()), and only for an address that has a key
+*/
+DLLLOCAL bool qore_quic_test_note_sent(int fd, const struct sockaddr* addr, socklen_t addrlen, int count);
+
+//! Debug-only: takes back datagrams that qore_quic_test_note_sent() counted and that were not sent
+/** Called only when qore_quic_test_note_sent() counted them, also if datagrams stopped being counted meanwhile;
+    wakes those waiting for the datagrams of the process to be read, as the datagrams taken back were not sent
+
+    @param fd the socket the datagrams were to be sent with
+    @param addr the destination address, or nullptr for the peer of a connected socket
+    @param addrlen the length of \a addr
+    @param count the number of datagrams that were not sent
+*/
+DLLLOCAL void qore_quic_test_take_back_sent(int fd, const struct sockaddr* addr, socklen_t addrlen, int count)
+    noexcept;
+
+//! Debug-only: the error that a test makes the next send of datagrams on a socket fail with, or 0
+/** See qore_quic_test_set_send_hook(); called before each send system call of sendQuicPacketsBatch()
+*/
+DLLLOCAL int qore_quic_test_send_error(int fd);
+
+//! Debug-only: counts datagrams received on a socket for the QUIC test clock (see qore_quic_test_advance_clock())
+/** @param fd the socket the datagrams were received on
+    @param src the source address of the datagrams
+    @param count the number of datagrams received
+*/
+DLLLOCAL void qore_quic_test_note_received(int fd, const struct sockaddr* src, int count);
+
+//! Debug-only: counts the datagrams of a sendQuicPacketsBatch() call as sent before they are sent
+/** A receiver in another thread can read and count a datagram before the call returns, and a count of what was
+    received above what was sent was taken for datagrams sent before they were counted (see
+    qore_quic_test_advance_clock()).  The datagrams that were not sent are taken back when the call returns, on every
+    path, and only if they were counted: datagrams can start being counted during the call.
+*/
+class QuicTestSentCount {
+public:
+    //! Counts @p total datagrams as sent; @p sent is the number of datagrams sent when the call returns
+    DLLLOCAL QuicTestSentCount(int fd, const struct sockaddr* addr, socklen_t addrlen, int total, const int& sent)
+            : fd(fd), addr(addr), addrlen(addrlen), total(total), sent(sent),
+            counted(total > 0 && qore_quic_test_note_sent(fd, addr, addrlen, total)) {
+    }
+
+    DLLLOCAL ~QuicTestSentCount() {
+        if (counted && sent < total) {
+            // the caller reads errno after sendQuicPacketsBatch() returns -1; the take-back's system calls must not
+            // change it
+            int saved_errno = errno;
+            qore_quic_test_take_back_sent(fd, addr, addrlen, total - sent);
+            errno = saved_errno;
+        }
+    }
+
+    QuicTestSentCount(const QuicTestSentCount&) = delete;
+    QuicTestSentCount& operator=(const QuicTestSentCount&) = delete;
+
+private:
+    int fd;
+    const struct sockaddr* addr;
+    socklen_t addrlen;
+    int total;
+    const int& sent;
+    bool counted;
+};
+#endif
+
 //! Batch-send UDP datagrams from a QuicPacketBatch
 /** Uses sendmmsg() on Linux for efficiency; falls back to sendmsg()/sendto()
     loop on macOS/FreeBSD.  Uses stack-allocated mmsghdr/iovec arrays (no heap
@@ -290,6 +364,10 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
 
     int total = batch.size();
     int offset = 0;
+#ifdef DEBUG
+    // the datagrams are counted as sent before they are sent, and those not sent are taken back on every return
+    QuicTestSentCount sent_count(fd, addr, addrlen, total, offset);
+#endif
 #ifdef __linux__
     // All large arrays are thread-local to avoid ~9KB of stack pressure per call.
     // This inline function is called from many sites; without thread_local, the
@@ -321,9 +399,18 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
         }
 
         int sent;
-        do {
-            sent = sendmmsg(fd, msgs, static_cast<unsigned int>(batch_size), 0);
-        } while (sent < 0 && errno == EINTR);
+#ifdef DEBUG
+        int test_error = qore_quic_test_send_error(fd);
+        if (test_error) {
+            errno = test_error;
+            sent = -1;
+        } else
+#endif
+        {
+            do {
+                sent = sendmmsg(fd, msgs, static_cast<unsigned int>(batch_size), 0);
+            } while (sent < 0 && errno == EINTR);
+        }
         if (sent < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 if (offset > 0) {
@@ -346,6 +433,13 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
     // macOS/FreeBSD: sendmsg()/sendto() loop fallback
     while (offset < total) {
         ssize_t sent;
+#ifdef DEBUG
+        int test_error = qore_quic_test_send_error(fd);
+        if (test_error) {
+            errno = test_error;
+            sent = -1;
+        } else
+#endif
         if (use_cmsg) {
             // Use sendmsg() to attach cmsg for source address pinning
             struct iovec iov;

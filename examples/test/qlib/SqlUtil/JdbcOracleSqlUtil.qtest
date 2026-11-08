@@ -201,7 +201,11 @@ class OracleTest inherits SqlTestBase {
             "char": (
                 "value": "hello",
                 "size": "20",
-                "expect": rpad ("hello", 20),
+                # the jdbc driver strips the trailing spaces of a CHAR value, which the oracle driver returns padded
+                # to the size of the column (see OracleSqlUtil.qtest)
+                "expect": "hello",
+                # Oracle stores the value padded, as compared in where clauses
+                "stored": rpad("hello", 20),
             ),
             "number": (
                 "size": 15,

@@ -128,6 +128,16 @@ ds.vselectRows("select * from schema.table where type = %v order by type offset 
     These universal collections are limited to 32767 elements, and the \c SYS.ODCIVARCHAR2LIST element size is
     \c VARCHAR2(4000).
 
+    A driver other than \c oracle (ex: \c jdbc) cannot bind a collection, so it binds each value, in collection
+    constructors of up to 999 values (Oracle refuses a constructor with more arguments), as in the following SQL:
+    @code{.py}
+*hash<auto> q = ds.select("select * from schema.table where col1 in (select column_value from "
+    "table(sys.odcinumberlist(%v, %v, %v, %v)))", 1, 2, 3, 4);
+    @endcode
+
+    The SQL then depends on the number of values, and a statement binds at most 65535 values: a list with more
+    values, with the values bound before it, raises an exception when the SQL is made.
+
     @section ora_date_comparisons Date Comparisons on Oracle
 
     The Oracle driver binds a Qore date value as a \c TIMESTAMP \c WITH \c TIME \c ZONE.  When such a value is
@@ -382,6 +392,12 @@ hash schema = (
 /** @page ora_relnotes Release Notes
 
     @section oracle17 OracleSqlUtilBase v1.7
+    - fixed the \c IN operator with a driver other than \c oracle (ex: \c jdbc), which cannot bind the collection of
+      values that the \c oracle driver binds, so the statement failed: each value is bound in a collection
+      constructor (see @ref ora_in_operator), and a list with more values than a statement can bind raises an
+      exception when the SQL is made
+    - fixed the server version of a connection of the \c jdbc driver, which gives it as a hash: runtime temporary
+      tables were refused, interval partitioning was not used and row limits were taken for Oracle 11g ones
     - added @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()" with
       \c DBMS_MVIEW.REFRESH, with the \c method (\c complete, \c fast or \c force) and \c atomic_refresh options;
       as \c DBMS_MVIEW.REFRESH commits implicitly, a refresh is refused in a transaction
@@ -587,6 +603,17 @@ string sub oracle_get_sql_object_name(string name) {
         return oracle_get_sql_identifier(l[0]) + "." + oracle_get_sql_identifier(l[1]);
     }
     return oracle_get_sql_identifier(name);
+}
+
+# returns the major version of the Oracle server of a connection (ex: 19, 23): the oracle driver gives the server's
+# version as a string, such as "Oracle Database 23ai Free Release 23.0.0.0.0", and the jdbc driver as a hash with its
+# major_version
+int sub oracle_get_server_major_version(AbstractDatasource ds) {
+    auto version = ds.getServerVersion();
+    if (version.typeCode() == NT_HASH) {
+        return version.major_version.toInt();
+    }
+    return (version =~ x/([0-9]+)/)[0].toInt();
 }
 
 # returns a database link name for SQL, where it is not quoted: letters, digits, underscores, dollar and pound signs,
@@ -2558,7 +2585,7 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
             return name;
         }
         # runtime temporary tables require Oracle 18c+ private temporary tables
-        int major = (ds.getServerVersion() =~ x/([0-9]+)/)[0].toInt();
+        int major = oracle_get_server_major_version(ds);
         if (major < 18) {
             throw "TEMP-TABLE-ERROR", sprintf("cannot create temporary table %y at runtime: the Oracle server "
                 "(major version %d) does not support private temporary tables (Oracle 18c or later is required); "
@@ -3016,6 +3043,18 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         */
         const OracleSelectOptions = AbstractTable::SelectOptions;
 
+        #! the most elements bound in one \c SYS.ODCI*LIST collection constructor by a driver other than \c oracle
+        /** Measured on Oracle 23 with the \c oracle and \c jdbc drivers: a constructor of any of these collection
+            types with 1000 or more arguments raises \c ORA-00939 (too many arguments for function)
+        */
+        const InListConstructorMaxArgs = 999;
+
+        #! the most values that a statement binds on Oracle
+        /** A driver other than \c oracle binds each value of the \c IN operator: a list with more values is refused
+            when the SQL is made
+        */
+        const MaxBindValues = 65535;
+
         #! Oracle Expression map
         const OracleExpressionMap = DefaultExpressionMap + {
             # Oracle server-side digest via STANDARD_HASH (returns RAW); supports MD5, SHA1, SHA256,
@@ -3283,42 +3322,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-%ifndef NO_ORACLE
                     auto val = args[0];
-                    # Qorus bug #989 SqlUtil: oracle op_in can fail in large amount of input elements
-                    # There is no support for CLOBs in WHERE clause in Oracle at all.
-                    # Binding large strings (over 4000 chars is performed by a CLOB in Qore driver.
-                    # Result of op_in operator can be "ORA-00932: inconsistent datatypes" if is
-                    # the list longer or if it contains large items with:
-                    # return cn + " in (select regexp_substr(%v,'[^,]+', 1, level) from dual connect by
-                    # regexp_substr(%v, '[^,]+', 1, level) is not null)";
-
-                    # determine list members type. Let's assume the 1st non NULL/NOTHING
-                    # element gives the type code for all elements.
-                    # get list type code
-                    int ltype;
-                    foreach auto v in (args[1]) {
-                        int t = v.typeCode();
-                        switch (t) {
-                            case NT_NULL:
-                            case NT_NOTHING:
-                                continue;
-                            case NT_DATE:
-                            case NT_INT:
-                            case NT_FLOAT:
-                            case NT_NUMBER:
-                            case NT_STRING:
-                                ltype = t;
-                                break;
-                            default:
-                                throw "ORACLE-IN-OPERATOR-ERROR", sprintf("the \"in\" operator unexpected list "
-                                    "element type: %s; only simple types are supported", v.fullType());
-                        }
-                        if (ltype) {
-                            break;
-                        }
-                    }
-
                     # make a copy of "info" before modifying
                     hash<QueryInfo> info0 = info;
 
@@ -3332,39 +3336,14 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                             AbstractDataProviderTypeMap."any");
                     }
 
-                    # Split long array to chunks of no more than 32767 elements due to Oracle limitation
-                    # "ORA-22165: OCI-22165: given index [32767] must be in the range of [0] to [32766]"
-                    int count;
-                    while (args[1]) {
-                        ++count;
-                        list<auto> chunk = extract args[1], 0, 32767;
-
-                        # Bind to Oracle by expected type
-                        switch (ltype) {
-                            case NT_DATE:
-                                info.args += bindOracleCollection("SYS.ODCIDATELIST", chunk);
-                                break;
-                            case NT_INT:
-                            case NT_FLOAT:
-                            case NT_NUMBER:
-                                info.args += bindOracleCollection("SYS.ODCINUMBERLIST", chunk);
-                                break;
-                            default:
-                                info.args += bindOracleCollection("SYS.ODCIVARCHAR2LIST", chunk);
-                        }
-                    }
-
-                    if (count) {
-                        return exp0 + " in (" + (map "select column_value from table(%v)",
-                            xrange(count)).join(" union all ") + ")";
+                    *string sql = OracleTable::getInSql(\info, exp0, args[1] ?? (), "ORACLE-IN-OPERATOR-ERROR");
+                    if (sql) {
+                        return sql;
                     }
                     # restore original info
                     info = info0;
                     # return an expression that returns false
                     return "1 != 1";
-%else
-                    throw "MISSING-ORACLE-DRIVER", "requires the oracle driver";
-%endif
                 },
             },
             COP_SEQ: {
@@ -3727,66 +3706,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         const OracleOpMap = DefaultOpMap + (
             OP_IN: (
                 "code": string sub (reference<hash<QueryInfo>> info, string cn, softlist arg) {
-%ifndef NO_ORACLE
-                    # Qorus bug #989 SqlUtil: oracle op_in can fail in large amount of input elements
-                    # There is no support for CLOBs in WHERE clause in Oracle at all.
-                    # Binding large strings (over 4000 chars is performed by a CLOB in Qore driver.
-                    # Result of op_in operator can be "ORA-00932: inconsistent datatypes" if is
-                    # the list longer or if it contains large items with:
-                    # return cn + " in (select regexp_substr(%v,'[^,]+', 1, level) from dual connect by regexp_substr(%v, '[^,]+', 1, level) is not null)";
-
-                    # determine list members type. Let's assume the 1st non NULL/NOTHING
-                    # element gives the type code for all elements.
-                    ListIterator it(arg);
-                    int ltype;
-                    while (it.next()) {
-                        switch (it.getValue().typeCode()) {
-                            case NT_NULL:
-                            case NT_NOTHING:
-                                continue;
-                            case NT_DATE:
-                            case NT_INT:
-                            case NT_FLOAT:
-                            case NT_NUMBER:
-                            case NT_STRING:
-                                ltype = it.getValue().typeCode();
-                                break;
-                            default:
-                                throw "ORACLE-DRIVER-ERROR", sprintf("op_in operator unexpected list member type: %s. Only simple types are supported.", it.getValue().type());
-                        }
-                        if (ltype) break;
-                    }
-
-                    # Split long array to chunks of no more than 32767 elements due to Oracle limitation
-                    # "ORA-22165: OCI-22165: given index [32767] must be in the range of [0] to [32766]"
-                    int count;
-                    while (arg.size()) {
-                        ++count;
-                        list chunk = extract arg, 0, 32767;
-
-                        # Bind to Oracle by expected type
-                        switch (ltype) {
-                            case NT_DATE:
-                                info.args += bindOracleCollection("SYS.ODCIDATELIST", chunk);
-                                break;
-                            case NT_INT:
-                            case NT_FLOAT:
-                            case NT_NUMBER:
-                                info.args += bindOracleCollection("SYS.ODCINUMBERLIST", chunk);
-                                break;
-                            default:
-                                info.args += bindOracleCollection("SYS.ODCIVARCHAR2LIST", chunk);
-                        }
-                    }
-
-                    if (count)
-                        return cn + " in (" + (map "select column_value from table(%v)",
-                            xrange(count)).join(" union all ") + ")";
-                    else
-                        return "1 != 1";
-%else
-                    throw "MISSING-ORACLE-DRIVER", "op_in requires oracle driver";
-%endif
+                    return OracleTable::getInSql(\info, cn, arg, "ORACLE-DRIVER-ERROR") ?? "1 != 1";
                 },
             ),
             OP_SUBSTR: (
@@ -4006,6 +3926,81 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         };
     }
 
+
+    #! returns the SQL of the \c IN operator for an expression and a list of values, adding the values to the arguments
+    /** The values are bound in collections of a type chosen by the first value that is not \c NULL: a date value in
+        \c SYS.ODCIDATELIST, a number in \c SYS.ODCINUMBERLIST and any other value in \c SYS.ODCIVARCHAR2LIST; the
+        \c oracle driver binds each collection as one value (see @ref ora_in_operator), and any other driver (ex:
+        \c jdbc), which cannot bind a collection, binds each value in a collection constructor.
+
+        @param info the query information, to which the bound values are added
+        @param exp the SQL of the expression whose value is looked up
+        @param l the values
+        @param err the exception code for a value of a type that is not supported
+
+        @return the SQL, or no value if the list is empty
+
+        @throw err a value of a type that is not supported
+        @throw MISSING-ORACLE-DRIVER the \c oracle driver is used without the \c oracle module
+    */
+    static *string getInSql(reference<hash<QueryInfo>> info, string exp, list<auto> l, string err) {
+        # the first value that is not NULL gives the type of the values
+        string type = "SYS.ODCIVARCHAR2LIST";
+        foreach auto v in (l) {
+            switch (v.typeCode()) {
+                case NT_NULL:
+                case NT_NOTHING:
+                    continue;
+                case NT_DATE:
+                    type = "SYS.ODCIDATELIST";
+                    break;
+                case NT_INT:
+                case NT_FLOAT:
+                case NT_NUMBER:
+                    type = "SYS.ODCINUMBERLIST";
+                    break;
+                case NT_STRING:
+                    break;
+                default:
+                    throw err, sprintf("the \"in\" operator: unexpected list element type: %s; only simple types are "
+                        "supported", v.fullType());
+            }
+            break;
+        }
+
+        bool native = info.table.getDriverName() == "oracle";
+        # each value is bound by a driver other than oracle
+        if (!native && (info.args.size() + l.size()) > MaxBindValues) {
+            throw err, sprintf("the \"in\" operator: %d values with the %d values bound before them exceed the "
+                "%d values that a statement binds on Oracle with the %y driver; use fewer values, or the oracle "
+                "driver, which binds the list as collections", l.size(), info.args.size(), MaxBindValues,
+                info.table.getDriverName());
+        }
+        list<string> sql = ();
+        while (l) {
+            if (native) {
+%ifndef NO_ORACLE
+                # Split long array to chunks of no more than 32767 elements due to Oracle limitation
+                # "ORA-22165: OCI-22165: given index [32767] must be in the range of [0] to [32766]"
+                list<auto> chunk = extract l, 0, 32767;
+                info.args += bindOracleCollection(type, chunk);
+                sql += "select column_value from table(%v)";
+%else
+                throw "MISSING-ORACLE-DRIVER", "the \"in\" operator with the oracle driver requires the oracle module";
+%endif
+            } else {
+                list<auto> chunk = extract l, 0, InListConstructorMaxArgs;
+                # each value is an argument of its own; a missing value is bound as NULL
+                foreach auto v in (chunk) {
+                    push info.args, v ?? NULL;
+                }
+                sql += sprintf("select column_value from table(%s(%s))", type.lwr(),
+                    (map "%v", chunk).join(", "));
+            }
+        }
+        return sql ? exp + " in (" + sql.join(" union all ") + ")" : NOTHING;
+    }
+
     constructor(AbstractDatasource nds, string nname, *hash opts) : AbstractTable(nds, nname, opts) {
         # see if there is a dblink in the name
         *string dbl = (nname =~ x/@(.*)/)[0];
@@ -4035,7 +4030,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                 get_module_hash().oracle.version);
         }
 
-        ora_major = (nds.getServerVersion() =~ x/([0-9]+)/)[0].toInt();
+        ora_major = oracle_get_server_major_version(nds);
 
         introspectSystemViews();
     }
@@ -5518,7 +5513,7 @@ group by p.index_name", schema.upr(), name.upr());
     /** @since OracleSqlUtilBase 1.6
     */
     private int getOracleServerMajorVersion() {
-        return (ds.getServerVersion() =~ x/([0-9]+)/)[0].toInt();
+        return oracle_get_server_major_version(ds);
     }
 
     private bool createPartitionsInCreateTableImpl() {

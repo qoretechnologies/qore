@@ -47,11 +47,13 @@
 #include <openssl/ssl.h>
 
 #include <sys/socket.h>
+#include <sys/stat.h>
 
 #include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -874,6 +876,8 @@ public:
     DLLLOCAL void clearPendingWrite() { pending_write_.store(false, std::memory_order_release); }
 
     //! Get current timestamp in nanoseconds (monotonic clock)
+    /** In a DEBUG build, the offset set with qore_quic_test_advance_clock() is added
+    */
     DLLLOCAL static ngtcp2_tstamp timestamp();
 
     //! Copy the stored remote peer address into caller-provided buffers
@@ -1243,11 +1247,18 @@ public:
         bool is_pollable = false;
         bool need_reassign = true;
         bool eof = false;
+        //! A regular file, which is always ready: it is not waited for (see getExtraFds()), as in Http2Session
+        bool is_regular_file = false;
 
         StreamInputStreamInfo() = default;
         StreamInputStreamInfo(InputStream* is)
             : input_stream(is), stream_fd(is->supportsNonBlockingIo() ? is->getPollableDescriptor() : -1),
-              is_pollable(stream_fd >= 0) {}
+              is_pollable(stream_fd >= 0) {
+            if (is_pollable) {
+                struct stat st;
+                is_regular_file = !fstat(stream_fd, &st) && S_ISREG(st.st_mode);
+            }
+        }
     };
 
     //! Store an InputStream for a stream (I/O thread will read from it)
@@ -2063,5 +2074,90 @@ public:
     //! Unregister a controller socket operation waiting for QUIC datagram notifications
     DLLLOCAL void unregisterDatagramWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
 };
+
+#ifdef DEBUG
+//! Debug-only QUIC test clock: advances the clock of every QUIC connection of the process by @p ms milliseconds
+/** QuicSession::timestamp() adds the total of the advances, so the timers of the connections (idle timeout, keep-alive,
+    loss detection) run as if that much time had passed; the clock only goes forward, as ngtcp2 requires.  The packets
+    already received are processed on the current clock first (the operations of every socket of the async I/O
+    controller are woken, and the I/O threads and the worker threads that run the operations implemented in %Qore and
+    their onComplete() callbacks are waited for (see AsyncIoControllerPriv::dbgWaitWorkersIdle()), until a pass
+    processes no packet and completes no operation, every datagram sent to a socket of the process has been read from
+    it, and no socket of the connections has a packet to read (see qore_quic_test_note_receive_fd(),
+    qore_quic_test_note_sent() and qore_quic_test_note_received()), as the packets sent while processing are received
+    by other connections of the process, an operation submitted again reads what it was sent in the next pass, and
+    macOS delivers a loopback datagram after its send has returned), so that
+    none is taken as received after the advance; then the clock is advanced and the operations are woken again, so
+    that they handle the timers that are due on the new clock at once (see AsyncIoControllerPriv::dbgWakeAllSockets()).
+    A test must make sure that no peer still sends packets that it does not want processed after the advance (a killed
+    peer has exited, for example).  A DBG-QUIC-CLOCK-ERROR exception is raised, and the clock is not advanced, if the
+    worker threads are not idle within 30 seconds, if a datagram sent to a socket of the process is not delivered
+    within 30 seconds, or if the connections still process packets after 100 passes.
+
+    @return the total advance in milliseconds
+*/
+DLLLOCAL int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink);
+
+//! Debug-only: the number of QUIC packets that client and server connections of the process have processed
+DLLLOCAL void qore_quic_test_packets_received(int64_t& client, int64_t& server);
+
+//! Debug-only: records a UDP socket that QUIC connections of the process receive packets on
+/** qore_quic_test_advance_clock() advances the clock only when none of these sockets has a packet waiting to be
+    read, and every datagram sent to one of them has been read from it (see qore_quic_test_note_sent())
+*/
+DLLLOCAL void qore_quic_test_note_receive_fd(int fd);
+
+//! Debug-only: starts counting the datagrams sent and received by the QUIC connections of the process
+/** The first advance of the QUIC test clock starts it too; see qore_quic_test_datagram_totals()
+*/
+DLLLOCAL void qore_quic_test_count_datagrams();
+
+//! Debug-only: the datagrams sent and received by the QUIC connections of the process since they are counted
+/** @return <tt>{"sent_to": {"address:port": count, ...}, "received_from": {"address:port": count, ...}}</tt>: the
+    datagrams sent to each address and received from each address.  A test whose QUIC peer runs in another process
+    exchanges these totals with it to advance the QUIC test clocks of both processes in steps, each step after both
+    have read what the other sent (see qore_quic_test_wait_received_from())
+*/
+DLLLOCAL QoreHashNode* qore_quic_test_datagram_totals();
+
+//! Debug-only: waits until at least @p count datagrams have been received from @p addr since they are counted
+/** @param addr \c "address:port"; an empty string or nullptr counts the datagrams received from every address
+    @param count the number of datagrams
+    @param timeout_ms the maximum time to wait
+
+    @return true if they have been received, false on timeout
+*/
+DLLLOCAL bool qore_quic_test_wait_received_from(const char* addr, int64_t count, int timeout_ms);
+
+//! Debug-only, for tests: sets the hook that sendQuicPacketsBatch() calls before each send system call
+/** The hook gets the socket and returns the error that the send fails with instead of being made, or 0 to make it;
+    an empty function removes the hook.  It is called by every thread that sends QUIC datagrams in the process, so a
+    test's hook fails only the sends on its own sockets.
+*/
+DLLLOCAL void qore_quic_test_set_send_hook(std::function<int(int)> hook);
+
+//! Debug-only, for tests: starts (@p on true) or stops counting datagrams; returns whether they were counted
+/** See qore_quic_test_count_datagrams()
+*/
+DLLLOCAL bool qore_quic_test_set_counting(bool on);
+
+//! Debug-only, for tests: the datagrams counted as sent to an address and not as read from it
+DLLLOCAL int64_t qore_quic_test_undelivered_to(const struct sockaddr* addr);
+
+//! Debug-only, for tests: forgets a socket recorded with qore_quic_test_note_receive_fd() before it is closed
+DLLLOCAL void qore_quic_test_forget_receive_fd(int fd);
+
+//! Debug-only, for tests: waits, as the QUIC test clock does, until every datagram sent to a socket of the process
+//! has been read from it
+/** @param timeout_ms the maximum time to wait
+    @param waiting called with the lock of the counts held, once the wait has found a datagram that has not been
+    read and before it waits: a datagram cannot be counted as read or taken back before the wait is waiting
+
+    @return true if no datagram was waited for, or if the wait was woken and found every datagram read; false if it
+    was not woken before its timeout
+*/
+DLLLOCAL bool qore_quic_test_wait_delivered_woken(int timeout_ms, const std::function<void()>& waiting);
+
+#endif
 
 #endif // _QORE_INTERN_QUICSESSION_H

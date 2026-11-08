@@ -34,6 +34,8 @@
 #define QORE_LIB_DEBUG_H
 
 #include <atomic>
+#include <string>
+#include <vector>
 
 DLLLOCAL void init_debug_functions(QoreNamespace& qns);
 
@@ -184,6 +186,26 @@ DLLLOCAL extern std::atomic<int> qore_dbg_cares_lost_query_count;
     @return the previous setting
 */
 DLLLOCAL std::string qore_dbg_cares_set_servers(const std::string& servers);
+
+//! The query options of the c-ares channels that ask the DNS servers of qore_dbg_cares_set_servers()
+struct QoreDbgCaresQueryOptions {
+    //! the timeout of the first try of a query
+    int timeout_ms = 1000;
+    //! the tries of a query
+    int tries = 3;
+    //! set if the channels look up names with the search domains in @ref domains, not those of the host
+    bool domains_set = false;
+    //! the search domains, if @ref domains_set
+    std::vector<std::string> domains;
+    //! the \c ndots option, or -1 for that of the host
+    int ndots = -1;
+    //! false to make the channels keep no answer in their query cache
+    bool query_cache = true;
+};
+
+//! Sets the query options of the c-ares channels made from now on that ask the servers of
+//! qore_dbg_cares_set_servers(); returns the previous options
+DLLLOCAL QoreDbgCaresQueryOptions qore_dbg_cares_set_query_options(const QoreDbgCaresQueryOptions& opts);
 
 //! Sets the hosts file that the name lookups started from now on read, as with the c-ares ARES_OPT_HOSTS_FILE option
 /** @param path the hosts file; empty for the system's hosts file

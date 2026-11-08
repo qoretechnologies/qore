@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+
+%exec-class PgsqlBulkInsertCopyTest
+
+#! A PostgreSQL datasource of the given driver that does not connect: it records the statements it executes
+class RecordingDatasource inherits Datasource {
+    public {
+        list<string> sql = ();
+    }
+
+    private {
+        string driver;
+    }
+
+    constructor(string driver) : Datasource(driver == "jdbc" ? "jdbc:u/p@x{url=postgresql://h:5432/db}"
+            : "pgsql:u/p@db%h") {
+        self.driver = driver;
+    }
+
+    string getDriverName() {
+        return driver;
+    }
+
+    string getDriverRealName() {
+        return driver == "jdbc" ? "PostgreSQL" : "pgsql";
+    }
+
+    auto getServerVersion() {
+        return 160004;
+    }
+
+    auto selectRow(string sql, ...) {
+        if (sql =~ /current_schema/) {
+            return {"schema": "public"};
+        }
+    }
+
+    auto select(string sql, ...) {
+        return {};
+    }
+
+    auto selectRows(string sql, ...) {
+        return ();
+    }
+
+    auto exec(string sql, ...) {
+        return vexec(sql, argv);
+    }
+
+    auto vexec(string sql, *softlist<auto> args) {
+        self.sql += sql;
+        return args[0].typeCode() == NT_LIST ? args[0].size() : 1;
+    }
+
+    auto execRaw(string sql) {
+        self.sql += sql;
+    }
+}
+
+#! A bulk insert of a PostgreSQL table uses the COPY protocol of the pgsql driver; other drivers (jdbc) cannot run
+#! "COPY ... FROM STDIN" as SQL, so a bulk insert failed there, and aborted the transaction of the connection
+class PgsqlBulkInsertCopyTest inherits QUnit::Test {
+    constructor() : Test("PgsqlBulkInsertCopyTest", "1.0", \ARGV) {
+        addTestCase("COPY only with the pgsql driver", \copyDriver());
+        set_return_value(main());
+    }
+
+    private copyDriver() {
+        foreach string driver in (("pgsql", "jdbc")) {
+            RecordingDatasource ds(driver);
+            PgsqlTable t(ds, "t");
+            t.setupTable({"columns": {"id": {"qore_type": "integer"}, "name": {"qore_type": "string", "size": 20}}});
+            t.bulkInsert({"id": (1, 2), "name": ("a", "b")});
+            list<string> copy = select ds.sql, $1 =~ /^COPY /;
+            if (driver == "pgsql") {
+                assertEq(1, copy.size(), driver + ": " + ds.sql.join("; "));
+            } else {
+                assertEq((), copy, driver + ": " + ds.sql.join("; "));
+                assertTrue(ds.sql.size() > 0, driver);
+            }
+        }
+    }
+}

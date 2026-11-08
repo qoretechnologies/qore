@@ -699,6 +699,8 @@ table.create();
 
         ds = nds;
         inDb = False;
+        # the keys of another connection's driver are read again
+        remove driver_option_keys;
     }
 
     private doTableOptions(*hash<auto> nopts) {
@@ -1640,7 +1642,7 @@ list<auto> changes = source_table.getAlignSql(target);
         # add current table to cache
         opt.table_cache.add(name, self);
 
-        string drv = ds.getDriverName();
+        list<string> drv = getDriverOptionKeys();
 
         # extract column options
         *hash<auto> oc = opt.(copt.keys());
@@ -1652,11 +1654,14 @@ list<auto> changes = source_table.getAlignSql(target);
             supported
         */
         if (desc.columns.driver) {
-            *hash<auto> h = remove desc.columns.driver{SqlUtilDrivers};
+            *hash<auto> h = remove desc.columns.driver{SqlUtilDrivers + drv};
             if (h) {
                 # if we have driver-specific info, add it to the columns hash
-                if (h{drv})
-                    desc.columns += h{drv};
+                foreach string key in (drv) {
+                    if (h{key}) {
+                        desc.columns += h{key};
+                    }
+                }
                 # if there is no column information, then delete the "driver" key
                 if (!desc.columns.driver)
                     delete desc.columns.driver;
@@ -1672,8 +1677,14 @@ list<auto> changes = source_table.getAlignSql(target);
         # structural driver configuration returned by introspection.  Apply an override only when the active
         # datasource driver is explicitly present and the selected hash contains standard strategy keys;
         # otherwise preserve the structural configuration.
-        *hash<auto> strategy_driver = desc.partition_strategy && desc.partition_strategy.driver
-            ? desc.partition_strategy.driver{drv} : NOTHING;
+        *hash<auto> strategy_driver;
+        if (desc.partition_strategy && desc.partition_strategy.driver) {
+            foreach string key in (drv) {
+                if (desc.partition_strategy.driver{key}) {
+                    strategy_driver += desc.partition_strategy.driver{key};
+                }
+            }
+        }
         if (strategy_driver && (exists strategy_driver.method || exists strategy_driver.columns
                 || exists strategy_driver.auto || exists strategy_driver.driver)) {
             *hash<auto> structural_driver = strategy_driver.driver;
@@ -3628,7 +3639,8 @@ string sql = table.getDropTriggerSql("trig_mytable");
         validateOptionsIntern("COLUMN-ERROR", copt, \opt, sprintf("%s.%s", name, cname));
 
         hash otm = getTypeMapImpl();
-        hash th;
+        # the description of the native type: none when the type is not in the map, which is checked below
+        *hash<auto> th;
 
         # first try to handle non-registered type (like eg. Oracle's objects)
         if (opt.native_type && !otm.hasKey(opt.native_type) && !opt.qore_type) {
@@ -4000,7 +4012,8 @@ table.insert(row);
                             hash<auto> h = doReturningImpl(opt, \sql, targs);
                             map rv{$1.key} += ($1.value,), h.pairIterator();
                         } else {
-                            hash<auto> h = execData(opt, sql, targs);
+                            # the SQL made by doReturningImpl() for the first row
+                            *hash<auto> h = execReturningImpl(opt, sql, targs);
                             map rv{$1.key} += $1.value, h.pairIterator();
                         }
                     } else {
@@ -9693,6 +9706,10 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
             cacheUnlocked();
         }
 
+        # driver-specific options are described under the key of the database's native driver, which a connection
+        # through a generic driver (ex: jdbc) also applies
+        string drv = getDriverOptionKeys()[0];
+
         # get column descriptions
         rv.columns = map {$1.key: $1.value.getDescriptionHash()}, columns.pairIterator();
 
@@ -9704,7 +9721,7 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
             };
             *hash<auto> driver_opt = getPrimaryKeyDescriptionOptionsImpl(primaryKey);
             if (driver_opt) {
-                rv.primary_key.driver{ds.getDriverName()} = driver_opt;
+                rv.primary_key.driver{drv} = driver_opt;
             }
         }
 
@@ -9717,7 +9734,7 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
                 };
                 *hash<auto> driver_opt = getIndexDescriptionOptionsImpl(i.value);
                 if (driver_opt) {
-                    ix.driver{ds.getDriverName()} = driver_opt;
+                    ix.driver{drv} = driver_opt;
                 }
                 rv.indexes{i.key} = ix;
             }
@@ -9733,7 +9750,7 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
                 desc.columns = uk.keys();
                 *hash<auto> driver_opt = getUniqueConstraintDescriptionOptionsImpl(uk);
                 if (driver_opt) {
-                    desc.driver = {ds.getDriverName(): driver_opt};
+                    desc.driver = {drv: driver_opt};
                 }
                 rv.unique_constraints{uk.getName()} = desc;
             }
@@ -12863,8 +12880,7 @@ on_exit printf("SQL> %s\n", sql);
     private list<auto> getCreateSqlUnlocked(*hash<auto> opt, bool cache = True) {
         # make sure driver options take precedence over generic options
         if (opt) {
-            string dn = getDriverName();
-            AbstractDatabase::checkDriverOptions(\opt, dn);
+            AbstractDatabase::checkDriverOptions(\opt, getDriverOptionKeys());
         }
 
         # mark in options that the entire table is being created
@@ -13560,6 +13576,24 @@ on_exit printf("SQL> %s\n", sql);
     private abstract AbstractDataProviderType getNumericTypeImpl(string type_name, bool nullable, *hash<auto> options);
 
     private abstract *hash<auto> doReturningImpl(hash<auto> opt, reference<string> sql, list<auto> args);
+
+    #! executes the SQL of an insert that doReturningImpl() made for another row, with the values of a row
+    /** A bulk insert on a driver without array binds inserts each row with the SQL that doReturningImpl() made for
+        the first row; a driver whose SQL gives the values in another form than one result (ex: SQL Server's batch of
+        statements) overrides it
+
+        @param opt the insert options
+        @param sql the SQL that doReturningImpl() made
+        @param args the values of the row
+
+        @return the values of the row's columns that the \c "returning" option names, each in a list of one value, as
+        @ref Qore::SQL::AbstractDatasource::exec() "exec()" gives a select's result
+
+        @since SqlUtil 3.11.0
+    */
+    private *hash<auto> execReturningImpl(hash<auto> opt, string sql, list<auto> args) {
+        return execData(opt, sql, args);
+    }
 
     private abstract bool emptyImpl();
 

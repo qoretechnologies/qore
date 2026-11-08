@@ -28,6 +28,9 @@
 %requires Util
 %requires QUnit
 %requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
 %requires DataProvider
 %requires ConnectionProvider
 %requires AwsRestClient
@@ -53,6 +56,42 @@ class RecordingObserver inherits DataProvider::Observer {
 
     update(string event_id, hash<auto> data_) {
         events += <RecordedEvent>{"id": event_id, "data": data_};
+    }
+}
+
+#! Answers every request as Amazon S3 answers a request signed with an access key that does not exist
+/** A local stand-in for Amazon S3 for the cases that need a client whose requests fail: a 403 response with an S3
+    error document, as Amazon answers the example credentials of the suite, without a network
+*/
+class InvalidAccessKeyHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! The error document of Amazon S3 for an access key that does not exist
+        const ErrorBody = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Error><Code>InvalidAccessKeyId</Code>"
+            "<Message>The AWS Access Key Id you provided does not exist in our records.</Message>"
+            "<AWSAccessKeyId>AKIAIOSFODNN7EXAMPLE</AWSAccessKeyId><RequestId>0123456789ABCDEF</RequestId>"
+            "<HostId>example-host-id</HostId></Error>";
+    }
+
+    private {
+        #! Guards the request count
+        Mutex m();
+
+        #! The number of requests answered
+        int requests = 0;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        {
+            AutoLock al(m);
+            ++requests;
+        }
+        return makeResponse(403, ErrorBody, {"Content-Type": "application/xml"});
+    }
+
+    #! Returns the number of requests answered
+    int getRequestCount() {
+        AutoLock al(m);
+        return requests;
     }
 }
 
@@ -521,11 +560,23 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         assertEq(("new-bucket", "new-or-updated-file"), events.getChildProviderNames());
         assertEq(2, events.getChildProviderSummaryInfo().size(), "every event child has summary info");
 
+        # example data must be produced without a working connection, so the providers that build it are given a
+        # client of a local server that refuses every request as Amazon S3 refuses the example credentials
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("s3-error-server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        InvalidAccessKeyHandler handler();
+        server.setDefaultHandler("s3", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        AwsS3CompatibleRestConnection refusing_conn("s3-refusing", "test connection",
+            sprintf("http://127.0.0.1:%d", port), {}, TestConnOptions);
+
         # the object watch has to be told which bucket to watch; the bucket watch covers the whole account
         hash<string, AbstractDataProvider> configured = {
-            "new-bucket": new AwsS3WatchNewBucketDataProvider({"restclient": conn.getAsync(False)}),
+            "new-bucket": new AwsS3WatchNewBucketDataProvider({"restclient": refusing_conn.getAsync(False)}),
             "new-or-updated-file": new AwsS3WatchObjectsDataProvider({
-                "restclient": conn.getAsync(False),
+                "restclient": refusing_conn.getAsync(False),
                 "bucket": "test-bucket",
             }),
         };
@@ -541,8 +592,11 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
 
             # example data must be produced without a working connection: the form that shows a trigger's
             # output fields is rendered before any credentials are exercised
+            int requests = handler.getRequestCount();
             auto ex = configured{name}.getExampleEventData(name);
             assertEq(NT_HASH, ex.typeCode(), sprintf("%y provides example event data", name));
+            # ... after a request that the server refused, as Amazon S3 refuses it
+            assertGt(requests, handler.getRequestCount(), sprintf("%y asked the server for real data first", name));
             # ... and it must match the declared type, or the field list the user maps against is wrong
             hash<string, AbstractDataField> fields = types{name}.type.getFields();
             foreach string f in (keys fields) {

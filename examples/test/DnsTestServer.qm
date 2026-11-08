@@ -1,0 +1,263 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file DnsTestServer.qm a local DNS server that gives the answers a test asks for, without the network
+
+/*  DnsTestServer.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module DnsTestServer {
+    version = "1.0";
+    desc    = "a local DNS server that gives the answers a test asks for, without the network";
+    author  = "David Nichols <david@qore.org>";
+    url     = "http://qore.org";
+    license = "MIT";
+}
+
+/** A DNS server on a UDP port of the loopback address that answers every query with the response code that the
+    first label of the queried name selects (RFC 1035 section 4.1.1), with no answer records:
+    - \c nx: \c NXDOMAIN (3), the name does not exist (c-ares: \c ENOTFOUND)
+    - \c nodata: \c NOERROR (0) without an answer, the name has no address (c-ares: \c ENODATA)
+    - \c servfail: \c SERVFAIL (2), the server failed (c-ares: \c ESERVFAIL)
+    - \c refused: \c REFUSED (5), the server refused the query (c-ares: \c EREFUSED)
+    - \c mixed: \c SERVFAIL for an \c A query; \c NOERROR without an answer for an \c AAAA query, given only once
+      the server has answered an \c A query from the same address and port, which is the socket of one c-ares
+      channel, and so of one lookup: a lookup of both address families (\c AF_UNSPEC) gets the answer for \c AAAA
+      after the one for \c A, whatever their order, and if c-ares tries a query once (see
+      \c dbg_cares_set_query_options()), after c-ares has given up on the \c A query (an \c AAAA query alone is not
+      answered)
+    - \c mixeddrop: as \c mixed for the first \c A query and the first \c AAAA query since
+      @ref DnsTestServer::DnsTestServer::resetMixedDrop() "resetMixedDrop()" was called; the later ones, such as those
+      of the lookups of each family that check the failure (which c-ares sends on a new socket), are dropped, and
+      @ref DnsTestServer::DnsTestServer::waitDropped() "waitDropped()" returns when one has been
+    - any other name: \c SERVFAIL
+
+    A debug build of %Qore sends the name lookups of the process to it with \c dbg_cares_set_servers(), so a test of
+    name lookup errors does not depend on the network or on the DNS configuration of its host; a name ending in a dot
+    is looked up as it is, without the search domains of the host.
+
+    @par Example:
+    @code{.py}
+%requires ../../DnsTestServer.qm
+
+DnsTestServer dns();
+on_exit dns.stop();
+string old = call_function("dbg_cares_set_servers", dns.getServer());
+on_exit call_function("dbg_cares_set_servers", old);
+    @endcode
+*/
+public namespace DnsTestServer {
+    #! the response codes that the first label of a name selects
+    public const Rcodes = {
+        "nx": 3,
+        "nodata": 0,
+        "servfail": 2,
+        "refused": 5,
+    };
+
+    #! the type of an A query (RFC 1035 section 3.2.2)
+    public const TypeA = 1;
+    #! the type of an AAAA query (RFC 3596 section 2.1)
+    public const TypeAaaa = 28;
+
+    #! The DNS server
+    public class DnsTestServer {
+        private {
+            Socket sock();
+            int port;
+            #! the thread that answers the queries ends when it has received this datagram
+            const Stop = <53544f50>;
+            Counter done(1);
+            #! the number of queries answered, by the first label of the name
+            hash<string, int> queries;
+            Mutex m();
+            #! the AAAA queries for \c mixed names to answer, by "address:port" of the client: replies
+            hash<string, list<binary>> held_aaaa;
+            #! the clients ("address:port") whose A query for a \c mixed name has been answered
+            hash<string, bool> a_answered;
+            #! the queries for \c mixeddrop names received since resetMixedDrop() was called, by type
+            hash<string, int> mixeddrop_queries;
+            #! gets the name of each query dropped
+            Queue dropped();
+            #! set if every query is dropped
+            bool drop_all;
+        }
+
+        #! Starts the server on a port that the system assigns on 127.0.0.1
+        /** @param drop_all if @ref True "True", every query is dropped (counted, but not answered), so that a
+            lookup waits for an answer until it times out
+        */
+        constructor(bool drop_all = False) {
+            self.drop_all = drop_all;
+            sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+            port = sock.getSocketInfo().port;
+            background run();
+        }
+
+        #! Returns the server address for \c dbg_cares_set_servers(): <tt>127.0.0.1:</tt><em>port</em>
+        string getServer() {
+            return sprintf("127.0.0.1:%d", port);
+        }
+
+        #! Returns the number of queries answered for names whose first label is \a label
+        int getQueries(string label) {
+            m.lock();
+            on_exit m.unlock();
+            return queries{label} ?? 0;
+        }
+
+        #! Makes the next \c A and \c AAAA queries for \c mixeddrop names the first ones, which are answered
+        resetMixedDrop() {
+            m.lock();
+            on_exit m.unlock();
+            mixeddrop_queries = {};
+        }
+
+        #! Waits until a query has been dropped (see \c mixeddrop); returns its name, or nothing on timeout
+        *string waitDropped(timeout timeout_ms) {
+            try {
+                return dropped.get(timeout_ms);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "QUEUE-TIMEOUT") {
+                    return;
+                }
+                rethrow;
+            }
+        }
+
+        #! Stops the server and waits for its thread to end
+        stop() {
+            Socket s();
+            s.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+            on_exit s.close();
+            drive(s.startPollSendTo("127.0.0.1", port, Stop));
+            done.waitForZero();
+            sock.close();
+        }
+
+        private run() {
+            on_exit done.dec();
+            while (True) {
+                AbstractPollOperation op = sock.startPollRecvFrom();
+                drive(op);
+                hash<auto> dgram = op.getOutput();
+                if (dgram.data == Stop) {
+                    return;
+                }
+                *hash<auto> reply = answer(dgram.data);
+                if (drop_all) {
+                    continue;
+                }
+                if (!reply) {
+                    continue;
+                }
+                string client = sprintf("%s:%d", dgram.address, dgram.port);
+                if (reply.mixeddrop) {
+                    int n;
+                    {
+                        m.lock();
+                        on_exit m.unlock();
+                        n = ++mixeddrop_queries{reply.type};
+                    }
+                    if (n > 1) {
+                        # a later query is dropped
+                        dropped.push(reply.name);
+                        continue;
+                    }
+                }
+                if (reply.held && !a_answered{client}) {
+                    # an AAAA query for a mixed name waits for the answer to the A query of its lookup
+                    held_aaaa{client} += (reply.data,);
+                    continue;
+                }
+                drive(sock.startPollSendTo(dgram.address, dgram.port, reply.data));
+                if (reply.mixed_a) {
+                    a_answered{client} = True;
+                    foreach binary held in (remove held_aaaa{client}) {
+                        drive(sock.startPollSendTo(dgram.address, dgram.port, held));
+                    }
+                }
+            }
+        }
+
+        #! Returns the response to a query, or nothing if it is not a query
+        /** @return <tt>{"data": binary, "held": bool, "mixed_a": bool, "mixeddrop": bool, "type": int,
+            "name": *string}</tt>: the response; whether it waits for the answer to an A query (an AAAA query for a
+            \c mixed name), whether it answers an A query for a \c mixed name, whether the name is a \c mixeddrop
+            name, the type of the query and the first label of its name
+        */
+        private *hash<auto> answer(binary query) {
+            # header (12 bytes), then the question: the name's labels, a zero byte, the type and the class
+            if (query.size() < 17) {
+                return;
+            }
+            int offset = 12;
+            *string first;
+            while (offset < query.size()) {
+                int len = query.substr(offset, 1).toHex().toInt(16);
+                if (!len) {
+                    break;
+                }
+                if (!first) {
+                    first = query.substr(offset + 1, len).toString().lwr();
+                }
+                offset += len + 1;
+            }
+            int question_end = offset + 1 + 4;
+            if (question_end > query.size()) {
+                return;
+            }
+            int qtype = query.substr(offset + 1, 2).toHex().toInt(16);
+            bool mixed = first == "mixed" || first == "mixeddrop";
+            int rcode = mixed ? (qtype == TypeAaaa ? 0 : 2) : (Rcodes{first} ?? 2);
+            {
+                m.lock();
+                on_exit m.unlock();
+                ++queries{first ?? ""};
+            }
+            # the flags of the query, with QR set, RA set and the response code (RFC 1035 section 4.1.1)
+            int flags = query.substr(2, 2).toHex().toInt(16);
+            flags = (flags | 0x8080) & 0xfff0 | rcode;
+            binary reply = query.substr(0, 2);
+            reply += parse_hex_string(sprintf("%04x", flags));
+            # one question, no answer, authority or additional records
+            reply += <0001000000000000>;
+            reply += query.substr(12, question_end - 12);
+            return {
+                "data": reply,
+                "held": mixed && qtype == TypeAaaa,
+                "mixed_a": mixed && qtype == TypeA,
+                "mixeddrop": first == "mixeddrop",
+                "type": qtype,
+                "name": first,
+            };
+        }
+
+        private static drive(AbstractPollOperation op) {
+            while (!op.goalReached()) {
+                *hash<SocketPollInfo> info = op.continuePoll();
+                if (info) {
+                    Socket::poll((info,), 3600s);
+                }
+            }
+        }
+    }
+}

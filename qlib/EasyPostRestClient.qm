@@ -113,15 +113,6 @@ public class EasyPostRestClientBase {
             "Accept": MimeTypeJson,
         };
 
-        #! Maximum total retry time for 429 errors (75 seconds = 1 minute 15 seconds)
-        const MaxRetryTime = 75s;
-
-        #! Initial retry delay for exponential backoff
-        const InitialRetryDelay = 1s;
-
-        #! Maximum single retry delay
-        const MaxRetryDelay = 30s;
-
         #! Default constructor options
         const DefaultOptions = {
             "data": DefaultData,
@@ -137,8 +128,8 @@ public class EasyPostRestClientBase {
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
 
-        # Set URL
-        rv.url = DefaultApiUrl;
+        # the EasyPost API, unless another URL is given, for example of a local server in a test
+        rv.url = opts.url ?? DefaultApiUrl;
 
         # Validate apikey is provided
         if (!opts.apikey) {
@@ -172,13 +163,8 @@ public class EasyPostRestClientBase {
     - Production API keys are prefixed \c EZAK... and bill the wallet for real shipments
 
     @par Rate Limit Handling:
-    This client automatically handles HTTP 429 (Too Many Requests) errors by implementing
-    retry logic with exponential backoff:
-    - Maximum total retry time: 75 seconds (1 minute 15 seconds)
-    - Initial retry delay: 1 second
-    - Backoff multiplier: 2x (1s, 2s, 4s, 8s, 16s, 30s, 30s...)
-    - Maximum single retry delay: 30 seconds
-    - Honors \c Retry-After response header when present
+    A rate-limited request (HTTP 429 Too Many Requests) is not retried: its error is raised as for any other error
+    status.
 */
 public class EasyPostRestClient inherits RestClient::RestClient, EasyPostRestClientBase {
     #! creates the object with the given options
@@ -192,6 +178,9 @@ EasyPostRestClient easypost({"apikey": "EZAK..."});
         plus:
         - \c apikey: the EasyPost API key (required)
 
+        The \c url option gives the URL of the API; the default is the EasyPost API
+        (@ref EasyPostRestClient::EasyPostRestClientBase::DefaultApiUrl "DefaultApiUrl")
+
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
 
@@ -201,79 +190,6 @@ EasyPostRestClient easypost({"apikey": "EZAK..."});
     constructor(hash<auto> opts, *softbool do_not_connect)
             : RestClient(EasyPostRestClientBase::getOptions(opts), do_not_connect) {
         setAssumedEncoding("UTF-8");
-    }
-
-    #! Makes a REST request with automatic retry on 429 (Too Many Requests) errors
-    /** @param m the HTTP method to use
-        @param path the URI path to use
-        @param body the request body to send (if any)
-        @param info an optional reference to a hash that will be used as an output variable giving the response info
-        @param decode_errors if @ref True, decode error responses
-        @param hdr any headers to use with the request
-
-        @return the response from the server
-
-        This method implements automatic retry with exponential backoff when EasyPost returns
-        HTTP 429 (Too Many Requests). It will retry for up to 75 seconds before giving up.
-    */
-    hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info, softbool decode_errors = True,
-            *hash<auto> hdr) {
-        date start_time = now_us();
-        date current_delay = InitialRetryDelay;
-
-        while (True) {
-            hash<auto> response = RestClient::doRequest(m, path, body, \info, decode_errors, hdr);
-
-            # Check if we got a 429 error
-            if (info.response_code == 429) {
-                date elapsed = now_us() - start_time;
-                if (elapsed >= MaxRetryTime) {
-                    # Max retry time exceeded, return the 429 error
-                    return response;
-                }
-
-                # Calculate retry delay
-                date retry_delay = getRetryDelay(info, current_delay);
-
-                # Check if waiting would exceed max retry time
-                if (elapsed + retry_delay > MaxRetryTime) {
-                    retry_delay = MaxRetryTime - elapsed;
-                    if (retry_delay <= 0s) {
-                        return response;
-                    }
-                }
-
-                # Wait before retrying
-                sleep(retry_delay);
-
-                # Increase delay for next retry (exponential backoff)
-                current_delay = current_delay * 2;
-                if (current_delay > MaxRetryDelay) {
-                    current_delay = MaxRetryDelay;
-                }
-                continue;
-            }
-
-            return response;
-        }
-    }
-
-    #! Returns the retry delay based on response headers or exponential backoff
-    /** @param info the response info hash
-        @param default_delay the default delay to use if no header is present
-
-        @return the delay to use before retrying
-    */
-    private date getRetryDelay(hash<auto> info, date default_delay) {
-        # Check for Retry-After header (standard HTTP header)
-        if (info.headers."retry-after") {
-            int secs = info.headers."retry-after".toInt();
-            if (secs > 0) {
-                return seconds(secs);
-            }
-        }
-
-        return default_delay;
     }
 }
 

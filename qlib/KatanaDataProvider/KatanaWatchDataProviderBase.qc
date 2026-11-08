@@ -81,7 +81,10 @@ public class KatanaWatchDataProviderBase inherits KatanaDataProviderBase,
     #! Returns example event data for documentation/testing
     private auto getExampleEventDataImpl(string event_id) {
         try {
-            list<hash<auto>> records = fetchRecords(now_us() - 30D);
+            # the example data is requested once, without retries
+            list<hash<auto>> records = DataProviderRetryUtil::runWithoutRetries(list<hash<auto>> sub () {
+                return fetchRecords(now_us() - 30D);
+            });
             if (records) {
                 return records[0];
             }
