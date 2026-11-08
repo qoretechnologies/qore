@@ -2900,6 +2900,8 @@ size_t QoreIRToLLVM::getCleanupPhiBudget() {
 bool QoreIRToLLVM::prepareIteratorCleanupArray(llvm::Function* llvm_func, size_t exits) {
     iterator_cleanup_array = nullptr;
     iterator_cleanup_array_count = 0;
+    iterator_cleanup_unpositioned_array = nullptr;
+    iterator_cleanup_unpositioned_count = 0;
     const size_t count = iterator_cleanup_allocas.size();
     const size_t budget = getCleanupPhiBudget();
     if (!llvm_func || !budget || !count || !exits) {
@@ -2936,6 +2938,29 @@ bool QoreIRToLLVM::prepareIteratorCleanupArray(llvm::Function* llvm_func, size_t
                 llvm::ConstantInt::get(i32_type, static_cast<unsigned>(i)),
                 "iterator_cleanup_slot_ptr");
         ab.CreateStore(iterator_cleanup_allocas[i], gep);
+    }
+    // the iterators that an exception exit releases with the statement temporaries: those without a place among the
+    // locals, which the release of the locals releases (see positionIterators())
+    if (!positioned_iterator_allocas.empty()) {
+        std::vector<llvm::Value*> unpositioned;
+        for (llvm::Value* alloca_ptr : iterator_cleanup_allocas) {
+            if (!positioned_iterator_alloca_set.count(alloca_ptr)) {
+                unpositioned.push_back(alloca_ptr);
+            }
+        }
+        if (!unpositioned.empty()) {
+            llvm::AllocaInst* uarray = ab.CreateAlloca(ptr_type,
+                    llvm::ConstantInt::get(i32_type, static_cast<unsigned>(unpositioned.size())),
+                    "iterator_cleanup_unpositioned_slots");
+            for (size_t i = 0; i < unpositioned.size(); ++i) {
+                llvm::Value* gep = ab.CreateGEP(ptr_type, uarray,
+                        llvm::ConstantInt::get(i32_type, static_cast<unsigned>(i)),
+                        "iterator_cleanup_unpositioned_slot_ptr");
+                ab.CreateStore(unpositioned[i], gep);
+            }
+            iterator_cleanup_unpositioned_array = uarray;
+        }
+        iterator_cleanup_unpositioned_count = static_cast<unsigned>(unpositioned.size());
     }
     iterator_cleanup_array = array;
     iterator_cleanup_array_count = static_cast<unsigned>(count);
@@ -4041,6 +4066,14 @@ void QoreIRToLLVM::emitIteratorCleanup(llvm::Module& module, bool skip_positione
             && iterator_cleanup_array_count == iterator_cleanup_allocas.size()) {
         auto run_helper = module.getOrInsertFunction("qore_rt_iterator_cleanup_allocas",
                 llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
+        if (skip_positioned && !positioned_iterator_allocas.empty()) {
+            // the positioned iterators are released with the locals
+            if (iterator_cleanup_unpositioned_count) {
+                builder->CreateCall(run_helper, {iterator_cleanup_unpositioned_array,
+                        llvm::ConstantInt::get(i32_type, iterator_cleanup_unpositioned_count)});
+            }
+            return;
+        }
         builder->CreateCall(run_helper, {iterator_cleanup_array,
                 llvm::ConstantInt::get(i32_type, iterator_cleanup_array_count)});
         return;
@@ -11354,6 +11387,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     boxed_exit_cleanup_array_count = 0;
     iterator_cleanup_array = nullptr;
     iterator_cleanup_array_count = 0;
+    iterator_cleanup_unpositioned_array = nullptr;
+    iterator_cleanup_unpositioned_count = 0;
     invoke_cleanup_array = nullptr;
     invoke_cleanup_array_capacity = estimateInvokeCleanupArrayCapacity(func);
     invoke_cleanup_array_count = 0;
