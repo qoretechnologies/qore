@@ -918,13 +918,17 @@ public class TableauDataProviderTest inherits QUnit::Test {
         assertEq(TableauDataProvider::MaxRetries + 1, rest.requests);
     }
 
-    #! A name that does not exist is not retried; a failure of name resolution that can be temporary is retried
+    #! A name that does not exist or is not valid is not retried; a failure of name resolution that can be temporary is
+    #! retried
     nameResolutionTests() {
         date orig_unit = DataProviderRetryUtil::getTransportRetryDelayUnit();
         on_exit DataProviderRetryUtil::setTransportRetryDelayUnit(orig_unit);
         # retries do not wait
         DataProviderRetryUtil::setTransportRetryDelayUnit(0s);
 
+        # a name with an empty label is not a valid name, which the resolver refuses itself, without a DNS query
+        # (c-ares: EBADNAME), so it is checked in every build
+        string malformed = "bad..tableau-retry-test.";
         if (Option::HAVE_LIBRARY_DEBUGGING) {
             # a local DNS server gives each answer without the network (see DnsTestServer)
             DnsTestServer dns();
@@ -933,10 +937,15 @@ public class TableauDataProviderTest inherits QUnit::Test {
             on_exit call_function("dbg_cares_set_servers", servers);
             checkNameResolution("nx.tableau-retry-test.", 1);
             checkNameResolution("servfail.tableau-retry-test.", TableauDataProvider::MaxRetries + 1);
+            checkNameResolution(malformed, 1);
+            # the resolver refused the malformed name without a query, so its lookup needs no DNS server in a build
+            # without debugging either
+            assertEq(0, dns.getQueries("bad"), "the malformed name was not sent to the DNS server");
         } else {
-            # a name that is never resolved (RFC 6761 section 6.4); the final dot makes the resolver look it up as it
-            # is, without the search domains of the host
-            checkNameResolution("tableau-retry-test.invalid.", 1);
+            # a temporary failure of name resolution needs an answer from a DNS server, which only a debug build can
+            # send its lookups to (dbg_cares_set_servers()), so only the definite answer for a malformed name is
+            # checked
+            checkNameResolution(malformed, 1);
         }
     }
 

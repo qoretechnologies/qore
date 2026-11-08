@@ -70,10 +70,9 @@ class RetryRecordingProvider inherits AbstractDataProvider {
 
 public class DataProviderRetryUtilTest inherits QUnit::Test {
     private {
-        #! A name that is never resolved (RFC 6761 section 6.4); the final dot makes the resolver look it up as it is,
-        #! without the search domains of the host (with a wildcard search domain, a name with fewer dots than
-        #! \c ndots would be resolved in it)
-        const UnresolvableUrl = "http://data-provider-retry-util.invalid.";
+        #! A URL whose name is not a valid name: it has an empty label, which the resolver refuses itself, without a
+        #! DNS query (c-ares: \c EBADNAME), so the lookup does not depend on the network in any build
+        const MalformedNameUrl = "http://bad..retry-util-test.";
 
         #! The transport errors retried in the tests
         const RetrySet = {
@@ -153,6 +152,8 @@ public class DataProviderRetryUtilTest inherits QUnit::Test {
     }
 
     realNameResolutionErrors() {
+        # a name that is not a valid name is a definite answer, which is not retried; the resolver refuses it without a
+        # DNS query, so it is checked in every build
         if (Option::HAVE_LIBRARY_DEBUGGING) {
             # a local DNS server gives each answer without the network (see DnsTestServer)
             DnsTestServer dns();
@@ -160,11 +161,19 @@ public class DataProviderRetryUtilTest inherits QUnit::Test {
             string servers = call_function("dbg_cares_set_servers", dns.getServer());
             on_exit call_function("dbg_cares_set_servers", servers);
             # a name that does not exist is a definite answer, which is not retried
-            checkClientErrors("http://nx.retry-util-test.", True);
+            checkClientErrors("http://nx.retry-util-test.", True, "ENOTFOUND");
             # a DNS server that failed can answer the next query: the failure is retried
-            checkClientErrors("http://servfail.retry-util-test.", False);
+            checkClientErrors("http://servfail.retry-util-test.", False, "ESERVFAIL");
+            assertGt(0, dns.getQueries("nx"), "the names were looked up with the DNS server");
+            checkClientErrors(MalformedNameUrl, True, "EBADNAME");
+            # the resolver refused the malformed name without a query, so its lookup needs no DNS server in a build
+            # without debugging either
+            assertEq(0, dns.getQueries("bad"), "the malformed name was not sent to the DNS server");
         } else {
-            checkClientErrors(UnresolvableUrl, True);
+            # a temporary failure of name resolution needs an answer from a DNS server, which only a debug build can
+            # send its lookups to (dbg_cares_set_servers()), so only the definite answer for a malformed name is
+            # checked
+            checkClientErrors(MalformedNameUrl, True, "EBADNAME");
         }
 
         # a failed connection is not a name resolution failure and is retried
@@ -181,15 +190,18 @@ public class DataProviderRetryUtilTest inherits QUnit::Test {
     }
 
     #! Checks the errors of the synchronous and asynchronous REST clients for a URL whose name cannot be resolved
-    /** @param definite True if the resolver's answer is definite, so the error is not retried
+    /** @param url the URL
+        @param definite True if the resolver's answer is definite, so the error is not retried
+        @param status the status of the resolver
     */
-    private checkClientErrors(string url, bool definite) {
+    private checkClientErrors(string url, bool definite, string status) {
         # the synchronous client raises the resolver's error as it is
         hash<ExceptionInfo> ex = getError(sub () {
             RestClient rest({"url": url}, True);
             rest.get("/");
         });
         assertEq("QOREADDRINFO-GETINFO-ERROR", ex.err, url);
+        assertEq(status, ex.arg.status, url);
         assertEq(definite, DataProviderRetryUtil::isNameResolutionError(ex), url);
         assertEq(!definite, DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet + {ex.err: True}), url);
 
@@ -200,6 +212,7 @@ public class DataProviderRetryUtilTest inherits QUnit::Test {
         });
         assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err, url);
         assertEq("QOREADDRINFO-GETINFO-ERROR", ex.arg.err, url);
+        assertEq(status, ex.arg.arg.status, url);
         assertEq(definite, DataProviderRetryUtil::isNameResolutionError(ex), url);
         assertEq(!definite, DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet), url);
     }
