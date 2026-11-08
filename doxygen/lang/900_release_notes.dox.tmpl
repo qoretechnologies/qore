@@ -1501,6 +1501,10 @@
     - in the JIT and tiered execution modes, the loop variable of a \c foreach statement bound by a closure was
       released only when the function returned, after its \c on_exit and \c on_error handlers, instead of when the
       statement ended
+    - in the JIT and tiered execution modes and in AOT-compiled code, when \c break left a \c foreach statement
+      whose loop variable had been reassigned, the element that the loop variable held before was released after the
+      loop variable instead of with the value the statement iterates, before the loop variable, as with the AST
+      interpreter
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, \c remove and \c delete on a global or
       \c thread_local variable holding a reference removed the referenced value instead of the variable's own value,
       as with the AST interpreter

@@ -19,10 +19,12 @@
     the locals declared before the statement.  The IR interpreter released its iterators after all of the frame's
     locals, and native code before all of them, so that an element of a list literal that the loop variable no longer
     held died before the locals of the loop body.  The iterators are now released at their places among the local
-    slots (QoreIRFunction::interpreter_iterator_slot_boundary).  The script checks a loop over a list literal, one
-    whose loop variable is reassigned, nested loops, a typed loop variable in a block and a loop left by return,
-    every case twice, in every execution mode, on the IR tier of tiered execution and as a qcc executable (see
-    ExecModeOutputTest).
+    slots (QoreIRFunction::interpreter_iterator_slot_boundary).  A loop left by break releases the list before the
+    loop variable too: native code kept the reference that the loop holds to the current element until the end of
+    the frame, so that the element outlived a reassigned loop variable.  The script checks a loop over a list
+    literal, one whose loop variable is reassigned, loops left by break after the variable was reassigned, nested
+    loops, a typed loop variable in a block and a loop left by return, every case twice, in every execution mode, on
+    the IR tier of tiered execution and as a qcc executable (see ExecModeOutputTest).
 */
 class ForeachExitIteratorOrderTest inherits ExecModeOutputTest {
     public {
@@ -51,6 +53,24 @@ sub k2() {
         E f("k2f");
         throw "K2";
     }
+}
+# a loop left by break after its variable was reassigned: the iterated list is released before the variable
+sub b() {
+    E e("be");
+    foreach auto v in ((new E("bl"), 1)) {
+        v = new E("bv");
+        printf("b: after assign\n");
+        break;
+    }
+    printf("b: after loop\n");
+}
+sub c() {
+    foreach auto v in (list(new E("cl"), 1)) {
+        v = new E("cv");
+        printf("c: after assign\n");
+        break;
+    }
+    printf("c: after loop\n");
 }
 # nested loops
 sub n() {
@@ -82,7 +102,7 @@ sub r() {
         return;
     }
 }
-foreach string fn in (("k", "k2", "n", "t", "r")) {
+foreach string fn in (("k", "k2", "b", "c", "n", "t", "r")) {
     for (int i = 0; i < 2; ++i) {
         try {
             call_function(fn);
@@ -114,6 +134,28 @@ foreach string fn in (("k", "k2", "n", "t", "r")) {
             "dtor k2v",
             "dtor k2e",
             "k2: K2",
+            "b: after assign",
+            "dtor bl",
+            "dtor bv",
+            "b: after loop",
+            "dtor be",
+            "b: returned",
+            "b: after assign",
+            "dtor bl",
+            "dtor bv",
+            "b: after loop",
+            "dtor be",
+            "b: returned",
+            "c: after assign",
+            "dtor cl",
+            "dtor cv",
+            "c: after loop",
+            "c: returned",
+            "c: after assign",
+            "dtor cl",
+            "dtor cv",
+            "c: after loop",
+            "c: returned",
             "dtor ng",
             "dtor nb",
             "dtor nf",

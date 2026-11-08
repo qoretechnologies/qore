@@ -2784,7 +2784,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // it holds to the list, and not at the end of the frame (an exhausted iterator has been released by
         // IteratorNext, which cleared its handle), and the list temporary is released before the variables rather
         // than at the end of the statement's temp scope
+        // The reference that the loop holds to the current element besides the variable's (the value that
+        // IteratorNext gave) is released first: native code keeps it until the next element or the end of the frame,
+        // so that after a break the element outlived the loop variable when the variable no longer held it
         if (foreach_source_entries) {
+            if (value_val.isValid()) {
+                builder.createReleaseOwnedTemp(value_val, stmt->loc);
+            }
             builder.createIteratorRelease(iter_val, stmt->loc);
             builder.createReleaseOwnedTemp(list_val, stmt->loc);
         }
