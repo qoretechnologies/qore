@@ -52,6 +52,7 @@ class HttpServerContentLengthTest inherits QUnit::Test {
         addTestCase("a valid Content-Length is read", \testValid());
         addTestCase("an invalid Content-Length is refused without waiting", \testInvalid());
         addTestCase("a Content-Length that is zero is no body, however it is written", \testZero());
+        addTestCase("a Content-Length field sent more than once is refused without waiting", \testRepeated());
         set_return_value(main());
     }
 
@@ -73,7 +74,21 @@ class HttpServerContentLengthTest inherits QUnit::Test {
         c.send("POST /x HTTP/1.1\r\nHost: x\r\nContent-Length: " + content_length + "\r\n\r\n" + body);
         hash<auto> h = c.readHTTPHeader(Timeout);
         int len = (h."content-length" ?? 0).toInt();
-        return {"code": h.status_code, "body": len ? c.recv(len, Timeout) : ""};
+        hash<auto> rv = {"code": h.status_code, "body": len ? c.recv(len, Timeout) : ""};
+        if (h.connection =~ /close/i) {
+            rv.end = HttpServerContentLengthTest::readEnd(c);
+        }
+        return rv;
+    }
+
+    #! Returns "closed" if the server closes the connection next, "data" if it sends more data
+    static string readEnd(Socket c) {
+        try {
+            *string more = c.recv(1, Timeout);
+            return more.val() ? "data" : "closed";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err == "SOCKET-CLOSED" ? "closed" : ex.err;
+        }
     }
 
     testParser() {
@@ -88,6 +103,8 @@ class HttpServerContentLengthTest inherits QUnit::Test {
             assertFalse(exists http_parse_content_length(bad), "invalid: " + bad);
         }
         assertFalse(exists http_parse_content_length(), "no value");
+        assertFalse(exists http_parse_content_length(("5", "5")), "a field received more than once");
+        assertFalse(exists http_parse_content_length(5), "not a string");
     }
 
     testValid() {
@@ -105,6 +122,8 @@ class HttpServerContentLengthTest inherits QUnit::Test {
             hash<auto> r = exchange(bad, "hello");
             assertEq(400, r.code, "Content-Length: " + bad);
             assertTrue(r.body =~ /Content-Length/i, "the error names the header: " + bad);
+            # the error is the only response: a second one (500, for a handler that sent no response) followed it
+            assertEq("closed", r.end, "the connection is closed after the error: " + bad);
         }
         assertLt(Timeout, now_us() - start, "refused without waiting for a body to be read");
         assertEq(calls, ContentLengthTestHandler::calls.getCount(), "the handler was not called");
@@ -119,5 +138,27 @@ class HttpServerContentLengthTest inherits QUnit::Test {
         }
         assertLt(Timeout, now_us() - start, "no wait for a body");
         assertEq(calls + 4, ContentLengthTestHandler::calls.getCount());
+    }
+
+    #! RFC 9112 section 6.3: a request with more than one Content-Length field is refused with 400 and the connection
+    #! is closed; the server used to neither answer nor close it until the client gave up
+    testRepeated() {
+        int calls = ContentLengthTestHandler::calls.getCount();
+        foreach list<string> values in (("0", "0"), ("5", "5"), ("0", "5")) {
+            Socket c();
+            c.connect("127.0.0.1:" + port);
+            on_exit c.close();
+            c.send("POST /x HTTP/1.1\r\nHost: x\r\n" + (foldl $1 + $2, (map "Content-Length: " + $1 + "\r\n", values))
+                + "\r\nhello");
+            hash<auto> h = c.readHTTPHeader(Timeout);
+            assertEq(400, h.status_code, sprintf("Content-Length: %y", values));
+            int len = (h."content-length" ?? 0).toInt();
+            string body = len ? c.recv(len, Timeout) : "";
+            assertTrue(body =~ /Content-Length/i, "the error names the header");
+            # the server closes the connection after the error, which is the only response
+            assertEq("closed", HttpServerContentLengthTest::readEnd(c),
+                sprintf("the connection is closed: %y", values));
+        }
+        assertEq(calls, ContentLengthTestHandler::calls.getCount(), "the handler was not called");
     }
 }

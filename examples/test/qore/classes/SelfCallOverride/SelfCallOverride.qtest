@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: parent - testInProgram runs the classes in a Program of the test's own process
 
 %modern
 %no-child-restrictions

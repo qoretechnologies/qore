@@ -27,6 +27,18 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
 
         #! flipped by the stubbed startHeartbeatThreadIntern() so tests can assert it would have started
         bool started_heartbeat_thread = False;
+
+        #! the number of heartbeats stopped by stopHeartbeatThread()
+        int stop_heartbeat_calls = 0;
+
+        #! the connection ID returned by getClosingConnectionId(), when set
+        *int closing_cid;
+
+        #! the connection ID returned by getCurrentConnectionId()
+        int current_cid = -1;
+
+        #! the connection ID returned by getEventConnectionId(), when set (otherwise the current one)
+        *int event_cid;
     }
 
     constructor(hash<auto> opts) : DiscordWebSocketClient(opts) {
@@ -35,6 +47,52 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
     #! capture outbound payloads instead of writing to a (nonexistent) connection
     sendData(auto value) {
         sent += value;
+    }
+
+    #! sets the ID of the client's current connection
+    setConnectionIdForTest(int id) {
+        current_cid = id;
+    }
+
+    int getCurrentConnectionId() {
+        return current_cid;
+    }
+
+    #! outside callbacks, events are those of the current connection
+    int getEventConnectionId() {
+        return event_cid ?? current_cid;
+    }
+
+    #! sets a heartbeat record of the given connection, without a thread
+    setHeartbeatForTest(int id) {
+        AutoLock al(heartbeat_lock);
+        hb = new DiscordHeartbeat(++hb_seq, id, 41250);
+    }
+
+    #! returns the connection ID of the heartbeat record, or -1
+    int getHeartbeatCidForTest() {
+        AutoLock al(heartbeat_lock);
+        return hb ? hb.cid : -1;
+    }
+
+    #! reports a connection closed as the closing callback does
+    testClosingConnection(int closed_cid) {
+        closing_cid = closed_cid;
+        on_exit remove closing_cid;
+        closingConnection();
+    }
+
+    int getClosingConnectionId() {
+        return closing_cid ?? DiscordWebSocketClient::getClosingConnectionId();
+    }
+
+    #! records heartbeat stops
+    private bool stopHeartbeatThread(*int cid) {
+        bool rv = DiscordWebSocketClient::stopHeartbeatThread(cid);
+        if (rv) {
+            ++stop_heartbeat_calls;
+        }
+        return rv;
     }
 
     #! exposes the private gateway event handler for testing
@@ -71,7 +129,7 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
         depending on a running AsyncIoController in unit tests
     */
     armResumeWatchdogForTest() {
-        resume_completed = False;
+        armResumeWatchdog();
     }
 
     #! suppresses the real heartbeat thread (no network, no controller in unit tests)
@@ -80,26 +138,26 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
         public flag records that the start would have happened
     */
     private startHeartbeatThreadIntern() {
+        # the heartbeat record set by handleHello() stays, so a subsequent handleHello() does not start another
+        # "thread"; no thread runs, so a stop does not wait
         started_heartbeat_thread = True;
-        # mimic hb_tid being set so a subsequent handleHello() does not try to
-        # start another "thread" — matches the real method's effect on state
-        hb_tid = -1;
     }
 
-    #! production armResumeWatchdog() uses AsyncSocketIo::getGlobalAsyncIoController()
-    /** which is not available in plain unit tests; override to preserve only
-        the observable state change (resume_completed = False) so handleHello()
-        can be exercised end-to-end and tests can still assert the contract via
-        testResumeWatchdogActive()
+    #! production armResumeWatchdog() starts a timer of AsyncSocketIo::getGlobalAsyncIoController()
+    /** override to preserve only the observable state change (resume_completed = False, and the connection it was
+        armed for) so handleHello() can be exercised end-to-end without a timer; the real cancelResumeWatchdog() runs,
+        and touches no controller since no timer is armed
     */
-    private armResumeWatchdog() {
+    private armResumeWatchdog(int cid = -1) {
+        AutoLock al(resume_watchdog_lock);
         resume_completed = False;
+        resume_watchdog_cid = cid;
     }
 
-    #! mirror the override above for cancel — keep the state machine consistent
-    private cancelResumeWatchdog() {
-        resume_completed = True;
-        resume_miss_count = 0;
+    #! returns the connection ID the RESUME watchdog was armed for
+    int getResumeWatchdogCidForTest() {
+        AutoLock al(resume_watchdog_lock);
+        return resume_watchdog_cid;
     }
 }
 
@@ -126,17 +184,103 @@ public class Main inherits QUnit::Test {
     constructor() : Test("DiscordWebSocketClientTest", "1.0") {
         addTestCase("discord tests", \discordTests());
         addTestCase("heartbeat request tests", \heartbeatRequestTests());
+        addTestCase("heartbeat ACK of another connection", \foreignAckTests());
+        addTestCase("RESUME watchdog keyed by connection", \resumeWatchdogKeyTests());
         addTestCase("heartbeat zombie detection tests", \zombieDetectionTests());
         addTestCase("resume watchdog tests", \resumeWatchdogTests());
         addTestCase("hello identify/resume decision tests", \helloIdentifyResumeTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("gateway discovery tests", \gatewayDiscoveryTests());
+        addTestCase("close of an older connection", \olderConnectionCloseTests());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
     }
 
     checkModule() {
+    }
+
+    #! the close of a connection reported after a newer connection was opened leaves the newer connection's
+    #! heartbeat running; the close of the current connection stops it
+    olderConnectionCloseTests() {
+        TestDiscordWebSocketClient c({"url": "wss://x", "token": "x"});
+        # connection 7 is open with its heartbeat; connection 6 is reported closed
+        c.setConnectionIdForTest(7);
+        c.setHeartbeatForTest(7);
+        c.testClosingConnection(6);
+        assertEq(0, c.stop_heartbeat_calls, "the newer connection's heartbeat is left running");
+        assertEq(7, c.getHeartbeatCidForTest());
+        # the current connection is reported closed
+        c.testClosingConnection(7);
+        assertEq(1, c.stop_heartbeat_calls, "the heartbeat is stopped with its connection");
+        assertEq(-1, c.getHeartbeatCidForTest());
+        # no connection is open (the closed one was taken)
+        c.setConnectionIdForTest(-1);
+        c.setHeartbeatForTest(7);
+        c.testClosingConnection(7);
+        assertEq(2, c.stop_heartbeat_calls, "the heartbeat is stopped when its connection closes");
+        # connection 8 is open, but the heartbeat left is that of connection 6, which is gone: the close of
+        # connection 5 stops it
+        c.setConnectionIdForTest(8);
+        c.setHeartbeatForTest(6);
+        c.testClosingConnection(5);
+        assertEq(3, c.stop_heartbeat_calls, "a heartbeat of a connection that is no longer the client's is stopped");
+        # connection 8's heartbeat is not stopped by the close of connection 5
+        c.setHeartbeatForTest(8);
+        c.testClosingConnection(5);
+        assertEq(3, c.stop_heartbeat_calls, "the heartbeat of the client's connection is left running");
+        # a HELLO of a connection that is not the client's starts nothing and sends nothing
+        c.testClosingConnection(8);
+        assertEq(-1, c.getHeartbeatCidForTest());
+        c.event_cid = 9;
+        c.testHandleEventData({"op": 10, "d": {"heartbeat_interval": 41250}});
+        assertEq(-1, c.getHeartbeatCidForTest(), "no heartbeat for the HELLO of another connection");
+        assertFalse(c.started_heartbeat_thread);
+        assertEq(0, c.sent.size(), "no IDENTIFY for the HELLO of another connection");
+        # the HELLO of the client's connection starts its heartbeat
+        c.event_cid = 8;
+        c.testHandleEventData({"op": 10, "d": {"heartbeat_interval": 41250}});
+        assertEq(8, c.getHeartbeatCidForTest());
+        assertTrue(c.started_heartbeat_thread);
+    }
+
+    #! the ACK of another connection does not acknowledge the heartbeat of the client's connection
+    foreignAckTests() {
+        TestDiscordWebSocketClient c({"url": "wss://x", "token": "x"});
+        c.setConnectionIdForTest(7);
+        c.setHeartbeatForTest(7);
+        # a heartbeat is sent: an ACK is due
+        assertFalse(c.testHeartbeatZombieCheck());
+        # an ACK of connection 6 arrives
+        c.event_cid = 6;
+        c.testHandleEventData({"op": 11});
+        assertTrue(c.testHeartbeatZombieCheck(), "the ACK of another connection is ignored");
+        # an ACK of connection 7 arrives
+        c.event_cid = 7;
+        c.testHandleEventData({"op": 11});
+        assertFalse(c.testHeartbeatZombieCheck(), "the ACK of the heartbeat's connection is taken");
+    }
+
+    #! the RESUME watchdog is armed for the connection that sent RESUME and canceled only by its events
+    resumeWatchdogKeyTests() {
+        TestDiscordWebSocketClient c({"url": "wss://x", "token": "x"});
+        c.setConnectionIdForTest(5);
+        c.setSessionStateForTest("session-xyz", 99);
+        c.testHandleEventData({"op": 10, "d": {"heartbeat_interval": 41250}});
+        assertEq(6, c.sent[0].op, "RESUME sent");
+        assertEq(5, c.getResumeWatchdogCidForTest(), "armed for connection 5");
+        assertTrue(c.testResumeWatchdogActive());
+        # a DISPATCH of connection 4 does not cancel it
+        c.event_cid = 4;
+        c.testHandleEventData({"op": 0, "t": "RESUMED", "s": 100, "d": {}});
+        assertTrue(c.testResumeWatchdogActive(), "a DISPATCH of another connection does not cancel it");
+        # the close of connection 4 does not cancel it
+        c.testClosingConnection(4);
+        assertTrue(c.testResumeWatchdogActive(), "the close of another connection does not cancel it");
+        # a DISPATCH of connection 5 cancels it
+        c.event_cid = 5;
+        c.testHandleEventData({"op": 0, "t": "RESUMED", "s": 101, "d": {}});
+        assertFalse(c.testResumeWatchdogActive(), "a DISPATCH of its connection cancels it");
     }
 
     discordTests() {

@@ -27,6 +27,38 @@ public namespace DiscordDataProvider {
 #! Discord MESSAGE_CREATE event constant
 public const EVENT_MESSAGE_CREATE = "MESSAGE_CREATE";
 
+#! Forwards the events of a DiscordWebSocketClient to a DiscordGatewayDataProvider; internal
+/** Holds only a weak reference to the data provider, so the client, which holds its observers strongly, never keeps
+    the data provider alive.
+
+    @since DiscordDataProvider 2.1
+*/
+public class DiscordGatewayEventForwarder inherits DataProvider::Observer {
+    private {
+        #! the data provider (weak reference)
+        *DiscordGatewayDataProvider provider;
+    }
+
+    #! Creates the object
+    constructor(DiscordGatewayDataProvider provider) {
+        self.provider := provider;
+    }
+
+    #! Forwards an event of the client to the data provider, if it still exists
+    update(string event_id, hash<auto> data_) {
+        *DiscordGatewayDataProvider p = provider;
+        if (p) {
+            try {
+                p.update(event_id, data_);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "OBJECT-ALREADY-DELETED") {
+                    rethrow;
+                }
+            }
+        }
+    }
+}
+
 #! The Discord gateway data provider class
 public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvider, DataProvider::DelayedObservable,
         DataProvider::Observer {
@@ -82,28 +114,36 @@ public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvi
 
         #! The WebSocket client object
         *DiscordWebSocketClient::DiscordWebSocketClient ws;
+
+        #! The observer registered with the client, forwarding its events to this object
+        *DiscordGatewayEventForwarder forwarder;
     }
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         ws = getWebSocketConnection(copts, logger);
-        ws.registerObserver(self);
+        observeClient();
     }
 
     #! Creates the object from a DiscordWebSocketClient
     constructor(DiscordWebSocketClient::DiscordWebSocketClient ws) {
         self.ws = ws;
+        observeClient();
     }
 
     #! Creates the object from a DiscordWebSocketConnection
     constructor(DiscordWebSocketClient::DiscordWebSocketConnection conn) {
         self.conn = conn;
         self.ws = conn.get();
+        observeClient();
     }
 
     #! Deletes the object
     destructor() {
+        if (ws && forwarder) {
+            ws.deregisterObserver(forwarder);
+        }
         if (ws) {
             # Stop the connection and its async I/O deterministically while we still hold a strong
             # reference (so the gateway cannot linger connected if anything else keeps the object
@@ -116,6 +156,12 @@ public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvi
             ws.disconnect();
             remove ws;
         }
+    }
+
+    #! Registers an observer with the client that forwards its events to this object without keeping it alive
+    private observeClient() {
+        forwarder = new DiscordGatewayEventForwarder(self);
+        ws.registerObserver(forwarder);
     }
 
     #! Disconnects from the gateway and stops all background threads
@@ -141,6 +187,9 @@ public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvi
                     notifyObservers(EVENT_MESSAGE_CREATE, msg."data");
                     break;
             }
+        } else if (event_id == EVENT_WS_CONNECTED || event_id == EVENT_WS_CLOSED) {
+            # the connection and disconnection events declared in the provider info
+            notifyObservers(event_id, msg);
         }
     }
 

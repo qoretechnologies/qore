@@ -1,0 +1,166 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./MysqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%exec-class MysqlTestIsolationTest
+
+#! The database that MysqlTestIsolation gives a run of a MySQL test
+class MysqlTestIsolationTest inherits QUnit::Test {
+    private {
+        *string connstr;
+        *string skip_reason;
+        # databases made for the leftover test, dropped at the end
+        list<string> made;
+    }
+
+    constructor() : Test("MysqlTestIsolationTest", "1.0", \ARGV) {
+%ifdef NoMysql
+        skip_reason = "mysql module unavailable";
+%endif
+        connstr = ENV.QORE_DB_CONNSTR_MYSQL;
+        if (!connstr) {
+            skip_reason = "QORE_DB_CONNSTR_MYSQL is not configured";
+        }
+        addTestCase("a non-MySQL connection has no run database", \notMysql());
+        # the leftover databases are made before the run's database, whose setup drops the ones that may be dropped
+        addTestCase("the setup drops only the databases of gone runs", \leftovers());
+        addTestCase("the run's connections use the run's database", \runDatabase());
+        addTestCase("the teardown drops the run's database", \teardown());
+        addTestCase("a leftover that a live run holds is left for a later run", \liveLeftover());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (connstr && made) {
+            Datasource ds(connstr);
+            map ds.exec("drop database if exists `" + $1 + "`"), made;
+            ds.commit();
+        }
+    }
+
+    private checkSkip() {
+        if (skip_reason) {
+            testSkip(skip_reason);
+        }
+    }
+
+    private notMysql() {
+        assertNothing(MysqlRunDatabase::getConnectionString(NOTHING, "x"));
+        assertEq("sqlite3:@:memory:", MysqlRunDatabase::getConnectionString("sqlite3:@:memory:", "x"));
+        assertNothing(MysqlRunDatabase::getName());
+    }
+
+    private leftovers() {
+        checkSkip();
+        Datasource ds(connstr);
+        string host = getHost();
+        int now = now_us().getEpochSeconds();
+        int old = now - TestRun::LeftoverAge.durationSeconds() - 60;
+        hash<string, bool> expected = {
+            # runs at least TestRun::LeftoverAge old, of any host and process, this one's too: dropped
+            sprintf("qtest_leftover_%s_%d_%d_abc123", host, getpid(), old): False,
+            sprintf("qtest_otherhost_%s_%d_%d_abc123", host + "x", 1, old): False,
+            # a recent run: kept
+            sprintf("qtest_recent_%s_%d_%d_abc123", host, 1, now): True,
+            # not a run's name: kept
+            sprintf("qtest_%d", old): True,
+        };
+        foreach string db in (keys expected) {
+            ds.exec("create database `" + db + "`");
+            push made, db;
+        }
+        ds.commit();
+
+        string run_connstr = MysqlRunDatabase::getConnectionString(connstr, "MysqlTestIsolation");
+        *string run = MysqlRunDatabase::getName();
+        assertRegex(sprintf("^qtest_mysqltestiso_%s_%d_[0-9]+_[a-z0-9]{6}$", host, getpid()), run);
+        assertEq(run, parse_datasource(run_connstr).db);
+
+        hash<string, bool> present = map {$1: True}, ds.select("select schema_name as name from "
+            "information_schema.schemata where schema_name like %v", "qtest%").name;
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, present{i.key} ?? False, i.key);
+        }
+        # a second call, with the same datasource string or with the one returned, gives the same database
+        assertEq(run_connstr, MysqlRunDatabase::getConnectionString(connstr, "MysqlTestIsolation"));
+        assertEq(run_connstr, MysqlRunDatabase::getConnectionString(run_connstr, "MysqlTestIsolation"));
+        assertEq(run, MysqlRunDatabase::getName());
+    }
+
+    private runDatabase() {
+        checkSkip();
+        string run_connstr = MysqlRunDatabase::getConnectionString(connstr, "MysqlTestIsolation");
+        Datasource ds(run_connstr);
+        assertEq(MysqlRunDatabase::getName(), ds.selectRow("select database() as db").db);
+        # a table created without a database name is in the run's database, not in the test's
+        ds.exec("create table isolation_t (id int)");
+        assertEq(1, ds.selectRow("select count(*) as c from information_schema.tables where table_schema = %v "
+            "and table_name = 'isolation_t'", MysqlRunDatabase::getName()).c);
+        Datasource shared(connstr);
+        assertEq(0, shared.selectRow("select count(*) as c from information_schema.tables where table_schema = "
+            "database() and table_name = 'isolation_t'").c);
+        # closed, so the teardown does not wait for their locks
+        ds.rollback();
+        shared.rollback();
+        ds.close();
+        shared.close();
+    }
+
+    #! A leftover database whose objects a connection holds locks of is not waited for longer than a few seconds: it
+    #! is left for a later run
+    private liveLeftover() {
+        checkSkip();
+        Datasource ds(connstr);
+        int old = now_us().getEpochSeconds() - TestRun::LeftoverAge.durationSeconds() - 60;
+        string db = sprintf("qtest_livelock_host_1_%d_abc123", old);
+        ds.exec("create database `" + db + "`");
+        ds.exec("create table `" + db + "`.t (id int)");
+        ds.commit();
+        push made, db;
+        # a transaction that holds a metadata lock of the database's table
+        Datasource holder(connstr);
+        holder.exec("insert into `" + db + "`.t values (1)");
+        on_exit holder.rollback();
+        date start = now_us();
+        list<string> dropped = MysqlRunDatabase::dropLeftovers(connstr);
+        assertFalse(inlist(db, dropped));
+        assertLt(60s, now_us() - start, "the drop is not waited for long");
+        assertEq(1, ds.selectRow("select count(*) as c from information_schema.schemata where schema_name = %v",
+            db).c);
+    }
+
+    private teardown() {
+        checkSkip();
+        string run = MysqlRunDatabase::getName();
+        MysqlRunDatabase::teardown();
+        assertNothing(MysqlRunDatabase::getName());
+        Datasource ds(connstr);
+        assertEq(0, ds.selectRow("select count(*) as c from information_schema.schemata where schema_name = %v",
+            run).c);
+        # nothing is done once it is dropped
+        MysqlRunDatabase::teardown();
+    }
+
+    private static string getHost() {
+        string host = (gethostname() =~ x/^([^.]+)/)[0] ?? gethostname();
+        host = host.lwr();
+        host =~ s/[^a-z0-9]//g;
+        return host.substr(0, 12);
+    }
+
+}

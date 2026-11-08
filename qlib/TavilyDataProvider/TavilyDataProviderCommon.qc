@@ -180,7 +180,7 @@ public class TavilyDataProviderCommon inherits DataProvider::AbstractDataProvide
     }
 
     private bool retry(hash<ExceptionInfo> ex, reference<int> retries) {
-        if (RetrySet{ex.err}) {
+        if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet)) {
             if (++retries == MaxIoRetries) {
                 LoggerWrapper::error(sprintf("Maximum retries exceeded (%d)", retries));
                 return False;

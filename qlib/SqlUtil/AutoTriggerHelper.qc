@@ -98,12 +98,14 @@ public hash<auto> sub generate_auto_triggers(string driver_name, string table_na
         case "mysql":
             return generate_mysql_auto_triggers(table_name, has_created, has_modified, seq_cols,
                 effective_insert_only);
+        # "freetds" is the name of the SQL Server driver and of the key of its driver-specific options
         case "mssql":
+        case "freetds":
             return generate_mssql_auto_triggers(table_name, has_created, has_modified, seq_cols,
                 effective_insert_only, pk_columns);
         default:
             throw "AUTO-TRIGGER-ERROR", sprintf("auto-trigger generation is not supported for driver %y; "
-                "supported drivers: pgsql, oracle, mysql, mssql", driver_name);
+                "supported drivers: pgsql, oracle, mysql, mssql (freetds)", driver_name);
     }
 }
 

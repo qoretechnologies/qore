@@ -35,6 +35,8 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../SqlUtil"
 %requires ../SqlUtil/PgsqlTestIsolation.qm
+%requires ../SqlUtil/MysqlTestIsolation.qm
+%requires ../SqlUtil/OracleTestIsolation.qm
 
 %exec-class DbViewDataProviderTest
 
@@ -127,6 +129,12 @@ class DbViewDataProviderTest inherits QUnit::Test {
                 # each run uses its own schema, so the listings of the search_path have only the run's objects
                 PgsqlRunSchema::setup(connstr, "DbViewDataProvider");
                 pgsql_isolated = True;
+            } else if (label == "mysql") {
+                # each run uses its own database, so the listings of the database have only the run's objects
+                connstr = MysqlRunDatabase::getConnectionString(connstr, "DbViewDataProvider");
+            } else if (label == "oracle") {
+                # each run uses its own schema, so the listings of the schema have only the run's objects
+                connstr = OracleRunSchema::getConnectionString(connstr, "DbViewDataProvider");
             }
         }
         Datasource ds(connstr);
@@ -191,6 +199,16 @@ class DbViewDataProviderTest inherits QUnit::Test {
                 printf("WARNING: cannot drop the PostgreSQL run schema: %s: %s\n", ex.err, ex.desc);
             }
         }
+        try {
+            MysqlRunDatabase::teardown();
+        } catch (hash<ExceptionInfo> ex) {
+            printf("WARNING: cannot drop the MySQL run database: %s: %s\n", ex.err, ex.desc);
+        }
+        try {
+            OracleRunSchema::teardown();
+        } catch (hash<ExceptionInfo> ex) {
+            printf("WARNING: cannot drop the Oracle run schema: %s: %s\n", ex.err, ex.desc);
+        }
     }
 
     #! returns the datasource for the given driver label or skips the test case
@@ -202,10 +220,11 @@ class DbViewDataProviderTest inherits QUnit::Test {
     }
 
     #! returns the name of a test object as the database lists it
+    /** SqlUtil lists the names of every database in lower case: Oracle's, which the catalog has in upper case, too,
+        unless the database object has the \c native_case option
+    */
     private string objName(string label, string suffix) {
-        string name = prefix + suffix;
-        # Oracle lists unquoted names in upper case
-        return label == "oracle" ? name.upr() : name;
+        return prefix + suffix;
     }
 
     #! returns the names in the given list as a set
@@ -293,7 +312,8 @@ class DbViewDataProviderTest inherits QUnit::Test {
         # the record type is the view's columns, with the types of the table's columns that they select
         hash<string, AbstractDataField> rec_type = view.getRecordType();
         assertEq(("id", "name", "amount"), keys rec_type);
-        assertEq(NT_INT, rec_type.id.getType().getBaseTypeCode());
+        # Oracle has no integer type: an integer column is a NUMBER(38), which can hold more than an int
+        assertEq(label == "oracle" ? NT_NUMBER : NT_INT, rec_type.id.getType().getBaseTypeCode());
         hash<string, AbstractDataField> table_type = dp.getChildProviderPath("tables/" + objName(label, "t"))
             .getRecordType();
         foreach string field in (keys rec_type) {
@@ -322,7 +342,8 @@ class DbViewDataProviderTest inherits QUnit::Test {
         # bulk read
         AbstractDataProviderBulkRecordInterface bulk = view.searchRecordsBulk(10, NOTHING, {"orderby": "id"});
         hash<auto> block = bulk.getValue();
-        assertEq((1, 2), block.id);
+        # a bulk read gives each column the type of the record type's field: number for Oracle's NUMBER(38)
+        assertEq(label == "oracle" ? (1n, 2n) : (1, 2), block.id);
         assertEq(("alpha", "beta"), block.name);
         assertNothing(bulk.getValue());
 

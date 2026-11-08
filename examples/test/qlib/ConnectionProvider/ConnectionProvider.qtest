@@ -43,6 +43,7 @@ public class ConnectionProviderTest inherits QUnit::Test {
         addTestCase("custom parseUrl", \customParseUrlTest());
         addTestCase("custom option validation", \customValidateOptions());
         addTestCase("polling monitor", \pollingMonitorTest());
+        addTestCase("polling monitor start hook", \pollingMonitorStartHookTest());
         addTestCase("indexed scheme fallback", \indexedSchemeFallbackTest());
         addTestCase("async HE cancel mid-race", \asyncHeCancelMidRaceTest());
         addTestCase("startPollConnect does not block", \asyncStartPollConnectNonBlockingTest());
@@ -338,6 +339,58 @@ public class ConnectionProviderTest inherits QUnit::Test {
 
         IgnoreOptionsConnection h("foo", "bar", "http://localhost", {}, opts);
         assertEq(opts, h.opts);
+    }
+
+    #! A subclass decides how the monitor opens the connection of a ping
+    pollingMonitorStartHookTest() {
+        SimpleTcpServer server();
+        on_exit server.stop();
+        string url = "http://127.0.0.1:" + server.getPort();
+
+        # the hook is called for each ping, and the operation it returns is the ping
+        {
+            HttpConnection hc("hook-delegate", "test", url);
+            HookPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.add(hc);
+            hash<auto> result = pcm.waitForResult();
+            assertEq("hook-delegate", result.name);
+            assertEq("OK", result.result);
+            assertEq(("hook-delegate",), pcm.getStarted(), "the hook started the ping");
+        }
+
+        # an exception from the hook is a ping that could not be started
+        {
+            HttpConnection hc("hook-error", "test", url);
+            HookPollingConnectionMonitor pcm(\HookPollingConnectionMonitor::refuse());
+            on_exit delete pcm;
+            pcm.add(hc);
+            hash<auto> result = pcm.waitForResult();
+            assertEq("hook-error", result.name);
+            assertEq("error", result.result);
+            assertEq("HOOK-REFUSED", result.ex.err);
+        }
+
+        # the operation is created in the hook's context: here a sandbox that denies the server's address, so the
+        # ping is refused before anything is sent to the server
+        {
+            SimpleTcpServer sandbox_server();
+            on_exit sandbox_server.stop();
+            HttpConnection hc("hook-sandbox", "test", "http://127.0.0.1:" + sandbox_server.getPort());
+            HookPollingConnectionMonitor pcm(\HookPollingConnectionMonitor::startSandboxed());
+            on_exit delete pcm;
+            pcm.add(hc);
+            hash<auto> result = pcm.waitForResult();
+            assertEq("hook-sandbox", result.name);
+            assertEq("error", result.result);
+            assertEq("NETWORK-ACCESS-DENIED", result.ex.err, result.ex.desc);
+            # connections are accepted in order: after this one is accepted, no event of an earlier one is left
+            Socket marker();
+            marker.connect("127.0.0.1:" + sandbox_server.getPort(), 5s);
+            on_exit marker.close();
+            sandbox_server.waitForAccept();
+            assertEq(0, sandbox_server.getPendingAccepts(), "the server was not reached by the ping");
+        }
     }
 
     pollingMonitorTest() {
@@ -961,6 +1014,51 @@ class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
     }
 }
 
+#! A monitor whose start hook records the pings it starts and can start them in another way
+class HookPollingConnectionMonitor inherits TestPollingConnectionMonitor {
+    private {
+        Mutex lck();
+        list<string> started();
+        *code start;
+    }
+
+    constructor(*code start) {
+        self.start = start;
+    }
+
+    list<string> getStarted() {
+        AutoLock al(lck);
+        return started;
+    }
+
+    #! Starts a ping by refusing it
+    static AbstractPollOperation refuse(code start_default, AbstractConnection conn) {
+        throw "HOOK-REFUSED", sprintf("refused to start the ping of %y", conn.getName());
+    }
+
+    #! Starts a ping in a Program whose sandbox denies loopback addresses
+    static AbstractPollOperation startSandboxed(code start_default, AbstractConnection conn) {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.blockPrivateNetworks();
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse("%new-style\nauto sub run(code c) { return c(); }", "hook-sandbox");
+        return p.callFunction("run", start_default);
+    }
+
+    private AbstractPollOperation startPollConnect(string name, AbstractConnection conn) {
+        {
+            AutoLock al(lck);
+            started += name;
+        }
+        code start_default = AbstractPollOperation sub () {
+            return TestPollingConnectionMonitor::startPollConnect(name, conn);
+        };
+        return start ? call_function(start, start_default, conn) : start_default();
+    }
+}
+
 class SimpleTcpServer {
     private:internal {
         Socket sock();
@@ -1011,6 +1109,11 @@ class SimpleTcpServer {
     }
 
     #! waits until the server has accepted a connection that it has not reported yet
+    #! Returns the number of accepted connections not yet waited for with waitForAccept()
+    int getPendingAccepts() {
+        return accept_events.size();
+    }
+
     waitForAccept() {
         accept_events.get();
     }

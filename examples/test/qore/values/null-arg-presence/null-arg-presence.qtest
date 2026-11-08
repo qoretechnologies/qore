@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: parent - the reference results are computed in the test's own process
 
 # A builtin reads its arguments in C++, where NULL is a value and NOTHING is none (QoreValue::operator bool()), as
 # with the AST interpreter.  The IR and JIT engines pass a NULL literal inline in the QoreValue rather than as the

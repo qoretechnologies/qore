@@ -77,6 +77,7 @@
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/CompressionTransforms.h"
 #include "qore/intern/SseEventFramer.h"
+#include "qore/intern/ql_debug.h"
 
 #include <atomic>
 #include <cassert>
@@ -4410,7 +4411,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             const char* err_str = err_data.c_str();
             const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/2 CONNECT request failed";
             cleanup_failed_connect();
-            xsink->raiseException(err_str, "%s", desc_str);
+            xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
             return nullptr;
         }
 
@@ -4635,7 +4636,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
             const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/3 CONNECT request failed";
             cleanup_failed_connect();
             restore_forced_h3();
-            xsink->raiseException(err_str, "%s", desc_str);
+            xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
             return nullptr;
         }
 
@@ -4783,7 +4784,7 @@ BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int tim
                 QoreStringDataHelper desc_data(h->getKeyValue("desc"));
                 const char* err_str = err_data.c_str();
                 const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/2 stream read failed";
-                xsink->raiseException(err_str, "%s", desc_str);
+                xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
                 return nullptr;
             }
             QoreValue legacy_error = h->getKeyValue("error");
@@ -4991,7 +4992,7 @@ BinaryNode* QoreHttpClientObject::readHttp3StreamData(int64_t stream_id, int tim
                 QoreStringDataHelper desc_data(h->getKeyValue("desc"));
                 const char* err_str = err_data.c_str();
                 const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/3 stream read failed";
-                xsink->raiseException(err_str, "%s", desc_str);
+                xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
                 return nullptr;
             }
             QoreValue legacy_error = h->getKeyValue("error");
@@ -5846,7 +5847,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             QoreStringValueHelper desc(desc_val);
                             desc_str = desc->c_str();
                         }
-                        xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+                        xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s",
+                            desc_str.c_str());
                         close_and_evict_if_unusable();
                         return nullptr;
                     }
@@ -6248,7 +6250,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         QoreStringValueHelper desc(desc_val);
                         desc_str = desc->c_str();
                     }
-                    xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+                    xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
                     // a reused connection closed by the peer before a response was received
                     if (!got_headers && HttpClientConnectionManagerBase::isConnectionClosedError(*xsink)
                             && canRepeatOnNewConnection(meth, conn_reused, stream_retried)) {
@@ -6642,7 +6644,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         QoreStringValueHelper desc(desc_val);
                         desc_str = desc->c_str();
                     }
-                    xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+                    xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
                     return nullptr;
                 }
 
@@ -6754,7 +6756,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         QoreStringValueHelper desc(desc_val);
                         desc_str = desc->c_str();
                     }
-                    xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+                    xsink->raiseExceptionArg(err_str.c_str(), raw_resp->getKeyValue("arg").refSelf(), "%s",
+                        desc_str.c_str());
                     return nullptr;
                 }
                 QoreValue sc_val = raw_resp->getKeyValue("status_code");
@@ -7198,7 +7201,7 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
             const char* err_str = err_data ? err_data.c_str() : "HTTP-CLIENT-RECEIVE-ERROR";
             const char* desc_str = desc_data ? desc_data.c_str() : "WebSocket Upgrade request failed";
             // the description is text, not a format
-            xsink->raiseException(err_str, "%s", desc_str);
+            xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
             return nullptr;
         }
 
@@ -8226,7 +8229,8 @@ public:
             if (dv) {
                 desc_str = dv.c_str();
             }
-            xsink->raiseException(err_str, "%s", desc_str);
+            xsink->raiseExceptionArg(err_str, err_info ? err_info->getKeyValue("arg").refSelf() : QoreValue(),
+                "%s", desc_str);
             done = true;
             phase = Phase::DONE;
             clearPendingUnlocked(xsink);
@@ -8333,7 +8337,8 @@ public:
                     desc_str = desc->c_str();
                 }
             }
-            xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+            xsink->raiseExceptionArg(err_str.c_str(), err_info ? err_info->getKeyValue("arg").refSelf() : QoreValue(),
+                "%s", desc_str.c_str());
             done = true;
             phase = Phase::DONE;
             clearPendingUnlocked(xsink);
@@ -8388,7 +8393,8 @@ public:
                     desc_str = desc->c_str();
                 }
             }
-            xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+            xsink->raiseExceptionArg(err_str.c_str(), err_info ? err_info->getKeyValue("arg").refSelf() : QoreValue(),
+                "%s", desc_str.c_str());
             done = true;
             phase = Phase::DONE;
             clearPendingUnlocked(xsink);
@@ -8497,7 +8503,7 @@ public:
             QoreStringValueHelper desc(desc_val);
             desc_str = desc->c_str();
         }
-        xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+        xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
         return true;
     }
 
@@ -9239,29 +9245,11 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     QoreFuture* future_raw = *future_holder;
     QoreEventNotifier* notifier_for_op = *notifier_holder;
 
-    if (conn->isClosed()) {
-        // Rare: the connection transitioned to CLOSED between async acquire
-        // and here.  Surface the protocol error as a DEFERRED error on the
-        // returned poll op rather than raising synchronously — callers
-        // expect the error to surface through drivePoll(), not from the
-        // start* call itself.  Mirrors the deferred-error pattern in
-        // startPollConnectConnMgr (SOCKET-CONNECT-ERROR test case).
-        ReferenceHolder<QoreHashNode> err_info(
-            conn->getReferencedErrorInfo(), xsink);
-        std::string err_str = "HTTP-CLIENT-CONNECT-ERROR";
-        std::string desc_str = "connection closed before poll send/recv request";
-        if (err_info) {
-            QoreValue ev = err_info->getKeyValue("err");
-            QoreValue dv = err_info->getKeyValue("desc");
-            if (ev.getType() == NT_STRING) {
-                QoreStringValueHelper err(ev);
-                err_str = err->c_str();
-            }
-            if (dv.getType() == NT_STRING) {
-                QoreStringValueHelper desc(dv);
-                desc_str = desc->c_str();
-            }
-        }
+    // Returns a poll operation that reports the given error, for a connection that the server closed before the
+    // request could be submitted: the error is reported through the poll operation, never raised by the start*
+    // call itself, however the close and the start interleave.  Mirrors the deferred-error pattern in
+    // startPollConnectConnMgr (SOCKET-CONNECT-ERROR test case).
+    auto deferred_error = [&] (const std::string& err_str, const std::string& desc_str) -> QoreObject* {
         mgr.closeAndEvict(conn, xsink);
         release_local_conn_ref();
 
@@ -9280,6 +9268,66 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             rv->setValue("goal", new QoreStringNode("received"), xsink);
         }
         return rv.release();
+    };
+
+    // the error of a connection found closed, as the poll operation reports it
+    auto closed_conn_error = [&] () -> QoreObject* {
+        ReferenceHolder<QoreHashNode> err_info(
+            conn->getReferencedErrorInfo(), xsink);
+        std::string err_str = "HTTP-CLIENT-CONNECT-ERROR";
+        std::string desc_str = "connection closed before poll send/recv request";
+        if (err_info) {
+            QoreValue ev = err_info->getKeyValue("err");
+            QoreValue dv = err_info->getKeyValue("desc");
+            if (ev.getType() == NT_STRING) {
+                QoreStringValueHelper err(ev);
+                err_str = err->c_str();
+            }
+            if (dv.getType() == NT_STRING) {
+                QoreStringValueHelper desc(dv);
+                desc_str = desc->c_str();
+            }
+        }
+        return deferred_error(err_str, desc_str);
+    };
+
+    // true if the submit failed because the connection was closed meanwhile: the connection is closed and the error
+    // is the one a submit on a closed connection raises (the connection's own error, or the closed-state error)
+    auto closed_submit_error = [&] () -> bool {
+        if (!*xsink || !conn->isClosed()) {
+            return false;
+        }
+        QoreStringValueHelper err(xsink->getExceptionErr());
+        if (!strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR")) {
+            return true;
+        }
+        ExceptionSink info_xsink;
+        ReferenceHolder<QoreHashNode> err_info(conn->getReferencedErrorInfo(), &info_xsink);
+        if (!err_info) {
+            return false;
+        }
+        QoreValue ev = err_info->getKeyValue("err");
+        if (ev.getType() != NT_STRING) {
+            return false;
+        }
+        QoreStringValueHelper conn_err(ev);
+        return !strcmp(err->c_str(), conn_err->c_str());
+    };
+
+    // reports the error of a submit on a connection closed meanwhile through the poll operation
+    auto deferred_submit_error = [&] () -> QoreObject* {
+        QoreStringValueHelper err(xsink->getExceptionErr());
+        QoreStringValueHelper desc(xsink->getExceptionDesc());
+        std::string err_str(err->c_str());
+        std::string desc_str(desc->c_str());
+        xsink->clear();
+        return deferred_error(err_str, desc_str);
+    };
+
+    if (conn->isClosed()) {
+        // Rare: the connection transitioned to CLOSED between async acquire
+        // and here.
+        return closed_conn_error();
     }
 
     // An ALPN-negotiating connection is transitional and cannot carry a request.
@@ -9319,8 +9367,17 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
                 new PromiseNotifierAction(promise_raw, notifier_raw, *notifier_obj));
         action->setEventSink(event_sink);
         reportPollSendEvent(method, msgpath, *nh);
+#ifdef DEBUG
+        // tests submit the request only once the I/O thread has marked the connection closed
+        qore_dbg_http_wait_submit_after_close();
+#endif
         int64_t stream_id = conn->submitRequestWithAction(method, msgpath,
             *nh, data, size, action, xsink);
+        if (closed_submit_error()) {
+            // the server closed the connection after it was found ready (the I/O thread marked it closed in the
+            // meantime): reported like a connection found closed above
+            return deferred_submit_error();
+        }
         if (*xsink || stream_id < 0) {
             mgr.releaseConnection(conn);
             release_local_conn_ref();
@@ -9355,39 +9412,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
                 // poll op, not synchronously — same rationale as the early
                 // isClosed() path above (SSE async connect test expects
                 // SOCKET-CONNECT-ERROR to come through drivePoll()).
-                ReferenceHolder<QoreHashNode> err_info(
-                    conn->getReferencedErrorInfo(), xsink);
-                std::string err_str = "HTTP-CLIENT-CONNECT-ERROR";
-                std::string desc_str = "connection closed before poll send/recv request";
-                if (err_info) {
-                    QoreValue ev = err_info->getKeyValue("err");
-                    QoreValue dv = err_info->getKeyValue("desc");
-                    if (ev.getType() == NT_STRING) {
-                        QoreStringValueHelper err(ev);
-                        err_str = err->c_str();
-                    }
-                    if (dv.getType() == NT_STRING) {
-                        QoreStringValueHelper desc(dv);
-                        desc_str = desc->c_str();
-                    }
-                }
-                mgr.closeAndEvict(conn, xsink);
-                release_local_conn_ref();
-
-                notifier_holder->notify();
-
-                poller = new HttpClientConnMgrPollOp(err_str.c_str(),
-                    desc_str.c_str(), notifier_for_op, this, self);
-
-                SocketPollOperationBase* p = *poller;
-                ReferenceHolder<QoreObject> rv(
-                    new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
-                if (!*xsink) {
-                    p->setSelf(*rv);
-                    rv->setValue("sock", notifier_obj.release(), xsink);
-                    rv->setValue("goal", new QoreStringNode("received"), xsink);
-                }
-                return rv.release();
+                return closed_conn_error();
             }
             // READY now — fall into the fast-path synchronous submit.
             AbstractAsyncAction* action = streaming_response
@@ -9397,8 +9422,15 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
                     new PromiseNotifierAction(promise_raw, notifier_raw, *notifier_obj));
             action->setEventSink(event_sink);
             reportPollSendEvent(method, msgpath, *nh);
+#ifdef DEBUG
+            qore_dbg_http_wait_submit_after_close();
+#endif
             int64_t stream_id = conn->submitRequestWithAction(method,
                 msgpath, *nh, data, size, action, xsink);
+            if (closed_submit_error()) {
+                // closed by the server meanwhile: reported by the poll operation, as above
+                return deferred_submit_error();
+            }
             if (*xsink || stream_id < 0) {
                 mgr.releaseConnection(conn);
                 release_local_conn_ref();
@@ -9766,7 +9798,7 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
             QoreStringValueHelper desc(desc_val);
             desc_str = desc->c_str();
         }
-        xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+        xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
         return nullptr;
     }
 

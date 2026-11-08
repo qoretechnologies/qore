@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
 
 # The forkexita, forkexitb and cppapiuser test modules (examples/test/module-cpp-api) are built into the build tree
 # and never installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)

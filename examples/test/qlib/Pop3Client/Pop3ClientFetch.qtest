@@ -29,6 +29,12 @@ class MockPop3Server {
         Counter done(1);
         #! Set by wait() to stop the accept loop
         bool stop_flag = False;
+        #! The socket of the session being served, if any
+        *Socket current;
+        #! Set by wait() when it closes the session being served, whose error is then not recorded
+        bool current_closed_by_wait;
+        #! Serializes stop_flag and current between wait() and the server thread
+        Mutex m();
         #! Error from server thread
         *string server_error;
         #! If True, advertise and accept APOP authentication
@@ -52,8 +58,20 @@ class MockPop3Server {
     }
 
     #! Stops the accept loop and waits for the server thread to exit
+    /** The session being served is closed: a client that never sends QUIT (for example one that is still connected
+        when the test ends) would otherwise keep the server reading until its idle-read timeout; closing the listener
+        wakes the accept loop
+    */
     wait(timeout to = 30s) {
-        stop_flag = True;
+        {
+            AutoLock al(m);
+            stop_flag = True;
+            if (current) {
+                current_closed_by_wait = True;
+                current.close();
+            }
+        }
+        listener.close();
         done.waitForZero(to);
     }
 
@@ -75,26 +93,45 @@ class MockPop3Server {
         land in it), and a client whose session ended may reconnect.  With a single
         accept the acceptor was gone in both cases, and the client then blocked until
         its own connect timeout — surfacing as an unrelated SOCKET-TIMEOUT far from
-        here.
+        here.  wait() closes the listener, which ends the accept.
     */
     private acceptAndServe() {
         on_exit done.dec();
         while (!stopping()) {
-            *Socket client;
+            Socket client;
             try {
-                # short accept timeout so wait() is noticed promptly
-                client = listener.accept(250ms);
+                client = listener.accept();
             } catch (hash<ExceptionInfo> ex) {
-                recordServerError(ex);
+                # wait() closes the listener to stop the loop
+                if (!stopping()) {
+                    recordServerError(ex);
+                }
                 break;
             }
-            if (!client) {
-                continue;
+            {
+                AutoLock al(m);
+                if (stop_flag) {
+                    client.close();
+                    break;
+                }
+                current = client;
             }
+            *hash<ExceptionInfo> session_error;
             try {
                 serveClient(client);
             } catch (hash<ExceptionInfo> ex) {
-                recordServerError(ex);
+                session_error = ex;
+            }
+            bool closed_by_wait;
+            {
+                AutoLock al(m);
+                remove current;
+                closed_by_wait = current_closed_by_wait;
+                current_closed_by_wait = False;
+            }
+            # an error caused by wait() closing the session is not recorded; any other error is
+            if (session_error && !closed_by_wait) {
+                recordServerError(session_error);
             }
             try {
                 client.close();
@@ -105,6 +142,7 @@ class MockPop3Server {
 
     #! Returns True once wait() has asked the accept loop to stop
     private bool stopping() {
+        AutoLock al(m);
         return stop_flag;
     }
 

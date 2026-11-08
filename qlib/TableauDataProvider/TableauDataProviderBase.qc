@@ -247,13 +247,21 @@ public class TableauDataProviderBase inherits DataProvider::AbstractDataProvider
     }
 
     #! Checks if a request should be retried
+    /** A transport error in @ref TableauDataProvider::RetrySet "RetrySet" is retried up to
+        @ref TableauDataProvider::MaxRetries "MaxRetries" times after 2, 4 and 8 units of the
+        @ref DataProvider::DataProviderRetryUtil::getTransportRetryDelayUnit() "transport retry delay" (seconds by
+        default), unless the name of the server cannot be resolved; a rate-limited request is retried after the time
+        given by the server's \c Retry-After header if it is from 1 to 60 seconds, and after 5 seconds otherwise
+        (see @ref waitForRateLimit()).  Nothing is retried while
+        @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed".
+    */
     private bool retryRequest(hash<ExceptionInfo> ex, reference<int> retries) {
-        if (retries >= MaxRetries) {
+        if (retries >= MaxRetries || DataProviderRetryUtil::retriesSuppressed()) {
             return False;
         }
-        if (RetrySet{ex.err}) {
+        if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet)) {
             ++retries;
-            sleep(pow(2, retries) * 1000ms);
+            DataProviderRetryUtil::waitTransportRetry(pow(2, retries));
             return True;
         }
         if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 429) {
@@ -263,10 +271,21 @@ public class TableauDataProviderBase inherits DataProvider::AbstractDataProvider
             if (wait_secs < 1 || wait_secs > 60) {
                 wait_secs = 5;
             }
-            sleep(wait_secs * 1000ms);
+            waitForRateLimit(seconds(wait_secs));
             return True;
         }
         return False;
+    }
+
+    #! Waits before a rate-limited request is made again
+    /** Called by @ref retryRequest() after a rate-limited response (HTTP 429) before the request is made again; not
+        called while @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed".  A
+        subclass can override it, for example a test that records the waits instead of waiting.
+
+        @param delay the time to wait
+    */
+    private waitForRateLimit(date delay) {
+        usleep(delay);
     }
 
     #! Builds a query string from a hash of parameters

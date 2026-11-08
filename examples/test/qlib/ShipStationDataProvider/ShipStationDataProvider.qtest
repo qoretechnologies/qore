@@ -137,6 +137,7 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
         addTestCase("url option tests", \urlOptionTests());
         addTestCase("connection url tests", \connectionUrlTests());
         addTestCase("sync client rate limit", \syncClientRateLimitTest());
+        addTestCase("example data rate limit", \exampleDataRateLimitTest());
         addTestCase("action catalog tests", \actionCatalogTests());
 
         # Integration tests (require SHIPSTATION_API_KEY and SHIPSTATION_API_SECRET)
@@ -1993,6 +1994,53 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
         resp = rest.doRequest("GET", "carriers", NOTHING, \info);
         assertEq(200, info."response-code");
         assertEq(2, handler.requests.size());
+    }
+
+    #! A rate-limited request for example data is not retried, and the fake example data is returned
+    exampleDataRateLimitTest() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        FakeShipStationHandler handler();
+        server.setHandler("shipstation", "", NOTHING, handler);
+        server.setDefaultHandler("shipstation", handler);
+        string url = "http://localhost:" + port;
+        hash<auto> opts = {"api_key": "test-key", "api_secret": "test-secret", "url": url};
+
+        # the example event data is requested once
+        ShipStationDataProvider::ShipStationOrderNotifyEventDataProvider watch(
+            new ShipStationRestClient::ShipStationRestClientIo(opts), {});
+        handler.rate_limited = ({"Retry-After": "1"}, {"Retry-After": "1"});
+        auto example = watch.getExampleEventData("order-notify");
+        assertEq("TEST-001", example.orderNumber);
+        assertEq(1, handler.requests.size());
+        assertRegex("^orders\\?", handler.requests[0].path);
+
+        # the synchronous client does not retry while retries are suppressed, whether error responses are raised or
+        # passed through
+        foreach bool passthru in ((False, True)) {
+            ShipStationRestClient::ShipStationRestClient rest(opts + {"error_passthru": passthru}, True);
+            handler.requests = ();
+            handler.rate_limited = ({"Retry-After": "1"}, {"Retry-After": "1"});
+            hash<auto> info;
+            *hash<ExceptionInfo> ex = DataProviderRetryUtil::runWithoutRetries(*hash<ExceptionInfo> sub () {
+                try {
+                    rest.doRequest("GET", "carriers", NOTHING, \info);
+                } catch (hash<ExceptionInfo> ex) {
+                    return ex;
+                }
+            });
+            if (passthru) {
+                assertNothing(ex);
+                assertEq(429, info."response-code");
+            } else {
+                assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+                assertEq(429, ex.arg.status_code);
+            }
+            assertEq(1, handler.requests.size(), passthru.toString());
+        }
     }
 
     #! An explicit url option is honored, and copyWithUrl() keeps the credentials

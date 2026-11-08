@@ -15,6 +15,7 @@
 %requires WebSocketClient
 %requires DiscordWebSocketClient
 %requires DiscordDataProvider
+%requires HttpServer
 
 %requires json
 
@@ -38,6 +39,7 @@ public class Main inherits QUnit::Test {
         addTestCase("action data dependent options", \testActionDataDependentOptions());
         addTestCase("rest command error formatting", \testRestCommandErrorFormatting());
         addTestCase("rate limit", \testRateLimit());
+        addTestCase("rate limit with retries suppressed", \testRateLimitSuppressed());
         addTestCase("synchronous client", \testSyncClient());
 
         try {
@@ -146,6 +148,40 @@ public class Main inherits QUnit::Test {
         assertEq(2, rest.requests);
     }
 
+    #! A rate-limited request is not retried while retries are suppressed, as while example data is built
+    testRateLimitSuppressed() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        RateLimitedGuildsHandler handler();
+        server.setHandler("discord", "", NOTHING, handler);
+        server.setDefaultHandler("discord", handler);
+
+        DiscordGuildsDataProvider prov(new DiscordRestClientIo(TestClientOptions
+            + {"url": "http://127.0.0.1:" + port}));
+        # the server is asked once, and the rate-limited response is raised
+        handler.rate_limited = 2;
+        hash<ExceptionInfo> ex = DataProviderRetryUtil::runWithoutRetries(hash<ExceptionInfo> sub () {
+            try {
+                prov.getChildProviderNames();
+            } catch (hash<ExceptionInfo> ex) {
+                return ex;
+            }
+            throw "TEST-ERROR", "no exception";
+        });
+        assertEq("REST-RESPONSE-ERROR", ex.err);
+        assertEq(429, ex.arg.status_code);
+        assertEq(1, handler.requests);
+
+        # otherwise the request is repeated until it is no longer rate-limited
+        handler.requests = 0;
+        handler.rate_limited = 2;
+        assertEq(("1",), (select prov.getChildProviderNames(), $1 != AbstractDataProvider::GenericApiCallChildName));
+        assertEq(3, handler.requests);
+    }
+
     #! A synchronous client is converted to an asynchronous client
     testSyncClient() {
         DiscordRestClient sync_rest(TestClientOptions, True);
@@ -240,6 +276,37 @@ class MockStatusOnlyRest inherits DiscordRestClientIo {
             "status_code": 400,
             "headers": {"content-type": "application/json"},
             "body": {"message": "bad request"},
+        };
+    }
+}
+
+#! A local Discord API server that rate-limits the given number of requests, with a reset time that has passed
+class RateLimitedGuildsHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the number of requests received
+        int requests = 0;
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited = 0;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        ++requests;
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {
+                    "Content-Type": MimeTypeJson,
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": sprintf("%d", now().getEpochSeconds() - 1),
+                },
+                "body": make_json({"message": "You are being rate limited.", "retry_after": 0}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json(({"id": "1", "name": "guild-1"},)),
         };
     }
 }

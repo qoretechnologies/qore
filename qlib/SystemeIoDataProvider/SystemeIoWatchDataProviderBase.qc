@@ -92,7 +92,10 @@ public class SystemeIoWatchDataProviderBase inherits SystemeIoDataProviderBase,
     #! Returns example event data for documentation/testing
     private auto getExampleEventDataImpl(string event_id) {
         try {
-            list<hash<auto>> records = fetchRecords(last_check);
+            # the example data is requested once, without retries
+            list<hash<auto>> records = DataProviderRetryUtil::runWithoutRetries(list<hash<auto>> sub () {
+                return fetchRecords(last_check);
+            });
             if (records) {
                 return records[0];
             }

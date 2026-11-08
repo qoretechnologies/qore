@@ -6,7 +6,30 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires ../../../../qlib/RestClientIo.qm
 %requires ../../../../qlib/QUnit.qm
+%requires HttpServer
+%requires Logger
+%requires ../../ClosingTestServer.qm
 %exec-class RestRetryPolicyTest
+
+#! A local server that counts requests and answers each of them with the same status
+class CountingStatusHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the number of requests received
+        int requests = 0;
+        #! the status code of every response
+        int status = 503;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        ++requests;
+        return <HttpResponseInfo>{
+            "code": status,
+            # a rate-limited request may be repeated at once
+            "hdr": {"Content-Type": MimeTypeText, "Retry-After": "0"},
+            "body": "busy",
+        };
+    }
+}
 
 #! the wall clock of ControlledRetryPolicy: a whole second, so an HTTP date a few seconds later is exact
 const ControlledWallClock = 2026-10-16T12:00:00Z;
@@ -63,6 +86,9 @@ class RestRetryPolicyTest inherits QUnit::Test {
         addTestCase("observers are isolated", \testObserver());
         addTestCase("invalid options rejected", \testInvalid());
         addTestCase("cancellation interrupts backoff", \testCancel());
+        addTestCase("suppressed retries fail once", \testSuppressed());
+        addTestCase("suppressed retries send one request", \testSuppressedServer());
+        addTestCase("suppressed retries connect once", \testSuppressedConnect());
         set_return_value(main());
     }
 
@@ -294,5 +320,168 @@ class RestRetryPolicyTest inherits QUnit::Test {
         cancel_thread(tid);
         assertEq("THREAD-CANCELLED", done.recv(2s));
         assertLt(1000000, clock_get_monotonic_us() - started);
+    }
+
+    #! No error is retried while a data provider builds example data in this thread
+    testSuppressed() {
+        list<hash<auto>> errors = (
+            {"err": "REST-RESPONSE-ERROR", "arg": {"status_code": 429, "headers": {"Retry-After": "0"}}},
+            {"err": "REST-RESPONSE-ERROR", "arg": {"status_code": 503}},
+            {"err": "HTTPCLIENT-CONNECT-ERROR", "arg": {}},
+            {"err": "HTTPCLIENT-TIMEOUT", "arg": {}},
+        );
+        foreach hash<auto> error in (errors) {
+            string label = sprintf("%s %y", error.err, error.arg.status_code);
+            ControlledRetryPolicy policy();
+            int calls = 0;
+            hash<ExceptionInfo> ex = DataProviderRetryUtil::runWithoutRetries(hash<ExceptionInfo> sub () {
+                return failure(policy, hash<auto> sub (int timeout_ms) {
+                    ++calls;
+                    throw error.err, "temporary", error.arg;
+                });
+            });
+            assertEq(error.err, ex.err, label);
+            assertEq(1, ex.arg.attempts, label);
+            assertEq(1, calls, label);
+            assertEq((), policy.delays, label);
+
+            # the suppression ends with runWithoutRetries(), and the same error is retried again
+            assertFalse(DataProviderRetryUtil::retriesSuppressed(), label);
+            policy = new ControlledRetryPolicy();
+            calls = 0;
+            hash<auto> response = policy.execute(hash<auto> sub (int timeout_ms) {
+                if (++calls == 1) {
+                    throw error.err, "temporary", error.arg;
+                }
+                return {"ok": True};
+            });
+            assertTrue(response.ok, label);
+            assertEq(2, calls, label);
+        }
+
+        # the suppression applies only to the thread that runs runWithoutRetries()
+        Channel suppressed(1);
+        Channel done(1);
+        background sub () {
+            try {
+                DataProviderRetryUtil::runWithoutRetries(sub () {
+                    suppressed.send(True);
+                    done.recv(5s);
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                suppressed.send(ex.err);
+            }
+        }();
+        on_exit done.send(True);
+        assertEq(True, suppressed.recv(5s));
+        ControlledRetryPolicy policy();
+        int calls = 0;
+        policy.execute(hash<auto> sub (int timeout_ms) {
+            if (++calls == 1) {
+                throw "REST-RESPONSE-ERROR", "busy", {"status_code": 503};
+            }
+            return {};
+        });
+        assertEq(2, calls);
+    }
+
+    #! A request sent with a retry policy reaches the server once while retries are suppressed
+    testSuppressedServer() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        CountingStatusHandler handler();
+        server.setHandler("status", "", NOTHING, handler);
+        server.setDefaultHandler("status", handler);
+
+        RestClientIo rest({"url": "http://127.0.0.1:" + port, "data": "json"});
+        foreach int status in ((429, 503)) {
+            handler.status = status;
+
+            # a rate-limited or unavailable server is asked once while example data is built
+            handler.requests = 0;
+            hash<ExceptionInfo> ex = DataProviderRetryUtil::runWithoutRetries(hash<ExceptionInfo> sub () {
+                try {
+                    rest.restDoRequestWithRetry("GET", "/items", NOTHING, NOTHING,
+                        new RestRetryPolicy(<RestRetryOptions>{"max_retries": 2, "retry_max_delay": 0}));
+                } catch (hash<ExceptionInfo> ex) {
+                    return ex;
+                }
+                throw "TEST-ERROR", "no exception";
+            });
+            assertEq("REST-RESPONSE-ERROR", ex.err, status.toString());
+            assertEq(status, ex.arg.status_code, status.toString());
+            assertEq(1, ex.arg.attempts, status.toString());
+            assertEq(1, handler.requests, status.toString());
+
+            # and as often as the policy allows otherwise
+            handler.requests = 0;
+            try {
+                rest.restDoRequestWithRetry("GET", "/items", NOTHING, NOTHING,
+                    new RestRetryPolicy(<RestRetryOptions>{"max_retries": 2, "retry_max_delay": 0}));
+                fail("no exception");
+            } catch (hash<ExceptionInfo> ex1) {
+                assertEq("REST-RESPONSE-ERROR", ex1.err, status.toString());
+                assertEq(3, ex1.arg.attempts, status.toString());
+            }
+            assertEq(3, handler.requests, status.toString());
+        }
+    }
+
+    #! A connection that fails is attempted once with a retry policy while retries are suppressed
+    /** The server holds its port and closes each connection, so the TLS handshake of each attempt fails at once
+        and the same way every time (see ClosingTestServer)
+    */
+    testSuppressedConnect() {
+        ClosingTestServer server();
+        on_exit server.stop();
+        RestClientIo rest({
+            "url": sprintf("https://127.0.0.1:%d", server.getPort()),
+            "data": "json",
+            # HTTP/3 is not raced over UDP against the port
+            "protocol": "h1",
+        });
+
+        list<hash<RestRetryEvent>> events = ();
+        RestRetryPolicy policy(<RestRetryOptions>{
+            "max_retries": 2,
+            "retry_max_delay": 0,
+            "retry_callback": sub (hash<RestRetryEvent> event) { push events, event; },
+        });
+        hash<ExceptionInfo> ex = DataProviderRetryUtil::runWithoutRetries(hash<ExceptionInfo> sub () {
+            try {
+                rest.restDoRequestWithRetry("GET", "/items", NOTHING, NOTHING, policy);
+            } catch (hash<ExceptionInfo> ex) {
+                return ex;
+            }
+            throw "TEST-ERROR", "no exception";
+        });
+        assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err);
+        assertEq(1, ex.arg.attempts);
+        assertEq((), events);
+        # the connections of the one attempt reached the server
+        int attempt_connections = server.getConnections();
+        assertGt(0, attempt_connections);
+
+        # the failed connection is retried otherwise
+        policy = new RestRetryPolicy(<RestRetryOptions>{
+            "max_retries": 2,
+            "retry_max_delay": 0,
+            "retry_callback": sub (hash<RestRetryEvent> event) { push events, event; },
+        });
+        try {
+            rest.restDoRequestWithRetry("GET", "/items", NOTHING, NOTHING, policy);
+            fail("no exception");
+        } catch (hash<ExceptionInfo> ex1) {
+            assertEq("HTTPCLIENT-CONNECT-ERROR", ex1.err);
+            assertEq(3, ex1.arg.attempts);
+        }
+        assertEq((1, 2), map $1.attempt, events);
+        assertEq(("HTTPCLIENT-CONNECT-ERROR", "HTTPCLIENT-CONNECT-ERROR"), map $1.err, events);
+        # each of the three attempts connected as often as the one attempt made with retries suppressed: the server
+        # has counted the connections of four attempts in all
+        assertEq(attempt_connections * 4, server.getConnections());
     }
 }

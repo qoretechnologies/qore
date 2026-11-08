@@ -1,0 +1,236 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file MysqlTestIsolation.qm gives each run of a MySQL/MariaDB test its own database
+
+/*  MysqlTestIsolation.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires Util
+%requires ./TestRunIsolation.qm
+
+module MysqlTestIsolation {
+    version = "1.0";
+    desc = "gives each run of a MySQL/MariaDB test its own database";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+/** @mainpage MysqlTestIsolation Module
+
+    @section mysqltestisolationintro Introduction
+
+    Tests that use a shared MySQL or MariaDB database must not share their tables, views, sequences, indexes,
+    triggers or routines with another test that runs at the same time (run_tests.sh runs tests in parallel), nor
+    list objects that another test creates.  In MySQL a schema is a database, so
+    @ref MysqlTestIsolation::MysqlRunDatabase::getConnectionString() "MysqlRunDatabase::getConnectionString()"
+    creates a database for the run on the test's server and returns the datasource string of the test's database
+    with the run's database in its place: every object that the test creates without a database name is created in
+    the run's database, whatever its name, and listings of the current database are only of the run's objects.
+
+    @ref MysqlTestIsolation::MysqlRunDatabase::teardown() "MysqlRunDatabase::teardown()" drops the database with
+    everything in it; it is also dropped when the program ends without calling it.  A run that is killed leaves its
+    database behind, so each run drops the databases of runs that are at least
+    @ref TestRunIsolation::TestRun::LeftoverAge "TestRun::LeftoverAge" old, whatever their host, as does
+    @ref MysqlTestIsolation::MysqlRunDatabase::dropLeftovers() "MysqlRunDatabase::dropLeftovers()" for a CI job.
+
+    A database is named as @ref TestRunIsolation::TestRun::makeName() "TestRun::makeName()" names it, so no two runs
+    have the same one; its creation fails if it exists.  The test's user must be allowed to create and drop databases
+    (the CI jobs connect as root).
+
+    @par Example:
+    @code{.py}
+%requires ./MysqlTestIsolation.qm
+
+*string connstr = MysqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_MYSQL, "MysqlSqlUtil");
+# ... run the tests with connstr ...
+MysqlRunDatabase::teardown();
+    @endcode
+*/
+
+#! Contains the definitions of the MysqlTestIsolation module
+public namespace MysqlTestIsolation {
+#! Holds the run's database on a server and the connection that created it, and drops it when it is destroyed
+class MysqlRunDatabaseGuard {
+    private {
+        #! The connection that created the database
+        Datasource ds;
+
+        #! The name of the database; no value once it is dropped
+        *string name;
+    }
+
+    constructor(Datasource ds, string name) {
+        self.ds = ds;
+        self.name = name;
+    }
+
+    destructor() {
+        drop();
+    }
+
+    #! Drops the database with everything in it, unless it is already dropped
+    drop() {
+        if (!name) {
+            return;
+        }
+        string db = remove name;
+        ds.exec("drop database if exists `" + db + "`");
+        ds.commit();
+    }
+}
+
+#! The database of this run of a MySQL/MariaDB test
+public class MysqlRunDatabase {
+
+    private {
+        #! The name of the run's database, once it is created
+        static *string name;
+
+        #! The run's database on each server, keyed by the datasource string that the test gave
+        static hash<string, MysqlRunDatabaseGuard> guards;
+
+        #! The datasource strings of the run's database, keyed by the datasource string that the test gave
+        static hash<string, string> connstrs;
+
+        #! Serializes setup and teardown
+        static Mutex lck();
+    }
+
+    #! Returns the datasource string of the run's database on the server of the given datasource string
+    /** The first call for a server creates the run's database there; a later call returns the same datasource
+        string.
+
+        @param connstr the datasource string of the test's database; returned as it is when it is not set or not for
+        the \c mysql driver
+        @param suite the name of the test, used in the name of the database
+
+        @return the datasource string of the run's database: the given one with the run's database in place of its
+        database; the given one if it is not for the \c mysql driver; no value if none is given
+    */
+    static *string getConnectionString(*string connstr, string suite) {
+        try {
+            return MysqlRunDatabase::getConnectionStringIntern(connstr, suite);
+        } catch (hash<ExceptionInfo> ex) {
+            # a message about a datasource string, such as DATASOURCE-PARSE-ERROR's, quotes it with its password
+            throw ex.err, TestRun::maskSecrets(ex.desc ?? "", connstr), ex.arg.typeCode() == NT_STRING
+                ? TestRun::maskSecrets(ex.arg, connstr) : ex.arg;
+        }
+    }
+
+    #! Returns the datasource string of the run's database or schema (see getConnectionString())
+    private static *string getConnectionStringIntern(*string connstr, string suite) {
+        if (!connstr) {
+            return connstr;
+        }
+        hash<auto> config = parse_datasource(connstr);
+        if (config.type != "mysql") {
+            return connstr;
+        }
+        lck.lock();
+        on_exit lck.unlock();
+        if (connstrs{connstr}) {
+            return connstrs{connstr};
+        }
+        # a datasource string that this function returned is the run's already
+        if (inlist(connstr, connstrs.values())) {
+            return connstr;
+        }
+
+        Datasource ds(connstr);
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            # a server that cannot be reached: the test finds it so when it connects, and reports or skips it
+            return connstr;
+        }
+        MysqlRunDatabase::dropLeftoversIntern(ds);
+
+        string db = name ?? TestRun::makeName(suite);
+        # a database of the run's name is never shared: its creation fails if it exists
+        ds.exec("create database `" + db + "`");
+        ds.commit();
+        name = db;
+        guards{connstr} = new MysqlRunDatabaseGuard(ds, db);
+        config.db = db;
+        return connstrs{connstr} = make_datasource_string(config);
+    }
+
+    #! Returns the name of the run's database, or @ref nothing if none was created
+    static *string getName() {
+        return name;
+    }
+
+    #! Drops the run's database on every server it was created on, with everything in it
+    /** Call this at the end of the test, after its connections are closed; nothing is done if no database was
+        created
+    */
+    static teardown() {
+        hash<string, MysqlRunDatabaseGuard> old_guards;
+        {
+            lck.lock();
+            on_exit lck.unlock();
+            if (!name) {
+                return;
+            }
+            old_guards = remove guards;
+            remove connstrs;
+            remove name;
+        }
+        map $1.drop(), old_guards.iterator();
+    }
+
+    #! Drops the databases left by test runs on the server of the given datasource string (see TestRun::isLeftover())
+    /** For a CI job's cleanup: a run that is killed leaves its database behind
+
+        @return the names of the databases dropped
+    */
+    static list<string> dropLeftovers(string connstr) {
+        Datasource ds(connstr);
+        return MysqlRunDatabase::dropLeftoversIntern(ds);
+    }
+
+    #! Drops the databases left by test runs that are at least TestRun::LeftoverAge old, whatever their host
+    private static list<string> dropLeftoversIntern(Datasource ds) {
+        list<string> rv = ();
+        # a database that a live run (one that runs longer than its name's age tells) holds a lock of is not waited
+        # for longer than this: it is dropped by a later run
+        ds.exec("set session lock_wait_timeout = 5");
+        *list<string> dbs = ds.select("select schema_name as name from information_schema.schemata "
+            "where schema_name like %v", TestRun::Prefix + "%").name;
+        foreach string db in (dbs) {
+            if (!TestRun::isLeftover(db)) {
+                continue;
+            }
+            # another run may drop the same leftover at the same time: one that cannot be dropped now is left for a
+            # later run
+            try {
+                ds.exec("drop database if exists `" + db + "`");
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+                ds.rollback();
+                continue;
+            }
+            rv += db;
+        }
+        return rv;
+    }
+}
+}
