@@ -827,6 +827,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             # TLS listeners not available: the HTTP/2 and HTTP/3 cases are skipped
         }
 
+        addTestCase("Discord: a heartbeat that reconnects on its own thread is not detached",
+            \discordInlineReconnectNotDetachedTest());
         addTestCase("a canceled HTTP/2 WebSocket handshake does not fall back to HTTP/1.1",
             \destroyDuringTunnelHandshakeTest());
         addTestCase("the destructor ends a connect in its TLS handshake", \destroyDuringTlsHandshakeTest());
@@ -2082,6 +2084,30 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertTrue(ctx.wsc.isOpen(), "the connection is open");
         checkCurrentConnection(ctx, 0);
     }
+    #! When the forced reconnect's thread cannot be started, the heartbeat thread reconnects itself and stops its own
+    #! record: the record is not detached (only a destructor running on the heartbeat thread detaches it)
+    discordInlineReconnectNotDetachedTest() {
+        FailingStarter starter();
+        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger,
+            "start_thread": \starter.start()});
+        on_exit {
+            d.releaseAll();
+            delete d;
+        }
+        d.connect();
+        d.force_zombie = True;
+        # the heartbeat thread starts; the next start (the forced reconnect's thread) fails
+        starter.ok_starts = 1;
+        d.startHeartbeatForTest(100);
+        assertEq("hb-started:" + d.getCurrentConnectionId(), d.events.get(LifecycleWsClient::HandoffTimeout));
+        DiscordHeartbeat rec = d.hbRecordForTest();
+        # the heartbeat thread finds the zombie, reconnects on its own thread and ends
+        rec.running.waitForZero(LifecycleWsClient::HandoffTimeout);
+        assertTrue(rec.ended, "the heartbeat thread ended");
+        assertFalse(rec.detached, "a heartbeat thread that stops its own record outside of the destructor is not "
+            "detached");
+    }
+
     #! The client is destroyed while its HTTP/2 extended CONNECT is not answered: the canceled handshake is not taken
     #! for a server that cannot tunnel WebSocket, so no HTTP/1.1 Upgrade request is made
     destroyDuringTunnelHandshakeTest() {
@@ -3349,6 +3375,12 @@ class HbDiscord inherits DiscordWebSocketClient {
         q.push("threads-done");
     }
 
+    #! returns the current heartbeat record
+    DiscordHeartbeat hbRecordForTest() {
+        AutoLock al(heartbeat_lock);
+        return hb;
+    }
+
     #! starts a heartbeat for the current connection without a HELLO (so no delivery task is involved)
     startHeartbeatForTest(int interval) {
         AutoLock al(heartbeat_lock);
@@ -3771,5 +3803,23 @@ class TestThreads {
     #! records an exception that ended a thread
     static report(hash<ExceptionInfo> ex) {
         TestThreads::errors.push(get_exception_string(ex));
+    }
+}
+
+#! A start_thread hook whose starts fail once it is told to fail
+class FailingStarter {
+    public {
+        #! the number of starts that succeed before the starts fail; -1: none fails
+        int ok_starts = -1;
+    }
+
+    int start(code c) {
+        if (!ok_starts) {
+            throw "TEST-START-ERROR", "the thread cannot be started";
+        }
+        if (ok_starts > 0) {
+            --ok_starts;
+        }
+        return background TestThreads::run(c);
     }
 }

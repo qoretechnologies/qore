@@ -473,6 +473,11 @@ public class DiscordWebSocketClient inherits WebSocketClientWithSerialization {
         */
         *DiscordHeartbeat hb;
 
+        #! Set when the destructor starts
+        /** @since DiscordWebSocketClient 1.2
+        */
+        bool in_destructor = False;
+
         #! The sequence number of the last heartbeat record; protected by @ref heartbeat_lock
         /** @since DiscordWebSocketClient 1.2
         */
@@ -585,6 +590,8 @@ DiscordWebSocketClient ws();
 
     #! Deletes the object
     destructor() {
+        # the heartbeat thread, if it runs this destructor, is detached when it is stopped (see stopHeartbeatThread())
+        in_destructor = True;
         # cancel watchdogs before teardown so a pending timer cannot
         # fire on an already-deleted object
         cancelHelloWatchdog();
@@ -1380,8 +1387,10 @@ hash<auto> h = ws.getInfo();
             }
         }
         if (h.tid == gettid()) {
-            # detached: nobody waits for this thread (it may run the destructor, which waits for other threads)
-            stopHeartbeatRecord(h, True);
+            # detached only when the destructor runs on this thread, which waits for the other threads of the client:
+            # nobody may wait for this one then; otherwise (e.g. the zombie-reconnect fallback, which reconnects on
+            # this thread) the thread ends as usual once it returns to its loop
+            stopHeartbeatRecord(h, in_destructor);
             return True;
         }
         stopHeartbeatRecord(h);
