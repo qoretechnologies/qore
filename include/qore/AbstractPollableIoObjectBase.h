@@ -51,7 +51,7 @@
 class MyConnection : public AbstractPollableIoObjectBase {
 public:
     int getPollableDescriptor() const override {
-        return socket.getSocket();
+        return socket.getDescriptorForLibrary();
     }
 
     int holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const override {

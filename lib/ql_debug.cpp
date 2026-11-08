@@ -5251,7 +5251,7 @@ private:
                 return Drive::Connected;
             }
             std::vector<struct pollfd> fds;
-            int sock = client.getSocket();
+            int sock = client.getDescriptor();
             if (sock >= 0) {
                 fds.push_back({sock, static_cast<short>(((rc & SOCK_POLLIN) ? POLLIN : 0)
                     | ((rc & SOCK_POLLOUT) ? POLLOUT : 0)), 0});
@@ -5850,7 +5850,7 @@ public:
             return;
         }
         // the connection stays in the listener's backlog: the peer never sends or closes
-        const int fd = client->getSocket();
+        const int fd = client->getPollableDescriptor();
 
         // a receive on the client socket waits for data, so its descriptor is registered in the event loop
         client->ref();
@@ -6028,7 +6028,7 @@ public:
             xsink.clear();
             return;
         }
-        const int fd = listener.getSocket();
+        const int fd = listener.getDescriptor();
         std::shared_ptr<void> hold;
         UT_ASSERT_EQ(c, -1, listener.holdDescriptor(fd + 1000, hold), "another descriptor is not held");
         UT_ASSERT(c, !hold, "no hold is given for another descriptor");
@@ -6036,7 +6036,7 @@ public:
         UT_ASSERT(c, hold != nullptr, "the hold is given");
 
         listener.close();
-        UT_ASSERT(c, listener.getSocket() == QORE_INVALID_SOCKET, "the socket has no descriptor after the close");
+        UT_ASSERT(c, listener.getDescriptor() == QORE_INVALID_SOCKET, "the socket has no descriptor after the close");
         UT_ASSERT(c, fcntl(fd, F_GETFD) != -1, "the held descriptor stays open after the close");
         std::shared_ptr<void> hold2;
         UT_ASSERT_EQ(c, -1, listener.holdDescriptor(fd, hold2), "a closed socket's descriptor is not held again");
@@ -6209,7 +6209,7 @@ public:
             if (rc || xsink) {
                 return;
             }
-            holder_peer = ::accept(listener.getSocket(), nullptr, nullptr);
+            holder_peer = ::accept(listener.getDescriptor(), nullptr, nullptr);
             UT_ASSERT(c, holder_peer >= 0, "connect failure port holder is accepted");
             if (holder_peer < 0) {
                 return;
@@ -6346,7 +6346,7 @@ public:
             if (rc || xsink) {
                 return;
             }
-            int peer = ::accept(listener->getSocket(), nullptr, nullptr);
+            int peer = ::accept(listener->getPollableDescriptor(), nullptr, nullptr);
             UT_ASSERT(c, peer >= 0, "shared registration peer is accepted");
             if (peer < 0) {
                 return;
@@ -6358,7 +6358,7 @@ public:
                 }
             } peer_closer{peer};
 
-            const int fd = client->getSocket();
+            const int fd = client->getPollableDescriptor();
             ReferenceHolder<QoreObject> other_obj(variant
                 ? new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), new NumberPollable(fd))
                 : qore_socket_dbg_new_controller_pollable(client->priv->socket), &xsink);
@@ -7957,7 +7957,7 @@ private:
             return;
         }
 
-        const int fd = sock->getSocket();
+        const int fd = sock->getPollableDescriptor();
         struct stat orig;
         if (fstat(fd, &orig)) {
             UT_ASSERT(c, false, "fstat() of the listener's descriptor succeeds");
@@ -8055,7 +8055,7 @@ private:
         }
 
         DLLLOCAL virtual int getPollableDescriptor() const override {
-            return socket.getSocket();
+            return socket.getDescriptor();
         }
 
         DLLLOCAL virtual int holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const override {
@@ -13025,7 +13025,7 @@ static void ut_tls_close_full_send_buffer(UnitTestCounters& c) {
         return;
     }
     // the peer does not read: fill the connection's buffers with bytes written past TLS until no more fit
-    int fd = qs.getSocket();
+    int fd = qs.getDescriptor();
     int sndbuf = 4096;
     setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
     char block[16384] = {};

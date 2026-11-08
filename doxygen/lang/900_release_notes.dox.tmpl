@@ -98,11 +98,11 @@
     compiled by an earlier \c qcc that exports one is refused when loaded and must be changed and recompiled.  A
     %Program's <tt>public thread_local</tt> variables are still passed to its child Programs.
 
-    @par Socket::getSocket() Is Removed, and Socket Descriptors Are Non-Blocking
-    \c Socket::getSocket(), which returned the socket's descriptor, is removed: every operation on a socket is made by
-    the async I/O controller, and the descriptor, which is non-blocking from the socket's creation, is the
-    controller's; a poll operation that waits for the socket returns the socket itself in its
-    @ref Qore::SocketPollInfo "SocketPollInfo".
+    @par The Descriptor of a Socket Is Not Available to Qore Code
+    \c Socket::getSocket() is removed and @ref Qore::Socket::getPollableDescriptor() "Socket::getPollableDescriptor()"
+    raises \c SOCKET-DESCRIPTOR-ERROR: every operation on a socket is made by the async I/O controller, which owns
+    its non-blocking descriptor; a poll operation that waits for a socket gives the socket itself
+    (@ref Qore::ExtraPollFdInfo "ExtraPollFdInfo" \c pollable).
 
     @par Final Methods Hold for the Whole Class Hierarchy
     A subclass can no longer bypass a @ref final_methods "final" method with an overload that accepts the same

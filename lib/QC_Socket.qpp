@@ -1938,15 +1938,24 @@ hashdecl Qore::SseMessageInfo {
     string comment;
 }
 
-//! Extra file descriptor to monitor alongside the main socket
-/** Used by poll operations that need to monitor additional fds
-    (e.g., InputStream fds for streaming responses).
+//! Extra file descriptor or pollable object to monitor alongside the main socket
+/** Used by poll operations that need to monitor additional fds (e.g., InputStream fds for streaming responses) or
+    other pollable objects (e.g., the connection of a stream whose main pollable object is an
+    @ref Qore::EventNotifier "EventNotifier").  An entry gives either \c fd or \c pollable.
 
     @since %Qore 3.0
 */
 hashdecl Qore::ExtraPollFdInfo {
-    //! The file descriptor to monitor
-    int fd;
+    //! The file descriptor to monitor; not set when \c pollable is
+    *int fd;
+
+    //! The pollable object to monitor, instead of a descriptor number
+    /** The object's descriptor is read when the operation's poll info is applied, and held open while it is
+        monitored, as for the main pollable object.  With the I/O controller, the object must be a builtin pollable
+        object (such as a @ref Qore::Socket "Socket"), whose descriptor is read without calling %Qore code; an object
+        that has been closed is not monitored.
+    */
+    *Qore::AbstractPollableIoObject pollable;
 
     //! The poll events; see @ref socket_poll_constants
     int events;
@@ -6194,6 +6203,25 @@ sock.shutdownSSL();
 */
 nothing Socket::shutdownSSL() {
     s->shutdownSSL(xsink);
+}
+
+//! The descriptor of a socket is not available to %Qore code
+/** Every operation on a socket is made by the async I/O controller, which owns the socket's descriptor: a read or a
+    write of the descriptor made by other code would take or interleave data under the controller's operations, and
+    the number can be reassigned when the socket is closed or reconnected.  A poll operation that waits for a socket
+    besides its main pollable object gives the socket itself in its poll info
+    (@ref Qore::ExtraPollFdInfo "ExtraPollFdInfo" \c pollable).
+
+    The controller and @ref Qore::Socket::poll() "Socket::poll()" read the descriptor without this method.
+
+    @throw SOCKET-DESCRIPTOR-ERROR always: the descriptor of a socket is not available to %Qore code
+
+    @since %Qore 3.0 this method raises an exception; it returned the descriptor before
+*/
+int Socket::getPollableDescriptor() [flags=RET_VALUE_ONLY] {
+    xsink->raiseException("SOCKET-DESCRIPTOR-ERROR", "the descriptor of a Socket is the async I/O controller's and "
+        "is not available to Qore code; give the Socket itself (ExtraPollFdInfo::pollable) to wait for it");
+    return -1;
 }
 
 //! Returns the port number of the socket for INET sockets

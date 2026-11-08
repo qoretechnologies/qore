@@ -10791,15 +10791,6 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
                 const QoreHashNode* extra_hash = extra_entry.get<const QoreHashNode>();
                 assert(extra_hash);
 
-                bool fd_found;
-                int64 fd64 = extra_hash->getKeyAsBigInt("fd", fd_found);
-                if (!fd_found || fd64 < 0 || fd64 > std::numeric_limits<int>::max()) {
-                    xsink->raiseException("SOCKET-POLL-ERROR",
-                        "element %zu/%zu (starting from 1) has an invalid extra_fds[%zu].fd value",
-                        li.index() + 1, poll_list->size(), extra_li.index());
-                    return nullptr;
-                }
-
                 bool extra_events_found;
                 int64 extra_events64 = extra_hash->getKeyAsBigInt("events", extra_events_found);
                 int extra_events = extra_events_found ? static_cast<int>(extra_events64) : 0;
@@ -10810,6 +10801,45 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
                     xsink->raiseException("SOCKET-POLL-ERROR",
                         "element %zu/%zu (starting from 1) has an invalid extra_fds[%zu].events value; "
                         "neither SOCK_POLLIN nor SOCK_POLLOUT is set",
+                        li.index() + 1, poll_list->size(), extra_li.index());
+                    return nullptr;
+                }
+
+                // an entry that gives a builtin pollable object is polled as the object itself; one implemented in
+                // Qore is polled by the descriptor that its method returns, as for the main object above
+                QoreValue extra_pollable_value = extra_hash->getKeyValue("pollable");
+                if (extra_pollable_value.getType() == NT_OBJECT) {
+                    QoreObject* extra_pollable = const_cast<QoreObject*>(extra_pollable_value.get<const QoreObject>());
+                    if (extra_pollable->getClass()->getClass(CID_ABSTRACTPOLLABLEIOOBJECTBASE)) {
+                        extra_pollable->ref();
+                        cleanup.objects.push_back(extra_pollable);
+                        extra_targets.push_back({extra_pollable, extra_events});
+                        continue;
+                    }
+                    int64 pfd = extra_pollable->evalMethod("getPollableDescriptor", nullptr, xsink).getAsBigInt();
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (pfd < 0 || pfd > std::numeric_limits<int>::max()) {
+                        // the object is not open: nothing to wait for
+                        continue;
+                    }
+                    std::unique_ptr<QoreSocketPollListPollable> pfd_pollable(
+                        new QoreSocketPollListPollable(static_cast<int>(pfd)));
+                    ReferenceHolder<QoreObject> pfd_obj(new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE,
+                        getProgram(), pfd_pollable.get()), xsink);
+                    pfd_pollable.release();
+                    QoreObject* pfd_poll_obj = pfd_obj.release();
+                    cleanup.objects.push_back(pfd_poll_obj);
+                    extra_targets.push_back({pfd_poll_obj, extra_events});
+                    continue;
+                }
+
+                bool fd_found;
+                int64 fd64 = extra_hash->getKeyAsBigInt("fd", fd_found);
+                if (!fd_found || fd64 < 0 || fd64 > std::numeric_limits<int>::max()) {
+                    xsink->raiseException("SOCKET-POLL-ERROR",
+                        "element %zu/%zu (starting from 1) has an invalid extra_fds[%zu].fd value",
                         li.index() + 1, poll_list->size(), extra_li.index());
                     return nullptr;
                 }
@@ -12001,7 +12031,11 @@ int QoreSocket::shutdownSSL(ExceptionSink* xsink) {
     return *xsink ? -1 : 0;
 }
 
-int QoreSocket::getSocket() const {
+int QoreSocket::getDescriptorForLibrary() const {
+    return priv->sock;
+}
+
+int QoreSocket::getDescriptor() const {
     return priv->sock;
 }
 

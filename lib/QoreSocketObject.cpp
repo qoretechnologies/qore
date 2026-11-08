@@ -1013,7 +1013,7 @@ public:
             session->getLocalAddrCopy(local_addr, local_addrlen);
 
             my_socket_priv* priv = my_socket_priv::getPriv(*sock);
-            int fd = priv->socket->getSocket();
+            int fd = priv->socket->getDescriptor();
             int sent = sendQuicPacketsBatch(fd, pkt_batch,
                 reinterpret_cast<const struct sockaddr*>(&peer_addr), peer_addrlen,
                 reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen);
@@ -6132,7 +6132,7 @@ long QoreSocketObject::verifyPeerCertificate(ExceptionSink* xsink) {
 }
 
 int QoreSocketObject::getPollableDescriptor() const {
-    return priv->socket->getSocket();
+    return priv->socket->getDescriptor();
 }
 
 int QoreSocketObject::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const {
@@ -6146,10 +6146,6 @@ int QoreSocketObject::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold
     }
     hold = std::move(h);
     return 0;
-}
-
-int QoreSocketObject::getSocket() {
-    return priv->socket->getSocket();
 }
 
 #ifdef DEBUG

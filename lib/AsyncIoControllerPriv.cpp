@@ -373,6 +373,10 @@ void SocketPollOperationBase::wakeIoThread(ExceptionSink* xsink) {
 // --- SocketPollInfoLender / SocketPollOperationBase::getSocketPollInfoHash ---
 
 //! The poll info hash lent to the C++ continuePoll() call the calling I/O thread is making, if any
+// raises SOCKET-POLL-ERROR for an extra pollable object that the I/O thread cannot read; defined with the code that
+// reads the extra_fds of a poll info
+static int qore_extra_poll_entries_check(const QoreHashNode* poll_info, ExceptionSink* xsink);
+
 static thread_local QoreHashNode* lent_poll_info = nullptr;
 
 SocketPollInfoLender::SocketPollInfoLender(QoreHashNode*& poll_info, ExceptionSink* xsink)
@@ -2071,6 +2075,22 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                                 state.assign(str->c_str(), str->size());
                                 has_state = true;
                             }
+                        }
+                    }
+
+                    // an extra pollable object that the I/O thread cannot read ends the operation here, where the
+                    // exception is the step's (see qore_extra_poll_entries_check())
+                    if (new_poll_info && !ex_hash) {
+                        ExceptionSink check_xsink;
+                        if (qore_extra_poll_entries_check(new_poll_info, &check_xsink)) {
+                            QoreException* ex_obj = check_xsink.getException();
+                            if (ex_obj) {
+                                ex_hash = ex_obj->makeExceptionObject();
+                            }
+                            check_xsink.clear();
+                            new_poll_info->deref(&work_xsink);
+                            new_poll_info = nullptr;
+                            completed = false;
                         }
                     }
 
@@ -8816,15 +8836,63 @@ void AsyncIoControllerPriv::removeExtraFdRegistration(IoThreadContext& t, int fd
     t.extra_fd_holds.erase({op_id, fd});
 }
 
+//! What an entry of a poll info's extra_fds list (ExtraPollFdInfo) gives, if not a descriptor (see qore_extra_poll_entry_fd())
+enum : int {
+    //! a pollable object that has no descriptor: it has been closed
+    QEPE_CLOSED = -1,
+    //! a pollable object that has no builtin pollable private data (implemented in %Qore); refused before the I/O thread
+    //! sees it (qore_extra_poll_entries_check())
+    QEPE_UNSUPPORTED = -2,
+    //! an entry with neither a descriptor nor a pollable object
+    QEPE_NONE = -3,
+};
+
+//! Returns the descriptor of an entry of a poll info's extra_fds list (ExtraPollFdInfo), or a QEPE_* code
+/** An entry gives a descriptor number (\c fd) or a pollable object (\c pollable), whose descriptor is read through
+    its C++ private data, as the descriptor of an operation's own socket is (no Qore code runs on an I/O thread).
+
+    @param h the entry
+    @param pollable_out if not nullptr, receives the entry's pollable object, referenced, when it has a descriptor
+    @param xsink for the release of the object's reference
+*/
+static int qore_extra_poll_entry_fd(const QoreHashNode* h, AbstractPollableIoObjectBase** pollable_out,
+        ExceptionSink* xsink) {
+    if (pollable_out) {
+        *pollable_out = nullptr;
+    }
+    QoreValue pv = h->getKeyValue("pollable");
+    if (pv.getType() == NT_OBJECT) {
+        AbstractPollableIoObjectBase* s = static_cast<AbstractPollableIoObjectBase*>(
+            const_cast<QoreObject*>(pv.get<const QoreObject>())->getReferencedPrivateDataIfExists(
+                CID_ABSTRACTPOLLABLEIOOBJECTBASE));
+        if (!s) {
+            return QEPE_UNSUPPORTED;
+        }
+        int fd = s->getPollableDescriptor();
+        if (pollable_out && fd >= 0) {
+            *pollable_out = s;
+        } else {
+            s->deref(xsink);
+        }
+        return fd >= 0 ? fd : QEPE_CLOSED;
+    }
+    QoreValue fv = h->getKeyValue("fd");
+    if (fv.isNothing()) {
+        return QEPE_NONE;
+    }
+    int fd = (int)fv.getAsBigInt();
+    return fd >= 0 ? fd : QEPE_NONE;
+}
+
 bool AsyncIoControllerPriv::extraFdsChanged(const IoThreadContext& t, uint64_t op_id,
         const QoreHashNode* poll_info) const {
     QoreValue v = poll_info->getKeyValue("extra_fds");
     const QoreListNode* list = v.getType() == NT_LIST ? v.get<const QoreListNode>() : nullptr;
-    size_t new_size = list ? list->size() : 0;
+    size_t list_size = list ? list->size() : 0;
 
     // Fast path for the steady state: this operation wants no extra fds and no operation
     // on this I/O thread has any registered, so there is nothing to reconcile
-    if (!new_size && t.key_extra_fds.empty()) {
+    if (!list_size && t.key_extra_fds.empty()) {
         return false;
     }
 
@@ -8833,30 +8901,48 @@ bool AsyncIoControllerPriv::extraFdsChanged(const IoThreadContext& t, uint64_t o
         ? nullptr
         : &prev_it->second;
 
+    // the entries that have a descriptor, with their events; a closed pollable object is a change (updateExtraFds()
+    // runs the operation again for it), and an entry without a descriptor is not waited for
+    std::vector<std::pair<int, int>> entries;
+    if (list) {
+        // a sink of its own: a reference released here can be the last one of its object
+        ExceptionSink local_xsink;
+        ConstListIterator li(list);
+        while (li.next()) {
+            QoreValue ev = li.getValue();
+            if (ev.getType() != NT_HASH) {
+                // malformed entry; let updateExtraFds() handle it as before
+                return true;
+            }
+            const QoreHashNode* h = ev.get<const QoreHashNode>();
+            int fd = qore_extra_poll_entry_fd(h, nullptr, &local_xsink);
+            local_xsink.clear();
+            if (fd == QEPE_CLOSED) {
+                return true;
+            }
+            if (fd < 0) {
+                continue;
+            }
+            int events = (int)h->getKeyValue("events").getAsBigInt();
+            if (!events) {
+                events = QORE_EV_READ;  // matches updateExtraFds()'s default
+            }
+            entries.emplace_back(fd, events);
+        }
+    }
+
     // Nothing to register now; only a change if something is still registered
-    if (!new_size) {
+    if (entries.empty()) {
         return prev_fds && !prev_fds->empty();
     }
-    if (!prev_fds || prev_fds->size() != new_size) {
+    if (!prev_fds || prev_fds->size() != entries.size()) {
         return true;
     }
 
     // Same count: compare fds and their event masks
-    ConstListIterator li(list);
-    while (li.next()) {
-        QoreValue ev = li.getValue();
-        if (ev.getType() != NT_HASH) {
-            // malformed entry; let updateExtraFds() handle it as before
-            return true;
-        }
-        const QoreHashNode* h = ev.get<const QoreHashNode>();
-        int fd = (int)h->getKeyValue("fd").getAsBigInt();
+    for (auto& [fd, events] : entries) {
         if (!prev_fds->count(fd)) {
             return true;
-        }
-        int events = (int)h->getKeyValue("events").getAsBigInt();
-        if (!events) {
-            events = QORE_EV_READ;  // matches updateExtraFds()'s default
         }
         auto fd_it = t.extra_fd_to_key_events.find(fd);
         if (fd_it == t.extra_fd_to_key_events.end()) {
@@ -8870,10 +8956,54 @@ bool AsyncIoControllerPriv::extraFdsChanged(const IoThreadContext& t, uint64_t o
     return false;
 }
 
+//! Returns -1 and raises SOCKET-POLL-ERROR if an entry of the poll info's extra_fds gives an unsupported pollable object
+/** Called on the thread that ran the operation's step, where the exception ends the operation: the I/O thread, which
+    reads the descriptors of the entries, cannot call the Qore code of a pollable object implemented in %Qore.
+*/
+static int qore_extra_poll_entries_check(const QoreHashNode* poll_info, ExceptionSink* xsink) {
+    QoreValue v = poll_info->getKeyValue("extra_fds");
+    if (v.getType() != NT_LIST) {
+        return 0;
+    }
+    ConstListIterator li(v.get<const QoreListNode>());
+    while (li.next()) {
+        QoreValue ev = li.getValue();
+        if (ev.getType() != NT_HASH) {
+            continue;
+        }
+        QoreValue pv = ev.get<const QoreHashNode>()->getKeyValue("pollable");
+        if (pv.getType() != NT_OBJECT) {
+            continue;
+        }
+        const QoreObject* obj = pv.get<const QoreObject>();
+        if (!obj->getClass()->getClass(CID_ABSTRACTPOLLABLEIOOBJECTBASE)) {
+            xsink->raiseException("SOCKET-POLL-ERROR", "extra_fds[%zu].pollable is an object of class '%s', which "
+                "is not a builtin pollable object (such as a Socket); the async I/O controller reads the descriptor "
+                "of an extra pollable object without calling Qore code", li.index(), obj->getClassName());
+            return -1;
+        }
+    }
+    return 0;
+}
+
 void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
         QoreObject* socket, QoreHashNode* poll_info, ExceptionSink* xsink) {
     // Map fd -> events (from ExtraPollFdInfo)
     std::unordered_map<int, int> new_fd_events;
+    // the pollable objects of the entries that give one, by descriptor (referenced); their descriptors are held with
+    // the objects' own holds while they are registered, as an operation's own socket's descriptor is
+    std::unordered_map<int, AbstractPollableIoObjectBase*> new_fd_pollables;
+    struct PollablesHelper {
+        std::unordered_map<int, AbstractPollableIoObjectBase*>& m;
+        ExceptionSink* xsink;
+        ~PollablesHelper() {
+            for (auto& [fd, s] : m) {
+                s->deref(xsink);
+            }
+        }
+    } pollables_helper{new_fd_pollables, xsink};
+    // true if the operation is run again: an extra pollable object was closed
+    bool wake = false;
 
     // Parse extra_fds from poll_info
     QoreValue v = poll_info->getKeyValue("extra_fds");
@@ -8882,7 +9012,25 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
         ConstListIterator li(list);
         while (li.next()) {
             QoreHashNode* h = li.getValue().get<QoreHashNode>();
-            int fd = (int)h->getKeyValue("fd").getAsBigInt();
+            AbstractPollableIoObjectBase* pollable;
+            int fd = qore_extra_poll_entry_fd(h, &pollable, xsink);
+            if (fd == QEPE_CLOSED) {
+                // a pollable object that has been closed: the operation runs again, as for its main object
+                wake = true;
+                continue;
+            }
+            if (fd < 0) {
+                // nothing to wait for (an unsupported object was refused when the step returned it)
+                continue;
+            }
+            if (pollable) {
+                auto pit = new_fd_pollables.find(fd);
+                if (pit == new_fd_pollables.end()) {
+                    new_fd_pollables[fd] = pollable;
+                } else {
+                    pollable->deref(xsink);
+                }
+            }
             int ev = (int)h->getKeyValue("events").getAsBigInt();
             if (!ev) {
                 ev = QORE_EV_READ;  // Default for backward compatibility
@@ -8925,9 +9073,24 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
         // is taken before the descriptor is registered and released when the registration is removed
         // (removeExtraFdRegistration())
         if (!prev_fds.count(fd)) {
-            std::shared_ptr<void> hold = qore_owned_descriptor_hold(fd);
-            if (hold) {
-                t.extra_fd_holds[{op_id, fd}] = std::move(hold);
+            auto pit = new_fd_pollables.find(fd);
+            if (pit != new_fd_pollables.end()) {
+                // a pollable object's descriptor is held with the object's hold; a hold refused means that the object
+                // was closed after its descriptor was read, so the number is not registered
+                std::shared_ptr<void> hold;
+                if (pit->second->holdPollableDescriptor(fd, hold)) {
+                    failed_fds.push_back(fd);
+                    wake = true;
+                    continue;
+                }
+                if (hold) {
+                    t.extra_fd_holds[{op_id, fd}] = std::move(hold);
+                }
+            } else {
+                std::shared_ptr<void> hold = qore_owned_descriptor_hold(fd);
+                if (hold) {
+                    t.extra_fd_holds[{op_id, fd}] = std::move(hold);
+                }
             }
         }
         t.extra_fd_to_key_events[fd][op_id] = ev_flags;
@@ -8963,6 +9126,17 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
         t.key_extra_fds.erase(op_id);
     } else {
         prev_fds = std::move(new_fds);
+    }
+
+    // an operation that waits for a closed object runs again, as when its main object is closed, so that it sees
+    // the close at once (it must stop waiting for the object, or it runs again at each step)
+    if (wake && socket) {
+        AbstractPollableIoObjectBase* s = static_cast<AbstractPollableIoObjectBase*>(
+            socket->getReferencedPrivateDataIfExists(CID_ABSTRACTPOLLABLEIOOBJECTBASE));
+        if (s) {
+            t.wake_socket_hashes.insert(getSocketHash(s));
+            s->deref(xsink);
+        }
     }
 }
 

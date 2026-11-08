@@ -652,7 +652,7 @@ void Http1ClientPollOperationPriv::startReady(bool protocol_switched, ExceptionS
 
 QoreHashNode* Http1ClientPollOperationPriv::handleReading(ExceptionSink* xsink) {
     ASYNC_IO_TRACE("H1 handleReading: req_state=%d send_state=%d fd=%d\n", (int)req_state.load(),
-        (int)send_state, sock_obj ? sock_obj->getSocket() : -1);
+        (int)send_state, sock_obj ? sock_obj->getPollableDescriptor() : -1);
     // Full-duplex streaming send: drive the chunked request body send side
     // concurrently with the response-receive machine (req_state is a RECV_*
     // state here), so the server can reply while the request body is still
@@ -737,7 +737,7 @@ QoreHashNode* Http1ClientPollOperationPriv::startBufferedFullDuplex(ExceptionSin
     req_state = ReqState::RECV_HEADER;
 
     ASYNC_IO_TRACE("H1 handleSending: request headers sent, buffered body still going -> full-duplex "
-        "(RECV_HEADER + concurrent send) fd=%d\n", sock_obj ? sock_obj->getSocket() : -1);
+        "(RECV_HEADER + concurrent send) fd=%d\n", sock_obj ? sock_obj->getPollableDescriptor() : -1);
     printd(5, "Http1ClientPollOperationPriv::startBufferedFullDuplex() headers sent, reading the response "
         "while the buffered request body is still being sent\n");
     return handleFullDuplex(xsink);
@@ -866,12 +866,12 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
                 // the operation carried the whole rest of the request, so the request body is complete
                 send_state = SendState::DONE;
                 ASYNC_IO_TRACE("H1 driveSendSide: buffered request body sent, request done fd=%d\n",
-                    sock_obj ? sock_obj->getSocket() : -1);
+                    sock_obj ? sock_obj->getPollableDescriptor() : -1);
             } else if (send_final_pending) {
                 send_final_pending = false;
                 send_state = SendState::DONE;
                 ASYNC_IO_TRACE("H1 driveSendSide: final chunk sent, request body done fd=%d\n",
-                    sock_obj ? sock_obj->getSocket() : -1);
+                    sock_obj ? sock_obj->getPollableDescriptor() : -1);
             }
         }
 
@@ -929,7 +929,7 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
             }
             final_chunk->append("\r\n", 2);
             ASYNC_IO_TRACE("H1 driveSendSide: sending final chunk fd=%d\n",
-                sock_obj ? sock_obj->getSocket() : -1);
+                sock_obj ? sock_obj->getPollableDescriptor() : -1);
             sock_obj->ref();
             setSendOp(new SocketSendPollOperation(xsink, final_chunk.release(), sock_obj));
             if (*xsink) {
@@ -944,7 +944,7 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
 
         // Normal chunk: HTTP/1.1 chunked TE frame "<hexsize>\r\n<data>\r\n"
         ASYNC_IO_TRACE("H1 driveSendSide: sending chunk (%lu bytes) fd=%d\n",
-            (unsigned long)chunk->size(), sock_obj ? sock_obj->getSocket() : -1);
+            (unsigned long)chunk->size(), sock_obj ? sock_obj->getPollableDescriptor() : -1);
         SimpleRefHolder<BinaryNode> chunk_data(new BinaryNode());
         QoreString size_line;
         size_line.sprintf("%lx\r\n", (unsigned long)chunk->size());
@@ -1029,7 +1029,7 @@ QoreHashNode* Http1ClientPollOperationPriv::recoverResponseAfterSendFailure(cons
     read_op->setSelf(*self);
 
     ASYNC_IO_TRACE("H1 handleSending: the request send failed (%s: %s) - reading the response the peer may have "
-        "sent fd=%d\n", err.c_str(), desc.c_str(), sock_obj ? sock_obj->getSocket() : -1);
+        "sent fd=%d\n", err.c_str(), desc.c_str(), sock_obj ? sock_obj->getPollableDescriptor() : -1);
 
     // the failed send operation is released, and the request is abandoned (send_state is not DONE, so a response
     // closes the connection)
@@ -1108,7 +1108,7 @@ QoreHashNode* Http1ClientPollOperationPriv::awaitBufferedSend(ExceptionSink* xsi
             // so the rest of the request can never be delivered.  The response in hand is complete and
             // authoritative, so that is what the caller gets rather than the write error it caused.
             ASYNC_IO_TRACE("H1 awaitBufferedSend: peer refused the rest of the request body after "
-                "responding - delivering the response fd=%d\n", sock_obj ? sock_obj->getSocket() : -1);
+                "responding - delivering the response fd=%d\n", sock_obj ? sock_obj->getPollableDescriptor() : -1);
             poll_xsink.clear();
             return abandonBufferedSendAndDeliver(xsink);
         }
@@ -1125,7 +1125,7 @@ QoreHashNode* Http1ClientPollOperationPriv::awaitBufferedSend(ExceptionSink* xsi
         releaseSendOp(xsink);
         send_state = SendState::DONE;
         ASYNC_IO_TRACE("H1 awaitBufferedSend: buffered request body complete, delivering the response "
-            "fd=%d\n", sock_obj ? sock_obj->getSocket() : -1);
+            "fd=%d\n", sock_obj ? sock_obj->getPollableDescriptor() : -1);
     }
     return completeDeferredResponse(xsink);
 }
@@ -1216,7 +1216,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
         // to drain TLS post-handshake records (e.g., TLS 1.3 NewSessionTicket) instead
         // of raw recv(MSG_PEEK) which would see the TLS record header byte (0x17) and
         // never be able to consume it, causing a busy-loop.
-        int fd = sock_obj->getSocket();
+        int fd = sock_obj->getPollableDescriptor();
         if (fd >= 0) {
 #ifdef DEBUG
             if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
@@ -1292,7 +1292,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
 
         // Connection is alive - start sending the request
         ASYNC_IO_TRACE("H1 handleIdle: start send (%lu bytes) fd=%d streaming_send=%d\n",
-            (unsigned long)req_data->size(), sock_obj ? sock_obj->getSocket() : -1,
+            (unsigned long)req_data->size(), sock_obj ? sock_obj->getPollableDescriptor() : -1,
             (int)is_streaming_send);
         releaseCurrentOp(xsink);
         sock_obj->ref();
@@ -1324,7 +1324,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     // If the event loop fires POLLIN on an idle connection (server FIN),
     // continuePoll() will be called and we'll reach this point again with
     // no pending request.  Use the async-poll idle-data helper, which is TLS-aware.
-    int fd = sock_obj->getSocket();
+    int fd = sock_obj->getPollableDescriptor();
     if (fd >= 0) {
         ExceptionSink idle_xsink;
         int idle_rc = sock_obj->checkIdleDataForAsyncPoll(&idle_xsink);
@@ -1437,7 +1437,7 @@ QoreHashNode* Http1ClientPollOperationPriv::armIdleDeadline(QoreHashNode* poll_i
     if (idle_deadline_us == 0) {
         idle_deadline_us = now_us + idle_timeout_us;
         ASYNC_IO_TRACE("H1 armIdleDeadline: arming now+%lldus fd=%d\n",
-            (long long)idle_timeout_us, sock_obj ? sock_obj->getSocket() : -1);
+            (long long)idle_timeout_us, sock_obj ? sock_obj->getPollableDescriptor() : -1);
     }
     int64_t remaining_us = idle_deadline_us - now_us;
     int64_t timeout_ms = (remaining_us + 999) / 1000;
@@ -1536,7 +1536,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
             send_final_pending = false;
             ASYNC_IO_TRACE("H1 handleSending: headers sent -> full-duplex "
                 "(RECV_HEADER + concurrent send) fd=%d\n",
-                sock_obj ? sock_obj->getSocket() : -1);
+                sock_obj ? sock_obj->getPollableDescriptor() : -1);
             return handleFullDuplex(xsink);
         }
 
@@ -1548,7 +1548,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
         // instead of a raw recv(MSG_PEEK), so TLS post-handshake records are
         // processed consistently with the pre-send idle checks above.
         if (next_stream_id > 1) {
-            int fd = sock_obj->getSocket();
+            int fd = sock_obj->getPollableDescriptor();
             if (fd >= 0) {
 #ifdef DEBUG
                 if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
@@ -1651,7 +1651,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
     ASYNC_IO_TRACE("H1 handleRecvHeader: poll_info=%p xsink=%d fd=%d\n",
-        poll_info, (int)(bool)poll_xsink, sock_obj ? sock_obj->getSocket() : -1);
+        poll_info, (int)(bool)poll_xsink, sock_obj ? sock_obj->getPollableDescriptor() : -1);
     if (poll_xsink) {
         QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
         QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
@@ -1860,7 +1860,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
         ASYNC_IO_TRACE("H1 handleRecvHeader: status=%d chunked=%d content_length=%lld close=%d fd=%d\n",
             response_status_code, (int)response_chunked,
             (long long)response_content_length, (int)connection_close,
-            sock_obj ? sock_obj->getSocket() : -1);
+            sock_obj ? sock_obj->getPollableDescriptor() : -1);
 
         // Report the response header events on the event queue of the client that issued the
         // request.  Reported here, where the header is parsed, and not when the response is
@@ -1961,7 +1961,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             }
             ASYNC_IO_TRACE("H1 handleRecvHeader: 100 Continue (%d of max %d), reading the next header "
                 "fd=%d\n", interim_response_count, MAX_INTERIM_RESPONSES,
-                sock_obj ? sock_obj->getSocket() : -1);
+                sock_obj ? sock_obj->getPollableDescriptor() : -1);
             releaseCurrentOp(xsink);
             sock_obj->ref();
             // a read that cannot be started (the socket was closed) is reported with setError(), which notifies the
@@ -2583,7 +2583,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvBodyClose(ExceptionSink* x
         // conn.close() → poll_op.abort() → HTTP1-ABORT for the still-
         // active stream.  Dispatch the body end now while the response
         // state is intact.
-        if (!sock_obj || sock_obj->getSocket() < 0) {
+        if (!sock_obj || sock_obj->getPollableDescriptor() < 0) {
             return streaming_active_io ? dispatchStreamingEnd(xsink) : dispatchResponse(xsink);
         }
 
@@ -2637,7 +2637,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
     // response anyway if the peer stops reading.
     if (send_buffered_body && send_state != SendState::DONE) {
         ASYNC_IO_TRACE("H1 dispatchResponse: response complete with the request body still going out "
-            "- waiting for it fd=%d\n", sock_obj ? sock_obj->getSocket() : -1);
+            "- waiting for it fd=%d\n", sock_obj ? sock_obj->getPollableDescriptor() : -1);
         releaseCurrentOp(xsink);
         deferred_streaming_end = false;
         req_state = ReqState::AWAIT_SEND;
@@ -2823,7 +2823,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
     // response anyway if the peer stops reading.
     if (send_buffered_body && send_state != SendState::DONE) {
         ASYNC_IO_TRACE("H1 dispatchStreamingEnd: response complete with the request body still going out "
-            "- waiting for it fd=%d\n", sock_obj ? sock_obj->getSocket() : -1);
+            "- waiting for it fd=%d\n", sock_obj ? sock_obj->getPollableDescriptor() : -1);
         releaseCurrentOp(xsink);
         deferred_streaming_end = true;
         req_state = ReqState::AWAIT_SEND;
@@ -2842,7 +2842,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
     if (send_state != SendState::INACTIVE && send_state != SendState::DONE) {
         ASYNC_IO_TRACE("H1 dispatchStreamingEnd: response ended with request body still "
             "open (send_state=%d) - forcing close fd=%d\n", (int)send_state,
-            sock_obj ? sock_obj->getSocket() : -1);
+            sock_obj ? sock_obj->getPollableDescriptor() : -1);
         close = true;
     }
     // see dispatchResponse(): the connection that this response ends accepts no further request before its stream
@@ -3105,7 +3105,7 @@ void Http1ClientPollOperationPriv::publishError(const char* err, const char* des
     // Without this, dead sockets accumulate when the remote closes the connection
     // and degrade I/O controller performance.  The epoll cleanup handles EBADF
     // gracefully when the controller unregisters the fd after this returns.
-    if (sock_obj && sock_obj->getSocket() >= 0) {
+    if (sock_obj && sock_obj->getPollableDescriptor() >= 0) {
         sock_obj->closeIo(xsink);
     }
     // Mark the connection closed BEFORE notifying the pending streams, for the
