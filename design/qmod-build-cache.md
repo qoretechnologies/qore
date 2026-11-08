@@ -307,6 +307,15 @@ Several jobs can share the directory.  Each object has a lock file, `objects/<re
 - one job prunes at a time (`prune.lock`, taken without waiting: a job that finds another one pruning skips its own
   prune and says so).
 
+The hits of the jobs that only read the cache (the jobs of other refs) are not recorded, so an entry that only they
+use ages out after `--max-age-days` without a hit by a job of a protected ref.  Recording them was considered and
+left out, because it is not safe: the record would have to live in a directory that those jobs can write and that
+the protected jobs' prune reads, which is the writable shared cache that the trust levels exclude.  A forged record
+cannot make a build use a wrong module, but it could keep chosen entries alive and push the protected jobs' own
+entries out under the size cap (or grow the record without bound), so a job of any ref could degrade the cache of the
+protected ones.  Such entries are those of a ref that branched from an older protected commit; the cost is a compile
+after a week, and their branch's next merge brings current entries.
+
 Without working locks (a file system that does not propagate them, possibly the virtiofs share of a macOS VM between
 VMs, which has not been tested), a removal can race a reader; the reader's checks (each stored file's digest before the
 copy, the module, depfile and fingerprints digests after it, the entry's signature) then make the module a miss, so
