@@ -1540,6 +1540,9 @@
       \c select or the hash \c map operators, were destroyed when the statement ended instead of when the operator
       had run (ex: <tt>f(new T("a") == new T("b"), g())</tt> destroyed the objects after \c g() ran); they are now
       destroyed when the operator has run, as with the AST interpreter
+    - in the IR execution mode, an exception raised by a destructor while an exception left an expression (ex: when
+      the arguments of a call were released) was lost, and a debug build aborted; it is now added to the exception
+      raised, as with the AST interpreter
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the arguments of a
       call are now destroyed last argument first when the call returns, as with the AST interpreter (they were
       destroyed first argument first in calls of closures, of static methods and from top-level code, and of

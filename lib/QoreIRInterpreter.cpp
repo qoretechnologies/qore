@@ -1851,8 +1851,11 @@ static void cleanupValues(IRValueSlots& values, IRCleanupSlots& cleanup,
     if (no_throw && release_groups) {
         cleanup.orderForException(0, *release_groups);
     }
-    // Iterate in reverse (LIFO) to clean up the latest values first.
-    ExceptionSink* eff_xsink = no_throw ? nullptr : xsink;
+    // Iterate in reverse (LIFO) to clean up the latest values first.  On the path of an exception (no_throw), an
+    // exception raised by a destructor is added to the one that is raised, as the AST interpreter adds it when it
+    // unwinds the holders of the temporaries; a null sink made execDestructor() lose it (an assertion in a debug build)
+    ExceptionSink no_throw_xsink;
+    ExceptionSink* eff_xsink = no_throw && !xsink ? &no_throw_xsink : xsink;
     for (auto it = cleanup.rbegin(); it != cleanup.rend(); ++it) {
         uint32_t id = *it;
         if (id >= values.size()) {
@@ -7727,7 +7730,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             - static_cast<size_t>(std::distance(temp_cleanup_marks.rbegin(), mark));
         // the mark's sentinel is at cleanup_size; keeping the mark keeps its sentinel too
         size_t cleanup_size = mark->cleanup_size + (keep_mark ? 1 : 0);
-        ExceptionSink* eff_xsink = no_throw ? nullptr : xsink;
+        // on the path of an exception (no_throw), an exception raised by a destructor is added to the one that is
+        // raised, as the AST interpreter adds it when it unwinds the holders of the temporaries (see cleanupValues())
+        ExceptionSink no_throw_xsink;
+        ExceptionSink* eff_xsink = no_throw && !xsink ? &no_throw_xsink : xsink;
         // an exception releases the temporaries as the AST interpreter unwinds them (no_throw is only given for one)
         if (no_throw && cleanup.size() > cleanup_size + 1) {
             cleanup.orderForException(cleanup_size, *release_groups);

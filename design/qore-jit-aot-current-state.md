@@ -712,6 +712,11 @@ and `foldr`, and a source of another type, stay with the statement. `ReleaseOwne
 value only when the frame owns it as a temporary, so an operand read from a variable is left alone.
 `OperatorOperandRelease.qtest`.
 
+On the path of an exception, the IR interpreter releases the temporaries with the exception's sink
+(`cleanupValues()`, `cleanupToTempScope()`): an exception raised by a destructor is added to the one
+raised, as the AST interpreter adds it when it unwinds its holders; a null sink lost it and made
+`execDestructor()` assert in a debug build.
+
 The runtime frame wrapper (`execJITWithDeopt()`) pushes the body locals of a native function that
 need runtime storage (not IR-only, not closure-bound) on the thread's local variable stack and pops
 them when the function returns, so native code only clears such a local at the end of its scope
