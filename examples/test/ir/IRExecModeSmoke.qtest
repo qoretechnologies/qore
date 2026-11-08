@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - testSandboxedSubProgramParseOptionsSmoke (not registered now) runs code in a Program of the test's own process
 
 %modern
 %no-child-restrictions

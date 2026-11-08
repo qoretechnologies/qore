@@ -60,6 +60,15 @@ DLLLOCAL TypedHashDecl* init_hashdecl_LingeringCloseInfo(QoreNamespace& ns);
 DLLLOCAL void qore_socket_raise_accept_without_connection(const QoreHashNode* result, const char* method,
         ExceptionSink* xsink);
 
+//! Returns true if \a en is the errno of a write that failed because the peer closed or reset the connection
+/** \c ECONNRESET, \c EPIPE or \c ECONNABORTED: the connection is gone, so a read returns at once with what the peer
+    sent before it closed, and then EOF or an error.  A plain socket raises such a write failure as
+    \c SOCKET-SEND-ERROR, and a TLS socket as \c SOCKET-SSL-ERROR, both with the errno as the exception argument.
+
+    @since %Qore 3.0
+*/
+DLLLOCAL bool qore_socket_errno_is_peer_close(int64 en);
+
 #include <qore/QoreSocket.h>
 #include <qore/AbstractPrivateData.h>
 #include <qore/QoreThreadLock.h>

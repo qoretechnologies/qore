@@ -52,6 +52,7 @@
 #include <qore/QoreSSLCertificate.h>
 #include <qore/Transform.h>
 
+#include "qore/intern/qore_program_private.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
@@ -251,6 +252,18 @@ static int qore_socket_close_private_from_controller(qore_socket_private* priv);
 QoreSandboxManager* qore_socket_ref_policy_sandbox_manager() {
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (!smh) {
+#ifdef DEBUG
+        // fails closed: code of a sandboxed Program is always governed by a network policy; a policy barrier or an
+        // applied sandbox context never lowers the sandbox of the Program that is running (see
+        // find_thread_sandbox_stack_ref_intern())
+        if (QoreProgram* pgm = getProgram()) {
+            QoreSandboxManager* own = qore_program_private::get(*pgm)->getSandboxManagerRef();
+            if (own) {
+                own->deref(nullptr);
+                assert(false && "a sandboxed Program has no network policy");
+            }
+        }
+#endif
         return nullptr;
     }
 
@@ -6321,7 +6334,11 @@ int SSLSocketHelper::sysCallError(ExceptionSink* xsink, int rc, const char* mnam
 void SSLSocketHelper::sendCloseNotify(int fd) {
     // nothing to send: the alert or a fatal alert was sent already, or the handshake did not complete, in which case
     // SSL_shutdown() sends nothing either
-    if (!(SSL_get_shutdown(ssl) & SSL_SENT_SHUTDOWN) && SSL_is_init_finished(ssl)) {
+    // after a write that the peer's close or reset made fail (SSL_ERROR_SYSCALL), OpenSSL forbids SSL_shutdown(): no
+    // alert is sent, on the client's and on the server's side (a TCP TLS socket has a TLS context of its own and does
+    // not resume sessions, so no session cache is affected)
+    if (!write_failed.load(std::memory_order_acquire) && !(SSL_get_shutdown(ssl) & SSL_SENT_SHUTDOWN)
+            && SSL_is_init_finished(ssl)) {
         // one attempt that cannot block: the write side is closed right after
 #ifdef _Q_WINDOWS
         u_long mode = 1;
@@ -6332,10 +6349,12 @@ void SSLSocketHelper::sendCloseNotify(int fd) {
 #endif
         ERR_clear_error();
         // 0: the alert was sent (the peer's is not awaited); < 0: it could not be sent now, which the error queue
-        // must not report to a later TLS call of this thread.  Either way SSL_SENT_SHUTDOWN is set, so the session
-        // stays resumable.
+        // must not report to a later TLS call of this thread.
         (void)SSL_shutdown(ssl);
         ERR_clear_error();
+#ifdef DEBUG
+        qore_dbg_ssl_close_notify_count.fetch_add(1, std::memory_order_relaxed);
+#endif
 #ifdef _Q_WINDOWS
         if (restore) {
             // a socket used from Qore threads is blocking; one on the async I/O thread stays non-blocking
@@ -6754,6 +6773,17 @@ std::string qore_dbg_cares_set_servers(const std::string& servers) {
     return prev;
 }
 
+//! the query options of the c-ares channels made from now on that ask the servers of qore_dbg_cares_set_servers();
+//! under qore_dbg_cares_servers_lock
+static QoreDbgCaresQueryOptions qore_dbg_cares_query_options;
+
+QoreDbgCaresQueryOptions qore_dbg_cares_set_query_options(const QoreDbgCaresQueryOptions& opts) {
+    std::lock_guard<std::mutex> lg(qore_dbg_cares_servers_lock);
+    QoreDbgCaresQueryOptions prev = std::move(qore_dbg_cares_query_options);
+    qore_dbg_cares_query_options = opts;
+    return prev;
+}
+
 //! guards @ref qore_dbg_cares_hosts_file
 static std::mutex qore_dbg_cares_hosts_file_lock;
 //! the hosts file of the name lookups started from now on; empty for the system's hosts file
@@ -6886,24 +6916,53 @@ static bool qore_hosts_file_has_address(const std::vector<QoreHostsFileAddress>&
     return false;
 }
 
+//! The storage of the debug options of a c-ares channel, which must stay valid until the channel is made
+struct QoreCaresDebugOptionStorage {
+    std::vector<std::string> domains;
+    std::vector<char*> domain_ptrs;
+};
+
 //! Returns the DNS servers that dbg_cares_set_servers() set for new c-ares channels, if any
-/** With servers set, the channel is also given a timeout of a second and three tries, so that a lookup that a test
-    makes does not depend on the options of the host's resolver configuration.
+/** With servers set, the channel is also given the query options of dbg_cares_set_query_options(): by default a
+    timeout of a second and three tries, so that a lookup that a test makes does not depend on the options of the
+    host's resolver configuration, and the search domains and \c ndots option if the test set them.
 
     @param options the options of the channel to make
     @param optmask the mask of the options set in \a options
+    @param storage the storage of the options, which must stay valid until the channel is made
 */
-static std::string qore_cares_debug_servers(struct ares_options& options, int& optmask) {
+static std::string qore_cares_debug_servers(struct ares_options& options, int& optmask,
+        QoreCaresDebugOptionStorage& storage) {
 #ifdef DEBUG
     std::string servers;
+    QoreDbgCaresQueryOptions opts;
     {
         std::lock_guard<std::mutex> lg(qore_dbg_cares_servers_lock);
         servers = qore_dbg_cares_servers;
+        opts = qore_dbg_cares_query_options;
     }
     if (!servers.empty()) {
-        options.timeout = 1000;
-        options.tries = 3;
+        options.timeout = opts.timeout_ms;
+        options.tries = opts.tries;
         optmask |= ARES_OPT_TIMEOUTMS | ARES_OPT_TRIES;
+        if (opts.domains_set) {
+            storage.domains = std::move(opts.domains);
+            for (std::string& d : storage.domains) {
+                storage.domain_ptrs.push_back(&d[0]);
+            }
+            options.domains = storage.domain_ptrs.empty() ? nullptr : storage.domain_ptrs.data();
+            options.ndomains = static_cast<int>(storage.domain_ptrs.size());
+            optmask |= ARES_OPT_DOMAINS;
+        }
+        if (opts.ndots >= 0) {
+            options.ndots = opts.ndots;
+            optmask |= ARES_OPT_NDOTS;
+        }
+        if (!opts.query_cache) {
+            // a maximum TTL of 0 disables the query cache
+            options.qcache_max_ttl = 0;
+            optmask |= ARES_OPT_QUERY_CACHE;
+        }
     }
     return servers;
 #else
@@ -6941,20 +7000,6 @@ static int qore_cares_set_debug_servers(ares_channel_t* channel, const std::stri
 //! The number of times a lookup is started again after c-ares lost its query before it fails
 static constexpr unsigned QORE_CARES_MAX_LOST_QUERY_RESTARTS = 3;
 
-//! Returns true if an unfinished lookup on the channel can never complete, because c-ares lost its query
-/** c-ares keeps every query it has sent on its timeout list until the query is answered or ended, so an unfinished
-    lookup whose channel has active queries but no timeout has lost a query: nothing will ever send it again, answer
-    it, or end it, and the lookup would wait forever.
-
-    c-ares 1.34.7 and 1.34.8 lose a query when a completion callback started from ares_flush_requeue() starts a new
-    query - ares_getaddrinfo() moving on to the next search domain, for example - and the new query is given the id
-    of the query that completed: ares_flush_requeue() detaches the completed query before its callback, freeing the
-    id, and ares_free_query() detaches it a second time afterwards, which removes the new query's id mapping.  The
-    answer to the new query is then dropped as unknown, and its retry is discarded when it times out.  The bundled
-    c-ares build is patched (cmake/PatchCaresLostQuery.cmake), but a system library can have the defect.
-
-    @param channel the channel of an unfinished lookup, after its events were processed
-*/
 QoreSharedDescriptor::~QoreSharedDescriptor() {
     if (close_on_release) {
         qore_socket_private::closeDescriptor(fd);
@@ -7200,6 +7245,21 @@ const char* QoreCaresSockets::aif_indextoname(unsigned int ifindex, char* ifname
 #endif
 #endif
 
+//! Returns true if an unfinished lookup on the channel can never complete, because c-ares lost its query
+/** c-ares keeps every query it has sent on its timeout list until the query is answered or ended, so an unfinished
+    lookup whose channel has active queries but no timeout has lost a query: nothing will ever send it again, answer
+    it, or end it, and the lookup would wait forever.
+
+    c-ares 1.34.7 and 1.34.8 lose a query when a completion callback started from ares_flush_requeue() starts a new
+    query - ares_getaddrinfo() moving on to the next search domain, for example - and the new query is given the id
+    of the query that completed: ares_flush_requeue() detaches the completed query before its callback, freeing the
+    id, and ares_free_query() detaches it a second time afterwards, which removes the new query's id mapping.  The
+    answer to the new query is then dropped as unknown, and its retry is discarded when it times out.  c-ares 1.34.9,
+    the minimum version (cmake/third-party-sources.cmake; an older system library is not used), releases only the id
+    that a query still holds; the check stays as a safety net for a defect that c-ares could have again.
+
+    @param channel the channel of an unfinished lookup, after its events were processed
+*/
 static bool qore_cares_channel_lost_query(ares_channel_t* channel) {
 #ifdef DEBUG
     // a lookup made to lose its query by dbg_cares_lose_query()
@@ -7230,14 +7290,33 @@ QoreCaresAddrInfoResolver::QoreCaresAddrInfoResolver(const char* host, const cha
 }
 
 QoreCaresAddrInfoResolver::~QoreCaresAddrInfoResolver() {
+    if (channel) {
+        // ends the lookups and queries of the lookup and of its check with ARES_EDESTRUCTION; their callbacks record
+        // nothing that needs the channel
+        ares_destroy(channel);
+        channel = nullptr;
+    }
     if (result) {
         ares_freeaddrinfo(result);
         result = nullptr;
     }
-    if (channel) {
-        ares_destroy(channel);
-        channel = nullptr;
-    }
+}
+
+void QoreCaresAddrInfoResolver::resetCheck() noexcept {
+    pending_check = Check::None;
+    running_check = Check::None;
+    check_remaining = 0;
+    check_found = false;
+    lookup_definite = false;
+    check_finished = false;
+    repeat_failure = ARES_SUCCESS;
+    server_failures = 0;
+    check_failures_start = 0;
+    repeated = false;
+}
+
+bool QoreCaresAddrInfoResolver::singleLabel() const {
+    return has_host && !host.empty() && host.find('.') == std::string::npos;
 }
 
 int QoreCaresAddrInfoResolver::continuePoll(ExceptionSink* xsink) {
@@ -7278,6 +7357,8 @@ int QoreCaresAddrInfoResolver::restart(ExceptionSink* xsink) {
     channel = nullptr;
     // the destroyed channel's sockets are closed; the new channel reports its own
     fd_events.clear();
+    // the lookup starts again on a new channel: a check of its failure that was started (see complete()) is dropped
+    resetCheck();
     started = false;
     status = ARES_SUCCESS;
     return start(xsink);
@@ -7395,7 +7476,8 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
     options.sock_state_cb = sockStateCallback;
     options.sock_state_cb_data = this;
     int optmask = ARES_OPT_SOCK_STATE_CB;
-    std::string debug_servers = qore_cares_debug_servers(options, optmask);
+    QoreCaresDebugOptionStorage debug_storage;
+    std::string debug_servers = qore_cares_debug_servers(options, optmask, debug_storage);
     std::string debug_hosts_file = qore_cares_debug_hosts_file();
     if (!debug_hosts_file.empty()) {
         options.hosts_path = &debug_hosts_file[0];
@@ -7434,8 +7516,11 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
             ares_strerror(rc));
         return -1;
     }
+    // the queries that fail are counted, so that only a definite failure of a lookup during which one failed is
+    // checked (see complete())
+    ares_set_server_state_callback(channel, serverStateCallback, this);
 
-    struct ares_addrinfo_hints hints = {};
+    hints = {};
     // POSIX AI_* and c-ares ARES_AI_* flags have different values, including across operating systems.
     // Translate their meanings rather than passing the platform bitmask to c-ares unchanged.
     static constexpr std::pair<int, int> flag_map[] = {
@@ -7479,10 +7564,117 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
         ares_getaddrinfo(channel, has_host ? host.c_str() : nullptr, has_service ? service.c_str() : nullptr,
             &hints, callback, this);
     }
+    advance();
     if (done) {
         return status == ARES_SUCCESS ? 0 : raiseError(xsink);
     }
     return 0;
+}
+
+void QoreCaresAddrInfoResolver::advance() {
+    while (!done) {
+        if (lookup_definite) {
+            lookup_definite = false;
+            // a query of the lookup failed, and c-ares can have hidden its failure behind the definite status (see
+            // complete()); a definite failure of a lookup during which no query failed is not checked: a check sends
+            // again a query whose answer the query cache of the channel does not keep, such as an NXDOMAIN answer
+            // without an SOA record (c-ares keeps an answer without records for its maximum TTL)
+            // the failures of this lookup: those since the check that started it again, if it was
+            bool failed = server_failures > check_failures_start;
+            if (failed && family == AF_UNSPEC) {
+                pending_check = Check::Confirm;
+            } else if (failed && singleLabel()) {
+                pending_check = Check::Probe;
+            } else {
+                done = true;
+                break;
+            }
+        } else if (check_finished) {
+            check_finished = false;
+            finishCheck();
+            if (done) {
+                break;
+            }
+        }
+        if (pending_check == Check::None) {
+            break;
+        }
+        // a check can end at once, for example with answers from the query cache
+        startCheck();
+    }
+}
+
+void QoreCaresAddrInfoResolver::startCheck() {
+    Check check = pending_check;
+    pending_check = Check::None;
+    running_check = check;
+    check_found = false;
+    check_failures_start = server_failures;
+    switch (check) {
+        case Check::Confirm:
+            startConfirmation();
+            break;
+        case Check::Probe:
+            startProbe();
+            break;
+        case Check::Repeat:
+            startRepeat();
+            break;
+        case Check::None:
+            break;
+    }
+}
+
+void QoreCaresAddrInfoResolver::startConfirmation() {
+    assert(family == AF_UNSPEC);
+    check_remaining = 2;
+    // the status reported if the answers of both families are definite
+    check_status = status;
+    struct ares_addrinfo_hints family_hints = hints;
+    QoreEnvironmentReadLock env_lock;
+#ifdef DEBUG
+    qore_dbg_cares_lookup_env_read();
+#endif
+    // a callback can run here, before the second lookup has started; it only records its result
+    family_hints.ai_family = AF_INET6;
+    ares_getaddrinfo(channel, has_host ? host.c_str() : nullptr, has_service ? service.c_str() : nullptr,
+        &family_hints, confirmCallback, this);
+    family_hints.ai_family = AF_INET;
+    ares_getaddrinfo(channel, has_host ? host.c_str() : nullptr, has_service ? service.c_str() : nullptr,
+        &family_hints, confirmCallback, this);
+}
+
+void QoreCaresAddrInfoResolver::startProbe() {
+    assert(singleLabel());
+    // the record types that the lookup asked for: c-ares 1.34.9 asks for AAAA records only for an IPv6 lookup, also
+    // with AI_V4MAPPED, so an A record of the name would hide a failure for AAAA
+    std::vector<ares_dns_rec_type_t> types;
+    if (family != AF_INET6) {
+        types.push_back(ARES_REC_TYPE_A);
+    }
+    if (family != AF_INET) {
+        types.push_back(ARES_REC_TYPE_AAAA);
+    }
+    check_remaining = static_cast<int>(types.size());
+    check_status = status;
+    // a query names the host itself, without the search domains; c-ares looks up a single-label name with the name
+    // that HOSTALIASES gives it, if any (ares_lookup_hostaliases()), and the query names the host as given: the
+    // SERVFAIL or REFUSED answer that c-ares hid is one for a name that the DNS server was asked for, which an alias
+    // is not, so a host with an alias is asked for as given, and its answer only tells whether that name fails
+    for (ares_dns_rec_type_t type : types) {
+        ares_query_dnsrec(channel, host.c_str(), ARES_CLASS_IN, type, probeCallback, this, nullptr);
+    }
+}
+
+void QoreCaresAddrInfoResolver::startRepeat() {
+    repeated = true;
+    addrs.clear();
+    QoreEnvironmentReadLock env_lock;
+#ifdef DEBUG
+    qore_dbg_cares_lookup_env_read();
+#endif
+    ares_getaddrinfo(channel, has_host ? host.c_str() : nullptr, has_service ? service.c_str() : nullptr,
+        &hints, callback, this);
 }
 
 void QoreCaresAddrInfoResolver::process(ExceptionSink* xsink) {
@@ -7500,6 +7692,7 @@ void QoreCaresAddrInfoResolver::process(ExceptionSink* xsink) {
             }
         }
     }
+    advance();
     if (done && status != ARES_SUCCESS) {
         raiseError(xsink);
     }
@@ -7507,6 +7700,40 @@ void QoreCaresAddrInfoResolver::process(ExceptionSink* xsink) {
 
 void QoreCaresAddrInfoResolver::callback(void* arg, int status, int, struct ares_addrinfo* res) {
     reinterpret_cast<QoreCaresAddrInfoResolver*>(arg)->complete(status, res);
+}
+
+void QoreCaresAddrInfoResolver::confirmCallback(void* arg, int status, int, struct ares_addrinfo* res) {
+    // only the status and whether the family has an address are used: an address makes the lookup start again
+    bool found = status == ARES_SUCCESS && res && res->nodes;
+    if (res) {
+        ares_freeaddrinfo(res);
+    }
+    reinterpret_cast<QoreCaresAddrInfoResolver*>(arg)->checked(status, found);
+}
+
+void QoreCaresAddrInfoResolver::probeCallback(void* arg, ares_status_t status, size_t,
+        const ares_dns_record_t* dnsrec) {
+    // ARES_SUCCESS is an answer with records (ares_dns_query_reply_tostatus()), which can be a CNAME record alone:
+    // only a record of the type asked for is an address
+    bool found = false;
+    if (status == ARES_SUCCESS && dnsrec && ares_dns_record_query_cnt(dnsrec) > 0) {
+        ares_dns_rec_type_t qtype;
+        if (ares_dns_record_query_get(dnsrec, 0, nullptr, &qtype, nullptr) == ARES_SUCCESS) {
+            size_t n = ares_dns_record_rr_cnt(dnsrec, ARES_SECTION_ANSWER);
+            for (size_t i = 0; i < n && !found; ++i) {
+                const ares_dns_rr_t* rr = ares_dns_record_rr_get_const(dnsrec, ARES_SECTION_ANSWER, i);
+                found = rr && ares_dns_rr_get_type(rr) == qtype;
+            }
+        }
+    }
+    reinterpret_cast<QoreCaresAddrInfoResolver*>(arg)->checked(found || status != ARES_SUCCESS ? status
+        : ARES_ENODATA, found);
+}
+
+void QoreCaresAddrInfoResolver::serverStateCallback(const char*, ares_bool_t success, int, void* data) {
+    if (!success) {
+        ++reinterpret_cast<QoreCaresAddrInfoResolver*>(data)->server_failures;
+    }
 }
 
 void QoreCaresAddrInfoResolver::sockStateCallback(void* arg, ares_socket_t socket_fd, int readable, int writable) {
@@ -7537,39 +7764,106 @@ void QoreCaresAddrInfoResolver::complete(int new_status, struct ares_addrinfo* r
         return;
     }
     status = new_status;
+    if (result) {
+        // the result of the lookup before it was started again (see startRepeat())
+        ares_freeaddrinfo(result);
+    }
     result = res;
     if (status == ARES_SUCCESS && result) {
-        bool first = true;
-        const char* canonname = nullptr;
-        if (flags & AI_CANONNAME) {
-            canonname = result->name && *result->name
-                ? result->name
-                : (result->cnames && result->cnames->name && *result->cnames->name ? result->cnames->name
-                    : nullptr);
-        }
-        for (struct ares_addrinfo_node* n = result->nodes; n; n = n->ai_next) {
-            if (!n->ai_addr || n->ai_addrlen <= 0
-                    || n->ai_addrlen > static_cast<ares_socklen_t>(sizeof(struct sockaddr_storage))) {
-                continue;
-            }
-            SocketResolvedAddrInfo ai;
-            ai.family = n->ai_family;
-            ai.socktype = n->ai_socktype;
-            ai.protocol = n->ai_protocol;
-            ai.addrlen = static_cast<socklen_t>(n->ai_addrlen);
-            memcpy(&ai.addr, n->ai_addr, n->ai_addrlen);
-            if (first && canonname) {
-                ai.canonname = canonname;
-            }
-            addrs.push_back(ai);
-            first = false;
-        }
+        addAddresses(result);
         keepHostsFileAddresses();
         if (addrs.empty()) {
             status = ARES_ENODATA;
         }
+    } else if (qore_cares_status_is_definite(status)) {
+        if (repeated && repeat_failure != ARES_SUCCESS) {
+            // the lookup started again failed with a definite status, but the check before it saw a failure that
+            // might not happen again: the answers of the server changed, and a failure is never reported as definite
+            // after a check saw a temporary failure
+            status = repeat_failure;
+        } else {
+            // whether the failure is checked is decided after c-ares has returned (see advance()): c-ares 1.34.9
+            // reports the failed queries (serverStateCallback()) when its public call returns, after the lookup's
+            // callback; a lookup started again is checked like the first one, as its own queries can fail
+            lookup_definite = true;
+            return;
+        }
     }
     done = true;
+}
+
+void QoreCaresAddrInfoResolver::checked(int new_status, bool found) {
+    if (restarting) {
+        return;
+    }
+    assert(check_remaining > 0);
+    if (found) {
+        check_found = true;
+    } else if (new_status != ARES_SUCCESS && !qore_cares_status_is_definite(new_status)
+            && qore_cares_status_is_definite(check_status)) {
+        // an answer that is not definite makes the failure one that might not happen again
+        check_status = new_status;
+    }
+    if (!--check_remaining) {
+        // ended after c-ares has returned (see advance())
+        check_finished = true;
+    }
+}
+
+void QoreCaresAddrInfoResolver::finishCheck() {
+    if (check_found) {
+        if (repeated) {
+            // the check of the lookup started again found an address again, but the lookup failed: the answers of the
+            // server keep changing, and a query failed, so the failure is not definite; the status of the check if it
+            // saw a temporary one, otherwise ESERVFAIL, as c-ares does not say how the query failed
+            status = qore_cares_status_is_definite(check_status) ? ARES_ESERVFAIL : check_status;
+            done = true;
+            return;
+        }
+        // the name has an address after all: the lookup is started again once, and its result is the answer, in
+        // the order that c-ares gives it (RFC 6724); a temporary failure that the check saw is reported if the
+        // lookup started again fails with a definite status (see complete()), and a definite failure of the lookup
+        // started again during which a query failed is checked again
+        repeat_failure = qore_cares_status_is_definite(check_status) ? ARES_SUCCESS : check_status;
+        pending_check = Check::Repeat;
+        return;
+    }
+    status = check_status;
+    // the lookups of a confirmation are of a single-label name with the search domains too: a SERVFAIL or REFUSED
+    // answer for the name itself is hidden again, and the name is asked for if a query failed meanwhile
+    if (running_check == Check::Confirm && qore_cares_status_is_definite(status) && singleLabel()
+            && server_failures > check_failures_start) {
+        pending_check = Check::Probe;
+        return;
+    }
+    done = true;
+}
+
+void QoreCaresAddrInfoResolver::addAddresses(const struct ares_addrinfo* res) {
+    bool first = addrs.empty();
+    const char* canonname = nullptr;
+    if (flags & AI_CANONNAME) {
+        canonname = res->name && *res->name
+            ? res->name
+            : (res->cnames && res->cnames->name && *res->cnames->name ? res->cnames->name : nullptr);
+    }
+    for (struct ares_addrinfo_node* n = res->nodes; n; n = n->ai_next) {
+        if (!n->ai_addr || n->ai_addrlen <= 0
+                || n->ai_addrlen > static_cast<ares_socklen_t>(sizeof(struct sockaddr_storage))) {
+            continue;
+        }
+        SocketResolvedAddrInfo ai;
+        ai.family = n->ai_family;
+        ai.socktype = n->ai_socktype;
+        ai.protocol = n->ai_protocol;
+        ai.addrlen = static_cast<socklen_t>(n->ai_addrlen);
+        memcpy(&ai.addr, n->ai_addr, n->ai_addrlen);
+        if (first && canonname) {
+            ai.canonname = canonname;
+        }
+        addrs.push_back(ai);
+        first = false;
+    }
 }
 
 void QoreCaresAddrInfoResolver::keepHostsFileAddresses() noexcept {
@@ -7589,8 +7883,50 @@ void QoreCaresAddrInfoResolver::keepHostsFileAddresses() noexcept {
     addrs.front().canonname = std::move(canonname);
 }
 
+const char* qore_cares_status_name(int status) {
+    switch (status) {
+        case ARES_ENODATA: return "ENODATA";
+        case ARES_EFORMERR: return "EFORMERR";
+        case ARES_ESERVFAIL: return "ESERVFAIL";
+        case ARES_ENOTFOUND: return "ENOTFOUND";
+        case ARES_ENOTIMP: return "ENOTIMP";
+        case ARES_EREFUSED: return "EREFUSED";
+        case ARES_EBADQUERY: return "EBADQUERY";
+        case ARES_EBADNAME: return "EBADNAME";
+        case ARES_EBADFAMILY: return "EBADFAMILY";
+        case ARES_EBADRESP: return "EBADRESP";
+        case ARES_ECONNREFUSED: return "ECONNREFUSED";
+        case ARES_ETIMEOUT: return "ETIMEOUT";
+        case ARES_EOF: return "EOF";
+        case ARES_EFILE: return "EFILE";
+        case ARES_ENOMEM: return "ENOMEM";
+        case ARES_EDESTRUCTION: return "EDESTRUCTION";
+        case ARES_EBADSTR: return "EBADSTR";
+        case ARES_EBADFLAGS: return "EBADFLAGS";
+        case ARES_ENONAME: return "ENONAME";
+        case ARES_EBADHINTS: return "EBADHINTS";
+        case ARES_ENOTINITIALIZED: return "ENOTINITIALIZED";
+        case ARES_ECANCELLED: return "ECANCELLED";
+        case ARES_ESERVICE: return "ESERVICE";
+        case ARES_ENOSERVER: return "ENOSERVER";
+        default: return "EUNKNOWN";
+    }
+}
+
+bool qore_cares_status_is_definite(int status) {
+    return status == ARES_ENOTFOUND || status == ARES_ENODATA;
+}
+
+QoreHashNode* qore_cares_error_arg(int status) {
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    h->setKeyValue("status", new QoreStringNode(qore_cares_status_name(status)), nullptr);
+    return h;
+}
+
 int QoreCaresAddrInfoResolver::raiseError(ExceptionSink* xsink) const {
-    xsink->raiseException("QOREADDRINFO-GETINFO-ERROR",
+    // the argument gives the resolver's status, which tells a definite answer (such as ENOTFOUND: the name does not
+    // exist) from a failure that might not happen again (such as ETIMEOUT or ESERVFAIL)
+    xsink->raiseExceptionArg("QOREADDRINFO-GETINFO-ERROR", qore_cares_error_arg(status),
         "ares_getaddrinfo(node: '%s', service: '%s', address_family: %d='%s') error: %s",
         has_host ? host.c_str() : "", has_service ? service.c_str() : "", family, q_af_to_str(family),
         ares_strerror(status));
@@ -7717,7 +8053,9 @@ public:
             if (desc_v) {
                 desc = desc_v.c_str();
             }
-            action->executeError(err, desc, xsink);
+            // the argument too, as the synchronous call raises it: a name lookup error has the resolver's status in
+            // it
+            action->executeErrorArg(err, desc, ex_hash->getKeyValue("arg").refSelf(), xsink);
             cleanupAction(xsink);
             return true;
         }
@@ -8041,7 +8379,8 @@ private:
         options.sock_state_cb = sockStateCallback;
         options.sock_state_cb_data = this;
         int optmask = ARES_OPT_SOCK_STATE_CB;
-        std::string debug_servers = qore_cares_debug_servers(options, optmask);
+        QoreCaresDebugOptionStorage debug_storage;
+        std::string debug_servers = qore_cares_debug_servers(options, optmask, debug_storage);
 
         int rc = qore_cares_init_channel(&channel, &options, optmask);
         if (rc != ARES_SUCCESS) {
@@ -8396,7 +8735,9 @@ public:
             if (desc_v) {
                 desc = desc_v.c_str();
             }
-            action->executeError(err, desc, xsink);
+            // the argument too, as the synchronous call raises it: a name lookup error has the resolver's status in
+            // it
+            action->executeErrorArg(err, desc, ex_hash->getKeyValue("arg").refSelf(), xsink);
             cleanupAction(xsink);
             return true;
         }
@@ -8615,7 +8956,8 @@ int QoreCaresNameInfoResolver::start(ExceptionSink* xsink) {
     options.sock_state_cb = sockStateCallback;
     options.sock_state_cb_data = this;
     int optmask = ARES_OPT_SOCK_STATE_CB;
-    std::string debug_servers = qore_cares_debug_servers(options, optmask);
+    QoreCaresDebugOptionStorage debug_storage;
+    std::string debug_servers = qore_cares_debug_servers(options, optmask, debug_storage);
 
     int rc = qore_cares_init_channel(&channel, &options, optmask);
     if (rc != ARES_SUCCESS) {
@@ -8954,7 +9296,8 @@ int SocketConnectInetHappyEyeballsPollState::finishResolve(ExceptionSink* xsink)
     addrs = resolver->getAddresses();
     resolver.reset();
     if (addrs.empty()) {
-        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR",
+        // the name has no address: a definite answer, as for ARES_ENODATA
+        xsink->raiseExceptionArg("QOREADDRINFO-GETINFO-ERROR", qore_cares_error_arg(ARES_ENODATA),
             "ares_getaddrinfo(node: '%s', service: '%s', address_family: %d='%s') returned no addresses",
             host.c_str(), service.c_str(), family, q_af_to_str(family));
         return -1;
@@ -9413,6 +9756,14 @@ int SocketConnectLayeredSslPollState::continuePoll(ExceptionSink* xsink) {
     return ssl->startConnect(xsink);
 }
 
+bool qore_socket_errno_is_peer_close(int64 en) {
+    return en == ECONNRESET || en == EPIPE
+#ifdef ECONNABORTED
+        || en == ECONNABORTED
+#endif
+        ;
+}
+
 SocketSendPollState::SocketSendPollState(ExceptionSink* xsink, qore_socket_private* sock, const char* data,
         size_t size) : sock(sock), data(data), size(size) {
 }
@@ -9573,8 +9924,8 @@ int SocketShutdownSslPollState::continuePoll(ExceptionSink* xsink) {
     return ssl->startShutdown(xsink);
 }
 
-SocketShutdownPollOperation::SocketShutdownPollOperation(QoreSocketObject* sock)
-        : SocketPollSocketOperationBase(sock) {
+SocketShutdownPollOperation::SocketShutdownPollOperation(QoreSocketObject* sock, bool write_only)
+        : SocketPollSocketOperationBase(sock), write_only(write_only) {
 }
 
 QoreHashNode* SocketShutdownPollOperation::continuePoll(ExceptionSink* xsink) {
@@ -9589,8 +9940,23 @@ QoreHashNode* SocketShutdownPollOperation::continuePoll(ExceptionSink* xsink) {
         return nullptr;
     }
 
-    rc = qore_socket_private::get(*priv->socket)->shutdown_direct();
+    qore_socket_private* qsp = qore_socket_private::get(*priv->socket);
+    if (!write_only) {
+        rc = qsp->shutdown_direct();
+        done = true;
+        return nullptr;
+    }
+
     done = true;
+    if (!qsp->isOpen()) {
+        se_not_open("Socket", "shutdownWrite", xsink);
+        return nullptr;
+    }
+    rc = qsp->shutdown_write_direct();
+    if (rc) {
+        xsink->raiseErrnoException("SOCKET-SHUTDOWN-ERROR", errno, "error shutting down the sending side of the "
+            "connection");
+    }
     return nullptr;
 }
 
@@ -11229,6 +11595,9 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
 #endif
     SSLSocketReferenceHelper ssrh(this);
 
+#ifdef DEBUG
+    bool dbg_forced_error_ssl = false;
+#endif
     int rc;
     while (true) {
         ERR_clear_error();
@@ -11237,6 +11606,14 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
                 rc = SSL_read_ex(ssl, buf, size, &real_io);
                 break;
             case WRITE:
+#ifdef DEBUG
+                // test hook: the write fails with a TLS protocol error while errno holds a stale peer-close error
+                if (qs.dbg_force_ssl_error_ssl.exchange(false)) {
+                    rc = 0;
+                    dbg_forced_error_ssl = true;
+                    break;
+                }
+#endif
                 rc = SSL_write_ex(ssl, buf, size, &real_io);
                 break;
             case PEEK:
@@ -11290,6 +11667,20 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
         }
 
         int err = SSL_get_error(ssl, rc);
+#ifdef DEBUG
+        if (dbg_forced_error_ssl) {
+            // a real TLS protocol error, as SSL_write_ex() queues it for a bad record, so the error path for a
+            // queued TLS-library error runs; errno holds a stale peer-close error, which must not be taken for the
+            // cause
+            err = SSL_ERROR_SSL;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+            ERR_raise(ERR_LIB_SSL, SSL_R_DECRYPTION_FAILED_OR_BAD_RECORD_MAC);
+#else
+            SSLerr(SSL_F_SSL_WRITE, SSL_R_DECRYPTION_FAILED_OR_BAD_RECORD_MAC);
+#endif
+            errno = EPIPE;
+        }
+#endif
 
         //printd(5, "SSLSocketHelper::doNonBlockingIo() %s size: %ld action: %s err: %d\n", mname, size,
         //    get_action_method(action), err);
@@ -11317,7 +11708,18 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
             }
             break;
         } else if (err == SSL_ERROR_SYSCALL) {
-            if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
+            // A write that fails because the peer closed or reset the connection leaves the socket open, as a plain
+            // socket's does: what the peer sent before it closed - an early HTTP response, say - is still in the
+            // receive buffer and can be read.  OpenSSL puts no TLS alert on the connection for a failed write of the
+            // transport, so its read side stays usable.
+            bool keep_open = action == WRITE && qore_socket_errno_is_peer_close(transportErrno());
+            if (keep_open) {
+                // the connection had a fatal error: no close_notify alert is sent when it is closed (see
+                // sendCloseNotify())
+                write_failed.store(true, std::memory_order_release);
+            }
+            if (!sslError(xsink, mname, get_action_method(action), action == WRITE,
+                    keep_open ? SslCall::Write : SslCall::Transport)) {
                 if (!rc) {
                     xsink->raiseException("SOCKET-SSL-ERROR", "error in Socket::%s(): the openssl library reported " \
                         "an EOF condition that violates the SSL protocol while calling %s()", mname,
@@ -11330,18 +11732,21 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
                         "error code %d in %s() but the error queue is empty", mname, rc, get_action_method(action));
                 }
             }
-            // close the local socket unconditionally
+            // close the local socket, except after a write that the peer's close or reset made fail (see above)
             // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
-            if (!qs.h2_session) {
+            if (!qs.h2_session && !keep_open) {
                 qore_socket_close_private_from_controller(&qs);
             }
             // in case there is no exception when reading, the remote end closed the connection
             rc = *xsink ? QSE_SSL_ERR : 0;
             break;
         } else if (err == SSL_ERROR_SSL) {
+            // a protocol failure: the TLS session is unusable, so the socket is closed in every case (the errno is
+            // not meaningful for SSL_ERROR_SSL, which a transport failure does not produce; a failed write of the
+            // transport is SSL_ERROR_SYSCALL, above)
             // must call sslError() before closing; close_internal() derefs ssl, which would
             // bring refs down to 1, violating sslError()'s assert(refs > 1) invariant
-            if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
+            if (!sslError(xsink, mname, get_action_method(action), action == WRITE, SslCall::Transport)) {
                 xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the " \
                     "openssl library reported a fatal I/O error while calling %s()", mname, get_action_method(action));
             }
@@ -11386,6 +11791,15 @@ DLLLOCAL OptionalNonBlockingHelper::~OptionalNonBlockingHelper() {
     if (set) {
         sock.set_non_blocking(false, xsink);
     }
+}
+
+int SSLSocketHelper::transportErrno() {
+    // peeked, not taken: sslError() reports the queue
+    unsigned long e = ERR_peek_error();
+    if (e && ERR_GET_LIB(e) == ERR_LIB_SYS) {
+        return ERR_GET_REASON(e);
+    }
+    return sock_get_error();
 }
 
 // returns true if an error was raised or the connection was closed, false if not
@@ -11445,7 +11859,9 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, unsigned long e, i
         // NOTE: For HTTP/2 connections, don't auto-close here.  This could be a timeout or the end
         // of a read operation, not necessarily a connection close.  Let the HTTP/2 layer handle
         // connection lifecycle.
-        if (!qs.h2_session) {
+        // A write that failed because the peer closed or reset the connection (SslCall::Write) leaves the socket
+        // open, so that what the peer sent before it closed can still be read; see doNonBlockingIo().
+        if (!qs.h2_session && call != SslCall::Write) {
             qore_socket_close_private_from_controller(&qs);
         }
         if (always_error) {
@@ -11467,8 +11883,12 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, unsigned long e, i
             // leaves it at 0, so this adds ECONNRESET and friends without inventing a cause
             if (sockerr) {
                 errstr->sprintf(" (last socket error %d: %s)", sockerr, strerror(sockerr));
+                // the errno is the argument, as for a plain socket's SOCKET-SEND-ERROR, so that callers can tell a
+                // connection the peer closed or reset from other failures without parsing the description
+                xsink->raiseExceptionArg("SOCKET-SSL-ERROR", static_cast<int64>(sockerr), errstr.release());
+            } else {
+                xsink->raiseException("SOCKET-SSL-ERROR", errstr.release());
             }
-            xsink->raiseException("SOCKET-SSL-ERROR", errstr.release());
         }
     } else {
         char buf[121];
@@ -11488,17 +11908,22 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, unsigned long e, i
             ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
             arg->setKeyValue("ssl_verify_error", static_cast<int64>(SSL_get_verify_result(ssl)), xsink);
             xsink->raiseExceptionArg("SOCKET-SSL-ERROR", arg.release(), errstr.release());
+        } else if (ERR_GET_LIB(e) == ERR_LIB_SYS) {
+            // a system call failed under OpenSSL - the transport write or read - and the reason is its errno: it is
+            // the argument, as for a plain socket's SOCKET-SEND-ERROR
+            xsink->raiseExceptionArg("SOCKET-SSL-ERROR", static_cast<int64>(ERR_GET_REASON(e)), errstr.release());
         } else {
             xsink->raiseException("SOCKET-SSL-ERROR", errstr.release());
         }
         // There used to be a connection-reset close here, guarded by
         // "e == SSL_ERROR_SYSCALL && sock_get_error() == ECONNRESET".  It could never run: `e` is
         // a packed ERR_get_error() code in this branch while SSL_ERROR_SYSCALL (5) belongs to the
-        // SSL_get_error() enum, and a packed ERR code is never 5.  It is not resurrected here
-        // because errno is only meaningful for a transport failure, and a transport failure
-        // leaves the OpenSSL error queue empty and is therefore handled above — where the socket
-        // is closed unconditionally.  Reaching this branch means OpenSSL reported a real protocol
-        // error, so any errno left over from an earlier call says nothing about this connection.
+        // SSL_get_error() enum, and a packed ERR code is never 5.  It is not resurrected here:
+        // closing the socket is the caller's decision (doNonBlockingIo() closes it, except after a
+        // write that the peer's close or reset made fail).  A failed transport call either leaves
+        // the OpenSSL error queue empty, handled above, or queues an ERR_LIB_SYS entry carrying
+        // its errno (OpenSSL 3), reported above with the errno as the argument; any other entry is
+        // a real protocol error, so an errno left over from an earlier call says nothing about it.
         (void)sockerr;
     }
 }
@@ -13891,7 +14316,8 @@ static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name
     qore_socket_close_private_from_controller(priv);
 
     if (addrs.empty()) {
-        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR",
+        // the name has no address: a definite answer, as for ARES_ENODATA
+        xsink->raiseExceptionArg("QOREADDRINFO-GETINFO-ERROR", qore_cares_error_arg(ARES_ENODATA),
             "ares_getaddrinfo(node: '%s', service: '%s') returned no addresses", name ? name : "",
             service ? service : "");
         qore_socket_set_bind_no_address_error();
@@ -16551,6 +16977,13 @@ QoreHashNode* SocketSendPollOperation::continuePoll(ExceptionSink* xsink) {
     if (!poll_state) {
         return nullptr;
     }
+
+#ifdef DEBUG
+    // tests hold the write here, with the socket's lock held, until the connection is shut down or reset
+    if (qore_dbg_socket_send_hook_t hook = qore_dbg_socket_send_hook.load()) {
+        hook(sock->priv->socket->getSocket());
+    }
+#endif
 
     // see if we are able to continue
     int rc = poll_state->continuePoll(xsink);

@@ -1,0 +1,697 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The HTTP/1.1 candidate of the race of automatic protocol selection.
+
+    A server that refuses HTTP/2 via ALPN speaks HTTP/1.1 over TLS.  The race starts HTTP/1.1 as soon as HTTP/2 is
+    refused and races it against HTTP/3, instead of waiting for the outcome of HTTP/3 first.  Here a UDP socket on
+    the server's port receives the client's QUIC datagrams and never reads them, as a network that drops UDP
+    silently: no handshake and no ICMP error, so the HTTP/3 candidate can only end with its connect timeout, which
+    is far longer than any case here takes.  Every proof is a state the race was in, recorded when it was reached,
+    not a time measured.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Logger
+%requires HttpClientIo
+%requires RestClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpClientIoHttp1RaceTest
+
+#! A TLS server that selects only HTTP/1.1 with ALPN, with a UDP socket on its port that never reads
+/** The UDP socket receives the client's QUIC datagrams and never answers them, so an HTTP/3 handshake with the
+    server can only end with its connect timeout.
+
+    Every response closes its connection, so each request needs a TCP connection of its own, and the number of
+    connections accepted is the number of TCP connection attempts that the client made.  A connection can be held
+    before its TLS handshake (see @ref hold()), so a test can observe the race while that connection is connecting,
+    and a connection can be closed before its TLS handshake (see @ref refuse()), so that it fails.
+*/
+class Http1OnlyServer {
+    public {
+        #! The fail-safe bound of the waits of the server and of the test for an event that is due
+        /** Far below the connect timeout of the HTTP/3 candidate in the cases that need it to be connecting
+        */
+        const EventTimeout = 20s;
+
+        #! The number of ports tried when another process uses the port number of the listener for UDP
+        const MaxPortAttempts = 20;
+    }
+
+    private {
+        #! The TLS listener
+        Socket listener;
+
+        #! The UDP socket on the port of the listener; it never reads
+        Socket udp;
+
+        #! The port of the listener
+        int port;
+
+        #! Guards the members below
+        Mutex m();
+
+        #! The number of TCP connections accepted
+        int connection_count = 0;
+
+        #! The number of HTTP/1.1 requests answered
+        int request_count = 0;
+
+        #! True once the server is stopping
+        bool stopping = False;
+
+        #! Connection number -> the gate that its TLS handshake waits for
+        hash<string, Counter> holds = {};
+
+        #! The numbers of the connections that are closed before their TLS handshake
+        hash<string, bool> refusals = {};
+
+        #! The numbers of the connections accepted, in order
+        Queue accepted();
+
+        #! The accept loop
+        Counter running(1);
+
+        #! The connection handlers in progress
+        Counter handlers();
+    }
+
+    #! Creates the server and starts accepting connections
+    constructor() {
+        # a TCP listener and a UDP socket with the same port number; another process may already use the port
+        # number for UDP, in which case another port is chosen
+        for (int attempt = 1; ; ++attempt) {
+            Socket tcp();
+            tcp.setCertificate(new SSLCertificate(TestCertificates::CertPem));
+            tcp.setPrivateKey(new SSLPrivateKey(TestCertificates::KeyPem));
+            tcp.bindINET("127.0.0.1", "0", True);
+            int p = tcp.getSocketInfo().port;
+            Socket u();
+            try {
+                u.bindINET("127.0.0.1", string(p), False, AF_INET, SOCK_DGRAM);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "SOCKET-BIND-ERROR" || attempt == MaxPortAttempts) {
+                    rethrow;
+                }
+                continue;
+            }
+            listener = tcp;
+            udp = u;
+            port = p;
+            break;
+        }
+        listener.listen();
+        background serve();
+    }
+
+    destructor() {
+        stop();
+    }
+
+    #! Returns the URL of the server
+    string getUrl() {
+        return sprintf("https://127.0.0.1:%d", port);
+    }
+
+    #! Returns the number of TCP connections accepted
+    int getConnectionCount() {
+        AutoLock al(m);
+        return connection_count;
+    }
+
+    #! Returns the number of HTTP/1.1 requests answered
+    int getRequestCount() {
+        AutoLock al(m);
+        return request_count;
+    }
+
+    #! Holds the TLS handshake of the given connection until @ref release() is called
+    /** @param n the number of the connection, counting from 1; it must not have been accepted yet
+    */
+    hold(int n) {
+        AutoLock al(m);
+        @assert(n > connection_count);
+        holds{n} = new Counter(1);
+    }
+
+    #! Releases a connection held with @ref hold()
+    release(int n) {
+        *Counter gate;
+        {
+            AutoLock al(m);
+            gate = remove holds{n};
+        }
+        if (gate) {
+            gate.dec();
+        }
+    }
+
+    #! Closes the given connection before its TLS handshake, so that it fails
+    /** @param n the number of the connection, counting from 1; it must not have been accepted yet
+    */
+    refuse(int n) {
+        AutoLock al(m);
+        @assert(n > connection_count);
+        refusals{n} = True;
+    }
+
+    #! Waits until the given connection has been accepted
+    /** @param n the number of the connection, counting from 1
+
+        @throw QUEUE-TIMEOUT the connection was not accepted within @ref EventTimeout
+    */
+    waitForConnection(int n) {
+        while (True) {
+            int accepted_n = accepted.get(EventTimeout);
+            if (accepted_n >= n) {
+                return;
+            }
+        }
+    }
+
+    #! Stops the server: releases held connections, ends the accept loop and waits for all connection handlers
+    /** The accept loop is unblocked with a throwaway connection rather than a timed wait, so teardown is
+        deterministic
+    */
+    stop() {
+        list<Counter> gates;
+        {
+            AutoLock al(m);
+            if (stopping) {
+                return;
+            }
+            stopping = True;
+            gates = holds.values() ?? ();
+            holds = {};
+        }
+        foreach Counter gate in (gates) {
+            gate.dec();
+        }
+        try {
+            Socket s();
+            s.connect(sprintf("127.0.0.1:%d", port));
+            s.close();
+        } catch (hash<ExceptionInfo> ex) {
+            # the accept loop has already exited
+        }
+        running.waitForZero();
+        handlers.waitForZero();
+        try { listener.close(); } catch () {}
+        try { udp.close(); } catch () {}
+    }
+
+    #! Accepts connections until the server stops
+    private serve() {
+        on_exit running.dec();
+        while (True) {
+            Socket client;
+            try {
+                client = listener.accept();
+            } catch (hash<ExceptionInfo> ex) {
+                break;
+            }
+            int n;
+            *Counter gate;
+            bool refuse;
+            {
+                AutoLock al(m);
+                if (stopping) {
+                    try { client.close(); } catch () {}
+                    break;
+                }
+                n = ++connection_count;
+                gate = holds{n};
+                refuse = refusals{n} ?? False;
+            }
+            handlers.inc();
+            accepted.push(n);
+            background handleConnection(client, gate, refuse);
+        }
+    }
+
+    #! Answers one HTTP/1.1 request over TLS, offering only HTTP/1.1 with ALPN
+    private handleConnection(Socket client, *Counter gate, bool refuse) {
+        on_exit handlers.dec();
+        try {
+            if (gate) {
+                gate.waitForZero();
+            }
+            if (!refuse) {
+                client.setAlpnProtocols(("http/1.1",));
+                client.upgradeServerToSSL(EventTimeout);
+                # an HTTP/2 client closes the connection here, since HTTP/1.1 was selected, so a failure to read is
+                # an expected outcome, not a failure of the test
+                client.readHTTPHeader(EventTimeout);
+                {
+                    AutoLock al(m);
+                    ++request_count;
+                }
+                client.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n"
+                    "Connection: close\r\n\r\nOK");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the peer went away
+        }
+        try { client.close(); } catch () {}
+    }
+}
+
+#! Records the candidates of the happy-eyeballs races of the manager
+/** Every connection the manager makes is submitted to the I/O controller once it is created, so the record is
+    made there: it holds every candidate and, when the first HTTP/1.1 candidate is started, the state that the
+    HTTP/3 candidate was in at that moment.
+*/
+class RaceRecordingManager inherits HttpClientIo::HttpClientConnectionManager {
+    private:internal {
+        #! Guards the members below
+        Mutex record_lock();
+
+        #! Connection ID -> connection, for every connection submitted to the I/O controller
+        hash<string, HttpClientIo::HttpClientConnection> candidates = {};
+
+        #! The state of the HTTP/3 candidate when the first HTTP/1.1 candidate was started, if one was started
+        *int h3_state_at_h1_start;
+    }
+
+    constructor(hash<HttpClientIo::HttpClientConnectionManagerOptions> opts)
+            : HttpClientIo::HttpClientConnectionManager(opts) {
+    }
+
+    #! Returns the connections of the given protocol that the manager made, oldest first
+    list<HttpClientIo::HttpClientConnection> getCandidates(string protocol) {
+        list<HttpClientIo::HttpClientConnection> rv = ();
+        {
+            AutoLock al(record_lock);
+            foreach HttpClientIo::HttpClientConnection conn in (candidates.iterator()) {
+                if (conn.getProtocol() == protocol) {
+                    rv += conn;
+                }
+            }
+        }
+        return sort(rv, int sub (HttpClientIo::HttpClientConnection l, HttpClientIo::HttpClientConnection r) {
+            return l.getConnectionId() <=> r.getConnectionId();
+        });
+    }
+
+    #! Returns the state of the HTTP/3 candidate when the first HTTP/1.1 candidate was started, if one was
+    *int getH3StateAtH1Start() {
+        AutoLock al(record_lock);
+        return h3_state_at_h1_start;
+    }
+
+    #! Returns the protocol cached for the given URL, if any
+    *string getCachedProtocol(string url) {
+        hash<UrlInfo> info = parse_url(url);
+        AutoReadLock al(pool_lock);
+        return protocol_cache{sprintf("%s:%d", info.host, info.port)};
+    }
+
+    #! Returns the number of async races in flight
+    int getRaceCount() {
+        AutoLock al(async_race_lock);
+        return async_races.size();
+    }
+
+    #! Returns the HTTP/1.1 candidate that is a leg of an unresolved race, if any
+    *HttpClientIo::HttpClientConnection getH1RaceLeg() {
+        foreach HttpClientIo::HttpClientConnection conn in (getCandidates("h1")) {
+            if (isUnresolvedRaceLeg(conn)) {
+                return conn;
+            }
+        }
+    }
+
+    #! Records a connection the first time it is submitted, then submits it
+    private submitConnectionToController(string key, HttpClientIo::HttpClientConnection conn, bool initial = True) {
+        if (initial) {
+            AutoLock al(record_lock);
+            string id = string(conn.getConnectionId());
+            if (!candidates{id}) {
+                if (conn.getProtocol() == "h1" && !exists h3_state_at_h1_start) {
+                    foreach HttpClientIo::HttpClientConnection c in (candidates.iterator()) {
+                        if (c.getProtocol() == "h3") {
+                            h3_state_at_h1_start = c.getConnectionState();
+                        }
+                    }
+                }
+                candidates{id} = conn;
+            }
+        }
+        HttpClientIo::HttpClientConnectionManager::submitConnectionToController(key, conn, initial);
+    }
+}
+
+public class HttpClientIoHttp1RaceTest inherits QUnit::Test {
+    public {
+        #! The client APIs tested
+        const Apis = ("HTTP", "HTTP async", "REST", "REST async", "connection acquisition");
+
+        #! The connect timeout of the cases where the HTTP/3 candidate must still be connecting when they end
+        /** No case takes longer than a fraction of it: HTTP/1.1 connects to a local server
+        */
+        const LongConnectTimeout = 60s;
+
+        #! The request timeout of those cases: the deadline of an asynchronous request, far below the connect timeout
+        const RequestTimeout = 20s;
+    }
+
+    private {
+        Logger logger;
+    }
+
+    constructor() : Test("HttpClientIoHttp1RaceTest", "1.0") {
+        addTestCase("HTTP/1.1 is raced against HTTP/3 when HTTP/2 is refused via ALPN", \http1RacedTest());
+        addTestCase("the HTTP/1.1 candidate of an async race is a race leg until it wins", \asyncRaceLegTest());
+        addTestCase("abandoning an async race closes its HTTP/1.1 candidate", \abandonRaceTest());
+        addTestCase("closing the manager during an async race closes its HTTP/1.1 candidate", \closeAllRaceTest());
+        addTestCase("a failed HTTP/1.1 candidate waits for HTTP/3 and every error is reported",
+            \failedHttp1WaitsForHttp3Test());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("http1-race", m_options.verbose > 2
+            ? LoggerLevel::getLevelDebug()
+            : LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+    }
+
+    #! An endpoint that refuses HTTP/2 is reached over HTTP/1.1 while the HTTP/3 handshake is still in progress
+    /** The server answers no QUIC datagram, so the HTTP/3 candidate cannot settle before its connect timeout; the
+        HTTP/1.1 candidate is started while HTTP/3 is still connecting and wins
+    */
+    http1RacedTest() {
+        foreach string api in (Apis) {
+            Http1OnlyServer server();
+            on_exit server.stop();
+            RaceRecordingManager mgr = getManager(LongConnectTimeout);
+            on_exit mgr.closeAll();
+            string url = server.getUrl();
+
+            hash<auto> resp = get(mgr, url, api);
+            assertEq(200, resp.status_code, api);
+            assertEq("OK", resp.body, api);
+            assertEq("h1", resp.protocol, api + ": HTTP/1.1 won the race");
+
+            list<HttpClientIo::HttpClientConnection> h3 = mgr.getCandidates("h3");
+            list<HttpClientIo::HttpClientConnection> h2 = mgr.getCandidates("h2");
+            list<HttpClientIo::HttpClientConnection> h1 = mgr.getCandidates("h1");
+            assertEq(1, h3.size(), api + ": one HTTP/3 candidate");
+            assertEq(1, h2.size(), api + ": one HTTP/2 candidate");
+            assertEq(1, h1.size(), api + ": one HTTP/1.1 candidate");
+            assertEq("HTTP2-ALPN-ERROR", h2[0].getPollOperation().getError().err,
+                api + ": HTTP/2 was refused via ALPN");
+            # the proof that the race did not wait for HTTP/3: it was connecting when HTTP/1.1 was started
+            assertEq(HttpClientIo::HttpClientConnectionState::Connecting, mgr.getH3StateAtH1Start(),
+                api + ": HTTP/1.1 was started while HTTP/3 was still connecting");
+            # ... and the losing HTTP/3 candidate is closed, not left connecting
+            assertEq(HttpClientIo::HttpClientConnectionState::Closed, h3[0].getConnectionState(),
+                api + ": the losing HTTP/3 candidate is closed");
+            assertEq(0, mgr.getRaceCount(), api + ": no race is left in flight");
+
+            # the refusal is cached as HTTP/1.1, so the next connection is made with HTTP/1.1 directly
+            assertEq("h1", mgr.getCachedProtocol(url), api);
+            assertEq(1, server.getRequestCount(), api);
+            assertEq(2, server.getConnectionCount(), api + ": the HTTP/2 attempt and HTTP/1.1");
+            hash<auto> resp2 = mgr.request(url, "GET", "/");
+            assertEq("h1", resp2.protocol, api + ": the next request");
+            assertEq(3, server.getConnectionCount(), api + ": the next request connects with HTTP/1.1 only");
+            assertEq(1, mgr.getCandidates("h3").size(), api + ": no other HTTP/3 candidate");
+            assertEq(1, mgr.getCandidates("h2").size(), api + ": no other HTTP/2 candidate");
+        }
+    }
+
+    #! While the HTTP/1.1 connection is held before its TLS handshake, it is a leg of the race
+    /** A caller that tracks the failures of connection attempts (a poll operation) must not count a failing
+        candidate of an unresolved race; the HTTP/1.1 candidate is one as well
+    */
+    asyncRaceLegTest() {
+        Http1OnlyServer server();
+        on_exit server.stop();
+        # connection 1 is the HTTP/2 candidate, connection 2 the HTTP/1.1 candidate
+        server.hold(2);
+        RaceRecordingManager mgr = getManager(LongConnectTimeout);
+        on_exit mgr.closeAll();
+        string url = server.getUrl();
+
+        *HttpClientIo::HttpClientConnection conn;
+        *EventNotifier n = mgr.acquireConnectionAsync(url, \conn);
+        *HttpClientIo::HttpClientConnection h1 = driveUntilH1RaceLeg(mgr, url, \n, \conn);
+        # a failed assertion ends the test case
+        assertTrue(exists h1, "the race started an HTTP/1.1 candidate, which is a race leg");
+        server.waitForConnection(2);
+        HttpClientIo::HttpClientConnection h3 = mgr.getCandidates("h3")[0];
+        HttpClientIo::HttpClientConnection h2 = mgr.getCandidates("h2")[0];
+        assertEq(HttpClientIo::HttpClientConnectionState::Connecting, h3.getConnectionState(),
+            "HTTP/3 is still connecting");
+        assertTrue(mgr.isUnresolvedRaceLeg(h3), "the HTTP/3 candidate is a race leg");
+        assertEq("HTTP2-ALPN-ERROR", h2.getPollOperation().getError().err, "HTTP/2 was refused via ALPN");
+        assertEq(HttpClientIo::HttpClientConnectionState::Connecting, h1.getConnectionState(),
+            "HTTP/1.1 is connecting");
+
+        server.release(2);
+        while (n) {
+            waitAndAcknowledge(mgr, n);
+            n = mgr.acquireConnectionAsync(url, \conn);
+        }
+        assertTrue(conn === h1, "the HTTP/1.1 candidate won");
+        assertTrue(conn.isReady(), "the winner is ready");
+        assertFalse(mgr.isUnresolvedRaceLeg(conn), "a winner is no longer a race leg");
+        assertEq(0, mgr.getRaceCount(), "the race has ended");
+        assertEq(HttpClientIo::HttpClientConnectionState::Closed, h3.getConnectionState(),
+            "the losing HTTP/3 candidate is closed");
+        assertEq("h1", mgr.getCachedProtocol(url));
+        # the winner is pooled: the request is made on it
+        hash<auto> resp = mgr.request(url, "GET", "/");
+        assertEq("h1", resp.protocol);
+        assertEq(2, server.getConnectionCount(), "the request was made on the connection that won the race");
+    }
+
+    #! An async race abandoned while its HTTP/1.1 candidate is connecting closes every candidate
+    abandonRaceTest() {
+        Http1OnlyServer server();
+        on_exit server.stop();
+        server.hold(2);
+        RaceRecordingManager mgr = getManager(LongConnectTimeout);
+        on_exit mgr.closeAll();
+        string url = server.getUrl();
+
+        *HttpClientIo::HttpClientConnection conn;
+        *EventNotifier n = mgr.acquireConnectionAsync(url, \conn);
+        *HttpClientIo::HttpClientConnection h1 = driveUntilH1RaceLeg(mgr, url, \n, \conn);
+        # a failed assertion ends the test case
+        assertTrue(exists h1, "the race started an HTTP/1.1 candidate, which is a race leg");
+        server.waitForConnection(2);
+
+        mgr.abandonAsyncHEForUrl(url);
+        assertEq(0, mgr.getRaceCount(), "the race was abandoned");
+        foreach string protocol in (("h3", "h2", "h1")) {
+            list<HttpClientIo::HttpClientConnection> candidates = mgr.getCandidates(protocol);
+            assertEq(1, candidates.size(), sprintf("one %s candidate", protocol));
+            assertEq(HttpClientIo::HttpClientConnectionState::Closed, candidates[0].getConnectionState(),
+                sprintf("the %s candidate is closed", protocol));
+            assertFalse(mgr.isUnresolvedRaceLeg(candidates[0]),
+                sprintf("the %s candidate of an abandoned race is no race leg", protocol));
+        }
+        assertEq(0, server.getRequestCount(), "no request was made");
+    }
+
+    #! Closing the manager while an async race's HTTP/1.1 candidate is connecting closes every candidate
+    /** closeAll() closed the HTTP/3 and HTTP/2 candidates of an unresolved race, but not its HTTP/1.1 candidate,
+        which was left connecting
+    */
+    closeAllRaceTest() {
+        Http1OnlyServer server();
+        on_exit server.stop();
+        server.hold(2);
+        RaceRecordingManager mgr = getManager(LongConnectTimeout);
+        bool closed;
+        on_exit if (!closed) {
+            mgr.closeAll();
+        }
+        string url = server.getUrl();
+
+        *HttpClientIo::HttpClientConnection conn;
+        *EventNotifier n = mgr.acquireConnectionAsync(url, \conn);
+        *HttpClientIo::HttpClientConnection h1 = driveUntilH1RaceLeg(mgr, url, \n, \conn);
+        # a failed assertion ends the test case
+        assertTrue(exists h1, "the race started an HTTP/1.1 candidate, which is a race leg");
+        server.waitForConnection(2);
+        assertEq(HttpClientIo::HttpClientConnectionState::Connecting, h1.getConnectionState(),
+            "HTTP/1.1 is connecting");
+
+        closed = True;
+        mgr.closeAll();
+        assertEq(0, mgr.getRaceCount(), "the race was torn down");
+        assertFalse(h1.getSocket().isOpen(), "the socket of the HTTP/1.1 candidate is closed");
+        foreach string protocol in (("h3", "h2", "h1")) {
+            list<HttpClientIo::HttpClientConnection> candidates = mgr.getCandidates(protocol);
+            assertEq(1, candidates.size(), sprintf("one %s candidate", protocol));
+            assertEq(HttpClientIo::HttpClientConnectionState::Closed, candidates[0].getConnectionState(),
+                sprintf("the %s candidate is closed", protocol));
+        }
+        assertEq(0, server.getRequestCount(), "no request was made");
+    }
+
+    #! When the HTTP/1.1 candidate fails, the race waits for HTTP/3, and the error names every protocol's failure
+    /** The race ends early only on a success: HTTP/3 might still connect.  Here it ends with its handshake timeout,
+        whose reason is part of the error, which proves that the race waited for it
+    */
+    failedHttp1WaitsForHttp3Test() {
+        foreach string api in (("HTTP", "connection acquisition")) {
+            Http1OnlyServer server();
+            on_exit server.stop();
+            server.refuse(2);
+            # a short connect timeout: the HTTP/3 handshake must time out for the race to end
+            RaceRecordingManager mgr = getManager(2s, 0);
+            on_exit mgr.closeAll();
+
+            try {
+                get(mgr, server.getUrl(), api);
+                fail(api + ": no exception raised");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err, api + ": " + ex.desc);
+                assertRegex("H3/QUIC: QUIC handshake did not complete", ex.desc,
+                    api + ": the race waited for the HTTP/3 handshake to time out");
+                assertRegex("H2/TCP: HTTP/2 not negotiated via ALPN", ex.desc,
+                    api + ": the HTTP/2 refusal is reported");
+                assertRegex("H1/TCP: ", ex.desc, api + ": the HTTP/1.1 failure is reported");
+                list<HttpClientIo::HttpClientConnection> h1 = mgr.getCandidates("h1");
+                assertEq(1, h1.size(), api + ": one HTTP/1.1 candidate");
+                # as for a connection that is not raced, the argument is the error of the connection that requests
+                # would have been made on
+                assertEq(h1[0].getPollOperation().getError().err, ex.arg.err,
+                    api + ": the argument is the error of the HTTP/1.1 connection");
+                foreach string protocol in (("h3", "h2", "h1")) {
+                    foreach HttpClientIo::HttpClientConnection conn in (mgr.getCandidates(protocol)) {
+                        assertEq(HttpClientIo::HttpClientConnectionState::Closed, conn.getConnectionState(),
+                            sprintf("%s: the %s candidate is closed", api, protocol));
+                    }
+                }
+                assertEq(0, mgr.getRaceCount(), api + ": no race is left in flight");
+            }
+            assertEq(0, server.getRequestCount(), api);
+        }
+    }
+
+    #! Drives an async race until it has an HTTP/1.1 candidate, and returns it, or until it ends
+    /** The HTTP/1.1 connection is held by the server, so the race cannot end before the HTTP/1.1 candidate exists,
+        unless it was never started
+
+        @param mgr the manager
+        @param url the URL of the server
+        @param n the notifier of the race; NOTHING if the race ended
+        @param conn the connection acquired, if the race ended
+
+        @return the HTTP/1.1 candidate, if the race started one
+    */
+    private *HttpClientIo::HttpClientConnection driveUntilH1RaceLeg(RaceRecordingManager mgr, string url,
+            reference<*EventNotifier> n, reference<*HttpClientIo::HttpClientConnection> conn) {
+        while (n) {
+            *HttpClientIo::HttpClientConnection h1 = mgr.getH1RaceLeg();
+            if (h1) {
+                return h1;
+            }
+            waitAndAcknowledge(mgr, n);
+            n = mgr.acquireConnectionAsync(url, \conn);
+        }
+    }
+
+    #! Waits for a notifier of an async race and acknowledges it
+    /** The race arms a recheck timer whenever it returns a notifier, so the wait ends with a wakeup; the bound is a
+        fail-safe
+    */
+    private waitAndAcknowledge(RaceRecordingManager mgr, EventNotifier n) {
+        mgr.getController().waitForNotifier(n, Http1OnlyServer::EventTimeout, Http1OnlyServer::EventTimeout);
+        n.acknowledge();
+    }
+
+    #! Returns a manager for automatic protocol selection with HTTP/3
+    /** @param connect_timeout the connect timeout, which is also the handshake timeout of HTTP/3
+        @param max_request_retries the maximum number of retries of a request, if not the default
+    */
+    private RaceRecordingManager getManager(timeout connect_timeout, *int max_request_retries) {
+        hash<HttpClientIo::HttpClientConnectionManagerOptions> opts = <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "auto",
+            "enable_http3": True,
+            "accept_all_certs": True,
+            "connect_timeout": connect_timeout,
+            "request_timeout": RequestTimeout,
+            "logger": logger,
+        };
+        if (exists max_request_retries) {
+            opts.max_request_retries = max_request_retries;
+        }
+        return new RaceRecordingManager(opts);
+    }
+
+    #! Makes a GET request with the given API and returns the status code, the body and the protocol
+    /** "connection acquisition" acquires the connection with the async race of
+        @ref HttpClientIo::HttpClientConnectionManager::acquireConnectionAsync() "acquireConnectionAsync()", as a
+        poll operation does, and then makes the request on it
+    */
+    private hash<auto> get(RaceRecordingManager mgr, string url, string api) {
+        switch (api) {
+            case "REST": {
+                RestClientIo rest({"url": url, "data": "text"}, mgr);
+                on_exit rest.close();
+                hash<auto> resp = rest.restGet("/");
+                return {"status_code": resp.status_code, "body": resp.body, "protocol": resp.protocol};
+            }
+            case "REST async": {
+                RestClientIo rest({"url": url, "data": "text"}, mgr);
+                on_exit rest.close();
+                hash<auto> resp = rest.restGetAsync("/").get(RequestTimeout);
+                return {"status_code": resp.status_code, "body": resp.body, "protocol": resp.protocol};
+            }
+            case "HTTP": {
+                hash<auto> resp = mgr.request(url, "GET", "/");
+                return {"status_code": resp.status_code, "body": resp.body, "protocol": resp.protocol};
+            }
+            case "HTTP async": {
+                hash<auto> resp = mgr.requestAsync(url, "GET", "/").get(RequestTimeout);
+                return {"status_code": resp.status_code, "body": resp.body, "protocol": resp.protocol};
+            }
+            case "connection acquisition": {
+                *HttpClientIo::HttpClientConnection conn;
+                *EventNotifier n = mgr.acquireConnectionAsync(url, \conn);
+                while (n) {
+                    waitAndAcknowledge(mgr, n);
+                    n = mgr.acquireConnectionAsync(url, \conn);
+                }
+                assertTrue(conn.isReady(), api + ": the connection acquired is ready");
+                hash<auto> resp = mgr.request(url, "GET", "/");
+                return {"status_code": resp.status_code, "body": resp.body, "protocol": resp.protocol};
+            }
+        }
+        throw "TEST-ERROR", sprintf("unknown API %y", api);
+    }
+}

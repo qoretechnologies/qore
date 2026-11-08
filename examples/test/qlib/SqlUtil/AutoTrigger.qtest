@@ -105,6 +105,10 @@ class AutoTriggerTest inherits QUnit::Test {
     mssqlTests() {
         hash<auto> result = SqlUtil::generate_auto_triggers("mssql", "my_table", getFullConfig());
 
+        # "freetds", the name of the SQL Server driver and the key of its options, gives the same triggers; it raised
+        # AUTO-TRIGGER-ERROR, so DataSchema auto_triggers failed on SQL Server
+        assertEq(result, SqlUtil::generate_auto_triggers("freetds", "my_table", getFullConfig()));
+
         assertTrue(result.hasKey("triggers"));
         assertTrue(result.triggers.hasKey("trig_my_table"));
 

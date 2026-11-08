@@ -81,17 +81,19 @@ class DataFrameDbiTest inherits QUnit::Test {
         ds.exec("INSERT INTO " + table + " (id, name, score) VALUES (3, 'Cy', 92.25)");
         ds.commit();
 
+        # Oracle's INTEGER is NUMBER(38): a scale-0 numeric of a precision over 18 is a decimal128 column of numbers
+        # in a columnar result, as it does not always fit in an int64; the other databases' integer is an int64
+        list<auto> ids = ds.getDriverRealName() =~ /oracle/i ? (1n, 2n, 3n) : (1, 2, 3);
         DataFrame::DataFrame df = DataFrame::DataFrame::fromQuery(ds,
             "SELECT id, name, score FROM " + table + " ORDER BY id");
         assertEq(3, df.numRows(), label + " fromQuery preserves row count");
-        assertEq((1, 2, 3), cast<list<int>>(getColumn(df, "id")), label + " fromQuery preserves dense ids");
+        assertEq(ids, getColumn(df, "id"), label + " fromQuery preserves dense ids");
         assertEq(("Ada", "Bo", "Cy"), cast<list<string>>(getColumn(df, "name")),
             label + " fromQuery preserves strings");
 
         ColumnarResult columns = ds.selectColumnar("SELECT id, name, score FROM " + table + " ORDER BY id");
         assertEq(3, columns.numRows(), label + " selectColumnar returns rows");
-        assertEq((1, 2, 3), cast<list<int>>(columns.getColumn("id").toList()),
-            label + " selectColumnar preserves dense ids");
+        assertEq(ids, columns.getColumn("id").toList(), label + " selectColumnar preserves dense ids");
 
         ds.exec("CREATE TABLE " + out_table + " (id integer, name varchar(80), score float)");
         df.toTable(ds, out_table);

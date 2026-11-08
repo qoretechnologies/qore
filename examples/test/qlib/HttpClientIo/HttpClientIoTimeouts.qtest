@@ -139,7 +139,9 @@ public class HttpClientIoTimeoutsTest inherits QUnit::Test {
     private {
         HttpServer server;
         StallHandler handler();
-        TrickleServer trickle();
+        #! started by globalSetUp() and stopped by globalTearDown(), so a run that runs no test (--list) has no thread
+        #! left that keeps the program from exiting
+        *TrickleServer trickle;
         hash<string, string> urls;
         *int quic_port;
     }
@@ -153,6 +155,7 @@ public class HttpClientIoTimeoutsTest inherits QUnit::Test {
     }
 
     globalSetUp() {
+        trickle = new TrickleServer();
         server = new HttpServer(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
@@ -185,7 +188,9 @@ public class HttpClientIoTimeoutsTest inherits QUnit::Test {
 
     globalTearDown() {
         handler.stall.dec();
-        trickle.stop();
+        if (trickle) {
+            trickle.stop();
+        }
         if (server) {
             server.stop();
         }
@@ -219,35 +224,51 @@ public class HttpClientIoTimeoutsTest inherits QUnit::Test {
     }
 
     testStall() {
-        foreach hash<auto> i in (urls.pairIterator()) {
-            HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
-                "protocol": i.key,
-                "request_timeout": 0,
-                "io_timeout": IoTimeout,
-                "max_request_retries": 0,
-            });
-            on_exit mgr.closeAll();
-            date start = now_us();
-            assertThrows("HTTPCLIENT-TIMEOUT", "io_timeout", \mgr.request(), (i.value, "GET", "/stall"), i.key);
-            HttpCancellableFuture f = mgr.requestAsync(i.value, "GET", "/stall");
-            assertThrows("HTTPCLIENT-TIMEOUT", "io_timeout", \f.get(), 30s, i.key);
-            assertThrows("HTTPCLIENT-TIMEOUT", "io_timeout", \runPoller(),
-                new HttpClientRequestPollOperation(mgr, i.value + "/stall"), i.key);
-            assertThrows("HTTPCLIENT-TIMEOUT", "io_timeout", \mgr.openStream(), i.value + "/stall", i.key);
+        # each protocol's requests are made one after the other on its own connection manager; the protocols run in
+        # parallel, as they share nothing but the server, so their inactivity timeouts elapse at the same time
+        hash<string, hash<auto>> results = runPerProtocol(\stallSteps());
+        foreach string k in (keys urls) {
+            hash<auto> r = results{k};
+            assertThrows("HTTPCLIENT-TIMEOUT", "io_timeout", \HttpClientIoTimeoutsTest::replay(), r.request, k);
+            assertThrows("HTTPCLIENT-TIMEOUT", "io_timeout", \HttpClientIoTimeoutsTest::replay(), r.async, k);
+            assertThrows("HTTPCLIENT-TIMEOUT", "io_timeout", \HttpClientIoTimeoutsTest::replay(), r.poller, k);
+            assertThrows("HTTPCLIENT-TIMEOUT", "io_timeout", \HttpClientIoTimeoutsTest::replay(), r.stream, k);
             # each timeout is the inactivity timeout, not another deadline
-            assertLt(20s, now_us() - start, i.key);
+            assertLt(20s, r.elapsed, k);
             # a request that receives its response is not affected
-            assertEq("done", mgr.request(i.value, "GET", "/x").body, i.key);
+            assertEq("done", HttpClientIoTimeoutsTest::replay(r.done), k);
             # the overall deadline applies as well
-            HttpClientConnectionManager both(<HttpClientConnectionManagerOptions>{
-                "protocol": i.key,
-                "request_timeout": 300ms,
-                "io_timeout": 60s,
-                "max_request_retries": 0,
-            });
-            on_exit both.closeAll();
-            assertThrows("HTTPCLIENT-TIMEOUT", "timed out", \both.request(), (i.value, "GET", "/stall"), i.key);
+            assertThrows("HTTPCLIENT-TIMEOUT", "timed out", \HttpClientIoTimeoutsTest::replay(), r.both, k);
         }
+    }
+
+    #! Makes the requests of testStall() for one protocol and returns their outcomes
+    private hash<auto> stallSteps(string proto, string url) {
+        hash<auto> r;
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": proto,
+            "request_timeout": 0,
+            "io_timeout": IoTimeout,
+            "max_request_retries": 0,
+        });
+        on_exit mgr.closeAll();
+        date start = now_us();
+        r.request = record(auto sub () { return mgr.request(url, "GET", "/stall"); });
+        HttpCancellableFuture f = mgr.requestAsync(url, "GET", "/stall");
+        r.async = record(auto sub () { return f.get(30s); });
+        r.poller = record(auto sub () { return runPoller(new HttpClientRequestPollOperation(mgr, url + "/stall")); });
+        r.stream = record(auto sub () { return mgr.openStream(url + "/stall"); });
+        r.elapsed = now_us() - start;
+        r.done = record(auto sub () { return mgr.request(url, "GET", "/x").body; });
+        HttpClientConnectionManager both(<HttpClientConnectionManagerOptions>{
+            "protocol": proto,
+            "request_timeout": 300ms,
+            "io_timeout": 60s,
+            "max_request_retries": 0,
+        });
+        on_exit both.closeAll();
+        r.both = record(auto sub () { return both.request(url, "GET", "/stall"); });
+        return r;
     }
 
     testTrickle() {
@@ -273,33 +294,103 @@ public class HttpClientIoTimeoutsTest inherits QUnit::Test {
     }
 
     testRestClientIo() {
-        foreach hash<auto> i in (urls.pairIterator()) {
-            RestClientIo rest({
-                "url": i.value,
-                "protocol": i.key,
-                "data": "text",
-                "io_timeout": IoTimeout,
-                "max_request_retries": 0,
-            });
-            on_exit rest.close();
-            assertEq(IoTimeout.durationMilliseconds(), rest.getConnectionManager().getIoTimeout(), i.key);
-            assertThrows("HTTPCLIENT-TIMEOUT", "io_timeout", \rest.restGet(), "/stall", i.key);
-            RestFuture f = rest.restGetAsync("/stall");
-            assertThrows("HTTPCLIENT-TIMEOUT", "io_timeout", \f.get(), NOTHING, i.key);
-            assertEq("done", rest.restGet("/x").body, i.key);
+        # the protocols run in parallel, as in testStall()
+        hash<string, hash<auto>> results = runPerProtocol(\restSteps());
+        foreach string k in (keys urls) {
+            hash<auto> r = results{k};
+            assertEq(IoTimeout.durationMilliseconds(), r.io_timeout, k);
+            assertThrows("HTTPCLIENT-TIMEOUT", "io_timeout", \HttpClientIoTimeoutsTest::replay(), r.get, k);
+            assertThrows("HTTPCLIENT-TIMEOUT", "io_timeout", \HttpClientIoTimeoutsTest::replay(), r.async, k);
+            assertEq("done", HttpClientIoTimeoutsTest::replay(r.done), k);
 
             # a connection manager without a request deadline
-            HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
-                "protocol": i.key,
-                "request_timeout": 0,
-            });
-            on_exit mgr.closeAll();
-            RestClientIo nodl({"url": i.value, "data": "text"}, mgr);
-            on_exit nodl.close();
-            assertEq(0, nodl.getTimeout(), i.key);
-            assertEq("done", nodl.restGet("/x").body, i.key);
-            assertEq("done", nodl.restGetAsync("/x").get().body, i.key);
+            assertEq(0, r.nodl_timeout, k);
+            assertEq("done", HttpClientIoTimeoutsTest::replay(r.nodl_get), k);
+            assertEq("done", HttpClientIoTimeoutsTest::replay(r.nodl_async), k);
         }
+    }
+
+    #! Makes the requests of testRestClientIo() for one protocol and returns their outcomes
+    private hash<auto> restSteps(string proto, string url) {
+        hash<auto> r;
+        RestClientIo rest({
+            "url": url,
+            "protocol": proto,
+            "data": "text",
+            "io_timeout": IoTimeout,
+            "max_request_retries": 0,
+        });
+        on_exit rest.close();
+        r.io_timeout = rest.getConnectionManager().getIoTimeout();
+        r.get = record(auto sub () { return rest.restGet("/stall"); });
+        RestFuture f = rest.restGetAsync("/stall");
+        r.async = record(auto sub () { return f.get(); });
+        r.done = record(auto sub () { return rest.restGet("/x").body; });
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": proto,
+            "request_timeout": 0,
+        });
+        on_exit mgr.closeAll();
+        RestClientIo nodl({"url": url, "data": "text"}, mgr);
+        on_exit nodl.close();
+        r.nodl_timeout = nodl.getTimeout();
+        r.nodl_get = record(auto sub () { return nodl.restGet("/x").body; });
+        r.nodl_async = record(auto sub () { return nodl.restGetAsync("/x").get().body; });
+        return r;
+    }
+
+    #! Runs the steps for each protocol in its own thread, all at the same time, and returns their outcomes by protocol
+    /** An error raised by the steps themselves, outside of a recorded call, is raised here
+    */
+    private hash<string, hash<auto>> runPerProtocol(code steps) {
+        Queue q();
+        foreach hash<auto> i in (urls.pairIterator()) {
+            background runSteps(q, steps, i.key, i.value);
+        }
+        hash<string, hash<auto>> rv;
+        *hash<ExceptionInfo> err;
+        for (int n = urls.size(); n; --n) {
+            hash<auto> h = q.get();
+            if (h.ex && !err) {
+                err = h.ex;
+            }
+            rv{h.proto} = h.result;
+        }
+        if (err) {
+            # the argument is the exception raised by the thread, with its call stack
+            throw err.err, err.desc, err;
+        }
+        return rv;
+    }
+
+    #! Runs the steps for one protocol and pushes their outcome, or the error that they raised, on the queue
+    private runSteps(Queue q, code steps, string proto, string url) {
+        try {
+            q.push({"proto": proto, "result": steps(proto, url)});
+        } catch (hash<ExceptionInfo> ex) {
+            q.push({"proto": proto, "ex": ex});
+        }
+    }
+
+    #! Returns the outcome of a call: its return value, or the exception it raised
+    static hash<auto> record(code c) {
+        try {
+            return {"rv": c()};
+        } catch (hash<ExceptionInfo> ex) {
+            return {"ex": ex};
+        }
+    }
+
+    #! Returns the return value of a recorded call, or raises the exception it raised
+    /** The exception has the error and description of the recorded one; as it is raised again on another thread,
+        its argument is the recorded exception, with its call stack, and the recorded argument in its \c arg key
+    */
+    static auto replay(hash<auto> outcome) {
+        if (outcome.ex) {
+            throw outcome.ex.err, outcome.ex.desc, outcome.ex;
+        }
+        return outcome.rv;
     }
 
     static auto runPoller(AbstractPollOperation op) {

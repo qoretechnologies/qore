@@ -262,13 +262,13 @@ public class FirecrawlDataProviderBase inherits DataProvider::AbstractDataProvid
 
     #! Returns True if the error indicates the operation should be retried
     private bool retry(hash<ExceptionInfo> ex, reference<int> retries) {
-        if (retries >= MaxRetries) {
+        if (retries >= MaxRetries || DataProviderRetryUtil::retriesSuppressed()) {
             return False;
         }
         # Retry on I/O errors
-        if (RetrySet{ex.err}) {
+        if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet)) {
             ++retries;
-            sleep(pow(2, retries) * 1000ms);
+            DataProviderRetryUtil::waitTransportRetry(pow(2, retries));
             return True;
         }
         # Retry on rate limit (429)

@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires SqlUtil
+%requires MssqlSqlUtilBase
+%requires FreetdsSqlUtil
+
+%exec-class MssqlServerVersionTest
+
+#! A datasource that does not connect: it reports the given server version, and its catalog queries return no rows
+class VersionDatasource inherits Datasource {
+    private {
+        auto version;
+    }
+
+    constructor(string connstr, auto version) : Datasource(connstr) {
+        self.version = version;
+    }
+
+    auto getServerVersion() {
+        return version;
+    }
+
+    # the database product, as the jdbc driver gives it
+    string getDriverRealName() {
+        return getDriverName() == "jdbc"
+            ? (version.typeCode() == NT_HASH ? version.name : "Microsoft SQL Server")
+            : getDriverName();
+    }
+
+    auto select(string sql, ...) {
+        return {};
+    }
+
+    auto selectRow(string sql, ...) {
+        # the default schema of SQL Server
+        return {"schema": "dbo"};
+    }
+
+    auto selectRows(string sql, ...) {
+        return ();
+    }
+}
+
+#! The server version of a SQL Server connection, as the freetds driver gives it (a string) and as the jdbc driver gives
+#! it (a hash with the product name and the major version number)
+class MssqlServerVersionTest inherits QUnit::Test {
+    constructor() : Test("MssqlServerVersionTest", "1.0", \ARGV) {
+        addTestCase("server versions", \versions());
+        set_return_value(main());
+    }
+
+    private versions() {
+        # SQL Server 2012 and later have sequences
+        hash<string, list<auto>> cases = {
+            "freetds 2022": ("freetds:u/p@db", "Microsoft SQL Server 2022 (RTM) - 16.0.1000.6", True, False),
+            "freetds 2008": ("freetds:u/p@db", "Microsoft SQL Server 2008 R2 (SP3) - 10.50.6000.34", False, False),
+            "jdbc 2022": ("jdbc:u/p@x{url=sqlserver://h:1433}", {"name": "Microsoft SQL Server",
+                "version": "16.00.4135", "major_version": 16, "minor_version": 0}, True, False),
+            "jdbc 2008": ("jdbc:u/p@x{url=sqlserver://h:1433}", {"name": "Microsoft SQL Server",
+                "version": "10.50.6000", "major_version": 10, "minor_version": 50}, False, False),
+            # a version after the newest known one is taken for the newest one
+            "jdbc next": ("jdbc:u/p@x{url=sqlserver://h:1433}", {"name": "Microsoft SQL Server",
+                "version": "18.00.1", "major_version": 18, "minor_version": 0}, True, False),
+            "jdbc sybase": ("jdbc:u/p@x{url=sybase:Tds:h:5000}", {"name": "Adaptive Server Enterprise",
+                "version": "16.0", "major_version": 16, "minor_version": 0}, False, True),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            VersionDatasource ds(i.value[0], i.value[1]);
+            assertEq(i.value[3], MssqlDatabase::isSybase(ds), i.key + ": Sybase");
+            MssqlDatabase db(ds);
+            assertEq(i.value[2], db.supportsSequences(), i.key + ": sequences");
+        }
+    }
+}

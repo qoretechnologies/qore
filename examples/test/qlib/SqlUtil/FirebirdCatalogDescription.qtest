@@ -9,6 +9,7 @@
 %requires SqlUtil
 %requires XdbcFirebirdSqlUtilBase
 %requires JdbcFirebirdSqlUtil
+%requires ./FirebirdTestIsolation.qm
 
 %try-module jni
 %define NoJni
@@ -111,7 +112,9 @@ class FirebirdCatalogDescriptionTest inherits QUnit::Test {
         if (ds) {
             return ds;
         }
-        string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD ?? "";
+        # the run's own database: tests that run at the same time do not share the objects of this one
+        string connstr = FirebirdRunDatabase::getConnectionString(m_options.connstr
+            ?? ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD, "FirebirdCatalog") ?? "";
         if (!connstr.val()) {
             testSkip("no Firebird connection; set QORE_DB_CONNSTR_JDBC_FIREBIRD or use -c");
         }

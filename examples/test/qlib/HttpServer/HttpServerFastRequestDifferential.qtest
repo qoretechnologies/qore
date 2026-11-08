@@ -33,15 +33,14 @@ class RecordingHandler inherits AbstractHttpRequestHandler {
     routes must accept the same bytes, with the same method and path and with headers that decide the same thing.
     The requests are a fixed list of corner cases and seeded random mutations of a valid request.  Each request is the
     second on its connection, and then the first one (the first request of a plain TCP connection is read by the same
-    operation).
+    operation).  The requests to the server with the route are followed by the end of the client's stream (a
+    half-close, Socket::shutdownWrite()), so a request that the server does not answer (an incomplete one, or one that
+    waits for a body) ends with the server closing the connection instead of a wait for a timeout.
 */
 class HttpServerFastRequestDifferentialTest inherits QUnit::Test {
     public {
         const Timeout = 30s;
 
-        #! how long to wait for the answer to a mutated request, which may be incomplete: a request that is not
-        #! answered in time is taken as not answered by the route, which the check allows
-        const MutationTimeout = 1s;
         const Mutations = 400;
         const Seed = 20260101;
     }
@@ -83,10 +82,11 @@ class HttpServerFastRequestDifferentialTest inherits QUnit::Test {
     }
 
     #! sends raw bytes as the second request of a connection and returns the status code and body of the answer
-    /** @param timeout how long to wait for the answer; a request that the server does not answer (an incomplete
-        one, or one that waits for a body) or answers by closing the connection has the status 0
+    /** @param half_close if @ref True "True", the client's stream ends after the request (a half-close), so the server
+        answers a complete request and closes the connection of a request that it cannot answer (an incomplete one, or
+        one that waits for a body), which has the status 0, as one that the server answers by closing the connection
     */
-    private hash<auto> exchange(int port, string raw, timeout timeout) {
+    private hash<auto> exchange(int port, string raw, bool half_close) {
         Socket c();
         c.connect("127.0.0.1:" + port);
         on_exit c.close();
@@ -97,15 +97,18 @@ class HttpServerFastRequestDifferentialTest inherits QUnit::Test {
             c.recv(h."content-length".toInt(), Timeout);
         }
         c.send(raw);
+        if (half_close) {
+            c.shutdownWrite();
+        }
         try {
-            h = c.readHTTPHeader(timeout);
+            h = c.readHTTPHeader(Timeout);
             int len = (h."content-length" ?? 0).toInt();
             # the response to a HEAD request has a Content-Length and no body
             bool head = raw.find("HEAD ") == 0;
             return {"status": h.status_code, "body": len && !head ? c.recv(len, Timeout) : "", "length": len,
                 "head": head};
         } catch (hash<ExceptionInfo> ex) {
-            # no answer in time, or the connection was closed or reset by the server (a rejected request)
+            # the connection was closed or reset by the server (a rejected or unanswered request)
             return {"status": 0, "body": ""};
         }
     }
@@ -116,16 +119,16 @@ class HttpServerFastRequestDifferentialTest inherits QUnit::Test {
     }
 
     #! checks one request: if the route answers it, the normal path must read it the same way
-    private bool check(string raw, string desc, timeout timeout = Timeout) {
+    private bool check(string raw, string desc) {
         # a route answers only a request with a complete header; the server cannot answer one without the empty line, so
         # there is nothing to compare and nothing to wait for
         if (raw !~ /\r\n\r\n/) {
             return False;
         }
-        if (!isFast(exchange(fast_port, raw, timeout))) {
+        if (!isFast(exchange(fast_port, raw, True))) {
             return False;
         }
-        hash<auto> plain = exchange(plain_port, raw, Timeout);
+        hash<auto> plain = exchange(plain_port, raw, False);
         assertTrue(plain.status == 200 && (plain.body == "handler" || plain.head),
             sprintf("%s: the route answered, but the normal path did not accept %y: %y", desc, raw, plain));
         hash<auto> rec = plain_handler.q.get(Timeout);
@@ -224,7 +227,7 @@ class HttpServerFastRequestDifferentialTest inherits QUnit::Test {
         # that never comes (also without any route), so the route must not answer these, and they are not waited for
         foreach string r in (("+0", "00", "-1", "0x0", "00000", "1e0", "0,0")) {
             assertFalse(check(sprintf("GET /p HTTP/1.1\r\nHost: x\r\nContent-Length: %s\r\n\r\n", r),
-                "non-canonical Content-Length " + r, MutationTimeout),
+                "non-canonical Content-Length " + r),
                 "the route does not answer Content-Length " + r);
         }
         assertTrue(fast >= 7, "the valid requests are answered by the route");
@@ -265,7 +268,7 @@ class HttpServerFastRequestDifferentialTest inherits QUnit::Test {
                     break;
                 }
             }
-            if (check(m, sprintf("mutation #%d", i), MutationTimeout)) {
+            if (check(m, sprintf("mutation #%d", i))) {
                 ++fast;
             }
         }

@@ -10,6 +10,8 @@
 %requires SqlUtil
 %requires Schema
 %requires ../SqlUtil/PgsqlTestIsolation.qm
+%requires ../SqlUtil/MysqlTestIsolation.qm
+%requires ../SqlUtil/MssqlTestIsolation.qm
 
 %try-module pgsql
 %define NO_PGSQL
@@ -54,6 +56,7 @@ class ReconciledIndexAlignmentTest inherits QUnit::Test {
 
     globalTearDown() {
         PgsqlRunSchema::teardown();
+        MysqlRunDatabase::teardown();
     }
 
     sqlite() {
@@ -83,7 +86,9 @@ class ReconciledIndexAlignmentTest inherits QUnit::Test {
             testSkip("QORE_DB_CONNSTR_MYSQL is not set");
         }
         skipIfNoConnection(ENV.QORE_DB_CONNSTR_MYSQL);
-        checkDatabase(ENV.QORE_DB_CONNSTR_MYSQL);
+        # the run's own database: tests that run at the same time do not share the tables of this one
+        string connstr = MysqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_MYSQL, "ReconciledIndexAlignment");
+        checkDatabase(connstr);
     }
 
     #! Skips the test case if the server of a connection string cannot be reached
@@ -109,7 +114,9 @@ class ReconciledIndexAlignmentTest inherits QUnit::Test {
             testSkip("QORE_DB_CONNSTR_FREETDS is not set");
         }
         skipIfNoConnection(ENV.QORE_DB_CONNSTR_FREETDS);
-        checkDatabase(ENV.QORE_DB_CONNSTR_FREETDS);
+        # the run's own database: tests that run at the same time do not share the objects of this one
+        string connstr = MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS, "ReconciledIndexAlignment");
+        checkDatabase(connstr);
     }
 
     #! Returns the contract of the reconciliation of the payments table: a canonical key mapped from the legacy key,

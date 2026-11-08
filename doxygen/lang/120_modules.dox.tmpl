@@ -34,6 +34,11 @@ ModuleName/
     |-SomeModuleFunction.ql
     @endcode \n
 
+    @anchor separated_module_paths
+    A separated module can also be required by the path of its directory or of its <tt>.qm</tt> file
+    (<tt>%requires ../lib/ModuleName</tt> or <tt>%requires ../lib/ModuleName/ModuleName.qm</tt>); either path loads the
+    whole module.
+
     The <tt>.qm</tt> file is parsed first, then the other files in the bytewise order of their names.  Parse directives
     belong in the <tt>.qm</tt> file: the parse options and the warnings it sets apply to every file of the module.  A warning
     directive in another file, such as @ref disable-warning "%disable-warning", applies only to that file.

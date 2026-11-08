@@ -1,0 +1,40 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class CompoundAssignmentUnassignedInProcessTest
+
+#! Tests -= and += on unassigned lvalues in the execution mode of the test itself
+/** The child processes of compound-assignment-unassigned.qtest check every execution mode against the AST
+    interpreter; these checks run in the process of the test, so each CI job checks them in its own execution mode.
+*/
+class CompoundAssignmentUnassignedInProcessTest inherits QUnit::Test {
+    constructor() : QUnit::Test("CompoundAssignmentUnassignedInProcess", "1.0", \ARGV) {
+        addTestCase("the AST interpreter's -= on unassigned lvalues", \testAstMinusEquals());
+
+        set_return_value(main());
+    }
+
+    #! -= assigns an unassigned lvalue of an arithmetic type, but not a hash that it removes keys from
+    testAstMinusEquals() {
+        code id = auto sub (auto v) { return v; };
+        int s;
+        s -= id(0);
+        assertEq(0, s);
+        assertEq("integer", s.type());
+        hash<auto> h;
+        h -= id("x");
+        assertEq(NOTHING, h);
+        float f;
+        f -= id(1);
+        assertEq(-1.0, f);
+        hash<auto> m = {};
+        m.v += id(NOTHING);
+        assertEq(NOTHING, m.v);
+    }
+}

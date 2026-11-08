@@ -151,6 +151,14 @@ hashdecl Qore::TimerEventInfo {
     registration. This is particularly important for listener sockets where
     connections may arrive before the poll call.
 
+    @par Regular Files
+    A regular file is always ready to read and to write (as \c poll(2) reports it), and the system cannot wait for
+    one; a regular file added with add() is therefore reported ready for its events by the next poll() after it is
+    added, and not again: remove it with del() and add it again to have it reported again.  A file closed while it
+    is in the loop is reported once with @ref Qore::SOCK_POLLERR "SOCK_POLLERR" and is then no longer polled.  Another
+    file that the system cannot wait for (a directory, or a character device without polling) cannot be added: add()
+    raises \c EVENT-LOOP-ERROR.
+
     @note This class is not available with the @ref PO_NO_NETWORK parse option
 
     @since %Qore 3.0
@@ -236,7 +244,8 @@ nothing EventLoop::add(Socket[QoreSocketObject] socket, int events) [flags=NAMED
 /** @par Example:
     @code{.py} loop.add(file: file, events: SOCK_POLLIN); @endcode
 
-    @param file The file to add (typically a pipe or ReadOnlyFile)
+    @param file The file to add (typically a pipe or ReadOnlyFile); a regular file is reported ready once, at the next
+    poll() (see @ref Qore::EventLoop "EventLoop")
     @param events Events to monitor (SOCK_POLLIN and/or SOCK_POLLOUT)
 
     @throw EVENT-LOOP-ERROR Failed to add file to event loop

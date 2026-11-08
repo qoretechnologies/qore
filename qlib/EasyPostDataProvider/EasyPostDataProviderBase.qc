@@ -65,6 +65,13 @@ public class EasyPostDataProviderBase inherits DataProvider::AbstractDataProvide
 
         #! Max retries
         const MaxIoRetries = 5;
+
+        #! The longest wait before a rate-limited request is made again that is taken from the server's
+        #! \c Retry-After header; a longer time is not honored (see @ref DefaultRateLimitWait)
+        const MaxRateLimitWait = 60s;
+
+        #! The wait before a rate-limited request is made again if the server gives no time from 1 to 60 seconds
+        const DefaultRateLimitWait = 5s;
     }
 
     private {
@@ -242,8 +249,18 @@ public class EasyPostDataProviderBase inherits DataProvider::AbstractDataProvide
     }
 
     #! Returns True if the error indicates that the operation should be retried
+    /** A transport error in @ref RetrySet is retried at once.  A rate-limited request (HTTP 429) is retried after
+        the time given by the server's \c Retry-After header in seconds, if it is from 1 second to
+        @ref MaxRateLimitWait, and after @ref DefaultRateLimitWait otherwise (see @ref waitForRateLimit()).  A request
+        is made at most @ref MaxIoRetries times.  Nothing is retried, and there is no wait, while
+        @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed".
+    */
     private bool retry(hash<ExceptionInfo> ex, reference<int> retries) {
-        if (RetrySet{ex.err}) {
+        # nothing is retried while retries are suppressed (see DataProviderRetryUtil::runWithoutRetries())
+        if (DataProviderRetryUtil::retriesSuppressed()) {
+            return False;
+        }
+        if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet)) {
             if (++retries == MaxIoRetries) {
                 return False;
             }
@@ -254,11 +271,29 @@ public class EasyPostDataProviderBase inherits DataProvider::AbstractDataProvide
                 return False;
             }
             *string retry_after = ex.arg.headers."retry-after";
-            int wait_secs = retry_after.val() ? retry_after.toInt() : (1 << retries);
-            sleep(wait_secs);
+            date delay = DefaultRateLimitWait;
+            if (retry_after.val()) {
+                # compared as seconds, so that a huge number cannot overflow a date
+                int secs = retry_after.toInt();
+                if (secs >= 1 && secs <= get_duration_seconds(MaxRateLimitWait)) {
+                    delay = seconds(secs);
+                }
+            }
+            waitForRateLimit(delay);
             return True;
         }
         return False;
+    }
+
+    #! Waits before a rate-limited request is made again
+    /** Called by @ref retry() after a rate-limited response (HTTP 429) before the request is made again; not called
+        while @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed".  A subclass can
+        override it, for example a test that records the waits instead of waiting.
+
+        @param delay the time to wait; at most @ref MaxRateLimitWait
+    */
+    private waitForRateLimit(date delay) {
+        usleep(delay);
     }
 
     #! Cursor-based pagination helper

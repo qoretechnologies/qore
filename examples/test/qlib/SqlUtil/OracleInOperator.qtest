@@ -1,0 +1,258 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires SqlUtil
+%requires OracleSqlUtilBase
+%requires ./TestRunIsolation.qm
+%requires ./OracleTestIsolation.qm
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./OracleCatalogDatasource.qm
+
+%exec-class OracleInOperatorTest
+
+#! An Oracle datasource of the jdbc driver that does not connect
+class JdbcCatalogDatasource inherits CatalogDatasource {
+    constructor() : CatalogDatasource((), (), (), (), {}, {}) {
+    }
+
+    string getDriverName() {
+        return "jdbc";
+    }
+}
+
+#! The IN operator on Oracle with the oracle driver, which binds a collection of the values, and with the jdbc driver,
+#! which cannot bind a collection: it raised JDBC-BIND-ERROR (a hash bound), or MISSING-ORACLE-DRIVER without the
+#! oracle module; it binds each value in collection constructors of up to 999 values
+class OracleInOperatorTest inherits QUnit::Test {
+    private {
+        # driver -> table
+        hash<string, AbstractTable> tables;
+
+        # driver -> the name of its test table: a name of the run's own, as the run may have no schema of its own
+        hash<string, string> names;
+
+        # the number of rows: more than two constructors
+        const Rows = 2100;
+
+        const Day = 2026-01-01;
+    }
+
+    constructor() : Test("OracleInOperatorTest", "1.0", \ARGV) {
+        on_exit {
+            dropTables();
+            OracleRunSchema::teardown();
+        }
+        foreach hash<auto> i in ({"oracle": "QORE_DB_CONNSTR_ORACLE", "jdbc": "QORE_DB_CONNSTR_JDBC_ORACLE"}
+                .pairIterator()) {
+            if (!ENV{i.value}.val()) {
+                continue;
+            }
+            *string connstr = OracleRunSchema::getConnectionString(ENV{i.value}, "OracleInOperator", i.key);
+            if (!connstr) {
+                continue;
+            }
+            Datasource ds(connstr);
+            ds.open();
+            names{i.key} = TestRun::makeName("in_" + i.key);
+            tables{i.key} = setupTable(ds, names{i.key});
+        }
+
+        addTestCase("numbers", \numbers());
+        addTestCase("strings and dates", \stringsAndDates());
+        addTestCase("the old-style where operator", \whereOperator());
+        addTestCase("empty, NULL and the constructor limit", \limits());
+        addTestCase("the SQL of each driver", \sql());
+        addTestCase("the most values bound in a statement", \bindLimit());
+        set_return_value(main());
+    }
+
+    #! drops the test tables
+    private dropTables() {
+        foreach hash<auto> i in (tables.pairIterator()) {
+            try {
+                AbstractDatasource ds = i.value.getDatasource();
+                ds.rollback();
+                i.value.drop();
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: %s: cannot drop table %s: %s: %s\n", i.key, names{i.key}, ex.err, ex.desc);
+            }
+        }
+    }
+
+    private AbstractTable setupTable(Datasource ds, string name) {
+        Table t(ds, name);
+        t.setupTable({
+            "columns": {
+                "id": {"qore_type": SqlUtil::NUMERIC, "size": 14, "notnull": True},
+                "s": {"qore_type": SqlUtil::VARCHAR, "size": 20},
+                "d": {"qore_type": Type::Date},
+            },
+            "primary_key": {"name": "pk_" + name, "columns": ("id",)},
+        });
+        t.create();
+        ds.commit();
+        # a table that is not set up is dropped here, as only the tables that are set up are dropped at the end
+        on_error {
+            ds.rollback();
+            t.drop();
+            ds.commit();
+        }
+        AbstractTable table = new Table(ds, name).getTable();
+        map table.insert({"id": $1, "s": sprintf("s%d", $1), "d": Day + days($1)}), seq(1, Rows);
+        ds.commit();
+        return table;
+    }
+
+    # returns the integers from first to last, both included
+    private static list<int> seq(int first, int last) {
+        list<int> l = ();
+        for (int i = first; i <= last; ++i) {
+            l += i;
+        }
+        return l;
+    }
+
+    private static hash<DataProviderExpression> mkexp(string op, auto args) {
+        return <DataProviderExpression>{"exp": op, "args": args};
+    }
+
+    private static hash<DataProviderFieldReference> fld(string name) {
+        return <DataProviderFieldReference>{"field": name};
+    }
+
+    private skipIfNone() {
+        if (!tables) {
+            testSkip("no Oracle connection available");
+        }
+    }
+
+    # returns the number of rows whose id is in the list
+    private int countIn(AbstractTable t, string col, list<auto> l) {
+        return t.selectRow({"columns": cop_as(cop_count(), "c"), "where": mkexp(OP_IN, (fld(col), l))}).c.toInt();
+    }
+
+    private numbers() {
+        skipIfNone();
+        foreach hash<auto> i in (tables.pairIterator()) {
+            assertEq(1, countIn(i.value, "id", (5,)), i.key);
+            assertEq(999, countIn(i.value, "id", seq(1, 999)), i.key);
+            assertEq(1000, countIn(i.value, "id", seq(1, 1000)), i.key);
+            assertEq(1998, countIn(i.value, "id", seq(1, 1998)), i.key);
+            assertEq(Rows, countIn(i.value, "id", seq(1, Rows + 10)), i.key);
+            # floats and numbers
+            assertEq(2, countIn(i.value, "id", (2.0, 3n, 4.5)), i.key);
+        }
+    }
+
+    private stringsAndDates() {
+        skipIfNone();
+        foreach hash<auto> i in (tables.pairIterator()) {
+            assertEq(3, countIn(i.value, "s", ("s1", "s1000", "s2100", "x")), i.key);
+            assertEq(1000, countIn(i.value, "s", map sprintf("s%d", $1), seq(1, 1000)), i.key);
+            assertEq(2, countIn(i.value, "d", (Day + days(1), Day + days(1000))), i.key);
+            assertEq(1000, countIn(i.value, "d", map Day + days($1), seq(1, 1000)), i.key);
+        }
+    }
+
+    private whereOperator() {
+        skipIfNone();
+        foreach hash<auto> i in (tables.pairIterator()) {
+            assertEq(1000, i.value.selectRows({"columns": "id", "where": {"id": op_in(seq(1, 1000))}}).size(),
+                i.key);
+            assertEq(2, i.value.selectRows({"columns": "id", "where": {"s": op_in("s7", "s1999")}}).size(), i.key);
+            assertEq(0, i.value.selectRows({"columns": "id", "where": {"id": op_in()}}).size(), i.key);
+        }
+    }
+
+    private limits() {
+        skipIfNone();
+        foreach hash<auto> i in (tables.pairIterator()) {
+            # an empty list matches no row
+            assertEq(0, countIn(i.value, "id", ()), i.key);
+            # NULL values match no row; the type is that of the first value that is not NULL
+            assertEq(2, countIn(i.value, "id", (NULL, 1, NOTHING, 2, NULL)), i.key);
+            assertEq(2, countIn(i.value, "s", (NULL, "s1", "s2")), i.key);
+            assertEq(0, countIn(i.value, "id", (NULL, NULL)), i.key);
+            # the values on each side of the constructor limit
+            list<auto> l = seq(1, 998) + (NULL, 999);
+            assertEq(999, countIn(i.value, "id", l), i.key);
+            l += 1000;
+            assertEq(1000, countIn(i.value, "id", l), i.key);
+            # a list value is refused
+            assertThrows("ORACLE-IN-OPERATOR-ERROR", \countIn(), (i.value, "id", ((1, 2),)), i.key);
+        }
+    }
+
+    #! a statement binds at most 65535 values (ORA-01745 on the server, or an error of the driver); a driver that
+    #! binds each value of the list refused more only when the statement was executed
+    private bindLimit() {
+%ifdef NoOracle
+        testSkip("oracle module unavailable");
+%endif
+        hash<auto> desc = {"columns": {
+            "id": {"qore_type": SqlUtil::NUMERIC, "size": 14},
+            "s": {"qore_type": SqlUtil::VARCHAR, "size": 20},
+        }};
+        foreach hash<auto> i in ({"oracle": new CatalogDatasource((), (), (), (), {}, {}),
+                "jdbc": new JdbcCatalogDatasource()}.pairIterator()) {
+            OracleTable t(i.value, "in_limit");
+            t.setupTable(desc);
+            list<auto> args;
+            hash<auto> sh = {"columns": "id", "where": mkexp(OP_IN, (fld("id"), seq(1, 65535)))};
+            t.getSelectSql(sh, \args);
+            if (i.key == "oracle") {
+                # collections of up to 32767 values, each one value
+                assertEq(3, args.size(), i.key);
+                args = ();
+                t.getSelectSql({"columns": "id", "where": mkexp(OP_IN, (fld("id"), seq(1, 70000)))}, \args);
+                assertEq(3, args.size(), i.key);
+                args = ();
+                t.getSelectSql({"columns": "id", "where": mkexp(OP_IN, (fld("id"), seq(1, 65534)))}, \args);
+                assertEq(2, args.size(), i.key);
+                continue;
+            }
+            assertEq(65535, args.size(), i.key);
+            args = ();
+            assertThrows("ORACLE-IN-OPERATOR-ERROR", "65535", \t.getSelectSql(),
+                ({"columns": "id", "where": mkexp(OP_IN, (fld("id"), seq(1, 65536)))}, \args), i.key);
+            # with another value bound in the statement, with the old-style operator
+            args = ();
+            assertThrows("ORACLE-DRIVER-ERROR", "65535", \t.getSelectSql(),
+                ({"columns": "id", "where": {"s": "x", "id": op_in(seq(1, 65535))}}, \args), i.key);
+        }
+    }
+
+    private sql() {
+        skipIfNone();
+        foreach hash<auto> i in (tables.pairIterator()) {
+            list<auto> args;
+            string sql = i.value.getSelectSql({"columns": "id", "where": mkexp(OP_IN, (fld("id"), seq(1, 1000)))},
+                \args);
+            if (i.key == "oracle") {
+                # one collection of up to 32767 values, bound as one value
+                assertEq(1, args.size(), i.key);
+                assertRegex("in \\(select column_value from table\\(%v\\)\\)", sql, i.key);
+            } else {
+                # each value is bound in two constructors: 999 values and 1 value
+                assertEq(1000, args.size(), i.key);
+                assertEq(seq(1, 1000), args, i.key);
+                assertRegex("table\\(sys\\.odcinumberlist\\((%v, ){998}%v\\)\\) union all select column_value "
+                    "from table\\(sys\\.odcinumberlist\\(%v\\)\\)\\)", sql, i.key);
+            }
+        }
+    }
+}

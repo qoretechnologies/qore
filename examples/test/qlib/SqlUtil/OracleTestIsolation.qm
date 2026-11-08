@@ -1,0 +1,298 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file OracleTestIsolation.qm gives each run of an Oracle test its own schema
+
+/*  OracleTestIsolation.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires Util
+%requires ./TestRunIsolation.qm
+
+module OracleTestIsolation {
+    version = "1.0";
+    desc = "gives each run of an Oracle test its own schema";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+/** @mainpage OracleTestIsolation Module
+
+    @section oracletestisolationintro Introduction
+
+    Tests that use a shared Oracle database must not share their tables, views, sequences, indexes, triggers, types
+    or packages with another test that runs at the same time (run_tests.sh runs tests in parallel), nor list objects
+    that another test creates.  In Oracle a schema is a user, so
+    @ref OracleTestIsolation::OracleRunSchema::getConnectionString() "OracleRunSchema::getConnectionString()"
+    creates a user for the run with the privileges a test needs to create objects in its own schema, and returns the
+    datasource string of the test's database with that user in place of the test's user: every object that the test
+    creates without a schema name is created in the run's schema, whatever its name, and listings of the current
+    schema are only of the run's objects.
+
+    The user is created with the connection given by the environment variable \c QORE_DB_CONNSTR_ORACLE_SYS, a user
+    that may create and drop users (the CI scripts set it: see init_oracle.sh).  Without it,
+    the run cannot have a schema of its own: the test uses its own datasource string, and the tests that do so on a
+    host run one at a time (@ref TestRunIsolation::TestRun::lockHost() "TestRun::lockHost()").
+
+    @ref OracleTestIsolation::OracleRunSchema::teardown() "OracleRunSchema::teardown()" drops the user with everything
+    in its schema; a user that a connection of the test still uses, and one of a program that ends without calling
+    it, is dropped when the program ends.  A run that is killed leaves its user behind, so each run drops the users of
+    runs that are at least @ref TestRunIsolation::TestRun::LeftoverAge "TestRun::LeftoverAge" old, whatever their host,
+    as does @ref OracleTestIsolation::OracleRunSchema::dropLeftovers() "OracleRunSchema::dropLeftovers()" for a CI job.
+
+    A user is named as @ref TestRunIsolation::TestRun::makeName() "TestRun::makeName()" names it, in upper case, with a
+    tag of its own for another user of the run (see getConnectionString()); its creation fails if it exists.
+
+    @par Example:
+    @code{.py}
+%requires ./OracleTestIsolation.qm
+
+*string connstr = OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE, "OracleSqlUtil");
+# ... run the tests with connstr ...
+OracleRunSchema::teardown();
+    @endcode
+*/
+
+#! Contains the definitions of the OracleTestIsolation module
+public namespace OracleTestIsolation {
+#! Holds a user of the run and the connection that created it, and drops the user when it is destroyed
+class OracleRunUserGuard {
+    private {
+        #! The connection that created the user
+        Datasource ds;
+
+        #! The name of the user; no value once it is dropped
+        *string name;
+    }
+
+    constructor(Datasource ds, string name) {
+        self.ds = ds;
+        self.name = name;
+    }
+
+    destructor() {
+        drop();
+    }
+
+    #! Drops the user with everything in its schema, unless it is already dropped
+    /** @return False if the user is still connected, so it is not dropped yet
+    */
+    bool drop() {
+        if (!name) {
+            return True;
+        }
+        if (!OracleRunSchema::dropUser(ds, name)) {
+            return False;
+        }
+        remove name;
+        return True;
+    }
+}
+
+#! The schema of this run of an Oracle test
+public class OracleRunSchema {
+    public {
+        #! The privileges of a run's user: those a test needs to create objects in its own schema
+        const Privileges = (
+            "create session", "create table", "create view", "create materialized view", "create sequence",
+            "create procedure", "create trigger", "create type", "create synonym",
+        );
+    }
+
+    private {
+        #! The name of the run's first user, which the run's other users have with a tag
+        static *string base;
+
+        #! The users of the run, keyed by the datasource string that the test gave
+        static hash<string, OracleRunUserGuard> guards;
+
+        #! The datasource strings of the run's users, keyed by the datasource string that the test gave
+        static hash<string, string> connstrs;
+
+        #! The users that teardown() could not drop as the test was still connected: dropped when the program ends
+        static list<OracleRunUserGuard> pending = ();
+
+        #! Serializes setup and teardown
+        static Mutex lck();
+    }
+
+    #! Returns the datasource string of a user of the run on the database of the given datasource string
+    /** The first call for a datasource string creates the user; a later call returns the same datasource string.
+
+        @param connstr the datasource string of the test's database; returned as it is when it is not set or not for
+        the \c oracle driver or the \c jdbc driver with an Oracle URL (whose user and password are the run's user's)
+        @param suite the name of the test, used in the name of the user
+        @param tag a suffix of the user's name for another user of the run, such as one whose tables the test reads
+        from the first one's schema: its letters and digits, at most 8 of them
+
+        @return the datasource string of the run's user: the given one with the run's user and its password; the
+        given one if it is not for the \c oracle driver, or if no user can be created for the run (see the
+        introduction); no value if none is given
+    */
+    static *string getConnectionString(*string connstr, string suite, *string tag) {
+        try {
+            return OracleRunSchema::getConnectionStringIntern(connstr, suite, tag);
+        } catch (hash<ExceptionInfo> ex) {
+            # a message about a datasource string, such as DATASOURCE-PARSE-ERROR's, quotes it with its password
+            throw ex.err, TestRun::maskSecrets(ex.desc ?? "", (connstr, ENV.QORE_DB_CONNSTR_ORACLE_SYS)), ex.arg.typeCode() == NT_STRING
+                ? TestRun::maskSecrets(ex.arg, (connstr, ENV.QORE_DB_CONNSTR_ORACLE_SYS)) : ex.arg;
+        }
+    }
+
+    #! Returns the datasource string of the run's database or schema (see getConnectionString())
+    private static *string getConnectionStringIntern(*string connstr, string suite, *string tag) {
+        if (!connstr) {
+            return connstr;
+        }
+        hash<auto> config = parse_datasource(connstr);
+        if (config.type != "oracle" && !OracleRunSchema::isOracleJdbc(config)) {
+            return connstr;
+        }
+        lck.lock();
+        on_exit lck.unlock();
+        if (connstrs{connstr}) {
+            return connstrs{connstr};
+        }
+        # a datasource string that this function returned is the run's already
+        if (inlist(connstr, connstrs.values())) {
+            return connstr;
+        }
+
+        *string admin_connstr = ENV.QORE_DB_CONNSTR_ORACLE_SYS;
+        if (!admin_connstr) {
+            TestRun::lockHost("oracle", connstr);
+            return connstr;
+        }
+        Datasource ds(admin_connstr);
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            # a server that cannot be reached: the test finds it so when it connects, and reports or skips it
+            return connstr;
+        }
+        OracleRunSchema::dropLeftoversIntern(ds);
+
+        # the users of the run have the name of the first one, and a tag of their own
+        base = base ?? TestRun::makeName(suite).upr();
+        string name = base;
+        if (tag) {
+            name += "_" + TestRun::getLabel(tag, 8).upr();
+        }
+        # a password that has the characters of every password rule
+        string pass = "Q" + get_random_string(20).lwr() + "_7";
+        string tablespace = ds.selectRow("select property_value from database_properties "
+            "where property_name = 'DEFAULT_PERMANENT_TABLESPACE'").property_value;
+        ds.exec(sprintf("create user %s identified by \"%s\" default tablespace %s quota unlimited on %s", name,
+            pass, tablespace, tablespace));
+        guards{connstr} = new OracleRunUserGuard(ds, name);
+        ds.exec(sprintf("grant %s to %s", (foldl $1 + ", " + $2, Privileges), name));
+        ds.commit();
+
+        config.user = name.lwr();
+        config.pass = pass;
+        return connstrs{connstr} = make_datasource_string(config);
+    }
+
+    #! Drops the users of the run, with everything in their schemas
+    /** Call this at the end of the test, after its connections are closed: a user that a connection of the test
+        still uses cannot be dropped, and is dropped when the program ends, once its connections are gone.  Nothing
+        is done if no user was created.
+    */
+    static teardown() {
+        *hash<string, OracleRunUserGuard> old_guards;
+        {
+            lck.lock();
+            on_exit lck.unlock();
+            old_guards = remove guards;
+            remove connstrs;
+            remove base;
+        }
+        foreach OracleRunUserGuard guard in (old_guards.iterator()) {
+            if (!guard.drop()) {
+                lck.lock();
+                on_exit lck.unlock();
+                pending += guard;
+            }
+        }
+    }
+
+    #! Drops a user with everything in its schema
+    /** @return False if the user is connected, so it was not dropped
+    */
+    static bool dropUser(Datasource ds, string name) {
+        try {
+            ds.exec("drop user " + name + " cascade");
+        } catch (hash<ExceptionInfo> ex) {
+            ds.rollback();
+            # ORA-01940: cannot drop a user who is currently connected
+            if (ex.desc =~ /ORA-01940/) {
+                return False;
+            }
+            rethrow;
+        }
+        ds.commit();
+        return True;
+    }
+
+    #! Returns True if a parsed datasource string is for the jdbc driver with an Oracle URL
+    private static bool isOracleJdbc(hash<auto> config) {
+        if (config.type != "jdbc") {
+            return False;
+        }
+        string url = config.options.url ?? config.db ?? "";
+        url =~ s/^jdbc://;
+        return url.lwr().startsWith("oracle:");
+    }
+
+    #! Drops the users left by test runs on the database of the given admin datasource string
+    /** For a CI job's cleanup: a run that is killed leaves its users behind (see TestRun::isLeftover())
+
+        @param admin_connstr a datasource string of a user that may drop users (\c QORE_DB_CONNSTR_ORACLE_SYS)
+
+        @return the names of the users dropped
+    */
+    static list<string> dropLeftovers(string admin_connstr) {
+        Datasource ds(admin_connstr);
+        return OracleRunSchema::dropLeftoversIntern(ds);
+    }
+
+    #! Drops the users left by test runs that are at least TestRun::LeftoverAge old, whatever their host
+    private static list<string> dropLeftoversIntern(Datasource ds) {
+        list<string> rv = ();
+        *list<string> users = ds.select("select username from all_users where username like %v",
+            TestRun::Prefix.upr() + "%").username;
+        foreach string user in (users) {
+            if (!TestRun::isLeftover(user)) {
+                continue;
+            }
+            # another run may drop the same leftover at the same time: one that cannot be dropped now is left for a
+            # later run
+            # (a user that is still connected too)
+            try {
+                if (OracleRunSchema::dropUser(ds, user)) {
+                    rv += user;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        return rv;
+    }
+}
+}

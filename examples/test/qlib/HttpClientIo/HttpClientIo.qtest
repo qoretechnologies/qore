@@ -1766,6 +1766,22 @@ class HttpClientIoTest inherits QUnit::Test {
             NOTHING, NOTHING, key);
         assertEq("could not connect to " + key, neither,
             "no-error case: bare message with no trailing separator");
+
+        # HTTP/1.1 was raced after the server refused HTTP/2 via ALPN: every leg is
+        # reported, in the order in which the race started them
+        string three = HttpClientIo::HttpClientConnectionManager::heBuildConnectErrorDesc(
+            {"err": "QUIC-HANDSHAKE-TIMEOUT", "desc": "quic timed out"},
+            {"err": "HTTP2-ALPN-ERROR", "desc": "HTTP/2 not negotiated via ALPN: got http/1.1"}, key,
+            {"err": "SOCKET-CLOSED"});
+        assertEq("could not connect to " + key + ": H3/QUIC: quic timed out; H2/TCP: HTTP/2 not negotiated via "
+            "ALPN: got http/1.1; H1/TCP: SOCKET-CLOSED", three,
+            "three legs: every reason, the H1/TCP one without a desc as well");
+
+        # an H1 leg that is still connecting when the wait bound expires is not reported
+        string h1_pending = HttpClientIo::HttpClientConnectionManager::heBuildConnectErrorDesc(
+            NOTHING, {"err": "HTTP2-ALPN-ERROR", "desc": "alpn refused"}, key, NOTHING);
+        assertEq("could not connect to " + key + ": H2/TCP: alpn refused", h1_pending,
+            "a pending H1 leg: no spurious H1/TCP leg reported");
     }
 
     #! When neither raced leg connects, HTTPCLIENT-CONNECT-ERROR has the transport error in its argument

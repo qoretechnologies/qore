@@ -1615,6 +1615,10 @@ public:
     //! For StoreLocal: selects the representation the store uses (see AssignmentMode)
     AssignmentMode mode = AssignmentMode::Normal;
     bool initial_assignment = false; // For StoreLocal/StoreClosure: declaration initializer write
+    //! For StoreLocal/StoreClosure: the assignment of an element to the variable of a foreach loop, whose type error
+    //! the AST interpreter describes as "<foreach lvalue assignment>"; every path of the store gives that
+    //! description to its own type check, never to code the store runs (a destructor of the value replaced)
+    bool foreach_assignment = false;
     bool is_closure = false;       // Pre-computed from local->closureUse() during IR analysis
     bool is_ref = false;           // Pre-computed from local->isRef() during IR analysis
     bool is_block_exit = false;    // For UninstantiateLocal: true = block scope exit (clear CVV unconditionally)
@@ -1772,6 +1776,65 @@ struct LVPathStep {
     */
     const QoreCastOperatorNode* cast_node = nullptr;
 };
+
+//! Returns true if a step of an lvalue path depends on an operand (a dynamic hash key or list index, a slice)
+inline bool qore_lv_path_has_dynamic_steps(const std::vector<LVPathStep>& path) {
+    for (const LVPathStep& step : path) {
+        if ((step.operand_idx != UINT32_MAX
+                && (step.kind == LVPathStepKind::HashKey || step.kind == LVPathStepKind::ListIndex))
+                || step.kind == LVPathStepKind::HashKeySlice
+                || step.kind == LVPathStepKind::ListIndexSlice
+                || step.kind == LVPathStepKind::ListRangeSlice) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! The steps of an lvalue path for one execution of an LValuePath instruction
+/** The instruction is shared by concurrent executions of the function, so the steps that depend on operands
+    (dynamic hash keys and list indexes, slices) are resolved in a private copy; a path with none is read in place.
+*/
+class IRLVPath {
+public:
+    //! reads the instruction's path in place
+    void setShared(const std::vector<LVPathStep>& path) {
+        steps = path.data();
+        num = path.size();
+    }
+
+    //! makes a private copy of the path, which the caller resolves
+    std::vector<LVPathStep>& makeCopy(const std::vector<LVPathStep>& path) {
+        copy = path;
+        steps = copy.data();
+        num = copy.size();
+        return copy;
+    }
+
+    const LVPathStep* data() const {
+        return steps;
+    }
+
+    size_t size() const {
+        return num;
+    }
+
+    const LVPathStep& operator[](size_t i) const {
+        assert(i < num);
+        return steps[i];
+    }
+
+    const LVPathStep& back() const {
+        assert(num);
+        return steps[num - 1];
+    }
+
+private:
+    std::vector<LVPathStep> copy;
+    const LVPathStep* steps = nullptr;
+    size_t num = 0;
+};
+
 
 //! Sub-operation type for LValuePathCompound
 enum class LVCompoundOp : uint8_t {
@@ -3583,6 +3646,40 @@ public:
     // the private (runtime-stack-free) path — a read yields the dereferenced value either way.
     std::unordered_set<const void*> stored_locals;
 
+    //! Locals assigned a value that can be a reference (see computeReferenceStoreLocals())
+    /** A reference reaches a local of no reference type not only from <tt>\var</tt> in the same function: it can
+        be the element of a container (<tt>auto r = h.r</tt> where \c h.r holds a reference), the value a call
+        returns, or the operand of a phi of such values; such a local then reads and writes the referenced lvalue,
+        and localMayHoldReference() is true for it.
+    */
+    std::unordered_set<const void*> reference_store_locals;
+
+    //! The values known never to be a reference, indexed by value id (1 if known; see computeReferenceStoreLocals())
+    /** A value not marked here can be a reference (or is not known, as the value of a parameter); the engines use it
+        to skip checking a value stored to a local that can hold a reference
+    */
+    std::vector<uint8_t> non_reference_values;
+
+    //! Returns true if a value is known never to be a reference (see non_reference_values)
+    bool valueNeverReference(QoreIRValue value) const {
+        return value.isValid() && value.id < non_reference_values.size() && non_reference_values[value.id];
+    }
+
+    //! Locals in reference_store_locals that keep their value in IR storage, as IR-only locals do
+    /** A body local that would be IR-only but for a store of a value that can be a reference: the reference it holds,
+        if one arrives, is the value in its storage (the slot of the IR interpreter, the native cache), and a read
+        reads the referenced lvalue (qore_local_reference_eval()) and a store that is not its declaration assigns it,
+        as a variable on the runtime stack holding the reference reads and assigns it.  These locals are not in
+        ir_only_locals, so that the IR optimizations keyed on that set, which take an IR-only local's storage to be
+        its value, leave them alone; the engines store them as IR-only locals (see hasIRStorage()).
+    */
+    std::unordered_set<const void*> reference_slot_locals;
+
+    //! Returns true if a local keeps its value in IR storage only and has none on the runtime stack
+    bool hasIRStorage(const void* key) const {
+        return ir_only_locals.count(key) || reference_slot_locals.count(key);
+    }
+
     // Locals referenced by AST expression subtrees retained in otherwise
     // lowered IR. This metadata lets native fast-entry eligibility distinguish
     // an unused synthetic method self local from one that still requires TLS.
@@ -3637,6 +3734,21 @@ public:
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
     void computeIROnlyLocals();
 
+    //! Computes reference_store_locals: the locals of a StoreLocal whose operand can be a reference
+    /** An operand can be a reference unless the instruction that produces it is known never to give one (a
+        constant, a load of a variable, which dereferences a reference it holds, an arithmetic, comparison or string
+        operation, a new container, ...); a phi can give one if any of its incoming values can, and a guard gives
+        its operand
+    */
+    void computeReferenceStoreLocals();
+
+    //! Re-derives reference_store_locals with the value facts known now, after facts were added late (ex: the
+    //! projection of the elements of a list returned by a function of the same batch); a reference slot local that no
+    //! store can give a reference any longer becomes an IR-only local, so that the late specializations apply to it
+    /** @return the number of locals that are no longer reference-store locals
+    */
+    size_t refineReferenceLocalsFromFacts();
+
     //! Returns true if this function can create a reference (\c "\\var") anywhere
     /** Conservative: also true when the IR contains a construct whose AST body this analysis
         cannot see through.  An untyped local of a function that creates no reference can never
@@ -3667,10 +3779,10 @@ public:
     //! never accessed via thread-local stack).  When true, callers can skip
     //! instantiating/uninstantiating body locals on the thread-local stack.
     bool areAllBodyLocalsIROnly() const {
-        return !all_body_locals.empty() && !ir_only_locals.empty()
+        return !all_body_locals.empty() && (!ir_only_locals.empty() || !reference_slot_locals.empty())
             && std::all_of(all_body_locals.begin(), all_body_locals.end(),
                 [this](const LocalVar* lv) {
-                    return ir_only_locals.count(reinterpret_cast<const void*>(lv));
+                    return hasIRStorage(reinterpret_cast<const void*>(lv));
                 });
     }
 
@@ -3713,6 +3825,23 @@ public:
     mutable std::vector<uint32_t> interpreter_param_slot_ids;
     mutable std::vector<const LocalVar*> interpreter_param_local_vars;
     mutable std::vector<uint8_t> interpreter_locals_ir_only;
+    //! Non-zero for the local slots of reference_slot_locals, whose slot can hold a reference that a store writes
+    //! through
+    mutable std::vector<uint8_t> interpreter_reference_slots;
+    //! The local of each local slot (null for a slot of no local), for the release of the locals at the exit
+    mutable std::vector<const LocalVar*> interpreter_slot_locals;
+    //! The place among the local slots of the iterator that each instruction creating the iterator of a foreach
+    //! statement creates (computeSlotIdsAndEmbed()): the iterator is released, when the frame is left with the
+    //! statement still running, after the slots from this one on and before the slot before it, as the AST
+    //! interpreter releases the value a foreach statement iterates after the locals of the loop's body and before the
+    //! loop variable and the locals declared before the statement (see IRActiveIterator in QoreIRInterpreter.cpp)
+    std::unordered_map<const QoreIRInstruction*, uint32_t> interpreter_iterator_slot_boundary;
+    //! The locals the function owns (QoreIRFunction::pre_instantiated_locals and every body local), which the
+    //! interpreter tells from the variables of an enclosing scope
+    mutable std::unordered_set<const void*> interpreter_function_own_locals;
+    //! Non-zero for the values of LoadLocal instructions that borrow their IR-only local's value if it is an object:
+    //! the only use is the base of a method call in the same block with no write to the local before it
+    mutable std::vector<uint8_t> interpreter_borrowed_bases;
     mutable std::vector<uint8_t> interpreter_return_protected_slots;
     //! Slots whose definition and uses are not all in the same basic block.
     /** The interpreter's scope-exit cleanup decides whether a value slot is

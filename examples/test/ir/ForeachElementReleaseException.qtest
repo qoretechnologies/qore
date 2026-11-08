@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ForeachElementReleaseExceptionTest
+
+#! Regression test: an exception raised by the destructor of an element that the variable of a foreach loop releases
+/** The variable of a foreach loop releases the element it held when it is assigned the next one; a destructor raising
+    an exception there left the native cache of the variable holding the released element in the JIT and tiered
+    execution modes (the exception check was made before the cache was stored), and the exit release of the function
+    released it again: a crash.  The script iterates an iterator whose elements' destructor raises an exception for
+    the first element, three times, in every execution mode, on the IR tier of tiered execution and as a qcc
+    executable (see ExecModeOutputTest).
+*/
+class ForeachElementReleaseExceptionTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# a foreach over an iterator whose element destructor throws when the loop variable releases it
+class D {
+    private { int n; }
+    constructor(int n) { self.n = n; }
+    destructor() {
+        printf("DTOR %d\n", n);
+        if (n == 1) {
+            throw "DTOR-ERR", sprintf("n=%d", n);
+        }
+    }
+}
+class It inherits AbstractIterator {
+    private { int i = 0; int max; }
+    constructor(int m) { max = m; }
+    bool next() { return ++i <= max; }
+    auto getValue() { return new D(i); }
+    bool valid() { return i > 0 && i <= max; }
+}
+sub f() {
+    foreach auto v in (new It(3)) {
+    }
+}
+for (int i = 0; i < 3; ++i) {
+    try {
+        f();
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s: %s\n", ex.err, ex.desc);
+    }
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "DTOR 1",
+            "DTOR 2",
+            "caught DTOR-ERR: n=1",
+            "DTOR 1",
+            "DTOR 2",
+            "caught DTOR-ERR: n=1",
+            "DTOR 1",
+            "DTOR 2",
+            "caught DTOR-ERR: n=1",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ForeachElementReleaseException", Script, (map $1 + "\n", Expected).join(""),
+            "releases the element of a foreach loop whose destructor raises an exception as the AST interpreter does") {
+    }
+}
