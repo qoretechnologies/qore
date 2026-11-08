@@ -2939,14 +2939,15 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         left.waitForZero(LifecycleWsClient::HandoffTimeout);
         assertEq(0, lt.getCount(), "uncounted once");
 
-        # the failure is reported before the thread ran
+        # the failure is reported before the thread ran: the thread is never counted again
         int t4 = lt.starting();
         lt.startFailed(t4);
         assertEq(0, lt.getCount());
         lt.enter(t4);
-        assertEq(1, lt.getCount(), "counted again when it runs");
+        assertEq(0, lt.getCount(), "not counted again when it runs");
+        assertFalse(lt.hasOthers());
         lt.leave(t4);
-        assertEq(0, lt.getCount());
+        assertEq(0, lt.getCount(), "the count never goes below zero");
 
         # closed: no start
         lt.close();

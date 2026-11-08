@@ -262,7 +262,8 @@ ws.send("Hello from HTTP/3!");
     connect, disconnect or reconnect end at once with \c WEBSOCKET-ERROR, and a handshake in progress is canceled; a
     close handshake ends at the latest at its close timeout.  User code these threads run (callbacks, observers, the
     logger, a \c start_thread hook, subclass hooks) must therefore not block on anything the thread destroying the
-    client holds, and a \c start_thread hook must run the code it is given.
+    client holds, and a \c start_thread hook must run the code it is given and must not raise an exception once it
+    has started the thread (the client then takes the start for failed and does not wait for that thread).
 
     Each connection is reported open exactly once
     (@ref WebSocketClient::EVENT_WS_CONNECTED "EVENT_WS_CONNECTED" for
@@ -640,6 +641,8 @@ public class WscLibraryThreads {
         hash<string, bool> live = {};
         #! the tokens whose thread started
         hash<string, bool> entered = {};
+        #! the tokens whose start was reported failed before their thread ran: never counted again
+        hash<string, bool> failed = {};
         #! the number of tokens running on each thread
         hash<string, int> tids = {};
         int seq = 0;
@@ -661,25 +664,33 @@ public class WscLibraryThreads {
 
     #! Uncounts a start that failed, unless its thread started (e.g. a \c start_thread hook that started it and then
     #! threw): that thread uncounts it when it ends
+    /** A thread that starts after its start was reported failed is not counted (the count is never raised again
+        after it went down): a \c start_thread hook must not throw once it has started the thread.
+    */
     startFailed(int token) {
         AutoLock al(m);
         if (!entered{token} && remove live{token}) {
+            failed{token} = True;
             cond.broadcast();
         }
     }
 
-    #! Records the calling thread as running the given start
+    #! Records the calling thread as running the given start, unless its start was reported failed
     enter(int token) {
         AutoLock al(m);
-        # counted again if its start was reported failed before the thread ran
-        live{token} = True;
+        if (failed{token}) {
+            return;
+        }
         entered{token} = True;
         ++tids{gettid()};
     }
 
-    #! Records the end of the given start on the calling thread, and uncounts it unless its start failure did
+    #! Records the end of the given start on the calling thread and uncounts it
     leave(int token) {
         AutoLock al(m);
+        if (remove failed{token}) {
+            return;
+        }
         string t = gettid().toString();
         if (!--tids{t}) {
             remove tids{t};
