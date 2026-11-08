@@ -657,6 +657,10 @@ remove_runner_files() {
     fi
 }
 trap remove_runner_files 0
+# a shell does not run its EXIT trap when a signal ends it, so the files are removed for an interrupted run too
+trap 'remove_runner_files; trap - 0; exit 129' HUP
+trap 'remove_runner_files; trap - 0; exit 130' INT
+trap 'remove_runner_files; trap - 0; exit 143' TERM
 # A separate marker per runner also permits concurrent test shards.
 TEST_START_MARKER=$(mktemp "$CORE_DIR_ABS/test-start.XXXXXX") || exit 1
 # the core files there were when the current test started (see find_test_core())

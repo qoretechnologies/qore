@@ -23,6 +23,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import time
 import unittest
 
 
@@ -192,6 +193,50 @@ class EventFifoTest(unittest.TestCase):
                              "the runners leave the core directory empty")
 
 
+class InterruptedRunnerTest(unittest.TestCase):
+    """A runner ended by a signal removes its files, the directory of its event FIFO among them"""
+
+    def interrupt(self, sig):
+        with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
+            tree = RunnerTree(directory)
+            # the test tells the harness that it runs (the runner has made its files by then) and blocks until the
+            # harness lets it end, after the runner has ended
+            ready = tree.root / "ready"
+            release = tree.root / "release"
+            os.mkfifo(ready)
+            os.mkfifo(release)
+            tree.add_test("blocks.qtest", f"""\
+                with open({str(ready)!r}, "w") as f:
+                    f.write("running\\n")
+                open({str(release)!r}).read()
+                """)
+            runner = subprocess.Popen(["sh", str(RUN_TESTS)], cwd=tree.root, env=tree.env(),
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, preexec_fn=no_core_dumps)
+            try:
+                with open(ready) as f:
+                    self.assertEqual("running\n", f.read())
+                self.assertEqual(1, len(list(tree.tmp.glob("qore-test-events.*"))), "the runner made its FIFO directory")
+                runner.send_signal(sig)
+                runner.wait(timeout=60)
+            finally:
+                if runner.poll() is None:
+                    runner.kill()
+                    runner.wait()
+                # lets the test end
+                with open(release, "w"):
+                    pass
+            self.assertEqual([], list(tree.tmp.glob("qore-test-events.*")),
+                             "the runner ended by signal %d left its FIFO directory" % sig)
+            self.assertEqual([], sorted(p.name for p in tree.cores.iterdir()),
+                             "the runner ended by signal %d left its files in the core directory" % sig)
+
+    def test_sigterm(self):
+        self.interrupt(signal.SIGTERM)
+
+    def test_sigint(self):
+        self.interrupt(signal.SIGINT)
+
+
 @unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")
 class FailedFifoTest(unittest.TestCase):
     """A watchdog whose event FIFO fails reports it; it does not take it for the time limit"""
@@ -227,20 +272,25 @@ class FailedFifoTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
             tree = RunnerTree(directory)
             tree.break_fifo()
-            tree.add_test("hangs.qtest", """\
+            # the test blocks on a FIFO that nothing writes, so it can only end by its time limit; that the limit is
+            # kept, not cut short, is shown by the time the run took (no earlier end is possible), not by a margin
+            hold = tree.root / "hold"
+            os.mkfifo(hold)
+            tree.add_test("hangs.qtest", f"""\
                 # test-timeout: 3
-                import time
-                time.sleep(2)
-                print("still running after 2 s", flush=True)
-                time.sleep(600)
+                print("test started", flush=True)
+                open({str(hold)!r}).read()
                 """)
             # a second test runs after it as usual
             tree.add_test("passes.qtest", """\
                 print("second test ran", flush=True)
                 """)
+            start = time.monotonic()
             result = tree.run()
+            elapsed = time.monotonic() - start
             self.assertIn("WATCHDOG ERROR: the watchdog's event FIFO", result.output)
-            self.assertIn("still running after 2 s", result.output)
+            self.assertIn("test started", result.output)
+            self.assertGreaterEqual(elapsed, 3, "the test was ended before its limit: " + result.output)
             self.assertIn("TIMEOUT: test exceeded 3s limit", result.output)
             self.assertIn("second test ran", result.output)
             self.assertRegex(result.output, r"Passed 1 out of +2 tests\. 1 tests failed\.")
