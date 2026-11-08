@@ -211,6 +211,14 @@ trusted thread or a trusted decision relies on, in `private:internal` members (n
 public or `private` members or in global variables. Audit every trusted class that sandboxed code can subclass for
 such state.
 
+Reflection applies the same member access to code that a sandbox governs (also under a policy barrier) and to code
+whose parse options restrict a functional domain, so neither can read such a member through the `reflection` module
+either. Trusted code that restricts no domain keeps full access to every member through reflection (debuggers and
+serializers need it): `private:internal` keeps state from sandboxed and restricted code, not from trusted code. A
+trusted thread that a capability starts must therefore also check that it was started for the module's own reason:
+the DataProvider catalog worker runs only when the catalog reserved its start, and ends at once otherwise
+(`design/data-provider-rest-schema-apps.md`).
+
 ##### Methods that a sandboxed subclass inherits from a trusted class
 
 An object that sandboxed code creates carries the creating Program's sandbox as its provenance, also when its class

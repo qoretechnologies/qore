@@ -95,6 +95,10 @@ auto PseudoMethod::call(auto val, ...) {
         call_args = args->copyListFrom(1);
     }
 
+    // the access of the pseudo-method's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, m->m, xsink)) {
+        return QoreValue();
+    }
     // the variant selected for the arguments must be allowed by the caller and the method's Program
     QoreReflectionCallCheckHelper call_check(caller, m->pgm);
     // pseudo-classes and pseudo-methods are always valid
@@ -130,6 +134,10 @@ auto PseudoMethod::callArgs(auto val, *softlist<auto> argv) {
         return QoreValue();
     }
 
+    // the access of the pseudo-method's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, m->m, xsink)) {
+        return QoreValue();
+    }
     // the variant selected for the arguments must be allowed by the caller and the method's Program
     QoreReflectionCallCheckHelper call_check(caller, m->pgm);
     // pseudo-classes and pseudo-methods are always valid

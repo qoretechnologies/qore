@@ -117,6 +117,8 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
 
     constructor() : Test("DataProvider lazy action registration safety", "1.0") {
         addTestCase("a subclass of the catalog cannot reach its internal state", \subclassTest());
+        addTestCase("sandboxed and restricted code cannot reach the catalog's internal state through reflection",
+            \reflectionTest());
         addTestCase("code restricted with PO_NO_UNCONTROLLED_APIS uses the catalog after a trusted load",
             \restrictedCallerTest());
         addTestCase("a restricted Program loads a module with a lazy value", \restrictedModuleLoadTest());
@@ -202,6 +204,35 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         # the class can still be subclassed
         Program p(PO_NEW_STYLE, True);
         p.parse("%requires DataProvider\nclass Plain inherits DataProviderActionCatalog {}\n", "plain");
+    }
+
+    reflectionTest() {
+        # refl.q and refl2.q: the capability, the worker's state and its methods, from a subclass and from outside
+        list<string> snippets = (
+            "code c = Class::forName('DataProviderActionCatalog').getStaticMember('lazy_worker_start').getValue(); "
+                + "c();",
+            "Class c = Class::forName('DataProviderActionCatalog'); c.getStaticMember('lazy_worker_shutdown').setValue(True);",
+            "Class c = Class::forName('DataProviderActionCatalog'); c.getStaticVariant('stopLazyWorker').call();",
+            "Class c = Class::forName('DataProviderActionCatalog'); c.getStaticMethod('lazyWorkerMain').call();",
+            "Class c = Class::forName('DataProviderActionCatalog'); c.getConstant('MaxLazyWorkers').getValue();",
+        );
+        foreach string snippet in (snippets) {
+            foreach hash<auto> caller in (({"name": "sandboxed", "opts": PO_NEW_STYLE, "sandbox": True},
+                    {"name": "restricted", "opts": PO_NEW_STYLE | PO_NO_FILESYSTEM, "sandbox": False})) {
+                Program p(caller.opts | PO_NO_CHILD_PO_RESTRICTIONS, True);
+                p.parse("%requires reflection\n%requires DataProvider\n"
+                    "class Evil inherits DataProviderActionCatalog { static f() { " + snippet + " } }\n"
+                    "sub from_subclass() { Evil::f(); }\n"
+                    "sub from_outside() { " + snippet + " }\n", "reflection-" + caller.name);
+                if (caller.sandbox) {
+                    p.setSandboxManager(new SandboxManager());
+                }
+                foreach string f in (("from_subclass", "from_outside")) {
+                    assertThrows("REFLECTION-ACCESS-ERROR", \p.callFunction(), (f,),
+                        sprintf("%s %s: %s", caller.name, f, snippet));
+                }
+            }
+        }
     }
 
     restrictedCallerTest() {

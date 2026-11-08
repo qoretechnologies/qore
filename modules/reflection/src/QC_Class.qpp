@@ -1551,6 +1551,10 @@ object Class::newObject(...) {
     if (check_constructor(caller, c->cls, c->pgm, xsink)) {
         return QoreValue();
     }
+    // the access of the constructor's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, c->cls->getConstructor(), xsink)) {
+        return QoreValue();
+    }
 
     if (c->cls->runtimeCheckInstantiateClass(xsink)) {
         return QoreValue();
@@ -1596,6 +1600,10 @@ object Class::newObjectArgs(*softlist argv) {
 
     // the class ptr must be valid
     if (check_constructor(caller, c->cls, c->pgm, xsink)) {
+        return QoreValue();
+    }
+    // the access of the constructor's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, c->cls->getConstructor(), xsink)) {
         return QoreValue();
     }
 
@@ -1650,6 +1658,10 @@ object Class::callConstructor(*softlist<auto> arguments, *softlist<Type> type_ar
 
     // the class ptr must be valid
     if (check_constructor(caller, c->cls, c->pgm, xsink)) {
+        return QoreValue();
+    }
+    // the access of the constructor's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, c->cls->getConstructor(), xsink)) {
         return QoreValue();
     }
 

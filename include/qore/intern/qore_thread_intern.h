@@ -1268,6 +1268,11 @@ DLLLOCAL LocalVarValue* thread_try_find_lvar(const LocalVar* local);
 DLLLOCAL QoreObject* runtime_get_stack_object();
 // to get the current runtime class
 DLLLOCAL const qore_class_private* runtime_get_class();
+//! returns the class context of the code that made the call running now, or nullptr if it ran in no class
+/** Set for every call that a code context helper (CodeContextHelperBase) runs: in a builtin method, it is the class
+    context of the code that called the method
+*/
+DLLLOCAL const qore_class_private* runtime_get_caller_class();
 DLLLOCAL void runtime_get_object_and_class(QoreObject*& obj, const qore_class_private*& qc);
 // to get or set the current generic receiver type for static generic method bodies
 DLLLOCAL const QoreTypeInfo* runtime_get_receiver_type_info();
@@ -1280,6 +1285,7 @@ private:
     const char* old_code;
     QoreObject* old_obj;
     const qore_class_private* old_class;
+    const qore_class_private* old_caller_class;
     QoreProgram* old_call_program_context;
     QoreObject* old_rc_obj;
     const qore_class_private* old_rc_class;

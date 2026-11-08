@@ -474,6 +474,9 @@ public:
     // current class context
     const qore_class_private* current_class = nullptr;
 
+    // the class context of the code that made the call running now (CodeContextHelperBase)
+    const qore_class_private* caller_class = nullptr;
+
     // current generic receiver type for static generic method bodies
     const QoreTypeInfo* current_receiver_type_info = nullptr;
 
@@ -3206,6 +3209,9 @@ CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, 
 
     old_class = td->current_class;
     td->current_class = c;
+    // the class context of the caller, for builtin code that applies the caller's member access (reflection)
+    old_caller_class = td->caller_class;
+    td->caller_class = old_class;
     RuntimeConfig& rc = rc_get_tls_ref();
     old_rc_obj = rc.getObject();
     old_rc_class = rc.getClass();
@@ -3261,6 +3267,7 @@ CodeContextHelperBase::~CodeContextHelperBase() {
     td->current_code = old_code;
     td->current_obj = old_obj;
     td->current_class = old_class;
+    td->caller_class = old_caller_class;
     if (do_rc_update) {
         RuntimeConfig& rc = rc_get_tls_ref();
         rc.setObject(old_rc_obj);
@@ -3324,6 +3331,10 @@ QoreObject* runtime_get_stack_object() {
 
 const qore_class_private* runtime_get_class() {
     return (thread_data.get())->current_class;
+}
+
+const qore_class_private* runtime_get_caller_class() {
+    return (thread_data.get())->caller_class;
 }
 
 void runtime_get_object_and_class(QoreObject*& obj, const qore_class_private*& qc) {

@@ -92,8 +92,30 @@ int reflection_check_class_value_access(const QoreReflectionCaller& caller, cons
     return -1;
 }
 
+int reflection_check_method_access(const QoreReflectionCaller& caller, const QoreMethod* m,
+        ExceptionSink* xsink) {
+    if (!m || !caller.appliesMemberAccess()) {
+        return 0;
+    }
+    QoreExternalFunctionIterator i(*m->getFunction());
+    while (i.next()) {
+        const QoreExternalMethodVariant* v = reinterpret_cast<const QoreExternalMethodVariant*>(i.getVariant());
+        if (caller.checkClassElementAccess(m->getClass(), v->getAccess(), "method", m->getName(), xsink)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 int reflection_check_variant_call(const QoreReflectionCaller& caller, const QoreExternalVariant* variant,
         const char* cname, const char* fname, const QoreProgram* target, ExceptionSink* xsink) {
+    // a method variant that is not public, used by a caller to which member access applies
+    if (const QoreClass* cls = variant->getClass()) {
+        const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(variant);
+        if (caller.checkClassElementAccess(cls, mv->getAccess(), "method", fname, xsink)) {
+            return -1;
+        }
+    }
     bool caller_refused = false;
     if (caller.allowsDomain(variant->getDomain(), target, &caller_refused)) {
         return caller.checkClassCallAccess(variant->getClass(), target, xsink);
