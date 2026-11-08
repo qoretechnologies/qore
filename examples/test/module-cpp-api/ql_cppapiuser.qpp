@@ -38,6 +38,7 @@
 #include <fcntl.h>
 #include <future>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -134,6 +135,29 @@ private:
 static std::mutex sb_mem_lock;
 static std::map<int64, void*> sb_mem_buffers;
 static int64 sb_mem_next = 0;
+
+// the sandbox captures made with sb_capture() and sb_capture_copy(), by handle
+static std::mutex sb_capture_lock;
+static std::map<int64, std::shared_ptr<QoreSandboxCapture>> sb_captures;
+static int64 sb_capture_next = 0;
+
+// returns the capture with the given handle, or raises an exception
+static std::shared_ptr<QoreSandboxCapture> sb_capture_get(int64 handle, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lock(sb_capture_lock);
+    auto i = sb_captures.find(handle);
+    if (i == sb_captures.end()) {
+        xsink->raiseException("SB-CAPTURE-ERROR", "unknown capture handle " QLLD, handle);
+        return std::shared_ptr<QoreSandboxCapture>();
+    }
+    return i->second;
+}
+
+// stores a capture and returns its handle
+static int64 sb_capture_add(std::shared_ptr<QoreSandboxCapture> capture) {
+    std::lock_guard<std::mutex> lock(sb_capture_lock);
+    sb_captures[++sb_capture_next] = std::move(capture);
+    return sb_capture_next;
+}
 
 // returns the time remaining until a deadline for poll(): -1 for no timeout, 0 if it has passed
 int remaining_ms(int timeout_ms, int64 deadline_us) {
@@ -1627,6 +1651,145 @@ nothing sb_mem_free(int handle) {
         sb_mem_buffers.erase(i);
     }
     q_sb_free(p);
+    return QoreValue();
+}
+
+//! Captures the sandbox that governs the current thread with QoreSandboxCapture; returns a handle for it
+/** @return the handle of the capture, for the other sb_capture functions; release it with sb_capture_free()
+*/
+int sb_capture() {
+    return sb_capture_add(std::make_shared<QoreSandboxCapture>());
+}
+
+//! Copies a capture with the QoreSandboxCapture copy constructor; returns a handle for the copy
+/** @param handle the handle of the capture to copy
+
+    @return the handle of the copy
+
+    @throw SB-CAPTURE-ERROR unknown handle
+*/
+int sb_capture_copy(int handle) {
+    std::shared_ptr<QoreSandboxCapture> capture = sb_capture_get(handle, xsink);
+    if (!capture) {
+        return QoreValue();
+    }
+    return sb_capture_add(std::make_shared<QoreSandboxCapture>(*capture));
+}
+
+//! Releases a capture
+/** @param handle the handle of the capture
+
+    @throw SB-CAPTURE-ERROR unknown handle
+*/
+nothing sb_capture_free(int handle) {
+    std::shared_ptr<QoreSandboxCapture> capture;
+    {
+        std::lock_guard<std::mutex> lock(sb_capture_lock);
+        auto i = sb_captures.find(handle);
+        if (i == sb_captures.end()) {
+            return xsink->raiseException("SB-CAPTURE-ERROR", "unknown capture handle " QLLD, handle);
+        }
+        // released after the lock
+        capture = std::move(i->second);
+        sb_captures.erase(i);
+    }
+    return QoreValue();
+}
+
+//! Returns QoreSandboxCapture::isSandboxed() of a capture
+/** @param handle the handle of the capture
+
+    @throw SB-CAPTURE-ERROR unknown handle
+*/
+bool sb_capture_is_sandboxed(int handle) {
+    std::shared_ptr<QoreSandboxCapture> capture = sb_capture_get(handle, xsink);
+    return capture ? capture->isSandboxed() : false;
+}
+
+//! Returns QoreSandboxCapture::sameSandbox() of two captures
+/** @param h1 the handle of the first capture
+    @param h2 the handle of the second capture
+
+    @throw SB-CAPTURE-ERROR unknown handle
+*/
+bool sb_capture_same(int h1, int h2) {
+    std::shared_ptr<QoreSandboxCapture> c1 = sb_capture_get(h1, xsink);
+    if (!c1) {
+        return false;
+    }
+    std::shared_ptr<QoreSandboxCapture> c2 = sb_capture_get(h2, xsink);
+    return c2 ? c1->sameSandbox(*c2) : false;
+}
+
+//! Returns True if QoreSandboxCapture::getPolicyManagerRef() returns a policy manager for a capture
+/** @param handle the handle of the capture
+
+    @throw SB-CAPTURE-ERROR unknown handle
+*/
+bool sb_capture_has_policy(int handle) {
+    std::shared_ptr<QoreSandboxCapture> capture = sb_capture_get(handle, xsink);
+    if (!capture) {
+        return false;
+    }
+    ReferenceHolder<QoreSandboxManager> policy(capture->getPolicyManagerRef(), xsink);
+    return policy ? true : false;
+}
+
+//! Checks read access to a path against the policy of a capture with QoreSandboxCapture::getPolicyManagerRef()
+/** The check does not depend on the sandbox of the current thread.
+
+    @param handle the handle of the capture
+    @param path the path to check
+
+    @throw SB-CAPTURE-ERROR unknown handle
+    @throw the exception of QoreSandboxManager::checkFilesystemAccess() if the captured policy denies the access
+*/
+nothing sb_capture_check_read(int handle, string path) {
+    std::shared_ptr<QoreSandboxCapture> capture = sb_capture_get(handle, xsink);
+    if (!capture) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreSandboxManager> policy(capture->getPolicyManagerRef(), xsink);
+    if (policy) {
+        policy->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink);
+    }
+    return QoreValue();
+}
+
+//! Checks read access to a path with the policy that governs the current thread
+/** As the filesystem functions do: QoreSandboxManagerHelper with QoreSandboxManagerHelper::Policy
+
+    @param path the path to check
+
+    @throw the exception of QoreSandboxManager::checkFilesystemAccess() if the thread's policy denies the access
+*/
+nothing sb_thread_check_read(string path) {
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh) {
+        smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink);
+    }
+    return QoreValue();
+}
+
+//! Checks read access to a path with the policy that governs the current thread while a capture is applied
+/** The capture is applied with QoreSandboxCaptureHelper, which governs the thread only as its outermost caller
+
+    @param handle the handle of the capture
+    @param path the path to check
+
+    @throw SB-CAPTURE-ERROR unknown handle
+    @throw the exception of QoreSandboxManager::checkFilesystemAccess() if the thread's policy denies the access
+*/
+nothing sb_capture_applied_check_read(int handle, string path) {
+    std::shared_ptr<QoreSandboxCapture> capture = sb_capture_get(handle, xsink);
+    if (!capture) {
+        return QoreValue();
+    }
+    QoreSandboxCaptureHelper sch(*capture);
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh) {
+        smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink);
+    }
     return QoreValue();
 }
 
