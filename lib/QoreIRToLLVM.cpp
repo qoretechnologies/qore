@@ -5152,15 +5152,18 @@ llvm::Value* QoreIRToLLVM::emitReferenceLocalRead(const void* key, llvm::Value* 
     assert(ref_flag);
     llvm::Type* i8_type = llvm::Type::getInt8Ty(ctx);
     // the value read at this site and the one read before it, which a consumer can still use, released at the
-    // following reads and at the exit of the function
+    // following reads, at the end of the statement and at the exit of the function: they are temporaries of the
+    // statement, as the AST interpreter holds the value that it reads through the reference for the expression only
+    // (as persistent cleanups, they kept an object read through the reference alive until the end of the frame:
+    // auto v = \o; v.name(); remove o; destroyed the object at the exit of the function)
     llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
     llvm::IRBuilder<> alloca_builder(entry, entry->begin());
     llvm::AllocaInst* current = alloca_builder.CreateAlloca(i64_type, nullptr, "reference_read");
     alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), current);
     llvm::AllocaInst* previous = alloca_builder.CreateAlloca(i64_type, nullptr, "reference_read_previous");
     alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), previous);
-    registerPersistentCleanupAlloca(current);
-    registerPersistentCleanupAlloca(previous);
+    registerInvokeCleanupAlloca(current);
+    registerInvokeCleanupAlloca(previous);
 
     llvm::Value* is_ref = builder->CreateICmpNE(builder->CreateLoad(i8_type, ref_flag),
         llvm::ConstantInt::get(i8_type, 0));

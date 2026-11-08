@@ -1505,9 +1505,13 @@
       whose loop variable had been reassigned, the element that the loop variable held before was released after the
       loop variable instead of with the value the statement iterates, before the loop variable, as with the AST
       interpreter
-    - in the IR, JIT and tiered execution modes and in AOT-compiled code, \c remove and \c delete on a global or
-      \c thread_local variable holding a reference removed the referenced value instead of the variable's own value,
-      as with the AST interpreter
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, \c remove and \c delete on a global,
+      \c thread_local or static class variable holding a reference removed the referenced value instead of the
+      variable's own value, as with the AST interpreter
+    - in the JIT and tiered execution modes and in AOT-compiled code, a value read through a reference held by a local
+      variable (ex: <tt>auto v = \\o; v.name();</tt>) was kept until the next read at the same place or until the
+      function returned, so that an object read through the reference outlived the removal of the variable it was
+      read from; it is now released at the end of the statement, as with the AST interpreter
     - in the JIT and tiered execution modes, an exception raised by the destructor of the value that the loop
       variable of \c foreach held when an iterator's next element was assigned could crash the program
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, a type error assigning an element to the

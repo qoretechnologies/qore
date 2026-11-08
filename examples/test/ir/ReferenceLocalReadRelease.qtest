@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ReferenceLocalReadReleaseTest
+
+#! Regression test: a value read through a reference that a local holds lives as long as the expression reading it
+/** The AST interpreter holds the value that it reads through a reference held by a local (auto v = \o; v.name())
+    for the expression only.  Native code kept the value read at each such site in a cleanup of the function until
+    the next read there or the end of the frame, so that an object read through the reference outlived the remove of
+    the variable it was read from.  The script reads through a local holding a reference for a method call, once and
+    in a loop, and then removes or clears the referenced variable, every case twice, in every execution mode, on the
+    IR tier of tiered execution and as a qcc executable (see ExecModeOutputTest).
+*/
+class ReferenceLocalReadReleaseTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# a value read through a reference that a local holds is a temporary of the expression that reads it
+class E {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+    string name() { return n; }
+}
+sub w1() {
+    auto o = new E("w1");
+    auto v = \o;
+    printf("%y\n", v.name());
+    remove o;
+    printf("w1 after remove o\n");
+}
+sub w2() {
+    auto o = new E("w2");
+    auto v = \o;
+    printf("%y\n", v.typeCode());
+    o = NOTHING;
+    printf("w2 after clear o\n");
+}
+sub w3() {
+    auto o = new E("w3");
+    auto v = \o;
+    for (int i = 0; i < 2; ++i) {
+        printf("%y\n", v.name());
+    }
+    remove o;
+    printf("w3 after remove o\n");
+}
+foreach string fn in (("w1", "w2", "w3")) {
+    for (int i = 0; i < 2; ++i) {
+        try {
+            call_function(fn);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s: %s %s\n", fn, ex.err, ex.desc);
+        }
+    }
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "\"w1\"",
+            "dtor w1",
+            "w1 after remove o",
+            "\"w1\"",
+            "dtor w1",
+            "w1 after remove o",
+            "10",
+            "dtor w2",
+            "w2 after clear o",
+            "10",
+            "dtor w2",
+            "w2 after clear o",
+            "\"w3\"",
+            "\"w3\"",
+            "dtor w3",
+            "w3 after remove o",
+            "\"w3\"",
+            "\"w3\"",
+            "dtor w3",
+            "w3 after remove o",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ReferenceLocalReadRelease", Script, (map $1 + "\n", Expected).join(""),
+            "releases a value read through a reference held by a local as the AST interpreter does") {
+    }
+}
