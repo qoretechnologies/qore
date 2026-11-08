@@ -626,18 +626,17 @@ printf(\"threads: %d\\n\", num_threads());
 
     stoppedWorkerTest() {
 %ifdef QoreDebug
-        # the catalog worker is stopped by the exit hook while it runs a sandboxed reader's job, and a second
-        # sandboxed reader's job is queued behind it: the second reader gets DATA-PROVIDER-LAZY-WORKER-STOPPED.  The
-        # child loads the DataProvider module after it registered the hook releasing the first job, so that the
+        # the catalog workers are stopped by the exit hook while each runs a sandboxed reader's job, and another
+        # sandboxed reader's job is queued behind them: that reader gets DATA-PROVIDER-LAZY-WORKER-STOPPED.  Four jobs
+        # keep the whole pool busy (DataProviderActionCatalog::MaxLazyWorkers), so that the fifth stays queued.  The
+        # child loads the DataProvider module after it registered the hook releasing the jobs, so that the
         # DataProvider's exit hook, registered later, runs first.
         hash<auto> r = runChild("stopped", "
 our Counter release(1);
 register_exit_hook(sub () { release.dec(); });
 ", "
-Counter started(1);
-string a = register_lazy(\"SafeStopBlocked\");
-DataProviderActionCatalog::registerLazyAppActions(a, sub () { started.dec(); release.waitForZero(); });
-string b = register_lazy(\"SafeStopQueued\");
+const Workers = 4;
+Counter started(Workers);
 Program reader(PO_NEW_STYLE, True);
 reader.parse(\"%requires DataProvider\\n\"
     \"string sub read(string app) {\\n\"
@@ -645,15 +644,21 @@ reader.parse(\"%requires DataProvider\\n\"
     \"    catch (hash<ExceptionInfo> ex) { return app + \\\": \\\" + ex.err; }\\n\"
     \"}\\n\", \"reader\");
 reader.setSandboxManager(new SandboxManager());
-background sub () { printf(\"%s\\n\", regex_subst(reader.callFunction(\"read\", a), \"_[^:]*:\", \":\")); }();
+for (int i = 0; i < Workers; ++i) {
+    string a = register_lazy(\"SafeStopBlocked\");
+    DataProviderActionCatalog::registerLazyAppActions(a, sub () { started.dec(); release.waitForZero(); });
+    background sub (string app) { printf(\"%s\\n\", regex_subst(reader.callFunction(\"read\", app), \"_[^:]*:\", \":\")); }(a);
+}
 started.waitForZero();
+string b = register_lazy(\"SafeStopQueued\");
 int queued = DataProviderActionCatalog::getLazyInitsQueued();
 background sub () { printf(\"%s\\n\", regex_subst(reader.callFunction(\"read\", b), \"_[^:]*:\", \":\")); }();
-# the second reader's job is queued behind the first one, which waits until the process ends
+# the last reader's job is queued behind the others, which wait until the process ends
 DataProviderActionCatalog::waitForLazyInitsQueued(queued + 1, 60s);
 ", ("release",));
         assertEq(0, r.rc, r.output);
-        assertEq(("SafeStopBlocked: ok", "SafeStopQueued: DATA-PROVIDER-LAZY-WORKER-STOPPED"),
+        assertEq(("SafeStopBlocked: ok", "SafeStopBlocked: ok", "SafeStopBlocked: ok", "SafeStopBlocked: ok",
+            "SafeStopQueued: DATA-PROVIDER-LAZY-WORKER-STOPPED"),
             sort(map $1, r.output.split("\n"), $1 =~ /^SafeStop/), r.output);
 %else
         testSkip("the test needs the catalog worker's test hooks, which only debug builds have");
