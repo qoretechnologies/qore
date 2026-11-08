@@ -1477,9 +1477,9 @@
       the value of an assignment (<tt>auto r = (t = h.r); r = 5;</tt>, also with \c +=), which was the referenced
       value instead of the reference; as an element of a list iterated by \c foreach, where an assignment to the
       loop variable and the assignment of the following elements now assign the referenced lvalue, and where
-      <tt>s += v</tt> on an \c int local read the element as \c 0 in AOT-compiled code; and held by a global
-      variable, which read as the reference itself in the IR execution mode and which an assignment replaced instead
-      of assigning the referenced lvalue
+      <tt>s += v</tt> on an \c int local read the element as \c 0 in AOT-compiled code; and held by a global or
+      \c thread_local variable, which read as the reference itself in the IR execution mode and which an assignment
+      replaced instead of assigning the referenced lvalue
     - in the JIT and tiered execution modes, an exception raised by the destructor of the value that the loop
       variable of \c foreach held when an iterator's next element was assigned could crash the program
     - the IR execution mode runs <tt>i += v</tt> on an \c int local with an \c auto local \c v as fast as with an

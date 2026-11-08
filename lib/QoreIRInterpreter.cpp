@@ -11999,6 +11999,25 @@ load_local_done:
                 // the value is read from the variable every time, as the AST interpreter reads it: a copy kept in the
                 // frame would go stale when an lvalue path changes the variable in place (ex: tl.a = 1)
                 QoreValue out = var_inst->var->eval();
+                // a reference that the variable holds reads as the referenced lvalue, as VarRefNode::evalImpl()
+                // reads it (see LoadGlobal)
+                if (qore_ir_value_node_type(out) == NT_REFERENCE) {
+                    ValueHolder ref(out, xsink);
+                    bool nd = true;
+                    out = reinterpret_cast<ReferenceNode*>(ref->getInternalNode())->eval(nd, xsink);
+                    if (!nd && out.needsRef()) {
+                        out = out.refSelf();
+                    }
+                    if (xsink && *xsink) {
+                        out.discard(xsink);
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                }
                 setValueSlot(values, var_inst->result.id, out, xsink);
                 if (out.needsRef()) {
                     cleanup.push_back(var_inst->result.id);

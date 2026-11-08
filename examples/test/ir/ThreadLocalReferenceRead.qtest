@@ -1,0 +1,56 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ThreadLocalReferenceReadTest
+
+#! Regression test: a thread_local variable holding a reference reads and writes the referenced lvalue
+/** The IR interpreter read a thread_local variable holding a reference (<tt>tl = \gx</tt>) as the reference itself:
+    a local assigned its value read the referenced lvalue later, giving a value changed after the assignment (a debug
+    library asserted on the reference stored in an IR-only local).  It is read as the AST interpreter reads it, as a
+    global variable is read.  The script runs twice, in every execution mode, on the IR tier of tiered execution and
+    as a qcc executable (see ExecModeOutputTest).
+*/
+class ThreadLocalReferenceReadTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# a thread_local variable holding a reference reads and writes the referenced lvalue
+thread_local auto tl;
+our int gx = 7;
+sub f() {
+    auto v = tl;
+    gx = 9;
+    printf("v: %y\n", v);
+    tl = 11;
+    printf("gx: %y tl: %y\n", gx, tl);
+}
+tl = \gx;
+f();
+# the variable keeps the reference: the next assignment assigns the referenced lvalue too
+gx = 7;
+f();
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "v: 7",
+            "gx: 11 tl: 11",
+            "v: 7",
+            "gx: 11 tl: 11",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ThreadLocalReferenceRead", Script, (map $1 + "\n", Expected).join(""),
+            "reads and writes a reference held by a thread_local variable as the AST interpreter does") {
+    }
+}
