@@ -141,7 +141,10 @@ ThreadPool::ThreadPool(ExceptionSink* xsink, int n_max, int n_minidle, int n_max
             == -1) {
         assert(*xsink);
         stopped = true;
-        releaseWorkerSlotUnlocked();
+        // no lock is held here, so the waiting pools are notified at once
+        if (sbx) {
+            sbx->releaseThreadSlot();
+        }
     }
 }
 
@@ -156,6 +159,11 @@ void ThreadPool::worker(ExceptionSink* xsink) {
     }
 
     while (!stopflag) {
+        // wake the pools waiting for a slot that this pool released with its lock held
+        flushSlotNotification(sl);
+        if (stopflag) {
+            break;
+        }
         if (q.empty()) {
             if (shutdown) {
                 stopflag = true;
@@ -169,6 +177,7 @@ void ThreadPool::worker(ExceptionSink* xsink) {
                     fh.pop_front();
                     tpt->stop();
                     releaseWorkerSlotUnlocked();
+                    // the waiting pools are notified at the top of the loop
                     continue;
                 }
             } else {
@@ -180,8 +189,10 @@ void ThreadPool::worker(ExceptionSink* xsink) {
             break;
 
         while (!q.empty()) {
-            ThreadPoolThread* tpt = getThreadUnlocked(xsink);
+            ThreadPoolThread* tpt = getThreadUnlocked(sl, xsink);
             if (!tpt) {
+                // a slot released for a worker that could not be started wakes the pools waiting for one
+                flushSlotNotification(sl);
                 // the pool was stopped while waiting for a worker: stop without waiting to retry
                 if (stopflag) {
                     break;
@@ -238,6 +249,14 @@ void ThreadPool::worker(ExceptionSink* xsink) {
         releaseWorkerSlotUnlocked();
     }
     reserved = 0;
+    // the pools waiting for a slot are notified after the lock is released, when this object may already be gone, so
+    // the manager is referenced here
+    QoreSandboxManager* notify_sbx = nullptr;
+    if (notify_pending) {
+        notify_pending = false;
+        sbx->ref();
+        notify_sbx = sbx;
+    }
 
 #ifdef DEBUG
     ah.clear();
@@ -253,6 +272,11 @@ void ThreadPool::worker(ExceptionSink* xsink) {
     q.clear();
 
     sl.unlock();
+
+    if (notify_sbx) {
+        notify_sbx->notifyThreadSlotReleased();
+        notify_sbx->deref(nullptr);
+    }
 
     // cancel tasks if any; decrement thread_counter for each cancelled task
     // (it was incremented at submit time)
@@ -300,8 +324,8 @@ ThreadPool tp(max_threads: 10, min_idle_threads: 2, max_idle_threads: 4);
     The threads of a ThreadPool created by a @ref Qore::Program "Program" with a
     @ref Qore::SandboxManager "SandboxManager" (its own thread and its workers, also idle ones) count against the
     thread limit of that sandbox (@ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()"): the
-    pool does not start more workers than the sandbox has free thread slots, and its queued tasks then wait for its
-    busy workers, as when \a max_threads is reached; see @ref sandbox_resources.  Each task runs under the sandbox of the code that submitted
+    pool does not start more workers than the sandbox has free thread slots, and its queued tasks then wait until one
+    of its busy workers becomes free or another thread of the sandbox ends; see @ref sandbox_resources.  Each task runs under the sandbox of the code that submitted
     it.
 
     @since %Qore 0.8.8

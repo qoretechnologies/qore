@@ -846,8 +846,28 @@ private:
     */
     DLLLOCAL int acquireThreadSlot(ExceptionSink* xsink);
 
-    //! Stops counting a thread counted with acquireThreadSlot()
+    //! Counts a new thread like acquireThreadSlot() without waking the thread pools waiting for a slot
+    /** For a ThreadPool taking a slot with its lock held.  A composition that cannot take a slot of every member
+        releases the slots it took again; \a released is then set to true, and the caller must call
+        notifyThreadSlotReleased() once it has released its lock.
+    */
+    DLLLOCAL int acquireThreadSlotQuiet(ExceptionSink* xsink, bool& released);
+
+    //! Stops counting a thread counted with acquireThreadSlot() and wakes the thread pools waiting for a slot
+    /** Must not be called with the lock of a ThreadPool held; see releaseThreadSlotQuiet()
+    */
     DLLLOCAL void releaseThreadSlot();
+
+    //! Stops counting a thread counted with acquireThreadSlot() without waking the thread pools waiting for a slot
+    /** For a ThreadPool releasing a slot with its lock held, which notifies the waiting pools once it has released
+        its lock
+    */
+    DLLLOCAL void releaseThreadSlotQuiet();
+
+    //! Wakes the thread pools waiting for a slot of this manager or of a member of this composition
+    /** Must not be called with the lock of a ThreadPool held
+    */
+    DLLLOCAL void notifyThreadSlotReleased();
 };
 
 //! RAII helper that acquires a ref'd sandbox manager for the current running program

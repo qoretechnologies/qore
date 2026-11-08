@@ -37,6 +37,7 @@
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/QoreSandboxMemory.h"
+#include "qore/intern/ThreadPool.h"
 
 #include <cassert>
 #include <cctype>
@@ -44,7 +45,9 @@
 #include <climits>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -1124,13 +1127,24 @@ int64 QoreSandboxManager::getMaxStackSize() const {
 }
 
 int QoreSandboxManager::acquireThreadSlot(ExceptionSink* xsink) {
+    bool released = false;
+    int rc = acquireThreadSlotQuiet(xsink, released);
+    if (released) {
+        // the slots of a composition taken before a member refused one were released again
+        notifyThreadSlotReleased();
+    }
+    return rc;
+}
+
+int QoreSandboxManager::acquireThreadSlotQuiet(ExceptionSink* xsink, bool& released) {
     if (const auto* managers = QoreSandboxComposition::members(this)) {
         size_t acquired = 0;
         for (auto* manager : *managers) {
             if ((!(acquired % 100) && qore_check_cancel(xsink, "sandbox thread reservation"))
-                    || manager->acquireThreadSlot(xsink)) {
+                    || manager->acquireThreadSlotQuiet(xsink, released)) {
                 while (acquired) {
-                    (*managers)[--acquired]->releaseThreadSlot();
+                    (*managers)[--acquired]->releaseThreadSlotQuiet();
+                    released = true;
                 }
                 return -1;
             }
@@ -1152,10 +1166,87 @@ int QoreSandboxManager::acquireThreadSlot(ExceptionSink* xsink) {
     }
 }
 
+//------------------------------------------------------------------------------
+// Thread pools waiting for a thread slot
+//------------------------------------------------------------------------------
+
+
+//! The thread pools waiting for a thread slot of a sandbox manager
+/** Pools register with their own lock held and are notified without it: a notifier takes this lock, references the
+    waiting pools, releases this lock and then takes the lock of each pool to wake it, so a pool lock and this lock are
+    never taken in the opposite order.
+*/
+static std::mutex slot_waiters_lock;
+static std::multimap<QoreSandboxManager*, ThreadPool*> slot_waiters;
+//! The number of registered pools, so that a release can skip the registry when no pool waits
+/** Sequentially consistent with the slot counts: a pool registers before it tries to take a slot, and a release
+    reads this count after releasing the slot, so either the pool takes the slot or the release sees the pool.
+*/
+static std::atomic<int> slot_waiter_count{0};
+
+void ThreadPool::registerSlotWaiter(ThreadPool* tp) {
+    assert(tp->sbx);
+    std::lock_guard<std::mutex> lck(slot_waiters_lock);
+    slot_waiters.emplace(tp->sbx, tp);
+    slot_waiter_count.fetch_add(1, std::memory_order_seq_cst);
+}
+
+void ThreadPool::unregisterSlotWaiter(ThreadPool* tp) {
+    std::lock_guard<std::mutex> lck(slot_waiters_lock);
+    auto range = slot_waiters.equal_range(tp->sbx);
+    for (auto i = range.first; i != range.second; ++i) {
+        if (i->second == tp) {
+            slot_waiters.erase(i);
+            slot_waiter_count.fetch_sub(1, std::memory_order_seq_cst);
+            return;
+        }
+    }
+    assert(false);
+}
+
+void ThreadPool::notifySlotReleased(QoreSandboxManager* sm) {
+    if (!slot_waiter_count.load(std::memory_order_seq_cst)) {
+        return;
+    }
+    // the waiting pools, referenced so that they stay valid after the registry lock is released
+    std::vector<ThreadPool*> pools;
+    {
+        std::lock_guard<std::mutex> lck(slot_waiters_lock);
+        auto range = slot_waiters.equal_range(sm);
+        for (auto i = range.first; i != range.second; ++i) {
+            i->second->ref();
+            pools.push_back(i->second);
+        }
+    }
+    ExceptionSink xsink;
+    for (ThreadPool* tp : pools) {
+        {
+            AutoLocker al(tp->m);
+            tp->cond.signal();
+        }
+        tp->deref(&xsink);
+    }
+}
+
 void QoreSandboxManager::releaseThreadSlot() {
+    releaseThreadSlotQuiet();
+    notifyThreadSlotReleased();
+}
+
+void QoreSandboxManager::notifyThreadSlotReleased() {
+    // a thread pool waiting for a slot of this manager, or of a member of this composition, can start a worker now
+    ThreadPool::notifySlotReleased(this);
     if (const auto* managers = QoreSandboxComposition::members(this)) {
         for (auto* manager : *managers) {
-            manager->releaseThreadSlot();
+            ThreadPool::notifySlotReleased(manager);
+        }
+    }
+}
+
+void QoreSandboxManager::releaseThreadSlotQuiet() {
+    if (const auto* managers = QoreSandboxComposition::members(this)) {
+        for (auto* manager : *managers) {
+            manager->releaseThreadSlotQuiet();
         }
         return;
     }

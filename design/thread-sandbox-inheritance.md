@@ -79,8 +79,8 @@ slot from construction until the pool has stopped (the constructor raises `THREA
 and each worker holds one of its thread slots while it is in the pool, also while idle. The slots are taken and released under the pool's lock: a slot is
 taken before a worker is started, and released when a worker leaves the pool (idle release, `done()` not requeuing
 it) or when the pool stops, so the slots held are always the pool's workers, and a worker that is still exiting
-never holds one. When no slot is free, the pool behaves as when its own `max_threads` is reached: queued tasks wait
-for its busy workers, and idle workers beyond the limit (`min_idle_threads`) are not started. A pool with no worker
+never holds one. When no slot is free, queued tasks wait for one of the pool's busy workers or for a slot that another
+thread of the sandbox releases (see below), and idle workers beyond the limit (`min_idle_threads`) are not started. A pool with no worker
 could not run a queued task, so `submit()` reserves the slot of the first worker in the submitting thread when the pool
 has none, raising `THREAD-CREATION-FAILURE` there if the sandbox has no free slot. A pool created by a Program without
 a sandbox manager serves every caller and is not limited; a module's Program inherits the manager of the Program that
@@ -88,8 +88,14 @@ loads the module first (`inherit_module_sandbox_manager()`), so a pool that the 
 sandboxed code creates is counted (qore#5635;
 test: `examples/test/qore/security/thread-pool-thread-limit.qtest`).
 
-A slot that another thread of the sandbox frees does not wake a pool whose queued tasks wait for a worker: the tasks
-wait for the pool's own busy workers, as with `max_threads`.
+A pool whose queued tasks wait for a slot is woken both by its own workers becoming free and by a slot that any other
+thread of the sandbox releases: the pool's thread registers in a registry of waiting pools (keyed by manager, in
+`lib/QoreSandboxManager.cpp`) before it tries to take a slot, and `QoreSandboxManager::releaseThreadSlot()` wakes the
+pools registered for the manager (and for the members of a composition) after releasing the slot. Registering before
+the attempt and reading the registry count after the release (both sequentially consistent) means either the pool
+gets the slot or the release sees the pool. A notifier takes the registry lock, references the waiting pools, releases
+the registry lock and then takes each pool's lock to signal it; a pool releases its own slots with its lock held
+quietly (`releaseThreadSlotQuiet()`) and notifies after unlocking, so pool locks never nest.
 
 A thread is counted when its inheritance is captured (`QoreInheritedSandbox::capture()`), before the thread is
 created, so the count is accurate the moment `background`/`q_start_thread()` returns. Starting a thread at the limit

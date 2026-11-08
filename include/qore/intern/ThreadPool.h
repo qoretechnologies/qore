@@ -268,6 +268,57 @@ protected:
     */
     int reserved = 0;
 
+    //! True if this pool released a slot with \a m held and has not yet notified the pools waiting for a slot
+    /** A slot released with the pool's lock held is released quietly, and the waiting pools are notified once the
+        lock has been released (flushSlotNotification()), as notifying a pool takes its lock and pool locks must never
+        nest.
+    */
+    bool notify_pending = false;
+
+    //! Registers this pool as waiting for a slot of \a sbx while it exists; must be created with \a m held
+    /** It is registered before the pool tries to take a slot, so that a slot released after a failed attempt always
+        notifies it; see notifySlotReleased().
+    */
+    class SlotWaitRegistration {
+    public:
+        DLLLOCAL SlotWaitRegistration(ThreadPool& tp) : tp(tp) {
+        }
+
+        DLLLOCAL ~SlotWaitRegistration() {
+            if (registered) {
+                ThreadPool::unregisterSlotWaiter(&tp);
+            }
+        }
+
+        //! Registers the pool if it is not registered yet
+        DLLLOCAL void set() {
+            if (!registered) {
+                ThreadPool::registerSlotWaiter(&tp);
+                registered = true;
+            }
+        }
+
+    private:
+        ThreadPool& tp;
+        bool registered = false;
+    };
+
+    //! Registers a pool waiting for a slot of its sandbox manager; called with the pool's lock held
+    DLLLOCAL static void registerSlotWaiter(ThreadPool* tp);
+
+    //! Removes the registration of a pool waiting for a slot; called with the pool's lock held
+    DLLLOCAL static void unregisterSlotWaiter(ThreadPool* tp);
+
+    //! Notifies the waiting pools if this pool released a slot with its lock held; releases and reacquires the lock
+    DLLLOCAL void flushSlotNotification(SafeLocker& sl) {
+        if (notify_pending) {
+            notify_pending = false;
+            sl.unlock();
+            sbx->notifyThreadSlotReleased();
+            sl.lock();
+        }
+    }
+
     //! Takes a slot for a new worker; must be called with \a m held
     /** @return true if the worker can be started: the pool is not governed by a sandbox, a reserved slot was used, or
         a slot was acquired; false if the sandbox thread limit is reached
@@ -282,7 +333,12 @@ protected:
         }
         // the limit is a capacity of the pool here, like max: a failure is not an error of any caller
         ExceptionSink slot_xsink;
-        if (sbx->acquireThreadSlot(&slot_xsink)) {
+        bool released = false;
+        int rc = sbx->acquireThreadSlotQuiet(&slot_xsink, released);
+        if (released) {
+            notify_pending = true;
+        }
+        if (rc) {
             slot_xsink.clear();
             return false;
         }
@@ -290,9 +346,13 @@ protected:
     }
 
     //! Releases the slot of a worker that leaves the pool, or of one that could not be started; \a m must be held
+    /** The slot is released quietly: the pools waiting for a slot are notified after \a m has been released (see
+        \a notify_pending).
+    */
     DLLLOCAL void releaseWorkerSlotUnlocked() {
         if (sbx) {
-            sbx->releaseThreadSlot();
+            sbx->releaseThreadSlotQuiet();
+            notify_pending = true;
         }
     }
 
@@ -330,25 +390,31 @@ protected:
         return 0;
     }
 
-    DLLLOCAL ThreadPoolThread* getThreadUnlocked(ExceptionSink* xsink) {
+    //! Returns a worker for the next task; \a sl must hold \a m, which is released while waiting
+    DLLLOCAL ThreadPoolThread* getThreadUnlocked(SafeLocker& sl, ExceptionSink* xsink) {
         assert(xsink);
         // true if a slot was taken for a new worker
         bool new_worker = false;
+        // registers the pool as waiting for a slot while it waits for one
+        SlotWaitRegistration slot_wait(*this);
         while (!stopflag && fh.empty()) {
             if (!max || (int)ah.size() < max) {
+                // register before trying, so that a slot released after a failed attempt wakes this pool
+                if (sbx && !reserved) {
+                    slot_wait.set();
+                }
                 if (acquireWorkerSlotUnlocked()) {
                     new_worker = true;
                     break;
                 }
-                // the sandbox thread limit is reached: wait for a busy worker of the pool, as when max is reached
-                if (ah.empty()) {
-                    // no worker can become free; submit() reserves a slot when the pool has none, so this happens
-                    // only after a worker could not be started
-                    xsink->raiseException("THREAD-CREATION-FAILURE", "ThreadPool cannot start a worker: the "
-                        "sandbox thread limit of %d of the Program that created the pool is reached",
-                        sbx->getMaxThreads());
-                    return nullptr;
-                }
+                // the sandbox thread limit is reached: wait for a busy worker of the pool to become free, as when
+                // max is reached, or for another thread of the sandbox to release a slot (notifySlotReleased())
+            }
+            // wake the other waiting pools first if a slot was released with the lock held; the loop condition is
+            // checked again after the lock was released
+            if (notify_pending) {
+                flushSlotNotification(sl);
+                continue;
             }
             waiting = true;
             cond.wait(m);
@@ -467,6 +533,17 @@ public:
         // optimistically create the task object outside the lock
         ThreadTaskHolder task(new ThreadTask(c, cc), xsink);
 
+        // true if slots of a composition were taken and released again with the lock held
+        bool released = false;
+        int rc = submitUnlocked(task, released, xsink);
+        if (released) {
+            sbx->notifyThreadSlotReleased();
+        }
+        return rc;
+    }
+
+    //! Queues the task for submit(); takes \a m
+    DLLLOCAL int submitUnlocked(ThreadTaskHolder& task, bool& released, ExceptionSink* xsink) {
         AutoLocker al(m);
         if (checkStopUnlocked("submit", xsink)) {
             return -1;
@@ -476,7 +553,7 @@ public:
         // sandbox thread limit raises THREAD-CREATION-FAILURE in the submitting code instead of leaving the task in a
         // pool that cannot start a worker
         if (sbx && !reserved && fh.empty() && ah.empty()) {
-            if (sbx->acquireThreadSlot(xsink)) {
+            if (sbx->acquireThreadSlotQuiet(xsink, released)) {
                 return -1;
             }
             ++reserved;
@@ -519,14 +596,26 @@ public:
                     cond.signal();
                 return 0;
             }
-            // the thread leaves the pool and ends
-            releaseWorkerSlotUnlocked();
+            // the thread leaves the pool and ends; its slot is released quietly, and the waiting pools are notified
+            // below, without the lock
+            if (sbx) {
+                sbx->releaseThreadSlotQuiet();
+            }
         }
 
+        if (sbx) {
+            sbx->notifyThreadSlotReleased();
+        }
         return -1;
     }
 
     DLLLOCAL void worker(ExceptionSink* xsink);
+
+    //! Wakes the pools waiting for a slot of the given sandbox manager after a slot of it was released
+    /** Must be called without any pool lock held, as it takes the lock of each waiting pool; called by
+        QoreSandboxManager::releaseThreadSlot() and by pools after a quiet release.
+    */
+    DLLLOCAL static void notifySlotReleased(QoreSandboxManager* sm);
 };
 
 #endif

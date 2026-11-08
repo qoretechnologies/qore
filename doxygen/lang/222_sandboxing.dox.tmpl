@@ -625,8 +625,8 @@ sm.setMaxStackSize(1024 * 1024);
     pool that the code of a module first loaded by sandboxed code creates is counted as well.
     - creating a pool when the sandbox has no free thread slot raises \c THREAD-CREATION-FAILURE in the code that
       creates it
-    - a pool does not start more workers than the sandbox has free slots: its queued tasks then wait for one of its
-      own busy workers, as when the pool's own \c max_threads is reached, and a task submitted to a pool that has no
+    - a pool does not start more workers than the sandbox has free slots: its queued tasks then wait until one of its
+      busy workers becomes free or another thread of the sandbox ends, and a task submitted to a pool that has no
       worker and cannot start one is refused with \c THREAD-CREATION-FAILURE in the code that submits it
     - an idle worker keeps its slot until the pool releases it (see \c max_idle_threads and \c idle_release_timeout
       in @ref Qore::Thread::ThreadPool::constructor() "ThreadPool::constructor()"); a worker stops counting when it

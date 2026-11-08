@@ -79,6 +79,8 @@ list<auto> sub start_blocked(int n, Queue gate) {
         addTestCase("workers that leave the pool after each task release their slots", \testWorkerLeaves());
         addTestCase("stopping a pool whose tasks wait for a slot", \testStopWaiting());
         addTestCase("a pool created by a module counts against the module Program's sandbox", \testModulePool());
+        addTestCase("a slot released by another thread of the sandbox wakes a waiting pool", \testSlotReleasedElsewhere());
+        addTestCase("a task waiting for a slot can be submitted by a task of the same pool", \testNestedSubmit());
         set_return_value(main());
     }
 
@@ -466,5 +468,78 @@ ThreadPool sub make_pool(int n) { return SandboxPoolFixture::make_pool(n); }", "
         ThreadPool tp2 = p2.callFunction("make_pool", 2);
         on_exit tp2.stopWait();
         assertEq(1, freeSlots(probe2, 2), "a pool created by a module Program without a sandbox is not counted");
+    }
+
+    testSlotReleasedElsewhere() {
+        # the pool's own thread, one worker and a thread of the probe fill the limit; the queued task must start when
+        # the probe's thread ends, although the pool's worker stays busy
+        SandboxManager sm();
+        sm.setMaxThreads(3);
+        Program p = getPoolProgram(sm);
+        Program probe = getProbe(sm);
+        ThreadPool tp = p.callFunction("make_pool", 4);
+        Queue started();
+        Queue gate();
+        Queue probe_gate();
+        list<auto> probe_threads;
+        on_exit {
+            release(gate, 2);
+            release(probe_gate, 1);
+            joinAll(probe_threads);
+            tp.stopWait();
+        }
+        assertEq((True,), p.callFunction("submit", tp, 1, started, gate));
+        started.get(60s);
+        probe_threads = probe.callFunction("start_blocked", 1, probe_gate);
+        assertEq(NT_INT, probe_threads[0].typeCode());
+        # the second task is queued: no slot is free and the only worker is busy
+        assertEq((True,), p.callFunction("submit", tp, 1, started, gate));
+        assertEq(0, freeSlots(probe, 1), "the sandbox has no free slot while the second task waits");
+        # the probe's thread ends and frees a slot: the pool starts a worker for the waiting task
+        probe_gate.push(True);
+        joinAll(probe_threads);
+        probe_threads = ();
+        assertEq(True, started.get(60s), "the waiting task starts when another thread of the sandbox ends");
+        release(gate, 2);
+        tp.stopWait();
+        assertEq(3, freeSlots(probe, 4), "the slots are free after the pool stopped");
+    }
+
+    testNestedSubmit() {
+        # a task submits another task to its own pool and waits for it; a slot freed elsewhere lets the second task run
+        # instead of the pool waiting for the first task, which waits for the second
+        SandboxManager sm();
+        sm.setMaxThreads(3);
+        Program p(PO_NEW_STYLE);
+        p.parse("ThreadPool sub make_pool() { return new ThreadPool(4); }
+sub run(ThreadPool tp, Queue started, Queue result) {
+    tp.submit(sub () {
+        started.push(True);
+        Queue inner();
+        tp.submit(sub () { inner.push(\"inner\"); });
+        result.push(inner.get(60s));
+    });
+}", "nested");
+        p.setSandboxManager(sm);
+        Program probe = getProbe(sm);
+        ThreadPool tp = p.callFunction("make_pool");
+        Queue probe_gate();
+        list<auto> probe_threads;
+        on_exit {
+            release(probe_gate, 1);
+            joinAll(probe_threads);
+            tp.stopWait();
+        }
+        # the probe holds the slot that the inner task needs
+        probe_threads = probe.callFunction("start_blocked", 1, probe_gate);
+        assertEq(NT_INT, probe_threads[0].typeCode());
+        Queue started();
+        Queue result();
+        p.callFunction("run", tp, started, result);
+        started.get(60s);
+        probe_gate.push(True);
+        joinAll(probe_threads);
+        probe_threads = ();
+        assertEq("inner", result.get(60s), "the inner task runs once a slot is free");
     }
 }
