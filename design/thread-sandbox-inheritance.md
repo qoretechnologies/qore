@@ -43,7 +43,7 @@ started for an *unrestricted* caller is not in any sandbox's scope, so sandboxed
 | `q_start_thread()` (all three overloads) | **yes**, unless `QTF_NO_SANDBOX_INHERIT` | `q_capture_start_thread_sandbox()`, `q_run_thread()` applies (`lib/thread.cpp`) |
 | `call_async()`, `parallel_map()`, `parallel_foreach()` | **yes** (they use `q_start_thread()`) | `lib/ql_thread.qpp` |
 | async I/O timer callback | **yes** — the sandbox of the code that added the timer | `addTimer()` captures, delivered via the callback worker (`lib/AsyncIoControllerPriv.cpp`) |
-| `ThreadPool` workers | **no** (opt out) — each task carries its own capture | `QTF_NO_SANDBOX_INHERIT`; `ThreadTask` captures per task (`include/qore/intern/ThreadPool.h`) |
+| `ThreadPool` workers | **no** (opt out) — each task carries its own capture; the workers count against the creating Program's sandbox (see "The thread limit") | `QTF_NO_SANDBOX_INHERIT`; `ThreadTask` captures per task (`include/qore/intern/ThreadPool.h`) |
 | async I/O controller I/O and callback threads | **no** (opt out) — each operation carries its own capture | `QTF_NO_SANDBOX_INHERIT`; `AsyncIoSandboxContext` per operation (`lib/AsyncIoControllerPriv.cpp`) |
 | `ml` `OnnxSessionPool` async/leader threads | **no** (opt out) — each request/batch carries its own capture | `QTF_NO_SANDBOX_INHERIT`; `QoreSandboxCapture` per request (`modules/ml`) |
 
@@ -69,8 +69,21 @@ everyone's work. Such a thread sets `QTF_NO_SANDBOX_INHERIT` and instead:
 `QoreSandboxManager::setMaxThreads(n)` limits the number of threads that code governed by the sandbox may have
 running at the same time: `background`, `call_async()`, the workers of `parallel_map()`/`parallel_foreach()`, and
 threads a module starts with `q_start_thread()` on the sandboxed code's behalf — exactly the threads that inherit
-the sandbox. The thread that enters the sandboxed Program from outside is not counted, and neither are the shared
-opt-out threads (ThreadPool, async I/O), because they do not inherit the sandbox.
+the sandbox. The thread that enters the sandboxed Program from outside is not counted, and neither are the async
+I/O threads, which do not inherit the sandbox.
+
+The workers of a `ThreadPool` do not inherit a sandbox either, but they count against the sandbox of the Program that
+created the pool (the Program running the constructor), if it has one: the pool takes a reference to that Program's
+`QoreSandboxManager` when it is created (keeping it if the Program later gets another manager), and each worker holds
+one of its thread slots while it is in the pool. The slots are taken and released under the pool's lock: a slot is
+taken before a worker is started, and released when a worker leaves the pool (idle release, `done()` not requeuing
+it) or when the pool stops, so the slots held are always the pool's workers, and a worker that is still exiting
+never holds one. When no slot is free, the pool behaves as when its own `max_threads` is reached: queued tasks wait
+for its busy workers, and idle workers beyond the limit (`min_idle_threads`) are not started. A pool with no worker
+could not run a queued task, so `submit()` reserves the slot of the first worker in the submitting thread when the pool
+has none, raising `THREAD-CREATION-FAILURE` there if the sandbox has no free slot. A pool created by a Program without
+a sandbox (a module's Program) serves every caller and is not limited (qore#5635; test:
+`examples/test/qore/security/thread-pool-thread-limit.qtest`).
 
 A thread is counted when its inheritance is captured (`QoreInheritedSandbox::capture()`), before the thread is
 created, so the count is accurate the moment `background`/`q_start_thread()` returns. Starting a thread at the limit
@@ -89,11 +102,9 @@ count against its thread limit like any other thread started on the sandboxed co
 limit bounds them. A user module that the restricted Program loads first inherits its restrictions and cannot use
 `background`; module threads come from modules that the host loaded already or loads with a parse option mask.
 
-The workers of a `ThreadPool` are not counted, also when the sandboxed code (or module code acting for it) creates
-the pool: they start with `QTF_NO_SANDBOX_INHERIT` as shared threads and apply each task's captured sandbox.
 `PO_NO_THREAD_CONTROL` does not stop a Program from creating a `ThreadPool` (the class is in the `THREAD_CLASS`
-domain); `PO_NO_THREAD_CLASSES` does. Until pool workers are accounted to a sandbox, the documentation tells hosts to
-add `PO_NO_THREAD_CLASSES` for code that must stay within its thread limit. The `MODULE_OWNED` builtins (`call_async()`,
+domain; `PO_NO_THREAD_CLASSES` refuses it); the workers of a pool that the sandboxed Program creates count against its
+thread limit as described above. The `MODULE_OWNED` builtins (`call_async()`,
 `parallel_map()`, `parallel_foreach()`, the `AsyncIoController` timer and task submitters) additionally refuse to run
 the code of a caller that may not control threads; a module's own closure that calls the caller's code is accepted, and
 its thread is counted as well.

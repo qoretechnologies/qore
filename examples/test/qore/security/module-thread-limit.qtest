@@ -328,8 +328,8 @@ list<auto> sub start_with_function(int n, Queue gate) {
         assertEq(refused(2), l[2]);
     }
 
-    # ThreadPool workers are shared threads that the sandbox thread limit does not count, so the documentation tells
-    # hosts to add PO_NO_THREAD_CLASSES; PO_NO_THREAD_CONTROL alone does not refuse the class
+    # PO_NO_THREAD_CONTROL does not refuse the ThreadPool class (its workers count against the sandbox of the Program
+    # that creates the pool; see thread-pool-thread-limit.qtest); PO_NO_THREAD_CLASSES does
     testThreadPoolOption() {
         string src = "int sub f() { ThreadPool tp(1); tp.stopWait(); return 1; }";
         Program p(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);

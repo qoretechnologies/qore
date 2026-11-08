@@ -32,6 +32,7 @@
 #include "qore/intern/ThreadPool.h"
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/qore_program_private.h"
 
 static void tpt_start_thread(ExceptionSink* xsink, ThreadPoolThread* tpt) {
    tpt->worker(xsink);
@@ -119,8 +120,9 @@ static void tp_start_thread(ExceptionSink* xsink, ThreadPool* tp) {
     tp->worker(xsink);
 }
 
-ThreadPool::ThreadPool(ExceptionSink* xsink, int n_max, int n_minidle, int n_maxidle, int n_release_ms) :
-    max(n_max), minidle(n_minidle), maxidle(n_maxidle), release_ms(n_release_ms) {
+ThreadPool::ThreadPool(ExceptionSink* xsink, int n_max, int n_minidle, int n_maxidle, int n_release_ms,
+        QoreSandboxManager* n_sbx) :
+    max(n_max), minidle(n_minidle), maxidle(n_maxidle), release_ms(n_release_ms), sbx(n_sbx) {
     assert(xsink);
     if (max < 0)
         max = 0;
@@ -159,6 +161,7 @@ void ThreadPool::worker(ExceptionSink* xsink) {
                     //printd(5, "ThreadPool::worker() this: %p release_ms: %d timeout - stopping idle thread %p (minidle: %d maxidle: %d fh.size(): %ld)\n", this, release_ms, tpt, minidle, maxidle, fh.size());
                     fh.pop_front();
                     tpt->stop();
+                    releaseWorkerSlotUnlocked();
                     continue;
                 }
             } else {
@@ -218,6 +221,12 @@ void ThreadPool::worker(ExceptionSink* xsink) {
 
     sl.lock();
 
+    // the workers have ended: release their slots and any slot reserved for a worker that was never started
+    for (size_t i = 0, e = fh.size() + ah.size() + reserved; i < e; ++i) {
+        releaseWorkerSlotUnlocked();
+    }
+    reserved = 0;
+
 #ifdef DEBUG
     ah.clear();
     fh.clear();
@@ -276,6 +285,13 @@ void ThreadPool::worker(ExceptionSink* xsink) {
 ThreadPool tp(max_threads: 10, min_idle_threads: 2, max_idle_threads: 4);
     @endcode
 
+    The workers of a ThreadPool created by a @ref Qore::Program "Program" with a
+    @ref Qore::SandboxManager "SandboxManager" count against the thread limit of that sandbox
+    (@ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()"): the pool does not start more workers
+    than the sandbox has free thread slots, and its queued tasks then wait for its busy workers, as when
+    \a max_threads is reached; see @ref sandbox_resources.  Each task runs under the sandbox of the code that submitted
+    it.
+
     @since %Qore 0.8.8
  */
 qclass ThreadPool [dom=THREAD_CLASS; arg=ThreadPool* tp; ns=Qore::Thread];
@@ -332,8 +348,9 @@ ThreadPool::constructor(int max_threads = 0, int min_idle_threads = 0, int max_i
         return;
     }
 
+    // the workers count against the thread limit of the sandbox of the Program that creates the pool, if it has one
     ReferenceHolder<ThreadPool> tp(new ThreadPool(xsink, max_threads, min_idle_threads, max_idle_threads,
-        idle_release_timeout), xsink);
+        idle_release_timeout, qore_program_private::get(*getProgram())->getSandboxManagerRef()), xsink);
     if (*xsink)
         return;
 
@@ -394,6 +411,10 @@ tp.submit(task: sub () { call_function(arg); });
     execute if the ThreadPool is stopped before the task can be executed; note that cancellation code is run
     serially for each task in order of submission in the ThreadPool's worker thread after the ThreadPool has
     been shut down
+
+    @throw THREAD-CREATION-FAILURE the pool was created by a Program with a sandbox, the pool has no worker, and the
+    thread limit of the sandbox is reached (see @ref sandbox_resources)
+    @throw THREADPOOL-ERROR the pool is being destroyed
  */
 ThreadPool::submit(code task, *code cancel_callback) [flags=NAMED_ARGS] {
     tp->submit(task->refRefSelf(), cancel_callback ? cancel_callback->refRefSelf() : 0, xsink);

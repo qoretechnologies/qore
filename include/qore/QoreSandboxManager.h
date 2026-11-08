@@ -838,6 +838,8 @@ private:
 
     // reserves and releases thread slots for the threads that inherit this sandbox
     friend class QoreInheritedSandbox;
+    // reserves and releases thread slots for the workers of a ThreadPool created by a Program with this sandbox
+    friend class ThreadPool;
 
     //! Counts a new thread governed by this sandbox; raises THREAD-CREATION-FAILURE at the thread limit
     /** @return 0 if the thread is counted, -1 if the limit has been reached (an exception is raised)

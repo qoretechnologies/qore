@@ -1,0 +1,338 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The workers of a ThreadPool count against the thread limit of the sandbox of the Program that created the pool, if
+# that Program has a SandboxManager (qore#5635): a pool cannot start more workers than the sandbox has free thread
+# slots, so its queued tasks wait for its busy workers; a pool that has no worker and cannot start one refuses a task
+# with THREAD-CREATION-FAILURE in the submitting code; a worker stops counting when it leaves the pool.  A pool
+# created by a Program without a sandbox (like a module Program) is not limited.
+#
+# Whether a worker holds a slot is checked deterministically with a probe: a Program that shares the SandboxManager
+# and starts threads with the background operator, which the sandbox refuses when all of its slots are held.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+
+%exec-class ThreadPoolThreadLimitTest
+
+class ThreadPoolThreadLimitTest inherits QUnit::Test {
+    #! the code of the Program that creates the pool and submits tasks to it
+    const PoolSource = "
+ThreadPool sub make_pool(int max_threads, int min_idle = 0, int max_idle = 0) {
+    return new ThreadPool(max_threads, min_idle, max_idle);
+}
+
+# submits n tasks that each report their start and then wait on the gate; returns True for each task submitted or the
+# exception that refused it, which this code handles
+list<auto> sub submit(ThreadPool tp, int n, Queue started, Queue gate) {
+    list<auto> rv = ();
+    for (int i = 0; i < n; ++i) {
+        try {
+            tp.submit(sub () {
+                started.push(True);
+                gate.get(60s);
+            });
+            rv += True;
+        } catch (hash<ExceptionInfo> ex) {
+            rv += sprintf(\"%s: %s\", ex.err, ex.desc);
+        }
+    }
+    return rv;
+}
+";
+
+    #! the code of the Program that probes the free slots of the sandbox
+    const ProbeSource = "
+# starts n threads that each wait on the gate; returns the TID of each or the exception that refused it
+list<auto> sub start_blocked(int n, Queue gate) {
+    list<auto> rv = ();
+    for (int i = 0; i < n; ++i) {
+        try {
+            rv += background gate.get(60s);
+        } catch (hash<ExceptionInfo> ex) {
+            rv += sprintf(\"%s: %s\", ex.err, ex.desc);
+        }
+    }
+    return rv;
+}
+";
+
+    constructor() : QUnit::Test("ThreadPool thread limit", "1.0", \ARGV) {
+        addTestCase("the workers of a pool count against its creator's sandbox", \testWorkersCount());
+        addTestCase("the limit refuses a task in the submitting code when the pool has no worker", \testSubmitRefused());
+        addTestCase("a restricted Program cannot exceed its limit with a pool", \testRestricted());
+        addTestCase("idle workers beyond the limit are not started", \testMinIdle());
+        addTestCase("the workers stop counting when the pool stops", \testRelease());
+        addTestCase("a pool created without a sandbox is not limited", \testUnsandboxedCreator());
+        addTestCase("a sandbox without a limit counts but does not limit the workers", \testNoLimit());
+        addTestCase("the pool keeps the sandbox of its creation", \testManagerReplaced());
+        set_return_value(main());
+    }
+
+    #! releases n waiting threads
+    private static release(Queue gate, int n) {
+        for (int i = 0; i < n; ++i) {
+            gate.push(True);
+        }
+    }
+
+    #! waits for n start reports
+    private static waitStarted(Queue started, int n) {
+        for (int i = 0; i < n; ++i) {
+            started.get(60s);
+        }
+    }
+
+    #! waits until each thread in the list has ended; elements that are not TIDs are ignored
+    private joinAll(list<auto> l) {
+        foreach auto tid in (l) {
+            if (tid.typeCode() == NT_INT) {
+                assertTrue(thread_join(tid, 60s), sprintf("thread %d ended", tid));
+            }
+        }
+    }
+
+    #! returns the Program that creates the pool, with the given sandbox
+    private static Program getPoolProgram(*SandboxManager sm, int opts = PO_NEW_STYLE, *ExecMode mode) {
+        Program p(opts);
+        if (exists mode) {
+            p.setExecMode(mode);
+            p.parse("%modern\n" + PoolSource, "pool");
+        } else {
+            p.parse(PoolSource, "pool");
+        }
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        return p;
+    }
+
+    #! returns a Program that probes the free slots of the given sandbox
+    private static Program getProbe(SandboxManager sm) {
+        Program p(PO_NEW_STYLE);
+        p.parse(ProbeSource, "probe");
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    #! returns the expected error for a thread refused at the given limit
+    private static string refused(int max_threads) {
+        return sprintf("THREAD-CREATION-FAILURE: cannot start a thread: sandbox thread limit of %d reached",
+            max_threads);
+    }
+
+    #! returns the number of threads the probe can start at once in the given sandbox, up to n, and ends them
+    private int freeSlots(Program probe, int n) {
+        Queue gate();
+        list<auto> l = probe.callFunction("start_blocked", n, gate);
+        list<auto> tids = select l, $1.typeCode() == NT_INT;
+        release(gate, tids.size());
+        joinAll(tids);
+        return tids.size();
+    }
+
+    testWorkersCount() {
+        SandboxManager sm();
+        sm.setMaxThreads(2);
+        Program p = getPoolProgram(sm);
+        Program probe = getProbe(sm);
+        ThreadPool tp = p.callFunction("make_pool", 10);
+        Queue started();
+        Queue gate();
+        on_exit {
+            release(gate, 10);
+            tp.stopWait();
+        }
+        # ten tasks for a pool that allows ten workers: the sandbox allows two
+        assertEq((map True, xrange(10)), p.callFunction("submit", tp, 10, started, gate));
+        waitStarted(started, 2);
+        # both slots are held by the workers
+        Queue probe_gate();
+        list<auto> l = probe.callFunction("start_blocked", 1, probe_gate);
+        assertEq((refused(2),), l, "the probe cannot start a thread while two workers hold the slots");
+        # each task that ends lets the next one run on a worker that is free again
+        for (int i = 2; i < 10; ++i) {
+            gate.push(True);
+            started.get(60s);
+        }
+        release(gate, 2);
+        tp.stopWait();
+        assertEq(2, freeSlots(probe, 2), "the slots are free after the pool stopped");
+    }
+
+    testSubmitRefused() {
+        # in every execution mode of the Program that submits, the failure is raised in its code, which handles it
+        hash<string, ExecMode> modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+        foreach string name in (keys modes) {
+            SandboxManager sm();
+            sm.setMaxThreads(1);
+            Program p = getPoolProgram(sm, PO_NEW_STYLE, modes{name});
+            Program probe = getProbe(sm);
+            ThreadPool tp = p.callFunction("make_pool", 4);
+            Queue started();
+            Queue gate();
+            Queue probe_gate();
+            list<auto> probe_threads;
+            on_exit {
+                release(gate, 1);
+                release(probe_gate, 1);
+                joinAll(probe_threads);
+                tp.stopWait();
+            }
+            # another thread of the sandbox holds its only slot
+            probe_threads = probe.callFunction("start_blocked", 1, probe_gate);
+            assertEq(NT_INT, probe_threads[0].typeCode(), name);
+            assertEq((refused(1),), p.callFunction("submit", tp, 1, started, gate), name);
+            # once the slot is free, the pool starts a worker for the next task
+            probe_gate.push(True);
+            joinAll(probe_threads);
+            probe_threads = ();
+            assertEq((True,), p.callFunction("submit", tp, 1, started, gate), name);
+            started.get(60s);
+        }
+    }
+
+    testRestricted() {
+        # a Program that cannot start threads itself, as in the review of qore#5635: before the fix, its pool ran ten
+        # workers under a limit of two
+        SandboxManager sm();
+        sm.setMaxThreads(2);
+        Program p = getPoolProgram(sm, PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+        Program probe = getProbe(sm);
+        ThreadPool tp = p.callFunction("make_pool", 10);
+        Queue started();
+        Queue gate();
+        on_exit {
+            release(gate, 10);
+            tp.stopWait();
+        }
+        assertEq((map True, xrange(10)), p.callFunction("submit", tp, 10, started, gate));
+        waitStarted(started, 2);
+        assertEq(0, freeSlots(probe, 1), "two workers hold both slots");
+        release(gate, 10);
+        waitStarted(started, 8);
+        tp.stopWait();
+        assertEq(2, freeSlots(probe, 2), "the slots are free after the pool stopped");
+    }
+
+    testMinIdle() {
+        # the pool wants four idle workers; the sandbox allows two, and the pool does not report an error
+        SandboxManager sm();
+        sm.setMaxThreads(2);
+        Program p = getPoolProgram(sm);
+        Program probe = getProbe(sm);
+        ThreadPool tp = p.callFunction("make_pool", 4, 4, 4);
+        Queue started();
+        Queue gate();
+        on_exit {
+            release(gate, 4);
+            tp.stopWait();
+        }
+        assertEq((map True, xrange(4)), p.callFunction("submit", tp, 4, started, gate));
+        waitStarted(started, 2);
+        assertEq(0, freeSlots(probe, 1), "the workers hold both slots");
+        release(gate, 4);
+        waitStarted(started, 2);
+        tp.stopWait();
+        assertEq(2, freeSlots(probe, 2), "the slots are free after the pool stopped");
+    }
+
+    testRelease() {
+        SandboxManager sm();
+        sm.setMaxThreads(3);
+        Program p = getPoolProgram(sm);
+        Program probe = getProbe(sm);
+        # several pools one after the other: each can use all slots only if the previous one released them
+        for (int round = 0; round < 3; ++round) {
+            ThreadPool tp = p.callFunction("make_pool", 3, 3, 3);
+            Queue started();
+            Queue gate();
+            on_exit {
+                release(gate, 3);
+                tp.stopWait();
+            }
+            assertEq((True, True, True), p.callFunction("submit", tp, 3, started, gate), "round " + round);
+            waitStarted(started, 3);
+            assertEq(0, freeSlots(probe, 1), "round " + round);
+            release(gate, 3);
+            tp.stopWait();
+            assertEq(3, freeSlots(probe, 3), "round " + round);
+        }
+        # a pool that is destroyed without stopWait() releases its slots too
+        {
+            ThreadPool tp = p.callFunction("make_pool", 2, 2, 2);
+            Queue started();
+            Queue gate();
+            assertEq((True, True), p.callFunction("submit", tp, 2, started, gate));
+            waitStarted(started, 2);
+            release(gate, 2);
+            # stop() waits for the workers to end
+            delete tp;
+        }
+        assertEq(3, freeSlots(probe, 3), "the slots are free after the pool was deleted");
+    }
+
+    testUnsandboxedCreator() {
+        # the pool is created by a Program without a sandbox (like a module Program) and used for sandboxed code
+        SandboxManager sm();
+        sm.setMaxThreads(1);
+        Program creator = getPoolProgram();
+        Program p = getPoolProgram(sm);
+        Program probe = getProbe(sm);
+        ThreadPool tp = creator.callFunction("make_pool", 3);
+        Queue started();
+        Queue gate();
+        on_exit {
+            release(gate, 3);
+            tp.stopWait();
+        }
+        assertEq((True, True, True), p.callFunction("submit", tp, 3, started, gate));
+        waitStarted(started, 3);
+        assertEq(1, freeSlots(probe, 1), "the workers of a pool created without a sandbox do not count");
+    }
+
+    testNoLimit() {
+        SandboxManager sm();
+        Program p = getPoolProgram(sm);
+        ThreadPool tp = p.callFunction("make_pool", 6);
+        Queue started();
+        Queue gate();
+        on_exit {
+            release(gate, 6);
+            tp.stopWait();
+        }
+        assertEq((map True, xrange(6)), p.callFunction("submit", tp, 6, started, gate));
+        # all six tasks run at once
+        waitStarted(started, 6);
+    }
+
+    testManagerReplaced() {
+        SandboxManager sm1();
+        sm1.setMaxThreads(1);
+        SandboxManager sm2();
+        sm2.setMaxThreads(5);
+        Program p = getPoolProgram(sm1);
+        Program probe1 = getProbe(sm1);
+        Program probe2 = getProbe(sm2);
+        ThreadPool tp = p.callFunction("make_pool", 3);
+        # the Program gets another sandbox after it created the pool
+        p.setSandboxManager(sm2);
+        Queue started();
+        Queue gate();
+        on_exit {
+            release(gate, 3);
+            tp.stopWait();
+        }
+        assertEq((True, True, True), p.callFunction("submit", tp, 3, started, gate));
+        waitStarted(started, 1);
+        assertEq(0, freeSlots(probe1, 1), "the worker holds the slot of the sandbox of the pool's creation");
+        assertEq(5, freeSlots(probe2, 5), "the worker does not count against the Program's new sandbox");
+        release(gate, 3);
+        waitStarted(started, 2);
+    }
+}

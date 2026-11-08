@@ -253,6 +253,48 @@ protected:
         stopped = false,       // stopped flag
         detach = false;        // detach flag
 
+    //! The sandbox manager of the Program that created the pool, or nullptr if it has none
+    /** Each worker of the pool holds a thread slot of this manager while it is in the pool (in \a fh or \a ah), so
+        the workers count against the thread limit of the sandbox of the Program that created the pool.  Slots are
+        acquired and released only with \a m held, so the number of slots held is always the number of workers plus
+        \a reserved.
+    */
+    QoreSandboxManager* sbx;
+
+    //! Slots that submit() reserved for a worker that the pool has not started yet
+    /** submit() reserves a slot when the pool has no worker, so that a task is never queued in a pool that has no
+        worker and cannot start one; a task queued in a pool with workers waits for one of them when no slot is free.
+    */
+    int reserved = 0;
+
+    //! Takes a slot for a new worker; must be called with \a m held
+    /** @return true if the worker can be started: the pool is not governed by a sandbox, a reserved slot was used, or
+        a slot was acquired; false if the sandbox thread limit is reached
+    */
+    DLLLOCAL bool acquireWorkerSlotUnlocked() {
+        if (!sbx) {
+            return true;
+        }
+        if (reserved) {
+            --reserved;
+            return true;
+        }
+        // the limit is a capacity of the pool here, like max: a failure is not an error of any caller
+        ExceptionSink slot_xsink;
+        if (sbx->acquireThreadSlot(&slot_xsink)) {
+            slot_xsink.clear();
+            return false;
+        }
+        return true;
+    }
+
+    //! Releases the slot of a worker that leaves the pool, or of one that could not be started; \a m must be held
+    DLLLOCAL void releaseWorkerSlotUnlocked() {
+        if (sbx) {
+            sbx->releaseThreadSlot();
+        }
+    }
+
     DLLLOCAL int checkStopUnlocked(const char* m, ExceptionSink* xsink) {
         if (shutdown) {
             xsink->raiseException("THREADPOOL-ERROR", "ThreadPool::%s() cannot be executed because the ThreadPool " \
@@ -262,11 +304,19 @@ protected:
         return 0;
     }
 
+    //! Starts an idle worker; must be called with \a m held
+    /** @return 0 if a worker was started, 1 if the sandbox thread limit is reached (no exception is raised), -1 if
+        the thread could not be started (an exception is raised)
+    */
     DLLLOCAL int addIdleWorker(ExceptionSink* xsink) {
         assert(xsink);
+        if (!acquireWorkerSlotUnlocked()) {
+            return 1;
+        }
         std::unique_ptr<ThreadPoolThread> tpth(new ThreadPoolThread(*this, xsink));
         if (!tpth->valid()) {
             assert(*xsink);
+            releaseWorkerSlotUnlocked();
             return -1;
         }
 
@@ -281,24 +331,47 @@ protected:
 
     DLLLOCAL ThreadPoolThread* getThreadUnlocked(ExceptionSink* xsink) {
         assert(xsink);
-        while (!stopflag && fh.empty() && max && (int)ah.size() == max) {
+        // true if a slot was taken for a new worker
+        bool new_worker = false;
+        while (!stopflag && fh.empty()) {
+            if (!max || (int)ah.size() < max) {
+                if (acquireWorkerSlotUnlocked()) {
+                    new_worker = true;
+                    break;
+                }
+                // the sandbox thread limit is reached: wait for a busy worker of the pool, as when max is reached
+                if (ah.empty()) {
+                    // no worker can become free; submit() reserves a slot when the pool has none, so this happens
+                    // only after a worker could not be started
+                    xsink->raiseException("THREAD-CREATION-FAILURE", "ThreadPool cannot start a worker: the "
+                        "sandbox thread limit of %d of the Program that created the pool is reached",
+                        sbx->getMaxThreads());
+                    return nullptr;
+                }
+            }
             waiting = true;
             cond.wait(m);
             waiting = false;
         }
 
-        if (stopflag)
+        if (stopflag) {
+            if (new_worker) {
+                releaseWorkerSlotUnlocked();
+            }
             return nullptr;
+        }
 
         ThreadPoolThread* tpt;
 
-        if (!fh.empty()) {
+        if (!new_worker) {
+            assert(!fh.empty());
             tpt = fh.front();
             fh.pop_front();
         } else {
             std::unique_ptr<ThreadPoolThread> tpt_pt(new ThreadPoolThread(*this, xsink));
             if (!tpt_pt->valid()) {
                 assert(*xsink);
+                releaseWorkerSlotUnlocked();
                 return nullptr;
             }
             tpt = tpt_pt.release();
@@ -312,7 +385,12 @@ protected:
     }
 
 public:
-    DLLLOCAL ThreadPool(ExceptionSink* xsink, int n_max = 0, int n_minidle = 0, int m_maxidle = 0, int n_release_ms = QTP_DEFAULT_RELEASE_MS);
+    //! Creates the pool
+    /** @param n_sbx the sandbox manager of the Program that creates the pool, which the pool takes over the reference
+        of, or nullptr if the Program has none; the workers of the pool count against its thread limit
+    */
+    DLLLOCAL ThreadPool(ExceptionSink* xsink, int n_max = 0, int n_minidle = 0, int m_maxidle = 0,
+        int n_release_ms = QTP_DEFAULT_RELEASE_MS, QoreSandboxManager* n_sbx = nullptr);
 
     DLLLOCAL ~ThreadPool() {
         if (!stopped) {
@@ -321,6 +399,10 @@ public:
         assert(q.empty());
         assert(ah.empty());
         assert(fh.empty());
+        assert(!reserved);
+        if (sbx) {
+            sbx->deref(nullptr);
+        }
     }
 
     DLLLOCAL void toString(QoreString& str) {
@@ -389,6 +471,16 @@ public:
             return -1;
         }
 
+        // a pool governed by a sandbox that has no worker reserves the slot of its first worker here, so that the
+        // sandbox thread limit raises THREAD-CREATION-FAILURE in the submitting code instead of leaving the task in a
+        // pool that cannot start a worker
+        if (sbx && !reserved && fh.empty() && ah.empty()) {
+            if (sbx->acquireThreadSlot(xsink)) {
+                return -1;
+            }
+            ++reserved;
+        }
+
         // Increment thread_counter at submit time (on the calling thread) so that
         // QoreProgramHelper::~QoreProgramHelper() waits for queued tasks before
         // program destruction. Decremented when the task completes or is cancelled.
@@ -426,6 +518,8 @@ public:
                     cond.signal();
                 return 0;
             }
+            // the thread leaves the pool and ends
+            releaseWorkerSlotUnlocked();
         }
 
         return -1;
