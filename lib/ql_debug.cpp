@@ -14736,6 +14736,170 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     return make_unit_test_result(c, xsink);
 }
 
+#ifdef DEBUG
+//! The datagrams that sendQuicPacketsBatch() counts as sent and does not send are taken back on every return
+/** The datagrams are counted before they are sent, for the QUIC test clock (see qore_quic_test_advance_clock()).  A
+    send that failed with nothing sent returned without taking them back, so the clock waited for datagrams that were
+    never sent until its timeout; datagrams not counted, because counting started during the call, were taken back
+    all the same, and a wait for the datagrams to be read was not woken when datagrams were taken back.
+*/
+static void ut_quic_send_batch_take_back(UnitTestCounters& c) {
+    int rfd = socket(AF_INET, SOCK_DGRAM, 0);
+    int sfd = socket(AF_INET, SOCK_DGRAM, 0);
+    bool counting = qore_quic_test_set_counting(true);
+    ON_BLOCK_EXIT([rfd, sfd, counting] () {
+        qore_quic_test_set_send_hook({});
+        qore_quic_test_set_counting(counting);
+        if (rfd >= 0) {
+            qore_quic_test_forget_receive_fd(rfd);
+            ::close(rfd);
+        }
+        if (sfd >= 0) {
+            ::close(sfd);
+        }
+    });
+    struct sockaddr_in raddr = {};
+    raddr.sin_family = AF_INET;
+    raddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    socklen_t rlen = sizeof(raddr);
+    // a datagram that is not delivered fails the test instead of blocking it
+    struct timeval tv = {30, 0};
+    if (rfd < 0 || sfd < 0 || bind(rfd, reinterpret_cast<struct sockaddr*>(&raddr), sizeof(raddr))
+            || getsockname(rfd, reinterpret_cast<struct sockaddr*>(&raddr), &rlen)
+            || setsockopt(rfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))) {
+        UT_ASSERT(c, false, "QUIC send take-back: the UDP sockets are made");
+        return;
+    }
+    qore_quic_test_note_receive_fd(rfd);
+    const struct sockaddr* to = reinterpret_cast<const struct sockaddr*>(&raddr);
+
+    // reads n datagrams and counts them as read; returns the number read
+    auto receive = [rfd](int n) -> int {
+        int got = 0;
+        for (; got < n; ++got) {
+            char buf[16];
+            struct sockaddr_storage src;
+            socklen_t len = sizeof(src);
+            if (recvfrom(rfd, buf, sizeof(buf), 0, reinterpret_cast<struct sockaddr*>(&src), &len) < 0) {
+                break;
+            }
+            qore_quic_test_note_received(rfd, reinterpret_cast<const struct sockaddr*>(&src), 1);
+        }
+        return got;
+    };
+    auto make_batch = [](QuicPacketBatch& batch, int n) {
+        static const uint8_t data[] = {'q', 'u', 'i', 'c'};
+        for (int i = 0; i < n; ++i) {
+            batch.addPacket(data, sizeof(data));
+        }
+    };
+    // the send system call of the sender's socket to fail (1 = the first), counted from 0 for each case
+    int calls = 0;
+    int fail_call = 0;
+    // called when the send fails, before sendQuicPacketsBatch() returns
+    std::function<void()> on_fail;
+    qore_quic_test_set_send_hook([sfd, &calls, &fail_call, &on_fail] (int fd) -> int {
+        if (fd != sfd || ++calls != fail_call) {
+            return 0;
+        }
+        if (on_fail) {
+            on_fail();
+        }
+        return ENOBUFS;
+    });
+
+    QuicPacketBatch three;
+    make_batch(three, 3);
+
+    // datagrams sent are counted until they are read
+    calls = 0;
+    fail_call = 0;
+    UT_ASSERT_EQ(c, 3, sendQuicPacketsBatch(sfd, three, to, rlen), "QUIC send take-back: a batch is sent");
+    UT_ASSERT_EQ(c, 3LL, static_cast<long long>(qore_quic_test_undelivered_to(to)),
+        "QUIC send take-back: the datagrams sent are counted until they are read");
+    UT_ASSERT_EQ(c, 3, receive(3), "QUIC send take-back: the datagrams sent are read");
+    UT_ASSERT_EQ(c, 0LL, static_cast<long long>(qore_quic_test_undelivered_to(to)),
+        "QUIC send take-back: the datagrams read are no longer waited for");
+
+    // a send that fails with nothing sent takes back what it counted
+    calls = 0;
+    fail_call = 1;
+    UT_ASSERT_EQ(c, -1, sendQuicPacketsBatch(sfd, three, to, rlen), "QUIC send take-back: the first send fails");
+    UT_ASSERT_EQ(c, 0LL, static_cast<long long>(qore_quic_test_undelivered_to(to)),
+        "QUIC send take-back: a failed send leaves no datagram to wait for");
+
+    // a send that fails after some datagrams were sent takes back the others; one system call sends up to
+    // QUIC_COMMON_MAX_SEND_BATCH datagrams with sendmmsg(), and one datagram with sendmsg() or sendto()
+    QuicPacketBatch many;
+    make_batch(many, QUIC_COMMON_MAX_SEND_BATCH + 1);
+    calls = 0;
+    fail_call = 2;
+    int sent = sendQuicPacketsBatch(sfd, many, to, rlen);
+    UT_ASSERT(c, sent > 0 && sent <= QUIC_COMMON_MAX_SEND_BATCH,
+        "QUIC send take-back: a send that fails after the first sends part of the batch");
+    UT_ASSERT_EQ(c, static_cast<long long>(sent), static_cast<long long>(qore_quic_test_undelivered_to(to)),
+        "QUIC send take-back: only the datagrams sent are waited for after a partial send");
+    UT_ASSERT_EQ(c, sent, receive(sent), "QUIC send take-back: the datagrams of the partial send are read");
+    UT_ASSERT_EQ(c, 0LL, static_cast<long long>(qore_quic_test_undelivered_to(to)),
+        "QUIC send take-back: nothing is waited for once the partial send is read");
+
+    // datagrams that were not counted, as counting started during the call, are not taken back
+    qore_quic_test_set_counting(false);
+    calls = 0;
+    fail_call = 2;
+    on_fail = [] () {
+        qore_quic_test_set_counting(true);
+    };
+    sent = sendQuicPacketsBatch(sfd, many, to, rlen);
+    UT_ASSERT(c, sent > 0 && sent <= QUIC_COMMON_MAX_SEND_BATCH,
+        "QUIC send take-back: a send fails after counting started");
+    UT_ASSERT_EQ(c, 0LL, static_cast<long long>(qore_quic_test_undelivered_to(to)),
+        "QUIC send take-back: datagrams not counted are not taken back");
+    // the datagrams sent are read without counting them, as they were not counted as sent
+    qore_quic_test_set_counting(false);
+    UT_ASSERT_EQ(c, sent, receive(sent), "QUIC send take-back: the datagrams sent before counting are read");
+    qore_quic_test_set_counting(true);
+    on_fail = {};
+
+    // datagrams taken back wake a wait for the datagrams of the process to be read; the wait is waiting when the
+    // send fails: it calls waiting() with the lock of the counts held, which the take-back needs
+    std::mutex m;
+    std::condition_variable cond;
+    bool waiting = false;
+    bool woken = false;
+    std::thread waiter;
+    ON_BLOCK_EXIT([&waiter] () {
+        if (waiter.joinable()) {
+            waiter.join();
+        }
+    });
+    calls = 0;
+    fail_call = 1;
+    on_fail = [&] () {
+        waiter = std::thread([&] () {
+            bool rc = qore_quic_test_wait_delivered_woken(30000, [&] () {
+                std::lock_guard<std::mutex> g(m);
+                waiting = true;
+                cond.notify_one();
+            });
+            std::lock_guard<std::mutex> g(m);
+            woken = rc;
+            // also when there was nothing to wait for, so that the send does not wait for the waiter forever
+            waiting = true;
+            cond.notify_one();
+        });
+        std::unique_lock<std::mutex> g(m);
+        cond.wait(g, [&waiting] () { return waiting; });
+    };
+    UT_ASSERT_EQ(c, -1, sendQuicPacketsBatch(sfd, three, to, rlen),
+        "QUIC send take-back: a send fails while a wait for the datagrams waits");
+    waiter.join();
+    UT_ASSERT(c, woken, "QUIC send take-back: the datagrams taken back woke the wait");
+    UT_ASSERT_EQ(c, 0LL, static_cast<long long>(qore_quic_test_undelivered_to(to)),
+        "QUIC send take-back: no datagram is waited for after the wait");
+}
+#endif
+
 static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
 
@@ -14790,6 +14954,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runDirectReplaceExtraFd(c);
     AsyncIoDescriptorHoldTest::runOrphanRegistrations(c);
     QoreCaresSocketsTest::run(c);
+    ut_quic_send_batch_take_back(c);
 #ifndef _Q_WINDOWS
     HappyEyeballsLayeredConnectTest::run(c);
 #endif

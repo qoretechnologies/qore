@@ -53,6 +53,7 @@
 #include <cassert>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -2127,6 +2128,35 @@ DLLLOCAL QoreHashNode* qore_quic_test_datagram_totals();
     @return true if they have been received, false on timeout
 */
 DLLLOCAL bool qore_quic_test_wait_received_from(const char* addr, int64_t count, int timeout_ms);
+
+//! Debug-only, for tests: sets the hook that sendQuicPacketsBatch() calls before each send system call
+/** The hook gets the socket and returns the error that the send fails with instead of being made, or 0 to make it;
+    an empty function removes the hook.  It is called by every thread that sends QUIC datagrams in the process, so a
+    test's hook fails only the sends on its own sockets.
+*/
+DLLLOCAL void qore_quic_test_set_send_hook(std::function<int(int)> hook);
+
+//! Debug-only, for tests: starts (@p on true) or stops counting datagrams; returns whether they were counted
+/** See qore_quic_test_count_datagrams()
+*/
+DLLLOCAL bool qore_quic_test_set_counting(bool on);
+
+//! Debug-only, for tests: the datagrams counted as sent to an address and not as read from it
+DLLLOCAL int64_t qore_quic_test_undelivered_to(const struct sockaddr* addr);
+
+//! Debug-only, for tests: forgets a socket recorded with qore_quic_test_note_receive_fd() before it is closed
+DLLLOCAL void qore_quic_test_forget_receive_fd(int fd);
+
+//! Debug-only, for tests: waits, as the QUIC test clock does, until every datagram sent to a socket of the process
+//! has been read from it
+/** @param timeout_ms the maximum time to wait
+    @param waiting called with the lock of the counts held, once the wait has found a datagram that has not been
+    read and before it waits: a datagram cannot be counted as read or taken back before the wait is waiting
+
+    @return true if no datagram was waited for, or if the wait was woken and found every datagram read; false if it
+    was not woken before its timeout
+*/
+DLLLOCAL bool qore_quic_test_wait_delivered_woken(int timeout_ms, const std::function<void()>& waiting);
 
 #endif
 
