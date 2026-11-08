@@ -68,7 +68,9 @@ public class TableMapperTestSchema inherits AbstractSchema {
         const T_TableMapperUpsertTest = (
             "columns": (
                 "id": c_int(True, "test"),
-                "string": c_varchar(50, C_NOT_NULL),
+                # the upserts have Czech and Spanish strings: an nvarchar on SQL Server, whose varchar keeps only the
+                # characters of its collation's code page
+                "string": c_varchar(50, C_NOT_NULL) + {"driver": {"freetds": {"native_type": "nvarchar"}}},
             ),
             "primary_key": ("name": "pk_table_mapper_upsert_test", "columns": "id"),
             "indexes": (
@@ -1372,7 +1374,9 @@ public class TableMapperTest inherits QUnit::Test {
     # FIXME this is very ad-hoc checking - 'ol' used only
     # when the actual value ('l') is present in mapped result.
     # No check if 'l' is empty, for example.
-    checkMap(list l, list ol) {
+    #! checks the rows of a select, which are no value with some drivers (the freetds driver) when there are none
+    checkMap(*list l, list ol) {
+        l = l ?? ();
         foreach hash h in (l) {
             assertEq(Type::Int, h.id.type(), "id type for row " + $#);
             any hval = h.string === NULL ? NOTHING : h.string;
