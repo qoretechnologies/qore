@@ -719,13 +719,27 @@ public:
     DLLLOCAL QoreHashNode* getModuleHash();
     DLLLOCAL QoreListNode* getModuleList();
 
-    //! Returns true if a module file or directory is in a directory of the process-wide module path
-    /** The process-wide module path is set when the library is initialized (\c QORE_MODULE_DIR and the standard
-        module directories) and cannot be changed afterwards; a path that a caller names, or that a Program adds
-        with \c %prepend-module-path or \c %append-module-path, is not part of it.  A module found there is library
-        code: its initialization runs with no sandbox provenance (see QoreModuleInitSandboxBarrierHelper).
+    //! Returns true if a module file or directory is in a directory of library code
+    /** The directories of library code are the directories of the process-wide module path when the library was
+        initialized (\c QORE_MODULE_DIR and the standard module directories, or those set with addModuleDir() before
+        that), as recorded then (see init()).  A directory added to the process-wide module path afterwards, with
+        an unquoted \c %append-module-path directive or with addModuleDirList(), is searched but is not one of them,
+        and neither is a path that a caller names or that a Program adds with \c %prepend-module-path or
+        \c %append-module-path.  A module found in one of them is library code: its initialization runs with no
+        sandbox provenance (see QoreModuleInitSandboxBarrierHelper).
+
+        The file is in such a directory if the name given is an absolute path with no \c "." or \c ".." component
+        under the directory as configured (a module directory can hold links to the files of a build), or if the
+        file it names is under the directory's canonical path.
+
+        @param path the module's file or directory
+        @param load_path if not null and the module is library code, set to the path to load it from: the path as
+        given if it is under the directory as configured, otherwise the canonical path that was checked, so that the
+        file that was found to be library code is the file that is loaded, also if a link on the way is changed
+
+        Reads only data that is set once by init(), so it needs no lock.
     */
-    DLLLOCAL bool isTrustedModulePath(const char* path) const;
+    DLLLOCAL bool isTrustedModulePath(const char* path, std::string* load_path = nullptr) const;
 
     //! Returns the path of a module with the name given in the process-wide module path, or an empty string
     /** Looks for a user module (\c name.qm, a separated module directory \c name/name.qm), an AOT module
@@ -758,15 +772,22 @@ public:
     //! Returns true if a feature was loaded by code that is not trusted, from outside the process-wide module path
     DLLLOCAL bool isTenantChosen(const char* feature) const;
 
-    DLLLOCAL void addModuleDir(const char* dir) {
-        AutoLocker al(mutex);
-        moduleDirList.push_back(dir);
-    }
+    //! Adds a directory to the process-wide module path; ignored for code that is not trusted
+    /** see qore_caller_is_untrusted(); a directory added after init() is not a directory of library code (see
+        isTrustedModulePath())
+    */
+    DLLLOCAL void addModuleDir(const char* dir);
 
-    DLLLOCAL void addModuleDirList(const char* strlist) {
-        AutoLocker al(mutex);
-        moduleDirList.addDirList(strlist);
-    }
+    //! Adds a list of directories to the process-wide module path; ignored for code that is not trusted
+    /** see addModuleDir()
+    */
+    DLLLOCAL void addModuleDirList(const char* strlist);
+
+    //! Returns true if the code parsed by the Program given can extend the process-wide module path
+    /** Not for code that is not trusted (see qore_caller_is_untrusted()), nor for a Program that a sandbox governs
+        or whose parse options restrict a functional domain
+    */
+    DLLLOCAL static bool mayChangeModulePath(const QoreProgram* pgm);
 
     DLLLOCAL void addStandardModulePaths();
 
@@ -1004,6 +1025,21 @@ protected:
 
     // list of module directories
     UniqueDirectoryList moduleDirList;
+
+    //! a directory of library code; see isTrustedModulePath()
+    struct TrustedModuleDir {
+        //! the directory as configured, if it is an absolute path with no "." or ".." component; otherwise empty
+        std::string named;
+        //! the directory's canonical path, if it existed when it was recorded; otherwise empty
+        std::string real;
+    };
+    //! the directories of library code: the process-wide module path when the library was initialized
+    /** set once by init(), before the library is used, and never changed, so it is read without the mutex
+    */
+    std::vector<TrustedModuleDir> trusted_module_dirs;
+
+    //! Records the directories of the process-wide module path as the directories of library code
+    DLLLOCAL void setTrustedModuleDirs();
 
     //! the features that code that is not trusted loaded from outside the process-wide module path; see
     //! checkShadowingLoad()

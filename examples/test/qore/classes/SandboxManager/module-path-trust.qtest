@@ -1,0 +1,773 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ModulePathTrustTest
+
+#! Verifies that only the module directories of the process-wide module path set when the library is initialized hold library code
+/** A module from one of these directories is initialized as library code, with no sandbox provenance (see
+    module-init-provenance.qtest).  Code that is not trusted (code that a sandbox governs, or whose parse options
+    restrict a functional domain) cannot change which modules are library code, nor which modules library code
+    gets:
+    - it cannot add a directory to the process-wide module path, and a directory that other code adds is not a
+      directory of library code;
+    - a library module that it loads does not resolve its own dependencies, optional dependencies or child modules
+      through the module paths of the code that loads it;
+    - a module that is not library code and that is loaded while library code that it loaded is initialized is
+      governed by its sandbox, and is subject to the same refusals as a module it loads itself;
+    - a module that it loads from outside the module path is not given to other code, nor to other sandboxes;
+    - its parse defines, and the classes it marks for re-export, do not shape library code; the defines that its
+      host sets do;
+    - a library module that it loads into a Program container of its own is not library code.
+
+    The probes run in child processes, whose module path is set with \c QORE_MODULE_DIR, from source and as AOT
+    modules compiled with the in-tree qcc.
+*/
+class ModulePathTrustTest inherits QUnit::Test {
+    public {
+        #! a module that reports the sandbox of its initialization and whether it could read the secret file
+        const ReportingModule = "%modern
+module @NAME@ {
+    version = \"1.0\";
+    desc = \"module path trust probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+    init = sub () {
+        @NAME@::Info::init_sandboxed = SandboxManager::isSandboxed();
+        try {
+            # called dynamically: a module that a sandbox denying file access governs cannot name the class
+            @NAME@::Info::read = call_static_method(\"Qore::ReadOnlyFile\", \"readTextFile\", \"@SECRET@\");
+        } catch (hash<ExceptionInfo> ex) {
+            @NAME@::Info::read = ex.err;
+        }
+    };
+}
+
+public namespace @NAME@ {
+public class Info {
+    public {
+        static bool init_sandboxed;
+        static string read = \"none\";
+    }
+
+    static string who() {
+        return sprintf(\"@WHO@ init_sandboxed=%y read=%s\", init_sandboxed, read);
+    }
+}
+}
+";
+
+        #! a library module that requires YDep
+        const XLib = "%modern
+%requires YDep
+
+module XLib {
+    version = \"1.0\";
+    desc = \"library module with a dependency\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+public namespace XLib {
+public class C {
+    static string y() {
+        return YDep::Info::who();
+    }
+}
+}
+";
+
+        #! a library module with an optional dependency that is not installed
+        const XTry = "%modern
+%try-module YOpt
+%define NoYOpt
+%endtry
+
+module XTry {
+    version = \"1.0\";
+    desc = \"library module with an optional dependency\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+public namespace XTry {
+public class C {
+    static string y() {
+%ifdef NoYOpt
+        return \"absent\";
+%else
+        return YOpt::Info::who();
+%endif
+    }
+}
+}
+";
+
+        #! a library module with an optional child module that is not installed
+        const XHost = "%modern
+%try-child-module XKid
+
+module XHost {
+    version = \"1.0\";
+    desc = \"library module with an optional child module\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+public namespace XHost {
+public class C {
+    static string y() {
+        return \"host\";
+    }
+}
+}
+";
+
+        #! a library module whose initialization loads a module by path
+        const NLoad = "%modern
+module NLoad {
+    version = \"1.0\";
+    desc = \"library module loading a module by path\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+    init = sub () {
+        try {
+            load_module(\"@PATH@\");
+            NLoad::Info::r = call_static_method(\"@NESTED@::Info\", \"who\");
+        } catch (hash<ExceptionInfo> ex) {
+            NLoad::Info::r = sprintf(\"%s: %s\", ex.err, ex.desc);
+        }
+    };
+}
+
+public namespace NLoad {
+public class Info {
+    public {
+        static string r = \"none\";
+    }
+
+    static string get() {
+        return r;
+    }
+}
+}
+";
+
+        #! a library module that reports the parse defines it was parsed with
+        const DefProbe = "%modern
+module DefProbe {
+    version = \"1.0\";
+    desc = \"parse define probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+public namespace DefProbe {
+public class Info {
+    static string defines() {
+        string rv;
+%ifdef ProbeLoaderDefine
+        rv += \"loader:True\";
+%else
+        rv += \"loader:False\";
+%endif
+%ifdef ProbeHostDefine
+        rv += \" host:True\";
+%else
+        rv += \" host:False\";
+%endif
+        return rv;
+    }
+}
+}
+";
+
+        #! a library module whose initialization calls a function of the Program container it is loaded into
+        const InjectProbe = "%modern
+module InjectProbe {
+    version = \"1.0\";
+    desc = \"container probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+    init = sub () {
+        call_function(\"container_hook\");
+    };
+}
+";
+
+        #! a trivial module
+        const Plain = "%modern
+module @NAME@ {
+    version = \"1.0\";
+    desc = \"plain module\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+public namespace @NAME@ {
+public class Info {
+    static string who() {
+        return \"@WHO@\";
+    }
+}
+}
+";
+
+        #! code that is not trusted: sets a parse define on a Program of its own, which then loads a library module
+        const DefinesTenant = "string sub run() {
+    Program c(PO_NEW_STYLE);
+    c.define(\"ProbeHostDefine\", True);
+    c.loadModule(\"DefProbe\");
+    c.parse(\"string sub d() { return DefProbe::Info::defines(); }\", \"c\");
+    return \"defines: \" + c.callFunction(\"d\");
+}
+";
+
+        #! code that is not trusted: imports a class of its own into a Program of its own for re-export to modules
+        const Reexport = "class TenantClass {}
+string sub run() {
+    Program c(PO_NEW_STYLE);
+    try {
+        c.importClass(\"TenantClass\", NOTHING, False, CSP_UNCHANGED, True);
+        return \"reexport: ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return \"reexport: \" + ex.err;
+    }
+}
+";
+
+        #! code that is not trusted: loads a library module into a Program container of its own, whose API has a
+        #! function of a Program that has no sandbox of its own
+        const Container = "string sub run() {
+    Program x(PO_NEW_STYLE);
+    x.parse(\"our string result = 'none';
+string sub container_hook() {
+    string r;
+    try {
+        r = call_static_method('Qore::ReadOnlyFile', 'readTextFile', '@SECRET@');
+    } catch (hash<ExceptionInfo> ex) {
+        r = ex.err;
+    }
+    return result = sprintf('sandboxed=%y read=%s', SandboxManager::isSandboxed(), r);
+}
+string sub get_result() {
+    return result;
+}
+sub give(Program c) {
+    c.importFunction('container_hook');
+}
+\", \"x\");
+    Program c(PO_NEW_STYLE);
+    x.callFunction(\"give\", c);
+    try {
+        c.@METHOD@(\"InjectProbe\");
+        return \"container: ok\\ninject: \" + x.callFunction(\"get_result\");
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"container: %s: %s\\ninject: %s\", ex.err, ex.desc, x.callFunction(\"get_result\"));
+    }
+}
+";
+
+        #! the child; ARGV[0] is the case, ARGV[1] how the loader is restricted (sandboxed, restricted), ARGV[2] an argument
+        const ChildSource = "%modern
+%no-child-restrictions
+string case_name = ARGV[0];
+string how = ARGV[1];
+string arg = ARGV[2] ?? \"\";
+string attacker = ENV.PROBE_ATTACKER;
+string other = ENV.PROBE_OTHER;
+string secret = ENV.PROBE_SECRET;
+
+SandboxManager sm();
+sm.setFilesystemDefaultPolicy(False);
+
+string sub err(hash<ExceptionInfo> ex) {
+    return sprintf(\"%s: %s\", ex.err, ex.desc);
+}
+
+const Funcs = \"sub load(string m) { load_module(m); }
+auto sub get(string c, string m) { return call_static_method(c, m); }
+\";
+
+#! a Program for the loader, governed by sm if sandboxed and restricted if restricted; sm is set before the parse
+Program sub loader(string src, softint po = 0) {
+    Program p(PO_NEW_STYLE | po | (how == \"restricted\" ? PO_NO_PROCESS_CONTROL : 0), True);
+    if (how == \"sandboxed\") {
+        p.setSandboxManager(sm);
+    }
+    p.parse(src, \"loader\");
+    return p;
+}
+
+#! trusted code: loads a module by name and returns what a static method returns, or the error
+string sub trusted_get(string mod, string c, string m) {
+    Program t(PO_NEW_STYLE, True);
+    try {
+        t.loadModule(mod);
+    } catch (hash<ExceptionInfo> ex) {
+        return err(ex);
+    }
+    t.parse(Funcs, \"trusted\");
+    return t.callFunction(\"get\", c, m);
+}
+
+switch (case_name) {
+    # a legacy %append-module-path directive, which extends the process-wide module path
+    case \"global-append\": {
+        Program p;
+        try {
+            p = loader(sprintf(\"%%append-module-path %s\\n\", attacker) + Funcs);
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"parse: %s\\n\", err(ex));
+            break;
+        }
+        try {
+            p.callFunction(\"load\", \"EvilMod\");
+            printf(\"EvilMod: %s\\n\", p.callFunction(\"get\", \"EvilMod::Info\", \"who\"));
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"EvilMod: %s\\n\", err(ex));
+        }
+        break;
+    }
+
+    # the same directive in code that is not governed by a sandbox when it is parsed; the loader is sandboxed later
+    case \"global-append-unsandboxed\": {
+        Program p(PO_NEW_STYLE, True);
+        p.parse(sprintf(\"%%append-module-path %s\\n\", attacker) + Funcs, \"loader\");
+        p.setSandboxManager(sm);
+        try {
+            p.callFunction(\"load\", \"EvilMod\");
+            printf(\"EvilMod: %s\\n\", p.callFunction(\"get\", \"EvilMod::Info\", \"who\"));
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"EvilMod: %s\\n\", err(ex));
+        }
+        break;
+    }
+
+    # a library module loaded by code with a module path of its own: arg is the module and the directive
+    case \"nested\": {
+        list<string> a = arg.split(\":\");
+        string mod = a[0];
+        Program p = loader(sprintf(\"%%%s-module-path \\\"%s\\\"\\n\", a[1], attacker) + Funcs);
+        try {
+            p.callFunction(\"load\", mod);
+            printf(\"load: ok\\n\");
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"load: %s\\n\", err(ex));
+            break;
+        }
+        if (mod == \"XHost\") {
+            printf(\"kid: %y\\n\", get_module_hash().hasKey(\"XKid\"));
+        } else {
+            printf(\"trusted sees: %s\\n\", trusted_get(mod, mod + \"::C\", \"y\"));
+        }
+        break;
+    }
+
+    # a library module whose initialization loads a module by path: arg is the name of that module
+    case \"nested-load\": {
+        Program p = loader(Funcs);
+        try {
+            p.callFunction(\"load\", \"NLoad\");
+            printf(\"nested: %s\\n\", p.callFunction(\"get\", \"NLoad::Info\", \"get\"));
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"nested: %s\\n\", err(ex));
+            break;
+        }
+        printf(\"trusted: %s\\n\", trusted_get(arg, arg + \"::Info\", \"who\"));
+        break;
+    }
+
+    # a load by path through a link to a library module: the module is loaded from the library module's file
+    case \"canonical\": {
+        Program p = loader(Funcs);
+        try {
+            p.callFunction(\"load\", arg);
+            printf(\"file: %s\\n\", get_module_hash().YDep.filename);
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"load: %s\\n\", err(ex));
+        }
+        break;
+    }
+
+    # a module that one sandbox loaded by path, requested by name by another sandbox and by the same sandbox
+    case \"cross-tenant\": {
+        Program a = loader(Funcs);
+        a.callFunction(\"load\", arg);
+        foreach list<auto> t in ((\"same\", sm), (\"other\", new SandboxManager())) {
+            Program b(PO_NEW_STYLE, True);
+            b.setSandboxManager(t[1]);
+            b.parse(Funcs, \"b\");
+            try {
+                b.callFunction(\"load\", \"TenantMod\");
+                printf(\"%s: %s\\n\", t[0], b.callFunction(\"get\", \"TenantMod::Info\", \"who\"));
+            } catch (hash<ExceptionInfo> ex) {
+                printf(\"%s: %s\\n\", t[0], err(ex));
+            }
+        }
+        break;
+    }
+
+    # a load by path of a module from elsewhere: arg is the path
+    case \"path\": {
+        Program p = loader(Funcs);
+        try {
+            p.callFunction(\"load\", arg);
+            printf(\"load: ok\\n\");
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"load: %s\\n\", err(ex));
+        }
+        break;
+    }
+
+    # parse defines: the host's, set before the parse, and the loader's own
+    case \"defines\": {
+        Program p(PO_NEW_STYLE | (how == \"restricted\" ? PO_NO_PROCESS_CONTROL : 0), True);
+        if (how == \"sandboxed\") {
+            p.setSandboxManager(sm);
+        }
+        p.define(\"ProbeHostDefine\", True);
+        p.parse(\"%define ProbeLoaderDefine\\n\" + Funcs, \"loader\");
+        p.callFunction(\"load\", \"DefProbe\");
+        printf(\"defines: %s\\n\", p.callFunction(\"get\", \"DefProbe::Info\", \"defines\"));
+        break;
+    }
+
+    # code that is not trusted, from the file given by arg, with the parse options given by ARGV[3]; it has run()
+    case \"custom\": {
+        Program p = loader(ReadOnlyFile::readTextFile(arg) + Funcs, ARGV[3] ?? 0);
+        printf(\"%s\\n\", p.callFunction(\"run\"));
+        break;
+    }
+}
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+        string env;
+        TmpDir tmp("qore-module-path-trust-");
+        string secret_path;
+        int runs;
+    }
+
+    constructor() : QUnit::Test("module path trust", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR_ONLY=1", libqore_dir,
+            libqore_dir, libqore_dir);
+        secret_path = tmp.path + DirSep + "secret.txt";
+        write(secret_path, "secret");
+        write(tmp.path + DirSep + "child.q", ChildSource);
+
+        addTestCase("sandboxed code cannot extend the process-wide module path", \globalAppendSandboxedTest());
+        addTestCase("restricted code cannot extend the process-wide module path", \globalAppendRestrictedTest());
+        addTestCase("a directory added to the process-wide module path holds no library code",
+            \globalAppendUnsandboxedTest());
+        set_return_value(main());
+    }
+
+    globalAppendSandboxedTest() {
+        hash<auto> d = dirs();
+        write(d.attacker + "/EvilMod.qm", reporting("EvilMod", "ATTACKER"));
+        string out = run(d, "global-append", "sandboxed");
+        assertRegex("^parse: PARSE-EXCEPTION: .*%append-module-path.*process-wide module path", line("parse:", out) ?? "",
+            out);
+    }
+
+    globalAppendRestrictedTest() {
+        hash<auto> d = dirs();
+        write(d.attacker + "/EvilMod.qm", reporting("EvilMod", "ATTACKER"));
+        string out = run(d, "global-append", "restricted");
+        assertRegex("^parse: PARSE-EXCEPTION: .*%append-module-path.*process-wide module path", line("parse:", out) ?? "",
+            out);
+    }
+
+    globalAppendUnsandboxedTest() {
+        hash<auto> d = dirs();
+        write(d.attacker + "/EvilMod.qm", reporting("EvilMod", "ATTACKER"));
+        string out = run(d, "global-append-unsandboxed", "sandboxed");
+        assertEq("EvilMod: ATTACKER init_sandboxed=True read=FILESYSTEM-ACCESS-DENIED", line("EvilMod:", out), out);
+    }
+
+    sourceNestedRequiresTest() {
+        foreach string how in (("sandboxed", "restricted")) {
+            foreach string directive in (("prepend", "append")) {
+                hash<auto> d = dirs();
+                writeLibrary(d);
+                write(d.trusted + "/XLib.qm", XLib);
+                string out = run(d, "nested", how, "XLib:" + directive);
+                assertEq("load: ok", line("load:", out), how + " " + directive + ": " + out);
+                assertEq("trusted sees: REAL", line("trusted sees:", out), how + " " + directive + ": " + out);
+            }
+        }
+    }
+
+    sourceNestedTryModuleTest() {
+        foreach string how in (("sandboxed", "restricted")) {
+            hash<auto> d = dirs();
+            writeLibrary(d);
+            write(d.trusted + "/XTry.qm", XTry);
+            write(d.attacker + "/YOpt.qm", reporting("YOpt", "ATTACKER"));
+            string out = run(d, "nested", how, "XTry:prepend");
+            assertEq("load: ok", line("load:", out), how + ": " + out);
+            assertEq("trusted sees: absent", line("trusted sees:", out), how + ": " + out);
+        }
+    }
+
+    sourceNestedChildTest() {
+        foreach string how in (("sandboxed", "restricted")) {
+            hash<auto> d = dirs();
+            write(d.trusted + "/XHost.qm", XHost);
+            write(d.attacker + "/XKid.qm", reporting("XKid", "ATTACKER"));
+            string out = run(d, "nested", how, "XHost:prepend");
+            assertEq("load: ok", line("load:", out), how + ": " + out);
+            assertEq("kid: False", line("kid:", out), how + ": " + out);
+        }
+    }
+
+    sourceNestedLoadTest() {
+        hash<auto> d = dirs();
+        write(d.other + "/NestedEvil.qm", reporting("NestedEvil", "ATTACKER"));
+        write(d.trusted + "/NLoad.qm", nload(d.other + "/NestedEvil.qm", "NestedEvil"));
+        checkNestedLoad(run(d, "nested-load", "sandboxed", "NestedEvil"));
+        # a module under the name of a library module, loaded by library code for the sandboxed loader
+        d = dirs();
+        writeLibrary(d);
+        write(d.other + "/YDep.qm", reporting("YDep", "ATTACKER"));
+        write(d.trusted + "/NLoad.qm", nload(d.other + "/YDep.qm", "YDep"));
+        string out = run(d, "nested-load", "sandboxed", "YDep");
+        assertRegex("^nested: LOAD-MODULE-ERROR: cannot load module 'YDep' from path", line("nested:", out), out);
+    }
+
+    aotNestedRequiresTest() {
+        hash<auto> d = dirs();
+        writeLibrary(d);
+        if (!compile(d, "XLib", XLib)) {
+            return;
+        }
+        foreach string how in (("sandboxed", "restricted")) {
+            string out = run(d, "nested", how, "XLib:prepend");
+            assertEq("load: ok", line("load:", out), how + ": " + out);
+            assertEq("trusted sees: REAL", line("trusted sees:", out), how + ": " + out);
+        }
+    }
+
+    aotNestedChildTest() {
+        hash<auto> d = dirs();
+        if (!compile(d, "XHost", XHost)) {
+            return;
+        }
+        write(d.attacker + "/XKid.qm", reporting("XKid", "ATTACKER"));
+        string out = run(d, "nested", "sandboxed", "XHost:prepend");
+        assertEq("load: ok", line("load:", out), out);
+        assertEq("kid: False", line("kid:", out), out);
+    }
+
+    aotNestedLoadTest() {
+        hash<auto> d = dirs();
+        write(d.other + "/NestedEvil.qm", reporting("NestedEvil", "ATTACKER"));
+        if (!compile(d, "NLoad", nload(d.other + "/NestedEvil.qm", "NestedEvil"))) {
+            return;
+        }
+        checkNestedLoad(run(d, "nested-load", "sandboxed", "NestedEvil"));
+    }
+
+    canonicalTest() {
+        hash<auto> d = dirs();
+        writeLibrary(d);
+        string link = d.other + "/YDep.qm";
+        assertEq(0, system(sprintf("ln -s '%s' '%s'", d.trusted + "/YDep.qm", link)));
+        string out = run(d, "canonical", "sandboxed", link);
+        assertEq("file: " + realpath(d.trusted + "/YDep.qm"), line("file:", out), out);
+    }
+
+    crossTenantTest() {
+        hash<auto> d = dirs();
+        write(d.other + "/TenantMod.qm", plain("TenantMod", "tenant"));
+        string out = run(d, "cross-tenant", "sandboxed", d.other + "/TenantMod.qm");
+        assertEq("same: tenant", line("same:", out), out);
+        assertRegex("^other: LOAD-MODULE-ERROR: cannot use module 'TenantMod'", line("other:", out), out);
+    }
+
+    splitAotShadowTest() {
+        hash<auto> d = dirs();
+        mkdir(d.trusted + "/SplitMod");
+        if (!compile(d, "SplitMod", plain("SplitMod", "real"), d.trusted + "/SplitMod")) {
+            return;
+        }
+        write(d.other + "/SplitMod.qm", plain("SplitMod", "ATTACKER"));
+        string out = run(d, "path", "sandboxed", d.other + "/SplitMod.qm");
+        assertRegex("^load: LOAD-MODULE-ERROR: cannot load module 'SplitMod' from path .*under the name of module '"
+            + d.trusted + "/SplitMod/SplitMod.qmod'", line("load:", out), out);
+    }
+
+    patternNameTest() {
+        hash<auto> d = dirs();
+        # a file that a pattern made of the name of the module below would match
+        write(d.trusted + "/Gx-api-1.0.qmod", "");
+        write(d.other + "/G*.qm", plain("Gx", "x"));
+        string out = run(d, "path", "sandboxed", d.other + "/G*.qm");
+        *string load = line("load:", out);
+        assertTrue(exists load, out);
+        assertFalse(load =~ /in the module path, which it would replace/, out);
+    }
+
+    definesTest() {
+        foreach string how in (("sandboxed", "restricted")) {
+            hash<auto> d = dirs();
+            write(d.trusted + "/DefProbe.qm", DefProbe);
+            string out = run(d, "defines", how);
+            # the loader's own define does not shape the library module; the host's does
+            assertEq("defines: loader:False host:True", line("defines:", out), how + ": " + out);
+        }
+    }
+
+    definesTenantTest() {
+        foreach string how in (("sandboxed", "restricted")) {
+            hash<auto> d = dirs();
+            write(d.trusted + "/DefProbe.qm", DefProbe);
+            string out = custom(d, how, DefinesTenant);
+            assertEq("defines: loader:False host:False", line("defines:", out), how + ": " + out);
+        }
+    }
+
+    reexportTest() {
+        foreach string how in (("sandboxed", "restricted")) {
+            hash<auto> d = dirs();
+            string out = custom(d, how, Reexport);
+            assertEq("reexport: CLASS-IMPORT-ERROR", line("reexport:", out), how + ": " + out);
+        }
+    }
+
+    containerPrivateTest() {
+        hash<auto> d = dirs();
+        write(d.trusted + "/InjectProbe.qm", InjectProbe);
+        string out = custom(d, "sandboxed", replace(replace(Container, "@METHOD@", "loadApplyToPrivateUserModule"),
+            "@SECRET@", secret_path));
+        assertEq("inject: sandboxed=True read=FILESYSTEM-ACCESS-DENIED", line("inject:", out), out);
+        assertEq("container: ok", line("container:", out), out);
+    }
+
+    containerInjectTest() {
+        hash<auto> d = dirs();
+        write(d.trusted + "/InjectProbe.qm", InjectProbe);
+        string out = custom(d, "sandboxed", replace(replace(Container, "@METHOD@", "loadApplyToUserModule"),
+            "@SECRET@", secret_path), PO_ALLOW_INJECTION);
+        assertEq("inject: none", line("inject:", out), out);
+        assertRegex("^container: LOAD-MODULE-ERROR: cannot load module 'InjectProbe' into a Program container",
+            line("container:", out), out);
+    }
+
+    #! A module that library code loaded by path for a sandboxed loader
+    private checkNestedLoad(string out) {
+        # initialized under the loader's sandbox
+        assertEq("nested: ATTACKER init_sandboxed=True read=FILESYSTEM-ACCESS-DENIED", line("nested:", out), out);
+        # and not given to trusted code
+        assertRegex("^trusted: LOAD-MODULE-ERROR: cannot use module 'NestedEvil'", line("trusted:", out), out);
+    }
+
+    #! Writes the library module YDep and the attacker's copy
+    private writeLibrary(hash<auto> d) {
+        write(d.trusted + "/YDep.qm", plain("YDep", "REAL"));
+        write(d.attacker + "/YDep.qm", reporting("YDep", "ATTACKER"));
+    }
+
+    #! Returns the source of a module that reports its initialization
+    private string reporting(string name, string who) {
+        return replace(replace(replace(ReportingModule, "@NAME@", name), "@WHO@", who), "@SECRET@", secret_path);
+    }
+
+    #! Returns the source of a trivial module
+    private static string plain(string name, string who) {
+        return replace(replace(Plain, "@NAME@", name), "@WHO@", who);
+    }
+
+    #! Returns the source of a library module that loads a module by path when it is initialized
+    private static string nload(string path, string nested) {
+        return replace(replace(NLoad, "@PATH@", path), "@NESTED@", nested);
+    }
+
+    #! Creates the directories of one probe: the module path, an attacker's module path, and another directory
+    private hash<auto> dirs() {
+        string base = tmp.path + DirSep + "run" + ++runs;
+        hash<auto> d = {
+            "trusted": base + "/trusted",
+            "attacker": base + "/attacker",
+            "other": base + "/other",
+        };
+        map mkdir($1, 0755, True), d.iterator();
+        return d;
+    }
+
+    #! Compiles a module into an AOT module in the module path; returns False if qcc is not available
+    private bool compile(hash<auto> d, string name, string src, *string dir) {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        string src_path = tmp.path + DirSep + name + ".qm";
+        write(src_path, src);
+        on_exit unlink(src_path);
+        string qmod = (dir ?? d.trusted) + DirSep + name + ".qmod";
+        string out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s --module -o %s %s 2>&1", env, d.trusted, qcc_bin,
+            qmod, src_path));
+        assertTrue(is_file(qmod), out);
+        return True;
+    }
+
+    #! Runs code that is not trusted in the child; returns its output
+    private string custom(hash<auto> d, string how, string src, int po = 0) {
+        string path = d.other + "/loader.q";
+        write(path, src);
+        return run(d, "custom", how, path, po.toString());
+    }
+
+    #! Runs the child with the module path of the probe; returns its output
+    private string run(hash<auto> d, string case_name, string how, string arg = "", string arg2 = "") {
+        string output = tmp.path + DirSep + "output.txt";
+        string cmd = sprintf("%s QORE_MODULE_DIR='%s' PROBE_ATTACKER='%s' PROBE_OTHER='%s' PROBE_SECRET='%s' '%s' '%s' "
+            "'%s' '%s' '%s' '%s' > '%s' 2>&1", env, d.trusted, d.attacker, d.other, secret_path, qore_bin,
+            tmp.path + DirSep + "child.q", case_name, how, arg, arg2, output);
+        int rc = system(cmd);
+        string out = ReadOnlyFile::readTextFile(output);
+        assertEq(0, rc, out);
+        return out;
+    }
+
+    #! Returns the first line of the output that starts with the prefix given, trimmed, or NOTHING
+    private static *string line(string prefix, string output) {
+        foreach string line in (map trim($1), output.split("\n")) {
+            if (line.equalPartial(prefix)) {
+                return line;
+            }
+        }
+    }
+
+    #! Writes a file
+    private static write(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+        f.close();
+    }
+}

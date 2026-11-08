@@ -1692,7 +1692,8 @@ void QoreBuiltinModule::issueModuleCmd(const QoreProgramLocation* loc, const Qor
 ModuleManager::ModuleManager() {
 }
 
-// to add a directory to the module directory search list, can only be called before init()
+// to add a directory to the module directory search list; a directory added after init() is searched but does not
+// hold library code; ignored for code that is not trusted
 void ModuleManager::addModuleDir(const char* dir) {
     QMM.addModuleDir(dir);
 }
@@ -1703,7 +1704,7 @@ void ModuleManager::addAutoModuleDir(const char* dir) {
     assert(false);
 }
 
-// to add a list of directories to the module directory search list, can only be called before init()
+// to add a list of directories to the module directory search list; see addModuleDir()
 void ModuleManager::addModuleDirList(const char* strlist) {
     QMM.addModuleDirList(strlist);
 }
@@ -1732,6 +1733,74 @@ void QoreModuleManager::init(bool se) {
             QoreModuleManager::addStandardModulePaths();
         }
     }
+
+    setTrustedModuleDirs();
+}
+
+void QoreModuleManager::setTrustedModuleDirs() {
+    assert(trusted_module_dirs.empty());
+    for (const std::string& dir : moduleDirList) {
+        TrustedModuleDir td;
+        if (dir[0] == '/' && !strstr(dir.c_str(), "/../") && !strstr(dir.c_str(), "/./")) {
+            size_t len = dir.size();
+            while (len > 1 && dir[len - 1] == '/') {
+                --len;
+            }
+            // a name that ends with a "." or ".." component is not used as configured
+            if (!(len >= 2 && !dir.compare(len - 2, 2, "/."))
+                && !(len >= 3 && !dir.compare(len - 3, 3, "/.."))) {
+                td.named = dir.substr(0, len);
+            }
+        }
+        // a relative directory is resolved now, against the current directory of the process when the library is
+        // initialized
+        std::unique_ptr<char, decltype(&free)> real(realpath(dir.c_str(), nullptr), &free);
+        if (real) {
+            td.real = real.get();
+        }
+        if (!td.named.empty() || !td.real.empty()) {
+            trusted_module_dirs.push_back(std::move(td));
+        }
+    }
+}
+
+void QoreModuleManager::addModuleDir(const char* dir) {
+    if (qore_caller_is_untrusted()) {
+        printd(0, "QoreModuleManager::addModuleDir() '%s': ignored: the caller is sandboxed or restricted\n", dir);
+        return;
+    }
+    AutoLocker al(mutex);
+    moduleDirList.push_back(dir);
+}
+
+void QoreModuleManager::addModuleDirList(const char* strlist) {
+    if (qore_caller_is_untrusted()) {
+        printd(0, "QoreModuleManager::addModuleDirList() '%s': ignored: the caller is sandboxed or restricted\n",
+            strlist);
+        return;
+    }
+    AutoLocker al(mutex);
+    moduleDirList.addDirList(strlist);
+}
+
+bool QoreModuleManager::mayChangeModulePath(const QoreProgram* pgm) {
+    if (qore_caller_is_untrusted()) {
+        return false;
+    }
+    if (!pgm) {
+        return true;
+    }
+    static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
+        & ~QoreParseOptions(QDOM_IN_MODULE);
+    if (!!(pgm->getParseOptions() & restricting)) {
+        return false;
+    }
+    QoreSandboxManager* sm = qore_program_private::get(*const_cast<QoreProgram*>(pgm))->getSandboxManagerRef();
+    if (sm) {
+        sm->deref(nullptr);
+        return false;
+    }
+    return true;
 }
 
 /* this internal helper function solves an issue with modules
@@ -1838,7 +1907,6 @@ int ModuleManager::registerAOTStaticModule(ExceptionSink* xsink, QoreProgram* tp
 }
 
 static const char* get_feature_from_path(QoreString& tmp);
-static bool qore_caller_is_untrusted();
 
 int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name,
         QoreProgram* pgm, QoreProgram* mpgm, unsigned load_opt, int warning_mask, bool reexport,
@@ -2805,50 +2873,42 @@ static bool qore_thread_is_sandboxed() {
     return static_cast<bool>(governing);
 }
 
-bool QoreModuleManager::isTrustedModulePath(const char* path) const {
+bool QoreModuleManager::isTrustedModulePath(const char* path, std::string* load_path) const {
     if (!path || !*path) {
         return false;
     }
-    // the file as named (a module directory can hold links to the files of a build) and the file it is; a name that
-    // is relative or goes up a directory names no file in a module directory
-    std::vector<std::string> names;
-    if (path[0] == '/' && !strstr(path, "/../") && !strstr(path, "/./")) {
-        names.push_back(path);
-    }
-    std::unique_ptr<char, decltype(&free)> real(realpath(path, nullptr), &free);
-    if (!real) {
-        return false;
-    }
-    names.push_back(real.get());
-    auto within = [] (const std::string& name, const std::string& dir) -> bool {
-        size_t dlen = dir.size();
-        while (dlen > 1 && dir[dlen - 1] == '/') {
-            --dlen;
-        }
-        return dlen && name.size() > dlen + 1 && !name.compare(0, dlen, dir, 0, dlen) && name[dlen] == '/';
+    auto within = [] (const char* name, size_t nlen, const std::string& dir) -> bool {
+        return !dir.empty() && nlen > dir.size() + 1 && !strncmp(name, dir.c_str(), dir.size())
+            && name[dir.size()] == '/';
     };
-    for (const std::string& dir : moduleDirList) {
-        std::unique_ptr<char, decltype(&free)> real_dir(realpath(dir.c_str(), nullptr), &free);
-        for (const std::string& name : names) {
-            if ((dir[0] == '/' && within(name, dir)) || (real_dir && within(name, real_dir.get()))) {
+    // the file as named, under a directory as configured: a module directory can hold links to the files of a
+    // build; a name that is relative or has a "." or ".." component is not used
+    size_t plen = strlen(path);
+    if (path[0] == '/' && !strstr(path, "/../") && !strstr(path, "/./")) {
+        for (const TrustedModuleDir& dir : trusted_module_dirs) {
+            if (within(path, plen, dir.named)) {
+                if (load_path) {
+                    *load_path = path;
+                }
                 return true;
             }
         }
     }
-    return false;
-}
-
-//! Returns true if the code running on the current thread is not trusted to choose library code
-/** Code that a sandbox governs, and code whose runtime parse options restrict a functional domain (other than the
-    in-module domain of module Programs)
-*/
-static bool qore_caller_is_untrusted() {
-    QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
-        & ~QoreParseOptions(QDOM_IN_MODULE);
-    if (!!(runtime_get_parse_options() & restricting)) {
-        return true;
+    // the file it is, under a directory's canonical path
+    std::unique_ptr<char, decltype(&free)> real(realpath(path, nullptr), &free);
+    if (!real) {
+        return false;
     }
-    return qore_thread_is_sandboxed();
+    size_t rlen = strlen(real.get());
+    for (const TrustedModuleDir& dir : trusted_module_dirs) {
+        if (within(real.get(), rlen, dir.real) || within(real.get(), rlen, dir.named)) {
+            if (load_path) {
+                *load_path = real.get();
+            }
+            return true;
+        }
+    }
+    return false;
 }
 
 std::string QoreModuleManager::findTrustedModule(const char* name) const {
@@ -2856,7 +2916,16 @@ std::string QoreModuleManager::findTrustedModule(const char* name) const {
         return std::string();
     }
     struct stat sb;
-    for (const std::string& dir : moduleDirList) {
+    std::vector<std::string> dirs;
+    for (const TrustedModuleDir& td : trusted_module_dirs) {
+        if (!td.named.empty()) {
+            dirs.push_back(td.named);
+        }
+        if (!td.real.empty() && td.real != td.named) {
+            dirs.push_back(td.real);
+        }
+    }
+    for (const std::string& dir : dirs) {
         for (const char* fmt : {"%s/%s.qm", "%s/%s.qmod", "%s/%s/%s.qm"}) {
             QoreString candidate;
             candidate.sprintf(fmt, dir.c_str(), name, name);

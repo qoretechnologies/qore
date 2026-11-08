@@ -1304,6 +1304,15 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                  if (*p == '"') {
                                                     qore_program_private::get(*getProgram())
                                                         ->applyModulePathDirective(false, yytext, *get_loc(yylloc));
+                                                 } else if (!QoreModuleManager::mayChangeModulePath(
+                                                        getProgram())) {
+                                                    // the process-wide module path is shared by all code
+                                                    parse_error(*get_loc(yylloc),
+                                                       "%%append-module-path with an unquoted path extends the "
+                                                       "process-wide module path, which code that a sandbox "
+                                                       "governs or whose functional domains are restricted cannot "
+                                                       "do; quote the path to add it to this Program's module "
+                                                       "path");
                                                  } else {
                                                     append_module_path(yytext);
                                                  }

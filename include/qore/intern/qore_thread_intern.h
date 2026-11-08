@@ -489,6 +489,13 @@ DLLLOCAL int qore_check_module_owned_code(const QoreValue code, int64 domain, co
 DLLLOCAL int qore_check_module_owned_code(const ResolvedCallReferenceNode* code, int64 domain, const char* name,
         const char* action, ExceptionSink* xsink);
 
+//! Returns true if the code running on the current thread is not trusted to choose library code
+/** Code that a sandbox governs, and code whose runtime parse options restrict a functional domain (other than the
+    in-module domain of module Programs).  Such code cannot change the process-wide module path, nor replace or
+    choose the modules that library code uses (see QoreModuleManager::isTrustedModulePath()).
+*/
+DLLLOCAL bool qore_caller_is_untrusted();
+
 //! Runs the initialization of a module from a trusted module directory with no sandbox provenance
 /** While it exists, sandbox resolution for every purpose (interrupts, limits, policy and the provenance of what
     is created) does not look beyond the code that loads the module: not at the Programs that were current when it

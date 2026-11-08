@@ -3864,6 +3864,22 @@ QoreSandboxManager* qore_find_thread_sandbox_manager_ref() {
     return find_thread_sandbox_manager_ref_intern();
 }
 
+bool qore_caller_is_untrusted() {
+    // the in-module domain only marks the Programs of modules
+    static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
+        & ~QoreParseOptions(QDOM_IN_MODULE);
+    ThreadData* td = thread_data.get();
+    // before the library is initialized, only the embedding application runs
+    if (!td) {
+        return false;
+    }
+    if (!!(td->runtime_po & restricting)) {
+        return true;
+    }
+    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+    return static_cast<bool>(governing);
+}
+
 QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool active) {
     if (!active) {
         return;
