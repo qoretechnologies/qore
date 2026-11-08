@@ -1516,6 +1516,8 @@
       list whose key or index expression assigns the variable (ex: <tt>h{(h = x).firstKey()} = v</tt>) stored into
       the container the variable held before, and could crash the program in the IR execution mode; it now stores into
       the container assigned, as with the AST interpreter
+    - the IR, JIT and tiered execution modes and AOT-compiled code mark an object held by a local of no type
+      (\c auto) as reachable from the stack, as they mark one held by a local of an object type
     - in the IR execution mode and wherever the JIT and tiered execution modes run a function with the IR
       interpreter, the first call of a large function in a thread with a pending cancellation (ex: in code that
       caught a \c THREAD-CANCELLED exception) raised the exception before the function ran; it is now raised at the

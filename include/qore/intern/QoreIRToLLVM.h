@@ -782,7 +782,7 @@ private:
         (qore_rt_object_slot_release())
     */
     bool isRealReferenceLocal(const void* key) const {
-        return current_ir_func && current_ir_func->real_reference_locals.count(key)
+        return current_ir_func && current_ir_func->hasRealReferenceStorage(key)
             && ir_only_locals_set && ir_only_locals_set->count(key);
     }
 

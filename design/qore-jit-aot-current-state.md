@@ -522,8 +522,13 @@ the IR interpreter's slot cache (`IRLocalSlotCache::set()` marks, `release()` re
 and the exit release, where the array form tags the cache of an object local in the lowest bit
 of its address for `qore_rt_cleanup_run_allocas()`). The object has a real reference exactly
 while the local holds it, released in the same order as the value; a parameter stays on the
-runtime stack, and an `auto` local holding an object is not marked
-(`ObjectLocalRealReference.qtest` checks the counts against the AST interpreter's). A third rule
+runtime stack. A body local of no type (`auto`, `any`) that is IR-only stays in `ir_only_locals`, so the
+optimizations keyed on that set still apply to it, and the object it holds is marked too
+(`QoreIRFunction::real_reference_ir_only_locals`): its value is checked at run time by the same helpers
+(and by `qore_rt_element_local_replace_real()` for the variable of a foreach loop), and the writes to IR
+storage that bypass them (fused int updates, in-place string appends and list pushes, typed foreach)
+never replace an object (they apply to int and string locals, and to a local holding a list).
+`ObjectLocalRealReference.qtest` checks the counts against the AST interpreter's. A third rule
 completes the lexical
 lifetime of IR-only locals: when a function is left, the values they own are released last
 local first, as the AST interpreter releases the variables of a frame. When an exception leaves

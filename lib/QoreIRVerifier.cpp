@@ -2037,6 +2037,7 @@ void QoreIRFunction::computeIROnlyLocals() {
     ir_only_locals.clear();
     reference_slot_locals.clear();
     real_reference_locals.clear();
+    real_reference_ir_only_locals.clear();
     cow_container_locals.clear();
     lvalue_path_locals.clear();
     weak_store_locals.clear();
@@ -2357,6 +2358,13 @@ void QoreIRFunction::computeIROnlyLocals() {
         }
         printd(5, "  local '%s' (%p): IR-ONLY\n", lv->getName(), key);
         ir_only_locals.insert(key);
+        // a body local of no type can hold an object, which then has a real reference from its storage, as on the
+        // runtime stack (see real_reference_ir_only_locals)
+        const QoreTypeInfo* lti = lv->getTypeInfo();
+        if (body_local_keys.count(key)
+                && (!QoreTypeInfo::hasType(lti) || lti == anyTypeInfo || lti == autoNoNarrowTypeInfo)) {
+            real_reference_ir_only_locals.insert(key);
+        }
     }
 
     // Build filtered instantiation list: body locals NOT classified as IR-only, which have no storage on the runtime

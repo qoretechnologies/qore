@@ -2476,7 +2476,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                         }
                         reference_slots[sid] = 1;
                     }
-                    if (func.real_reference_locals.count(key)) {
+                    if (func.hasRealReferenceStorage(key)) {
                         if (real_slots.empty()) {
                             real_slots.assign(local_slot_count, 0);
                         }

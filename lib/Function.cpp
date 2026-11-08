@@ -5197,6 +5197,7 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
                 ir->ir_only_locals.clear();
                 ir->reference_slot_locals.clear();
                 ir->real_reference_locals.clear();
+                ir->real_reference_ir_only_locals.clear();
                 ir->ast_visible_body_locals = ir->all_body_locals;
             }
         }
@@ -5810,6 +5811,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
             func->ir_only_locals.clear();
             func->reference_slot_locals.clear();
             func->real_reference_locals.clear();
+            func->real_reference_ir_only_locals.clear();
             func->ast_visible_body_locals = func->all_body_locals;
         }
     }

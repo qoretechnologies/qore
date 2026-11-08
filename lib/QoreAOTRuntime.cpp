@@ -8677,6 +8677,7 @@ static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm) {
         ir.ir_only_locals.clear();
         ir.reference_slot_locals.clear();
         ir.real_reference_locals.clear();
+        ir.real_reference_ir_only_locals.clear();
         ir.ast_visible_body_locals = ir.all_body_locals;
     }
 

@@ -3664,6 +3664,26 @@ public:
     */
     std::unordered_set<const void*> real_reference_locals;
 
+    //! IR-only body locals of no type (auto, any, no type declared) whose object, when they hold one, has a real
+    //! reference from their IR storage
+    /** As for real_reference_locals, the object such a local holds is marked with a real reference while the local
+        holds it, so that releasing another reference to an object in a recursive graph that the local holds needs no
+        collection decision.  These locals stay in ir_only_locals, so the IR optimizations keyed on that set keep
+        applying to them: the value is checked at run time, and only an object is marked (a store releases the value
+        it replaces with its mark, as a release of the storage does; see qore_rt_object_slot_replace() and
+        qore_rt_element_local_replace_real()).  Every write to the storage of such a local goes through those helpers
+        (or IRLocalSlotCache::set()/release() in the IR interpreter); the writes that bypass the store of a value
+        (fused int updates, in-place string appends and list pushes, typed foreach) never replace an object: they apply
+        to int and string locals, and to a local holding a list.  Parameters are not marked.
+    */
+    std::unordered_set<const void*> real_reference_ir_only_locals;
+
+    //! Returns true if the object a local holds has a real reference from its IR storage (see real_reference_locals
+    //! and real_reference_ir_only_locals)
+    bool hasRealReferenceStorage(const void* key) const {
+        return real_reference_locals.count(key) || real_reference_ir_only_locals.count(key);
+    }
+
     //! Returns true if a local keeps its value in IR storage only and has none on the runtime stack
     bool hasIRStorage(const void* key) const {
         return ir_only_locals.count(key) || reference_slot_locals.count(key) || real_reference_locals.count(key);

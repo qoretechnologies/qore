@@ -424,6 +424,8 @@ void qore_rt_reference_slot_write(uint64_t ref, uint64_t value, ExceptionSink* x
 void qore_rt_foreach_assignment_error(ExceptionSink* xsink);
 //! Stores an element to the native cache of the IR-only variable of a foreach loop; returns the value of the cache
 uint64_t qore_rt_element_local_replace(uint64_t old_value, uint64_t value, ExceptionSink* xsink);
+//! As qore_rt_element_local_replace(), for a local whose object has a real reference from its cache
+uint64_t qore_rt_element_local_replace_real(uint64_t old_value, uint64_t value, ExceptionSink* xsink);
 //! Releases the value that the native cache of an object local holds, with its real reference
 void qore_rt_object_slot_release(uint64_t value, ExceptionSink* xsink);
 //! Stores a value in the native cache of an object local, marking its object with a real reference

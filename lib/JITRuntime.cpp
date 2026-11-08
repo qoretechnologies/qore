@@ -202,6 +202,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_reference_slot_write", reinterpret_cast<void*>(&qore_rt_reference_slot_write) },
     { "qore_rt_foreach_assignment_error", reinterpret_cast<void*>(&qore_rt_foreach_assignment_error) },
     { "qore_rt_element_local_replace", reinterpret_cast<void*>(&qore_rt_element_local_replace) },
+    { "qore_rt_element_local_replace_real", reinterpret_cast<void*>(&qore_rt_element_local_replace_real) },
     { "qore_rt_reload_local_if_stale_raw", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_raw) },
     { "qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local) },
     { "qore_rt_binary_op", reinterpret_cast<void*>(&qore_rt_binary_op) },
@@ -2144,6 +2145,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_element_local_replace(uint64_t old_value, 
         return old_value;
     }
     ov.discard(xsink);
+    return value;
+}
+
+//! As qore_rt_element_local_replace(), for the cache of a local whose object has a real reference from it (see
+//! QoreIRFunction::real_reference_ir_only_locals): an object stored is marked, and an object replaced is released
+//! with its mark
+extern "C" DLLEXPORT uint64_t qore_rt_element_local_replace_real(uint64_t old_value, uint64_t value,
+        ExceptionSink* xsink) {
+    QoreValue ov = fromBits(old_value);
+    if (ov.hasNode() && ov.getInternalNode()->getType() == NT_REFERENCE) {
+        // a type error is described as the AST interpreter describes the assignment of an element
+        qore_rt_reference_slot_write_impl(old_value, value, xsink, "<foreach lvalue assignment>");
+        return old_value;
+    }
+    qore_rt_object_slot_replace(old_value, value, xsink);
     return value;
 }
 

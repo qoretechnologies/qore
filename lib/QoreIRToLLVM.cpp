@@ -2944,13 +2944,16 @@ size_t QoreIRToLLVM::getReloadChainCallThreshold() {
 
 // documented in QoreIRToLLVM.h
 bool QoreIRToLLVM::isRealReferenceAlloca(const llvm::AllocaInst* alloca) const {
-    if (!current_ir_func || current_ir_func->real_reference_locals.empty()) {
+    if (!current_ir_func || (current_ir_func->real_reference_locals.empty()
+            && current_ir_func->real_reference_ir_only_locals.empty())) {
         return false;
     }
-    for (const void* key : current_ir_func->real_reference_locals) {
-        auto it = local_allocas.find(key);
-        if (it != local_allocas.end() && it->second.storage() == alloca && isRealReferenceLocal(key)) {
-            return true;
+    for (const auto* set : {&current_ir_func->real_reference_locals, &current_ir_func->real_reference_ir_only_locals}) {
+        for (const void* key : *set) {
+            auto it = local_allocas.find(key);
+            if (it != local_allocas.end() && it->second.storage() == alloca && isRealReferenceLocal(key)) {
+                return true;
+            }
         }
     }
     return false;
@@ -15726,7 +15729,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // it (see qore_rt_element_local_replace()), which also releases the value it replaces
                     // raw local cache: the value held is the reference or the value released
                     llvm::Value* old_val = builder->CreateLoad(i64_type, it->second.storage());
-                    auto replace_fn = module.getOrInsertFunction("qore_rt_element_local_replace",
+                    // the object of a local of no type has a real reference from the cache (see
+                    // QoreIRFunction::real_reference_ir_only_locals)
+                    auto replace_fn = module.getOrInsertFunction(isRealReferenceLocal(key)
+                            ? "qore_rt_element_local_replace_real" : "qore_rt_element_local_replace",
                         llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
                     llvm::Value* cache_val = builder->CreateCall(replace_fn, {old_val, owned_boxed, xsink_arg});
                     // the cache takes its value before the exception check: the helper released the value it
