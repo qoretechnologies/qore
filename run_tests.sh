@@ -1208,9 +1208,9 @@ count_test_result() {
 
 # Runs the tests TEST_JOBS at a time (see TEST_JOBS above): the exclusive tests first, one by one, then the others,
 # with at most one serial test at a time, each lane longest first by the durations of the tests (see plan_tests()).
-# Each test runs in a background shell with a directory of its own (its slot), and writes its output there; the
-# shell writes the number of its slot to a FIFO when the test has ended, and the runner, which reads the FIFO, prints
-# the output and the result and starts the next test.
+# Each test runs in a background shell with a directory of its own (named by the test's number), and writes its output
+# there; when the shell has ended, however it ended, the number of the test is written to a FIFO, and the runner, which
+# reads the FIFO, prints the output and the result and starts the next test.
 run_tests_parallel() {
     RUN_DIR=`mktemp -d "${TMPDIR:-/tmp}/qore-run-tests.XXXXXX"` || exit 1
     RUN_DIR=`cd "$RUN_DIR" && pwd -P`
@@ -1260,13 +1260,6 @@ EOF
         "$(printf '%s' "$PENDING_EXCLUSIVE" | grep -c .) exclusive)"
     echo
 
-    FREE_SLOTS=""
-    slot=1
-    while [ $slot -le $TEST_JOBS ]; do
-        mkdir "$RUN_DIR/$slot" || exit 1
-        FREE_SLOTS="$FREE_SLOTS $slot"
-        slot=`expr $slot + 1`
-    done
     RUNNING=0
     SERIAL_RUNNING=0
     EXCLUSIVE_RUNNING=0
@@ -1301,37 +1294,46 @@ EOF
             if [ -z "$next" ]; then
                 break
             fi
-            set -- $FREE_SLOTS
-            slot=$1
-            shift
-            FREE_SLOTS="$*"
             set -- $next
             number=$1
             next=$2
-            echo "$next" > "$RUN_DIR/$slot/test"
-            echo "$lane" > "$RUN_DIR/$slot/lane"
-            # the outer shell reports the slot when the inner one has ended, however it ended, so that the runner
-            # never waits for a test that is gone; the inner one runs the test, which does not get the FIFO
+            dir="$RUN_DIR/$number"
+            mkdir "$dir" || exit 1
+            echo "$next" > "$dir/test"
+            echo "$lane" > "$dir/lane"
+            # The test runs in an inner shell, which writes its result, inside an outer one, which keeps the result
+            # once the inner one has ended.  A reporter reads the standard output of the outer shell, a pipe that
+            # nothing else holds, to its end, which comes when the outer shell has ended, however it ended (a shell
+            # that is killed writes nothing), and then reports the test; so the runner never waits for a test that is
+            # gone, and a test whose outer shell ended before it kept the result has none.  The test does not get the
+            # FIFO.
             (
                 trap - 0 INT TERM
                 (
-                    exec > "$RUN_DIR/$slot/output" 2>&1 5>&-
-                    # the slot's own files (see find_test_core() and run_with_watchdog())
-                    TEST_START_MARKER="$RUN_DIR/$slot/start"
-                    TEST_CORES_BEFORE="$RUN_DIR/$slot/cores"
-                    TEST_EVENT_FIFO="$RUN_DIR/$slot/events"
-                    TEST_LOG="$RUN_DIR/$slot/log"
-                    print_test_header "$next" $number
-                    test_start=`date +%s`
-                    test_exit=1
-                    run_test "$next" $number
-                    print_test_footer "$next" `expr \`date +%s\` - $test_start`
-                    echo "$test_exit" > "$RUN_DIR/$slot/result"
-                )
-                echo "$slot" >&5
+                    (
+                        exec > "$dir/output" 2>&1 5>&-
+                        # the test's own files (see find_test_core() and run_with_watchdog())
+                        TEST_START_MARKER="$dir/start"
+                        TEST_CORES_BEFORE="$dir/cores"
+                        TEST_EVENT_FIFO="$dir/events"
+                        TEST_LOG="$dir/log"
+                        print_test_header "$next" $number
+                        test_start=`date +%s`
+                        test_exit=1
+                        run_test "$next" $number
+                        print_test_footer "$next" `expr \`date +%s\` - $test_start`
+                        echo "$test_exit" > "$dir/exit"
+                    )
+                    if [ -f "$dir/exit" ]; then
+                        mv "$dir/exit" "$dir/result"
+                    fi
+                ) | {
+                    cat > /dev/null
+                    echo "$number" >&5
+                }
             ) &
             RUN_PIDS="$RUN_PIDS $!"
-            echo "$!" > "$RUN_DIR/$slot/pid"
+            echo "$!" > "$dir/pid"
             RUNNING=`expr $RUNNING + 1`
             case $lane in
                 serial) SERIAL_RUNNING=1 ;;
@@ -1342,29 +1344,28 @@ EOF
             break
         fi
         # the next test that ends
-        if ! IFS= read -r slot <&5; then
+        if ! IFS= read -r number <&5; then
             echo "ERROR: the parallel run lost its FIFO" >&2
             exit 1
         fi
-        pid=`cat "$RUN_DIR/$slot/pid"`
+        dir="$RUN_DIR/$number"
+        pid=`cat "$dir/pid"`
         wait $pid 2>/dev/null
         RUN_PIDS=`for p in $RUN_PIDS; do [ "$p" = "$pid" ] || echo $p; done`
-        test=`cat "$RUN_DIR/$slot/test"`
-        result=`cat "$RUN_DIR/$slot/result" 2>/dev/null`
+        test=`cat "$dir/test"`
+        result=`cat "$dir/result" 2>/dev/null`
         if [ -z "$result" ]; then
             result=1
-            echo "*** the shell that ran $test ended without its result ***" >> "$RUN_DIR/$slot/output"
+            echo "*** the shell that ran $test ended without its result ***" >> "$dir/output"
         fi
-        cat "$RUN_DIR/$slot/output"
+        cat "$dir/output"
         count_test_result "$test" "$result"
         DONE_COUNT=`expr $DONE_COUNT + 1`
-        case `cat "$RUN_DIR/$slot/lane"` in
+        case `cat "$dir/lane"` in
             serial) SERIAL_RUNNING=0 ;;
             exclusive) EXCLUSIVE_RUNNING=0 ;;
         esac
-        rm -f "$RUN_DIR/$slot/output" "$RUN_DIR/$slot/result" "$RUN_DIR/$slot/log" "$RUN_DIR/$slot/test" \
-            "$RUN_DIR/$slot/lane" "$RUN_DIR/$slot/pid"
-        FREE_SLOTS="$FREE_SLOTS $slot"
+        rm -rf "$dir"
         RUNNING=`expr $RUNNING - 1`
     done
     exec 5>&-

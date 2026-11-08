@@ -205,6 +205,38 @@ class ParallelRunnerTest(unittest.TestCase):
         self.assertIn("Passed 1 out of 2 tests. 1 tests failed.", result.stdout)
         self.assertIn("Failed tests:\n./examples/test/dies.qtest\n", result.stdout)
 
+    def test_shells_of_a_test_that_die_are_a_failure(self):
+        # every shell between run_tests.sh and the test is killed (here by the test itself), so none of them reports
+        # that the test ended: the run still counts the test as failed and goes on, instead of waiting for it forever;
+        # run_tests.sh is the process that its subshells name with $$ (QORE_TEST_PROCESS_MARK is "<$$>.<number>")
+        self.make_test("dies.qtest", r'''
+main=${QORE_TEST_PROCESS_MARK%.*}
+parent() {
+    if [ -r /proc/$1/status ]; then
+        awk '/^PPid:/ { print $2 }' /proc/$1/status
+    else
+        ps -o ppid= -p $1 | tr -d ' '
+    fi
+}
+shells=""
+p=$PPID
+while [ -n "$p" ] && [ "$p" -gt 1 ] && [ "$p" != "$main" ]; do
+    shells="$shells $p"
+    p=$(parent $p)
+done
+[ "$p" = "$main" ] || { echo "out dies.qtest: run_tests.sh $main is not an ancestor"; exit 1; }
+echo "out dies.qtest: killing$shells" > "$SHARED/killed"
+kill -9 $shells
+''')
+        self.make_test("ok.qtest", "exit 0\n")
+        result = self.run_runner(2)
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        # the test found and killed the shells above it, the one that reports the test included
+        self.assertRegex((self.shared / "killed").read_text(), r"^out dies.qtest: killing \d+ \d+")
+        self.assertIn("*** the shell that ran ./examples/test/dies.qtest ended without its result ***", result.stdout)
+        self.assertIn("Passed 1 out of 2 tests. 1 tests failed.", result.stdout)
+        self.assertIn("Failed tests:\n./examples/test/dies.qtest\n", result.stdout)
+
     def test_run_without_tests_prints_its_settings(self):
         # a run that selects no test ends with an error once it has printed its settings (the datasource strings with
         # their passwords masked, which run-tests-credentials.qtest checks); -l prints nothing but the error
