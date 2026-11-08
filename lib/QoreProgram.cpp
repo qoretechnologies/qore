@@ -78,6 +78,7 @@ extern bool threads_initialized;
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <condition_variable>
 #include <new>
 #include <map>
 
@@ -5167,18 +5168,56 @@ std::vector<QoreExitHook> exit_hooks;
 int64 exit_hook_seq = 0;
 //! set when the hooks of the process have started to run: no hook can be registered afterwards
 bool exit_hooks_closed = false;
+//! the system threads (qore_start_system_thread()) being started outside the lock
+/** The hooks do not start to run while one is being started, so that the hook that stops it runs after it exists
+*/
+int system_threads_starting = 0;
+//! signalled when the last system thread being started has been started
+std::condition_variable exit_hook_cond;
+
+//! The fork handler of the exit hook registry, a leaf lock: its holders take no other registered lock
+/** In the child, the threads that were starting system threads are gone with their reservations
+*/
+class QoreExitHookForkHandler : public QoreForkHandler {
+public:
+    QoreExitHookForkHandler() : QoreForkHandler(QFLR_LEAF, "exit_hooks") {
+    }
+
+    void prepare() noexcept override {
+        exit_hook_lock.lock();
+    }
+
+    void parent() noexcept override {
+        exit_hook_lock.unlock();
+    }
+
+    void child() noexcept override {
+        // the objects are created again in place: the waiters and the holder are gone with their threads
+        new (&exit_hook_cond) std::condition_variable();
+        new (&exit_hook_lock) std::mutex();
+        system_threads_starting = 0;
+    }
+};
+
+QoreExitHookForkHandler exit_hook_fork_handler;
+
+//! Closes the registry for the process, or for a Program, and waits for the system threads being started
+void qore_close_exit_hooks(QoreProgram* pgm) {
+    std::unique_lock<std::mutex> l(exit_hook_lock);
+    if (!pgm) {
+        exit_hooks_closed = true;
+    } else {
+        // the Program's hooks start: its code can register no more
+        qore_program_private::get(*pgm)->exit_hooks_closed = true;
+    }
+    exit_hook_cond.wait(l, [] () { return !system_threads_starting; });
+}
 
 //! Takes the last hook registered of a Program, or of any Program, out of the registry
 /** @return true if a hook was taken
 */
 bool qore_take_last_exit_hook(QoreProgram* pgm, QoreExitHook& hook) {
     std::lock_guard<std::mutex> l(exit_hook_lock);
-    if (!pgm) {
-        exit_hooks_closed = true;
-    } else {
-        // the Program's hooks have started: its code can register no more
-        qore_program_private::get(*pgm)->exit_hooks_closed = true;
-    }
     for (auto i = exit_hooks.rbegin(), e = exit_hooks.rend(); i != e; ++i) {
         if (!pgm || i->pgm == pgm) {
             hook = *i;
@@ -5264,6 +5303,7 @@ bool qore_deregister_exit_hook(int64 id, ExceptionSink* xsink) {
 void qore_run_exit_hooks(QoreProgram* pgm) {
     // the hooks are taken one at a time, so that a hook that deletes a Program, or a Program deleted meanwhile by
     // another thread, runs that Program's hooks still registered when it is deleted, and none is run after it
+    qore_close_exit_hooks(pgm);
     QoreExitHook hook;
     if (!qore_take_last_exit_hook(pgm, hook)) {
         return;
@@ -5307,19 +5347,25 @@ void qore_system_thread_main(ExceptionSink* xsink, void* arg) {
 }
 
 int qore_start_system_thread(const ResolvedCallReferenceNode* code, QoreProgram* pgm, ExceptionSink* xsink) {
-    std::unique_ptr<QoreSystemThreadArg> arg(new QoreSystemThreadArg{code->refRefSelf(), pgm});
-    pgm->depRef();
-    int tid;
+    // the start is reserved under the lock; the hooks do not start to run until it has been made (see
+    // qore_close_exit_hooks()), so that the hook that stops the thread runs after it exists
     {
-        // the check and the start are atomic with respect to the start of the exit hooks, so that the hook that stops
-        // the thread runs after it was started
         std::lock_guard<std::mutex> l(exit_hook_lock);
         if (exit_hooks_closed) {
-            tid = -1;
             xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system thread cannot be started after the exit hooks "
                 "of the process have started");
-        } else {
-            tid = q_start_thread(xsink, qore_system_thread_main, arg.get(), QTF_NO_SANDBOX_INHERIT);
+            return -1;
+        }
+        ++system_threads_starting;
+    }
+    std::unique_ptr<QoreSystemThreadArg> arg(new QoreSystemThreadArg{code->refRefSelf(), pgm});
+    pgm->depRef();
+    // started without the lock, which creating a thread must not hold (it takes other locks, and fork() handlers)
+    int tid = q_start_thread(xsink, qore_system_thread_main, arg.get(), QTF_NO_SANDBOX_INHERIT);
+    {
+        std::lock_guard<std::mutex> l(exit_hook_lock);
+        if (!--system_threads_starting) {
+            exit_hook_cond.notify_all();
         }
     }
     if (tid < 0) {
