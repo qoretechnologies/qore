@@ -2214,6 +2214,12 @@ QoreHashNode* thread_get_local_vars(int frame, ExceptionSink* xsink) {
     return rv.release();
 }
 
+int64 thread_get_local_var_count(ExceptionSink* xsink) {
+    // the stack that thread_instantiate_lvar() pushes local variables on
+    ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
+    return tlpd ? static_cast<int64>(tlpd->lvstack.getVarCount()) : 0;
+}
+
 // returns 0 = OK, 1 = no such variable or inaccessible frame, -1 exception setting variable
 int thread_set_local_var_value(int frame, const char* name, const QoreValue& val, ExceptionSink* xsink) {
     ThreadLocalProgramData* tlpd = ProgramThreadCountContextHelper::getContextFrame(frame, xsink);

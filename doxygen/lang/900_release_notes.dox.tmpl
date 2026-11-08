@@ -1532,6 +1532,9 @@
       <tt>f(new T("a"), new T("b"), thr())</tt> destroyed \c b before \c a); the arguments evaluated are now released
       first argument first, the innermost call's first, and the objects that the statement holds (such as the object
       of a method call) last, as with the AST interpreter
+    - in AOT-compiled code, a function called directly from compiled code left an entry on the runtime stack for each
+      local variable of its own that is visible to the runtime at each call, so a loop of such calls in top-level code
+      took time quadratic in the number of iterations, and memory grew with it
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the arguments of a
       call are now destroyed last argument first when the call returns, as with the AST interpreter (they were
       destroyed first argument first in calls of closures, of static methods and from top-level code, and of

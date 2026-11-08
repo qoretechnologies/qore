@@ -2821,9 +2821,15 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
                 }
                 const void* key = reinterpret_cast<const void*>(var);
                 if (!var->closureUse()) {
+                    // a direct fast entry pushed the local at its entry (emitLocalInstantiation()), as no runtime
+                    // frame wrapper did, so it pops it: clearing it, as for a local the wrapper pushed, left an entry
+                    // on the runtime stack for each call, and a lookup of a local by the caller (a top-level loop's)
+                    // walked them all
                     if (!fast_entry_name.empty() && !ir_only_body_locals.count(key)) {
+                        auto pop_local = module.getOrInsertFunction("qore_rt_pop_local_aot",
+                                llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
                         int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
-                        builder->CreateCall(helper, {aot_ctx_arg,
+                        builder->CreateCall(pop_local, {aot_ctx_arg,
                                 llvm::ConstantInt::get(i32_type, slot), xsink_arg});
                     }
                     continue;

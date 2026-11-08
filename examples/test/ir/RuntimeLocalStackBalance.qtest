@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class RuntimeLocalStackBalanceTest
+
+#! Regression test: a call that returns leaves the runtime local variable stack as it found it
+/** A direct AOT fast entry (a function that compiled code calls without the runtime frame wrapper) pushed the body
+    locals that need runtime storage on the thread's local variable stack at its entry, and cleared them at its exit
+    as if the wrapper owned them, so each call left an entry on the stack: a top-level loop of such calls, whose locals
+    are looked up by a walk of the stack, took time quadratic in the number of iterations (80000 iterations of a call
+    in a top-level loop took 51 s in a qcc executable, against 0.1 to 0.4 s in the other modes).  The fast entry now
+    pops them.  The script measures the stack's size (qore_test_local_var_stack_size()) around loops of function and
+    method calls, in top-level code and in a function, and of calls that raise an exception, in every execution mode,
+    on the IR tier of tiered execution and as a qcc executable (see ExecModeOutputTest).
+*/
+class RuntimeLocalStackBalanceTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%new-style
+%require-types
+int sub fn(int i) {
+    int a = i;
+    hash<auto> h = {"a": a};
+    return a + h.a;
+}
+int sub thrower(int i) {
+    int a = i;
+    hash<auto> h = {"a": a};
+    if (h.a >= 0) {
+        throw "X", "thrower", a;
+    }
+    return a;
+}
+class C {
+    int m(int i) {
+        int b = i;
+        hash<auto> h = {"b": b};
+        return b + h.b;
+    }
+}
+# a call that returns leaves the runtime local variable stack as it found it
+int sub inner(int n) {
+    int before = qore_test_local_var_stack_size();
+    int s = 0;
+    for (int i = 0; i < n; ++i) {
+        s += fn(i);
+    }
+    printf("calls in a function: %d %d\n", s, qore_test_local_var_stack_size() - before);
+    return s;
+}
+# top-level locals are declared before the stack is measured
+int before;
+int s;
+int caught;
+C c();
+before = qore_test_local_var_stack_size();
+for (int i = 0; i < 100; ++i) {
+    s += fn(i);
+}
+printf("calls in top-level code: %d %d\n", s, qore_test_local_var_stack_size() - before);
+before = qore_test_local_var_stack_size();
+inner(100);
+printf("after a function: %d\n", qore_test_local_var_stack_size() - before);
+before = qore_test_local_var_stack_size();
+s = 0;
+for (int i = 0; i < 100; ++i) {
+    s += c.m(i);
+}
+printf("method calls in top-level code: %d %d\n", s, qore_test_local_var_stack_size() - before);
+before = qore_test_local_var_stack_size();
+for (int i = 0; i < 100; ++i) {
+    try {
+        thrower(i);
+    } catch (hash<ExceptionInfo> ex) {
+        caught += ex.arg;
+    }
+}
+printf("calls raising an exception: %d %d\n", caught, qore_test_local_var_stack_size() - before);
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "calls in top-level code: 9900 0",
+            "calls in a function: 9900 0",
+            "after a function: 0",
+            "method calls in top-level code: 9900 0",
+            "calls raising an exception: 4950 0",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("RuntimeLocalStackBalance", Script, (map $1 + "\n", Expected).join(""),
+            "leaves the runtime local variable stack as it found it after a loop of calls") {
+    }
+}

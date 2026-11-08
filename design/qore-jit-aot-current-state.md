@@ -693,6 +693,16 @@ a statement with more than 256 temporaries keeps the error return's order, as ea
 orders the temporaries registered before it).
 `ExceptionTempReleaseOrder.qtest`.
 
+The runtime frame wrapper (`execJITWithDeopt()`) pushes the body locals of a native function that
+need runtime storage (not IR-only, not closure-bound) on the thread's local variable stack and pops
+them when the function returns, so native code only clears such a local at the end of its scope
+(`qore_rt_uninstantiate_local_aot()`). A direct AOT fast entry, which compiled code calls without
+the wrapper, pushes them itself (`emitLocalInstantiation()`) and therefore pops them when it returns
+(`qore_rt_pop_local_aot()` from `emitLocalUninstantiation()`); clearing them left one entry on the
+stack for each call, and the lookup of a top-level local, which walks the stack, made a top-level
+loop of such calls quadratic. `RuntimeLocalStackBalance.qtest` checks the stack's size
+(`qore_test_local_var_stack_size()`, a test hook) around loops of calls in every mode.
+
 The native cache of a local on the runtime stack is retained by the local's reload tracker. A
 store releases the tracker's reference before the runtime assignment releases the variable's, so
 the value replaced is destroyed by the assignment, as with the AST interpreter. The tracker is

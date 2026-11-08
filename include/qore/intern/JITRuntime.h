@@ -1511,6 +1511,13 @@ void qore_rt_uninstantiate_local_aot(QoreAOTContext* ctx, int32_t idx, Exception
 //! Used for closure-use vars that are NOT pre-instantiated by evalTiered.
 void qore_rt_pop_closure_var_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
+//! Pops a local that a direct AOT fast entry pushed on the runtime stack at its entry
+/** A direct fast entry bypasses the runtime frame wrapper (execJITWithDeopt()), which pushes and pops the body locals
+    of a function that need runtime storage, so it pushes them itself (QoreIRToLLVM::emitLocalInstantiation()) and
+    must pop them when it returns; qore_rt_uninstantiate_local_aot() only clears the value, as the wrapper pops it
+*/
+void qore_rt_pop_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
 //! Pops a closure-use local from the cvstack only if it is on the current frame's cvstack
 /** The JIT counterpart of qore_rt_pop_closure_var_aot(); see that function for the rationale.
     A closure-use local that evalTiered does not pre-instantiate reaches the cvstack only when
