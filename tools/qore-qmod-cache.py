@@ -1022,12 +1022,19 @@ class Cache:
     def quarantine(self):
         """Takes every entry out of use at once (an audit found a module that qcc does not write again): the cache
         directory is renamed out of the way, so no job reuses an entry of it; a later prune deletes it"""
-        dst = "%s.quarantine.%d.%d" % (self.root, os.getpid(), int(time.time()))
+        now = int(time.time())
+        dst = "%s.quarantine.%d.%d" % (self.root, os.getpid(), now)
         try:
             os.rename(self.root, dst)
-            return dst
         except OSError:
             return None
+        # a rename keeps the directory's modification time; prune ages the quarantine by the time in its name, and
+        # this one is for tools that look at the modification time
+        try:
+            os.utime(dst, (now, now))
+        except OSError:
+            pass
+        return dst
 
     def candidates(self, base, remove_invalid=False):
         """Returns the valid entries stored under a base key, most recently used first
@@ -1774,6 +1781,13 @@ def remove_orphans(cache, now):
     return removed
 
 
+def quarantine_time(name):
+    """The time a cache was quarantined, from the name of its directory (<schema>.quarantine.<pid>.<time>); a name
+    without one counts as quarantined now, so that it is kept for ORPHAN_AGE"""
+    m = re.match(r"^.*\.quarantine\.[0-9]+\.([0-9]+)$", name)
+    return int(m.group(1)) if m else time.time()
+
+
 def cmd_prune(args):
     """Prunes the cache and prints one line with the hits and misses of a build and the size of the cache before and
     after: orphans older than ORPHAN_AGE and quarantined caches are removed, then the entries not used for
@@ -1800,7 +1814,7 @@ def cmd_prune(args):
             parent = os.path.dirname(cache.root)
             for n in os.listdir(parent):
                 p = os.path.join(parent, n)
-                if n.startswith(SCHEMA + ".quarantine.") and now - os.stat(p).st_mtime > ORPHAN_AGE:
+                if n.startswith(SCHEMA + ".quarantine.") and now - quarantine_time(n) > ORPHAN_AGE:
                     shutil.rmtree(p, ignore_errors=True)
                     stats["quarantined caches"] += 1
             entries = cache_entries(cache)

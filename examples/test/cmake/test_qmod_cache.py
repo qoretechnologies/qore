@@ -975,9 +975,17 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         # the next build reuses nothing of the cache whose key missed an input
         (self.source / "nondeterministic.txt").unlink()
         self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all())
-        # a prune removes the quarantined cache once no job can be reading it
-        for q in self.cache.glob(qc.SCHEMA + ".quarantine.*"):
-            os.utime(str(q), (time.time() - 2 * qc.ORPHAN_AGE,) * 2)
+        # a prune keeps a quarantined cache while a job can still be reading it, however old the directory's
+        # modification time (a rename does not change it)
+        quarantined = list(self.cache.glob(qc.SCHEMA + ".quarantine.*"))
+        self.assertEqual(1, len(quarantined))
+        os.utime(str(quarantined[0]), (time.time() - 2 * qc.ORPHAN_AGE,) * 2)
+        self.prune("--max-size", "1000")
+        self.assertTrue(quarantined[0].exists())
+        # and removes it then: the time is in its name
+        old = quarantined[0].with_name(re.sub(r"\.[0-9]+$", ".%d" % (time.time() - 2 * qc.ORPHAN_AGE),
+                                              quarantined[0].name))
+        quarantined[0].rename(old)
         out = self.prune("--max-size", "1000")
         self.assertIn("1 quarantined caches", out)
         self.assertFalse(list(self.cache.glob(qc.SCHEMA + ".quarantine.*")))
