@@ -3715,6 +3715,13 @@ public:
     */
     void computeReferenceStoreLocals();
 
+    //! Re-derives reference_store_locals with the value facts known now, after facts were added late (ex: the
+    //! projection of the elements of a list returned by a function of the same batch); a reference slot local that no
+    //! store can give a reference any longer becomes an IR-only local, so that the late specializations apply to it
+    /** @return the number of locals that are no longer reference-store locals
+    */
+    size_t refineReferenceLocalsFromFacts();
+
     //! Returns true if this function can create a reference (\c "\\var") anywhere
     /** Conservative: also true when the IR contains a construct whose AST body this analysis
         cannot see through.  An untyped local of a function that creates no reference can never
