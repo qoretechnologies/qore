@@ -5380,14 +5380,18 @@ bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::
         return false;
     }
     bool released = false;
-    for (size_t i = static_cast<size_t>(arg_start); i < inst->operands.size(); ++i) {
-        if (i > static_cast<size_t>(arg_start) && !((i - arg_start) % 100)) {
+    // last argument first, as the AST interpreter releases the parameters that took the arguments over when the
+    // callee returns
+    size_t count = 0;
+    for (size_t i = inst->operands.size(); i > static_cast<size_t>(arg_start); --i) {
+        if (count++ && !(count % 100)) {
             (void)qore_check_cancel(nullptr, "LLVM call argument release");
         }
-        uint32_t id = inst->operands[i].id;
-        // only a value created by a call is a temporary whose release is observable; a value loaded from a
-        // variable or a constant is not
-        if (!id || weak_load_result_ids.count(id) || !value_defined_by_call.count(id)
+        uint32_t id = inst->operands[i - 1].id;
+        // only a value created by a call, or a Phi of such values that took their references over (see
+        // consumable_phis), is a temporary whose release is observable; a value loaded from a variable or a constant
+        // is not
+        if (!id || weak_load_result_ids.count(id) || (!value_defined_by_call.count(id) && !consumable_phis.count(id))
                 || invoke_alloca_map.find(id) == invoke_alloca_map.end()) {
             continue;
         }
@@ -11541,6 +11545,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     element_local_read_flags.clear();
     weak_load_result_ids.clear();
     native_boolean_result_values.clear();
+    consumable_phis.clear();
     // the values read from a local that a write to the local can release before their last use take a reference of
     // their own
     if (!qore_ir_find_local_reads_overwritten_before_use(func, overwritten_local_reads)) {
@@ -12107,6 +12112,48 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         stable_scalar_loads.emplace(load->result.id, local);
                     }
                 }
+            }
+        }
+    }
+    // the Phis whose incoming values are used by the Phi once, and otherwise only in the block that defines them,
+    // before the Phi (new T() ?? x tests the temporary first), which can take their references over (see
+    // consumable_phis); a value with more than one use is consumed by no other instruction
+    {
+        std::unordered_map<uint32_t, uint32_t> phi_uses;
+        std::unordered_set<uint32_t> used_elsewhere;
+        std::vector<const QoreIRPhiInstruction*> phis;
+        for (const auto& block : func.blocks) {
+            for (const auto& inst_ptr : block->instructions) {
+                bool phi_inst = inst_ptr->opcode == QoreIROpcode::Phi;
+                if (phi_inst && inst_ptr->result.isValid()) {
+                    phis.push_back(static_cast<const QoreIRPhiInstruction*>(inst_ptr.get()));
+                }
+                qore_ir_visit_value_operands(*inst_ptr, [&](QoreIRValue operand) {
+                    if (phi_inst) {
+                        ++phi_uses[operand.id];
+                        return;
+                    }
+                    auto def_it = value_def_block.find(operand.id);
+                    if (def_it == value_def_block.end() || def_it->second != block.get()) {
+                        used_elsewhere.insert(operand.id);
+                    }
+                });
+            }
+        }
+        for (const QoreIRPhiInstruction* phi : phis) {
+            if (phi->value_kind != QoreIRPhiValueKind::QoreValue || phi->incoming.empty()) {
+                continue;
+            }
+            bool temps = true;
+            for (const auto& inc : phi->incoming) {
+                auto uses_it = phi_uses.find(inc.value.id);
+                if (uses_it == phi_uses.end() || uses_it->second != 1 || used_elsewhere.count(inc.value.id)) {
+                    temps = false;
+                    break;
+                }
+            }
+            if (temps) {
+                consumable_phis.insert(phi->result.id);
             }
         }
     }
@@ -12979,7 +13026,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
 
     // PHI fixup pass: add incoming values now that all blocks are lowered
-    for (auto& [phi_node, phi_inst, phi_ir_block, phi_value_kind] : pending_phis) {
+    for (auto& [phi_node, phi_inst, phi_ir_block, phi_value_kind, phi_temp_cleanup] : pending_phis) {
         llvm::BasicBlock* phi_bb = phi_node->getParent();
         if (q_env_is_set("QORE_LLVM_DEBUG")) {
             fprintf(stderr, "PHI-FIXUP-START: PHI in block=%s predecessors=[",
@@ -13103,6 +13150,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     // blocks, so use the branch-free helper form here.
                     val = boxValue(val, inc.value.id, false);
                     break;
+            }
+            if (phi_temp_cleanup) {
+                // the Phi's cleanup slot takes the incoming temporary's reference over; a value that a jump past the
+                // end of its statement left in the slot is released first
+                llvm::Value* inc_cleanup = invoke_alloca_map[inc.value.id];
+                llvm::Value* owned = builder->CreateLoad(i64_type, inc_cleanup);
+                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), inc_cleanup);
+                llvm::Value* old_val = builder->CreateLoad(i64_type, phi_temp_cleanup);
+                builder->CreateStore(owned, phi_temp_cleanup);
+                builder->CreateCall(module.getOrInsertFunction("qore_rt_decref",
+                    llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false)), {old_val, xsink_arg});
             }
             phi_node->addIncoming(val, bb);
         }
@@ -16327,10 +16385,36 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // PHI carries NaN-boxed i64 values (incoming values are boxed in fixup pass).
                 nanboxed_values.insert(inst->result.id);
             }
+            // a Phi of temporaries, each of which owns its reference in a cleanup slot of its own, is a temporary
+            // too: its own cleanup slot takes the incoming value's reference over at the end of the predecessor
+            // (in the fixup pass), so a call consumes it as it consumes any temporary argument (see
+            // consumable_phis); an incoming value not lowered yet (a forward edge) has no slot to take over
+            llvm::AllocaInst* temp_cleanup = nullptr;
+            if (phi_value_kind == QoreIRPhiValueKind::QoreValue && consumable_phis.count(inst->result.id)) {
+                bool all_owned = true;
+                for (const auto& inc : phi->incoming) {
+                    auto alloca_it = invoke_alloca_map.find(inc.value.id);
+                    if (alloca_it == invoke_alloca_map.end() || !alloca_it->second
+                            || !llvm::isa<llvm::AllocaInst>(alloca_it->second)
+                            || !nanboxed_values.count(inc.value.id)
+                            || weak_load_result_ids.count(inc.value.id)) {
+                        all_owned = false;
+                        break;
+                    }
+                }
+                if (all_owned) {
+                    llvm::IRBuilder<> alloca_builder(&llvm_func->getEntryBlock(),
+                        llvm_func->getEntryBlock().begin());
+                    temp_cleanup = alloca_builder.CreateAlloca(i64_type, nullptr, "phi_temp_cleanup");
+                    alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), temp_cleanup);
+                    registerInvokeCleanupAlloca(temp_cleanup);
+                    invoke_alloca_map[inst->result.id] = temp_cleanup;
+                }
+            }
             // Store for fixup pass after all blocks are lowered (incoming values
             // may not be lowered yet due to forward edges).
             pending_phis.push_back({
-                phi_node, phi, current_lowering_block_, phi_value_kind});
+                phi_node, phi, current_lowering_block_, phi_value_kind, temp_cleanup});
             return true;
         }
 

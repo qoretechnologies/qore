@@ -580,6 +580,16 @@ as a temporary's, and the IR interpreter borrows none of them as a method base. 
 holds a reference to a receiver read from a variable or a container while the call's arguments
 need evaluation (`QoreDotEvalOperatorNode::evalImpl()`). `LocalReadOverwrittenBeforeUse.qtest`.
 
+The AST interpreter gives the temporary arguments of a call to the callee's parameters, which
+it releases last parameter first when the callee returns. The compiled modes release the
+temporaries a call consumes in the same order: native code and the IR interpreter release them last
+argument first after a call that does not take them over (`QoreIRToLLVM::releaseConsumedCallArgs()`,
+the interpreter's `releaseConsumedCallArgs` and `consumeLastUseCallArgSlots()`), and a Phi of
+temporaries that are used by the Phi once, and otherwise only before it in their own block, takes
+their references over, so that it is a temporary the call consumes too
+(`interpreter_phi_takes_incoming`; native code: `consumable_phis`, whose cleanup slot takes the
+incoming temporary's slot over at the end of each predecessor). `CallArgumentReleaseOrder.qtest`.
+
 `benchmark_exec_modes.qr` (object_local, object_list_index, new_object_member, builtin_method,
 queue_cycle) measures these patterns in every mode.
 

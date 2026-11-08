@@ -2195,20 +2195,22 @@ static void markIRValueUse(std::vector<uint8_t>& uses, QoreIRValue value) {
 */
 static bool buildValueUseCounts(const QoreIRFunction& func,
         std::vector<uint32_t>& counts, std::vector<uint8_t>& dot_eval_only_bases,
-        std::vector<uint8_t>& consumed_call_args, ExceptionSink* xsink) {
+        std::vector<uint8_t>& consumed_call_args, std::vector<uint8_t>& phi_takes_incoming, ExceptionSink* xsink) {
     counts.assign(func.max_value_id + 1, 0);
     std::vector<uint8_t> dot_eval_base_candidates(counts.size(), 0);
     std::vector<uint8_t> non_dot_eval_uses(counts.size(), 0);
-    // values used as call arguments by a call in the block or the temp scope (the statement) that defines them,
-    // after the definition: a call in a try block is an invoke that ends its block, and its arguments are defined
-    // in the blocks before it; a loop invariant hoisted out of a loop is defined in a temp scope of its own
+    // values used as call arguments by a call in the block or the temp scope (the statement) that defines them: a
+    // call in a try block is an invoke that ends its block, and its arguments are defined in the blocks before it, as
+    // is an argument given by a Phi (c ? new T() : new T()); a loop invariant hoisted out of a loop is defined in a
+    // temp scope of its own
     std::vector<uint8_t> same_block_call_args(counts.size(), 0);
-    // the block and the temp scope defining each value seen so far
+    // the block and the temp scope defining each value
     std::vector<const QoreIRBasicBlock*> def_block(counts.size(), nullptr);
     std::vector<uint32_t> def_scope(counts.size(), 0);
     // values created by a call: the temporaries whose release is observable; a value loaded from a variable or a
     // constant is not a temporary, and the interpreter can read it again from its slot
     std::vector<uint8_t> def_by_call(counts.size(), 0);
+    std::vector<const QoreIRPhiInstruction*> phis;
     for (const auto& block : func.blocks) {
         for (const auto& inst_uptr : block->instructions) {
             const QoreIRInstruction* inst = inst_uptr.get();
@@ -2216,15 +2218,8 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 countIRValueUse(counts, operand);
             });
             int arg_start = qore_ir_call_arg_start(inst);
-            if (arg_start >= 0) {
-                for (size_t i = static_cast<size_t>(arg_start); i < inst->operands.size(); ++i) {
-                    QoreIRValue arg = inst->operands[i];
-                    if (arg.isValid() && arg.id < def_block.size() && def_by_call[arg.id]
-                            && (def_block[arg.id] == block.get()
-                                || (def_scope[arg.id] && def_scope[arg.id] == inst->temp_scope_id))) {
-                        same_block_call_args[arg.id] = 1;
-                    }
-                }
+            if (inst->opcode == QoreIROpcode::Phi && inst->result.isValid()) {
+                phis.push_back(static_cast<const QoreIRPhiInstruction*>(inst));
             }
 
             bool dot_eval = inst->opcode == QoreIROpcode::DotEvalMethodDirect
@@ -2249,6 +2244,72 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 def_block[inst->result.id] = block.get();
                 def_scope[inst->result.id] = inst->temp_scope_id;
                 def_by_call[inst->result.id] = arg_start >= 0;
+            }
+        }
+    }
+    // a Phi of temporaries used by the Phi only takes their references over (see takes_incoming), and is a
+    // temporary itself, which a call consumes as its argument as it consumes any temporary
+    // (f(new T(), c ? new T() : new T(), new T())), so that it is released with the other arguments, last argument
+    // first, as the AST interpreter releases the callee's parameters; a Phi of Phis is found by repeating
+    phi_takes_incoming.assign(counts.size(), 0);
+    // an incoming temporary is used by its Phi once, and otherwise only in the block that defines it, before the Phi
+    // (new T() ?? x tests the temporary before the Phi), so the Phi's slot can take its reference over
+    std::vector<uint32_t> phi_uses(counts.size(), 0);
+    std::vector<uint8_t> used_elsewhere(counts.size(), 0);
+    if (!phis.empty()) {
+        for (const auto& block : func.blocks) {
+            for (const auto& inst_uptr : block->instructions) {
+                const QoreIRInstruction* inst = inst_uptr.get();
+                bool phi_inst = inst->opcode == QoreIROpcode::Phi;
+                qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                    if (!operand.isValid() || operand.id >= counts.size()) {
+                        return;
+                    }
+                    if (phi_inst) {
+                        ++phi_uses[operand.id];
+                    } else if (def_block[operand.id] != block.get()) {
+                        used_elsewhere[operand.id] = 1;
+                    }
+                });
+            }
+        }
+    }
+    for (bool changed = true; changed;) {
+        changed = false;
+        for (const QoreIRPhiInstruction* phi : phis) {
+            uint32_t id = phi->result.id;
+            if (id >= def_by_call.size() || def_by_call[id] || phi->incoming.empty()) {
+                continue;
+            }
+            bool temps = true;
+            for (const auto& inc : phi->incoming) {
+                if (!inc.value.isValid() || inc.value.id >= counts.size() || !def_by_call[inc.value.id]
+                        || phi_uses[inc.value.id] != 1 || used_elsewhere[inc.value.id]) {
+                    temps = false;
+                    break;
+                }
+            }
+            if (temps) {
+                def_by_call[id] = 1;
+                phi_takes_incoming[id] = 1;
+                changed = true;
+            }
+        }
+    }
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_uptr : block->instructions) {
+            const QoreIRInstruction* inst = inst_uptr.get();
+            int arg_start = qore_ir_call_arg_start(inst);
+            if (arg_start < 0) {
+                continue;
+            }
+            for (size_t i = static_cast<size_t>(arg_start); i < inst->operands.size(); ++i) {
+                QoreIRValue arg = inst->operands[i];
+                if (arg.isValid() && arg.id < def_block.size() && def_by_call[arg.id]
+                        && (def_block[arg.id] == block.get()
+                            || (def_scope[arg.id] && def_scope[arg.id] == inst->temp_scope_id))) {
+                    same_block_call_args[arg.id] = 1;
+                }
             }
         }
     }
@@ -2281,7 +2342,9 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     std::vector<uint32_t> value_use_counts;
     std::vector<uint8_t> dot_eval_only_bases;
     std::vector<uint8_t> consumed_call_args;
-    if (!buildValueUseCounts(func, value_use_counts, dot_eval_only_bases, consumed_call_args, xsink)) {
+    std::vector<uint8_t> phi_takes_incoming;
+    if (!buildValueUseCounts(func, value_use_counts, dot_eval_only_bases, consumed_call_args, phi_takes_incoming,
+            xsink)) {
         return false;
     }
     std::vector<int32_t> operand_use_counts(func.max_value_id + 1, 0);
@@ -2434,6 +2497,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_value_use_counts = std::move(value_use_counts);
     func.interpreter_dot_eval_only_bases = std::move(dot_eval_only_bases);
     func.interpreter_consumed_call_args = std::move(consumed_call_args);
+    func.interpreter_phi_takes_incoming = std::move(phi_takes_incoming);
     func.interpreter_operand_use_counts = std::move(operand_use_counts);
     func.interpreter_param_slot_ids = std::move(param_slot_ids);
     func.interpreter_param_local_vars = std::move(param_local_vars);
@@ -5011,12 +5075,23 @@ static void consumeLastUseCallArgSlots(IRValueSlots& values, IRCleanupSlots& cle
         const std::unordered_map<uint32_t, int32_t>* borrowed_slots, ExceptionSink* xsink) {
     std::unordered_map<uint32_t, uint32_t> occurrences;
     countCallArgOccurrences(values, operands, start_index, value_use_counts, occurrences);
+    // last argument first, as the AST interpreter releases the parameters that took the arguments over when the
+    // callee returns (an argument given twice is released at its last position)
     uint32_t checked = 0;
-    for (const auto& [id, occurrences_in_args] : occurrences) {
+    for (size_t i = operands.size(); i > start_index; --i) {
         if (((++checked % 100) == 0)
                 && qore_check_cancel(xsink, "IR call argument cleanup")) {
             return;
         }
+        QoreIRValue operand = operands[i - 1];
+        auto it = operand.isValid() ? occurrences.find(operand.id) : occurrences.end();
+        if (it == occurrences.end()) {
+            continue;
+        }
+        uint32_t id = operand.id;
+        uint32_t occurrences_in_args = it->second;
+        // released once
+        occurrences.erase(it);
         if (value_use_counts[id] != occurrences_in_args) {
             continue;
         }
@@ -7381,14 +7456,17 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         if (arg_start < 0) {
             return;
         }
-        for (size_t i = static_cast<size_t>(arg_start); i < call_inst->operands.size(); ++i) {
+        // last argument first, as the AST interpreter releases the parameters that took the arguments over when the
+        // callee returns
+        size_t count = 0;
+        for (size_t i = call_inst->operands.size(); i > static_cast<size_t>(arg_start); --i) {
             // a cancelled release leaves the remaining arguments to the end of the statement (DiscardTemps)
-            if (i > static_cast<size_t>(arg_start) && !((i - arg_start) % 100)
+            if (count++ && !(count % 100)
                     && qore_check_cancel(xsink, "IR call argument cleanup")) {
                 return;
             }
-            uint32_t id = call_inst->operands[i].id;
-            if (!call_inst->operands[i].isValid() || id >= values.size() || id >= consumed_call_args.size()
+            uint32_t id = call_inst->operands[i - 1].id;
+            if (!call_inst->operands[i - 1].isValid() || id >= values.size() || id >= consumed_call_args.size()
                     || !consumed_call_args[id]
                     || !hasCleanupEntry(cleanup, id) || weak_load_temp_slots.count(id)
                     || (id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
@@ -7399,6 +7477,29 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             values[id] = QoreValue();
             // an exception raised by a destructor is added to any exception raised by the call, as in the AST
             v.discard(xsink);
+        }
+    };
+
+    // Sets the slot of a Phi to the value of its incoming operand: a temporary used by the Phi only gives the Phi its
+    // reference (see QoreIRFunction::interpreter_phi_takes_incoming), which makes the Phi a temporary that a call
+    // consumes as its argument; any other value is referenced again
+    const std::vector<uint8_t>& phi_takes_incoming = func.interpreter_phi_takes_incoming;
+    auto setPhiValue = [&](const QoreIRPhiInstruction* phi, QoreIRValue incoming) {
+        QoreValue val = getIRValue(values, incoming);
+        uint32_t id = incoming.id;
+        if (val.needsRef() && phi->result.id < phi_takes_incoming.size() && phi_takes_incoming[phi->result.id]
+                && id < values.size() && !weak_load_temp_slots.count(id)
+                && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)
+                && removeAllCleanupEntries(cleanup, id)) {
+            values[id] = QoreValue();
+            setValueSlot(values, phi->result.id, val, xsink);
+            cleanup.push_back(phi->result.id);
+            return;
+        }
+        QoreValue stored = val.needsRef() ? val.refSelf() : val;
+        setValueSlot(values, phi->result.id, stored, xsink);
+        if (stored.needsRef()) {
+            cleanup.push_back(phi->result.id);
         }
     };
 
@@ -7665,12 +7766,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupLocalCaches();
                     return false;
                 }
-                QoreValue val = getIRValue(values, incoming_value);
-                QoreValue stored = val.needsRef() ? val.refSelf() : val;
-                setValueSlot(values, phi->result.id, stored, xsink);
-                if (stored.needsRef()) {
-                    cleanup.push_back(phi->result.id);
-                }
+                setPhiValue(phi, incoming_value);
                 ++ip;
             }
         }
@@ -17092,12 +17188,7 @@ load_local_done:
                     }
                 }
                 if (found) {
-                    QoreValue val = getIRValue(values, incoming_value);
-                    QoreValue stored = val.needsRef() ? val.refSelf() : val;
-                    setValueSlot(values, phi->result.id, stored, xsink);
-                    if (stored.needsRef()) {
-                        cleanup.push_back(phi->result.id);
-                    }
+                    setPhiValue(phi, incoming_value);
                 }
                 ++ip;
                 break;

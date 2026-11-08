@@ -1095,8 +1095,22 @@ private:
         const QoreIRPhiInstruction* inst;
         const QoreIRBasicBlock* ir_block;
         QoreIRPhiValueKind value_kind;
+        //! the cleanup slot of a Phi of temporaries, which takes each incoming temporary's reference over at the end
+        //! of its predecessor (see consumable_phis); null for any other Phi
+        llvm::AllocaInst* temp_cleanup = nullptr;
     };
     std::vector<PendingPhi> pending_phis;
+
+    //! Phis of temporaries: QoreValue Phis whose every incoming value is used by the Phi only
+    /** When every incoming value owns its reference in a cleanup slot (a temporary, such as the result of a call or of
+        new), the Phi gets a cleanup slot of its own, which takes the reference over from the incoming value's slot at
+        the end of each predecessor: the Phi is then a temporary as the incoming values are, which a call consumes as
+        its argument as it consumes any temporary (f(new T(), c ? new T() : new T(), new T())).  Otherwise the
+        incoming slots kept their references until the end of the statement, after the temporaries that the call
+        consumed, which the AST interpreter releases last argument first when the call returns, as the callee's
+        parameters.
+    */
+    std::unordered_set<uint32_t> consumable_phis;
 
     // Pointer to current IR function being lowered (for reading type profiles)
     const QoreIRFunction* current_ir_func = nullptr;
@@ -1784,7 +1798,8 @@ private:
             llvm::Module& module);
 
     // Releases the temporary arguments of a call that the call consumes - their last use, in the block that
-    // defines them - as the AST interpreter releases the argument list of a call when it returns; \a use_pending
+    // defines them - last argument first, as the AST interpreter releases the parameters that took them over when
+    // the call returns; \a use_pending
     // is true when the uses of the call's operands have not been consumed yet (in an invoke lowerer).  Returns true
     // if any was released, as releasing can raise an exception
     bool releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::Module& module, bool use_pending);

@@ -3811,6 +3811,9 @@ public:
     //! call arguments that the call consumes: their only use is a call in the block that defines them, so the value
     //! cannot be needed again (a later execution of the block recomputes it first)
     mutable std::vector<uint8_t> interpreter_consumed_call_args;
+    //! Non-zero for the result of a Phi of temporaries used by the Phi only: the Phi's slot takes the incoming
+    //! temporary's reference over, and the Phi is a temporary that a call consumes as its argument
+    mutable std::vector<uint8_t> interpreter_phi_takes_incoming;
     mutable std::vector<int32_t> interpreter_operand_use_counts;
     mutable std::vector<uint32_t> interpreter_param_slot_ids;
     mutable std::vector<const LocalVar*> interpreter_param_local_vars;
