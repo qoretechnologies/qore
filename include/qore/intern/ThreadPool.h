@@ -275,6 +275,9 @@ protected:
     */
     bool notify_pending = false;
 
+    //! Set by notifySlotReleased() with \a m held when a slot of \a sbx was released for this waiting pool
+    bool slot_notified = false;
+
     //! Registers this pool as waiting for a slot of \a sbx while it exists; must be created with \a m held
     /** It is registered before the pool tries to take a slot, so that a slot released after a failed attempt always
         notifies it; see notifySlotReleased().
@@ -314,7 +317,8 @@ protected:
         if (notify_pending) {
             notify_pending = false;
             sl.unlock();
-            sbx->notifyThreadSlotReleased();
+            // this pool released the slot itself: it does not need to be woken for it
+            sbx->notifyThreadSlotReleased(this);
             sl.lock();
         }
     }
@@ -397,8 +401,10 @@ protected:
         bool new_worker = false;
         // registers the pool as waiting for a slot while it waits for one
         SlotWaitRegistration slot_wait(*this);
+        // false after a failed attempt that this pool's own release followed, until a slot may be free again
+        bool try_slot = true;
         while (!stopflag && fh.empty()) {
-            if (!max || (int)ah.size() < max) {
+            if (try_slot && (!max || (int)ah.size() < max)) {
                 // register before trying, so that a slot released after a failed attempt wakes this pool
                 if (sbx && !reserved) {
                     slot_wait.set();
@@ -410,15 +416,20 @@ protected:
                 // the sandbox thread limit is reached: wait for a busy worker of the pool to become free, as when
                 // max is reached, or for another thread of the sandbox to release a slot (notifySlotReleased())
             }
-            // wake the other waiting pools first if a slot was released with the lock held; the loop condition is
-            // checked again after the lock was released
+            // wake the other waiting pools first if a slot was released with the lock held (the rollback of a
+            // composition that could not take a slot of every member); the loop condition is checked again after the
+            // lock was released, and a slot is tried again only if another thread released one meanwhile, so that a
+            // failed attempt and its own release cannot repeat without end
             if (notify_pending) {
+                slot_notified = false;
                 flushSlotNotification(sl);
+                try_slot = slot_notified;
                 continue;
             }
             waiting = true;
             cond.wait(m);
             waiting = false;
+            try_slot = true;
         }
 
         if (stopflag) {
@@ -615,7 +626,10 @@ public:
     /** Must be called without any pool lock held, as it takes the lock of each waiting pool; called by
         QoreSandboxManager::releaseThreadSlot() and by pools after a quiet release.
     */
-    DLLLOCAL static void notifySlotReleased(QoreSandboxManager* sm);
+    /** @param sm the manager whose slot was released
+        @param except a pool not to wake, or nullptr
+    */
+    DLLLOCAL static void notifySlotReleased(QoreSandboxManager* sm, const AbstractPrivateData* except = nullptr);
 };
 
 #endif

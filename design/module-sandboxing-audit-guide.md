@@ -603,7 +603,8 @@ Program can therefore cause concurrent execution through module code. What bound
 
 - A thread started on behalf of a sandboxed caller (`background`, `q_start_thread()`, `call_async()`,
   `parallel_map()`, `parallel_foreach()`) inherits the caller's `QoreSandboxManager`: filesystem and network policy,
-  interrupts, cancellation scope and the thread limit (see [thread-sandbox-inheritance.md](thread-sandbox-inheritance.md)).
+  interrupts, cancellation scope and the thread limit (see
+  [thread-sandbox-inheritance.md](thread-sandbox-inheritance.md)).
 - `SandboxManager::setMaxThreads()` bounds how many threads are started on behalf of sandboxed code. A sandbox has no
   thread limit unless the host sets one, so hosts that run sandboxed code must set it. The threads of a `ThreadPool`
   count against the sandbox of the Program that created the pool; a module's Program has the sandbox of the Program

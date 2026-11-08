@@ -68,7 +68,8 @@ list<auto> sub start_blocked(int n, Queue gate) {
 
     constructor() : QUnit::Test("ThreadPool thread limit", "1.0", \ARGV) {
         addTestCase("the workers of a pool count against its creator's sandbox", \testWorkersCount());
-        addTestCase("the limit refuses a task in the submitting code when the pool has no worker", \testSubmitRefused());
+        addTestCase("the limit refuses a task in the submitting code when the pool has no worker",
+            \testSubmitRefused());
         addTestCase("a restricted Program cannot exceed its limit with a pool", \testRestricted());
         addTestCase("idle workers beyond the limit are not started", \testMinIdle());
         addTestCase("the workers stop counting when the pool stops", \testRelease());
@@ -79,8 +80,12 @@ list<auto> sub start_blocked(int n, Queue gate) {
         addTestCase("workers that leave the pool after each task release their slots", \testWorkerLeaves());
         addTestCase("stopping a pool whose tasks wait for a slot", \testStopWaiting());
         addTestCase("a pool created by a module counts against the module Program's sandbox", \testModulePool());
-        addTestCase("a slot released by another thread of the sandbox wakes a waiting pool", \testSlotReleasedElsewhere());
-        addTestCase("a task waiting for a slot can be submitted by a task of the same pool", \testNestedSubmit());
+        addTestCase("a slot released by another thread of the sandbox wakes a waiting pool",
+            \testSlotReleasedElsewhere());
+        addTestCase("a task waiting for a slot can be submitted by a task of the same pool",
+            \testNestedSubmit());
+        addTestCase("raising the thread limit wakes a waiting pool", \testLimitRaised());
+        addTestCase("a slot that another pool releases wakes a waiting pool", \testOtherPoolWakes());
         set_return_value(main());
     }
 
@@ -431,10 +436,13 @@ sub submit(ThreadPool tp, Queue started, Queue gate, Queue result, int i) {
         p.callFunction("submit", tp, started, gate, result, 1);
         started.get(60s);
         Queue stopped();
+        date start = now_us();
         int tid = background (sub () { tp.stop(); stopped.push(True); })();
         on_exit thread_join(tid);
         release(gate, 2);
         assertEq(True, stopped.get(60s), "stop() returns");
+        # the pool's thread stops at once instead of waiting idle_release_timeout (5s) to retry getting a worker
+        assertLt(4s, now_us() - start, "stop() does not wait to retry");
         list<string> outcomes = (result.get(60s), result.get(60s));
         assertEq("ran", outcomes[0], "the running task ends");
         assertTrue(outcomes[1] == "ran" || outcomes[1] == "cancelled", "the waiting task runs or is cancelled");
@@ -541,5 +549,67 @@ sub run(ThreadPool tp, Queue started, Queue result) {
         joinAll(probe_threads);
         probe_threads = ();
         assertEq("inner", result.get(60s), "the inner task runs once a slot is free");
+    }
+
+    testLimitRaised() {
+        # the pool's own thread and a busy worker fill the limit, and a second task waits
+        SandboxManager sm();
+        sm.setMaxThreads(2);
+        Program p = getPoolProgram(sm);
+        ThreadPool tp = p.callFunction("make_pool", 4);
+        Queue started();
+        Queue gate();
+        on_exit {
+            release(gate, 2);
+            tp.stopWait();
+        }
+        assertEq((True, True), p.callFunction("submit", tp, 2, started, gate));
+        started.get(60s);
+        # the host raises the limit: the waiting task gets a worker while the first one stays busy
+        sm.setMaxThreads(3);
+        assertEq(True, started.get(60s), "the waiting task starts when the limit is raised");
+    }
+
+    testOtherPoolWakes() {
+        # two pools in one sandbox: pool A's thread and worker, and pool B's thread and worker fill a limit of 4; B's
+        # second task waits until A releases a slot, either because A's worker leaves A after its task or because A
+        # stops
+        foreach string how in (("worker-leaves", "stop")) {
+            SandboxManager sm();
+            sm.setMaxThreads(4);
+            Program p(PO_NEW_STYLE);
+            # pool A keeps no idle worker (max_idle_threads 0, idle_release_timeout 0), so its worker leaves after its
+            # task
+            p.parse(PoolSource + "ThreadPool sub make_leaving_pool() { return new ThreadPool(1, 0, 0, 0); }", "pools");
+            p.setSandboxManager(sm);
+            Program probe = getProbe(sm);
+            ThreadPool a = p.callFunction("make_leaving_pool");
+            ThreadPool b = p.callFunction("make_pool", 4);
+            Queue a_started();
+            Queue a_gate();
+            Queue b_started();
+            Queue b_gate();
+            on_exit {
+                release(a_gate, 1);
+                release(b_gate, 2);
+                a.stopWait();
+                b.stopWait();
+            }
+            assertEq((True,), p.callFunction("submit", a, 1, a_started, a_gate), how);
+            a_started.get(60s);
+            assertEq((True, True), p.callFunction("submit", b, 2, b_started, b_gate), how);
+            b_started.get(60s);
+            assertEq(0, freeSlots(probe, 1), how + ": the pools hold all slots");
+            # A's task ends; A releases its worker's slot (it leaves A), or A stops and releases both of its slots
+            a_gate.push(True);
+            if (how == "stop") {
+                a.stopWait();
+            }
+            assertEq(True, b_started.get(60s), how + ": B's waiting task starts when A releases a slot");
+            release(b_gate, 2);
+            a.stopWait();
+            b.stopWait();
+            assertEq(4, freeSlots(probe, 5), how + ": the slots are free after the pools stopped");
+        }
     }
 }

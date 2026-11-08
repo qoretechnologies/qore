@@ -626,11 +626,12 @@ sm.setMaxStackSize(1024 * 1024);
     - creating a pool when the sandbox has no free thread slot raises \c THREAD-CREATION-FAILURE in the code that
       creates it
     - a pool does not start more workers than the sandbox has free slots: its queued tasks then wait until one of its
-      busy workers becomes free or another thread of the sandbox ends, and a task submitted to a pool that has no
-      worker and cannot start one is refused with \c THREAD-CREATION-FAILURE in the code that submits it
+      busy workers becomes free, another thread of the sandbox ends or the limit is raised, and a task submitted to
+      a pool that has no worker and cannot start one is refused with \c THREAD-CREATION-FAILURE in the code that submits it
     - an idle worker keeps its slot until the pool releases it (see \c max_idle_threads and \c idle_release_timeout
       in @ref Qore::Thread::ThreadPool::constructor() "ThreadPool::constructor()"); a worker stops counting when it
-      leaves the pool, and the pool's own thread when the pool has stopped
+      leaves the pool, and the pool's own thread when the pool has stopped, before it runs the cancellation code of
+      the tasks still queued
 
     The threads of a pool created by a %Program without a sandbox manager are not counted, as they serve every
     caller; each task runs under the sandbox of the code that submitted it.

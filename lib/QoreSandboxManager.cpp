@@ -1083,6 +1083,8 @@ static T sandbox_intersection_limit(const QoreSandboxManager* manager, T own,
 
 void QoreSandboxManager::setMaxThreads(int count) {
     max_threads = count;
+    // a raised limit frees slots for the thread pools waiting for one
+    notifyThreadSlotReleased();
 }
 
 int QoreSandboxManager::getMaxThreads() const {
@@ -1204,7 +1206,7 @@ void ThreadPool::unregisterSlotWaiter(ThreadPool* tp) {
     assert(false);
 }
 
-void ThreadPool::notifySlotReleased(QoreSandboxManager* sm) {
+void ThreadPool::notifySlotReleased(QoreSandboxManager* sm, const AbstractPrivateData* except) {
     if (!slot_waiter_count.load(std::memory_order_seq_cst)) {
         return;
     }
@@ -1214,14 +1216,17 @@ void ThreadPool::notifySlotReleased(QoreSandboxManager* sm) {
         std::lock_guard<std::mutex> lck(slot_waiters_lock);
         auto range = slot_waiters.equal_range(sm);
         for (auto i = range.first; i != range.second; ++i) {
-            i->second->ref();
-            pools.push_back(i->second);
+            // a pool being destroyed (no references left) cannot use a slot; never revive it
+            if (static_cast<const AbstractPrivateData*>(i->second) != except && i->second->optRef()) {
+                pools.push_back(i->second);
+            }
         }
     }
     ExceptionSink xsink;
     for (ThreadPool* tp : pools) {
         {
             AutoLocker al(tp->m);
+            tp->slot_notified = true;
             tp->cond.signal();
         }
         tp->deref(&xsink);
@@ -1233,12 +1238,12 @@ void QoreSandboxManager::releaseThreadSlot() {
     notifyThreadSlotReleased();
 }
 
-void QoreSandboxManager::notifyThreadSlotReleased() {
+void QoreSandboxManager::notifyThreadSlotReleased(const AbstractPrivateData* except) {
     // a thread pool waiting for a slot of this manager, or of a member of this composition, can start a worker now
-    ThreadPool::notifySlotReleased(this);
+    ThreadPool::notifySlotReleased(this, except);
     if (const auto* managers = QoreSandboxComposition::members(this)) {
         for (auto* manager : *managers) {
-            ThreadPool::notifySlotReleased(manager);
+            ThreadPool::notifySlotReleased(manager, except);
         }
     }
 }

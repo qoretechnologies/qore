@@ -866,8 +866,11 @@ private:
 
     //! Wakes the thread pools waiting for a slot of this manager or of a member of this composition
     /** Must not be called with the lock of a ThreadPool held
+
+        @param except a pool not to wake: the pool that released slots itself, which retries only when another
+        thread released one
     */
-    DLLLOCAL void notifyThreadSlotReleased();
+    DLLLOCAL void notifyThreadSlotReleased(const AbstractPrivateData* except = nullptr);
 };
 
 //! RAII helper that acquires a ref'd sandbox manager for the current running program

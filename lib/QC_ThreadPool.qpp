@@ -325,8 +325,8 @@ ThreadPool tp(max_threads: 10, min_idle_threads: 2, max_idle_threads: 4);
     @ref Qore::SandboxManager "SandboxManager" (its own thread and its workers, also idle ones) count against the
     thread limit of that sandbox (@ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()"): the
     pool does not start more workers than the sandbox has free thread slots, and its queued tasks then wait until one
-    of its busy workers becomes free or another thread of the sandbox ends; see @ref sandbox_resources.  Each task runs under the sandbox of the code that submitted
-    it.
+    of its busy workers becomes free, another thread of the sandbox ends or the limit is raised; see
+    @ref sandbox_resources.  Each task runs under the sandbox of the code that submitted it.
 
     @since %Qore 0.8.8
  */
