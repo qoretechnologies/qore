@@ -1823,6 +1823,10 @@ def cmd_verify(args):
                 raise CacheError(reason)
             if sha256_file(qmod) != entry["files"]["qmod"]:
                 raise CacheError("it is not the module the cache supplied")
+            # the loader decides from the depfile and the fingerprints whether the module is current
+            for suffix in (".d", ".d.fingerprints"):
+                if sha256_file(qmod + suffix) != entry["files"][suffix]:
+                    raise CacheError("its %s is not the one the cache supplied" % suffix)
             target, deps = read_depfile(qmod + ".d")
             if os.path.abspath(target) != os.path.abspath(qmod):
                 raise CacheError("its dependency file names '%s'" % target)

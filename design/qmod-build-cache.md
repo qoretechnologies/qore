@@ -189,8 +189,10 @@ After the build, `qore-qmod-cache.py verify --build-dir build --qcc build/qcc --
 - qcc reports another identity than the build's `qore_aot_runtime_identity.h`;
 - any qmod of the build (supplied, compiled, or one the cache did not see) does not contain the build's identity, or
   its sidecar records another one;
-- a module the cache supplied is no longer the module it supplied, its depfile names another module or lists other
-  dependencies, a dependency changed after the module was supplied, or its unavailable optional modules differ.
+- a module the cache supplied is no longer the module it supplied, its depfile or source fingerprints are not the ones
+  it supplied (the loader decides from them whether the module is current), its depfile names another module or
+  lists other dependencies, a dependency changed after the module was supplied, or its unavailable optional modules
+  differ.
 
 ### Key holes: a failed audit or a key collision
 

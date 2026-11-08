@@ -964,6 +964,19 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertEqual(1, res.returncode)
         self.assertIn("AOT runtime identity", res.stderr)
         qmod.write_bytes(data)
+        # the fingerprints or the depfile of a supplied module changed afterwards, even where the depfile still lists
+        # the same files: the loader decides from them whether the module is current
+        for suffix, change in ((".d.fingerprints", lambda t: t.replace(" 0000000000000000 ", " 0000000000000001 ", 1)),
+                               (".d", lambda t: t + "\n")):
+            side = Path(str(qmod) + suffix)
+            text = side.read_text()
+            side.write_text(change(text))
+            self.assertNotEqual(text, side.read_text())
+            res = self.verify()
+            self.assertEqual(1, res.returncode, suffix)
+            self.assertIn("its %s is not the one the cache supplied" % suffix, res.stderr)
+            side.write_text(text)
+        self.assertEqual(0, self.verify().returncode)
         # a dependency changed after the module was supplied
         base = self.source / "qlib" / "Base.qm"
         base.write_text(base.read_text() + "#\n")
