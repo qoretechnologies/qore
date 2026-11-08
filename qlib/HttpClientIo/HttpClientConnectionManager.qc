@@ -1821,7 +1821,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         # Tear down any in-flight async happy-eyeballs races: cancel the race
         # timers (their closures retain a self-ref until cancelled, which would
         # otherwise defer this manager's destruction) and close
-        # the not-yet-pooled H3/H2 candidates so the cancelByOwner() barrier
+        # the not-yet-pooled H3/H2/H1 candidates so the cancelByOwner() barrier
         # below has nothing left to leak.
         {
             AutoLock al(async_race_lock);
@@ -1831,10 +1831,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                     continue;
                 }
                 heAbandonTimers(race);
-                try { race.h3conn.close(); } catch (hash<ExceptionInfo> ex) {}
-                if (race.h2conn) {
-                    try { race.h2conn.close(); } catch (hash<ExceptionInfo> ex) {}
-                }
+                heCloseLegs(race.h3conn, race.h2conn, race.h1conn);
             }
             remove async_races;
         }

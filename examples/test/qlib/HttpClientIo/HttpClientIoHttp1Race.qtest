@@ -389,6 +389,7 @@ public class HttpClientIoHttp1RaceTest inherits QUnit::Test {
         addTestCase("HTTP/1.1 is raced against HTTP/3 when HTTP/2 is refused via ALPN", \http1RacedTest());
         addTestCase("the HTTP/1.1 candidate of an async race is a race leg until it wins", \asyncRaceLegTest());
         addTestCase("abandoning an async race closes its HTTP/1.1 candidate", \abandonRaceTest());
+        addTestCase("closing the manager during an async race closes its HTTP/1.1 candidate", \closeAllRaceTest());
         addTestCase("a failed HTTP/1.1 candidate waits for HTTP/3 and every error is reported",
             \failedHttp1WaitsForHttp3Test());
         set_return_value(main());
@@ -519,6 +520,43 @@ public class HttpClientIoHttp1RaceTest inherits QUnit::Test {
                 sprintf("the %s candidate is closed", protocol));
             assertFalse(mgr.isUnresolvedRaceLeg(candidates[0]),
                 sprintf("the %s candidate of an abandoned race is no race leg", protocol));
+        }
+        assertEq(0, server.getRequestCount(), "no request was made");
+    }
+
+    #! Closing the manager while an async race's HTTP/1.1 candidate is connecting closes every candidate
+    /** closeAll() closed the HTTP/3 and HTTP/2 candidates of an unresolved race, but not its HTTP/1.1 candidate,
+        which was left connecting
+    */
+    closeAllRaceTest() {
+        Http1OnlyServer server();
+        on_exit server.stop();
+        server.hold(2);
+        RaceRecordingManager mgr = getManager(LongConnectTimeout);
+        bool closed;
+        on_exit if (!closed) {
+            mgr.closeAll();
+        }
+        string url = server.getUrl();
+
+        *HttpClientIo::HttpClientConnection conn;
+        *EventNotifier n = mgr.acquireConnectionAsync(url, \conn);
+        *HttpClientIo::HttpClientConnection h1 = driveUntilH1RaceLeg(mgr, url, \n, \conn);
+        # a failed assertion ends the test case
+        assertTrue(exists h1, "the race started an HTTP/1.1 candidate, which is a race leg");
+        server.waitForConnection(2);
+        assertEq(HttpClientIo::HttpClientConnectionState::Connecting, h1.getConnectionState(),
+            "HTTP/1.1 is connecting");
+
+        closed = True;
+        mgr.closeAll();
+        assertEq(0, mgr.getRaceCount(), "the race was torn down");
+        assertFalse(h1.getSocket().isOpen(), "the socket of the HTTP/1.1 candidate is closed");
+        foreach string protocol in (("h3", "h2", "h1")) {
+            list<HttpClientIo::HttpClientConnection> candidates = mgr.getCandidates(protocol);
+            assertEq(1, candidates.size(), sprintf("one %s candidate", protocol));
+            assertEq(HttpClientIo::HttpClientConnectionState::Closed, candidates[0].getConnectionState(),
+                sprintf("the %s candidate is closed", protocol));
         }
         assertEq(0, server.getRequestCount(), "no request was made");
     }
