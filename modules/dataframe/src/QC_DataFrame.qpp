@@ -351,10 +351,14 @@ static int qdfCallObjectBoolMethod(QoreObject* obj, const char* method,
 
 // writes the DataFrame with a SqlUtil table object for the driver of the datasource
 // @param table_out the SqlUtil table object, set when the rows must be written with an INSERT statement instead,
-// because the table is not visible to SqlUtil (ex: a temporary table) or its bulk insert failed for the first block
+// because the table is not visible to SqlUtil (ex: a temporary table)
 //
 // @return 0 if the rows were written, 1 if they must be written with an INSERT statement made with the SQL names
 // from \a table_out, -1 if an exception was raised
+//
+// An error of a statement that SqlUtil executes (the existence check or a bulk insert) is raised unchanged: the
+// transaction belongs to the caller, which this function cannot roll back, and a database such as PostgreSQL aborts
+// the transaction on an error, so a fallback statement would only fail with an error that hides the real one.
 static int qdfTryGenericBulkInsert(QoreProgram* pgm, QoreObject* ds,
         const std::string& table_name, const QoreHashNode* options,
         const std::vector<Column>& columns, int64_t n_rows, int64_t block_size,
@@ -423,16 +427,13 @@ static int qdfTryGenericBulkInsert(QoreProgram* pgm, QoreObject* ds,
 
     bool exists = false;
     if (qdfCallObjectBoolMethod(*table, "checkExistence", exists, xsink)) {
-        xsink->clear();
-        table_out = table.release();
-        return 1;
+        return -1;
     }
     if (!exists) {
         table_out = table.release();
         return 1;
     }
 
-    bool inserted_any = false;
     for (int64_t start = 0; start < n_rows; start += block_size) {
         if (qore_check_cancel(xsink, "writing DataFrame to table")) {
             return -1;
@@ -444,14 +445,8 @@ static int qdfTryGenericBulkInsert(QoreProgram* pgm, QoreObject* ds,
             return -1;
         }
         if (qdfCallObjectMethod(*table, "bulkInsert", data.release(), xsink)) {
-            if (!inserted_any) {
-                xsink->clear();
-                table_out = table.release();
-                return 1;
-            }
             return -1;
         }
-        inserted_any = true;
     }
 
     return 0;
@@ -1620,10 +1615,16 @@ nothing DataFrame::writeParquet(string path, *hash<ParquetWriteOptions> options)
     Column names from the DataFrame are used as the column list. The method writes
     through SqlUtil::AbstractTable bulk inserts, allowing each driver to use its
     native bulk DML / array-bind support or SqlUtil's emulation. If SqlUtil cannot
-    see the table (for example, a temporary table) or its bulk insert of the first
-    block fails, the method writes the rows with a prepared insert statement when
-    possible and otherwise with per-row \c exec() calls, with the table and
-    column names written in the SQL dialect of the driver as SqlUtil writes them.
+    see the table (for example, a temporary table), the method writes the rows with
+    a prepared insert statement when possible and otherwise with per-row \c exec()
+    calls, with the table and column names written in the SQL dialect of the driver
+    as SqlUtil writes them.
+
+    If a statement that SqlUtil executes fails (the check whether the table exists,
+    or the bulk insert of any block), its exception is raised unchanged and no other
+    statement is executed: the transaction belongs to the caller, which can roll it
+    back, and a database such as PostgreSQL aborts the transaction on an error, so
+    any further statement would fail with an error that hides the real one.
 
     The table name and the column names are written into the SQL text, so each
     must be a plain SQL identifier: a letter or \c _, followed only by letters,
@@ -1645,8 +1646,8 @@ nothing DataFrame::writeParquet(string path, *hash<ParquetWriteOptions> options)
     ds.commit();
     @endcode
 
-    @throw DATAFRAME-DB-ERROR if the INSERT fails, the table name or a column name is not a plain SQL identifier,
-    or the SqlUtil module cannot be loaded
+    @throw DATAFRAME-DB-ERROR the table name or a column name is not a plain SQL identifier, or the SqlUtil module
+    cannot be loaded
 */
 nothing DataFrame::toTable(object ds, string table_name, *hash<auto> options) [dom=DATABASE] {
     if (qore_check_cancel(xsink, "writing DataFrame to table")) {

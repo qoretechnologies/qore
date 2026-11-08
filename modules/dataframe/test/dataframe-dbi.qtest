@@ -63,12 +63,15 @@ class DataFrameDbiTest inherits QUnit::Test {
 
         string table = sprintf("qdfdbi%d", getpid());
         string out_table = sprintf("qdfdbo%d", getpid());
+        string key_table = sprintf("qdfdbk%d", getpid());
         on_exit {
+            execIgnore(ds, "DROP TABLE " + key_table);
             execIgnore(ds, "DROP TABLE " + out_table);
             execIgnore(ds, "DROP TABLE " + table);
             ds.close();
         }
 
+        execIgnore(ds, "DROP TABLE " + key_table);
         execIgnore(ds, "DROP TABLE " + out_table);
         execIgnore(ds, "DROP TABLE " + table);
 
@@ -98,6 +101,29 @@ class DataFrameDbiTest inherits QUnit::Test {
             "SELECT id, name, score FROM " + out_table + " ORDER BY id");
         assertEq(("Ada", "Bo", "Cy"), cast<list<string>>(getColumn(out, "name")),
             label + " toTable round-trip preserves strings");
+
+        # a bulk insert that fails raises the error of the database, not the error of a fallback statement: a
+        # database such as PostgreSQL aborts the transaction on an error, so a fallback would fail with "current
+        # transaction is aborted"
+        ds.exec("CREATE TABLE " + key_table + " (id integer primary key, name varchar(80))");
+        ds.exec("INSERT INTO " + key_table + " (id, name) VALUES (1, 'Ada')");
+        ds.commit();
+        DataFrame::DataFrame dup({"id": (2, 1), "name": ("Bo", "Ada again")});
+        try {
+            dup.toTable(ds, key_table);
+            ds.commit();
+            assertTrue(False, label + " toTable() of a duplicate key raises an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            ds.rollback();
+            string err = ex.err + ": " + ex.desc;
+            assertRegex("duplicate|unique|primary key", err.lwr(),
+                label + " toTable() raises the duplicate key error of the database");
+            assertFalse(err =~ /current transaction is aborted/i,
+                label + " toTable() does not hide the error behind a fallback statement");
+        }
+        list<int> ids = cast<list<int>>(getColumn(DataFrame::DataFrame::fromQuery(ds,
+            "SELECT id FROM " + key_table + " ORDER BY id"), "id"));
+        assertEq((1,), ids, label + " the caller rolled back the failed toTable()");
     }
 
     private verifyConnstr(string label, *string connstr) {
