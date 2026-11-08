@@ -4,9 +4,11 @@ exceeds its time limit.
 
 run_tests.sh runs a tree of its own with a stand-in for qore that runs each test file with Python, so a test is a
 Python script that does what the case needs: it records what the runner gives it, reports events through the FIFO,
-handles or blocks signals, or hangs.  The time limits are real, a few seconds each.  The runner tested is
-QORE_RUN_TESTS_SH if set (to show that a case fails with an older run_tests.sh), else the one in this tree.  Core
-dumps are disabled for the runner and the tests: its "ulimit -c unlimited" cannot raise the hard limit of 0.
+handles or ignores signals, or hangs.  The time limits are real, a few seconds each.  The cases of SignalQoreTest run
+qore tests with the qore of the build in QORE_TEST_BUILD_DIR, or in build/ in this tree, and are skipped without one.
+The runner tested is QORE_RUN_TESTS_SH if set (to show that a case fails with an older run_tests.sh), else the one in
+this tree.  Core dumps are disabled for the runner and the tests: its "ulimit -c unlimited" cannot raise the hard
+limit of 0.
 
 Copyright (C) 2026 Qore Technologies, s.r.o.
 """
@@ -16,7 +18,7 @@ from pathlib import Path
 import re
 import resource
 import shutil
-import stat
+import signal
 import subprocess
 import sys
 import tempfile
@@ -30,15 +32,21 @@ RUN_TESTS = Path(os.environ.get("QORE_RUN_TESTS_SH", str(ROOT / "run_tests.sh"))
 # the commands run_tests.sh times a test with: GNU or BusyBox timeout, or GNU timeout as gtimeout (macOS)
 HAVE_TIMEOUT = bool(shutil.which("timeout") or shutil.which("gtimeout"))
 
+# the build whose qore runs the qore tests
+BUILD_DIR = Path(os.environ.get("QORE_TEST_BUILD_DIR", str(ROOT / "build")))
+LIBQORE = next((BUILD_DIR / name for name in ("libqore.so", "libqore.dylib") if (BUILD_DIR / name).exists()), None)
+HAVE_QORE = (BUILD_DIR / "qore").exists() and LIBQORE is not None
+
 
 def no_core_dumps():
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
 
 class RunnerTree:
-    """A tree that run_tests.sh runs in, with Python scripts as its tests"""
+    """A tree that run_tests.sh runs in, with Python scripts as its tests, or qore scripts with the qore of the build"""
 
-    def __init__(self, directory):
+    def __init__(self, directory, qore=False):
+        self.qore = qore
         self.root = Path(directory)
         self.bin = self.root / "bin"
         self.bin.mkdir()
@@ -52,6 +60,8 @@ class RunnerTree:
         self.tmp = self.root / "tmp"
         self.tmp.mkdir()
         (self.bin / "libqore.so").touch()
+        # the modules of the qore tests: QUnit from the source of this tree (QORE_TEST_SOURCE_MODULES below)
+        (self.root / "qlib").symlink_to(ROOT / "qlib")
         # qore: runs the test file it is given with Python, in the same process
         self.write_script("qore", f"""\
             #!/bin/sh
@@ -95,6 +105,12 @@ class RunnerTree:
             "CORE_DIR": str(self.cores),
             "TREE": str(self.root),
         }
+        if self.qore:
+            env.update({
+                "QORE_BINARY": str(BUILD_DIR / "qore"),
+                "LIBQORE_BINARY": str(LIBQORE),
+                "QORE_TEST_SOURCE_MODULES": "1",
+            })
         env.update(variables)
         return env
 
@@ -108,6 +124,15 @@ class RunnerTree:
         result = self.run_shell('exec sh "$RUN_TESTS"', timeout, **variables)
         result.output = result.stdout + result.stderr
         return result
+
+    @staticmethod
+    def sections(output):
+        """Returns the output of each test, by the name of its file"""
+        sections = {}
+        for part in output.split("Running test (")[1:]:
+            name = part.split("\n", 1)[0].rsplit("/", 1)[-1]
+            sections[name] = part.split("*************************************", 1)[0]
+        return sections
 
     def break_fifo(self):
         """Makes the event FIFO of the runner fail: another runner removes it between this runner's mkfifo and its
@@ -300,6 +325,216 @@ class WatchdogReadTest(unittest.TestCase):
         self.assertNotIn("test ran to its end", result.output)
         self.assertRegex(result.output, r"run_with_watchdog: 124 WATCHDOG_TEST_EXIT=134 WATCHDOG_TIMED_OUT=1 "
                                         r"WATCHDOG_ERROR=1")
+
+
+# A test that hangs until it is ended; it reports through the event FIFO and handles SIGUSR1 as its parameters say:
+# REPORT is the process ID it reports as having the handler ("" for none, "self" for its own), HANDLE is "handler"
+# (prints "call stacks printed" and reports "dumped"), "ignore" or "default", and MASKS is a list of the
+# (SigBlk, SigCgt) masks of its threads in a /proc tree of its own (QORE_TEST_PROC), made before it reports
+HANGING_TEST = """\
+    # test-timeout: 3
+    import os
+    import signal
+    import time
+    REPORT = {report!r}
+    HANDLE = {handle!r}
+    MASKS = {masks!r}
+    fifo = os.environ["QORE_TEST_EVENT_FIFO"]
+
+    def report(event):
+        fd = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+        os.write(fd, (event + "\\n").encode())
+        os.close(fd)
+
+    def stacks(sig, frame):
+        print("call stacks printed", flush=True)
+        report("dumped")
+
+    if HANDLE == "handler":
+        signal.signal(signal.SIGUSR1, stacks)
+    elif HANDLE == "ignore":
+        signal.signal(signal.SIGUSR1, signal.SIG_IGN)
+    if MASKS is not None:
+        task = os.path.join(os.environ["QORE_TEST_PROC"], str(os.getpid()), "task")
+        os.makedirs(task)
+        for i, (blocked, caught) in enumerate(MASKS):
+            os.makedirs(os.path.join(task, str(i + 1)))
+            with open(os.path.join(task, str(i + 1), "status"), "w") as f:
+                f.write("Name:\\tpython\\nSigQ:\\t0/1000\\nSigPnd:\\t0000000000000000\\nShdPnd:\\t0000000000000000\\n"
+                        "SigBlk:\\t%s\\nSigIgn:\\t0000000000000000\\nSigCgt:\\t%s\\n" % (blocked, caught))
+    if REPORT:
+        report("handler %d" % (os.getpid() if REPORT == "self" else int(REPORT)))
+    print("test hangs", flush=True)
+    while True:
+        time.sleep(600)
+"""
+
+# the masks of a thread that blocks or catches SIGUSR1, and of one that does neither
+USR1 = format(1 << (signal.SIGUSR1 - 1), "016x")
+NONE = "0" * 16
+
+
+@unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")
+class SignalTest(unittest.TestCase):
+    """A test that exceeds its time limit is sent SIGUSR1 only when the signal cannot end it; otherwise it is aborted
+    at once (SIGABRT), so that it dumps core
+
+    SIGUSR1 ended a test that did not handle it, with no core dump and no call stacks, as one that hung before QUnit had
+    installed its handler.
+    """
+
+    def run_tests(self, tests, proc=None, **variables):
+        """Runs the given tests ({file: (report, handle, masks)}); returns the output of each test and the result"""
+        with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
+            tree = RunnerTree(directory)
+            for name, (report, handle, masks) in tests.items():
+                tree.add_test(name, HANGING_TEST.format(report=report, handle=handle, masks=masks))
+            if proc is not None:
+                # a /proc tree of the tests' own: empty, so the thread masks of no process can be read, unless a test
+                # makes its own
+                (tree.root / "proc").mkdir()
+                variables["QORE_TEST_PROC"] = str(tree.root / "proc")
+            variables.setdefault("QORE_TEST_STACK_DUMP_WAIT", "60")
+            result = tree.run(**variables)
+            sections = RunnerTree.sections(result.output)
+            self.assertEqual(sorted(tests), sorted(sections), result.output)
+            return sections, result
+
+    def assert_usr1(self, output, stacks=True):
+        self.assertIn("the test exceeded its 3s limit: SIGUSR1 sent for the call stacks of its threads", output)
+        if stacks:
+            self.assertIn("call stacks printed", output)
+        self.assertIn("TIMEOUT: test exceeded 3s limit (it was ended by signal 6)", output)
+
+    def assert_aborted_at_once(self, output):
+        self.assertIn("test hangs", output)
+        self.assertIn("the test exceeded its 3s limit: SIGABRT sent at once, as it does not handle SIGUSR1", output)
+        self.assertNotIn("SIGUSR1 sent", output)
+        self.assertIn("TIMEOUT: test exceeded 3s limit (it was ended by signal 6)", output)
+
+    def test_a_test_without_a_handler_is_aborted_at_once(self):
+        # with the thread masks of /proc where it exists (Linux), and without them, where QUnit's report decides
+        for proc in (None, "empty"):
+            with self.subTest(proc=proc):
+                sections, result = self.run_tests({"hangs.qtest": ("", "default", None)}, proc=proc)
+                self.assert_aborted_at_once(sections["hangs.qtest"])
+                self.assertEqual(1, result.returncode, result.output)
+
+    def test_a_test_with_a_handler_is_sent_sigusr1_and_prints_its_call_stacks(self):
+        # it reports its handler, and catches the signal (/proc/<pid>/task/*/status on Linux); the call stacks are
+        # printed, the test is aborted when it reports them, without waiting for QORE_TEST_STACK_DUMP_WAIT
+        for proc in (None, "empty"):
+            with self.subTest(proc=proc):
+                sections, result = self.run_tests({"handler.qtest": ("self", "handler", None)}, proc=proc)
+                self.assert_usr1(sections["handler.qtest"])
+
+    def test_the_report_of_the_test_s_own_process_decides(self):
+        # a Qore handler does not show in the signal masks of the threads: Qore's signal thread waits for the signal
+        # with sigwait(), and Linux shows it as unblocked in that thread meanwhile
+        child = os.getpid()
+        sections, result = self.run_tests({
+            "reported.qtest": ("self", "ignore", None),
+            # the masks do not matter when the handler is reported
+            "reported-not-blocked.qtest": ("self", "ignore", [(NONE, NONE)]),
+            # a process that the test started has the FIFO in its environment as well
+            "reported-by-another-process.qtest": (str(child), "ignore", None),
+            "not-reported.qtest": ("", "ignore", None),
+        }, proc="empty", QORE_TEST_STACK_DUMP_WAIT="1")
+        for name in ("reported.qtest", "reported-not-blocked.qtest"):
+            with self.subTest(test=name):
+                self.assert_usr1(sections[name], stacks=False)
+        for name in ("reported-by-another-process.qtest", "not-reported.qtest"):
+            with self.subTest(test=name):
+                self.assert_aborted_at_once(sections[name])
+
+    def test_on_linux_a_test_that_catches_or_blocks_the_signal_in_every_thread_is_sent_it(self):
+        # the masks in the /proc tree that each test makes for itself, which run_tests.sh reads wherever the test's
+        # task directory exists in it; a test that ignores SIGUSR1 survives it, and is aborted after
+        # QORE_TEST_STACK_DUMP_WAIT
+        sections, result = self.run_tests({
+            "all-block.qtest": ("", "ignore", [(USR1, NONE), (USR1, NONE)]),
+            "caught.qtest": ("", "ignore", [(NONE, USR1), (NONE, USR1)]),
+            "one-blocks.qtest": ("", "ignore", [(USR1, NONE), (NONE, NONE)]),
+            "no-threads.qtest": ("", "ignore", []),
+        }, proc="empty", QORE_TEST_STACK_DUMP_WAIT="1")
+        for name in ("all-block.qtest", "caught.qtest"):
+            with self.subTest(test=name):
+                self.assert_usr1(sections[name], stacks=False)
+        for name in ("one-blocks.qtest", "no-threads.qtest"):
+            with self.subTest(test=name):
+                self.assert_aborted_at_once(sections[name])
+
+    def test_signal_handling_disabled(self):
+        sections, result = self.run_tests({"handler.qtest": ("self", "handler", [(USR1, USR1)])}, proc="empty",
+                                          QORE_TEST_OPTS="-b")
+        output = sections["handler.qtest"]
+        self.assertIn("the test exceeded its 3s limit: SIGABRT sent (signal handling is disabled)", output)
+        self.assertNotIn("SIGUSR1 sent", output)
+        self.assertNotIn("call stacks printed", output)
+        self.assertIn("TIMEOUT: test exceeded 3s limit (it was ended by signal 6)", output)
+
+
+@unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")
+@unittest.skipUnless(HAVE_QORE, f"no qore build in {BUILD_DIR}")
+class SignalQoreTest(unittest.TestCase):
+    """The same with qore tests, and QUnit from this tree"""
+
+    QUNIT_TEST = """\
+        #!/usr/bin/env qore
+        # test-timeout: 5
+        %modern
+        %requires QUnit
+        %exec-class HangTest
+        class HangTest inherits QUnit::Test {
+            constructor() : Test("HangTest", "1.0") {
+                addTestCase("hangs", \\hangsInQueueGet());
+                set_return_value(main());
+            }
+            hangsInQueueGet() {
+                Queue q();
+                q.get();
+            }
+        }
+        """
+
+    # hangs before it creates its QUnit test object, so it has no SIGUSR1 handler
+    PLAIN_TEST = """\
+        #!/usr/bin/env qore
+        # test-timeout: 5
+        %modern
+        Queue q();
+        q.get();
+        """
+
+    def run_tests(self, tests, **variables):
+        with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
+            tree = RunnerTree(directory, qore=True)
+            for name, source in tests.items():
+                tree.add_test(name, source)
+            result = tree.run(QORE_TEST_STACK_DUMP_WAIT="60", **variables)
+            sections = RunnerTree.sections(result.output)
+            self.assertEqual(sorted(tests), sorted(sections), result.output)
+            return sections
+
+    def test_qunit_test_that_hangs_prints_its_call_stacks_and_one_that_hangs_before_it_is_aborted(self):
+        sections = self.run_tests({"qunit.qtest": self.QUNIT_TEST, "plain.qtest": self.PLAIN_TEST})
+        output = sections["qunit.qtest"]
+        self.assertIn("the test exceeded its 5s limit: SIGUSR1 sent for the call stacks of its threads", output)
+        self.assertIn("=== QUnit: SIGUSR1: call stacks of all threads ===", output)
+        self.assertIn("HangTest::hangsInQueueGet", output)
+        self.assertIn("TIMEOUT: test exceeded 5s limit (it was ended by signal 6)", output)
+        output = sections["plain.qtest"]
+        self.assertIn("the test exceeded its 5s limit: SIGABRT sent at once, as it does not handle SIGUSR1", output)
+        self.assertNotIn("SIGUSR1 sent", output)
+        self.assertIn("TIMEOUT: test exceeded 5s limit (it was ended by signal 6)", output)
+
+    def test_qunit_test_with_signal_handling_disabled_is_aborted_at_once(self):
+        sections = self.run_tests({"qunit.qtest": self.QUNIT_TEST}, QORE_TEST_OPTS="-b")
+        output = sections["qunit.qtest"]
+        self.assertIn("the test exceeded its 5s limit: SIGABRT sent (signal handling is disabled)", output)
+        self.assertNotIn("SIGUSR1 sent", output)
+        self.assertNotIn("=== QUnit: SIGUSR1", output)
+        self.assertIn("TIMEOUT: test exceeded 5s limit (it was ended by signal 6)", output)
 
 
 if __name__ == "__main__":

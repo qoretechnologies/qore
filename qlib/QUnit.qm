@@ -162,7 +162,10 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
     of the process to standard output, so the stacks of a test that hangs can be printed with
     <tt>kill -USR1 \<pid\></tt>.  \c run_tests.sh sends \c SIGUSR1 to a test that exceeds its time limit and ends
     the test as soon as the handler reports, through the FIFO named by the \c QORE_TEST_EVENT_FIFO environment
-    variable, that the stacks have been printed.
+    variable, that the stacks have been printed.  The test also reports there that the handler is installed, with the
+    ID of its process: \c SIGUSR1 ends a process that does not handle it, without a core dump, so \c run_tests.sh
+    sends it only to a test that has reported its handler, and aborts any other Qore test at once, so that it dumps
+    core (the signal masks of a process's threads do not show a Qore signal handler).
 
     - a test that installs its own \c SIGUSR1 handler, for example in its constructor, replaces this one
     - when signal handling is disabled (<tt>qore -b</tt>), nothing is installed and \c SIGUSR1 has its default
@@ -183,8 +186,9 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
     @section qunit_v0_5_2 Version 0.5.2
     - a test prints the call stacks of all its threads when it receives \c SIGUSR1 (for example
       <tt>kill -USR1 \<pid\></tt> on a test that hangs); \c run_tests.sh sends it to a test that exceeds its
-      time limit before ending it, so the log shows where the test hangs; a test that installs its own
-      \c SIGUSR1 handler keeps it; see @ref qunit_stack_dump
+      time limit before ending it, so the log shows where the test hangs, and aborts a test without the handler
+      instead, so that it dumps core; a test that installs its own \c SIGUSR1 handler keeps it; see
+      @ref qunit_stack_dump
     - fixed assertions after a test case that starts a thread: the thread replaced the test case that the test
       restored afterwards, so the assertions of later test cases could be counted for the wrong test case and those
       in @ref QUnit::Test::globalTearDown() "Test::globalTearDown()" failed with \c TEST-ERROR
@@ -278,11 +282,18 @@ namespace Priv {
         if (!testIsProgramBeingRun()) {
             return;
         }
+        # with signal handling disabled (qore -b), set_signal_handler() installs nothing, so no handler is reported
+        if (!Option::HAVE_SIGNAL_HANDLING) {
+            return;
+        }
         try {
             set_signal_handler(SIGUSR1, \QUnit::Priv::timeoutStackDump());
         } catch (hash<ExceptionInfo> ex) {
             # a module manages SIGUSR1 in this process; run_tests.sh then ends the test without the stacks
+            return;
         }
+        # with the ID of this process: a process that the test starts gets the FIFO in its environment as well
+        reportTestEvent(sprintf("handler %d", getpid()));
     }
 
     #! Returns @ref True if the test object being created belongs to the program being run
@@ -329,6 +340,14 @@ namespace Priv {
             printf("=== QUnit: SIGUSR1: the call stacks cannot be printed: %s: %s ===\n", ex.err, ex.desc);
         }
         flush();
+        reportTestEvent("dumped");
+    }
+
+    #! Reports an event to \c run_tests.sh through the FIFO named by \c QORE_TEST_EVENT_FIFO, if set
+    /** The events are <tt>handler \<pid\></tt> when the \c SIGUSR1 handler has been installed in the process with
+        that ID, and \c dumped when it has printed the call stacks of all threads.
+    */
+    sub reportTestEvent(string event) {
         *string fifo = ENV{TestEventFifoVar};
         if (!fifo) {
             return;
@@ -337,9 +356,9 @@ namespace Priv {
             # nonblocking: run_tests.sh keeps the FIFO open for reading, and a write must not wait if it does not
             File f();
             f.open2(fifo, O_WRONLY | O_NONBLOCK);
-            f.write("dumped\n");
+            f.write(event + "\n");
         } catch (hash<ExceptionInfo> ex) {
-            # run_tests.sh is not waiting for it; it ends the test after its time limit for the stacks
+            # run_tests.sh is not reading it: it then ends a test that exceeds its time limit without the stacks
         }
     }
 }

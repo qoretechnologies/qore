@@ -21,8 +21,10 @@ print_usage () {
   echo "                           the tests of the binary modules in ./modules are run only when named here."
   echo "  TEST_TIMEOUT             Seconds a single test may run before it is killed (default: 300); a test"
   echo "                           declares its own budget with a '# test-timeout: <seconds>' comment.  A test"
-  echo "                           that exceeds it is first sent SIGUSR1 (QUnit tests print the call stacks of"
-  echo "                           their threads), unless QORE_TEST_OPTS disables signal handling (-b)."
+  echo "                           that exceeds it is first sent SIGUSR1 if it handles it (QUnit tests print the"
+  echo "                           call stacks of their threads), then aborted (SIGABRT), so that it dumps core;"
+  echo "                           a test that does not handle SIGUSR1, or one run with signal handling disabled"
+  echo "                           (-b in QORE_TEST_OPTS), is aborted at once."
   echo "  QORE_TEST_STACK_DUMP_WAIT"
   echo "                           Seconds to wait for those stacks before the test is ended (default: 30)."
   echo "  CI_NODE_INDEX            Shard index (1-based) for parallel test execution."
@@ -669,16 +671,16 @@ TEST_EVENT_TMP=${TMPDIR:-/tmp}
 TEST_EVENT_DIR=$(mktemp -d "${TEST_EVENT_TMP%/}/qore-test-events.XXXXXX") || exit 1
 TEST_EVENT_FIFO="$TEST_EVENT_DIR/events"
 
-# A test that exceeds its time limit is first sent SIGUSR1, unless signal handling is disabled (where SIGUSR1 would
-# end it without a core dump): a QUnit test then prints the call stacks of all its threads and reports it through
-# the event FIFO.  Once it has reported it, has ended, or QORE_TEST_STACK_DUMP_WAIT seconds (default 30) have
-# passed, the test is sent the signal that ends a hung test as before (SIGABRT with GNU timeout, so that it dumps
-# core, SIGTERM otherwise), and SIGKILL 60 seconds later.
+# A test that exceeds its time limit is first sent SIGUSR1 when the signal cannot end it (see run_with_watchdog()):
+# a QUnit test then prints the call stacks of all its threads and reports it through the event FIFO.  Once it has
+# reported it, has ended, or QORE_TEST_STACK_DUMP_WAIT seconds (default 30) have passed, it is aborted (SIGABRT), so
+# that it dumps core, and sent SIGKILL 60 seconds later.  A test that SIGUSR1 would end, without a core dump and
+# without its call stacks, such as one that hangs before QUnit has installed its handler, or one run with signal
+# handling disabled (-b), is aborted at once.  The watchdog aborts the test with any timeout command: its exit code is
+# 124 when it ends the test, so the abort is not taken for a crash, as it is when BusyBox timeout ends a test (which
+# keeps SIGTERM: see TIMEOUT_SIGNAL_OPTS).
 TEST_STACK_DUMP_WAIT=${QORE_TEST_STACK_DUMP_WAIT:-30}
-TEST_TIMEOUT_SIGNAL=TERM
-if [ -n "$TIMEOUT_SIGNAL_OPTS" ]; then
-    TEST_TIMEOUT_SIGNAL=ABRT
-fi
+TEST_TIMEOUT_SIGNAL=ABRT
 TEST_SIGNALS_ENABLED=1
 for opt in $QORE_TEST_OPTS; do
     case "$opt" in
@@ -687,7 +689,9 @@ for opt in $QORE_TEST_OPTS; do
 done
 
 # The events that the watchdog of a test reads from the event FIFO, one per line:
-# - "dumped": QUnit's SIGUSR1 handler has printed the call stacks of the test's threads (see qlib/QUnit.qm)
+# - "handler <pid>": QUnit has installed its SIGUSR1 handler, which prints the call stacks of the test's threads, in
+#   process <pid> (see qlib/QUnit.qm)
+# - "dumped": that handler has printed them
 # - "exit": the test has ended (run_with_watchdog())
 
 # Prints the events read from the event FIFO (open on fd 4), one per line as "event <event>", until one of the events
@@ -794,18 +798,61 @@ event $1
             return 1
         }
 
+        # Returns 0 if SIGUSR1 cannot end the test, which is then sent it for the call stacks of its threads: QUnit has
+        # reported that it has installed its handler in the test's own process, or, on Linux, the test catches the
+        # signal with a signal handler, or every thread of the test blocks it (the masks in /proc/<pid>/task/*/status;
+        # /proc is QORE_TEST_PROC if set, for the tests of run_tests.sh).  Otherwise the signal's default action would
+        # end the test, without a core dump and without its call stacks.  The masks do not show a Qore handler: Qore's
+        # signal thread waits for the signals that have one with sigwait(), and while it waits, Linux shows them as
+        # unblocked in that thread, as it shows the signals that have none.
+        usr1_cannot_end_test() {
+            if watchdog_got "handler $test_pid"; then
+                return 0
+            fi
+            proc=${QORE_TEST_PROC:-/proc}
+            if [ ! -d "$proc/$test_pid/task" ]; then
+                return 1
+            fi
+            # the number of SIGUSR1, which depends on the architecture
+            usr1=1
+            while [ $usr1 -le 64 ] && [ "`kill -l $usr1 2>/dev/null`" != USR1 ]; do
+                usr1=$((usr1 + 1))
+            done
+            if [ $usr1 -gt 64 ]; then
+                return 1
+            fi
+            # the masks are in hexadecimal, signal 1 in the lowest bit
+            cat "$proc/$test_pid"/task/*/status 2>/dev/null | awk -v sig=$usr1 '
+                function has_signal(mask,   digit) {
+                    digit = substr(mask, length(mask) - int((sig - 1) / 4), 1)
+                    if (digit == "") {
+                        return 0
+                    }
+                    return int((index("0123456789abcdef", tolower(digit)) - 1) / 2 ^ ((sig - 1) % 4)) % 2
+                }
+                $1 == "SigBlk:" { ++threads; if (has_signal($2)) ++blocked }
+                $1 == "SigCgt:" && has_signal($2) { caught = 1 }
+                END { exit !(threads > 0 && (caught || blocked == threads)) }'
+        }
+
         watchdog_wait $limit exit
         # the test has ended, or the read failed before the time limit: the test is not ended for that
         if [ $? -ne 1 ]; then
             exit $status
         fi
         status=$((status | 1))
-        if [ $TEST_SIGNALS_ENABLED -eq 1 ]; then
+        if [ $TEST_SIGNALS_ENABLED -eq 0 ]; then
+            echo "*** the test exceeded its ${limit}s limit: SIG$TEST_TIMEOUT_SIGNAL sent (signal handling is" \
+                "disabled) ***"
+        elif usr1_cannot_end_test; then
             echo "*** the test exceeded its ${limit}s limit: SIGUSR1 sent for the call stacks of its threads ***"
             kill -USR1 $test_pid 2>/dev/null
             if watchdog_wait $TEST_STACK_DUMP_WAIT dumped exit && watchdog_got exit; then
                 exit $status
             fi
+        else
+            echo "*** the test exceeded its ${limit}s limit: SIG$TEST_TIMEOUT_SIGNAL sent at once, as it does not" \
+                "handle SIGUSR1, which would end it without its call stacks or a core dump ***"
         fi
         kill -$TEST_TIMEOUT_SIGNAL $test_pid 2>/dev/null
         if ! watchdog_wait 60 exit; then
@@ -933,8 +980,8 @@ EOF
         else
             echo "TIMEOUT: test exceeded ${THIS_TEST_TIMEOUT}s limit"
         fi
-        # the stacks of the threads of a test aborted by the timeout show where it hangs
-        if [ -n "$TIMEOUT_SIGNAL_OPTS" ] && command -v gdb > /dev/null 2>&1; then
+        # the stacks of the threads of a test aborted by the watchdog or the timeout show where it hangs
+        if { [ $WATCHDOG_TIMED_OUT -eq 1 ] || [ -n "$TIMEOUT_SIGNAL_OPTS" ]; } && command -v gdb > /dev/null 2>&1; then
             find_test_core
             TIMEOUT_CORE=$CORE_FILE
             if [ -n "$TIMEOUT_CORE" ]; then

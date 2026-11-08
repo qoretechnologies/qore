@@ -69,10 +69,16 @@ refer to the following files/locations for specific information:
 ## Test Environment Notes
 
 A test that exceeds its time limit (`TEST_TIMEOUT`, or the test's own
-`# test-timeout:` budget) is first sent `SIGUSR1`, unless `QORE_TEST_OPTS`
-disables signal handling (`-b`): a QUnit test then prints the call stacks of all
-its threads.  Once it has printed them or `QORE_TEST_STACK_DUMP_WAIT` seconds
-(default 30) have passed, the test is ended as before.
+`# test-timeout:` budget) is first sent `SIGUSR1` if the signal cannot end it: a
+QUnit test then prints the call stacks of all its threads.  Once it has printed
+them or `QORE_TEST_STACK_DUMP_WAIT` seconds (default 30) have passed, the test is
+aborted (`SIGABRT`), so that it dumps core.  A test that does not handle
+`SIGUSR1`, such as one that hangs before QUnit has installed its handler, or one
+run with signal handling disabled (`-b` in `QORE_TEST_OPTS`), is aborted at once:
+`SIGUSR1` would end it without a core dump.  QUnit reports through the
+watchdog's event FIFO that it has installed its handler; on Linux, a test whose
+threads all block `SIGUSR1`, or that catches it with a signal handler
+(`/proc/<pid>/task/*/status`), is sent it as well.
 
 `run_tests.sh` watches each test through an event FIFO in a directory of its
 own (made with `mktemp -d` in `TMPDIR`), so several runners can share a source
