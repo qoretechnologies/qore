@@ -1001,21 +1001,11 @@ static bool qore_aot_dependency_is_compiled_one(const std::string& name, const s
     }
     size_t file_sep = file.rfind(QORE_DIR_SEP);
     std::string file_base = file_sep == std::string::npos ? file : file.substr(file_sep + 1);
-    // a native binary module (<name>-api-<x>.<y>.qmod) with the name and module API version of one compiled against:
-    // AOT code binds to a native module only through its API, by the names of its symbols, which the slot maps of
-    // the AOT module resolve when they are registered (a symbol that the module does not provide is reported then;
-    // see "A Provider Older Than the One Compiled Against" in design/aot-object-files-and-module-artifacts.md), so
-    // another build of the same module, such as an installed one, is the module compiled against
-    if (!is_aot && file_base.find("-api-") != std::string::npos && file_base.size() > 5
-            && !file_base.compare(file_base.size() - 5, 5, ".qmod")) {
-        for (const std::string& dep : compiled_against) {
-            size_t sep = dep.rfind(QORE_DIR_SEP);
-            if (!dep.compare(sep == std::string::npos ? 0 : sep + 1, std::string::npos, file_base)) {
-                return true;
-            }
-        }
-    }
-    // a copy of a file compiled against, with the same name, size and content (a link farm, an installed copy)
+    // a copy of a file compiled against, with the same name, size and content (a link farm, an installed copy); this
+    // is the only other file that counts for a native binary module too: AOT code depends on more of a native module
+    // than the names of its symbols (constants folded into it, the variants and hashdecls it was compiled against,
+    // purity flags), and the module API version in the name of its file is not the version of the module, so another
+    // build of it is a different module
     {
         const std::string& base = file_base;
         struct stat fsb;

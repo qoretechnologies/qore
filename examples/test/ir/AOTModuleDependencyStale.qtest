@@ -51,7 +51,7 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
             \chainShadowTest());
         addTestCase("without a source module, an out-of-date AOT module is loaded with a warning",
             \noSourceTest());
-        addTestCase("another build of a native module with the same name and API version is the one compiled against",
+        addTestCase("another build of a native module is a different module unless it is an identical copy",
             \nativeModuleTest());
         addTestCase("a module compiled with a relative output path is checked", \relativeOutputTest());
         set_return_value(main());
@@ -322,11 +322,19 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
             "return make_json({\"a\": 1}); } }");
         string module_path = qmod_dir + ":" + src_dir + ":" + json_dir;
         compile(module_path, src_dir, qmod_dir, "User");
-        # another build of json: the same name and API version, other bytes
+        # an identical copy of json in a directory that is searched first: the module compiled against
         string other = other_dir + "/" + basename(json_file);
-        assertEq(0, system(sprintf("cp '%s' '%s' && printf 'another build' >> '%s'", json_file, other, other)));
+        assertEq(0, system(sprintf("cp '%s' '%s'", json_file, other)));
         string out = runRequires(other_dir + ":" + module_path, tmp.path, "User", "User::value()");
         assertEq("{\"a\":1} User.qmod", out, out);
+
+        # another build of json, with the same name and module API version but other bytes: AOT code depends on more of
+        # a native module than the names of its symbols, so User is out of date, and its source is loaded
+        assertEq(0, system(sprintf("printf 'another build' >> '%s'", other)));
+        out = runRequires(other_dir + ":" + module_path, tmp.path, "User", "User::value()");
+        assertEq("{\"a\":1} User.qm", out.split("\n").last(), out);
+        assertRegex("AOT module '.*/User\\.qmod' for feature 'User' is out of date: it was compiled against other "
+            "files of module 'json' than '.*/installed/json[^']*\\.qmod'", out);
     }
 
     relativeOutputTest() {

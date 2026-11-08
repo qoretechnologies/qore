@@ -101,13 +101,14 @@ A module is the one compiled against when:
   `--depfile-module-deps=artifact`);
 - or it is a copy of such a file, with the same name, size and content hash (as the fingerprint file records them; a
   link farm, an installed copy);
-- or it is a native binary module (`<name>-api-<x>.<y>.qmod`) with the name and module API version of a listed one:
-  AOT code binds to a native module only through its API, by the names of the symbols its slot maps resolve when they
-  are registered, which report a symbol the module lacks (see "A Provider Older Than the One Compiled Against" in
-  `aot-object-files-and-module-artifacts.md`), so another build of the same native module, such as an installed one,
-  is the module compiled against;
 - or it is an AOT module of a build tree whose own sources (the file of the module's main source, or the files of its
   module directory, as its own depfile lists them) are listed there.
+
+A native binary module counts as the one compiled against only when it is the listed file or an identical copy of it.
+Another build of it, even with the same name and module API version (such as an installed one), is a different
+module: AOT code depends on more of a native module than the names of its symbols (constants folded into the code,
+the variants it was bound to, the hashdecls and placeholders it was compiled against, purity flags), and the module
+API version in the file's name (`<name>-api-<x>.<y>.qmod`) is the version of the module API, not of the module.
 
 An AOT module without its depfile (an installed module, or one compiled by hand without `--depfile`) is not checked:
 what it was compiled from is not known, and the loader does not check such a module's own sources either.
