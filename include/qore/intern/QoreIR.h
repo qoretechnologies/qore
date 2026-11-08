@@ -3791,6 +3791,8 @@ public:
     //! Non-zero for the local slots of reference_slot_locals, whose slot can hold a reference that a store writes
     //! through
     mutable std::vector<uint8_t> interpreter_reference_slots;
+    //! The local of each local slot (null for a slot of no local), for the release of the locals at the exit
+    mutable std::vector<const LocalVar*> interpreter_slot_locals;
     //! The locals the function owns (QoreIRFunction::pre_instantiated_locals and every body local), which the
     //! interpreter tells from the variables of an enclosing scope
     mutable std::unordered_set<const void*> interpreter_function_own_locals;

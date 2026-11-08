@@ -507,10 +507,27 @@ Queue that the values pushed to it refer to) made the collector decide at every 
 the object, and such a loop ran 1.5 times the instructions of the runtime-stack variable; the
 cause is not known yet (see `computeIROnlyLocals()`). A third rule completes the lexical
 lifetime of IR-only locals: when a function is left, the values they own are released last
-local first, as the AST interpreter releases the variables of a frame, by an exception too (the
-IR interpreter's `SlotCacheCleanup` and `cleanupLocalCaches()` walk the slots in reverse, a
-local's slot being assigned where it first appears; native code releases its boxed exit slots in
-reverse, in the inline form as in `qore_rt_cleanup_run_allocas()`).
+local first, as the AST interpreter releases the variables of a frame. When an exception leaves
+the function, IR-only locals and runtime-stack locals are released together in one sequence, last
+declared first: releasing all IR-only locals before the runtime-stack locals ran destructors out
+of the AST order (a destructor that unlocks a lock held by an `AutoLock` released first raised
+`LOCK-ERROR`). The IR interpreter's `SlotCacheCleanup` and `cleanupLocalCaches()` walk the slots
+in reverse, a local's slot being assigned where it first appears, and release a runtime-stack
+local at its slot (`releaseFrameRuntimeLocal()`, using `QoreIRFunction::interpreter_slot_locals`).
+That map holds only the function's own body locals: a parameter is released by the caller after the
+function's handlers, and an `on_block_exit` handler or closure body run as an IR function of its own
+has slots for the locals of the function it belongs to, which that function's handlers still read
+(releasing them there emptied them before an outer `on_error` handler ran).
+Native code builds the sequence in `QoreIRToLLVM::getExitReleaseSequence()`: body locals in
+declaration order, an owned IR-only cache as an alloca and a runtime-stack local as its `LocalVar`
+(its native cache allocas follow it, so they are released before the runtime slot is cleared by
+`qore_rt_clear_local()`). The inline form releases the sequence in reverse; the array form
+(`qore_rt_cleanup_run_allocas()`, used above `QORE_JIT_CLEANUP_PHI_BUDGET`) stores it in order
+with a runtime-stack local tagged with bit 1 and releases it last entry first. The inline form
+includes runtime-stack locals only at an exception exit; the array form, shared by every exit,
+includes them always, and a local already released at a normal exit is released again as no value.
+AOT code keeps the earlier sequence of IR-only locals only; `ExceptionExitLocalOrder.qtest` checks
+the AST order in every mode, a qcc executable included.
 `IRBlockScopedObjectLifetime.qtest` and `ObjectLocalLifetime.qtest` check exact
 constructor/destructor order for these shapes in every tier and in AOT (block exits, loops,
 returns, exceptions within and across functions, reassignment, `AutoLock`, recursive graphs).

@@ -1717,6 +1717,23 @@ static void ensureLocalInstantiated(LocalVar* var, IRLocalVarSet& locals,
     }
 }
 
+//! Releases the value of a local on the runtime stack that the frame instantiated, at the exit of the function
+/** The variable is removed from the stack afterwards (cleanupInstantiatedLocals(), or the caller for a pre-instantiated
+    local); its value is released here, at its slot's place among the IR-only locals, so that a function left by an
+    exception releases all of its locals last declared first, as the AST interpreter does.  A closure-bound local and
+    a local that the frame has not instantiated (or has uninstantiated) are left alone.
+*/
+static void releaseFrameRuntimeLocal(const LocalVar* lv, const IRLocalVarSet& instantiated,
+        const std::unordered_set<const LocalVar*>* pre_instantiated, ExceptionSink* xsink) {
+    if (!lv || lv->closureUse()
+            || (!instantiated.count(lv) && !(pre_instantiated && pre_instantiated->count(lv)))) {
+        return;
+    }
+    if (LocalVarValue* lvv = thread_try_find_lvar(lv)) {
+        lvv->del(xsink);
+    }
+}
+
 static void cleanupInstantiatedLocals(const std::vector<const LocalVar*>& locals_ordered, ExceptionSink* xsink,
         const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr) {
     // Iterate in REVERSE instantiation order so that closures that capture
@@ -2280,6 +2297,20 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_param_local_vars = std::move(param_local_vars);
     func.interpreter_locals_ir_only = std::move(locals_ir_only);
     func.interpreter_reference_slots = std::move(reference_slots);
+    // the local of each slot, for the release of the locals at the exit of the function (see SlotCacheCleanup): only
+    // the function's own body locals; the slot of a parameter, which the caller releases after the function's
+    // handlers, and that of a local of the parent function used by an on_block_exit handler or a closure body, which
+    // the parent releases, have none
+    {
+        const std::unordered_set<const void*> body_local_keys = func.buildBodyLocalKeys();
+        std::vector<const LocalVar*> slot_locals(local_slot_count, nullptr);
+        for (auto& [lvar, sid] : func.local_var_slots) {
+            if (lvar && sid < local_slot_count && body_local_keys.count(lvar)) {
+                slot_locals[sid] = lvar;
+            }
+        }
+        func.interpreter_slot_locals = std::move(slot_locals);
+    }
     // the loads of IR-only locals whose only use is the base of a method call in the same block, with no write to
     // the local between: when the value is an object, they borrow it, as the AST interpreter evaluates the base of a
     // method call without a reference of its own; each reference taken and released was a dereference of the object,
@@ -6520,6 +6551,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             locals_slot_cache.storage(i).discard(xsink);
             locals_slot_cache.storage(i) = QoreValue();
+            // at the exit of the function, the value of a local on the runtime stack is released at its slot's
+            // place too (see SlotCacheCleanup)
+            if (!preserve_ir_only && i < func.interpreter_slot_locals.size()
+                    && !(i < locals_ir_only.size() && locals_ir_only[i])) {
+                releaseFrameRuntimeLocal(func.interpreter_slot_locals[i], instantiated_locals, pre_instantiated,
+                    xsink);
+            }
         }
         std::fill(locals_lvar_cache.begin(), locals_lvar_cache.end(), nullptr);
     };
@@ -6655,19 +6693,31 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     struct SlotCacheCleanup {
         IRLocalSlotCache& cache;
         ExceptionSink* xsink;
+        const std::vector<const LocalVar*>& slot_locals;
+        const std::vector<uint8_t>& ir_only;
+        const IRLocalVarSet& instantiated;
+        const std::unordered_set<const LocalVar*>* pre_instantiated;
         // the slots of IR-only locals own their values: they are released last slot first, as the AST interpreter
         // releases the variables of a frame (a local's slot is assigned where it first appears, after those of the
         // locals declared before it), so that an object local's destructor runs before that of a local declared
-        // before it when the function is left by an exception too
+        // before it when the function is left by an exception too.  The value of a local on the runtime stack that
+        // this frame instantiated is released at its slot's place too, between those of the IR-only locals
+        // declared before and after it (the variable is removed from the stack afterwards): a function left by an
+        // exception releases all of its locals last declared first, as the AST interpreter does, whichever storage
+        // they have
         ~SlotCacheCleanup() {
             for (size_t i = cache.size(); i; --i) {
                 // raw slot: the value the slot owns is released
                 QoreValue& v = cache.storage(i - 1);
                 v.discard(xsink);
                 v = QoreValue();
+                if (i - 1 < slot_locals.size() && !(i - 1 < ir_only.size() && ir_only[i - 1])) {
+                    releaseFrameRuntimeLocal(slot_locals[i - 1], instantiated, pre_instantiated, xsink);
+                }
             }
         }
-    } slot_cache_cleanup{locals_slot_cache, xsink};
+    } slot_cache_cleanup{locals_slot_cache, xsink, func.interpreter_slot_locals, locals_ir_only,
+        instantiated_locals, pre_instantiated};
 
     // Declared after SlotCacheCleanup so dirty parent slots are published before
     // this frame releases its cached local references.

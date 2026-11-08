@@ -1480,6 +1480,11 @@
       <tt>s += v</tt> on an \c int local read the element as \c 0 in AOT-compiled code; and held by a global or
       \c thread_local variable, which read as the reference itself in the IR execution mode and which an assignment
       replaced instead of assigning the referenced lvalue
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, when an exception left a function, the
+      objects held by its local variables could be destroyed in another order than with the AST interpreter (ex: the
+      destructor of an object held by an \c auto local declared before an \c AutoLock ran while the lock was still
+      held, or the locals of a block whose inner block's \c on_error handler rethrew the exception were destroyed
+      first declared first); local variables are now released last declared first, as with the AST interpreter
     - in the JIT and tiered execution modes, an exception raised by the destructor of the value that the loop
       variable of \c foreach held when an iterator's next element was assigned could crash the program
     - the IR execution mode runs <tt>i += v</tt> on an \c int local with an \c auto local \c v as fast as with an

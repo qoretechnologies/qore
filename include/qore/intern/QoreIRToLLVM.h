@@ -1233,6 +1233,26 @@ private:
     */
     std::vector<llvm::AllocaInst*> getBoxedExitCleanupSlots() const;
 
+    //! An entry of the release of a function's locals at its exit: the native cache of a local, or a local on the
+    //! runtime stack whose value is released (see getExitReleaseSequence())
+    struct ExitReleaseEntry {
+        llvm::AllocaInst* alloca = nullptr;
+        LocalVar* var = nullptr;
+    };
+
+    //! The locals released at the exit of the function, in declaration order (they are released last first)
+    /** The boxed slots of getBoxedExitCleanupSlots(), and, unless \a runtime_locals is false or the code is AOT
+        code, the body locals on the runtime stack that the frame instantiated, between the IR-only locals declared
+        before and after them, so that a function left by an exception releases all of its locals last declared first,
+        as the AST interpreter does, whichever storage they have; with \a cache_allocas, a runtime local is followed by
+        the allocas of its native cache that hold references (released before the variable's value)
+    */
+    std::vector<ExitReleaseEntry> getExitReleaseSequence(bool runtime_locals, bool cache_allocas) const;
+
+    //! Creates the alloca of the reference that a local's native cache replaced at its last reload, if it has none
+    //! yet (see retainLocalCacheValueIntern()), so that a release emitted before it is created releases it too
+    void ensureLocalReloadDeferred(const void* key, llvm::Function* llvm_func);
+
     //! Route boxed exit cleanup through qore_rt_cleanup_run_allocas() when the
     //! inline per-slot triples would need (slots x exit_edges) PHIs.
     /** @param llvm_func the function being finalized
@@ -1289,7 +1309,9 @@ private:
     void endNativeHandlerSlotCache(llvm::Module& module, llvm::Value* guard);
 
     // Emit qore_rt_decref calls for pre-instantiated local entry loads
-    void emitPreinstantiatedCleanup(llvm::Module& module);
+    //! @param exception_exit true for an exit by an exception, which releases the body locals on the runtime stack
+    //! with the IR-only locals, in declaration order (see getExitReleaseSequence())
+    void emitPreinstantiatedCleanup(llvm::Module& module, bool exception_exit = false);
 
     // Conditionally re-instantiate pre-instantiated closure-use block-scoped locals
     // that were popped mid-execution (e.g. loop-body closure captures).  Called at

@@ -1039,6 +1039,13 @@ extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, in
     // order so dependent temporaries (for example iterators) are released
     // before the values they reference.
     for (int32_t i = count - 1; i >= 0; --i) {
+        // a local on the runtime stack whose value is released is given by its LocalVar tagged in bit 1 (see
+        // QoreIRToLLVM::getExitReleaseSequence())
+        uintptr_t tagged = reinterpret_cast<uintptr_t>(alloca_ptrs[i]);
+        if (tagged & 2) {
+            qore_rt_clear_local(reinterpret_cast<LocalVar*>(tagged & ~static_cast<uintptr_t>(2)), xsink);
+            continue;
+        }
         uint64_t* slot = alloca_ptrs[i];
         QoreValue v = fromBits(*slot);
         *slot = 0;
