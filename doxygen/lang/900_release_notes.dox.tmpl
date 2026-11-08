@@ -1527,6 +1527,11 @@
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, <tt>map $1.key, l</tt> gave \c NOTHING for
       each object in the list instead of its member, and \c map, \c select and \c foldl over an object that is not
       an iterator gave a list of one value instead of the value, as the AST interpreter gives it
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, when an exception left an expression, the
+      objects created for it were destroyed in another order than with the AST interpreter (ex:
+      <tt>f(new T("a"), new T("b"), thr())</tt> destroyed \c b before \c a); the arguments evaluated are now released
+      first argument first, the innermost call's first, and the objects that the statement holds (such as the object
+      of a method call) last, as with the AST interpreter
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the arguments of a
       call are now destroyed last argument first when the call returns, as with the AST interpreter (they were
       destroyed first argument first in calls of closures, of static methods and from top-level code, and of

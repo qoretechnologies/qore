@@ -1064,6 +1064,47 @@ public:
         slot_owned_entries.clear();
     }
 
+    //! Orders the temp entries from the given position for their release by an exception, which drains them last first
+    /** Each temp scope (the entries between two sentinels) is ordered as the AST interpreter releases a statement's
+        temporaries when an exception leaves it (see qore_ir_order_exception_release())
+    */
+    void orderForException(size_t from, const std::vector<uint32_t>& groups) {
+        // the order is only changed in place, without allocation, once it is computed, so a failed allocation leaves
+        // the entries in the order of their registration, which releases them all the same
+        try {
+            orderForExceptionIntern(from, groups);
+        } catch (const std::bad_alloc&) {
+        }
+    }
+
+private:
+    void orderForExceptionIntern(size_t from, const std::vector<uint32_t>& groups) {
+        std::vector<size_t> order;
+        std::vector<uint32_t> ordered;
+        size_t end = entries.size();
+        while (end > from) {
+            size_t start = end;
+            while (start > from && entries[start - 1] < counts.size()) {
+                --start;
+            }
+            if (end - start > 1
+                    && qore_ir_order_exception_release(groups, entries.data() + start, end - start, order)) {
+                // the entries are drained last first: the first released is put last
+                ordered.clear();
+                for (size_t i = order.size(); i > 0; --i) {
+                    ordered.push_back(entries[start + order[i - 1]]);
+                }
+                std::copy(ordered.begin(), ordered.end(), entries.begin() + start);
+            }
+            // skip the sentinel ending the scope below
+            end = start ? start - 1 : 0;
+            if (start <= from) {
+                break;
+            }
+        }
+    }
+
+public:
     //! LIFO iteration for cleanup passes
     std::vector<uint32_t>::const_reverse_iterator rbegin() const {
         return entries.rbegin();
@@ -1790,7 +1831,12 @@ static inline void setOwnedValueSlot(IRValueSlots& values, IRCleanupSlots& clean
 }
 
 static void cleanupValues(IRValueSlots& values, IRCleanupSlots& cleanup,
-        ExceptionSink* xsink, bool no_throw, std::vector<std::string>* cleanup_log) {
+        ExceptionSink* xsink, bool no_throw, std::vector<std::string>* cleanup_log,
+        const std::vector<uint32_t>* release_groups = nullptr) {
+    // an exception leaving the function releases each statement's temporaries as the AST interpreter unwinds them
+    if (no_throw && release_groups) {
+        cleanup.orderForException(0, *release_groups);
+    }
     // Iterate in reverse (LIFO) to clean up the latest values first.
     ExceptionSink* eff_xsink = no_throw ? nullptr : xsink;
     for (auto it = cleanup.rbegin(); it != cleanup.rend(); ++it) {
@@ -2532,6 +2578,11 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_dot_eval_only_bases = std::move(dot_eval_only_bases);
     func.interpreter_consumed_call_args = std::move(consumed_call_args);
     func.interpreter_phi_takes_incoming = std::move(phi_takes_incoming);
+    {
+        std::vector<uint32_t> release_groups;
+        qore_ir_build_exception_release_groups(func, release_groups);
+        func.interpreter_exception_release_groups = std::move(release_groups);
+    }
     func.interpreter_operand_use_counts = std::move(operand_use_counts);
     func.interpreter_param_slot_ids = std::move(param_slot_ids);
     func.interpreter_param_local_vars = std::move(param_local_vars);
@@ -6418,6 +6469,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     if (!ensureInterpreterAnalysis(func, xsink)) {
         return false;
     }
+    // the classes of the values for the order in which an exception releases a statement's temporaries
+    const std::vector<uint32_t>* release_groups = &func.interpreter_exception_release_groups;
     // the slots of the object locals, whose object has a real reference from the slot
     if (!func.interpreter_real_slots.empty()) {
         locals_slot_cache.setRealSlots(func.interpreter_real_slots);
@@ -7321,7 +7374,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         fireScopeExits();
         if (!values_cleaned) {
-            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
         }
         cleanupLocalCaches(false);
         if (!xsink || !*xsink) {
@@ -7664,6 +7717,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         // the mark's sentinel is at cleanup_size; keeping the mark keeps its sentinel too
         size_t cleanup_size = mark->cleanup_size + (keep_mark ? 1 : 0);
         ExceptionSink* eff_xsink = no_throw ? nullptr : xsink;
+        // an exception releases the temporaries as the AST interpreter unwinds them (no_throw is only given for one)
+        if (no_throw && cleanup.size() > cleanup_size + 1) {
+            cleanup.orderForException(cleanup_size, *release_groups);
+        }
         unsigned cancel_countdown = 100;
         while (cleanup.size() > cleanup_size) {
             if (!--cancel_countdown) {
@@ -7809,7 +7866,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             if (xsink) {
                 xsink->raiseException("IR-EXEC-ERROR", "fell off end of basic block");
             }
-            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
             cleanupLocalCaches();
             return false;
         }
@@ -7823,7 +7880,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "phi has no predecessor");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -7840,7 +7897,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "phi missing predecessor incoming");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -7852,7 +7909,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             if (xsink) {
                 xsink->raiseException("IR-EXEC-ERROR", "fell off end of basic block after phi");
             }
-            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
             cleanupLocalCaches();
             return false;
         }
@@ -8054,7 +8111,7 @@ next_instruction:
                     if (branchToExceptionTarget(inst)) {
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8122,7 +8179,7 @@ next_instruction:
                     if (branchToExceptionTarget(inst)) {
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8188,7 +8245,7 @@ next_instruction:
                     if (branchToExceptionTarget(inst)) {
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8256,7 +8313,7 @@ next_instruction:
                 }
                 if (xsink && *xsink) {
                     result.discard(xsink);
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8452,7 +8509,7 @@ next_instruction:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8480,7 +8537,7 @@ next_instruction:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8506,7 +8563,7 @@ next_instruction:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8596,7 +8653,7 @@ next_instruction:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8646,7 +8703,7 @@ next_instruction:
                         result->concat(*s, xsink);
                         if (xsink && *xsink) {
                             result->deref();
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
@@ -8662,7 +8719,7 @@ next_instruction:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "incref missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8678,7 +8735,7 @@ next_instruction:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "refself missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8696,7 +8753,7 @@ next_instruction:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "decref missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8714,7 +8771,7 @@ next_instruction:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -9048,7 +9105,7 @@ next_instruction:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -9091,7 +9148,7 @@ next_instruction:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -9154,7 +9211,7 @@ next_instruction:
                     bool needs_deref = true;
                     out = local_inst->local->eval(needs_deref, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -9201,7 +9258,7 @@ next_instruction:
                             }
                             if (xsink && *xsink) {
                                 out.discard(xsink);
-                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                                 cleanupLocalCaches();
                                 return false;
                             }
@@ -9255,7 +9312,7 @@ next_instruction:
                         bool needs_deref = true;
                         QoreValue val = local_inst->local->eval(needs_deref, xsink);
                         if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
@@ -9346,7 +9403,7 @@ next_instruction:
                         bool needs_deref = true;
                         out = local_inst->local->eval(needs_deref, xsink);
                         if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
@@ -9462,7 +9519,7 @@ load_local_done:
                             QoreValue val = cv->evalWeakBorrowed(is_weak_ref_local, xsink);
                             if (is_weak_ref_local) {
                                 if (xsink && *xsink) {
-                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                                     cleanupLocalCaches();
                                     return false;
                                 }
@@ -9470,7 +9527,7 @@ load_local_done:
                             } else {
                                 if (xsink && *xsink) {
                                     val.discard(xsink);
-                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                                     cleanupLocalCaches();
                                     return false;
                                 }
@@ -9489,7 +9546,7 @@ load_local_done:
                                 bool needs_deref = false;
                                 out = lvv->eval(needs_deref, xsink);
                                 if (xsink && *xsink) {
-                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                                     cleanupLocalCaches();
                                     return false;
                                 }
@@ -9533,7 +9590,7 @@ load_local_done:
                 QoreValue raw_base = getIRValue(values, hka_inst->operands[0]);
                 QoreIROperandHolder base_holder(raw_base, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -9547,7 +9604,7 @@ load_local_done:
                         out = o->evalMember(hka_inst->key_name.c_str(), xsink);
                     }
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -9556,7 +9613,7 @@ load_local_done:
                     if (h) {
                         out = h->getKeyValue(hka_inst->key_name.c_str(), xsink);
                         if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
@@ -9567,7 +9624,7 @@ load_local_done:
                     const QoreHashNode* h = base.get<const QoreHashNode>();
                     out = h->getKeyValue(hka_inst->key_name.c_str(), xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -9577,7 +9634,7 @@ load_local_done:
                     QoreObject* o = const_cast<QoreObject*>(base.get<const QoreObject>());
                     out = o->evalMember(hka_inst->key_name.c_str(), xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -9585,7 +9642,7 @@ load_local_done:
                 if (!preserve_weak_result) {
                     evaluateOwnedWeakReferenceResult(out, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -9603,7 +9660,7 @@ load_local_done:
                 QoreValue raw_base = getIRValue(values, hka_inst->operands[0]);
                 QoreIROperandHolder base_holder(raw_base, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -9751,7 +9808,7 @@ load_local_done:
                     return true;
                 };
                 if (!store_key()) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -9763,7 +9820,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -9896,7 +9953,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -9910,7 +9967,7 @@ load_local_done:
                 QoreValue raw_list_val = getIRValue(values, inst->operands[0]);
                 QoreIROperandHolder list_holder(raw_list_val, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10123,7 +10180,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10153,7 +10210,7 @@ load_local_done:
                     bool nd = true;
                     QoreValue tv = fused_inst->target->eval(nd, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10182,7 +10239,7 @@ load_local_done:
                         if (ref_needs_deref) {
                             rv.discard(xsink);
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10201,7 +10258,7 @@ load_local_done:
                     bool nd = true;
                     QoreValue sv = fused_inst->source->eval(nd, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10247,7 +10304,7 @@ load_local_done:
                         // Closure-use variable: write through cvstack, not lvstack
                         assignClosureVarValueTransfer(fused_inst->target, QoreValue(result_val), xsink);
                         if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
@@ -10293,7 +10350,7 @@ load_local_done:
                             result_val = qore_rt_increment_closure_int(fused_inst->local, fused_inst->delta, xsink);
                         }
                         if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
@@ -10326,7 +10383,7 @@ load_local_done:
                     bool nd = true;
                     QoreValue lv = fused_inst->local->eval(nd, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10392,7 +10449,7 @@ load_local_done:
                     bool nd = true;
                     QoreValue lv = fused_inst->lhs->eval(nd, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10422,7 +10479,7 @@ load_local_done:
                     bool nd = true;
                     QoreValue rv = fused_inst->rhs->eval(nd, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10456,7 +10513,7 @@ load_local_done:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10479,7 +10536,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10573,7 +10630,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10658,7 +10715,7 @@ load_local_done:
                         if (branchToExceptionTarget(inst)) {
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10684,7 +10741,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10700,14 +10757,14 @@ load_local_done:
                 QoreObject* obj = runtime_get_stack_object();
                 assert(obj);
                 if (qore_ir_check_closure_self_valid(obj, xsink)) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
                 ValueHolder val(qore_object_private::get(*obj)->getReferencedMemberForSelf(
                     sm_inst->member_name.c_str(), xsink), xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10718,7 +10775,7 @@ load_local_done:
                 QoreValue out = needs_eval ? val->eval(xsink)
                     : (qore_weak_reference_target_destroyed(*val) ? QoreValue() : val.release());
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10746,7 +10803,7 @@ load_local_done:
                         : qore_rt_load_static_var_by_path(deferred_static->class_path.c_str(),
                             deferred_static->member_name.c_str(), xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10768,7 +10825,7 @@ load_local_done:
                 if (!vi) {
                     xsink->raiseException("IR-RUNTIME-ERROR",
                         "LoadStaticVar instruction has invalid static member metadata");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10776,14 +10833,14 @@ load_local_done:
                 ValueHolder val(vi->getReferencedValue(sv_inst->var_name.c_str(), xsink),
                         xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
                 bool needs_eval = !isDotEvalOnlyBase(inst) && val->needsEval();
                 QoreValue out = needs_eval ? val->eval(xsink) : val.release();
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10841,7 +10898,7 @@ load_local_done:
                     // the class was not bound at parse time, so neither were the sandboxing and abstract-class
                     // checks; a class bound here once is not resolved again, but a deferred class always is
                     if (qc && qore_class_private::runtimeCheckInstantiateClassByName(*qc, pgm, xsink)) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10865,7 +10922,7 @@ load_local_done:
                         xsink->raiseException("RUNTIME-ERROR",
                             "cannot construct object: class not resolved");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10888,7 +10945,7 @@ load_local_done:
                 uint64_t rv = qore_rt_new_object_nb(qc, variant, object_type_info, nb_args, nargs, xsink);
                 if (nargs > SMALL_BUF) delete[] nb_args;
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10932,7 +10989,7 @@ load_local_done:
                         : lc_inst->expr.refSelf();
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10987,12 +11044,12 @@ load_local_done:
                 } else {
                     xsink->raiseException("RUNTIME-ERROR",
                         "closure expression not resolved in AOT mode");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11011,7 +11068,7 @@ load_local_done:
                     xsink->raiseException("RUNTIME-ERROR",
                         "call reference expression not resolved in AOT mode");
                     ref_expr.discard(xsink);
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11021,7 +11078,7 @@ load_local_done:
                 }
                 ref_expr.discard(xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11040,7 +11097,7 @@ load_local_done:
                     xsink->raiseException("RUNTIME-ERROR",
                         "method reference expression not resolved in AOT mode");
                     ref_expr.discard(xsink);
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11057,7 +11114,7 @@ load_local_done:
                 }
                 ref_expr.discard(xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11087,7 +11144,7 @@ load_local_done:
                         pr_inst->expr.getInternalNode());
                     if (!prn) {
                         xsink->raiseException("RUNTIME-ERROR", "parse reference expression has invalid type in AOT mode");
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -11100,12 +11157,12 @@ load_local_done:
                     }
                 } else {
                     xsink->raiseException("RUNTIME-ERROR", "parse reference not resolved in AOT mode");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11125,7 +11182,7 @@ load_local_done:
                 const NewHashDeclNode* nhd = dynamic_cast<const NewHashDeclNode*>(node);
                 if (!nhd) {
                     raiseMissingAOTExpr("new hashdecl", nhd_inst->expr);
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11134,7 +11191,7 @@ load_local_done:
                     out = out.refSelf();
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11154,7 +11211,7 @@ load_local_done:
                 const NewComplexHashNode* nch = dynamic_cast<const NewComplexHashNode*>(node);
                 if (!nch) {
                     raiseMissingAOTExpr("new complex hash", nch_inst->expr);
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11163,7 +11220,7 @@ load_local_done:
                     out = out.refSelf();
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11183,7 +11240,7 @@ load_local_done:
                 const NewComplexListNode* ncl = dynamic_cast<const NewComplexListNode*>(node);
                 if (!ncl) {
                     raiseMissingAOTExpr("new complex list", ncl_inst->expr);
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11192,7 +11249,7 @@ load_local_done:
                     out = out.refSelf();
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11211,7 +11268,7 @@ load_local_done:
                 const NewComplexBufferNode* ncb = dynamic_cast<const NewComplexBufferNode*>(node);
                 if (!ncb) {
                     raiseMissingAOTExpr("new complex buffer", ncb_inst->expr);
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11227,7 +11284,7 @@ load_local_done:
                     }
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11290,7 +11347,7 @@ load_local_done:
                         "vrn.construct has neither AST node nor serialized expression");
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11306,7 +11363,7 @@ load_local_done:
                 QoreValue hash_val = getIRValue(values, inst->operands[0]);
                 const TypedHashDecl* hd = resolveNewHashDeclFromHashTarget(*nhdfh_inst, xsink);
                 if (!hd) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11315,7 +11372,7 @@ load_local_done:
                     xsink->raiseException("HASHDECL-INIT-ERROR",
                         "hashdecl '%s' hash initializer value must be a hash; got type '%s' instead",
                         hd->getName(), hash_val.getTypeName());
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11324,7 +11381,7 @@ load_local_done:
                 QoreHashNode* result = typed_hash_decl_private::get(*hd)->newHash(
                     init, nhdfh_inst->runtime_check, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11358,7 +11415,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11380,7 +11437,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11411,7 +11468,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "store.local missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11475,7 +11532,7 @@ load_local_done:
                     if (branchToExceptionTarget(inst)) {
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11517,7 +11574,7 @@ load_local_done:
                                 ip = 0;
                                 break;
                             }
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
@@ -11553,7 +11610,7 @@ load_local_done:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -11611,7 +11668,7 @@ load_local_done:
                         if (branchToExceptionTarget(inst)) {
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -11634,7 +11691,7 @@ load_local_done:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -11686,7 +11743,7 @@ load_local_done:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -11805,7 +11862,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12214,7 +12271,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "store.closure missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12230,7 +12287,7 @@ load_local_done:
                 } else if (store_mode == AssignmentMode::Normal) {
                     normalizeWeakReferenceForAssignment(val, weak_eval_holder, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -12251,7 +12308,7 @@ load_local_done:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -12292,7 +12349,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12318,7 +12375,7 @@ load_local_done:
                         if (branchToExceptionTarget(inst)) {
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -12336,7 +12393,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "store.global missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12352,7 +12409,7 @@ load_local_done:
                 } else if (store_mode == AssignmentMode::Normal) {
                     normalizeWeakReferenceForAssignment(val, weak_eval_holder, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -12381,7 +12438,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12407,7 +12464,7 @@ load_local_done:
                         if (branchToExceptionTarget(inst)) {
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -12425,7 +12482,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "store.threadlocal missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12441,7 +12498,7 @@ load_local_done:
                 } else if (store_mode == AssignmentMode::Normal) {
                     normalizeWeakReferenceForAssignment(val, weak_eval_holder, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -12471,7 +12528,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12604,7 +12661,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12627,7 +12684,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12650,7 +12707,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12700,7 +12757,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12725,7 +12782,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12749,7 +12806,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12762,7 +12819,7 @@ load_local_done:
                 QoreValue res = QoreIterateOperatorNode::evalIteratorValue(source,
                     QoreIterateOperatorNode::getElementTypeInfo(source, source.getTypeInfo()), xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12800,7 +12857,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12845,7 +12902,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12893,7 +12950,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12932,7 +12989,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12965,7 +13022,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12984,7 +13041,7 @@ load_local_done:
                     static_cast<uint64_t>(state_val.getAsBigInt()),
                     toBits(value_val), xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12998,7 +13055,7 @@ load_local_done:
                     static_cast<uint64_t>(state_val.getAsBigInt()),
                     fill_val.getAsBigInt(), xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13033,7 +13090,7 @@ load_local_done:
                         xsink->raiseException("IR-EXEC-ERROR", "on-block-exit requires a statement or handler IR");
                     }
                     executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13062,7 +13119,7 @@ load_local_done:
                                 tlpd->dbgFunctionExit(statements, return_value, xsink);
                             }
                             executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return dbg_rc == RC_RETURN;
                         }
@@ -13118,14 +13175,14 @@ load_local_done:
                             }
                             tlpd->dbgFunctionExit(statements, return_value, xsink);
                             executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
                         if (dbg_rc == RC_RETURN) {
                             tlpd->dbgFunctionExit(statements, return_value, xsink);
                             executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return true;
                         }
@@ -13157,7 +13214,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13276,7 +13333,7 @@ load_local_done:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -13309,7 +13366,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "discard.temps.keep missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13343,7 +13400,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13443,7 +13500,7 @@ load_local_done:
                 if (xsink) {
                     xsink->raiseThreadExit();
                 }
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                 cleanupLocalCaches();
                 return false;
             case QoreIROpcode::GuardInt:
@@ -13455,7 +13512,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "guard missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13518,7 +13575,7 @@ load_local_done:
                         // Mutex::unlock()); without this, on_exit handlers are orphaned
                         // and resources like mutexes remain locked.
                         executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -13546,14 +13603,14 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "unary op missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
                 QoreValue val = getIRValue(values, inst->operands[0]);
                 QoreValue res = QoreIRInterpreter::evalUnary(inst->opcode, val, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13618,7 +13675,7 @@ load_local_done:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         if (debug_active) {
                             tlpd->dbgFunctionExit(statements, return_value, xsink);
                         }
@@ -13642,7 +13699,7 @@ load_local_done:
                         xsink->raiseException("IR-EXEC-ERROR",
                             "string append missing operands");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13664,7 +13721,7 @@ load_local_done:
                         toBits(left), toBits(right), xsink))
                     : QoreIRInterpreter::evalBinary(inst->opcode, left, right, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13831,7 +13888,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "binary op missing operands");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13845,7 +13902,7 @@ load_local_done:
                     if (branchToExceptionTarget(inst)) {
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13866,7 +13923,7 @@ load_local_done:
                 auto* plugin_inst = static_cast<QoreIRPluginInstruction*>(inst);
                 uint32_t global_id = resolvePluginOperationId(*plugin_inst, xsink);
                 if (!global_id || (xsink && *xsink)) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13888,7 +13945,7 @@ load_local_done:
                     QoreValue self = getIRValue(values, inst->operands[0]);
                     args_value = makePluginArgsList(inst->operands, 1, values, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -13896,7 +13953,7 @@ load_local_done:
                 } else if (inst->opcode == QoreIROpcode::PluginConstruct) {
                     args_value = makePluginArgsList(inst->operands, 0, values, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -13916,7 +13973,7 @@ load_local_done:
 
                 args_value.discard(xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13935,7 +13992,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "container access op missing operands");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13960,7 +14017,7 @@ load_local_done:
                         static_cast<int32_t>(expr_inst->list_selector_kinds.size()),
                         selector_bits.data(), string_index_char, xsink));
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -13981,7 +14038,7 @@ load_local_done:
                     evaluateOwnedListElement(res, xsink);
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14013,7 +14070,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "ternary op missing operands");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 } else {
@@ -14023,7 +14080,7 @@ load_local_done:
                     res = QoreIRInterpreter::evalTernary(inst->opcode, first, second, third, xsink);
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14039,7 +14096,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "fused sprintf join missing operands");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14050,7 +14107,7 @@ load_local_done:
                 QoreValue res = fromBits(qore_rt_list_int_sprintf_join(
                     toBits(separator), toBits(list), toBits(literal), metadata.getAsBigInt(), xsink));
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14073,7 +14130,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "quaternary op missing operands");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 } else {
@@ -14084,7 +14141,7 @@ load_local_done:
                     res = QoreIRInterpreter::evalQuaternary(inst->opcode, first, second, third, fourth, xsink);
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14099,7 +14156,7 @@ load_local_done:
                 auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst);
                 QoreValue res = QoreIRInterpreter::evalLValueLoad(lval_inst->lvalue, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14119,7 +14176,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "store.lvalue missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14187,7 +14244,7 @@ load_local_done:
                 QoreValue res = QoreIRInterpreter::evalLValueStore(lval_inst->lvalue, val, xsink,
                     lval_inst->mode);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14219,7 +14276,7 @@ load_local_done:
                 auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst);
                 if (path_inst->operands.empty() || path_inst->path.empty()) {
                     xsink->raiseException("IR-EXEC-ERROR", "lvalue.path.assign missing operand or path");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14235,7 +14292,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14293,7 +14350,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14318,7 +14375,7 @@ load_local_done:
                 auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst);
                 if (path_inst->operands.empty() || path_inst->path.empty()) {
                     xsink->raiseException("IR-EXEC-ERROR", "lvalue.path.compound missing operand or path");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14333,7 +14390,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14367,7 +14424,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14391,7 +14448,7 @@ load_local_done:
                 auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst);
                 if (path_inst->path.empty()) {
                     xsink->raiseException("IR-EXEC-ERROR", "lvalue.path.unary missing path");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14411,7 +14468,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14887,7 +14944,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14923,7 +14980,7 @@ load_local_done:
                 auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst);
                 if (path_inst->path.empty()) {
                     xsink->raiseException("IR-EXEC-ERROR", "lvalue.path.binary_mut missing path");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14938,7 +14995,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15064,7 +15121,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15085,7 +15142,7 @@ load_local_done:
                 auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst);
                 if (path_inst->path.empty()) {
                     xsink->raiseException("IR-EXEC-ERROR", "lvalue.path.ternary missing path");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15100,7 +15157,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15269,7 +15326,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15331,7 +15388,7 @@ load_local_done:
                 // The slot cache was pre-invalidated above; next LoadLocal re-reads from TLS.
                 QoreValue res = QoreIRInterpreter::evalLValueUnary(inst->opcode, lval_inst->lvalue, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15348,7 +15405,7 @@ load_local_done:
                 const VarRefNode* lval_vrn = prepareLValueSlotCache(lval_inst);
                 QoreValue res = QoreIRInterpreter::evalLValueUnary(inst->opcode, lval_inst->lvalue, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15368,7 +15425,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "lvalue binary op missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15398,7 +15455,7 @@ load_local_done:
                     res = evalPlusEquals(lval_inst->lvalue, right, xsink);
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15425,7 +15482,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "lvalue binary op missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15488,7 +15545,7 @@ load_local_done:
                     res = evalLValueBinary(inst->opcode, lval_inst->lvalue, right, xsink);
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15507,7 +15564,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "lvalue binary op missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15517,7 +15574,7 @@ load_local_done:
                     lval_inst->lvalue.getInternalNode()) != nullptr;
                 QoreValue res = QoreIRInterpreter::evalLValueBinary(inst->opcode, lval_inst->lvalue, right, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15535,7 +15592,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "lvalue ternary op missing operands");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15546,7 +15603,7 @@ load_local_done:
                 QoreValue res = QoreIRInterpreter::evalLValueTernary(inst->opcode, lval_inst->lvalue, first, second,
                     third, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -16045,7 +16102,7 @@ load_local_done:
                         xsink->raiseException("IR-INTERPRETER-ERROR",
                             "no self object in direct method call");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -16163,7 +16220,7 @@ load_local_done:
                         xsink->raiseException("IR-INTERPRETER-ERROR",
                             "no self object in invoke method direct");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -16235,7 +16292,7 @@ load_local_done:
                     if (!o || !o->isValid()) {
                         qore_raise_deleted_object(xsink, 
                             "cannot call method on a deleted weak reference");
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -16405,7 +16462,7 @@ load_local_done:
                 if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
 
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -16419,7 +16476,7 @@ load_local_done:
                 releaseConsumedCallArgs(direct_inst);
                 if (xsink && *xsink) {
                     res.discard(xsink);
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -16611,7 +16668,7 @@ load_local_done:
             }
             if (xsink && *xsink) {
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                 cleanupLocalCaches();
                 return false;
             }
@@ -16638,7 +16695,7 @@ load_local_done:
                     break;
                 }
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                 cleanupLocalCaches();
                 return false;
             }
@@ -16662,7 +16719,7 @@ load_local_done:
                     break;
                 }
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                 cleanupLocalCaches();
                 return false;
             }
@@ -16710,7 +16767,7 @@ load_local_done:
                     expr_inst->expr);
             }
             if (xsink && *xsink) {
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                 cleanupLocalCaches();
                 return false;
             }
@@ -16766,7 +16823,7 @@ load_local_done:
                 QoreValue res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
                     expr_inst->expr);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -16809,7 +16866,7 @@ load_local_done:
                     res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
                         expr_inst->expr);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         return false;
                     }
                 }
@@ -16841,14 +16898,14 @@ load_local_done:
                     }
                     // For other types, res stays NOTHING
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         return false;
                     }
                 } else {
                     res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
                         expr_inst->expr);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         return false;
                     }
                 }
@@ -16906,7 +16963,7 @@ load_local_done:
                     if (branchToExceptionTarget(inst)) {
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -16932,7 +16989,7 @@ load_local_done:
                         expr_inst->expr);
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
@@ -16953,7 +17010,7 @@ load_local_done:
                 cleanupLocalCaches();
 
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
@@ -16982,7 +17039,7 @@ load_local_done:
                         expr_inst->expr);
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -17020,7 +17077,7 @@ load_local_done:
                         expr_inst->expr);
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -17077,13 +17134,13 @@ load_local_done:
                 // No exception target: fire all scope exits after raising the exception.
                 // The exception is now on xsink, so on_error handlers can access it
                 // via CatchExceptionHelper for rethrow support.
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                 return returnAfterUnhandledException(true);
             }
             case QoreIROpcode::Rethrow: {
                 auto* rethrow_inst = static_cast<QoreIRThrowInstruction*>(inst);
                 if (!xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -17170,7 +17227,7 @@ load_local_done:
                                 ip = 0;
                                 break;
                             }
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
@@ -17257,7 +17314,7 @@ load_local_done:
                     msg += std::to_string(static_cast<int>(inst->opcode));
                     xsink->raiseException("IR-EXEC-ERROR", "%s", msg.c_str());
                 }
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                 cleanupLocalCaches();
                 return false;
         }
@@ -17289,7 +17346,7 @@ load_local_done:
     if (xsink) {
         xsink->raiseException("IR-EXEC-ERROR", "executor reached invalid state");
     }
-    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
     cleanupLocalCaches(false);
     return false;
 }

@@ -605,6 +605,18 @@ private:
     size_t exit_temp_cleanup_count = 0;
     // Map from value ID to invoke-result alloca (for clearing at Return)
     std::unordered_map<uint32_t, llvm::Value*> invoke_alloca_map;
+    //! the value id of each cleanup alloca of invoke_alloca_map, for the order of the release of a statement's
+    //! temporaries by an exception
+    std::unordered_map<llvm::Value*, uint32_t> cleanup_alloca_value_ids;
+    //! the class of each value for the order of the release of a statement's temporaries by an exception (see
+    //! qore_ir_build_exception_release_groups())
+    std::vector<uint32_t> exception_release_groups;
+
+    //! Records the cleanup alloca of a value
+    void setInvokeAlloca(uint32_t id, llvm::Value* alloca) {
+        invoke_alloca_map[id] = alloca;
+        cleanup_alloca_value_ids[alloca] = id;
+    }
     //! the output slot of each IteratorNext, by its result id: it holds a reference to the current element, which
     //! ReleaseOwnedTemp releases when a return or an exception leaves the loop
     std::unordered_map<uint32_t, llvm::Value*> iterator_element_allocas;
@@ -1374,6 +1386,19 @@ private:
     // \a handler itself if there are none.  Pending SSA cleanups are promoted to cleanup allocas first.
     llvm::BasicBlock* getExceptionEdgeTarget(llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst, llvm::BasicBlock* handler);
+
+    // Returns the block that an exception raised by \a inst outside a try block branches to on its way to the
+    // function's error return \a target: a block that first releases the temporaries of the raising statement whose
+    // release can run a destructor, in the order in which the AST interpreter unwinds them, if the error return's
+    // release (last registered first) gives another order; otherwise \a target itself
+    llvm::BasicBlock* getOrderedErrorReturnEdge(llvm::Module& module, llvm::Function* llvm_func,
+            const QoreIRInstruction* inst, llvm::BasicBlock* target);
+
+    // Gives the cleanup allocas of a statement's temporaries, registered since \a start, in the order of their release
+    // when an exception leaves the statement (see qore_ir_order_exception_release()); returns true if it differs from
+    // the reverse of the registration order.  \a observable_only leaves out the values whose release cannot run a
+    // destructor
+    bool orderExceptionTemps(size_t start, bool observable_only, std::vector<llvm::Value*>& temps);
 
     // Emit statement/condition-boundary temp cleanup for values tracked since
     // the latest PushTempMark.

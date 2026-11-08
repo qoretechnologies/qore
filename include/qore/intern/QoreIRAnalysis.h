@@ -177,6 +177,44 @@ DLLLOCAL const LocalVar* qore_ir_get_written_local(
 DLLLOCAL bool qore_ir_find_local_reads_overwritten_before_use(const QoreIRFunction& func,
     std::unordered_set<uint32_t>& result);
 
+//! The release class of a value that is the receiver of an operation (see qore_ir_build_exception_release_groups())
+constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
+
+//! Classifies the values of a function for the order in which an exception releases the temporaries of a statement
+/** When an exception leaves an expression, the AST interpreter unwinds its evaluation: the arguments of each call (and
+    the elements of each list or hash) whose evaluation the exception interrupted are released with their argument
+    list, first argument first, the innermost call's first, and an operand that an operator holds is released as the
+    operator is unwound; a receiver (the object of a method call, the container of [], {} or a slice, the value of a
+    cast), which the statement holds until it ends (QoreStatementTempScope::holdReceiver()), is released last, last
+    held first.  An engine that releases a statement's temporaries last registered first gives another order
+    (f(new T("a"), new T("b"), thr()) destroys b before a).
+
+    Each value used once gets a class: 1 + the serial (in block and instruction order) of the instruction whose argument
+    list (the arguments of a call, the elements of a list or a hash) it is in, QORE_IR_RELEASE_RECEIVER if it is a
+    receiver, or 0 if it is released on its own (an operand of any other instruction, or a value used more than once);
+    an incoming value of a Phi in an argument list that has no class of its own gets the Phi's, as the Phi's value is
+    the incoming value, which an engine can keep in the incoming value's own slot.
+
+    @param func the function
+    @param groups receives the class of each value, indexed by value id
+*/
+DLLLOCAL void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vector<uint32_t>& groups);
+
+//! Orders the temporaries of a statement for their release when an exception leaves it
+/** The temporaries of each argument list (see qore_ir_build_exception_release_groups()) are released together, first
+    registered first, and the lists last started first (the innermost first); a temporary released on its own takes
+    the place of a list of one; receivers are released after all of them, last registered first.
+
+    @param groups the classes of the values (qore_ir_build_exception_release_groups()); a value id outside it is
+    released on its own
+    @param ids the value ids of the temporaries, in the order of their registration
+    @param count the number of temporaries
+    @param order receives the indexes into @a ids in the order of their release
+    @return true if @a order differs from the reverse of the registration order
+*/
+DLLLOCAL bool qore_ir_order_exception_release(const std::vector<uint32_t>& groups, const uint32_t* ids, size_t count,
+    std::vector<size_t>& order);
+
 //! Return true when one instruction can mutate state visible to its caller.
 //! Direct function calls without reference arguments are handled by the
 //! interprocedural fixed-point analysis and therefore return false here.

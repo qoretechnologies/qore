@@ -669,6 +669,30 @@ iteration of a loop. An incoming value with no cleanup slot of its own gives the
 reference of its own. In the IR interpreter every Phi's slot owns its value, so every Phi is a
 temporary. `CallArgumentReleaseOrder.qtest`.
 
+When an exception leaves an expression, the AST interpreter unwinds its evaluation: the arguments
+of each call (and the elements of each list or hash literal) evaluated before the exception are
+released with their argument list, first argument first, the innermost call's first, and an
+operand that an operator holds is released as the operator is unwound; a receiver (the object of a
+method call, the container of `[]`, `{}` or a slice, the value of a cast, the callable of a call
+through a call reference) is held by the statement (`QoreStatementTempScope::holdReceiver()`) and
+released when it ends, last held first. The compiled modes register a statement's temporaries as
+they are created and release them last registered first, which gave another order
+(`f(new T("a"), new T("b"), thr())` destroyed `b` first). `qore_ir_build_exception_release_groups()`
+classifies each value used once by the instruction that uses it: an argument list (the arguments of
+a call, the elements of `MakeList`/`MakeHash` and the typed container constructors; the incoming
+values of a Phi in an argument list take the Phi's class), a receiver, or released on its own; and
+`qore_ir_order_exception_release()` orders a statement's temporaries for an exception: the lists
+last started first, each first registered first, then the receivers, last registered first. The IR
+interpreter orders the temp scopes it drains for an exception (`IRCleanupSlots::orderForException()`,
+from `cleanupToTempScope()` and `cleanupValues()` when they release for an exception); native code
+releases the temporaries of the raising statement in that order on the edge to an in-frame handler
+(`getExceptionEdgeTarget()`), and, for an exception leaving the function, on a per-site edge to the
+error return when the order of the temporaries that can run a destructor (a value whose type can hold
+an object, `QoreTypeInfo::needsScan()`) differs from the error return's (`getOrderedErrorReturnEdge()`;
+a statement with more than 256 temporaries keeps the error return's order, as each exception check
+orders the temporaries registered before it).
+`ExceptionTempReleaseOrder.qtest`.
+
 The native cache of a local on the runtime stack is retained by the local's reload tracker. A
 store releases the tracker's reference before the runtime assignment releases the variable's, so
 the value replaced is destroyed by the assignment, as with the AST interpreter. The tracker is

@@ -3861,6 +3861,9 @@ public:
     //! Non-zero for an incoming value of a Phi that is a temporary used by the Phi once (and otherwise only before it
     //! in its own block): the Phi's slot takes its reference over; every Phi is a temporary that a call consumes
     mutable std::vector<uint8_t> interpreter_phi_takes_incoming;
+    //! The class of each value for the order of the release of a statement's temporaries by an exception (see
+    //! qore_ir_build_exception_release_groups())
+    mutable std::vector<uint32_t> interpreter_exception_release_groups;
     mutable std::vector<int32_t> interpreter_operand_use_counts;
     mutable std::vector<uint32_t> interpreter_param_slot_ids;
     mutable std::vector<const LocalVar*> interpreter_param_local_vars;

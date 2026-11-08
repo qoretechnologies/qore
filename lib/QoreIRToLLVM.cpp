@@ -3553,17 +3553,9 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
     if (pending_ssa_cleanup.size() > mark->pending_ssa_count) {
         promotePendingSsaToAllocas(module, llvm_func);
     }
-    size_t start = mark->invoke_alloca_count;
+    // in the order in which the AST interpreter unwinds them
     std::vector<llvm::Value*> temps;
-    for (size_t i = invoke_result_allocas.size(); i > start; --i) {
-        if (!((invoke_result_allocas.size() - i + 1) % 100)) {
-            (void)qore_check_cancel(nullptr, "LLVM exception edge temp release");
-        }
-        llvm::Value* alloca_ptr = invoke_result_allocas[i - 1];
-        if (!persistent_cleanup_allocas.count(alloca_ptr)) {
-            temps.push_back(alloca_ptr);
-        }
-    }
+    orderExceptionTemps(mark->invoke_alloca_count, false, temps);
     if (temps.empty()) {
         return handler;
     }
@@ -3573,7 +3565,6 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
     builder->SetInsertPoint(edge);
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-    // in the reverse order of their creation, as DiscardTemps releases them
     size_t count = 0;
     for (llvm::Value* alloca_ptr : temps) {
         if (!(++count % 100)) {
@@ -3584,6 +3575,80 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
         builder->CreateCall(helper, {val, xsink_arg});
     }
     builder->CreateBr(handler);
+    builder->SetInsertPoint(saved_insert, saved_ip);
+    return edge;
+}
+
+bool QoreIRToLLVM::orderExceptionTemps(size_t start, bool observable_only, std::vector<llvm::Value*>& temps) {
+    temps.clear();
+    std::vector<llvm::Value*> allocas;
+    std::vector<uint32_t> ids;
+    for (size_t i = start; i < invoke_result_allocas.size(); ++i) {
+        if (!((i - start + 1) % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM exception edge temp release");
+        }
+        llvm::Value* alloca_ptr = invoke_result_allocas[i];
+        if (persistent_cleanup_allocas.count(alloca_ptr)) {
+            continue;
+        }
+        // an alloca of no known value is released on its own: its id is outside the classes
+        auto id_it = cleanup_alloca_value_ids.find(alloca_ptr);
+        uint32_t id = id_it == cleanup_alloca_value_ids.end() ? QORE_IR_RELEASE_RECEIVER - 1 : id_it->second;
+        if (observable_only && id_it != cleanup_alloca_value_ids.end() && current_ir_func) {
+            // a value that cannot hold an object runs no destructor when it is released
+            const QoreIRValueFacts* facts = current_ir_func->getValueFacts(QoreIRValue(id));
+            if (facts && facts->type_info && !QoreTypeInfo::needsScan(facts->type_info)) {
+                continue;
+            }
+        }
+        allocas.push_back(alloca_ptr);
+        ids.push_back(id);
+    }
+    std::vector<size_t> order;
+    bool reordered = qore_ir_order_exception_release(exception_release_groups, ids.data(), ids.size(), order);
+    temps.reserve(order.size());
+    for (size_t i : order) {
+        temps.push_back(allocas[i]);
+    }
+    return reordered;
+}
+
+llvm::BasicBlock* QoreIRToLLVM::getOrderedErrorReturnEdge(llvm::Module& module, llvm::Function* llvm_func,
+        const QoreIRInstruction* inst, llvm::BasicBlock* target) {
+    if (!inst || !inst->temp_scope_id || temp_cleanup_marks.empty() || exception_release_groups.empty()) {
+        return target;
+    }
+    const TempCleanupMark* mark = nullptr;
+    for (size_t i = temp_cleanup_marks.size(); i > 0; --i) {
+        if (temp_cleanup_marks[i - 1].scope_id == inst->temp_scope_id) {
+            mark = &temp_cleanup_marks[i - 1];
+            break;
+        }
+    }
+    // only temporaries whose release can run a destructor are released here, and only if the order differs: the
+    // error return releases them all, last registered first.  Each exception check of a statement orders the
+    // statement's temporaries registered so far, so a statement with more than MaxOrderedErrorReturnTemps of them
+    // (a generated literal of thousands of calls) keeps the error return's order rather than take compile time
+    // quadratic in its size
+    static constexpr size_t MaxOrderedErrorReturnTemps = 256;
+    std::vector<llvm::Value*> temps;
+    if (!mark || pending_ssa_cleanup.size() > mark->pending_ssa_count
+            || invoke_result_allocas.size() - mark->invoke_alloca_count > MaxOrderedErrorReturnTemps
+            || !orderExceptionTemps(mark->invoke_alloca_count, true, temps)) {
+        return target;
+    }
+    llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
+    auto saved_ip = builder->GetInsertPoint();
+    llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
+    builder->SetInsertPoint(edge);
+    auto helper = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    for (llvm::Value* alloca_ptr : temps) {
+        llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
+        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
+        builder->CreateCall(helper, {val, xsink_arg});
+    }
+    builder->CreateBr(target);
     builder->SetInsertPoint(saved_insert, saved_ip);
     return edge;
 }
@@ -4509,7 +4574,7 @@ llvm::AllocaInst* QoreIRToLLVM::promoteSsaEntryToAlloca(uint32_t result_id,
     alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), ca);
     builder->CreateStore(val, ca);
     registerInvokeCleanupAlloca(ca);
-    invoke_alloca_map[result_id] = ca;
+    setInvokeAlloca(result_id, ca);
     // Remove the matching SSA entry so the normal-exit and per-invoke LP
     // cleanup paths don't double-decref the promoted value.
     for (auto it = pending_ssa_cleanup.begin(); it != pending_ssa_cleanup.end(); ) {
@@ -4635,7 +4700,7 @@ void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id
     builder->CreateCall(decref_fn, {old_val, xsink_arg});
 
     registerInvokeCleanupAlloca(cleanup_alloca);
-    invoke_alloca_map[result_id] = cleanup_alloca;
+    setInvokeAlloca(result_id, cleanup_alloca);
 }
 
 // Walk a lvalue AST expression to find the root LocalVar* key (for alloca lookup).
@@ -5363,7 +5428,7 @@ llvm::AllocaInst* QoreIRToLLVM::emitPreDecrefAndClearTracker(uint32_t result_id,
         ca = ab.CreateAlloca(i64_type, nullptr, "lv_cleanup");
         ab.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), ca);
         registerInvokeCleanupAlloca(ca);
-        invoke_alloca_map[result_id] = ca;
+        setInvokeAlloca(result_id, ca);
     }
 
     // Decref old value (first-iteration decref of NOTHING is a no-op)
@@ -10204,7 +10269,7 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
         if (!error_return_block) {
             error_return_block = llvm::BasicBlock::Create(ctx, "error_return", llvm_func);
         }
-        exception_block = error_return_block;
+        exception_block = getOrderedErrorReturnEdge(module, llvm_func, inst, error_return_block);
     }
     // Inline exception check as direct memory loads instead of function call
     // ExceptionSink::priv at offset 0 -> qore_es_private*
@@ -11328,6 +11393,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     exit_temp_cleanup_array_overflow = false;
     exit_temp_cleanup_count = 0;
     invoke_alloca_map.clear();
+    cleanup_alloca_value_ids.clear();
     iterator_element_allocas.clear();
     iterator_cleanup_allocas.clear();
     pending_phis.clear();
@@ -11623,6 +11689,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         error = "cancelled during LLVM overwritten local read analysis";
         return false;
     }
+    // an exception releases a statement's temporaries in the order in which the AST interpreter unwinds them
+    qore_ir_build_exception_release_groups(func, exception_release_groups);
     // First: collect all register IDs used as DotEval bases
     std::unordered_set<uint32_t> dot_eval_base_candidates;
     std::unordered_set<uint32_t> non_dot_eval_uses;
@@ -16488,7 +16556,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 temp_cleanup = alloca_builder.CreateAlloca(i64_type, nullptr, "phi_temp_cleanup");
                 alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), temp_cleanup);
                 registerInvokeCleanupAlloca(temp_cleanup);
-                invoke_alloca_map[inst->result.id] = temp_cleanup;
+                setInvokeAlloca(inst->result.id, temp_cleanup);
             }
             // Store for fixup pass after all blocks are lowered (incoming values
             // may not be lowered yet due to forward edges).
@@ -32879,7 +32947,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     ca = ab.CreateAlloca(i64_type, nullptr, "lvp_cleanup");
                     ab.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), ca);
                     registerInvokeCleanupAlloca(ca);
-                    invoke_alloca_map[inst->result.id] = ca;
+                    setInvokeAlloca(inst->result.id, ca);
                 }
                 auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                         llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));

@@ -577,6 +577,184 @@ const LocalVar* qore_ir_get_written_local(
     }
 }
 
+// the operation of an instruction: an Invoke (an operation that can raise in a try block) performs its invoke_opcode
+static QoreIROpcode qore_ir_release_class_opcode(const QoreIRInstruction* inst) {
+    return inst->opcode == QoreIROpcode::Invoke
+        ? static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode : inst->opcode;
+}
+
+// returns true for an operation whose first operand the AST interpreter holds as a receiver until the end of the
+// statement (QoreStatementTempScope::holdReceiver(): QoreDotEvalOperatorNode, QoreCastOperatorNode,
+// QoreHashObjectDereferenceOperatorNode, QoreSquareBracketsOperatorNode, QoreSquareBracketsRangeOperatorNode)
+static bool qore_ir_opcode_holds_receiver(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject:
+        case QoreIROpcode::CastAny:
+        case QoreIROpcode::CastList:
+        case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastObject:
+        case QoreIROpcode::CastEnum:
+        case QoreIROpcode::CastComplexHash:
+        case QoreIROpcode::HashKeyAccess:
+        case QoreIROpcode::HashKeyAccessInt:
+        case QoreIROpcode::HashKeyAccessHash:
+        case QoreIROpcode::HashKeyAccessHashGuarded:
+        case QoreIROpcode::HashDerefDynamic:
+        case QoreIROpcode::ListIndexAccess:
+        case QoreIROpcode::ListIndexDynamic:
+        case QoreIROpcode::RangeSliceAny:
+        case QoreIROpcode::RangeSliceInt:
+        case QoreIROpcode::RangeSliceFloat:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// returns true for an operation that builds a list or a hash of its operands, which the AST interpreter builds
+// element by element, so an exception releases the elements built with the container, first element first
+static bool qore_ir_opcode_builds_container(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::MakeList:
+        case QoreIROpcode::MakeHash:
+        case QoreIROpcode::MakeHashConstKeys:
+        case QoreIROpcode::NewComplexList:
+        case QoreIROpcode::NewComplexHash:
+        case QoreIROpcode::NewHashDecl:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// documented in QoreIRAnalysis.h
+void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vector<uint32_t>& groups) {
+    groups.assign(static_cast<size_t>(func.max_value_id) + 1, 0);
+    std::vector<uint32_t> uses(groups.size(), 0);
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                if (operand.isValid() && operand.id < uses.size()) {
+                    ++uses[operand.id];
+                }
+            });
+        }
+    }
+    auto set_class = [&](QoreIRValue operand, uint32_t cls) {
+        // a value used more than once is released on its own: it has no one place to be released with
+        if (operand.isValid() && operand.id < groups.size() && uses[operand.id] == 1) {
+            groups[operand.id] = cls;
+        }
+    };
+    uint32_t serial = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            const QoreIRInstruction* inst = inst_ptr.get();
+            ++serial;
+            // the serial is a class of its own for each instruction, as the first serial is 1 and the receiver class
+            // is beyond the number of instructions of any function
+            assert(serial < QORE_IR_RELEASE_RECEIVER);
+            int arg_start = qore_ir_call_arg_start(inst);
+            if (arg_start >= 0) {
+                // the operands before the arguments are the receiver: the object of a method call, or the callable
+                // of a call through a call reference (CallReferenceCallNode holds it as a receiver)
+                for (size_t i = 0; i < inst->operands.size(); ++i) {
+                    set_class(inst->operands[i], i < static_cast<size_t>(arg_start) ? QORE_IR_RELEASE_RECEIVER
+                        : serial + 1);
+                }
+                continue;
+            }
+            QoreIROpcode op = qore_ir_release_class_opcode(inst);
+            if (qore_ir_opcode_builds_container(op)) {
+                for (const QoreIRValue& operand : inst->operands) {
+                    set_class(operand, serial + 1);
+                }
+            } else if (qore_ir_opcode_holds_receiver(op) && !inst->operands.empty()) {
+                set_class(inst->operands[0], QORE_IR_RELEASE_RECEIVER);
+            }
+        }
+    }
+    // the value of a Phi in an argument list (f(new T(), x ?? new T(), thr())) is the incoming value that it takes
+    // or references, which an engine can keep in the incoming value's slot, so an incoming value released on its own
+    // is released with the Phi's list; a Phi incoming to another Phi gets its class in a later round
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (const auto& block : func.blocks) {
+            for (const auto& inst_ptr : block->instructions) {
+                if (inst_ptr->opcode != QoreIROpcode::Phi || !inst_ptr->result.isValid()
+                        || inst_ptr->result.id >= groups.size()) {
+                    continue;
+                }
+                uint32_t cls = groups[inst_ptr->result.id];
+                if (!cls || cls == QORE_IR_RELEASE_RECEIVER) {
+                    continue;
+                }
+                for (const auto& inc : static_cast<const QoreIRPhiInstruction*>(inst_ptr.get())->incoming) {
+                    if (inc.value.isValid() && inc.value.id < groups.size() && !groups[inc.value.id]) {
+                        groups[inc.value.id] = cls;
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// documented in QoreIRAnalysis.h
+bool qore_ir_order_exception_release(const std::vector<uint32_t>& groups, const uint32_t* ids, size_t count,
+        std::vector<size_t>& order) {
+    order.clear();
+    if (count < 2) {
+        if (count) {
+            order.push_back(0);
+        }
+        return false;
+    }
+    // the class of each temporary, and the position of the first temporary of each argument list
+    std::vector<uint32_t> cls(count, 0);
+    std::unordered_map<uint32_t, size_t> first;
+    for (size_t i = 0; i < count; ++i) {
+        uint32_t c = ids[i] < groups.size() ? groups[ids[i]] : 0;
+        cls[i] = c;
+        if (c && c != QORE_IR_RELEASE_RECEIVER) {
+            first.emplace(c, i);
+        }
+    }
+    // the position of the list that each temporary is released with: its own for a temporary released on its own
+    std::vector<size_t> list_pos(count);
+    order.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        list_pos[i] = cls[i] && cls[i] != QORE_IR_RELEASE_RECEIVER ? first[cls[i]] : i;
+        if (cls[i] != QORE_IR_RELEASE_RECEIVER) {
+            order.push_back(i);
+        }
+    }
+    // the lists last started first, each first registered first
+    std::stable_sort(order.begin(), order.end(), [&list_pos](size_t a, size_t b) {
+        return list_pos[a] != list_pos[b] ? list_pos[a] > list_pos[b] : a < b;
+    });
+    // then the receivers, last registered first
+    for (size_t i = count; i > 0; --i) {
+        if (cls[i - 1] == QORE_IR_RELEASE_RECEIVER) {
+            order.push_back(i - 1);
+        }
+    }
+    for (size_t i = 0; i < count; ++i) {
+        if (order[i] != count - 1 - i) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // documented in QoreIRAnalysis.h
 bool qore_ir_find_local_reads_overwritten_before_use(const QoreIRFunction& func,
         std::unordered_set<uint32_t>& result) {
