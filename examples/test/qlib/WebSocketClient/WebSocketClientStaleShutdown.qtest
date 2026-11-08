@@ -866,7 +866,11 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             \discordInlineReconnectNotDetachedTest());
         addTestCase("a canceled HTTP/2 WebSocket handshake does not fall back to HTTP/1.1",
             \destroyDuringTunnelHandshakeTest());
-        addTestCase("the destructor ends a connect in its TLS handshake", \destroyDuringTlsHandshakeTest());
+        foreach string hv in (("auto", "1.1", "2.0")) {
+            addTestCase(sprintf("the destructor ends a connect in its TLS handshake (HTTP version %s)", hv),
+                \destroyDuringTlsHandshakeTest(), hv);
+        }
+        addTestCase("the destructor ends a connect in its QUIC handshake (HTTP/3)", \destroyDuringQuicHandshakeTest());
         # last: an exception that no thread of the tests handled fails the run
         addTestCase("no unhandled exception in a thread of the tests", \noUnhandledThreadExceptionsTest());
         set_return_value(main());
@@ -2215,9 +2219,9 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertEq((), (select rest, $1 == "h1-upgrade"), sprintf("no HTTP/1.1 Upgrade request was made: %y", rest));
     }
 
-    #! The client is destroyed while its connect waits for the server's TLS handshake: the destructor shuts the
-    #! connection manager down instead of waiting for the connect timeout
-    destroyDuringTlsHandshakeTest() {
+    #! The client is destroyed while its connect waits for the server's TLS handshake: connectAsync() returned at
+    #! once, and the destructor shuts the connection manager down instead of waiting for the connect timeout
+    destroyDuringTlsHandshakeTest(string http_version) {
         Socket srv();
         srv.bindINET("localhost", "0");
         srv.listen();
@@ -2233,12 +2237,36 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             accepted.push(exists s);
             server_done.waitForZero(LifecycleWsClient::HandoffTimeout * 4);
         });
-        LifecycleWsClient c(sub (*data msg) {}, {"url": "wss://localhost:" + port, "http_version": "auto",
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "wss://localhost:" + port, "http_version": http_version,
             "ssl_verify_cert": False, "logger": logger, "timeout": LifecycleWsClient::HandoffTimeout * 4,
             "connect_timeout": LifecycleWsClient::HandoffTimeout * 4});
         Queue ready();
         c.connectAsync(NOTHING, ready);
+        # the server never answers, so the connect cannot have ended: connectAsync() did not wait for it
+        assertEq(0, ready.size(), "connectAsync() returned while the connect waits for the TLS handshake");
         assertTrue(accepted.get(LifecycleWsClient::HandoffTimeout), "the client connected");
+        Queue deleted();
+        background TestThreads::run(sub () {
+            delete c;
+            deleted.push(True);
+        });
+        assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout), "destroyed without waiting for the connect timeout");
+        auto r = ready.get(LifecycleWsClient::HandoffTimeout);
+        assertTrue(exists r.error, sprintf("the connect failed: %y", r));
+    }
+
+    #! The same for HTTP/3: the server's UDP socket receives the client's QUIC handshake and never answers it
+    destroyDuringQuicHandshakeTest() {
+        Socket srv();
+        srv.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+        int port = srv.getSocketInfo().port;
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "wss://127.0.0.1:" + port, "http_version": "3.0",
+            "ssl_verify_cert": False, "logger": logger, "timeout": LifecycleWsClient::HandoffTimeout * 4,
+            "connect_timeout": LifecycleWsClient::HandoffTimeout * 4});
+        Queue ready();
+        c.connectAsync(NOTHING, ready);
+        assertEq(0, ready.size(), "connectAsync() returned while the connect waits for the QUIC handshake");
+        assertTrue(srv.isDataAvailable(LifecycleWsClient::HandoffTimeout), "the client started its handshake");
         Queue deleted();
         background TestThreads::run(sub () {
             delete c;

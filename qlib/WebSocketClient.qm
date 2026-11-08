@@ -4869,14 +4869,14 @@ ws.setEventQueue();
             # not after the destructor began, also not as a retry; the destructor shuts the manager down, which ends
             # the acquisition
             checkHandshakeCanceled(hcio_mgr);
+            # the manager stays registered for the destructor through the whole attempt: the TLS handshake of an
+            # HTTP/2 or HTTP/3 connection can be waited for in startStreaming() (the stream waits for its connection to
+            # be ready), after acquireStream() returned
+            on_exit clearHandshakeMgr();
             # Acquire a stream — the manager negotiates the best protocol via
             # ALPN (H1/H2) and Alt-Svc (H3). We use the same stream for the
             # WS handshake — no probe-and-discard.
-            HttpClientIo::HttpClientStreamHandle stream;
-            {
-                on_exit clearHandshakeMgr();
-                stream = hcio_mgr.acquireStream(http_opts.url);
-            }
+            HttpClientIo::HttpClientStreamHandle stream = hcio_mgr.acquireStream(http_opts.url);
 
             if (stream instanceof HttpClientIo::Http1ClientStreamHandle) {
                 logDebug("HCIO auto: negotiated H1, using Upgrade handshake");
