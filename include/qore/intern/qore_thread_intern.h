@@ -558,6 +558,8 @@ public:
 };
 
 //! Makes the sandbox manager lookups of the current thread return a captured context while the object exists
+class ProgramThreadCountContextHelper;
+
 class QoreSandboxContextHelper {
 public:
     //! Applies the context; the context must remain valid while the helper exists
@@ -570,6 +572,7 @@ public:
 
 private:
     const QoreSandboxContext* old_ctx = nullptr;
+    const ProgramThreadCountContextHelper* old_pgm_ctx = nullptr;
     bool active = false;
 };
 

@@ -64,6 +64,16 @@ everyone's work. Such a thread sets `QTF_NO_SANDBOX_INHERIT` and instead:
 
 `ThreadPool` (`include/qore/intern/ThreadPool.h`) is the reference implementation of this pattern.
 
+An applied context never lowers the sandbox of code that runs inside its scope: a sandbox check on the worker uses
+the context's manager together with the managers of the Programs entered after the context was applied (the
+current Program and the program-context frames above `ThreadData::sandbox_context_pgm_ctx`), combined so that the
+stricter rule wins; a policy barrier pushed inside the scope stops the walk as it does without a context.  A context
+captured inside a policy barrier (`SandboxManager::createSystemPolicyCall()`) while sandboxed code was on the stack
+has a manager but no network or filesystem policy, so without this a sandboxed Program called by the task
+(`Program::callFunction()`) would run with no policy at all.  In debug builds, a socket or QUIC operation created
+while the current Program has a sandbox asserts that the policy lookup found one
+(`qore_socket_ref_policy_sandbox_manager()`).  Test: examples/test/qore/security/sandbox-context-policy.qtest.
+
 ## The thread limit
 
 `QoreSandboxManager::setMaxThreads(n)` limits the number of threads that code governed by the sandbox may have

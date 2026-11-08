@@ -52,6 +52,7 @@
 #include <qore/QoreSSLCertificate.h>
 #include <qore/Transform.h>
 
+#include "qore/intern/qore_program_private.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
@@ -251,6 +252,18 @@ static int qore_socket_close_private_from_controller(qore_socket_private* priv);
 QoreSandboxManager* qore_socket_ref_policy_sandbox_manager() {
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (!smh) {
+#ifdef DEBUG
+        // fails closed: code of a sandboxed Program is always governed by a network policy; a policy barrier or an
+        // applied sandbox context never lowers the sandbox of the Program that is running (see
+        // find_thread_sandbox_stack_ref_intern())
+        if (QoreProgram* pgm = getProgram()) {
+            QoreSandboxManager* own = qore_program_private::get(*pgm)->getSandboxManagerRef();
+            if (own) {
+                own->deref(nullptr);
+                assert(false && "a sandboxed Program has no network policy");
+            }
+        }
+#endif
         return nullptr;
     }
 

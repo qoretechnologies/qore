@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires HttpClientIo
+
+%exec-class SandboxContextPolicyTest
+
+#! the sandboxed Program that connects; its sandbox blocks private networks
+our Program Connector;
+
+#! Runs the connect of the sandboxed Program in a ThreadPool worker: trusted code, no closure of a sandboxed Program
+string sub pool_connect(string how) {
+    Qore::Thread::ThreadPool tp(1);
+    Queue q();
+    tp.submit(sub () {
+        try {
+            q.push(Connector.callFunction("connect", how));
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex.err);
+        }
+    });
+    on_exit tp.stopWait();
+    return q.get(60s);
+}
+
+#! pool_connect() under a policy barrier (set in the test's constructor)
+our code PoolConnectUnderBarrier;
+string sub barrier_pool_connect(string how) {
+    return call_function(PoolConnectUnderBarrier, how);
+}
+
+#! Tests that an applied sandbox context never lowers the sandbox of a Program entered inside its scope
+/** A task's sandbox context is captured when it is submitted.  Inside a policy barrier
+    (SandboxManager::createSystemPolicyCall()) a sandboxed caller's context has a sandbox but no network policy; when
+    the task applied it, a policy check returned the context's policy and did not look at the Programs on the call
+    stack, so a sandboxed Program called by the task (Program::callFunction()) was unrestricted.  The Programs entered
+    after the context was applied now govern as well, the stricter wins.
+
+    The target is a private address that is not this host's: the sandbox refuses it before anything is sent; a
+    connection that is attempted fails in another way.
+*/
+class SandboxContextPolicyTest inherits QUnit::Test {
+    public {
+        const Target = "10.255.255.254";
+    }
+
+    private {
+        Program caller;
+    }
+
+    constructor() : QUnit::Test("SandboxContextPolicyTest", "1.0", \ARGV) {
+        PoolConnectUnderBarrier = SandboxManager::createSystemPolicyCall(\pool_connect());
+        Connector = sandboxedProgram("connector");
+        Connector.parse("%requires HttpClientIo\nstring sub connect(string how) {
+            if (how == \"tcp\") {
+                Socket s();
+                s.connect(\"" + Target + ":9\", 2s);
+                s.close();
+                return \"CONNECTED\";
+            }
+            HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+                \"protocol\": \"h3\",
+                \"accept_all_certs\": True,
+                \"connect_timeout\": 2s,
+                \"max_request_retries\": 0,
+            });
+            on_exit mgr.closeAll();
+            mgr.request(\"https://" + Target + ":9\", \"GET\", \"/\");
+            return \"CONNECTED\";
+        }", "connector");
+        caller = sandboxedProgram("caller");
+        caller.importFunction("pool_connect");
+        caller.importFunction("barrier_pool_connect");
+        caller.parse("string sub run(string how, bool barrier) { "
+            "return barrier ? barrier_pool_connect(how) : pool_connect(how); }", "caller");
+
+        addTestCase("a sandboxed Program is checked directly", \directTest());
+        addTestCase("a sandboxed Program called by a task of a sandboxed caller is checked", \taskTest());
+        addTestCase("a sandboxed Program called by a task submitted in a policy barrier is checked",
+            \barrierTaskTest());
+        set_return_value(main());
+    }
+
+    directTest() {
+        foreach string how in (("tcp", "quic")) {
+            assertEq("NETWORK-ACCESS-DENIED", callDirect(how), how);
+        }
+    }
+
+    taskTest() {
+        foreach string how in (("tcp", "quic")) {
+            assertEq("NETWORK-ACCESS-DENIED", caller.callFunction("run", how, False), how);
+        }
+    }
+
+    barrierTaskTest() {
+        foreach string how in (("tcp", "quic")) {
+            assertEq("NETWORK-ACCESS-DENIED", caller.callFunction("run", how, True), how);
+        }
+    }
+
+    private string callDirect(string how) {
+        try {
+            return Connector.callFunction("connect", how);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    private static Program sandboxedProgram(string label) {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.blockPrivateNetworks();
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        return p;
+    }
+}
