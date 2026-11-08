@@ -47,7 +47,7 @@ public class GoogleDocumentAiProcessDocumentDataProvider inherits GoogleDocument
     private {
         #! The ID of the builder of the types; see initializeTypes()
         static int types_id = DataProviderActionCatalog::registerLazyValue(
-            \GoogleDocumentAiProcessDocumentDataProvider::buildTypes());
+            auto sub () { return GoogleDocumentAiProcessDocumentDataProvider::buildTypes(); });
     }
 
     #! Returns the request type, which is built on first use

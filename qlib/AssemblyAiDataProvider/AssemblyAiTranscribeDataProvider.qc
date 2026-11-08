@@ -43,7 +43,7 @@ public class AssemblyAiTranscribeDataProvider inherits AssemblyAiDataProviderCom
         static *AssemblyAiTranscribeResponseDataType response_type;
         #! The ID of the builder of the types; see initializeTypes()
         static int types_id = DataProviderActionCatalog::registerLazyValue(
-            \AssemblyAiTranscribeDataProvider::buildTypes());
+            auto sub () { return AssemblyAiTranscribeDataProvider::buildTypes(); });
     }
 
     #! Returns the request type, which is built on first use

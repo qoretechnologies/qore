@@ -1625,7 +1625,8 @@ DataProviderActionCatalog::registerLazyAppActions(AppName, sub () {
         @code{.py}
 class MyProvider {
     private {
-        static int request_type_id = DataProviderActionCatalog::registerLazyValue(\MyProvider::buildRequestType());
+        static int request_type_id = DataProviderActionCatalog::registerLazyValue(
+            auto sub () { return MyProvider::buildRequestType(); });
         static *MyRequestType request_type;
     }
 

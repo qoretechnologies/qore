@@ -58,7 +58,7 @@ public class BflGenerateImageDataProvider inherits BflDataProviderCommon {
     private {
         #! The ID of the builder of the types; see initializeTypes()
         static int types_id = DataProviderActionCatalog::registerLazyValue(
-            \BflGenerateImageDataProvider::buildTypes());
+            auto sub () { return BflGenerateImageDataProvider::buildTypes(); });
     }
     #! Returns the request type, which is built on first use
     /** It is built from the vendored API description, so loading the module does not parse it

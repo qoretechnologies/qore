@@ -45,12 +45,12 @@ public class MistralOcrDataProvider inherits MistralDataProviderCommon {
         static *MistralOcrRequestDataType request_type;
         #! The ID of the request type's builder; see requestType()
         static int request_type_id = DataProviderActionCatalog::registerLazyValue(
-            \MistralOcrDataProvider::buildRequestType());
+            auto sub () { return MistralOcrDataProvider::buildRequestType(); });
         #! The response type, built on first use; see responseType()
         static *MistralOcrResponseDataType response_type;
         #! The ID of the response type's builder; see responseType()
         static int response_type_id = DataProviderActionCatalog::registerLazyValue(
-            \MistralOcrDataProvider::buildResponseType());
+            auto sub () { return MistralOcrDataProvider::buildResponseType(); });
     }
 
     #! Returns the request type, which is built on first use

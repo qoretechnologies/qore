@@ -52,7 +52,7 @@ public class AssemblyAiActions {
             "action_code": DPAT_API, "mutates_state": True,
             "groups": ("Transcription",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                AssemblyAiTranscribeRequestDataType::Fields),
+                AssemblyAiTranscribeDataProvider::requestType().getFields()),
             "output_type": AssemblyAiTranscribeDataProvider::responseType(),
         };
         return result;
