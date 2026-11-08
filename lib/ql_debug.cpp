@@ -4104,6 +4104,534 @@ public:
 #endif
 
 #if defined(DEBUG) && !defined(_Q_WINDOWS)
+//! A definite failure of a name lookup is checked only if a query of the lookup failed, and checked completely
+/** c-ares gives the status of the address family whose query finished last, and goes on to the next name after a
+    SERVFAIL or REFUSED answer for a single-label name (c-ares issue #852), so a definite status (ENOTFOUND or ENODATA)
+    can hide a failure that might not happen again; QoreCaresAddrInfoResolver checks such a status, but only when a
+    query of the lookup failed (a lookup of a name that does not exist was otherwise made twice, as answers without an
+    SOA record are not cached).  The lookups ask a DNS server that the test runs in its own thread: it reads each query
+    when it is sent and answers it as the case says, so every answer comes in a known order.
+*/
+class QoreCaresCheckTest {
+public:
+    static void run(UnitTestCounters& c) {
+        DnsServer dns;
+        if (!dns.open()) {
+            UT_ASSERT(c, false, "c-ares check: the DNS server is started");
+            return;
+        }
+        // the lookups ask the server with one try each, so that a failure is answered once
+        ServersHelper servers(dns.port);
+        QoreDbgCaresQueryOptions opts;
+        opts.tries = 1;
+        opts.timeout_ms = 30000;
+        QueryOptionsHelper query_options(opts);
+
+        definiteWithoutFailure(c, dns);
+        mixedFamilies(c, dns);
+        addressesFoundByCheck(c, dns);
+        singleLabel(c, dns);
+        destroyDuringConfirmation(c, dns);
+        restartDuringConfirmation(c, dns);
+        timeoutDuringConfirmation(c, dns);
+    }
+
+private:
+    //! the record types of the queries
+    static constexpr int TypeA = 1;
+    static constexpr int TypeAaaa = 28;
+    //! the response codes of the answers
+    static constexpr int NoError = 0;
+    static constexpr int ServFail = 2;
+    static constexpr int NxDomain = 3;
+    static constexpr int Refused = 5;
+    //! the longest wait for which nothing would continue a lookup: a hang guard only
+    static constexpr int HangGuardMs = 30000;
+
+    struct Query {
+        std::string name;
+        int type = 0;
+        std::string raw;
+        struct sockaddr_storage from = {};
+        socklen_t fromlen = 0;
+    };
+
+    //! What the server does with a query
+    struct Answer {
+        //! the response code, or -1 to drop the query
+        int rcode = NoError;
+        //! the addresses of the answer: 4 bytes for A, 16 for AAAA
+        std::vector<std::string> addrs;
+        //! set to answer the query only after the A query of the same name has been answered
+        bool after_a = false;
+    };
+
+    class DnsServer {
+    public:
+        int fd = -1;
+        int port = 0;
+        //! the queries received, as "name/type"
+        std::vector<std::string> queries;
+
+        DLLLOCAL ~DnsServer() {
+            if (fd >= 0) {
+                ::close(fd);
+            }
+        }
+
+        DLLLOCAL bool open() {
+            fd = socket(AF_INET, SOCK_DGRAM, 0);
+            struct sockaddr_in a = {};
+            a.sin_family = AF_INET;
+            a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            socklen_t len = sizeof(a);
+            if (fd < 0 || ::bind(fd, reinterpret_cast<struct sockaddr*>(&a), sizeof(a))
+                    || getsockname(fd, reinterpret_cast<struct sockaddr*>(&a), &len)) {
+                return false;
+            }
+            port = ntohs(a.sin_port);
+            return true;
+        }
+
+        //! Reads a query that has arrived; false if none has
+        DLLLOCAL bool receive(Query& q) {
+            char buf[512];
+            q.fromlen = sizeof(q.from);
+            ssize_t n = recvfrom(fd, buf, sizeof(buf), MSG_DONTWAIT, reinterpret_cast<struct sockaddr*>(&q.from),
+                &q.fromlen);
+            if (n < 17) {
+                return false;
+            }
+            q.raw.assign(buf, n);
+            size_t off = 12;
+            q.name.clear();
+            while (off < q.raw.size()) {
+                size_t len = static_cast<unsigned char>(q.raw[off]);
+                if (!len) {
+                    break;
+                }
+                if (!q.name.empty()) {
+                    q.name += '.';
+                }
+                q.name.append(q.raw, off + 1, len);
+                off += len + 1;
+            }
+            if (off + 5 > q.raw.size()) {
+                return false;
+            }
+            q.type = (static_cast<unsigned char>(q.raw[off + 1]) << 8) | static_cast<unsigned char>(q.raw[off + 2]);
+            // the header and the question
+            q.raw.resize(off + 5);
+            queries.push_back(q.name + "/" + std::to_string(q.type));
+            return true;
+        }
+
+        DLLLOCAL void reply(const Query& q, const Answer& a) {
+            std::string r = q.raw;
+            // QR, the opcode and RD of the query, RA, and the response code; one question
+            r[2] = static_cast<char>((static_cast<unsigned char>(q.raw[2]) & 0x79) | 0x80);
+            r[3] = static_cast<char>(0x80 | a.rcode);
+            r[6] = 0;
+            r[7] = static_cast<char>(a.addrs.size());
+            for (int i = 8; i < 12; ++i) {
+                r[i] = 0;
+            }
+            for (const std::string& addr : a.addrs) {
+                // the name of the question, the type, class IN, a TTL of 60 seconds and the address
+                r += std::string("\xc0\x0c", 2);
+                r += static_cast<char>(0);
+                r += static_cast<char>(addr.size() == 4 ? TypeA : TypeAaaa);
+                r += std::string("\x00\x01\x00\x00\x00\x3c\x00", 7);
+                r += static_cast<char>(addr.size());
+                r += addr;
+            }
+            sendto(fd, r.data(), r.size(), 0, reinterpret_cast<const struct sockaddr*>(&q.from), q.fromlen);
+        }
+
+        DLLLOCAL int count(const std::string& query) const {
+            return static_cast<int>(std::count(queries.begin(), queries.end(), query));
+        }
+    };
+
+    //! Sets the DNS servers of the c-ares channels and restores them
+    class ServersHelper {
+    public:
+        DLLLOCAL ServersHelper(int port) : prev(qore_dbg_cares_set_servers("127.0.0.1:" + std::to_string(port))) {
+        }
+
+        DLLLOCAL ~ServersHelper() {
+            qore_dbg_cares_set_servers(prev);
+        }
+
+    private:
+        std::string prev;
+    };
+
+    //! Sets the query options of the c-ares channels and restores them
+    class QueryOptionsHelper {
+    public:
+        DLLLOCAL QueryOptionsHelper(const QoreDbgCaresQueryOptions& opts)
+                : prev(qore_dbg_cares_set_query_options(opts)) {
+        }
+
+        DLLLOCAL ~QueryOptionsHelper() {
+            qore_dbg_cares_set_query_options(prev);
+        }
+
+    private:
+        QoreDbgCaresQueryOptions prev;
+    };
+
+    using answer_t = std::function<Answer(const Query&)>;
+
+    //! Runs a lookup until it is done or @p stop returns true, answering its queries with @p answer
+    /** @return the last result of continuePoll(): 0 done, -1 failed, 1 stopped
+    */
+    static int drive(QoreCaresAddrInfoResolver& r, DnsServer& dns, const answer_t& answer,
+            const std::function<bool()>& stop, ExceptionSink& xsink) {
+        // the queries held until the A query of their name has been answered
+        std::vector<std::pair<Query, Answer>> held;
+        std::set<std::string> a_answered;
+        while (true) {
+            int rc = r.continuePoll(&xsink);
+            if (rc != 1 || stop()) {
+                return rc;
+            }
+            std::vector<std::pair<int, int>> fds;
+            r.getExtraFds(fds);
+            std::vector<struct pollfd> pfds;
+            pfds.push_back({dns.fd, POLLIN, 0});
+            for (auto& [fd, events] : fds) {
+                pfds.push_back({fd, static_cast<short>(((events & SOCK_POLLIN) ? POLLIN : 0)
+                    | ((events & SOCK_POLLOUT) ? POLLOUT : 0)), 0});
+            }
+            int to = r.getPollTimeoutMs();
+            if (::poll(pfds.data(), pfds.size(), to < 0 ? HangGuardMs : std::min(to, HangGuardMs)) < 0
+                    && errno != EINTR) {
+                return -1;
+            }
+            Query q;
+            while (dns.receive(q)) {
+                Answer a = answer(q);
+                if (a.rcode < 0) {
+                    continue;
+                }
+                if (a.after_a && !a_answered.count(q.name)) {
+                    held.push_back({q, a});
+                    continue;
+                }
+                dns.reply(q, a);
+                if (q.type == TypeA) {
+                    a_answered.insert(q.name);
+                    for (auto i = held.begin(); i != held.end();) {
+                        if (i->first.name == q.name) {
+                            dns.reply(i->first, i->second);
+                            i = held.erase(i);
+                        } else {
+                            ++i;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    static int drive(QoreCaresAddrInfoResolver& r, DnsServer& dns, const answer_t& answer, ExceptionSink& xsink) {
+        return drive(r, dns, answer, [] () { return false; }, xsink);
+    }
+
+    //! The status of a failed lookup, from its exception
+    static std::string statusOf(ExceptionSink& xsink) {
+        std::string rv;
+        if (xsink) {
+            const QoreValue arg = xsink.getExceptionArg();
+            const QoreHashNode* h = arg.getType() == NT_HASH ? arg.get<const QoreHashNode>() : nullptr;
+            QoreValue st = h ? h->getKeyValue("status") : QoreValue();
+            if (st.getType() == NT_STRING) {
+                rv = st.get<const QoreStringNode>()->c_str();
+            } else {
+                QoreStringValueHelper err(xsink.getExceptionErr());
+                rv = err->c_str();
+            }
+        }
+        xsink.clear();
+        return rv;
+    }
+
+    //! The addresses of a lookup as text, in their order
+    static std::string addressesOf(const QoreCaresAddrInfoResolver& r) {
+        std::string rv;
+        for (const SocketResolvedAddrInfo& ai : r.getAddresses()) {
+            char buf[INET6_ADDRSTRLEN] = "";
+            if (ai.family == AF_INET) {
+                inet_ntop(AF_INET, &reinterpret_cast<const struct sockaddr_in*>(&ai.addr)->sin_addr, buf,
+                    sizeof(buf));
+            } else {
+                inet_ntop(AF_INET6, &reinterpret_cast<const struct sockaddr_in6*>(&ai.addr)->sin6_addr, buf,
+                    sizeof(buf));
+            }
+            if (!rv.empty()) {
+                rv += " ";
+            }
+            rv += buf;
+        }
+        return rv;
+    }
+
+    static Answer rcode(int code) {
+        Answer a;
+        a.rcode = code;
+        return a;
+    }
+
+    //! A name that does not exist is a definite answer; with no failed query, no other query is made
+    static void definiteWithoutFailure(UnitTestCounters& c, DnsServer& dns) {
+        dns.queries.clear();
+        ExceptionSink xsink;
+        {
+            QoreCaresAddrInfoResolver r("nx.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0);
+            UT_ASSERT_EQ(c, -1, drive(r, dns, [] (const Query&) { return rcode(NxDomain); }, xsink),
+                "c-ares check: a name that does not exist is not found");
+        }
+        UT_ASSERT(c, statusOf(xsink) == "ENOTFOUND", "c-ares check: a name that does not exist gives ENOTFOUND");
+        UT_ASSERT_EQ(c, 2, static_cast<int>(dns.queries.size()),
+            "c-ares check: a definite failure with no failed query makes no other query");
+    }
+
+    //! A SERVFAIL answer for A and a NODATA answer for AAAA, given last, is a failure that might not happen again
+    static void mixedFamilies(UnitTestCounters& c, DnsServer& dns) {
+        dns.queries.clear();
+        ExceptionSink xsink;
+        {
+            QoreCaresAddrInfoResolver r("mixed.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0);
+            drive(r, dns, [] (const Query& q) {
+                Answer a = rcode(q.type == TypeA ? ServFail : NoError);
+                a.after_a = q.type == TypeAaaa;
+                return a;
+            }, xsink);
+        }
+        UT_ASSERT(c, statusOf(xsink) == "ESERVFAIL", "c-ares check: the failure of one family is reported");
+        // the lookup, and the lookup of each family; the NODATA answer for AAAA comes from the query cache of the
+        // channel (c-ares keeps an answer without records and without an SOA record), the A query is sent again
+        UT_ASSERT_EQ(c, 2, dns.count("mixed.qore-check/1"), "c-ares check: each family is looked up again");
+        UT_ASSERT_EQ(c, 1, dns.count("mixed.qore-check/28"), "c-ares check: the AAAA answer comes from the cache");
+    }
+
+    //! A check that finds an address starts the lookup again: its addresses are in the order that c-ares gives them
+    static void addressesFoundByCheck(UnitTestCounters& c, DnsServer& dns) {
+        static const std::string v4("\x7f\x00\x00\x01", 4);
+        static const std::string v6("\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01", 16);
+        for (int flags : {0, AI_V4MAPPED | AI_ALL}) {
+            // the addresses that a lookup that is answered at once gives
+            std::string expected;
+            ExceptionSink xsink;
+            {
+                QoreCaresAddrInfoResolver r("both.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0, flags);
+                UT_ASSERT_EQ(c, 0, drive(r, dns, [] (const Query& q) {
+                    Answer a;
+                    a.addrs.push_back(q.type == TypeA ? v4 : v6);
+                    return a;
+                }, xsink), "c-ares check: a name with addresses is resolved");
+                expected = addressesOf(r);
+            }
+            // the first lookup fails for A, and AAAA is not found (an NXDOMAIN answer without an SOA record, which
+            // the query cache does not keep); the checks find both addresses
+            dns.queries.clear();
+            std::string found;
+            {
+                QoreCaresAddrInfoResolver r("flip.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0, flags);
+                bool first_a = true;
+                bool first_aaaa = true;
+                UT_ASSERT_EQ(c, 0, drive(r, dns, [&first_a, &first_aaaa] (const Query& q) {
+                    Answer a;
+                    if (q.type == TypeA) {
+                        if (first_a) {
+                            first_a = false;
+                            return rcode(ServFail);
+                        }
+                        a.addrs.push_back(v4);
+                    } else {
+                        a.after_a = true;
+                        if (first_aaaa) {
+                            first_aaaa = false;
+                            a.rcode = NxDomain;
+                            return a;
+                        }
+                        a.addrs.push_back(v6);
+                    }
+                    return a;
+                }, xsink), "c-ares check: a name whose check finds addresses is resolved");
+                found = addressesOf(r);
+            }
+            UT_ASSERT(c, !xsink, "c-ares check: the lookup started again succeeds");
+            xsink.clear();
+            UT_ASSERT(c, found == expected, "c-ares check: the addresses are in the order of a lookup");
+            if (found != expected) {
+                printf("  expected '%s', got '%s' (flags %d)\n", expected.c_str(), found.c_str(), flags);
+            }
+            bool has_v4 = (" " + found + " ").find(" 127.0.0.1 ") != std::string::npos;
+            bool has_mapped = found.find("::ffff:127.0.0.1") != std::string::npos;
+            UT_ASSERT(c, !(has_v4 && has_mapped), "c-ares check: no IPv4 address is given twice");
+        }
+    }
+
+    //! A SERVFAIL or REFUSED answer for a single-label name itself is reported, though a search domain followed
+    static void singleLabel(UnitTestCounters& c, DnsServer& dns) {
+        // the name itself is asked for first (ndots 0), then with the search domain
+        QoreDbgCaresQueryOptions opts;
+        opts.tries = 1;
+        opts.timeout_ms = 30000;
+        opts.domains_set = true;
+        opts.domains.push_back("qore-check-domain");
+        opts.ndots = 0;
+        QueryOptionsHelper query_options(opts);
+        for (int family : {AF_INET, AF_UNSPEC}) {
+            for (int code : {ServFail, Refused}) {
+                dns.queries.clear();
+                ExceptionSink xsink;
+                {
+                    QoreCaresAddrInfoResolver r("single", nullptr, family, SOCK_STREAM, 0);
+                    drive(r, dns, [code] (const Query& q) {
+                        return rcode(q.name == "single" && q.type == TypeA ? code : NxDomain);
+                    }, xsink);
+                }
+                std::string expected = code == ServFail ? "ESERVFAIL" : "EREFUSED";
+                std::string status = statusOf(xsink);
+                UT_ASSERT(c, status == expected, "c-ares check: a failure for a single-label name is reported");
+                if (status != expected) {
+                    printf("  family %d: expected %s, got %s; queries:", family, expected.c_str(), status.c_str());
+                    for (const std::string& q : dns.queries) {
+                        printf(" %s", q.c_str());
+                    }
+                    printf("\n");
+                }
+            }
+            // a failure that does not happen again leaves the definite answer
+            dns.queries.clear();
+            ExceptionSink xsink;
+            {
+                QoreCaresAddrInfoResolver r("single", nullptr, family, SOCK_STREAM, 0);
+                bool failed = false;
+                drive(r, dns, [&failed] (const Query& q) {
+                    if (q.name == "single" && q.type == TypeA && !failed) {
+                        failed = true;
+                        return rcode(ServFail);
+                    }
+                    return rcode(NxDomain);
+                }, xsink);
+            }
+            UT_ASSERT(c, statusOf(xsink) == "ENOTFOUND",
+                "c-ares check: a single-label name whose failure does not happen again is not found");
+        }
+    }
+
+    //! The mixed case, stopped when the lookup of each family has started
+    static int toConfirmation(QoreCaresAddrInfoResolver& r, DnsServer& dns, ExceptionSink& xsink,
+            bool answer_check = true) {
+        int a_queries = 0;
+        int aaaa_queries = 0;
+        return drive(r, dns, [&a_queries, &aaaa_queries, answer_check] (const Query& q) {
+            if (q.type == TypeA) {
+                if (++a_queries > 1 && !answer_check) {
+                    return rcode(-1);
+                }
+                return rcode(ServFail);
+            }
+            if (++aaaa_queries > 1 && !answer_check) {
+                return rcode(-1);
+            }
+            Answer a;
+            a.after_a = true;
+            return a;
+        }, [&r] () {
+            // the lookup of IPv6 can be answered from the query cache at once
+            return r.running_check == QoreCaresAddrInfoResolver::Check::Confirm && r.check_remaining > 0;
+        }, xsink);
+    }
+
+    //! A lookup destroyed while the lookups of each family run ends them
+    static void destroyDuringConfirmation(UnitTestCounters& c, DnsServer& dns) {
+        dns.queries.clear();
+        ExceptionSink xsink;
+        {
+            QoreCaresAddrInfoResolver r("mixed.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0);
+            UT_ASSERT_EQ(c, 1, toConfirmation(r, dns, xsink), "c-ares destroy: the lookup of each family runs");
+        }
+        UT_ASSERT(c, !xsink, "c-ares destroy: the lookup is destroyed without an error");
+        xsink.clear();
+    }
+
+    //! A lookup started again while the lookups of each family run drops them and gives the result of the new one
+    static void restartDuringConfirmation(UnitTestCounters& c, DnsServer& dns) {
+        dns.queries.clear();
+        ExceptionSink xsink;
+        {
+            QoreCaresAddrInfoResolver r("mixed.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0);
+            UT_ASSERT_EQ(c, 1, toConfirmation(r, dns, xsink), "c-ares restart: the lookup of each family runs");
+            UT_ASSERT_EQ(c, 0, r.restart(&xsink), "c-ares restart: the lookup is started again");
+            UT_ASSERT(c, r.running_check == QoreCaresAddrInfoResolver::Check::None && !r.check_remaining,
+                "c-ares restart: the check is dropped");
+            drive(r, dns, [] (const Query& q) {
+                Answer a = rcode(q.type == TypeA ? ServFail : NoError);
+                a.after_a = q.type == TypeAaaa;
+                return a;
+            }, xsink);
+        }
+        UT_ASSERT(c, statusOf(xsink) == "ESERVFAIL", "c-ares restart: the lookup started again is checked");
+    }
+
+    //! The lookups of each family that time out make the failure a timeout
+    static void timeoutDuringConfirmation(UnitTestCounters& c, DnsServer& dns) {
+        // the queries of the checks are not answered; a timeout long enough for the lookup itself to be answered
+        QoreDbgCaresQueryOptions opts;
+        opts.tries = 1;
+        opts.timeout_ms = 500;
+        QueryOptionsHelper query_options(opts);
+        dns.queries.clear();
+        ExceptionSink xsink;
+        bool confirmed = false;
+        {
+            QoreCaresAddrInfoResolver r("mixed.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0);
+            int a_queries = 0;
+            int aaaa_queries = 0;
+            drive(r, dns, [&a_queries, &aaaa_queries] (const Query& q) {
+                if (q.type == TypeA) {
+                    return rcode(++a_queries > 1 ? -1 : ServFail);
+                }
+                if (++aaaa_queries > 1) {
+                    return rcode(-1);
+                }
+                Answer a;
+                a.after_a = true;
+                return a;
+            }, [&r, &confirmed] () {
+                if (r.running_check == QoreCaresAddrInfoResolver::Check::Confirm) {
+                    confirmed = true;
+                }
+                return false;
+            }, xsink);
+        }
+        std::string status = statusOf(xsink);
+        UT_ASSERT(c, confirmed, "c-ares timeout: the lookup of each family ran");
+        UT_ASSERT(c, status == "ETIMEOUT", "c-ares timeout: the failure is a timeout");
+        if (!confirmed || status != "ETIMEOUT") {
+            printf("  status %s; queries:", status.c_str());
+            for (const std::string& q : dns.queries) {
+                printf(" %s", q.c_str());
+            }
+            printf("\n");
+        }
+    }
+};
+#else
+class QoreCaresCheckTest {
+public:
+    static void run(UnitTestCounters& c) {
+    }
+};
+#endif
+
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
 //! A connection made with QoreSocket::startConnect() reports everything that a module's operation must wait for
 /** A module's poll operation that makes a connection with the poll state that QoreSocket::startConnect() returns,
     as module-ssh2's SftpPollOperation does, can only wait for what the state's public API reports: the events that
@@ -14991,6 +15519,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runDirectReplaceExtraFd(c);
     AsyncIoDescriptorHoldTest::runOrphanRegistrations(c);
     QoreCaresSocketsTest::run(c);
+    QoreCaresCheckTest::run(c);
     ut_quic_send_batch_take_back(c);
 #ifndef _Q_WINDOWS
     HappyEyeballsLayeredConnectTest::run(c);
@@ -16593,6 +17122,69 @@ static QoreValue f_dbg_cares_set_servers(const QoreListNode* params, RuntimeConf
     return new QoreStringNode(qore_dbg_cares_set_servers(servers->c_str()));
 }
 
+//! Returns the query options of the debug c-ares channels as a hash; see f_dbg_cares_set_query_options()
+static QoreHashNode* dbg_cares_query_options_to_hash(const QoreDbgCaresQueryOptions& opts) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), nullptr);
+    h->setKeyValue("timeout_ms", opts.timeout_ms, nullptr);
+    h->setKeyValue("tries", opts.tries, nullptr);
+    if (opts.domains_set) {
+        ReferenceHolder<QoreListNode> l(new QoreListNode(stringTypeInfo), nullptr);
+        for (const std::string& d : opts.domains) {
+            l->push(new QoreStringNode(d), nullptr);
+        }
+        h->setKeyValue("domains", l.release(), nullptr);
+    }
+    if (opts.ndots >= 0) {
+        h->setKeyValue("ndots", opts.ndots, nullptr);
+    }
+    return h.release();
+}
+
+//! sets the query options of the c-ares channels that ask the DNS servers of dbg_cares_set_servers()
+/** @param opts a hash with the keys \c timeout_ms (the timeout of the first try of a query; default 1000),
+    \c tries (the tries of a query; default 3), \c domains (a list of search domains; missing for those of the host)
+    and \c ndots (the \c ndots option; missing for that of the host)
+
+    @return the previous options, in the same form
+*/
+static QoreValue f_dbg_cares_set_query_options(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    HARD_QORE_VALUE_PARAM(h, const QoreHashNode, params, 0);
+    QoreDbgCaresQueryOptions opts;
+    QoreValue v = h->getKeyValue("timeout_ms");
+    if (!v.isNothing()) {
+        opts.timeout_ms = static_cast<int>(v.getAsBigInt());
+    }
+    v = h->getKeyValue("tries");
+    if (!v.isNothing()) {
+        opts.tries = static_cast<int>(v.getAsBigInt());
+    }
+    if (opts.timeout_ms <= 0 || opts.tries <= 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "timeout_ms and tries must be positive; got %d and %d",
+            opts.timeout_ms, opts.tries);
+        return QoreValue();
+    }
+    v = h->getKeyValue("domains");
+    if (!v.isNothing()) {
+        if (v.getType() != NT_LIST) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "domains must be a list of strings");
+            return QoreValue();
+        }
+        const QoreListNode* l = v.get<const QoreListNode>();
+        opts.domains_set = true;
+        ConstListIterator li(l);
+        while (li.next()) {
+            QoreStringValueHelper str(li.getValue());
+            opts.domains.push_back(str->c_str());
+        }
+    }
+    v = h->getKeyValue("ndots");
+    if (!v.isNothing()) {
+        opts.ndots = static_cast<int>(v.getAsBigInt());
+    }
+    return dbg_cares_query_options_to_hash(qore_dbg_cares_set_query_options(opts));
+}
+
 //! makes the name lookups started from now on read the given hosts file instead of the system's
 /** c-ares reads the file, and so does the check of the addresses that c-ares adds to the answer for a localhost name
     (RFC 6761), so that a test controls what the hosts file gives \c "localhost".
@@ -17238,6 +17830,8 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_cares_set_servers", f_dbg_cares_set_servers, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "servers");
+    qns.addBuiltinVariant("dbg_cares_set_query_options", f_dbg_cares_set_query_options, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 1, hashTypeInfo, QORE_PARAM_NO_ARG, "opts");
     qns.addBuiltinVariant("dbg_cares_set_hosts_file", f_dbg_cares_set_hosts_file, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "path");
     qns.addBuiltinVariant("dbg_set_next_program_id", f_dbg_set_next_program_id, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
