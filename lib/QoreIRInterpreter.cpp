@@ -1463,6 +1463,13 @@ struct IRCallFrame {
     // results from variable-held values — only temporaries are cleared at block exit.
     // indexed by value slot id; a set allocated a node for each slot in every call
     std::vector<uint8_t> local_owned_slots;
+    //! a temp scope mark: the size of the cleanup vector when the scope was entered
+    struct TempCleanupMark {
+        uint32_t scope_id;
+        size_t cleanup_size;
+    };
+    //! the marks of the temp scopes entered (PushTempMark), pooled with the frame so that a call does not allocate them
+    std::vector<TempCleanupMark> temp_cleanup_marks;
 
     // Reset all fields for reuse.  clear() retains capacity, so no heap
     // allocation after the first call at each recursion depth.
@@ -1513,7 +1520,13 @@ struct IRCallFrame {
             locals_ir_only.assign(local_slot_count, false);
             locals_instantiated.assign(local_slot_count, false);
             local_init_slots.assign(local_slot_count, UINT32_MAX);
-            local_load_slots.clear();
+            // the vectors kept keep their capacity, so a call reading a local does not allocate one
+            if (local_load_slots.size() > local_slot_count) {
+                local_load_slots.resize(local_slot_count);
+            }
+            for (std::vector<uint32_t>& load_slots : local_load_slots) {
+                load_slots.clear();
+            }
             local_load_slots.resize(local_slot_count);
         } else {
             locals_slot_cache.releaseAll(nullptr);
@@ -1532,6 +1545,7 @@ struct IRCallFrame {
         active_iterators.clear();
         on_block_exit_handlers.clear();
         local_owned_slots.assign(reserve_size, 0);
+        temp_cleanup_marks.clear();
     }
 };
 
@@ -7544,11 +7558,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     std::unordered_map<uint32_t, int32_t> weak_load_temp_slots;
     auto& borrowed_temp_remaining = frame.borrowed_temp_remaining;
     auto& borrowed_temp_active = frame.borrowed_temp_active;
-    struct TempCleanupMark {
-        uint32_t scope_id;
-        size_t cleanup_size;
-    };
-    std::vector<TempCleanupMark> temp_cleanup_marks;
+    using TempCleanupMark = IRCallFrame::TempCleanupMark;
+    auto& temp_cleanup_marks = frame.temp_cleanup_marks;
 
     auto releaseWeakLoadTemp = [&](uint32_t id) {
         if (id >= values.size()) {
