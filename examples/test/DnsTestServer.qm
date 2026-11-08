@@ -39,10 +39,15 @@ module DnsTestServer {
     - \c servfail: \c SERVFAIL (2), the server failed (c-ares: \c ESERVFAIL)
     - \c refused: \c REFUSED (5), the server refused the query (c-ares: \c EREFUSED)
     - \c mixed: \c SERVFAIL for an \c A query; \c NOERROR without an answer for an \c AAAA query, given only once
-      the server has answered the \c A query of the same lookup (the one received last before it, or else the next
-      one) @ref DnsTestServer::DnsTestServer::MixedATries "MixedATries" times: a lookup of both address families
-      (\c AF_UNSPEC) gets the answer for \c AAAA last, after c-ares has given up on the \c A query, which it sends
-      again after each \c SERVFAIL answer with the same id (an \c AAAA query alone is not answered)
+      the server has answered an \c A query from the same address and port, which is the socket of one c-ares
+      channel, and so of one lookup: a lookup of both address families (\c AF_UNSPEC) gets the answer for \c AAAA
+      after the one for \c A, whatever their order, and if c-ares tries a query once (see
+      \c dbg_cares_set_query_options()), after c-ares has given up on the \c A query (an \c AAAA query alone is not
+      answered)
+    - \c mixeddrop: as \c mixed for the first \c A query and the first \c AAAA query since
+      @ref DnsTestServer::DnsTestServer::resetMixedDrop() "resetMixedDrop()" was called; the later ones, such as those
+      of the lookups of each family that check the failure (which c-ares sends on a new socket), are dropped, and
+      @ref DnsTestServer::DnsTestServer::waitDropped() "waitDropped()" returns when one has been
     - any other name: \c SERVFAIL
 
     A debug build of %Qore sends the name lookups of the process to it with \c dbg_cares_set_servers(), so a test of
@@ -84,23 +89,24 @@ public namespace DnsTestServer {
             #! the number of queries answered, by the first label of the name
             hash<string, int> queries;
             Mutex m();
-            #! the AAAA queries for \c mixed names to answer: the reply, the address and port it goes to, and the
-            #! id of the A query to answer before it (none: the next A query)
-            list<hash<auto>> held_aaaa = ();
-            #! the A queries for \c mixed names being answered: the times each was answered, by id
-            hash<string, int> a_answers;
-            #! the id of the A query for a \c mixed name received last, while it is being answered
-            *string last_a_id;
+            #! the AAAA queries for \c mixed names to answer, by "address:port" of the client: replies
+            hash<string, list<binary>> held_aaaa;
+            #! the clients ("address:port") whose A query for a \c mixed name has been answered
+            hash<string, bool> a_answered;
+            #! the queries for \c mixeddrop names received since resetMixedDrop() was called, by type
+            hash<string, int> mixeddrop_queries;
+            #! gets the name of each query dropped
+            Queue dropped();
+            #! set if every query is dropped
+            bool drop_all;
         }
 
-        #! the times the A query of a lookup of a \c mixed name is answered before its AAAA query
-        /** The tries of the channels that \c dbg_cares_set_servers() sends the lookups of a debug build to: the last
-            answer for the A query of a lookup of both families comes before the answer for its AAAA query
-        */
-        public const MixedATries = 3;
-
         #! Starts the server on a port that the system assigns on 127.0.0.1
-        constructor() {
+        /** @param drop_all if @ref True "True", every query is dropped (counted, but not answered), so that a
+            lookup waits for an answer until it times out
+        */
+        constructor(bool drop_all = False) {
+            self.drop_all = drop_all;
             sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
             port = sock.getSocketInfo().port;
             background run();
@@ -116,6 +122,25 @@ public namespace DnsTestServer {
             m.lock();
             on_exit m.unlock();
             return queries{label} ?? 0;
+        }
+
+        #! Makes the next \c A and \c AAAA queries for \c mixeddrop names the first ones, which are answered
+        resetMixedDrop() {
+            m.lock();
+            on_exit m.unlock();
+            mixeddrop_queries = {};
+        }
+
+        #! Waits until a query has been dropped (see \c mixeddrop); returns its name, or nothing on timeout
+        *string waitDropped(timeout timeout_ms) {
+            try {
+                return dropped.get(timeout_ms);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "QUEUE-TIMEOUT") {
+                    return;
+                }
+                rethrow;
+            }
         }
 
         #! Stops the server and waits for its thread to end
@@ -138,47 +163,46 @@ public namespace DnsTestServer {
                     return;
                 }
                 *hash<auto> reply = answer(dgram.data);
+                if (drop_all) {
+                    continue;
+                }
                 if (!reply) {
                     continue;
                 }
-                if (reply.held) {
-                    held_aaaa += {"reply": reply.data, "address": dgram.address, "port": dgram.port,
-                        "a_id": last_a_id};
+                string client = sprintf("%s:%d", dgram.address, dgram.port);
+                if (reply.mixeddrop) {
+                    int n;
+                    {
+                        m.lock();
+                        on_exit m.unlock();
+                        n = ++mixeddrop_queries{reply.type};
+                    }
+                    if (n > 1) {
+                        # a later query is dropped
+                        dropped.push(reply.name);
+                        continue;
+                    }
+                }
+                if (reply.held && !a_answered{client}) {
+                    # an AAAA query for a mixed name waits for the answer to the A query of its lookup
+                    held_aaaa{client} += (reply.data,);
                     continue;
                 }
-                if (reply.mixed_a && !a_answers{reply.id}) {
-                    # the A query of a lookup: the AAAA queries waiting for the next one wait for it
-                    last_a_id = reply.id;
-                    foreach hash<auto> h in (\held_aaaa) {
-                        if (!h.a_id) {
-                            h.a_id = reply.id;
-                        }
-                    }
-                }
                 drive(sock.startPollSendTo(dgram.address, dgram.port, reply.data));
-                if (reply.mixed_a && ++a_answers{reply.id} == MixedATries) {
-                    # the last answer for the A query: the AAAA queries of its lookup are answered
-                    remove a_answers{reply.id};
-                    if (last_a_id == reply.id) {
-                        remove last_a_id;
+                if (reply.mixed_a) {
+                    a_answered{client} = True;
+                    foreach binary held in (remove held_aaaa{client}) {
+                        drive(sock.startPollSendTo(dgram.address, dgram.port, held));
                     }
-                    list<hash<auto>> held = ();
-                    foreach hash<auto> h in (held_aaaa) {
-                        if (h.a_id == reply.id) {
-                            drive(sock.startPollSendTo(h.address, h.port, h.reply));
-                        } else {
-                            held += h;
-                        }
-                    }
-                    held_aaaa = held;
                 }
             }
         }
 
         #! Returns the response to a query, or nothing if it is not a query
-        /** @return <tt>{"data": binary, "id": string, "held": bool, "mixed_a": bool}</tt>: the response; the id of
-            the query in hex; whether it is held (an AAAA query for a \c mixed name), and whether it answers an A query
-            for a \c mixed name
+        /** @return <tt>{"data": binary, "held": bool, "mixed_a": bool, "mixeddrop": bool, "type": int,
+            "name": *string}</tt>: the response; whether it waits for the answer to an A query (an AAAA query for a
+            \c mixed name), whether it answers an A query for a \c mixed name, whether the name is a \c mixeddrop
+            name, the type of the query and the first label of its name
         */
         private *hash<auto> answer(binary query) {
             # header (12 bytes), then the question: the name's labels, a zero byte, the type and the class
@@ -202,7 +226,7 @@ public namespace DnsTestServer {
                 return;
             }
             int qtype = query.substr(offset + 1, 2).toHex().toInt(16);
-            bool mixed = first == "mixed";
+            bool mixed = first == "mixed" || first == "mixeddrop";
             int rcode = mixed ? (qtype == TypeAaaa ? 0 : 2) : (Rcodes{first} ?? 2);
             {
                 m.lock();
@@ -219,9 +243,11 @@ public namespace DnsTestServer {
             reply += query.substr(12, question_end - 12);
             return {
                 "data": reply,
-                "id": query.substr(0, 2).toHex(),
                 "held": mixed && qtype == TypeAaaa,
                 "mixed_a": mixed && qtype == TypeA,
+                "mixeddrop": first == "mixeddrop",
+                "type": qtype,
+                "name": first,
             };
         }
 
