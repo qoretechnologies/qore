@@ -43,3 +43,41 @@ and asynchronous APIs, valid and invalid numeric port boundaries, passive wildca
 numeric addresses, and rejection of synchronous resolution on the I/O worker.
 
 The c-ares [API documentation](https://c-ares.org/docs/ares_getaddrinfo.html) describes its hint constants.
+
+## The status of a failed lookup, and its checks
+
+A `QOREADDRINFO-GETINFO-ERROR` exception for an answer of the resolver has the resolver's status in its argument
+(`arg.status`): `ENOTFOUND`, `ENODATA`, `EBADNAME`, `ENONAME` and `ESERVICE` are definite answers about the name,
+which `DataProviderRetryUtil` does not retry; the others, such as `ESERVFAIL`, `EREFUSED` and `ETIMEOUT`, can be
+temporary. c-ares can give a definite status that hides a temporary failure:
+
+- for a lookup of both address families (`AF_UNSPEC`), it gives the status of the family whose query finished last,
+  so a `SERVFAIL` for `A` and a `NODATA` for `AAAA`, finishing last, gave `ENODATA`;
+- it goes on to the next name after a `SERVFAIL` or `REFUSED` answer for a single-label name, which it looks up with
+  the search domains (c-ares issue #852: systemd-resolved fails or refuses single-label names by policy), so a search
+  domain's `NXDOMAIN` hid the failure of the name itself.
+
+`QoreCaresAddrInfoResolver` therefore checks a definite failure, but only if a query of the lookup failed: it counts
+the failed queries of its channel (a `SERVFAIL`, `NOTIMP` or `REFUSED` answer, a timeout or a connection error) with
+`ares_set_server_state_callback()`. A lookup during which no query failed is definite as c-ares gives it, with no
+other query: a check would send again a query whose answer the query cache does not keep, such as an `NXDOMAIN`
+without an SOA record. c-ares 1.34.9 reports the failed queries when its public call returns, after the callbacks of
+the lookups, so `advance()` decides what follows a result after c-ares has returned; it also starts the checks then,
+as a lookup takes the environment lock. The checks are:
+
+- **Confirm**: a lookup of both families is checked by a lookup of each family. The failure is definite only if both
+  answers are; otherwise the lookup fails with the status of the family that was not.
+- **Probe**: a single-label name is asked for itself, without the search domains (`ares_query_dnsrec()`), for the
+  record types that the lookup asked for (`A`, `AAAA` or both; c-ares asks for `AAAA` only for an IPv6 lookup, also
+  with `AI_V4MAPPED`). A `SERVFAIL` or `REFUSED` answer makes the lookup fail with it. A lookup of both families that
+  is confirmed with a definite failure is probed if a query failed during the confirmation, as the lookups of the
+  confirmation hide it too. The probe names the host as given, not an alias that `HOSTALIASES` gives it.
+- **Repeat**: a check that finds an address (a family with addresses, or a probe with records) starts the lookup
+  again once, and its result is the answer, so that the addresses are in the order that c-ares sorts them (RFC 6724).
+  If the lookup started again fails with a definite status after the check saw a temporary failure, the lookup fails
+  with that failure: a definite failure is never reported after a temporary one was seen.
+
+A lookup started again after c-ares lost its query (`restart()`) drops a running check. The unit test
+`QoreCaresCheckTest` (`lib/ql_debug.cpp`, run by `asyncio_unit_tests.qtest`) drives lookups against a DNS server that
+answers each query in a known order, including lookups destroyed or started again during each check;
+`cares-error-status.qtest` covers the statuses through the public APIs with `examples/test/DnsTestServer.qm`.

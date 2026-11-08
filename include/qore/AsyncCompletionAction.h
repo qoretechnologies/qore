@@ -86,8 +86,8 @@ public:
     DLLEXPORT virtual void complete(ExceptionSink* xsink) {}
 
     //! Called on the I/O thread when the operation fails with an exception argument
-    /** The default implementation discards the argument and calls executeError(); it is the last virtual method,
-        after those of earlier versions, so that the virtual table of an action built with them keeps its layout
+    /** The default implementation discards the argument and calls executeError().  It is declared after the other
+        virtual methods, so that adding it did not change the virtual table offsets of the methods declared before it
 
         @param err error string
         @param desc error description

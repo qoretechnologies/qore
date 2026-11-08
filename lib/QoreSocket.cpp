@@ -6981,21 +6981,6 @@ static int qore_cares_set_debug_servers(ares_channel_t* channel, const std::stri
 //! The number of times a lookup is started again after c-ares lost its query before it fails
 static constexpr unsigned QORE_CARES_MAX_LOST_QUERY_RESTARTS = 3;
 
-//! Returns true if an unfinished lookup on the channel can never complete, because c-ares lost its query
-/** c-ares keeps every query it has sent on its timeout list until the query is answered or ended, so an unfinished
-    lookup whose channel has active queries but no timeout has lost a query: nothing will ever send it again, answer
-    it, or end it, and the lookup would wait forever.
-
-    c-ares 1.34.7 and 1.34.8 lose a query when a completion callback started from ares_flush_requeue() starts a new
-    query - ares_getaddrinfo() moving on to the next search domain, for example - and the new query is given the id
-    of the query that completed: ares_flush_requeue() detaches the completed query before its callback, freeing the
-    id, and ares_free_query() detaches it a second time afterwards, which removes the new query's id mapping.  The
-    answer to the new query is then dropped as unknown, and its retry is discarded when it times out.  c-ares 1.34.9,
-    the minimum version (cmake/third-party-sources.cmake; an older system library is not used), releases only the id
-    that a query still holds; the check stays as a safety net for a defect that c-ares could have again.
-
-    @param channel the channel of an unfinished lookup, after its events were processed
-*/
 QoreSharedDescriptor::~QoreSharedDescriptor() {
     if (close_on_release) {
         qore_socket_private::closeDescriptor(fd);
@@ -7241,6 +7226,21 @@ const char* QoreCaresSockets::aif_indextoname(unsigned int ifindex, char* ifname
 #endif
 #endif
 
+//! Returns true if an unfinished lookup on the channel can never complete, because c-ares lost its query
+/** c-ares keeps every query it has sent on its timeout list until the query is answered or ended, so an unfinished
+    lookup whose channel has active queries but no timeout has lost a query: nothing will ever send it again, answer
+    it, or end it, and the lookup would wait forever.
+
+    c-ares 1.34.7 and 1.34.8 lose a query when a completion callback started from ares_flush_requeue() starts a new
+    query - ares_getaddrinfo() moving on to the next search domain, for example - and the new query is given the id
+    of the query that completed: ares_flush_requeue() detaches the completed query before its callback, freeing the
+    id, and ares_free_query() detaches it a second time afterwards, which removes the new query's id mapping.  The
+    answer to the new query is then dropped as unknown, and its retry is discarded when it times out.  c-ares 1.34.9,
+    the minimum version (cmake/third-party-sources.cmake; an older system library is not used), releases only the id
+    that a query still holds; the check stays as a safety net for a defect that c-ares could have again.
+
+    @param channel the channel of an unfinished lookup, after its events were processed
+*/
 static bool qore_cares_channel_lost_query(ares_channel_t* channel) {
 #ifdef DEBUG
     // a lookup made to lose its query by dbg_cares_lose_query()
