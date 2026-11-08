@@ -30,6 +30,10 @@ A regular `.qmod` without a dependency file next to it is **not checked**:
 - a module compiled by hand with `qcc --compile-module` (or `qore --compile-module`) without `--depfile`: it is used
   even if its source has changed since; rebuild it, or compile it with `--depfile` to have it checked.
 
+qcc writes the real path of a `.qmod` as the target of its dependency file, also when `-o` is relative (before,
+a relative target was taken as relative to the dependency file's directory, not to the directory qcc ran in, so the
+loader ignored the file and checked nothing); `--depfile-target` names another target.
+
 A dependency file is **used only for the module that its rule names**: its target (the `-o` path qcc wrote it for)
 must resolve to the module that is checked, the regular file itself or, for a link, the module the link resolves
 to; a relative target is taken relative to the directory of the dependency file.  A dependency file whose target is

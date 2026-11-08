@@ -45,6 +45,7 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         addTestCase("a changed module that a dependency re-exports makes a module out of date", \transitiveTest());
         addTestCase("a module loaded for a dependency from another file makes a module out of date",
             \shadowedDependencyTest());
+        addTestCase("a module compiled with a relative output path is checked", \relativeOutputTest());
         set_return_value(main());
     }
 
@@ -208,5 +209,27 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         assertEq("other User.qm", out.split("\n").last(), out);
         assertRegex("AOT module '.*/User\\.qmod' for feature 'User' is out of date: it was compiled against other "
             "files of module 'Dep' than '.*/shadow/Dep\\.qm'", out);
+    }
+
+    relativeOutputTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        writeModule(src_dir, "Rel", "", "public namespace Rel { public string sub value() { return \"v1\"; } }");
+        # qcc runs in the tree's root with an output path relative to it
+        string out = run(sprintf("cd %s && %s QORE_MODULE_DIR=%s %s -m --depfile=build/qlib-qmod/Rel.qmod.d "
+            "--depfile-module-deps=source -o build/qlib-qmod/Rel.qmod qlib/Rel.qm", tmp.path, env, src_dir, qcc_bin));
+        assertTrue(is_file(qmod_dir + "/Rel.qmod"), out);
+        # the depfile's target is the module's real path
+        string text = ReadOnlyFile::readTextFile(qmod_dir + "/Rel.qmod.d");
+        assertEq(realpath(qmod_dir + "/Rel.qmod"), (text =~ x/^([^:]+):/)[0]);
+        string module_path = qmod_dir + ":" + src_dir;
+        assertEq("v1 Rel.qmod", runRequires(module_path, tmp.path, "Rel", "Rel::value()"));
+        writeModule(src_dir, "Rel", "", "public namespace Rel { public string sub value() { return \"v2\"; } }");
+        touchLater(src_dir + "/Rel.qm");
+        out = runRequires(module_path, tmp.path, "Rel", "Rel::value()");
+        assertEq("v2 Rel.qm", out.split("\n").last(), out);
     }
 }

@@ -1116,7 +1116,27 @@ static void qcc_set_module_dep_sink(std::vector<std::string>* sink, const std::s
 }
 
 static std::string qcc_depfile_target(const std::string& output) {
-    return depfile_target_path ? std::string(depfile_target_path) : output;
+    if (depfile_target_path) {
+        return depfile_target_path;
+    }
+    // The module loader uses the depfile of an AOT module only for the module its rule names, and takes a relative
+    // target as relative to the depfile's directory, not to the directory qcc ran in: a relative -o made the loader
+    // ignore the depfile, so that no source of the module was checked.  The target of a .qmod is therefore its real
+    // path (--depfile-target names another one, for a build system that needs it).
+    if (qcc_output_is_qmod(output) && !output.empty() && output[0] != '/') {
+        char* resolved = realpath(output.c_str(), nullptr);
+        if (resolved) {
+            std::string rv = resolved;
+            free(resolved);
+            return rv;
+        }
+        if (char* cwd = getcwd(nullptr, 0)) {
+            std::string rv = std::string(cwd) + "/" + output;
+            free(cwd);
+            return rv;
+        }
+    }
+    return output;
 }
 
 static void print_usage(const char* prog) {
