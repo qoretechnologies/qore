@@ -194,7 +194,8 @@ hash<auto> desc = {
     - the comments of columns are kept on SQL Server, as the \c MS_Description extended properties of the columns:
       they are created with a table or column, aligned, and described; they were ignored before
     - implemented the \c "returning" insert option (@ref SqlUtil::AbstractTable::InsertOptions) with SQL Server's
-      \c OUTPUT clause; it raised \c UNIMPLEMENTED before
+      \c OUTPUT clause into a table variable, so also for a table with triggers; it raised \c UNIMPLEMENTED before,
+      as it still does on Sybase, which has no \c OUTPUT clause
     - fixed the server version of a connection of the \c jdbc driver, which gives it as a hash: \c MERGE (upserts)
       and sequences were not used, as the version was taken for an unknown one
     - names of tables, columns, indexes, constraints, sequences, views, triggers, schemas, filegroups, partition
@@ -4167,19 +4168,53 @@ tc.constraint_name, c1.ordinal_position", schema, name);
             l += rh.key;
         }
         if (l) {
-            # SQL Server gives the values of the inserted row as a result set of the OUTPUT clause, which comes
-            # before the VALUES clause of the insert, with no placeholders
-            string output = "output " + (foldl $1 + ", " + $2, (map "inserted." + getColumnSqlName($1), l));
+            if (is_sybase) {
+                throw "UNIMPLEMENTED", sprintf("%s: the \"returning\" option is not supported on Sybase, which has "
+                    "no OUTPUT clause", getSqlName());
+            }
+            # SQL Server gives the values of the inserted row with the OUTPUT clause, which comes before the VALUES
+            # clause of the insert, with no placeholders; the values are output into a table variable, which is then
+            # selected, as an OUTPUT clause without INTO is refused on a table with an enabled trigger (server message
+            # 334)
+            list<string> names = map getColumnSqlName($1), l;
+            string decl = "declare @qore_returning table ("
+                + (foldl $1 + ", " + $2, (map names[$#] + " " + MssqlTable::getReturningType(columns{$1}), l))
+                + "); ";
+            string output = "output " + (foldl $1 + ", " + $2, (map "inserted." + $1, names))
+                + " into @qore_returning";
             # the first ") values (" outside of a quoted (bracketed) name ends the insert's column list
             int i = MssqlTable::findOutsideBrackets(sql, ") values (");
             if (i < 0) {
                 throw "RETURNING-ERROR", sprintf("cannot add the OUTPUT clause to the insert %y", sql);
             }
-            sql = sql.substr(0, i + 2) + output + sql.substr(i + 1);
+            sql = decl + sql.substr(0, i + 2) + output + sql.substr(i + 1) + "; select "
+                + (foldl $1 + ", " + $2, names) + " from @qore_returning";
+            *hash<auto> h = execData(opt, sql, args);
+            # the batch gives the result of each statement that has one, as "query0", "query1", ...: the row count
+            # of the insert and the rows of the select, which is the last one
+            if (h && h.hasKey("query0")) {
+                h = h{"query" + (h.size() - 1)};
+            }
+            return h ? map {$1.key: $1.value.typeCode() == NT_LIST ? $1.value[0] : $1.value}, h.pairIterator() : h;
         }
 
         *hash<auto> h = execData(opt, sql, args);
         return h ? map {$1.key: $1.value.typeCode() == NT_LIST ? $1.value[0] : $1.value}, h.pairIterator() : h;
+    }
+
+    #! returns the type of a column of the table variable that the values of the \c "returning" option are output to
+    /** A table variable cannot have the deprecated large object types, and a \c timestamp (\c rowversion) value is
+        kept as its binary value
+    */
+    static string getReturningType(MssqlColumn c) {
+        switch (c.native_type.lwr()) {
+            case "text": return "varchar(max)";
+            case "ntext": return "nvarchar(max)";
+            case "image": return "varbinary(max)";
+            case "timestamp":
+            case "rowversion": return "binary(8)";
+        }
+        return c.getNativeTypeString();
     }
 
     #! returns the offset of the first occurrence of a string in SQL outside of a bracketed name, or -1 if none
