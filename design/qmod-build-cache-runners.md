@@ -8,7 +8,8 @@ Copyright (C) 2026 Qore Technologies, s.r.o.
 
 ## GitLab (mirror/qore): done
 
-- Environment `qmod-cache-build`: the build jobs (`.qmod-cache` in `.gitlab-ci.yml`) name it, with action `prepare`
+- Environment `qmod-cache-build`: only the build jobs that run on the writer's runner name it (`.qmod-cache` in
+  `.gitlab-ci.yml`, `QORE_QMOD_CACHE_ENVIRONMENT`), with action `prepare`
   (no deployment).
 - `QORE_QMOD_CACHE_SIGNING_KEY`: the Ed25519 private key, a variable of type File, protected, scoped to the
   environment `qmod-cache-build`, so that only the build jobs of protected refs get it.
@@ -87,6 +88,16 @@ tags and builds without the cache, so this configuration can be merged before th
 before they exist leaves the jobs pending, as no runner has the tags.  The rules also keep the jobs out of merge request
 pipelines, as for jobs without rules.
 
-`develop` is not a protected branch of mirror/qore yet: until it is, `CI_COMMIT_REF_PROTECTED` is false for its
-pipelines, so no job gets the signing key or runs on the writer's runner, and no job writes the cache.  Protecting
-`develop` (and the release branches and tags) is the step that starts filling it.
+The environment that the signing key's variable is scoped to follows the runner: the template's
+`QORE_QMOD_CACHE_ENVIRONMENT` is `qmod-cache-read` (an environment no secret is scoped to), and only the writer's rule
+(`QORE_QMOD_CACHE_RUNNERS=1` on a protected ref) sets it to `qmod-cache-build`.  GitLab writes a File variable into
+every job of its environment, so a protected job on the shared runners, which run privileged pods (or on the macOS
+runner every ref uses), must never name `qmod-cache-build`: while `QORE_QMOD_CACHE_RUNNERS` is unset, no job does.
+
+A pipeline variable (a variable given when a pipeline is run or by a trigger) overrides these variables, so it could
+name `qmod-cache-build` on any runner: in mirror/qore, pipeline variables must be restricted to Maintainers (project
+setting "Minimum role to use pipeline variables": Maintainer, or no one), the same users who can change the CI
+configuration of a protected branch anyway.
+
+`develop` is a protected branch of mirror/qore: its jobs get the writer's runner and the signing key once
+`QORE_QMOD_CACHE_RUNNERS` is `1` and the writer runners are registered; until then no job writes the cache.

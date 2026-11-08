@@ -126,17 +126,21 @@ check-fast-routes-core-sanitizers:
 # Only the jobs of protected refs write the cache, and sign its entries after the build with the Ed25519 private key
 # QORE_QMOD_CACHE_SIGNING_KEY (a protected CI variable of type File, limited to the build jobs' environment, which no
 # process of the build gets); every job uses only entries that the public key QORE_QMOD_CACHE_VERIFY_KEY (a CI
-# variable) verifies.  The jobs that build Qore name the environment "qmod-cache-build" (action "prepare": no
-# deployment), to which the private key's variable is scoped, so that no other job gets it.
+# variable) verifies.  The jobs that build Qore on the writer's runner name the environment "qmod-cache-build"
+# (action "prepare": no deployment), to which the private key's variable is scoped, so that no other job gets it.
 # QORE_QMOD_CACHE_DISABLE=1 compiles every module and stores nothing.
 # The cache's runners (design/qmod-build-cache-runners.md): a job of a protected ref runs on the runner that mounts
 # the cache read-write (tags qmod-cache-writer and the architecture; macOS: macos-qmod-cache-writer), the other jobs on
 # the one that mounts it read-only (qmod-cache-reader and the architecture; macOS: the existing runner, tag macos).
 # Until those runners are registered, the CI variable QORE_QMOD_CACHE_RUNNERS is unset and the jobs keep the shared
 # runners' tags (k8s, macos), which mount no cache, so the jobs build without it; QORE_QMOD_CACHE_RUNNERS=1 switches.
+# Only a job that runs on the writer's runner names the environment qmod-cache-build, to which the signing key's
+# variable is scoped: every other job (on the shared runners, which run privileged pods, or on the reader's runner)
+# names qmod-cache-read, so GitLab never writes the key into it.  A pipeline variable must not be able to override
+# these variables (pipeline variables Maintainer-only; see design/qmod-build-cache-runners.md).
 .qmod-cache:
   environment:
-    name: qmod-cache-build
+    name: $QORE_QMOD_CACHE_ENVIRONMENT
     action: prepare
   variables:
     QORE_QMOD_CACHE_AUDIT: "0.03:${CI_PIPELINE_ID}"
@@ -144,6 +148,7 @@ check-fast-routes-core-sanitizers:
     QORE_QMOD_CACHE_MAX_AGE_DAYS: "7"
     QORE_QMOD_CACHE_RUNNER_TAG: k8s
     QORE_QMOD_CACHE_MACOS_RUNNER_TAG: macos
+    QORE_QMOD_CACHE_ENVIRONMENT: qmod-cache-read
   # as for a job without rules, no merge request pipeline runs these jobs; the rules only choose the runner's tag
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
@@ -152,6 +157,7 @@ check-fast-routes-core-sanitizers:
       variables:
         QORE_QMOD_CACHE_RUNNER_TAG: qmod-cache-writer
         QORE_QMOD_CACHE_MACOS_RUNNER_TAG: macos-qmod-cache-writer
+        QORE_QMOD_CACHE_ENVIRONMENT: qmod-cache-build
     - if: '$QORE_QMOD_CACHE_RUNNERS == "1"'
       variables:
         QORE_QMOD_CACHE_RUNNER_TAG: qmod-cache-reader
