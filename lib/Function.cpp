@@ -5013,7 +5013,8 @@ UserVariantBase::UserVariantBase(StatementBlock *b, int n_sig_first_line, int n_
         RetTypeInfo* rv, bool synced)
         : signature(n_sig_first_line, n_sig_last_line, params, rv,
             b ? b->pwo.parse_options : parse_get_parse_options()), statements(b),
-        gate(synced ? new VRMutex : nullptr), pgm(getProgram()), recheck(false), init(false) {
+        gate(synced ? new VRMutex : nullptr), pgm(getProgram()), pgm_id(pgm ? pgm->getProgramId() : 0),
+        recheck(false), init(false) {
     //printd(5, "UserVariantBase::UserVariantBase() this: %p params: %p rv: %p b: %p synced: %d\n", params, rv, b,
     //    synced);
 }
@@ -5633,6 +5634,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     func->source_variant = variant;
     // Owning program for the per-Program background-compile drain (set unconditionally).
     func->pgm = pgm;
+    func->pgm_id = pgm->getProgramId();
     // Debug-step hook context (issue #5352): record the top-level StatementBlock and
     // the owning program's attached-debugger pointer slot so the JIT lowering can bake
     // the per-statement dbgStep hook (blockStatement context + cheap inline attach gate).

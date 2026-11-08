@@ -159,6 +159,9 @@ private:
 class QoreExternalStaticMember : public QoreExternalMemberVarBase {
 public:
     //! returns the current value of the member; caller owns an reference returned
+    /** Returns no value if the calling Program cannot access the member: the Program that defines its class has
+        been deleted (see setValue(), which raises \c PROGRAM-ERROR then)
+    */
     DLLEXPORT QoreValue getValue() const;
 
     //! sets the value of the member

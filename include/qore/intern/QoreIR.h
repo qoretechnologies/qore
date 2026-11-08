@@ -3490,6 +3490,9 @@ public:
     //! only the compiles referencing a Program being torn down. Set unconditionally at
     //! lowering (independent of the #5352 debug context above). Null for AOT.
     QoreProgram* pgm = nullptr;
+    //! the ID of \a pgm, taken when it is set: a background compile checks that the Program with this ID is still
+    //! the one at \a pgm, as a deleted Program's address can be reused (see QoreJIT::enqueueBgCompile())
+    qore_program_id_t pgm_id = 0;
     std::vector<std::unique_ptr<QoreIRBasicBlock>> blocks;
 
     //! Transient SSA facts used by IR optimization and native lowering.

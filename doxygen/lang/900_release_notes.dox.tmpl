@@ -2046,6 +2046,31 @@
       \c FILESYSTEM-ACCESS-DENIED in a program that is not allowed to access the filesystem, and a
       @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" could not be constructed in a sandboxed service; it
       now uses @ref Qore::get_random_bytes()
+    - a destructor run while the @ref static_class_variables "static class variables" of a program were released
+      (at process exit for a user module or the main program, or when a @ref Qore::Program "Program" was deleted)
+      could crash the process if it created a Program: the new Program shares the program's public classes, and
+      deleting it deleted their static variables while the program still used them
+    - deleting @ref Qore::Program "Program" objects that share a class in different threads at the same time could
+      crash the process
+    - a @ref Qore::Program "Program" created while a program's data was released (by a destructor at exit, for
+      example) shared the values of the program's static class variables, so storing it in one of them kept those
+      values, and itself, alive; it now sees the values until they are released, and accessing them afterwards
+      raises a \c PROGRAM-ERROR exception (see @ref static_class_variables)
+    - <b>behavior change:</b> the values of the static variables of a public class are released when the
+      @ref Qore::Program "Program" that defines it is deleted, even if programs that inherited the class still exist;
+      accessing them from those programs then raises \c PROGRAM-ERROR, as calling the class's methods does (see
+      @ref static_class_variables)
+    - the constants and static class variables of a module loaded at runtime while a program's data was released
+      (by a destructor at exit, for example) were never released
+    - key-value data set with the C++ API function QoreClass::setKeyValue() was never released for a class without
+      static variables
+    - after a failed parse, a @ref Qore::Program "Program" without @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE"
+      (which a child program does not get when its parent does not have it) lost the classes, constants and other
+      symbols that it had inherited from its parent, so a new parse could not find them; only what the failed parse
+      added is removed now
+    - after a failed parse, a @ref Qore::Program "Program" with @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE" kept
+      the classes, constants, hashdecls, enums and namespaces that the failed parse had declared, so a new parse could
+      not declare them again
 
     @section qore_2_2_1 Qore 2.2.1
 

@@ -5961,7 +5961,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     closure_ir->computeSlotIdsAndEmbed();
                     closure_variant->setCachedIR(closure_ir.release());
                 }
-                closure_variant->pgm = pgm;
+                closure_variant->setProgram(pgm);
 
                 if (closure_bindings && native_body_key && *native_body_key) {
                     AOTClosureRuntimeBinding binding;

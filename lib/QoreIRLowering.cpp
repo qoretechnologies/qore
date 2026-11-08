@@ -4613,6 +4613,9 @@ QoreIRFunction* QoreIRLowering::compileHandlerToIR(
     // the statements of the handler are debugged as those of the function that it belongs to
     handler_func->source_statement_block = builder.getFunction()->source_statement_block;
     handler_func->source_dpgm_addr = builder.getFunction()->source_dpgm_addr;
+    // a handler belongs to the Program of the function it is part of (see QoreJIT::workReferencesPgm())
+    handler_func->pgm = builder.getFunction()->pgm;
+    handler_func->pgm_id = builder.getFunction()->pgm_id;
     handler_func->emit_debug_statements = builder.getFunction()->emit_debug_statements;
 
     // Populate pre_instantiated_locals with handler body locals
@@ -4833,6 +4836,9 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         // the statements of the handler are debugged as those of the function that it belongs to
         handler_func->source_statement_block = parent_func->source_statement_block;
         handler_func->source_dpgm_addr = parent_func->source_dpgm_addr;
+        // a handler belongs to the Program of the function it is part of (see QoreJIT::workReferencesPgm())
+        handler_func->pgm = parent_func->pgm;
+        handler_func->pgm_id = parent_func->pgm_id;
         handler_func->emit_debug_statements = parent_func->emit_debug_statements;
 
         // Phase B1: Pre-seed handler's local_var_slots with parent's entries
@@ -4953,6 +4959,9 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         // the statements of the handler are debugged as those of the function that it belongs to
         handler_func->source_statement_block = parent_func->source_statement_block;
         handler_func->source_dpgm_addr = parent_func->source_dpgm_addr;
+        // a handler belongs to the Program of the function it is part of (see QoreJIT::workReferencesPgm())
+        handler_func->pgm = parent_func->pgm;
+        handler_func->pgm_id = parent_func->pgm_id;
         handler_func->emit_debug_statements = parent_func->emit_debug_statements;
 
         // Phase B1: Pre-seed handler's local_var_slots with parent's entries
@@ -11691,6 +11700,7 @@ QoreIRValue QoreIRLowering::lowerBackgroundHelper(const QoreValue& expr, const Q
     // native helper's symbol is named after the function (see QoreIRToLLVM::emitBackgroundHelper())
     auto helper = std::make_unique<QoreIRFunction>("background_helper_" + std::to_string(helper_index));
     helper->pgm = starting_func ? starting_func->pgm : nullptr;
+    helper->pgm_id = starting_func ? starting_func->pgm_id : 0;
 
     QoreIRBuilder helper_builder(helper.get());
     helper_builder.setBlock(helper->createBlock("entry"));

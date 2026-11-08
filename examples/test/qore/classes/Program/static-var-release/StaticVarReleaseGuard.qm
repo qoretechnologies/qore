@@ -1,0 +1,38 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# StaticVarReleaseGuard.qm - module of static-var-release.qtest: a static variable whose value's destructor creates a
+# Program that shares the module's classes when the module's static variables are released at teardown
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module StaticVarReleaseGuard {
+    version = "1.0";
+    desc = "module of the static variable release tests";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace StaticVarReleaseGuard {
+    #! creates a Program in its destructor that shares the classes of this module and runs code using them
+    public class Guard {
+        destructor() {
+            Program p(PO_NEW_STYLE);
+            p.parse("int sub get() { return StaticVarReleaseGuard::Holder::value(); }", "guard");
+            printf("guard Program result: %d\n", p.callFunction("get"));
+        }
+    }
+
+    #! holds the guard in a static variable; the other static variables are released around it
+    public class Holder {
+        public {
+            static int before = 1;
+            static Guard guard = new Guard();
+            static hash<auto> after = {"a": 1};
+        }
+
+        static int value() {
+            return 42;
+        }
+    }
+}

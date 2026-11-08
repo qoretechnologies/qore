@@ -16624,6 +16624,260 @@ static QoreValue f_dbg_continue_program_release(const QoreListNode* params, Runt
     return h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return !h.held; });
 }
 
+namespace {
+//! holds the thread that tears down a Program after the cleanup callback, before it marks the Program as torn down
+/** While the thread is held, other threads can enter the Program, as they could while the callback ran
+*/
+struct ProgramTeardownHold {
+    std::mutex m;
+    std::condition_variable cond;
+    //! the Program to hold the teardown of; null if not armed; only compared, never dereferenced
+    QoreProgram* pgm = nullptr;
+    //! the thread is waiting in the hook
+    bool held = false;
+    //! the thread may continue
+    bool released = false;
+    //! the thread has marked the Program and waits for the threads in it to leave
+    bool final_wait = false;
+};
+
+ProgramTeardownHold& program_teardown_hold() {
+    // not destroyed, as Programs can be torn down while static objects are destroyed
+    static ProgramTeardownHold* h = new ProgramTeardownHold;
+    return *h;
+}
+
+void dbg_hold_program_teardown(QoreProgram* pgm, qore_program_private::DbgTeardownPoint point) {
+    ProgramTeardownHold& h = program_teardown_hold();
+    std::unique_lock<std::mutex> l(h.m);
+    if (!h.pgm || pgm != h.pgm) {
+        return;
+    }
+    if (point == qore_program_private::DbgTeardownPoint::AfterCleanupCallback) {
+        if (h.held) {
+            return;
+        }
+        h.held = true;
+        h.cond.notify_all();
+        h.cond.wait(l, [&h]() { return h.released; });
+        return;
+    }
+    // the Program's lock is held: this point only reports that it was reached
+    if (h.released) {
+        h.final_wait = true;
+        h.cond.notify_all();
+    }
+}
+}
+
+//! arms a hold of the thread that tears down the given Program; see ProgramTeardownHold
+/** @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_program_teardown(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    ProgramTeardownHold& h = program_teardown_hold();
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.pgm) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a Program teardown hold is already armed");
+        return QoreValue();
+    }
+    h.pgm = *pgm;
+    h.held = false;
+    h.released = false;
+    h.final_wait = false;
+    qore_program_private::dbg_teardown_hook.store(dbg_hold_program_teardown);
+    return QoreValue();
+}
+
+//! waits for the teardown of the armed Program to reach the hold; returns False if it did not within the timeout
+static QoreValue f_dbg_wait_program_teardown_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    ProgramTeardownHold& h = program_teardown_hold();
+    std::unique_lock<std::mutex> l(h.m);
+    return h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return h.pgm && h.held; });
+}
+
+//! lets the held teardown continue and waits until it waits for the threads in the Program to leave it
+/** The hold is disarmed in any case.
+
+    @return False if the teardown did not reach the wait within the timeout
+
+    @throw DBG-ARGUMENT-ERROR no teardown is held
+*/
+static QoreValue f_dbg_continue_program_teardown(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    ProgramTeardownHold& h = program_teardown_hold();
+    std::unique_lock<std::mutex> l(h.m);
+    if (!h.pgm || !h.held) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "no Program teardown is held");
+        return QoreValue();
+    }
+    h.released = true;
+    h.cond.notify_all();
+    bool rv = h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return h.final_wait; });
+    // "released" stays set, so that a held thread that has not woken yet continues
+    h.pgm = nullptr;
+    return rv;
+}
+
+namespace {
+//! holds the thread that calls the code of a class from another Program after it has taken the class's Program
+/** See qore_class_private::dbg_source_program_taken; the thread holds a reference to the Program, which can be
+    deleted while it is held
+*/
+struct SourceProgramHold {
+    std::mutex m;
+    std::condition_variable cond;
+    //! the Program to hold the callers of; null if not armed; only compared, never dereferenced
+    QoreProgram* pgm = nullptr;
+    //! a thread is waiting in the hook
+    bool held = false;
+    //! the thread may continue
+    bool released = false;
+    //! the held thread holds a reference to the Program
+    bool referenced = false;
+};
+
+SourceProgramHold& source_program_hold() {
+    // not destroyed, as classes can be called while static objects are destroyed
+    static SourceProgramHold* h = new SourceProgramHold;
+    return *h;
+}
+
+void dbg_hold_source_program_taken(const qore_class_private& cls, QoreProgram* pgm, bool referenced) {
+    SourceProgramHold& h = source_program_hold();
+    std::unique_lock<std::mutex> l(h.m);
+    if (!h.pgm || pgm != h.pgm || h.held) {
+        return;
+    }
+    h.referenced = referenced;
+    h.held = true;
+    h.cond.notify_all();
+    h.cond.wait(l, [&h]() { return h.released; });
+    h.pgm = nullptr;
+    h.held = false;
+    h.released = false;
+    h.cond.notify_all();
+}
+}
+
+//! arms a hold of the next thread that calls the code of a class of the given Program from another Program
+/** @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_source_program_call(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    SourceProgramHold& h = source_program_hold();
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.pgm) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a source Program hold is already armed");
+        return QoreValue();
+    }
+    h.pgm = *pgm;
+    qore_class_private::dbg_source_program_taken.store(dbg_hold_source_program_taken);
+    return QoreValue();
+}
+
+//! waits for a thread to reach the armed hold; returns False if none did within the timeout
+/** Returns a hash with \c held (the thread is held) and \c referenced (it holds a reference to the Program, so the
+    Program stays allocated whatever else releases it)
+*/
+static QoreValue f_dbg_wait_source_program_call_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    SourceProgramHold& h = source_program_hold();
+    std::unique_lock<std::mutex> l(h.m);
+    bool held = h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return h.held; });
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("held", held, xsink);
+    rv->setKeyValue("referenced", held && h.referenced, xsink);
+    return rv.release();
+}
+
+//! lets the held thread continue and waits until it has left the hook; returns False on timeout
+/** @throw DBG-ARGUMENT-ERROR no thread is held
+*/
+static QoreValue f_dbg_continue_source_program_call(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    SourceProgramHold& h = source_program_hold();
+    std::unique_lock<std::mutex> l(h.m);
+    if (!h.held) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "no thread is held for a source Program call");
+        return QoreValue();
+    }
+    h.released = true;
+    h.cond.notify_all();
+    return h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return !h.held; });
+}
+
+//! makes the background JIT compiler refuse work that refers to the given Program, as when it is deleted
+static QoreValue f_dbg_close_program_bg_compile(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    QoreJIT::instance().waitForBgCompileQueue(*pgm);
+    return QoreValue();
+}
+
+//! returns the number of background JIT compiles refused because a Program they refer to is being deleted
+static QoreValue f_dbg_get_bg_compile_refused_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return (int64)QoreJIT::instance().bgCompileRefusedClosedCount();
+}
+
+//! returns True if the background JIT compiler sees the given Program with its ID plus \a id_offset
+/** The compiler identifies a Program by its address and its ID, as the address of a deleted Program can be reused
+*/
+static QoreValue f_dbg_program_registered_with_id(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    int64 id_offset = get_param_value(params, 1).getAsBigInt();
+    std::vector<std::pair<const QoreProgram*, qore_program_id_t>> pgms;
+    pgms.emplace_back(*pgm, (qore_program_id_t)((int64)pgm->getProgramId() + id_offset));
+    bool ran = false;
+    bool rv = qore_program_private::runWithRegisteredPrograms(pgms, [&ran]() -> bool {
+        ran = true;
+        return true;
+    });
+    assert(rv == ran);
+    return rv;
+}
+
+//! returns the number of ThreadProgramData objects
+static QoreValue f_dbg_get_thread_program_data_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return ThreadProgramData::dbgLiveCount();
+}
+
+//! waits until no more than the given number of ThreadProgramData objects exist; returns False on timeout
+static QoreValue f_dbg_wait_thread_program_data_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return ThreadProgramData::dbgWaitLiveCount(get_param_value(params, 0).getAsBigInt(),
+        get_param_value(params, 1).getAsBigInt());
+}
+
 //! returns the argument stored in inline short string storage
 /** Whether a string value uses inline short string storage or a heap QoreStringNode depends on the
     execution mode that produced it, which makes the representation awkward to pin down from a
@@ -19291,6 +19545,30 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_continue_program_release", f_dbg_continue_program_release, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_hold_program_teardown", f_dbg_hold_program_teardown, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
+    qns.addBuiltinVariant("dbg_wait_program_teardown_held", f_dbg_wait_program_teardown_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_continue_program_teardown", f_dbg_continue_program_teardown, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_hold_source_program_call", f_dbg_hold_source_program_call, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
+    qns.addBuiltinVariant("dbg_wait_source_program_call_held", f_dbg_wait_source_program_call_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_continue_source_program_call", f_dbg_continue_source_program_call, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_close_program_bg_compile", f_dbg_close_program_bg_compile, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
+    qns.addBuiltinVariant("dbg_get_bg_compile_refused_count", f_dbg_get_bg_compile_refused_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_program_registered_with_id", f_dbg_program_registered_with_id, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "id_offset");
+    qns.addBuiltinVariant("dbg_get_thread_program_data_count", f_dbg_get_thread_program_data_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_wait_thread_program_data_count", f_dbg_wait_thread_program_data_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_new_hashdecl_hash_without_sink", f_dbg_new_hashdecl_hash_without_sink, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 1, anyTypeInfo, QORE_PARAM_NO_ARG, "h");
     qns.addBuiltinVariant("dbg_make_short_string", f_dbg_make_short_string, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

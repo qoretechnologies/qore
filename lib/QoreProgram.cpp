@@ -542,6 +542,32 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     copyExternalData();
 }
 
+#ifdef DEBUG
+std::atomic<qore_program_private_base::dbg_teardown_hook_t> qore_program_private_base::dbg_teardown_hook{nullptr};
+#endif
+
+QoreProgram* qore_program_private::getReferencedProgram(const QoreProgram* p, qore_program_id_t id) {
+    QoreAutoRWReadLocker al(&lck_programMap);
+    programid_to_program_map_t::const_iterator i = programid_to_program_map.find(id);
+    if (i == programid_to_program_map.end() || i->second != p) {
+        return nullptr;
+    }
+    // a registered Program has references (see derefUnregister())
+    return i->second->optRef() ? i->second : nullptr;
+}
+
+bool qore_program_private::runWithRegisteredPrograms(
+        const std::vector<std::pair<const QoreProgram*, qore_program_id_t>>& pgms, const std::function<bool()>& f) {
+    QoreAutoRWReadLocker al(&lck_programMap);
+    for (const auto& p : pgms) {
+        programid_to_program_map_t::const_iterator i = programid_to_program_map.find(p.second);
+        if (i == programid_to_program_map.end() || i->second != p.first) {
+            return false;
+        }
+    }
+    return f();
+}
+
 void qore_program_private::registerProgram() {
     QoreAutoRWWriteLocker al(&qore_program_private::lck_programMap);
     assert(qore_program_set.find(pgm) == qore_program_set.end());
@@ -1622,8 +1648,10 @@ void qore_program_private_base::copyExternalData() {
 
 void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     bool atomic_rollback = static_cast<bool>(pwo.parse_options & PO_ALLOW_REPARSE);
-    // delete pending changes to namespaces
-    qore_root_ns_private::get(*RootNS)->parseRollback(xsink, atomic_rollback);
+    // delete pending changes to namespaces: only what the failed parse added is removed, also without
+    // PO_ALLOW_REPARSE, as the namespaces hold what the Program had before the parse, including the classes and
+    // other symbols inherited from its parent when it was created, which a new parse must still find
+    qore_root_ns_private::get(*RootNS)->parseRollback(xsink, true);
 
     // delete pending statements
     sb.parseRollback();
@@ -1719,12 +1747,25 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     // otherwise workers on other threads fail with PROGRAM-ERROR.
     if (need_cleanup) {
         qore_call_program_cleanup_callback(pgm);
+#ifdef DEBUG
+        if (dbg_teardown_hook_t hook = dbg_teardown_hook.load()) {
+            hook(pgm, DbgTeardownPoint::AfterCleanupCallback);
+        }
+#endif
     }
 
     if (need_cleanup) {
         AutoLocker al(plock);
         // mark the program so that only code from this thread can run during data destruction
         ptid = q_gettid();
+#ifdef DEBUG
+        if (dbg_teardown_hook_t hook = dbg_teardown_hook.load()) {
+            hook(pgm, DbgTeardownPoint::BeforeFinalWait);
+        }
+#endif
+        // threads could enter the Program while the cleanup callback ran (ptid was not set yet): wait for them to
+        // leave it, as its data is destroyed below; no other thread can enter it now
+        waitForAllThreadsToTerminateIntern();
         clr = true;
     }
 
@@ -2741,7 +2782,7 @@ void qore_program_private::del(ExceptionSink* xsink) {
     QoreJIT::instance().waitForBgCompileQueue(pgm);
 
     // delete the namespace and all data
-    qore_root_ns_private::get(*RootNS)->deleteData(!ns_vars, xsink);
+    qore_root_ns_private::get(*RootNS)->deleteData(xsink);
 
     // no more code of this Program runs: free the thread-local data of the family for the last time if this
     // Program is its root, including the data that the destructors run above have saved; the members of the family

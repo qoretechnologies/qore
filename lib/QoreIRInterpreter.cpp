@@ -3097,20 +3097,6 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
     return eligible_state;
 }
 
-static QoreProgram* qore_ir_method_execution_program(const QoreMethod* method, const UserVariantBase* uvb) {
-    QoreProgram* pgm = nullptr;
-    if (method) {
-        const QoreClass* qc = method->getClass();
-        if (qc) {
-            pgm = qc->getSourceProgram();
-            if (!pgm) {
-                pgm = qc->getProgram();
-            }
-        }
-    }
-    return pgm ? pgm : (uvb ? uvb->pgm : nullptr);
-}
-
 class QoreIRInlineCallStackLocation : public QoreStackLocation {
 public:
     DLLLOCAL QoreIRInlineCallStackLocation(const QoreProgramLocation* loc, std::string call_name,
@@ -4633,11 +4619,12 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
-    // the method runs in this interpreter instead of being called, so the call is counted here for its promotion
-    // to native code; once it is native, this inline path is no longer taken
-    uvb->recordFastCallExecution();
-
-    QoreProgram* exec_pgm = qore_ir_method_execution_program(method, uvb);
+    // the method's code belongs to the Program of its class, which is kept for the whole inlined call (see
+    // QoreSourceProgramHolder); a class without a source Program is not inlined: the regular call path reports it
+    const QoreClass* method_class = method ? method->getClass() : nullptr;
+    QoreSourceProgramHolder exec_pgm_holder(method_class ? qore_class_private::get(*method_class) : nullptr,
+        xsink);
+    QoreProgram* exec_pgm = exec_pgm_holder.get();
     if (!exec_pgm) {
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
@@ -4648,6 +4635,9 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         result = QoreValue();
         return true;
     }
+    // the method runs in this interpreter instead of being called, so the call is counted here for its promotion
+    // to native code (only once it runs in its Program); once it is native, this inline path is no longer taken
+    uvb->recordFastCallExecution();
 
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
@@ -4906,11 +4896,12 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
-    // the static method runs in this interpreter instead of being called, so the call is counted here for its
-    // promotion to native code; once it is native, this inline path is no longer taken
-    uvb->recordFastCallExecution();
-
-    QoreProgram* exec_pgm = qore_ir_method_execution_program(inst->method, uvb);
+    // the method's code belongs to the Program of its class, which is kept for the whole inlined call (see
+    // QoreSourceProgramHolder); a class without a source Program is not inlined: the regular call path reports it
+    const QoreClass* method_class = inst->method ? inst->method->getClass() : nullptr;
+    QoreSourceProgramHolder exec_pgm_holder(method_class ? qore_class_private::get(*method_class) : nullptr,
+        xsink);
+    QoreProgram* exec_pgm = exec_pgm_holder.get();
     if (!exec_pgm) {
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
@@ -4920,6 +4911,10 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         result = QoreValue();
         return true;
     }
+    // the static method runs in this interpreter instead of being called, so the call is counted here for its
+    // promotion to native code (only once it runs in its Program); once it is native, this inline path is no longer
+    // taken
+    uvb->recordFastCallExecution();
 
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();

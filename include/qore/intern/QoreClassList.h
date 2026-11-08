@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -43,11 +43,17 @@
 struct cl_rec_t {
     QoreClass* cls = nullptr;
     bool priv = false;
+    //! true if the entry holds a reference to the class's constants; see qore_class_private::const_refs
+    bool consts = true;
+    //! true if the entry holds a reference to the values of the class's static variables; see qore_class_private::var_refs
+    bool vars = true;
+    //! true if the entry holds a reference to the class's static variables; see qore_class_private::data_refs
+    bool data = true;
 
     DLLLOCAL cl_rec_t() {
     }
 
-    DLLLOCAL cl_rec_t(QoreClass* c, bool p) : cls(c), priv(p) {
+    DLLLOCAL cl_rec_t(QoreClass* c, bool p, bool v = true) : cls(c), priv(p), vars(v) {
     }
 };
 
@@ -79,12 +85,35 @@ class QoreClassList {
 
 private:
     hm_qc_t hm;        // hash_map for name lookups
+    //! set when the constants of the classes have been released; a class added afterwards releases its reference
     bool ns_const : 1;
+    //! set when the Program owning the list releases the values of the static variables of its classes
+    /** Set when the Program's data is being cleared (see setVarsReleased()), and by clear() and deleteClassData().
+        A copy of a class from a list with this flag set does not share the values (see qore_class_private::var_refs),
+        nor does a class added to it.
+    */
     bool ns_vars : 1;
 
     DLLLOCAL void deleteAll();
 
-    DLLLOCAL void addInternal(QoreClass* ot, bool priv);
+    //! releases the references of a class added to the list after its data was released
+    /** A class can be added while the Program's data is released or afterwards (by a runtime module load in a
+        destructor, for example): its references to the constants and to the values of the static variables are then
+        released here, as the list no longer releases them; its reference to the static variables (data_refs) is
+        released with the rest of the list's
+    */
+    DLLLOCAL void releaseAdded(cl_rec_t& rec);
+
+    //! adds a copy of a class; \a vars is true if the copy may share the values of its static variables
+    /** The entry takes over the copy's reference to the values, if it has one (see
+        qore_class_private::takeWrapperVarRef()), and releases it at once if \a vars is false
+    */
+    DLLLOCAL void addInternal(QoreClass* ot, bool priv, bool vars);
+
+    //! returns true if a copy of the class in the given entry of this list may share the values of its static variables
+    /** see qore_class_private::var_refs
+    */
+    DLLLOCAL bool sharesVars(const cl_rec_t& rec) const;
 
 public:
     DLLLOCAL QoreClassList() : ns_const(false), ns_vars(false) {}
@@ -133,11 +162,20 @@ public:
     }
 
     // clears static class vars
-    DLLLOCAL void clear(ExceptionSink* xsink);
+    //! releases the static variable values of the classes; \a pgm is the Program owning the list, if any
+    DLLLOCAL void clear(ExceptionSink* xsink, const QoreProgram* pgm);
     DLLLOCAL void clearConstants(QoreListNode& l);
     DLLLOCAL void clearConstants(ExceptionSink* xsink);
     //! releases the class data held by the Program whose namespace is deleted; see qore_class_private::deleteClassData()
-    DLLLOCAL void deleteClassData(bool deref_vars, const QoreProgram* pgm, ExceptionSink* xsink);
+    DLLLOCAL void deleteClassData(const QoreProgram* pgm, ExceptionSink* xsink);
+
+    //! marks the list as owned by a Program that is releasing the values of the static variables of its classes
+    /** Called for all of the Program's class lists before any value is released, so that a Program created from it
+        while the values are released (by a destructor) does not share them; see qore_class_private::var_refs
+    */
+    DLLLOCAL void setVarsReleased() {
+        ns_vars = true;
+    }
 };
 
 class ClassListIterator {

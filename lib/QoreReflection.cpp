@@ -343,7 +343,9 @@ QoreValue QoreExternalStaticMember::getValue() const {
 
 int QoreExternalStaticMember::setValue(const QoreValue val, ExceptionSink* xsink) const {
     LValueHelper lvh(xsink);
-    const_cast<QoreVarInfo*>(reinterpret_cast<const QoreVarInfo*>(this))->getLValue(lvh);
+    if (const_cast<QoreVarInfo*>(reinterpret_cast<const QoreVarInfo*>(this))->getLValue(lvh)) {
+        return -1;
+    }
     lvh.assign(val.refSelf(), "<set static class member value>");
     return *xsink ? -1 : 0;
 }

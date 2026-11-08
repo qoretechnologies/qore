@@ -1294,6 +1294,12 @@ private:
     QoreProgram* old_call_program_context;
     QoreObject* old_rc_obj;
     const qore_class_private* old_rc_class;
+    //! the source Program of the class, if a reference to it had to be taken; released by the destructor
+    /** The Program is the call context of the frame (call_program_context), which code run in the frame uses; it is
+        kept while the frame runs, as the Program can be deleted in another thread (see
+        qore_class_private::getSourceProgramForCall())
+    */
+    QoreProgram* referenced_class_pgm = nullptr;
     bool do_ref,
         do_program_context,
         do_rc_update;
@@ -1953,10 +1959,16 @@ private:
    DLLLOCAL ~ThreadProgramData() {
       assert(pgm_set.empty());
       assert(tld_map.empty());
+#ifdef DEBUG
+      dbgLiveCountChanged(-1);
+#endif
    }
 
 public:
    DLLLOCAL ThreadProgramData(ThreadData* n_td) : td(n_td) {
+#ifdef DEBUG
+      dbgLiveCountChanged(1);
+#endif
    }
 
    DLLLOCAL void ref() {
@@ -2023,6 +2035,16 @@ public:
    */
    typedef void (*dbg_after_unlist_t)(int tid, QoreProgram* pgm);
    DLLLOCAL static std::atomic<dbg_after_unlist_t> dbg_after_unlist;
+
+   //! debug-only: returns the number of objects of this class that exist
+   DLLLOCAL static int64 dbgLiveCount();
+
+   //! debug-only: waits until no more than \a count objects of this class exist; returns false on timeout
+   DLLLOCAL static bool dbgWaitLiveCount(int64 count, int64 timeout_ms);
+
+private:
+   //! debug-only: counts the objects of this class
+   DLLLOCAL static void dbgLiveCountChanged(int64 delta);
 #endif
 };
 
