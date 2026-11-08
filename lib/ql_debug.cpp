@@ -1833,12 +1833,6 @@ struct UtRegularFile {
     }
 };
 
-//! A regular file is reported ready like an edge-triggered descriptor, and a close or a reuse of its number is seen
-/** poll(2) reports a regular file always ready; epoll refuses one and kqueue reports one readable only before its
-    end, so a wait for one lasted until its timeout.  Reporting it at every poll made an owner that waits for it with
-    something else, without reading it, spin; it is reported when it is registered, when its registrations or events
-    change and when rearmAlwaysReady() is called, and a closed file is reported once with an error and dropped
-*/
 //! A poll reports the armed regular files without looking at every registration of the loop
 /** addAlwaysReadyEvents() looked at every registration at every poll in which a regular file was armed, so a loop
     with many sockets and a file read in steps did work for every socket at every step.
@@ -1901,6 +1895,48 @@ static void ut_event_loop_armed_scan(UnitTestCounters& c) {
     xsink.clear();
 }
 
+//! Registering and removing a regular file between polls does not grow the list of armed descriptors
+/** A file is armed when it is registered, and the list of armed descriptors is emptied by a poll only while one is
+    armed: a file registered and removed between polls left an entry in it every time
+*/
+static void ut_event_loop_armed_churn(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreEventLoop loop(&xsink);
+    UT_ASSERT(c, !xsink && loop.isValid(), "armed churn: the event loop is created");
+    UtRegularFile file;
+    if (xsink || !file.open()) {
+        UT_ASSERT(c, false, "armed churn: a regular file is made");
+        xsink.clear();
+        return;
+    }
+    for (int i = 0; i < 1000; ++i) {
+        if (loop.addRegistration(file.fd, 1, QORE_EV_READ, nullptr, &xsink)
+                || loop.removeRegistration(file.fd, 1, &xsink)) {
+            UT_ASSERT(c, false, "armed churn: the file is registered and removed");
+            xsink.clear();
+            return;
+        }
+    }
+    UT_ASSERT_EQ(c, 0, static_cast<int>(loop.dbgArmedCount()), "armed churn: no file is armed");
+    UT_ASSERT_EQ(c, 0, static_cast<int>(loop.dbgArmedListSize()),
+        "armed churn: the list of armed descriptors is empty once none is armed");
+    // a file that stays registered is armed once, and reported once
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(file.fd, 1, QORE_EV_READ, nullptr, &xsink),
+        "armed churn: the file is registered again");
+    UT_ASSERT_EQ(c, 1, static_cast<int>(loop.dbgArmedListSize()), "armed churn: the registered file is listed once");
+    UT_ASSERT_EQ(c, 1, static_cast<int>(ut_event_loop_poll_keys(loop, file.fd).size()),
+        "armed churn: the registered file is reported");
+    UT_ASSERT_EQ(c, 0, static_cast<int>(loop.dbgArmedListSize()), "armed churn: the poll emptied the list");
+    UT_ASSERT(c, !xsink, "armed churn: no exception");
+    xsink.clear();
+}
+
+//! A regular file is reported ready like an edge-triggered descriptor, and a close or a reuse of its number is seen
+/** poll(2) reports a regular file always ready; epoll refuses one and kqueue reports one readable only before its
+    end, so a wait for one lasted until its timeout.  Reporting it at every poll made an owner that waits for it with
+    something else, without reading it, spin; it is reported when it is registered, when its registrations or events
+    change and when rearmAlwaysReady() is called, and a closed file is reported once with an error and dropped
+*/
 static void ut_event_loop_always_ready(UnitTestCounters& c) {
     ExceptionSink xsink;
     QoreEventLoop loop(&xsink);
@@ -14923,6 +14959,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
 #ifdef DEBUG
     ut_event_loop_always_ready(c);
     ut_event_loop_armed_scan(c);
+    ut_event_loop_armed_churn(c);
 #ifdef DARWIN
     ut_event_loop_remove_write_only_registration(c);
 #endif

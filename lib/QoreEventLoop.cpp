@@ -432,7 +432,12 @@ void QoreEventLoop::setArmed(FdInfo& info, bool armed) {
         armed_fds.push_back(info.fd);
     } else {
         assert(armed_count);
-        --armed_count;
+        if (!--armed_count) {
+            // every descriptor in the list was disarmed or removed: without this the list grew with every
+            // registration and removal of a regular file between polls, as a poll looks at it only while a
+            // descriptor is armed
+            armed_fds.clear();
+        }
     }
     info.armed = armed;
 }

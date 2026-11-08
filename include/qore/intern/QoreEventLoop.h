@@ -357,8 +357,13 @@ loop.removeRegistration(fd, op_key, xsink);
     //! Debug-only: the number of descriptors that the polls have looked at to report the armed always-ready ones
     /** See armed_fds: a poll looks at the descriptors armed since the previous poll, not at every registration
     */
-        DLLLOCAL size_t dbgAlwaysReadyVisits() const {
+    DLLLOCAL size_t dbgAlwaysReadyVisits() const {
         return dbg_always_ready_visits;
+    }
+
+    //! Debug-only: the number of entries in the list of armed always-ready descriptors (see armed_fds)
+    DLLLOCAL size_t dbgArmedListSize() const {
+        return armed_fds.size();
     }
 
     //! Debug-only: the number of registered regular files to report at the next poll (see armed_count)
@@ -560,7 +565,7 @@ private:
     //! the always-ready descriptors armed since the last poll, which poll() reports (see addAlwaysReadyEvents())
     /** A descriptor is added when it is armed; one that was disarmed or removed since is skipped by the poll, and one
         armed again after it was disarmed can be in the list more than once.  The poll reports the armed descriptors
-        from this list instead of looking at every registration.
+        from this list instead of looking at every registration.  The list is emptied when no descriptor is armed.
     */
     std::vector<int> armed_fds;
 
