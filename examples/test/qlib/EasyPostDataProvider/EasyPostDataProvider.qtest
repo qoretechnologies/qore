@@ -46,8 +46,32 @@
 
 %requires EasyPostRestClient
 %requires EasyPostDataProvider
+%requires HttpServerUtil
+%requires HttpServer
+%requires Logger
 
 %exec-class EasyPostDataProviderTest
+
+#! Counts requests and answers each with 429 Too Many Requests
+class RateLimitedHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the number of requests received
+        int requests = 0;
+        #! the Authorization header of the last request
+        *string authorization;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        ++requests;
+        authorization = hdr.authorization;
+        return <HttpResponseInfo>{
+            "code": 429,
+            "hdr": {"Content-Type": MimeTypeJson, "Retry-After": "1"},
+            "body": make_json({"error": {"code": "RATE_LIMITED", "message": "rate limited"}}),
+        };
+    }
+}
+
 
 public class EasyPostDataProviderTest inherits QUnit::Test {
     private {
@@ -76,6 +100,7 @@ public class EasyPostDataProviderTest inherits QUnit::Test {
         addTestCase("data type instantiation test", \dataTypeInstantiationTest());
         addTestCase("action registration test", \actionRegistrationTest());
         addTestCase("watch event example data test", \watchEventExampleDataTest());
+        addTestCase("sync client rate limit test", \syncClientRateLimitTest());
 
         # Integration tests - require -c <connection>
         addTestCase("integration: list-addresses", \integrationListAddresses());
@@ -350,6 +375,35 @@ public class EasyPostDataProviderTest inherits QUnit::Test {
     }
 
     #! Integration: search the addresses collection
+    #! The synchronous client raises a rate-limited request's error after one request, and can use a local server
+    /** Its retry loop for HTTP 429 never ran (it read a key that the response info does not have, and the client
+        raises an error status), and was removed; the client always used the EasyPost API, whatever its \c url
+        option, so it could not be tested without the network
+    */
+    syncClientRateLimitTest() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        RateLimitedHandler handler();
+        server.setHandler("easypost", "", NOTHING, handler);
+        server.setDefaultHandler("easypost", handler);
+
+        EasyPostRestClient::EasyPostRestClient rest({"apikey": "EZTKtest", "url": "http://127.0.0.1:" + port + "/v2"},
+            True);
+        assertEq("http://127.0.0.1:" + port + "/v2", rest.getURL(), "the url option is used");
+        hash<auto> info;
+        try {
+            rest.get("addresses", NOTHING, \info);
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(429, info."response-code", "the rate-limited response is the error");
+        }
+        assertEq(1, handler.requests, "the rate-limited request was made once");
+        assertEq("Basic " + make_base64_string("EZTKtest:"), handler.authorization, "the API key authenticates the request");
+    }
+
     integrationListAddresses() {
         checkJson();
         if (!connName) {
