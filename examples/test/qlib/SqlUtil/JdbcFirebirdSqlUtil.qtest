@@ -1,6 +1,5 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-parallel: serial - it creates fixed-name objects in the shared Firebird test database
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -16,6 +15,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires SqlUtilTestBase
+%requires ./FirebirdTestIsolation.qm
 
 %exec-class JdbcFirebirdTest
 
@@ -168,6 +168,8 @@ class JdbcFirebirdTest inherits SqlTestBase {
         if (!m_options.connstr) {
             m_options.connstr = ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD;
         }
+        # the run's own database: tests that run at the same time do not share the objects of this one
+        m_options.connstr = FirebirdRunDatabase::getConnectionString(m_options.connstr, "JdbcFirebirdSqlUtil");
         Datasource ds(m_options.connstr);
         if (ds.getDriverRealName() !~ /^firebird/i)
             throw "JDBCFIREBIRD-ERROR", sprintf("cannot execute the JDBC Firebird tests on a connection using driver "
