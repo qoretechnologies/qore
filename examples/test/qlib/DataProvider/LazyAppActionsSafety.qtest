@@ -81,6 +81,8 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("a registration made under a sandbox runs under it for any reader", \governedRegistrationTest());
         addTestCase("a thread loading a module does not wait for an initialization", \moduleLoadTest());
         addTestCase("a sandboxed thread loading a module is refused trusted registrations", \sandboxedModuleLoadTest());
+        addTestCase("a sandboxed reader is refused the worker while the worker waits for its initialization",
+            \workerCycleTest());
         addTestCase("deregistering an app during its initialization retains nothing", \deregistrationTest());
         addTestCase("no worker runs until a sandboxed reader needs one, and the process ends with it", \exitTest());
         addTestCase("the end of the process stops the worker, and its waiting readers get an error",
@@ -478,6 +480,57 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(app, False));
         assertEq(1, SafetyRuns::get(app));
         assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+    }
+
+    workerCycleTest() {
+%ifdef QoreDebug
+        # a sandboxed reader S initializes app a (a pending action that sandboxed code registered); the worker runs a
+        # second sandboxed reader's registration of c, which reads a and waits for S; then S, in a's initialization,
+        # reads b, whose trusted registration only the worker can run: S must be refused instead of waiting for the
+        # worker, which waits for S
+        string a = registerApp("SafeCycleA");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(a);
+        string b = registerLazyApp("SafeCycleB");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(b);
+        string c = registerApp("SafeCycleC");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(c);
+        DataProviderActionCatalog::registerLazyAppActions(c, sub () {
+            DataProviderActionCatalog::getActions(a, False);
+            registerAction(c, "lazy-c");
+        });
+        SandboxManager sm();
+        Program registrar(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        registrar.parse("%requires DataProvider\n"
+            "sub reg(string app, string other, Counter owned, Queue results) {\n"
+            "    DataProviderActionCatalog::registerPendingAppAction(app, \"pending-a\", sub () {\n"
+            "        owned.dec();\n"
+            "        DataProviderActionCatalog::waitForLazyWorkerWait(app, 60s);\n"
+            "        try { DataProviderActionCatalog::getActions(other, False); results.push(\"read\"); }\n"
+            "        catch (hash<ExceptionInfo> ex) { results.push(ex.err); }\n"
+            "        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app,\n"
+            "            \"action\": \"pending-a\", \"path\": \"/pending-a\", \"display_name\": \"pending-a\",\n"
+            "            \"short_desc\": \"pending-a\", \"desc\": \"pending-a\", \"action_code\": DPAT_API});\n"
+            "    });\n"
+            "}\n", "cycle-registrar");
+        registrar.setSandboxManager(sm);
+        Counter owned(1);
+        Queue results();
+        registrar.callFunction("reg", a, b, owned, results);
+        Program reader = readerProgram(sm);
+        Counter done(2);
+        Queue errors();
+        background LazyAppActionsSafetyTest::readIn(reader, a, done, errors);
+        owned.waitForZero();
+        background LazyAppActionsSafetyTest::readIn(reader, c, done, errors);
+        assertEq(0, done.waitForZero(Deadline), "neither the reader nor the worker waits for ever");
+        assertEq("DATA-PROVIDER-LAZY-INIT-ERROR", results.get(0));
+        assertEq(("pending-a",), map $1.action, DataProviderActionCatalog::getActions(a, False));
+        assertEq(("lazy-c",), map $1.action, DataProviderActionCatalog::getActions(c, False));
+        # b's registration stays pending for the next reader
+        assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(b, False));
+%else
+        testSkip("the test needs the catalog worker's test hooks, which only debug builds have");
+%endif
     }
 
     deregistrationTest() {

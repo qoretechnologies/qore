@@ -1384,6 +1384,10 @@ public class DataProviderActionCatalog {
 
         #! Signalled when a job is queued for the catalog worker; for tests (debug builds only)
         static Condition lazy_queue_cond();
+
+        #! Signalled, with init_lck held, when a thread starts to wait for an initialization; for tests (debug builds
+        #! only)
+        static Condition lazy_wait_cond();
 %endif
 
 
@@ -5144,6 +5148,20 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @throw DATA-PROVIDER-LAZY-WORKER-STOPPED the worker was stopped before it ran the job
     */
     private:internal static runOnWorker(hash<auto> job) {
+        string tkey = gettid().toString();
+        # the wait for the worker is registered before the job is queued, so that the worker, which can read an app
+        # that this thread initializes, sees it in its cycle check (see initWaitCycle()); a worker waiting already,
+        # directly or through others, for an app that this thread initializes would never run the job
+        {
+            AutoLock al(init_lck);
+            if (DataProviderActionCatalog::lazyWorkerWaitsFor(gettid())) {
+                throw "DATA-PROVIDER-LAZY-INIT-ERROR", sprintf("%s cannot be initialized: the catalog worker waits "
+                    "for an initialization that this thread runs", DataProviderActionCatalog::describeJob(job));
+            }
+            init_waits{tkey} = LazyWorkerKey;
+        }
+        # removing the entry takes no lock and cannot fail, however the wait ends
+        on_exit remove init_waits{tkey};
         string id;
         {
             AutoLock al(lazy_worker_lck);
@@ -5164,17 +5182,10 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             lazy_queue_cond.broadcast();
 %endif
         }
-        string tkey = gettid().toString();
         # removing the entries takes no lock and cannot fail, however the wait ends
         on_exit {
-            remove init_waits{tkey};
             remove lazy_job_waiting{id};
             remove lazy_job_results{id};
-        }
-        # a wait for the worker, for the cycle check of the worker's own waits (see initWaitCycle())
-        {
-            AutoLock al(init_lck);
-            init_waits{tkey} = LazyWorkerKey;
         }
         *hash<ExceptionInfo> error;
         {
@@ -5226,6 +5237,31 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     #! Returns the number of jobs queued for the catalog worker since the process started (debug builds only)
     static int getLazyInitsQueued() {
         return lazy_jobs_submitted;
+    }
+
+    #! Waits until the catalog worker waits for another thread's initialization of an app (debug builds only)
+    /** @param app the app
+        @param timeout_ms the most to wait, in milliseconds
+
+        @return @ref True if the worker waits for the app's initialization, @ref False if the time ran out
+
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+    */
+    static bool waitForLazyWorkerWait(string app, timeout timeout_ms) {
+        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+            throw "PERMISSION-DENIED", "cannot wait for the catalog worker from a context with restricted process "
+                "control";
+        }
+        AutoLock al(init_lck);
+        while (True) {
+            *int worker = DataProviderActionCatalog::lazyWorkerTid();
+            if (worker && init_waits{worker.toString()} == app) {
+                return True;
+            }
+            if (lazy_wait_cond.wait(init_lck, timeout_ms)) {
+                return False;
+            }
+        }
     }
 %endif
 
@@ -5463,12 +5499,25 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                     return;
                 }
                 init_waits{tkey} = app;
+%ifdef QoreDebug
+                lazy_wait_cond.broadcast();
+%endif
                 wait_for = owner.done;
             }
             # removing the entry cannot fail
             on_exit remove init_waits{tkey};
             wait_for.waitForZero();
         }
+    }
+
+    #! Returns @ref True if the worker waits, directly or through others, for an app the thread inits; init_lck is held
+    private:internal static bool lazyWorkerWaitsFor(int tid) {
+        *int worker = DataProviderActionCatalog::lazyWorkerTid();
+        if (!worker) {
+            return False;
+        }
+        *string app = init_waits{worker.toString()};
+        return exists app && app != LazyWorkerKey && DataProviderActionCatalog::initWaitCycle(app, tid);
     }
 
     #! Returns @ref True if waiting for the initialization of the app would close a cycle of waits; init_lck is held
