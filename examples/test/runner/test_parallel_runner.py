@@ -267,6 +267,24 @@ class ParallelRunnerTest(unittest.TestCase):
                 self.assertRegex(line, valid, "%s: '# test-parallel: serial|exclusive - <why>'" % test)
         self.assertGreater(found, 0)
 
+    def test_process_limit_tests_are_exclusive(self):
+        # A test that reads the process or thread limit of the machine does so to reach it: while it holds every
+        # process the limit allows, the tests beside it cannot fork or start a thread ("Cannot fork"), so it must run
+        # alone (max-threads-count.qtest under the pids.max limit of a container killed the tests beside it)
+        limit = re.compile(r"pids\.max|Max processes|RLIMIT_NPROC|ulimit\s+-u|kern\.maxproc|maxprocperuid|"
+                           r"threads-max")
+        exclusive = re.compile(r"(?m)^# test-parallel: exclusive - \S")
+        found = []
+        for test in sorted((ROOT / "examples/test").rglob("*.qtest")) + sorted((ROOT / "modules").glob(
+                "*/test/**/*.qtest")):
+            source = test.read_text(errors="replace")
+            if limit.search(source):
+                found.append(test.relative_to(ROOT))
+                self.assertTrue(exclusive.search(source), "%s reads the process limit of the machine: it must "
+                                "declare '# test-parallel: exclusive - <why>'" % test.relative_to(ROOT))
+        # the check finds the test that reaches the limit
+        self.assertIn(Path("examples/test/qore/threads/max-threads-count.qtest"), found)
+
 
 if __name__ == "__main__":
     unittest.main()

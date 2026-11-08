@@ -70,7 +70,9 @@
   prints each test's output whole when it ends.  Tests must therefore not share state: listen on port 0, write under
   their own `make_tmp_dir()`/`TmpDir`, and use names of their own for shared objects.  A test that cannot run beside
   others declares `# test-parallel: serial - <why>` (one at a time beside the others: the database and service tests,
-  which share schemas and data) or `# test-parallel: exclusive - <why>` (alone).  A test that takes more than about two
+  which share schemas and data) or `# test-parallel: exclusive - <why>` (alone: a test that reads the process limit
+  of the machine to reach it, such as `qore/threads/max-threads-count.qtest`, must, or the tests beside it cannot fork;
+  `examples/test/runner/test_parallel_runner.py` enforces it).  A test that takes more than about two
   minutes is split into parts: its class adds each case with `addPartCase(<part>, ...)` and each `<name>-<part>.qtest`
   runs one part (ex: `ir/CMakeBuildHelpers.qc`); `examples/test/runner/test_split_tests.py` checks the parts.
 - The shards of a CI job are balanced by `examples/test/docker_test/test-durations.tsv`; refresh it from a green
