@@ -2341,7 +2341,42 @@ public:
 
     mutable QoreReferenceCounter refs;  // existence references
     mutable QoreReferenceCounter const_refs; // constant references
-    mutable QoreReferenceCounter var_refs;   // static var references
+    //! Holds a reference to the static variables of a class while their values are released; see releaseVarsLast()
+    class VarRefHolder {
+    public:
+        DLLLOCAL VarRefHolder(const QoreReferenceCounter& refs) : refs(refs) {
+            refs.ROreference();
+        }
+
+        DLLLOCAL ~VarRefHolder() {
+            if (!released) {
+                refs.ROdereference();
+            }
+        }
+
+        VarRefHolder(const VarRefHolder&) = delete;
+        VarRefHolder& operator=(const VarRefHolder&) = delete;
+
+        //! Releases the reference; returns true if it was the last one
+        DLLLOCAL bool release() {
+            assert(!released);
+            released = true;
+            return refs.ROdereference();
+        }
+
+    private:
+        const QoreReferenceCounter& refs;
+        bool released = false;
+    };
+
+    //! static var references: one for each Program sharing the class's static variables
+    /** The Program that releases the last reference releases the variables: it clears their values, which runs the
+        destructors of the objects they hold, and the variables are deleted when no Program shares them.  A Program
+        created while the values are released, by a destructor that they run, shares the class again (it inherits the
+        classes of the Program running the destructor), so a reference is held while the values are released; see
+        releaseVarsLast()
+    */
+    mutable QoreReferenceCounter var_refs;
 
     unsigned num_methods, num_user_methods, num_static_methods, num_static_user_methods;
 
@@ -2488,7 +2523,7 @@ public:
         }
         if (ns_vars && var_refs.ROdereference()) {
             // vars may not be empty when deleting an uninitialized user class
-            if (!vars.empty()) {
+            if (!vars.empty() && releaseVarsLast(nullptr)) {
                 vars.del(nullptr);
             }
         }
@@ -3375,13 +3410,32 @@ public:
 
         if (var_refs.ROdereference()) {
             // issue #3521: only clear vars here; do not delete
-            vars.clear(xsink);
-            // delete key-value data when the last program sharing this class is cleaned up
-            for (auto& i : kvmap) {
-                i.second.discard(xsink);
-            }
-            kvmap.clear();
+            releaseVarsLast(xsink);
         }
+    }
+
+    //! Releases the values of the static variables and the key-value data for the last Program sharing them
+    /** Called after the last reference in var_refs has been released.  The destructors of the values run here, and
+        one can create a Program that shares the class (a Program inherits the classes of the Program that creates it,
+        and a destructor runs in the Program of its class); deleting that Program would release the variables again,
+        as the last Program sharing them, and delete them while they are being cleared here.  A reference is held
+        while the values are released, so a Program created meanwhile never releases the last one; one that still
+        exists afterwards releases the variables (and the values assigned to them) itself when it is deleted.
+
+        @param xsink for exceptions raised by destructors
+
+        @return true if no Program shares the static variables afterwards, false if a Program created while they
+        were released still does
+    */
+    DLLLOCAL bool releaseVarsLast(ExceptionSink* xsink) {
+        VarRefHolder holder(var_refs);
+        vars.clear(xsink);
+        // delete key-value data when the last program sharing this class is cleaned up
+        for (auto& i : kvmap) {
+            i.second.discard(xsink);
+        }
+        kvmap.clear();
+        return holder.release();
     }
 
     //! Releases the class data that a Program sharing the class holds, when the Program is deleted
@@ -3396,14 +3450,11 @@ public:
         // true if no other Program shares the class's data
         bool last = false;
         if (deref_vars && var_refs.ROdereference()) {
-            last = true;
-            vars.clear(xsink);
-            vars.del(xsink);
-            // delete key-value data when the last program sharing this class is cleaned up
-            for (auto& i : kvmap) {
-                i.second.discard(xsink);
+            // a Program created while the values are released can still share the variables, and then deletes them
+            if (releaseVarsLast(xsink)) {
+                last = true;
+                vars.del(xsink);
             }
-            kvmap.clear();
         } else if (!var_refs.reference_count()) {
             last = true;
             // delete vars again if possible

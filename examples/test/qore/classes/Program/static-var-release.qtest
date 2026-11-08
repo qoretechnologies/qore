@@ -1,0 +1,152 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class StaticVarReleaseTest
+
+#! what the destructors run in the Programs of the in-process cases did
+class Results {
+    public {
+        #! the reports of the destructors
+        static list<string> reports = ();
+        #! the Programs that destructors created and kept
+        static list<Program> kept = ();
+    }
+}
+
+#! records a report of a destructor run in a Program of an in-process case
+sub svr_report(string msg) {
+    Results::reports += msg;
+}
+
+#! keeps a Program that a destructor created
+sub svr_keep(Program p) {
+    Results::kept += p;
+}
+
+#! The static variables of a class released while a destructor that they run creates a Program sharing the class
+/** The Program that releases the last reference to the static variables of a class clears their values, which runs
+    the destructors of the objects they hold.  A Program created by such a destructor shares the class (a Program
+    inherits the public classes of the Program that creates it, and a destructor runs in the Program of its class), so
+    it referenced the variables again, and when it was deleted, it released them as the last Program sharing them and
+    deleted them while they were still being cleared: the release then read freed memory and the process crashed.
+    This happened at process exit for the static variables of a user module (when the module Programs are cleared)
+    and of the main Program, and when a Program is deleted.
+
+    The exit cases run in a separate process, in each execution mode, as a crash is the failure.
+*/
+class StaticVarReleaseTest inherits QUnit::Test {
+    public {
+        #! the code of the in-process Program; the guard's destructor runs when the Program is deleted
+        const ChildSrc = "
+public class Guard {
+    destructor() {
+        Program p(PO_NEW_STYLE);
+        p.parse(\"int sub get() { return Holder::value(); }\", \"guard\");
+        svr_report(sprintf(\"guard Program result: %d\", p.callFunction(\"get\")));
+        if (Holder::keep) {
+            svr_keep(p);
+        }
+    }
+}
+
+public class Holder {
+    public {
+        static int before = 1;
+        static Guard guard = new Guard();
+        static hash<auto> after = {\"a\": 1};
+        const keep = KEEP;
+    }
+
+    static int value() {
+        return 42;
+    }
+}
+
+int sub get() {
+    return Holder::value();
+}
+";
+
+        #! the output of the exit scripts
+        const ExitOutput = ("main done: 42", "guard Program result: 42");
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("StaticVarReleaseTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+
+        addTestCase("deleted Program", \deletedProgramTest());
+        addTestCase("deleted Program; the Program created by the destructor outlives it",
+            \deletedProgramKeptTest());
+        addTestCase("main Program at exit", \exitTest(), ("main-exit.q",));
+        addTestCase("user module at exit", \exitTest(), ("module-exit.q",));
+        set_return_value(main());
+    }
+
+    #! returns a Program with the guard class; the Program created by the guard's destructor is kept if keep is set
+    private Program getProgram(bool keep) {
+        Program p(PO_NEW_STYLE);
+        p.importFunction("svr_report");
+        p.importFunction("svr_keep");
+        p.parse(replace(ChildSrc, "KEEP", keep ? "True" : "False"), "child");
+        assertEq(42, p.callFunction("get"));
+        return p;
+    }
+
+    deletedProgramTest() {
+        Results::reports = ();
+        {
+            Program p = getProgram(False);
+            delete p;
+        }
+        assertEq(("guard Program result: 42",), Results::reports);
+        assertEq((), Results::kept);
+    }
+
+    deletedProgramKeptTest() {
+        Results::reports = ();
+        {
+            Program p = getProgram(True);
+            delete p;
+        }
+        assertEq(("guard Program result: 42",), Results::reports);
+        assertEq(1, Results::kept.size());
+        # the Program created by the destructor still shares the class; the code of the class cannot run, as its
+        # Program has been deleted
+        assertThrows("PROGRAM-ERROR", "already been deleted", \Results::kept[0].callFunction(), "get");
+        # deleting it releases the static variables, which have no values now
+        delete Results::kept[0];
+        Results::kept = ();
+        assertEq(("guard Program result: 42",), Results::reports);
+    }
+
+    exitTest(string script) {
+        string dir = get_script_dir() + "static-var-release";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string what = sprintf("%s with %s", script, mode);
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("env QORE_MODULE_DIR=%s "
+                "%s --exec-mode=%s %s", StaticVarReleaseTest::shellQuote(dir),
+                StaticVarReleaseTest::shellQuote(qore_bin), mode,
+                StaticVarReleaseTest::shellQuote(dir + DirSep + script)));
+            assertEq(0, r.rc, sprintf("%s exits normally: %s", what, r.out));
+            assertEq(ExitOutput, (select r.stdout.split("\n"), $1.val()), sprintf("%s output: %s", what, r.out));
+            assertEq("", r.stderr, what + " writes nothing to stderr");
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}
