@@ -355,5 +355,22 @@ class MigrationExecutorTest inherits QUnit::Test {
             me.executeMigrations(migrations, "1.0", "2.0", "pre_align");
             assertEq(i.value[2], ds.sql, i.key);
         }
+
+        # an empty override list is no override: the default statements run, as before driver keys were added
+        step.driver = {"oracle": (), "jdbc": ()};
+        migrations = ({"version": "2.0", "pre_align": (step,)},);
+        foreach list<string> d in (("oracle", "oracle"), ("jdbc", "Oracle")) {
+            RecordingDatasource ds(d[0], d[1]);
+            Schema::MigrationExecutor me(ds);
+            me.executeMigrations(migrations, "1.0", "2.0", "pre_align");
+            assertEq(("default",), ds.sql, d[0] + " empty");
+        }
+        # an empty list under the generic driver's key: the native driver's statements
+        step.driver = {"oracle": ("oracle 1",), "jdbc": ()};
+        migrations = ({"version": "2.0", "pre_align": (step,)},);
+        RecordingDatasource ds("jdbc", "Oracle");
+        Schema::MigrationExecutor me(ds);
+        me.executeMigrations(migrations, "1.0", "2.0", "pre_align");
+        assertEq(("oracle 1",), ds.sql, "jdbc empty, oracle set");
     }
 }
