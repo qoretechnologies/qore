@@ -7328,6 +7328,10 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         race, returns @ref False without touching the counter, so the caller keeps waiting
         instead of consuming the attempt budget.  Never throws.
 
+        @param tracked_conn the connection handed back by the last acquisition step, if any
+        @param oauth2 @ref True if the connection is to the OAuth2 token endpoint, acquired with
+        the client of the token endpoint, @ref False if it is to the ping target
+
         @return @ref True if @a tracked_conn was closed (failure recorded), @ref False
         otherwise
     */
@@ -7342,8 +7346,11 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         # failing against a host that does not serve HTTP/3 is the expected outcome and the race goes on with the
         # other candidates, so counting it as a failed connection attempt would fail the ping of every "auto"
         # connection to such a host.  Nothing is recorded for such a candidate: the caller acquires the
-        # connection again, which lets the race start its next candidate or hand back the winner.
-        if (rcio.getConnectionManager().isUnresolvedRaceLeg(tracked_conn)) {
+        # connection again, which lets the race start its next candidate or hand back the winner.  The race
+        # belongs to the connection manager of the client that acquired the connection: the OAuth2 token
+        # endpoint is reached with a client and a connection manager of its own (see doStartOAuth2Refresh()).
+        *RestClientIo owner = oauth2 ? oauth2_rcio : rcio;
+        if (owner && owner.getConnectionManager().isUnresolvedRaceLeg(tracked_conn)) {
             return False;
         }
         *hash<auto> err = tracked_conn.getPollOperation().getError();
