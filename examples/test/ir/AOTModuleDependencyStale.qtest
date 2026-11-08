@@ -55,6 +55,8 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         addTestCase("a module compiled with a relative output path is checked", \relativeOutputTest());
         addTestCase("a module file the sandbox does not let the loader read is not read", \sandboxDeniedTest());
         addTestCase("an include file named like a module is not that module", \includedModuleNameTest());
+        addTestCase("a dependency is found as the module's own module path directives find it",
+            \modulePathDirectiveTest());
         set_return_value(main());
     }
 
@@ -453,5 +455,32 @@ try {
         # the module was compiled with no module Other, so the one in the module path does not make it out of date
         string out = runRequires(module_path, tmp.path, "Inc2", "Inc2::value()");
         assertEq("v1 Inc2.qmod", out, out);
+    }
+
+    modulePathDirectiveTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        string own_dir = tmp.path + "/own";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        mkdir(own_dir);
+        # Mid re-exports Base, which its initialization loads with Mid's own module path, which its
+        # %prepend-module-path directive puts first
+        writeModule(src_dir, "Base", "", "public namespace Base { public string sub value() { return \"base\"; } }");
+        writeModule(src_dir, "Mid", sprintf("%%prepend-module-path %s\n%%requires(reexport) Base", own_dir),
+            "public namespace Mid { public string sub value() { return Base::value(); } }");
+        string module_path = qmod_dir + ":" + src_dir;
+        compile(module_path, src_dir, qmod_dir, "Base");
+        compile(module_path, src_dir, qmod_dir, "Mid");
+        assertEq("base Mid.qmod", runRequires(module_path, tmp.path, "Mid", "Mid::value()"));
+
+        # another Base in the directory of Mid's own directive: Mid would load it, so Mid is out of date, and its
+        # source is loaded
+        writeModule(own_dir, "Base", "", "public namespace Base { public string sub value() { return \"other\"; } }");
+        string out = runRequires(module_path, tmp.path, "Mid", "Mid::value()");
+        assertEq("other Mid.qm", out.split("\n").last(), out);
+        assertRegex("AOT module '.*/Mid\\.qmod' for feature 'Mid' is out of date: it was compiled against other "
+            "files of module 'Base' than '.*/own/Base\\.qm'", out);
     }
 }

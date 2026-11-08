@@ -25477,6 +25477,10 @@ static bool addAOTModuleInfoSection(llvm::LLVMContext& ctx, llvm::Module& module
         names.erase("qore");
         info.compiled_with.assign(names.begin(), names.end());
     }
+    // the module's own module path directives, which its initialization searches as well (the module path lists that
+    // appendModulePathListSections() stores for it): the loader finds the modules it checks with them
+    info.prepended_module_paths = pp->prepended_module_paths;
+    info.appended_module_paths = pp->appended_module_paths;
     std::vector<uint8_t> record;
     if (!qoreAOTEncodeModuleInfo(info, record, error)) {
         return false;

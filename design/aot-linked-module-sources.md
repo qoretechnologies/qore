@@ -95,7 +95,11 @@ it was compiled with is checked:
   `%include` directive opened can have the name of a module, `<x>.qm`);
 - a module that is loaded is checked as it was loaded; one that is not loaded yet (a module the AOT module
   re-exports, which its initialization loads) is found without loading it, in the search order of
-  `loadModuleIntern()` (`QoreModuleManager::findModuleFileUnlocked()`).
+  `loadModuleIntern()` (`QoreModuleManager::findModuleFileUnlocked()`), in the module path that the module's
+  initialization searches (`inheritAOTModulePathLists()`): the module's own `%prepend-module-path` directories, which
+  qcc writes into its metadata, those of the Program loading it, the module path, those the Program appends, and the
+  module's own `%append-module-path` directories.  The initialization inherits the lists of the Program loading the
+  module (the one the loader checks with), not of the Program that happens to be current, so both find the same file.
 
 A module is the one compiled against when:
 

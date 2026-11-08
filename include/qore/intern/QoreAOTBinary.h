@@ -2481,12 +2481,16 @@ struct QoreAOTModuleFileInfo {
         \c dependencies (see design/aot-linked-module-sources.md)
     */
     std::vector<std::string> compiled_with;
+    //! the module's own %prepend-module-path directories, in the order its initialization searches them
+    std::vector<std::string> prepended_module_paths;
+    //! the module's own %append-module-path directories, in the order its initialization searches them
+    std::vector<std::string> appended_module_paths;
 };
 
 //! The magic number of an AOT module metadata record: 'QAMI' little-endian
 static constexpr uint32_t QORE_AOT_MODULE_INFO_MAGIC = 0x494d4151u;
 //! The format version of AOT module metadata records
-/** version 2 added the names of the modules the module was compiled with
+/** version 2 added the names of the modules the module was compiled with and its own module path directories
 */
 static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 2u;
 //! The size of the header of an AOT module metadata record: magic, version and payload size

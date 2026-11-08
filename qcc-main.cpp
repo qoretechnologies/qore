@@ -8342,6 +8342,14 @@ static void print_aot_module_info(const char* path) {
         }
         printf("      %s\n", info.compiled_with[i].c_str());
     }
+    printf("    prepended module paths: %zu\n", info.prepended_module_paths.size());
+    for (const std::string& dir : info.prepended_module_paths) {
+        printf("      %s\n", dir.c_str());
+    }
+    printf("    appended module paths: %zu\n", info.appended_module_paths.size());
+    for (const std::string& dir : info.appended_module_paths) {
+        printf("      %s\n", dir.c_str());
+    }
 }
 
 static int dump_aot_info_for_file(const char* path) {

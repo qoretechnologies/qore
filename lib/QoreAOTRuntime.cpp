@@ -11677,6 +11677,13 @@ static void inheritAOTModulePathLists(QoreProgram* local_pgm, QoreProgram* paren
         return;
     }
 
+    // the lists are those of the Program loading the module when the module loader names it, as for the inherited
+    // parse options: the loader loads the module's descriptor dependencies and finds the modules it checks for an
+    // AOT module of a build tree with them (see QoreModuleManager::checkAOTModuleDependencyFiles()), so the modules
+    // that the module's initialization loads, those it re-exports among them, must be found in the same way
+    if (aot_module_init_loader_pgm) {
+        parent_pgm = aot_module_init_loader_pgm;
+    }
     const qore_program_private* parent_priv = nullptr;
     if (parent_pgm && parent_pgm != local_pgm) {
         parent_priv = qore_program_private::get(*parent_pgm);

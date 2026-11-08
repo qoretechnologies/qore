@@ -1078,8 +1078,16 @@ static bool qore_aot_dependency_is_compiled_one(const std::string& name, const s
 }
 #endif
 
-std::string QoreModuleManager::findModuleFileUnlocked(const char* name, QoreProgram* pgm) {
+std::string QoreModuleManager::findModuleFileUnlocked(const char* name, QoreProgram* pgm,
+        const std::vector<std::string>* mod_prepended, const std::vector<std::string>* mod_appended) {
+    // the order of inheritAOTModulePathLists() for an AOT module's own Program: its own prepended directories, those
+    // of the Program, the module path, those appended by the Program, its own appended directories
     std::vector<const std::string*> search_paths;
+    if (mod_prepended) {
+        for (const std::string& p : *mod_prepended) {
+            search_paths.push_back(&p);
+        }
+    }
     const qore_program_private* priv_pgm = pgm ? qore_program_private::get(*pgm) : nullptr;
     if (priv_pgm) {
         for (const std::string& p : priv_pgm->prepended_module_paths) {
@@ -1091,6 +1099,11 @@ std::string QoreModuleManager::findModuleFileUnlocked(const char* name, QoreProg
     }
     if (priv_pgm) {
         for (const std::string& p : priv_pgm->appended_module_paths) {
+            search_paths.push_back(&p);
+        }
+    }
+    if (mod_appended) {
+        for (const std::string& p : *mod_appended) {
             search_paths.push_back(&p);
         }
     }
@@ -1198,7 +1211,9 @@ bool QoreModuleManager::checkAOTModuleDependencyFiles(ExceptionSink& xsink, cons
             file = fn;
             is_aot = !m->isUser() && m->isBuiltin() && static_cast<QoreBuiltinModule*>(m)->isAot();
         } else {
-            file = findModuleFileUnlocked(name.c_str(), pgm);
+            // as the AOT module's initialization will load it: with its own module path directives too
+            file = findModuleFileUnlocked(name.c_str(), pgm, &aot_info.prepended_module_paths,
+                &aot_info.appended_module_paths);
             if (file.empty()) {
                 continue;
             }
