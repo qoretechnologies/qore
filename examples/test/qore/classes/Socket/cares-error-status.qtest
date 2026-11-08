@@ -25,6 +25,7 @@ class CaresErrorStatusTest inherits QUnit::Test {
         addTestCase("getaddrinfo() gives the resolver's status", \getaddrinfoTest());
         addTestCase("Socket::resolveAddrInfo() gives the resolver's status", \resolveAddrInfoTest());
         addTestCase("Socket::connect() gives the resolver's status", \connectTest());
+        addTestCase("HTTPClient gives the resolver's status", \httpClientTest());
         addTestCase("a server that does not listen gives a temporary status", \refusedTest());
         set_return_value(main());
     }
@@ -64,6 +65,17 @@ class CaresErrorStatusTest inherits QUnit::Test {
         foreach hash<auto> i in (Expected.pairIterator()) {
             checkStatus(sub (string target) { Socket s(); s.connect(target, 10s); }, (i.key + ".qore-test.:80",),
                 i.value);
+        }
+    }
+
+    #! HTTPClient raised the connection's error again without its argument
+    httpClientTest() {
+        checkDebug();
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            checkStatus(sub (string url) { HTTPClient h({"url": url}); h.connect(); },
+                ("http://" + i.key + ".qore-test.",), i.value);
+            checkStatus(sub (string url) { HTTPClient h({"url": url}); h.get("/"); },
+                ("http://" + i.key + ".qore-test.",), i.value);
         }
     }
 
