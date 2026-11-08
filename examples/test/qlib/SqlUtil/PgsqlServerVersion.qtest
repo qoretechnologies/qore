@@ -40,10 +40,19 @@ class VersionDatasource inherits Datasource {
         if (sql =~ /current_schema/) {
             return {"schema": "public"};
         }
+        # no routine
+        if (sql =~ /pg_proc/) {
+            return;
+        }
         if (sql =~ /select c\.relname from pg_class/) {
             return {"relname": "s"};
         }
         return {"start": 1, "increment": 1, "max": 9223372036854775807, "min": 1, "cycle": False};
+    }
+
+    auto select(string sql, ...) {
+        self.sql += sql;
+        return {};
     }
 }
 
@@ -53,7 +62,39 @@ class VersionDatasource inherits Datasource {
 class PgsqlServerVersionTest inherits QUnit::Test {
     constructor() : Test("PgsqlServerVersionTest", "1.0", \ARGV) {
         addTestCase("the sequence catalog of each version", \sequences());
+        addTestCase("the routines of each version", \routines());
         set_return_value(main());
+    }
+
+    #! pg_proc.prokind was added with procedures in PostgreSQL 11: the routines of an earlier version are read without
+    #! it, and are all functions
+    private routines() {
+        hash<string, list<auto>> cases = {
+            "pgsql 10": (100023, False),
+            "pgsql 16": (160004, True),
+            "jdbc 10": ({"name": "PostgreSQL", "version": "10.23", "major_version": 10, "minor_version": 23}, False),
+            "jdbc 11": ({"name": "PostgreSQL", "version": "11.0", "major_version": 11, "minor_version": 0}, True),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            VersionDatasource ds(i.value[0]);
+            PgsqlDatabase db(ds);
+            bool procs = i.value[1];
+            assertEq(procs, db.hasProcedures(), i.key);
+            db.listFunctions();
+            db.getFunction("f");
+            db.getFunction("f(a integer)");
+            assertEq((), db.listProcedures(), i.key);
+            assertNothing(db.getProcedure("p"), i.key);
+            int prokind = (select ds.sql, $1 =~ /prokind/).size();
+            if (procs) {
+                # functions and procedures are told apart, and procedures are looked up and listed
+                assertTrue(prokind >= 5, i.key + ": " + ds.sql.join("; "));
+            } else {
+                assertEq(0, prokind, i.key + ": " + ds.sql.join("; "));
+            }
+            assertEq(procs ? "PgsqlProcedure" : "PgsqlFunction", db.makeProcedure("p(a int)", "language plpgsql as "
+                "$$ begin perform a; end; $$").className(), i.key);
+        }
     }
 
     private sequences() {

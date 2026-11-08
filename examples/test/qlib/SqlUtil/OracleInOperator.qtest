@@ -14,7 +14,24 @@
 %requires ./TestRunIsolation.qm
 %requires ./OracleTestIsolation.qm
 
+%try-module oracle
+%define NoOracle
+%endtry
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./OracleCatalogDatasource.qm
+
 %exec-class OracleInOperatorTest
+
+#! An Oracle datasource of the jdbc driver that does not connect
+class JdbcCatalogDatasource inherits CatalogDatasource {
+    constructor() : CatalogDatasource((), (), (), (), {}, {}) {
+    }
+
+    string getDriverName() {
+        return "jdbc";
+    }
+}
 
 #! The IN operator on Oracle with the oracle driver, which binds a collection of the values, and with the jdbc driver,
 #! which cannot bind a collection: it raised JDBC-BIND-ERROR (a hash bound), or MISSING-ORACLE-DRIVER without the
@@ -183,29 +200,38 @@ class OracleInOperatorTest inherits QUnit::Test {
     #! a statement binds at most 65535 values (ORA-01745 on the server, or an error of the driver); a driver that
     #! binds each value of the list refused more only when the statement was executed
     private bindLimit() {
-        skipIfNone();
-        foreach hash<auto> i in (tables.pairIterator()) {
+%ifdef NoOracle
+        testSkip("oracle module unavailable");
+%endif
+        hash<auto> desc = {"columns": {
+            "id": {"qore_type": SqlUtil::NUMERIC, "size": 14},
+            "s": {"qore_type": SqlUtil::VARCHAR, "size": 20},
+        }};
+        foreach hash<auto> i in ({"oracle": new CatalogDatasource((), (), (), (), {}, {}),
+                "jdbc": new JdbcCatalogDatasource()}.pairIterator()) {
+            OracleTable t(i.value, "in_limit");
+            t.setupTable(desc);
             list<auto> args;
             hash<auto> sh = {"columns": "id", "where": mkexp(OP_IN, (fld("id"), seq(1, 65535)))};
-            i.value.getSelectSql(sh, \args);
+            t.getSelectSql(sh, \args);
             if (i.key == "oracle") {
                 # collections of up to 32767 values, each one value
                 assertEq(3, args.size(), i.key);
                 args = ();
-                i.value.getSelectSql({"columns": "id", "where": mkexp(OP_IN, (fld("id"), seq(1, 70000)))}, \args);
+                t.getSelectSql({"columns": "id", "where": mkexp(OP_IN, (fld("id"), seq(1, 70000)))}, \args);
                 assertEq(3, args.size(), i.key);
                 args = ();
-                i.value.getSelectSql({"columns": "id", "where": mkexp(OP_IN, (fld("id"), seq(1, 65534)))}, \args);
+                t.getSelectSql({"columns": "id", "where": mkexp(OP_IN, (fld("id"), seq(1, 65534)))}, \args);
                 assertEq(2, args.size(), i.key);
                 continue;
             }
             assertEq(65535, args.size(), i.key);
             args = ();
-            assertThrows("ORACLE-IN-OPERATOR-ERROR", "65535", \i.value.getSelectSql(),
+            assertThrows("ORACLE-IN-OPERATOR-ERROR", "65535", \t.getSelectSql(),
                 ({"columns": "id", "where": mkexp(OP_IN, (fld("id"), seq(1, 65536)))}, \args), i.key);
             # with another value bound in the statement, with the old-style operator
             args = ();
-            assertThrows("ORACLE-DRIVER-ERROR", "65535", \i.value.getSelectSql(),
+            assertThrows("ORACLE-DRIVER-ERROR", "65535", \t.getSelectSql(),
                 ({"columns": "id", "where": {"s": "x", "id": op_in(seq(1, 65535))}}, \args), i.key);
         }
     }

@@ -581,9 +581,14 @@ module Schema {
             - "CREATE MATERIALIZED VIEW mv_summary AS SELECT status, count(*) cnt FROM users GROUP BY status"
     @endcode
 
-    The \c driver key maps driver names (\c pgsql, \c oracle, \c mysql, \c mssql) to
+    The \c driver key maps driver names (\c pgsql, \c oracle, \c mysql, \c freetds) to
     driver-specific SQL statement lists. If a match is found for the current driver, those
-    statements execute instead of the \c statements list.
+    statements execute instead of the \c statements list.  A connection through a generic driver
+    (ex: \c jdbc or \c odbc) takes the list under the generic driver's name, else the list under the
+    key of the database's native driver (ex: \c oracle on a \c jdbc connection to Oracle), else the
+    \c statements list.  An empty list is no override: the next list in this order is taken (ex: an
+    empty \c jdbc list on a \c jdbc connection to Oracle runs the \c oracle list, or the \c statements
+    list if there is none).
 
     @section schema_upgrade_scripts Script-Based Migrations
 
