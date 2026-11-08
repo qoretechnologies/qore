@@ -45,6 +45,10 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         addTestCase("a changed module that a dependency re-exports makes a module out of date", \transitiveTest());
         addTestCase("a module loaded for a dependency from another file makes a module out of date",
             \shadowedDependencyTest());
+        addTestCase("a module a dependency re-exports, loaded from another file, makes a module out of date",
+            \reexportShadowTest());
+        addTestCase("a module further down the chain, loaded from another file, makes a module out of date",
+            \chainShadowTest());
         addTestCase("a module compiled with a relative output path is checked", \relativeOutputTest());
         set_return_value(main());
     }
@@ -209,6 +213,67 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         assertEq("other User.qm", out.split("\n").last(), out);
         assertRegex("AOT module '.*/User\\.qmod' for feature 'User' is out of date: it was compiled against other "
             "files of module 'Dep' than '.*/shadow/Dep\\.qm'", out);
+    }
+
+    #! writes the Base, Mid and Top modules: Top requires Mid, which requires or re-exports Base; Top uses Base
+    private writeChain(string src_dir, bool reexport) {
+        writeModule(src_dir, "Base", "", "public namespace Base { public class Value { public { string v = "
+            "\"base\"; } } }");
+        writeModule(src_dir, "Mid", reexport ? "%requires(reexport) Base" : "%requires Base",
+            "public namespace Mid { public string sub value() { return (new Base::Value()).v; } }");
+        writeModule(src_dir, "Top", "%requires Mid", "public namespace Top { public string sub value() { "
+            "return Mid::value(); } }");
+    }
+
+    reexportShadowTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        string shadow_dir = tmp.path + "/shadow";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        mkdir(shadow_dir);
+        writeChain(src_dir, True);
+        string module_path = qmod_dir + ":" + src_dir;
+        foreach string name in ("Base", "Mid", "Top") {
+            compile(module_path, src_dir, qmod_dir, name);
+        }
+        assertEq("base Top.qmod", runRequires(module_path, tmp.path, "Top", "Top::value()"));
+        # the module Mid re-exports is not a dependency of its descriptor: it is found through Mid's depfile
+        writeModule(shadow_dir, "Base", "", "public namespace Base { public class Value { public { string v = "
+            "\"other\"; } } }");
+        string out = runRequires(shadow_dir + ":" + module_path, tmp.path, "Mid", "Mid::value()");
+        assertEq("other Mid.qm", out.split("\n").last(), out);
+        assertRegex("AOT module '.*/Mid\\.qmod' for feature 'Mid' is out of date: it was compiled against other "
+            "files of module 'Base' than '.*/shadow/Base\\.qm'", out);
+        out = runRequires(shadow_dir + ":" + module_path, tmp.path, "Top", "Top::value()");
+        assertEq("other Top.qm", out.split("\n").last(), out);
+        assertRegex("AOT module '.*/Top\\.qmod' for feature 'Top' is out of date: it was compiled against other "
+            "files of module '(Base|Mid)'", out);
+    }
+
+    chainShadowTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        string shadow_dir = tmp.path + "/shadow";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        mkdir(shadow_dir);
+        writeChain(src_dir, False);
+        string module_path = qmod_dir + ":" + src_dir;
+        foreach string name in ("Base", "Mid", "Top") {
+            compile(module_path, src_dir, qmod_dir, name);
+        }
+        # Mid comes from its source, which then loads another Base: Top, which requires Base only through Mid, is
+        # out of date too
+        unlink(qmod_dir + "/Mid.qmod");
+        writeModule(shadow_dir, "Base", "", "public namespace Base { public class Value { public { string v = "
+            "\"other\"; } } }");
+        string out = runRequires(shadow_dir + ":" + module_path, tmp.path, "Top", "Top::value()");
+        assertEq("other Top.qm", out.split("\n").last(), out);
+        assertRegex("AOT module '.*/Top\\.qmod' for feature 'Top' is out of date: it was compiled against other "
+            "files of module 'Base' than '.*/shadow/Base\\.qm'", out);
     }
 
     relativeOutputTest() {

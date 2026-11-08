@@ -999,10 +999,11 @@ static bool qore_aot_dependency_is_compiled_one(const std::string& name, const s
     if (compiled_against.count(file)) {
         return true;
     }
+    size_t file_sep = file.rfind(QORE_DIR_SEP);
+    std::string file_base = file_sep == std::string::npos ? file : file.substr(file_sep + 1);
     // a copy of a file compiled against, with the same name, size and content (a link farm, an installed copy)
     {
-        size_t sep = file.rfind(QORE_DIR_SEP);
-        std::string base = sep == std::string::npos ? file : file.substr(sep + 1);
+        const std::string& base = file_base;
         struct stat fsb;
         bool have_hash = false;
         uint64_t hash = 0;
@@ -1073,11 +1074,88 @@ static bool qore_aot_dependency_is_compiled_one(const std::string& name, const s
 }
 #endif
 
-int QoreModuleManager::checkAOTModuleDependencyFiles(ExceptionSink& xsink, const char* path, const char* feature,
-        const std::vector<std::string>& dependencies, const QoreProgram* pgm) {
+#ifndef _Q_WINDOWS
+//! Adds the names of the modules whose files a depfile lists to \a names
+/** A user module is listed by its sources: <tt>\<dir\>/\<name\>.qm</tt>, or <tt>\<dir\>/\<name\>/\<name\>.qm</tt> and the
+    other files of its module directory; a binary module by its file (<tt>\<name\>-api-\<x\>.\<y\>.qmod</tt>, or an AOT
+    module's <tt>\<name\>.qmod</tt>).  The depfile of an AOT module lists every module it requires, directly or not,
+    and the modules they re-export (see design/aot-linked-module-sources.md).
+*/
+static void qore_aot_depfile_module_names(const std::vector<std::string>& deps, std::set<std::string>& names) {
+    for (const std::string& dep : deps) {
+        size_t sep = dep.rfind(QORE_DIR_SEP);
+        std::string base = sep == std::string::npos ? dep : dep.substr(sep + 1);
+        if (base.size() > 3 && !base.compare(base.size() - 3, 3, ".qm")) {
+            names.insert(base.substr(0, base.size() - 3));
+            continue;
+        }
+        if (base.size() > 5 && !base.compare(base.size() - 5, 5, ".qmod")) {
+            size_t api = base.find("-api-");
+            names.insert(base.substr(0, api == std::string::npos ? base.size() - 5 : api));
+        }
+    }
+}
+#endif
+
+std::string QoreModuleManager::findModuleFileUnlocked(const char* name, QoreProgram* pgm) {
+    std::vector<const std::string*> search_paths;
+    const qore_program_private* priv_pgm = pgm ? qore_program_private::get(*pgm) : nullptr;
+    if (priv_pgm) {
+        for (const std::string& p : priv_pgm->prepended_module_paths) {
+            search_paths.push_back(&p);
+        }
+    }
+    for (const std::string& p : moduleDirList) {
+        search_paths.push_back(&p);
+    }
+    if (priv_pgm) {
+        for (const std::string& p : priv_pgm->appended_module_paths) {
+            search_paths.push_back(&p);
+        }
+    }
+    struct stat sb;
+    auto exists = [&sb](const QoreString& p) -> bool {
+        return !stat(p.c_str(), &sb) && S_ISREG(sb.st_mode);
+    };
+    // the order of loadModuleIntern(): in each directory, the binary forms (with each API version, then without),
+    // then those in a directory of the module's name, then the source, then a module directory
+    for (const std::string* dir : search_paths) {
+        for (const char* sub : {"", name}) {
+            for (unsigned ai = 0; ai <= qore_mod_api_list_len; ++ai) {
+                QoreString str(*dir);
+                if (*sub) {
+                    str.sprintf(QORE_DIR_SEP_STR "%s", sub);
+                }
+                str.sprintf(QORE_DIR_SEP_STR "%s", name);
+                if (ai < qore_mod_api_list_len) {
+                    str.sprintf("-api-%d.%d.qmod", qore_mod_api_list[ai].major, qore_mod_api_list[ai].minor);
+                } else {
+                    str.concat(".qmod");
+                }
+                if (exists(str)) {
+                    return str.c_str();
+                }
+            }
+        }
+        QoreString str(*dir);
+        str.sprintf(QORE_DIR_SEP_STR "%s.qm", name);
+        if (exists(str)) {
+            return str.c_str();
+        }
+        str = *dir;
+        str.sprintf(QORE_DIR_SEP_STR "%s", name);
+        if (!stat(str.c_str(), &sb) && S_ISDIR(sb.st_mode) && has_separated_module_main(str.c_str(), name)) {
+            return str.c_str();
+        }
+    }
+    return std::string();
+}
+
+bool QoreModuleManager::checkAOTModuleDependencyFiles(ExceptionSink& xsink, const char* path, const char* feature,
+        const std::vector<std::string>& dependencies, QoreProgram* pgm, std::string& stale_desc) {
 #ifndef _Q_WINDOWS
     if (pgm && (pgm->getParseOptions() & PO_NO_FILESYSTEM)) {
-        return 0;
+        return false;
     }
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     std::function<bool(const std::string&)> allowed = [&smh](const std::string& file) -> bool {
@@ -1093,17 +1171,17 @@ int QoreModuleManager::checkAOTModuleDependencyFiles(ExceptionSink& xsink, const
     };
     char* resolved = realpath(path, nullptr);
     if (!resolved) {
-        return 0;
+        return false;
     }
     std::string target = resolved;
     free(resolved);
     if (!allowed(target + ".d")) {
-        return 0;
+        return false;
     }
     // only a module of a build tree, with the depfile qcc wrote for it, is checked
     std::vector<std::string> deps;
     if (!qore_aot_read_module_depfile(target, deps)) {
-        return 0;
+        return false;
     }
     // qcc writes the real paths of the files (see write_depfile() in qcc-main.cpp), so they are compared as they are
     std::set<std::string> compiled_against(deps.begin(), deps.end());
@@ -1112,37 +1190,57 @@ int QoreModuleManager::checkAOTModuleDependencyFiles(ExceptionSink& xsink, const
     if (allowed(target + ".d" QORE_AOT_MODULE_FINGERPRINT_SUFFIX)) {
         qore_aot_read_module_source_fingerprints(target + ".d" QORE_AOT_MODULE_FINGERPRINT_SUFFIX, fingerprints);
     }
-    for (size_t i = 0; i < dependencies.size(); ++i) {
-        if (i && !(i % 10) && qore_check_cancel(&xsink, "AOT module dependency file check")) {
-            return -1;
+    // every module the AOT module was compiled with: the dependencies of its descriptor, and the modules whose files
+    // its depfile lists, which are those it requires directly or not and those they re-export (a re-exported module
+    // is not a dependency of the descriptor, and a module further down the chain can be loaded from another file
+    // while its dependent comes from its source)
+    std::set<std::string> names(dependencies.begin(), dependencies.end());
+    qore_aot_depfile_module_names(deps, names);
+    names.erase(feature);
+    names.erase("qore");
+    size_t count = 0;
+    for (const std::string& name : names) {
+        if (++count % 10 == 0 && qore_check_cancel(&xsink, "AOT module dependency file check")) {
+            return false;
         }
-        QoreAbstractModule* m = findModuleUnlocked(dependencies[i].c_str());
-        if (!m) {
-            continue;
+        // a module that is loaded is used as it is; one that is not is found as loadModuleIntern() would find it
+        std::string file;
+        bool is_aot = false;
+        if (QoreAbstractModule* m = findModuleUnlocked(name.c_str())) {
+            const char* fn = m->getFileName();
+            // a builtin module has no file
+            if (!fn || !*fn || *fn == '<') {
+                continue;
+            }
+            file = fn;
+            is_aot = !m->isUser() && m->isBuiltin() && static_cast<QoreBuiltinModule*>(m)->isAot();
+        } else {
+            file = findModuleFileUnlocked(name.c_str(), pgm);
+            if (file.empty()) {
+                continue;
+            }
+            if (file.size() > 5 && !file.compare(file.size() - 5, 5, ".qmod")) {
+                QoreAOTModuleFileInfo info;
+                std::string error;
+                is_aot = qoreAOTReadModuleInfo(file, info, error) == QoreAOTModuleInfoStatus::FOUND;
+            }
         }
-        const char* fn = m->getFileName();
-        // a builtin module has no file
-        if (!fn || !*fn || *fn == '<') {
-            continue;
+        char* r = realpath(file.c_str(), nullptr);
+        if (r) {
+            file = r;
+            free(r);
         }
-        char* r = realpath(fn, nullptr);
-        std::string file = r ? r : fn;
-        free(r);
         if (!allowed(file)) {
             continue;
         }
-        bool is_aot = !m->isUser() && m->isBuiltin() && static_cast<QoreBuiltinModule*>(m)->isAot();
-        if (!qore_aot_dependency_is_compiled_one(dependencies[i], file, is_aot, compiled_against, fingerprints,
-                allowed)) {
-            xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT module '%s' for feature "
-                "'%s' is out of date: it was compiled against other files of module '%s' than '%s', which is "
-                "loaded for it now; rebuild the AOT module", path, feature, dependencies[i].c_str(),
-                file.c_str());
-            return -1;
+        if (!qore_aot_dependency_is_compiled_one(name, file, is_aot, compiled_against, fingerprints, allowed)) {
+            stale_desc = std::string("it was compiled against other files of module '") + name + "' than '" + file
+                + "', which is loaded for it now";
+            return true;
         }
     }
 #endif
-    return 0;
+    return false;
 }
 
 //! Raises the warning for an AOT module that is not loaded because one of its sources has changed
@@ -4341,10 +4439,20 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
         if (loadAOTBinaryModuleDependencies(xsink, aot_info.dependencies, path_pgm)) {
             return nullptr;
         }
-        // a module of a build tree is out of date when a dependency is loaded from another module than the one it
-        // was compiled against (one that appeared in a directory searched earlier, for example); the caller then
-        // loads its source module, as for any AOT module that cannot be loaded
-        if (checkAOTModuleDependencyFiles(xsink, path, feature, aot_info.dependencies, path_pgm)) {
+        // a module of a build tree is out of date when a module it was compiled with is loaded from another module
+        // than the one it was compiled against (one that appeared in a directory searched earlier, for example): the
+        // caller then loads its source module, as for any AOT module that cannot be loaded; without a source module
+        // the AOT module is loaded, and the warning tells that it must be rebuilt, as for an optional module that is
+        // available now
+        std::string stale_desc;
+        bool stale = checkAOTModuleDependencyFiles(xsink, path, feature, aot_info.dependencies, path_pgm,
+            stale_desc);
+        if (xsink) {
+            return nullptr;
+        }
+        if (stale) {
+            xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT module '%s' for feature "
+                "'%s' is out of date: %s; rebuild the AOT module", path, feature, stale_desc.c_str());
             return nullptr;
         }
     }

@@ -1026,18 +1026,27 @@ protected:
             QoreProgram* mpgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
             ModuleLoadMapHelper* load_guard = nullptr);
 
-    //! Checks that the dependencies loaded for an AOT module of a build tree are the modules it was compiled against
+    //! Checks that the modules an AOT module of a build tree was compiled with are the ones it was compiled against
     /** A module of a build tree has the depfile that qcc wrote next to it; for any other module nothing is checked.
-        A dependency is the module the AOT module was compiled against if the file it was loaded from is listed in the
-        depfile, or if it is an AOT module of a build tree whose own sources are listed there.  Otherwise (a module
-        that appeared in a directory of the module path that is searched first, for example), an \c AOT-MODULE-STALE
-        exception is raised.  The mutex must be held.
+        The modules checked are the dependencies of its descriptor and every module whose files its depfile lists
+        (those it requires, directly or not, and those they re-export); a module that is loaded is checked as it is
+        loaded, and one that is not as findModuleFileUnlocked() finds it.  A module is the one compiled against if the
+        file it comes from is listed in the depfile, is a copy of a listed file, or is an AOT module of a build tree whose own sources are
+        listed (an AOT module without a depfile is not checked).  The mutex must be held.
 
-        @return 0 if the dependencies are the ones compiled against, or nothing was checked; -1 if an exception was
-        raised
+        @param stale_desc set to why the AOT module is out of date
+
+        @return true if the AOT module is out of date (or an exception was raised for cancellation)
     */
-    DLLLOCAL int checkAOTModuleDependencyFiles(ExceptionSink& xsink, const char* path, const char* feature,
-            const std::vector<std::string>& dependencies, const QoreProgram* pgm);
+    DLLLOCAL bool checkAOTModuleDependencyFiles(ExceptionSink& xsink, const char* path, const char* feature,
+            const std::vector<std::string>& dependencies, QoreProgram* pgm, std::string& stale_desc);
+
+    //! Returns the file that loadModuleIntern() would load module \a name from, or an empty string
+    /** The search order of loadModuleIntern() in the module path of \a pgm, without loading anything: in each
+        directory the binary forms, those in a directory of the module's name, the source and a module directory.
+        The mutex must be held.
+    */
+    DLLLOCAL std::string findModuleFileUnlocked(const char* name, QoreProgram* pgm);
 
     //! Load direct AOT descriptor dependencies while the parent module owns a load-map reservation.
     DLLLOCAL int loadAOTBinaryModuleDependencies(ExceptionSink& xsink,

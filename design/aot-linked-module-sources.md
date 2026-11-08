@@ -81,12 +81,24 @@ directory are the sources.
 The sources say what the module was compiled from, not which module the loader finds for a dependency now: a module
 that appears in a directory of the module path that is searched first (an installed module, a test's stand-in) is
 loaded instead of the one the module was compiled against, and the module's code would run against declarations it
-was not compiled for.  So once the dependencies of an AOT module of a build tree are loaded
-(`QoreModuleManager::checkAOTModuleDependencyFiles()`, called by `loadBinaryModuleFromPath()` before the module is
-mapped), each one must be the module it was compiled against:
+was not compiled for.  So once the dependencies of an AOT module of a build tree are loaded, and before the module is
+mapped (`QoreModuleManager::checkAOTModuleDependencyFiles()`, called by `loadBinaryModuleFromPath()`), every module
+it was compiled with is checked:
 
-- the file it was loaded from is listed in the module's depfile (a source module, a binary module, or an AOT module
-  with `--depfile-module-deps=artifact`);
+- the dependencies of its descriptor, and every module whose files its depfile lists: the modules it requires,
+  directly or not, and the modules they re-export.  qcc keeps `%requires(reexport)` modules out of the descriptor's
+  dependencies (a re-exported module can require the module back, and the loader loads the descriptor's dependencies
+  before it maps the module), and a module further down the chain can be loaded from another file while its dependent
+  comes from its source, so the descriptor alone is not enough.  The names come from the depfile's files:
+  `<name>.qm` (a single-file module, or the main source of a module directory) and `<name>[-api-<x>.<y>].qmod`;
+- a module that is loaded is checked as it was loaded; one that is not loaded yet (a module the AOT module
+  re-exports, which its initialization loads) is found without loading it, in the search order of
+  `loadModuleIntern()` (`QoreModuleManager::findModuleFileUnlocked()`).
+
+A module is the one compiled against when:
+
+- the file it comes from is listed in the module's depfile (a source module, a binary module, or an AOT module with
+  `--depfile-module-deps=artifact`);
 - or it is a copy of such a file, with the same name, size and content hash (as the fingerprint file records them; a
   link farm, an installed copy);
 - or it is an AOT module of a build tree whose own sources (the file of the module's main source, or the files of its
@@ -94,11 +106,12 @@ mapped), each one must be the module it was compiled against:
 
 An AOT module without its depfile (an installed module, or one compiled by hand without `--depfile`) is not checked:
 what it was compiled from is not known, and the loader does not check such a module's own sources either.
-Otherwise the loader raises `AOT-MODULE-STALE`, which, as for any AOT module that cannot be loaded, loads the source
-module instead with a `BINARY-MODULE-SOURCE-FALLBACK` warning.  A builtin module, a file the sandbox does not let the
-loader read and a module loaded into a Program without filesystem access are not checked.  An incremental build
-cannot see such a module appear (a make prerequisite cannot be a file that does not exist); the loader reports it and
-asks for the module to be rebuilt.
+
+Otherwise the module is out of date: the loader raises `AOT-MODULE-STALE`, which, as for any AOT module that cannot
+be loaded, loads the source module instead with a `BINARY-MODULE-SOURCE-FALLBACK` warning.  A builtin
+module, a file the sandbox does not let the loader read and a module loaded into a Program without filesystem access
+are not checked.  An incremental build cannot see such a module appear (a make prerequisite cannot be a file that
+does not exist); the loader reports it and asks for the module to be rebuilt.
 
 ## When a source has changed
 
