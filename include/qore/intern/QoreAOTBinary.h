@@ -2447,6 +2447,14 @@ struct AOTCompiledFuncWithSlots {
     std::vector<AOTStmtLocEntry> aot_stmt_locs;
 };
 
+//! Opens a file for reading only if it is a regular file; returns nullptr otherwise or if it cannot be opened
+/** The module loader reads files that it finds in the module path or next to a module (module images, dependency and
+    fingerprint files, sources) with the module manager's mutex held: opening a FIFO or a device with such a name would
+    block or read without end, so a file that is not a regular file is not opened, and one that is replaced between
+    the check and the open is refused (see ModuleManager.cpp)
+*/
+DLLLOCAL FILE* qore_open_regular_file(const char* path);
+
 //! AOT module metadata: the module's identity, its dependencies and the optional modules that were unavailable
 /** qcc stores this metadata in a section of every AOT qmod that it links, so that it is part of the image and the code
     signature covers it (see design/aot-object-files-and-module-artifacts.md "Module Metadata Section"):

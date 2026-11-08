@@ -555,6 +555,14 @@ try {
             unlink(path);
             write(path, saved);
         }
+
+        # a FIFO with the name of the dependency's AOT module in a directory searched first: reading its metadata
+        # blocked the loader with its mutex held; it is no module file, and the source of Dep is loaded
+        string fifo_dir = tmp.path + "/fifo";
+        mkdir(fifo_dir);
+        assertEq(0, system(sprintf("mkfifo '%s/Dep.qmod'", fifo_dir)));
+        string out = runRequires(fifo_dir + ":" + module_path, tmp.path, "User", "User::value()", prefix);
+        assertEq("dep User.qmod", out.split("\n").last(), out);
     }
 
     #! runs a script that requires \a spec (a path or a name) and prints Sep::value(); returns its output
@@ -599,6 +607,12 @@ try {
         assertRegex("AOT-MODULE-STALE: AOT module '.*/build/qlib-qmod/Sep/Sep\\.qmod' for feature 'Sep' is out of "
             "date: its source '.*/Part\\.qc' has changed since it was compiled, and there is no source module next to "
             "it to load instead", out);
+        assertNRegex("(?m)^v[12]$", out);
+        # by name, in a module path with no source module: not loaded either, as by its path
+        out = runSep(qmod_dir, tmp.path, "Sep");
+        assertRegex("AOT-MODULE-STALE: AOT module '.*/build/qlib-qmod/Sep/Sep\\.qmod' for feature 'Sep' is out of "
+            "date: its source '.*/Part\\.qc' has changed since it was compiled, and there is no source module to "
+            "load instead", out);
         assertNRegex("(?m)^v[12]$", out);
     }
 }

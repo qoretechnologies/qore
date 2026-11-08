@@ -304,7 +304,9 @@ inline uint64_t moduleInfoEnd(uint64_t off, uint64_t len) {
 //! Reads a module file at absolute offsets
 class AOTModuleFileReader {
 public:
-    explicit AOTModuleFileReader(const char* path) : f(fopen(path, "rb")) {
+    // only a regular file is read (see qore_open_regular_file()): a FIFO with the name of a module would block the
+    // loader, which reads the metadata with the module manager's mutex held
+    explicit AOTModuleFileReader(const char* path) : f(qore_open_regular_file(path)) {
         if (!f) {
             return;
         }

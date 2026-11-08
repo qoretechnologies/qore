@@ -97,21 +97,22 @@ static const qore_mod_api_compat_s qore_mod_api_list_l[] = {
 const qore_mod_api_compat_s* qore_mod_api_list = qore_mod_api_list_l;
 const unsigned qore_mod_api_list_len = QORE_MOD_API_LEN;
 
-//! Opens a file for reading only if it is a regular file; returns nullptr otherwise or if it cannot be opened
-/** The module loader reads files that it finds next to a module (a dependency file, a fingerprint file, sources):
-    opening a FIFO or a device with that name would block or read without end, so the file is opened without blocking
-    and refused unless it is a regular file, before anything is read from it
-*/
-static FILE* qore_open_regular_file(const char* path) {
+FILE* qore_open_regular_file(const char* path) {
 #ifdef _Q_WINDOWS
     return fopen(path, "rb");
 #else
+    // a file that is not a regular file is not opened at all: opening a FIFO for reading blocks until a writer opens it
+    struct stat sb;
+    if (stat(path, &sb) || !S_ISREG(sb.st_mode)) {
+        return nullptr;
+    }
+    // without blocking, in case the file was replaced by a FIFO since; then it must be the file stat() saw
     int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
     if (fd < 0) {
         return nullptr;
     }
-    struct stat sb;
-    if (fstat(fd, &sb) || !S_ISREG(sb.st_mode)) {
+    struct stat fsb;
+    if (fstat(fd, &fsb) || !S_ISREG(fsb.st_mode) || fsb.st_dev != sb.st_dev || fsb.st_ino != sb.st_ino) {
         close(fd);
         return nullptr;
     }
@@ -893,15 +894,16 @@ static bool qore_build_aot_module_is_stale(const char* qmod_path, const std::str
 #ifdef _Q_WINDOWS
     return false;
 #else
+    // a Program without filesystem access does not even look at the file
+    if (pgm && (pgm->getParseOptions() & PO_NO_FILESYSTEM)) {
+        return false;
+    }
     struct stat lsb;
     if (lstat(qmod_path, &lsb)) {
         return false;
     }
     const bool linked = S_ISLNK(lsb.st_mode);
     if (!linked && !S_ISREG(lsb.st_mode)) {
-        return false;
-    }
-    if (pgm && (pgm->getParseOptions() & PO_NO_FILESYSTEM)) {
         return false;
     }
     std::string target;
@@ -2279,6 +2281,12 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
                     "linked with module '%s' identifies feature '%s'", feature, aot_info->module_name.c_str());
                 return -1;
             }
+            // unlike for a .qmod (loadBinaryModuleFromPath() ends the scope before the module is mapped), the scope
+            // lasts through loadBinaryModuleFromDesc(), which loads the dependencies and runs the module's
+            // initialization: the initialization creates the module's own Program with its own directories first and
+            // then the lists of tpgm, which include them now (inheritAOTModulePathLists() skips a directory it already
+            // has), so its Program gets the same lists in the same order as without the scope; and a module that the
+            // initialization loads uses that Program, not tpgm, so the scope does not apply to it
             if (!aot_info->prepended_module_paths.empty() || !aot_info->appended_module_paths.empty()) {
                 path_scope = std::make_unique<QoreModulePathScope>(tpgm, aot_info->prepended_module_paths,
                     aot_info->appended_module_paths);
@@ -2928,7 +2936,13 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         QoreString source_path;
         rv = load_user_module_source(source_dir, source_found, &source_path);
         if (!source_found) {
-            return false;
+            // nothing to load instead: the out-of-date module is not loaded, as when it is named by its path (see
+            // loadModuleIntern() above)
+            xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(qmod_path), "AOT module '%s' for feature "
+                "'%s' is out of date: its source '%s' has changed since it was compiled, and there is no source "
+                "module to load instead; rebuild the AOT module", qmod_path, name, stale_source.c_str());
+            rv = nullptr;
+            return true;
         }
         if (rv && !xsink) {
             qore_warn_stale_aot_module(xsink, wsink, warning_mask, name, qmod_path, source_path.c_str(),
@@ -2943,6 +2957,22 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             qore_raise_binary_module_source_fallback_error(xsink, name, qmod_path, source_path.c_str(),
                 stale_xsink);
         }
+        return true;
+    };
+
+    // an out-of-date AOT module of a build tree without a source module to load instead is not loaded, as when it is
+    // named by its path (see above)
+    auto refuse_stale_aot_module_without_source = [&](const char* qmod_path) -> bool {
+        std::string module_dir = qmod_path;
+        const char* dsep = q_find_last_path_sep(module_dir.c_str());
+        module_dir = dsep ? module_dir.substr(0, dsep - module_dir.c_str()) : std::string(".");
+        std::string stale_source;
+        if (!qore_build_aot_module_is_stale(qmod_path, module_dir, name, ctx_pgm, stale_source, xsink)) {
+            return static_cast<bool>(xsink);
+        }
+        xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(qmod_path), "AOT module '%s' for feature "
+            "'%s' is out of date: its source '%s' has changed since it was compiled, and there is no source module "
+            "to load instead; rebuild the AOT module", qmod_path, name, stale_source.c_str());
         return true;
     };
 
@@ -2991,6 +3021,11 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 std::string source_dir;
                 bool source_available = ai == qore_mod_api_list_len && find_user_module_source_dir(source_dir);
                 if (xsink) {
+                    return nullptr;
+                }
+                // an AOT user module has no API suffix; a native binary module is not checked against sources
+                if (!source_available && ai == qore_mod_api_list_len
+                        && refuse_stale_aot_module_without_source(str.c_str())) {
                     return nullptr;
                 }
                 if (source_available && load_source_for_stale_aot_module(str.c_str(), source_dir, mi)) {
@@ -3059,6 +3094,11 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 std::string source_dir;
                 bool source_available = ai == qore_mod_api_list_len && find_user_module_source_dir(source_dir);
                 if (xsink) {
+                    return nullptr;
+                }
+                // an AOT user module has no API suffix; a native binary module is not checked against sources
+                if (!source_available && ai == qore_mod_api_list_len
+                        && refuse_stale_aot_module_without_source(str.c_str())) {
                     return nullptr;
                 }
                 if (source_available && load_source_for_stale_aot_module(str.c_str(), source_dir, mi)) {
@@ -4490,6 +4530,19 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     }
 
     QoreModuleNameContextHelper mnch(feature);
+
+#ifndef _Q_WINDOWS
+    // a binary module is a regular file: reading or mapping a FIFO or a device with the name of one would block the
+    // loader with the module manager's mutex held (a file that does not exist is left to dlopen() to report)
+    {
+        struct stat sb;
+        if (!stat(path, &sb) && !S_ISREG(sb.st_mode)) {
+            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
+                "cannot load qore module '%s': it is not a regular file", path);
+            return nullptr;
+        }
+    }
+#endif
 
     // must happen before dlopen(): on macOS an invalid signature is fatal inside dlopen()
     {
