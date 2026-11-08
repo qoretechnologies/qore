@@ -535,6 +535,15 @@ private:
     */
     bool send_failure_pending = false;
 
+    //! True if the failed send of @ref send_failure_pending was on a reused keep-alive connection
+    /** setError() then reports the connection-closed error (\c HTTP1-CONNECTION-CLOSED), which an idempotent request
+        is repeated for on a new connection, and a 408 read after the failed send is taken for the server's close of
+        the idle connection rather than an answer to the request.  I/O thread only, like @ref send_failure_pending.
+
+        @since %Qore 3.0
+    */
+    bool send_failure_reused = false;
+
     //! The error code of the failed send; see @ref send_failure_pending
     std::string send_failure_err;
 
@@ -786,6 +795,14 @@ private:
     DLLLOCAL QoreHashNode* recoverResponseAfterSendFailure(const std::string& err, const std::string& desc,
         ExceptionSink* xsink);
 
+    //! Creates the operation that reads a response header block on the socket; the caller took a socket reference
+    /** If the operation cannot be created (e.g. the socket was closed), the error is reported with setError(), which
+        notifies the pending stream and marks the connection closed, and nullptr is returned.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL SocketPollOperationBase* newHeaderReadOp(ExceptionSink* xsink);
+
     //! Gives up the send of a request body that failed, so that the response can still be read
     /** Releases the send operation, enters @ref SendState::ABANDONED and saves the send error, which setError()
         reports if no response arrives (see @ref send_failure_pending).  The response read is left as it is.  For a
@@ -807,13 +824,14 @@ private:
           which also makes a write fail with \c EPIPE, and the error that the cancel or close published is the one
           reported;
         - if the header block was not verifiably written and the send did not fail because the peer closed or reset
-          the connection (sendFailedOnPeerClose()): the peer cannot have answered;
-        - if the header block was not verifiably written on a connection that served a request before: data
-          waiting there can be a response that the server sent on its own before it closed the idle connection (a
-          \c 408, say), and a failed send on a reused connection is the retryable connection failure that the
-          connection manager repeats on a new connection.  A BSD-derived stack (macOS) does not report the bytes of a
-          write that a reset interrupted, so a request whose header block did reach the server is also repeated:
-          the server's answer then arrives on the new connection.
+          the connection (sendFailedOnPeerClose()): the peer cannot have answered.
+
+        A BSD-derived stack (macOS) does not report the bytes of a write that a reset interrupted, so a failure on a
+        peer close is read for whatever the count shows.  On a connection that served a request before (see
+        @ref send_failure_reused), a response that arrives is delivered (e.g. an early \c 413 or \c 431), except a
+        \c 408, which is the server's close of the idle connection; that and no response at all are reported as the
+        connection-closed error (\c HTTP1-CONNECTION-CLOSED), which an idempotent request is repeated for on a new
+        connection (RFC 9110 section 9.2.2) and a request that is not idempotent is not.
 
         @param send_xsink the exception raised by the failed send
         @param header_written true if the request header block is known to have been written in full

@@ -370,6 +370,13 @@ public class HttpClientEarlyResponseTest inherits QUnit::Test {
             \cancelDuringWriteTest());
         addTestCase("a response the server sent before a reused connection's request was written is not delivered",
             \reusedConnectionUnsolicitedResponseTest());
+        addTestCase("an idempotent request is repeated when the server closed a reused connection with a 408",
+            \reusedConnectionIdempotentRetryTest());
+        addTestCase("an early fault on a reused connection is delivered although the write counted no bytes",
+            \reusedConnectionEarlyFaultTest());
+        addTestCase("a send failure after the final response header is a failure of the response",
+            \sendFailureAfterResponseHeaderTest());
+        addTestCase("arming an armed send-side hook again leaves its parameters", \sendSideHookArmedTwiceTest());
         set_return_value(main());
     }
 
@@ -701,9 +708,8 @@ public class HttpClientEarlyResponseTest inherits QUnit::Test {
     #! An unsolicited response on a reused connection is not taken for the answer to the next request
     /** The first request is answered and leaves the connection open.  When the client is about to write the second
         request on it, a debug hook has the peer send a 408 and reset the connection; the write fails before the
-        request header block is out.  The 408 was not an answer to this request: the write error is raised, as for
-        any failed write on a reused connection, which is the connection failure that a connection manager can repeat
-        the request for on a new connection.
+        request header block is out.  The 408 is the server's close of the idle connection, not an answer to this
+        request: the connection-closed error is raised, and a POST, which is not idempotent, is not repeated.
     */
     reusedConnectionUnsolicitedResponseTest() {
         requireDebugHooks();
@@ -736,9 +742,187 @@ public class HttpClientEarlyResponseTest inherits QUnit::Test {
         }
         result = call_function("dbg_http1_send_failure_result");
         assertEq(0, reached.getCount(), "the hook held the write of the second request");
-        assertEq(0, result.recoveries, "the unsolicited response was not read as the answer");
+        assertEq(1, result.recoveries, "what the server sent was read after the failed write");
         assertEq(NOTHING, rv.response, "the 408 is not delivered as the answer");
-        assertEq("SOCKET-SEND-ERROR", rv.err, sprintf("the write error is raised (got %y: %y)", rv.err, rv.desc));
+        assertEq("HTTP1-CONNECTION-CLOSED", rv.err, sprintf("the connection-closed error is raised (got %y: %y)",
+            rv.err, rv.desc));
+        assertEq("handover", peer.getObserved(), "the peer's connection was answered by the hook");
+    }
+
+    #! An idempotent request whose reused connection the server closed with a 408 is repeated on a new connection
+    reusedConnectionIdempotentRetryTest() {
+        requireDebugHooks();
+        Counter reached(1);
+        EarlyPeer peer((
+            <EarlyPlan>{"read": "drain", "status": 200, "body_size": 2, "keep": True},
+            <EarlyPlan>{"read": "handover", "status": 0},
+            <EarlyPlan>{"read": "drain", "status": 200, "body_size": 3},
+        ), False, reached);
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        hash<auto> first = hc.send("x", "PUT", "/first", {"Content-Type": "application/octet-stream"}, True);
+        assertEq(200, first.status_code, "the first request is answered");
+        assertEq("/first", peer.getObserved(), "the first request reaches the peer");
+
+        string response = "HTTP/1.1 408 Request Timeout\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        call_function("dbg_hold_http1_socket_send", peer.getPort(), reached, peer.takeConnection(), response);
+        hash<auto> result;
+        on_exit if (!result) {
+            call_function("dbg_http1_send_failure_result");
+        }
+
+        hash<auto> rv;
+        try {
+            rv.response = hc.send("x", "PUT", "/second", {"Content-Type": "application/octet-stream"}, True);
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+        }
+        result = call_function("dbg_http1_send_failure_result");
+        assertEq(0, reached.getCount(), "the hook held the write of the second request");
+        assertEq(NOTHING, rv.err, sprintf("no error is raised (got %y: %y)", rv.err, rv.desc));
+        assertEq(200, rv.response.status_code, "the request was repeated and answered on a new connection");
+        assertEq(3, rv.response.body.size(), "the answer of the repeated request is delivered, not the 408");
+        assertEq("handover", peer.getObserved(), "the reused connection was answered by the hook");
+        assertEq("/second", peer.getObserved(), "the request was repeated on a new connection");
+    }
+
+    #! An early fault that the server sent on a reused connection before the request write failed is delivered
+    /** The write of the request fails at once, having counted no bytes, as a BSD-derived stack reports a write that
+        a reset interrupted; the server's 413 is the answer to the request and is delivered, not retried.
+    */
+    reusedConnectionEarlyFaultTest() {
+        requireDebugHooks();
+        Counter reached(1);
+        EarlyPeer peer((
+            <EarlyPlan>{"read": "drain", "status": 200, "body_size": 2, "keep": True},
+            <EarlyPlan>{"read": "handover", "status": 0},
+        ), False, reached);
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        hash<auto> first = hc.send("x", "PUT", "/first", {"Content-Type": "application/octet-stream"}, True);
+        assertEq(200, first.status_code, "the first request is answered");
+        assertEq("/first", peer.getObserved(), "the first request reaches the peer");
+
+        call_function("dbg_hold_http1_socket_send", peer.getPort(), reached, peer.takeConnection(),
+            faultResponse(413));
+        hash<auto> result;
+        on_exit if (!result) {
+            call_function("dbg_http1_send_failure_result");
+        }
+
+        hash<auto> rv;
+        try {
+            rv.response = hc.send(upload, "PUT", "/second", {"Content-Type": "application/octet-stream"}, True);
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+        }
+        result = call_function("dbg_http1_send_failure_result");
+        assertEq(0, reached.getCount(), "the hook held the write of the second request");
+        assertEq(1, result.recoveries, "the response was read after the failed write");
+        checkFault(rv, 413);
+        assertEq("handover", peer.getObserved(), "the reused connection was answered by the hook");
+    }
+
+    #! Once the final response header has been received, a failed write of the rest of the upload is not reported
+    #! as the send error: the response that is cut short is reported as such
+    /** A streamed request: its header block is read by the test, which then answers with the response header and
+        part of the body, arms the hook and lets the body's next chunk be pushed.  The receive side reads the response
+        header before the send side writes the chunk, which the hook makes fail.
+    */
+    sendFailureAfterResponseHeaderTest() {
+        requireDebugHooks();
+        Counter reached(1);
+        EarlyPeer peer((<EarlyPlan>{"read": "handover", "status": 0},), False, reached);
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+        hc.connect();
+        Socket conn = peer.takeConnection();
+
+        Counter gate(1);
+        on_exit if (gate.getCount()) {
+            gate.dec();
+        }
+        int calls = 0;
+        code send_callback = *data sub () {
+            if (++calls == 1) {
+                # the next chunk is pushed once the response header has been sent and the hook armed
+                gate.waitForZero(ClientTimeout);
+                return binary(strmul(Pattern, ChunkSize / Pattern.size()));
+            }
+            return NOTHING;
+        };
+        Queue res();
+        background sub () {
+            hash<auto> rv;
+            try {
+                rv.response = hc.sendWithSendCallback(send_callback, "PUT", "/duplex",
+                    {"Content-Type": "application/octet-stream"}, NOTHING, True);
+            } catch (hash<ExceptionInfo> ex) {
+                rv.err = ex.err;
+                rv.desc = ex.desc;
+            }
+            res.push(rv);
+        }();
+
+        # the request header block arrived: the response header and part of its body are sent
+        hash<auto> hdr = conn.readHTTPHeader(EarlyPeer::PeerTimeout);
+        assertEq("/duplex", hdr.path);
+        conn.send("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: 100000\r\n\r\n"
+            + strmul(Pattern, 4), EarlyPeer::PeerTimeout);
+        call_function("dbg_fail_http1_send_side", reached, conn, "");
+        hash<auto> result;
+        on_exit if (!result) {
+            call_function("dbg_http1_send_failure_result");
+        }
+        gate.dec();
+
+        hash<auto> rv = res.get(ClientTimeout);
+        result = call_function("dbg_http1_send_failure_result");
+        assertEq(0, reached.getCount(), "the send side failed after the response header was received");
+        assertEq(NOTHING, rv.response, "a truncated response is not delivered");
+        assertTrue(rv.err == "SOCKET-CLOSED" || rv.err == "SOCKET-RECV-ERROR",
+            sprintf("the truncated response is reported, not the send error (got %y: %y)", rv.err, rv.desc));
+        assertEq("handover", peer.getObserved(), "the peer's connection was answered by the hook");
+    }
+
+    #! A second arming of the send-side hook fails and leaves the parameters of the first
+    sendSideHookArmedTwiceTest() {
+        requireDebugHooks();
+        Counter reached(1);
+        EarlyPeer peer((<EarlyPlan>{"read": "handover", "status": 0},), False, reached);
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+        hc.connect();
+
+        Socket conn = peer.takeConnection();
+        call_function("dbg_fail_http1_send_side", reached, conn, faultResponse(413));
+        hash<auto> result;
+        on_exit if (!result) {
+            call_function("dbg_http1_send_failure_result");
+        }
+        # armed already: the second call fails, and its skip count is not taken
+        Counter other(1);
+        assertThrows("DBG-ARGUMENT-ERROR", \call_function(), ("dbg_fail_http1_send_side", other, new Socket(),
+            faultResponse(413), 1000000));
+
+        hash<auto> rv;
+        try {
+            rv.response = hc.send(upload, "POST", "/toobig", {"Content-Type": "application/octet-stream"}, True);
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+        }
+        result = call_function("dbg_http1_send_failure_result");
+        assertEq(0, reached.getCount(), "the hook acted on the first send side, as first armed");
+        checkFault(rv, 413);
         assertEq("handover", peer.getObserved(), "the peer's connection was answered by the hook");
     }
 }

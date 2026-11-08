@@ -436,10 +436,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProxyConnectSend(ExceptionSink
         printd(5, "Http1ClientPollOperationPriv::handleProxyConnectSend() CONNECT sent, reading response\n");
         releaseCurrentOp(xsink);
         sock_obj->ref();
-        current_op = new SocketReadHttpHeaderPollOperation(xsink, sock_obj);
-        if (*xsink) {
-            current_op->deref(xsink);
-            current_op = nullptr;
+        // a read that cannot be started (the socket was closed) is reported with setError(), which notifies the
+        // pending stream and marks the connection closed
+        current_op = newHeaderReadOp(xsink);
+        if (!current_op) {
             return nullptr;
         }
         current_op->setSelf(*self);
@@ -926,6 +926,22 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
     }
 }
 
+SocketPollOperationBase* Http1ClientPollOperationPriv::newHeaderReadOp(ExceptionSink* xsink) {
+    ExceptionSink read_xsink;
+    SocketPollOperationBase* op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
+    if (!read_xsink) {
+        return op;
+    }
+    op->deref(&read_xsink);
+    QoreStringValueHelper err_str(read_xsink.getExceptionErr());
+    QoreStringValueHelper desc_str(read_xsink.getExceptionDesc());
+    std::string err(*err_str ? err_str->c_str() : "HTTP1-RECV-ERROR");
+    std::string desc(*desc_str ? desc_str->c_str() : "the response read could not be started");
+    read_xsink.clear();
+    setError(err.c_str(), desc.c_str(), xsink);
+    return nullptr;
+}
+
 QoreHashNode* Http1ClientPollOperationPriv::recoverResponseAfterSendFailure(const std::string& err,
         const std::string& desc, ExceptionSink* xsink) {
     assert(current_op);
@@ -947,6 +963,9 @@ QoreHashNode* Http1ClientPollOperationPriv::recoverResponseAfterSendFailure(cons
         if (read_xsink) {
             read_op->deref(&read_xsink);
             read_xsink.clear();
+            // reported like a failed send whose response did not arrive (setError() maps the error of a reused
+            // connection to the connection-closed error)
+            abandonFailedSend(err, desc, xsink);
             setError(err.c_str(), desc.c_str(), xsink);
             return nullptr;
         }
@@ -978,15 +997,11 @@ bool Http1ClientPollOperationPriv::sendFailureReadsResponse(ExceptionSink& send_
     if (header_written) {
         return true;
     }
-    if (!sendFailedOnPeerClose(send_xsink)) {
-        return false;
-    }
-    // on a reused connection, data waiting before the request header block verifiably reached the server can be a
-    // response that the server sent on its own as it closed the idle connection; the send error is the retryable
-    // connection failure instead (next_stream_id counts the requests submitted on this connection; submitRequest()
-    // writes it in the caller's thread under stream_lock)
-    AutoLocker al(stream_lock);
-    return next_stream_id <= 1;
+    // the peer closed or reset the connection: it may have answered the request (a BSD-derived stack does not report
+    // the bytes of a write that a reset interrupted, so the header block may have reached it); on a reused
+    // connection, what the read finds is checked against a response the server sent on its own as it closed the idle
+    // connection (see abandonFailedSend())
+    return sendFailedOnPeerClose(send_xsink);
 }
 
 bool Http1ClientPollOperationPriv::closedLocally() const {
@@ -1003,9 +1018,19 @@ void Http1ClientPollOperationPriv::abandonFailedSend(const std::string& err, con
     send_state = SendState::ABANDONED;
     send_buffered_body = false;
     send_final_pending = false;
+    // once a final response header was received, the response has started: a failure that follows is a failure of
+    // the response (e.g. SOCKET-CLOSED for a body cut short), not the send error, which is not armed again (see
+    // handleRecvHeader(), which clears it when the final header arrives)
+    if (response_status_code && response_status_code != 100) {
+        return;
+    }
     send_failure_pending = true;
     send_failure_err = err;
     send_failure_desc = desc;
+    // next_stream_id counts the requests submitted on this connection; submitRequest() writes it in the caller's
+    // thread under stream_lock
+    AutoLocker al(stream_lock);
+    send_failure_reused = next_stream_id > 1;
 }
 
 bool Http1ClientPollOperationPriv::sendFailedOnPeerClose(ExceptionSink& send_xsink) {
@@ -1420,10 +1445,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
                 "entering full-duplex streaming\n");
             releaseCurrentOp(xsink);
             sock_obj->ref();
-            current_op = new SocketReadHttpHeaderPollOperation(xsink, sock_obj);
-            if (*xsink) {
-                current_op->deref(xsink);
-                current_op = nullptr;
+            // a read that cannot be started (the socket was closed) is reported with setError(), which notifies the
+            // pending stream and marks the connection closed
+            current_op = newHeaderReadOp(xsink);
+            if (!current_op) {
                 return nullptr;
             }
             current_op->setSelf(*self);
@@ -1476,10 +1501,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
 
         releaseCurrentOp(xsink);
         sock_obj->ref();
-        current_op = new SocketReadHttpHeaderPollOperation(xsink, sock_obj);
-        if (*xsink) {
-            current_op->deref(xsink);
-            current_op = nullptr;
+        // a read that cannot be started (the socket was closed) is reported with setError(), which notifies the
+        // pending stream and marks the connection closed
+        current_op = newHeaderReadOp(xsink);
+        if (!current_op) {
             return nullptr;
         }
         current_op->setSelf(*self);
@@ -1776,7 +1801,16 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
         // a failure of the response, such as a body cut short, and is reported as such rather than as the send error
         // the response may have followed
         if (response_status_code != 100) {
+            // on a reused connection, a 408 read after the request send failed is the response the server sent on
+            // its own as it closed the idle connection (RFC 9110 section 15.5.9), not an answer to this request: the
+            // connection-closed error is reported (setError() reports it for a reused connection), so an idempotent
+            // request is repeated on a new connection instead of being given another request's 408
+            if (send_failure_pending && send_failure_reused && response_status_code == 408) {
+                setError("HTTP1-CONNECTION-CLOSED", "the server closed the reused connection", xsink);
+                return nullptr;
+            }
             send_failure_pending = false;
+            send_failure_reused = false;
         }
 
         // 101 Switching Protocols: the HTTP framing layer is done;
@@ -1829,10 +1863,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
                 sock_obj ? sock_obj->getSocket() : -1);
             releaseCurrentOp(xsink);
             sock_obj->ref();
-            current_op = new SocketReadHttpHeaderPollOperation(xsink, sock_obj);
-            if (*xsink) {
-                current_op->deref(xsink);
-                current_op = nullptr;
+            // a read that cannot be started (the socket was closed) is reported with setError(), which notifies the
+            // pending stream and marks the connection closed
+            current_op = newHeaderReadOp(xsink);
+            if (!current_op) {
                 return nullptr;
             }
             current_op->setSelf(*self);
@@ -2503,6 +2537,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProtocolSwitched(ExceptionSink
 QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsink) {
     empty_read_count = 0;
     send_failure_pending = false;
+    send_failure_reused = false;
 
     // The response is complete but a buffered request body is not.  The request declared a
     // Content-Length, so stopping short of it would leave the peer holding a request it cannot process -
@@ -2688,6 +2723,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
     empty_read_count = 0;
     // the response arrived: a send that failed before it is not reported
     send_failure_pending = false;
+    send_failure_reused = false;
 
     // The response is complete but a buffered request body is not.  The request declared a
     // Content-Length, so stopping short of it would leave the peer holding a request it cannot process -
@@ -2892,6 +2928,16 @@ void Http1ClientPollOperationPriv::setError(const char* err, const char* desc, c
         std::string saved_desc(std::move(send_failure_desc));
         send_failure_err.clear();
         send_failure_desc.clear();
+        if (send_failure_reused) {
+            send_failure_reused = false;
+            // a reused keep-alive connection that the server closed before it answered the request: the
+            // connection-closed error, which an idempotent request is repeated for on a new connection (RFC 9110
+            // section 9.2.2); a request that is not idempotent is not repeated and gets this error
+            QoreStringMaker msg("the server closed the reused connection before it answered the request (%s: %s)",
+                saved_err.c_str(), saved_desc.c_str());
+            publishError("HTTP1-CONNECTION-CLOSED", msg.c_str(), nullptr, xsink);
+            return;
+        }
         // the argument and extra information belong to the error that is replaced
         publishError(saved_err.c_str(), saved_desc.c_str(), nullptr, xsink);
         return;

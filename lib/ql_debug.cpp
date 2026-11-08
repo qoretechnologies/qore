@@ -16230,8 +16230,11 @@ void dbg_http1_socket_send_hook(int fd) {
 }
 
 //! arms one point of the send-failure hooks; the Counter and the peer's socket are taken over
+/** @param setup called with the lock held once the point is known not to be armed, to set the point's own
+    parameters; parameters of a point that is already armed are never overwritten
+*/
 void dbg_http1_send_failure_arm(Counter*& slot, Counter* c, QoreSocketObject* peer, const std::string& response,
-        const char* name, ExceptionSink* xsink) {
+        const char* name, ExceptionSink* xsink, const std::function<void(Http1SendFailure&)>& setup = nullptr) {
     Http1SendFailure& h = http1_send_failure;
     std::lock_guard<std::mutex> l(h.m);
     if (slot || (peer && h.peer)) {
@@ -16241,6 +16244,9 @@ void dbg_http1_send_failure_arm(Counter*& slot, Counter* c, QoreSocketObject* pe
         }
         xsink->raiseException("DBG-ARGUMENT-ERROR", "%s() is already armed", name);
         return;
+    }
+    if (setup) {
+        setup(h);
     }
     slot = c;
     if (peer) {
@@ -16316,12 +16322,9 @@ static QoreValue f_dbg_fail_http1_send_side(const QoreListNode* params, RuntimeC
     if (*xsink) {
         return QoreValue();
     }
-    {
-        std::lock_guard<std::mutex> l(http1_send_failure.m);
-        http1_send_failure.send_side_skip = get_param_value(params, 3).getAsBigInt();
-    }
+    int64 skip = get_param_value(params, 3).getAsBigInt();
     dbg_http1_send_failure_arm(http1_send_failure.send_side, c, peer.release(), dbg_http1_bytes_arg(params, 2),
-        "dbg_fail_http1_send_side", xsink);
+        "dbg_fail_http1_send_side", xsink, [skip] (Http1SendFailure& h) { h.send_side_skip = skip; });
     return QoreValue();
 }
 
@@ -16349,12 +16352,8 @@ static QoreValue f_dbg_hold_http1_socket_send(const QoreListNode* params, Runtim
     if (*xsink) {
         return QoreValue();
     }
-    {
-        std::lock_guard<std::mutex> l(http1_send_failure.m);
-        http1_send_failure.socket_send_port = port;
-    }
     dbg_http1_send_failure_arm(http1_send_failure.socket_send, c, peer.release(), dbg_http1_bytes_arg(params, 3),
-        "dbg_hold_http1_socket_send", xsink);
+        "dbg_hold_http1_socket_send", xsink, [port] (Http1SendFailure& h) { h.socket_send_port = port; });
     if (!*xsink) {
         qore_dbg_socket_send_hook.store(dbg_http1_socket_send_hook);
     }

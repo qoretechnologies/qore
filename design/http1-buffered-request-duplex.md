@@ -89,16 +89,21 @@ It does not read the response, and reports the send error as it is, when:
   error, and an abort marks the operation closed, before the socket is shut down; the shutdown makes a write in
   progress fail with `EPIPE`, which must not be taken for a peer reset.  The error that the cancel or abort
   published stays the one reported (the first published error wins).
-- the header block was not verifiably written on a connection that served a request before (`next_stream_id > 1`).
-  A server that closes an idle keep-alive connection may send a response of its own first (a `408`); arriving
-  before the request was on the wire, it is not this request's answer.  The send error there is reported as for
-  any failed write on a reused connection: it is the connection failure that the qlib `HttpClientConnectionManager`
-  repeats the request for on a new connection (`isConnectionErrorStatic()`); the `HTTPClient` class raises it (its
-  manager, `QoreHttpClientConnectionManagerBase`, repeats an idempotent request only for the errors of
-  `isConnectionClosedError()`).  On macOS the byte count can be short (below), so the error is also reported for a
-  request whose header block did reach the server; a repeated request gets the server's answer on the new
-  connection, where the first-request rule delivers it.  Reporting the connection failure is preferred to returning
-  a response that may belong to no request.
+
+### Reused connections
+
+A send that fails because the peer closed or reset the connection is read for a response whatever the byte count
+shows (on macOS it can be short, below).  On a connection that served a request before (`next_stream_id > 1`,
+recorded as `send_failure_reused` by `abandonFailedSend()`):
+
+- a final response that arrives is delivered (an early `413`, `431` and the like), except a `408`: a server that
+  closes an idle keep-alive connection may send a `408` of its own first (RFC 9110 section 15.5.9), which answers no
+  request;
+- that `408`, or no response at all, is reported as `HTTP1-CONNECTION-CLOSED` (`setError()` maps the saved send
+  error).  It is the connection-closed condition that `HTTPClient` (`canRepeatOnNewConnection()`) and
+  `QoreHttpClientConnectionManagerBase::isConnectionClosedError()` repeat an idempotent request for on a new
+  connection (RFC 9110 section 9.2.2); a request that is not idempotent is not repeated, and its caller gets that
+  error with the send error in its description.
 
 `recoverResponseAfterSendFailure()` abandons the request (`SendState::ABANDONED`, see below) and reads the
 response: if one has arrived it is delivered and the connection is closed; if not, the error reported is the
@@ -142,6 +147,13 @@ errno (`SslCall::Write`).  OpenSSL raises no alert for a failed transport write,
 `SSL_read()` returns the response records, then the peer's `close_notify` (end of data) or the reset (an error,
 reported as a truncated response if a response had started, else as the send error).  The socket is closed by its
 owner afterwards, as a plain socket's is.
+
+That the read side stays usable after a failed transport write is OpenSSL's behaviour, not a documented guarantee;
+`examples/test/qore/classes/Socket/TlsWriteAfterPeerReset.qtest` fails if an OpenSSL release changes it.  OpenSSL
+forbids `SSL_shutdown()` after a fatal error (`SSL_ERROR_SYSCALL`), so a socket kept open after a failed write
+sends no `close_notify` when it is closed (`SSLSocketHelper::write_failed`, checked by `sendCloseNotify()`): the
+session did not end with the alert, so OpenSSL removes it from the session cache when the connection is freed, and
+it is not resumed.  A protocol failure (`SSL_ERROR_SSL`) still closes the socket at once: its errno means nothing.
 
 ### A response that has started
 
