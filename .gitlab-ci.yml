@@ -123,7 +123,10 @@ check-fast-routes-core-sanitizers:
 # QORE_QMOD_CACHE_MAX_AGE_DAYS days, then the least recently used ones above QORE_QMOD_CACHE_MAX_SIZE_MB MiB per job
 # name) and prints the hits, misses and the cache size before and after pruning.  A sample of the modules the cache
 # supplies is compiled again and must be byte for byte the same (QORE_QMOD_CACHE_AUDIT; 1 audits every one).
-# QORE_QMOD_CACHE_DISABLE=1 compiles every module and stores nothing.
+# Only the jobs of protected refs write the cache, and sign its entries with the Ed25519 private key
+# QORE_QMOD_CACHE_SIGNING_KEY (a protected CI variable); every job uses only entries that the public key
+# QORE_QMOD_CACHE_VERIFY_KEY (a CI variable) verifies.  QORE_QMOD_CACHE_DISABLE=1 compiles every module and stores
+# nothing.
 .qmod-cache:
   variables:
     QORE_QMOD_CACHE_AUDIT: "0.03:${CI_PIPELINE_ID}"

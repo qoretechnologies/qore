@@ -213,18 +213,27 @@ base key.
 
 ### Trust levels
 
-Whoever can write to a cache directory can make a build use a module that qcc never wrote, and the module's digests
-in the entry only prove that it was not changed after the entry was written.  So the CI cache has a directory per
-trust level, and the runner configuration enforces who writes to which:
+Whoever can write to a cache directory can make a build use a module that qcc never wrote, and the digests in an
+entry only prove that its files were not changed after the entry was written.  So only the jobs of protected refs
+write the CI cache, and every job checks that an entry was written by one of them:
 
 - `protected/<job name>`: written only by the jobs of protected refs (`CI_COMMIT_REF_PROTECTED=true`).  They sign each
-  entry with `QORE_QMOD_CACHE_SIGNING_KEY` (HMAC-SHA256 of the entry, which has the digests of its files), a protected
-  CI variable, so jobs of other refs never have it, and use only entries signed with it; the guard checks the
-  signatures of the entries it supplied.  A runner that runs the jobs of unprotected refs mounts `protected/`
-  read-only.
-- `unprotected/<ref slug>/<job name>`: written by the jobs of one unprotected ref, which read the protected cache of
-  their job name too (`exec --read-cache-dir`), but never write to it (no last-use mark, no removal of a damaged
-  entry), and never get the signing key.  A ref cannot poison another ref's cache, nor develop's.
+  entry (the entry with the digests of its files) with the Ed25519 private key `QORE_QMOD_CACHE_SIGNING_KEY`, a
+  protected CI variable that only they get, and use only entries that verify.  Without the key, a job of a protected
+  ref builds without the cache, so it never writes or accepts an unsigned entry.
+- The jobs of other refs only read it: their runner mounts `protected/` read-only (and runs no privileged pods, which
+  could mount it again), and they use only entries that the public key `QORE_QMOD_CACHE_VERIFY_KEY` (not secret)
+  verifies: with the public key a job can check an entry but cannot sign one, so an entry that anyone without the
+  private key wrote, even into a directory they can write, is a miss.  They write no cache that another job reads (no
+  cache of their own across jobs: a job-local one would only serve the job itself), so one ref cannot poison
+  another's build, nor abuse a quarantine.  Without the public key they build without the cache.
+
+The signatures are made and checked with the `openssl` command (OpenSSL 3: `pkeyutl -rawin` with Ed25519; macOS's
+LibreSSL has no Ed25519, so the MacPorts or Homebrew one is used, or `QORE_QMOD_CACHE_OPENSSL`): Python's standard
+library has no asymmetric signatures, and an HMAC key would let every job that checks entries also forge them.  A
+check costs one process (about 8 ms), once per module looked up.  A job with a key but no OpenSSL 3 builds without
+the cache.  The guard checks the signatures of the entries the cache supplied.  `qore_qmod_cache_finish` unsets the
+private key, so that nothing run after the build (the tests of `test-macos.sh`) has it.
 
 A job of a protected ref on a runner that mounts `protected/` read-only uses it read-only
 (`QORE_QMOD_CACHE_READONLY=1`).
@@ -243,9 +252,14 @@ Several jobs can share the directory.  Each object has a lock file, `objects/<re
 - one job prunes at a time (`prune.lock`, taken without waiting: a job that finds another one pruning skips its own
   prune and says so).
 
-Without working locks (a file system that does not propagate them), a removal can race a reader; the reader's checks
-(each stored file's digest before the copy, the module and depfile digests after it) then make the module a miss, so
+Without working locks (a file system that does not propagate them, possibly the virtiofs share of a macOS VM between
+VMs, which has not been tested), a removal can race a reader; the reader's checks (each stored file's digest before the
+copy, the module, depfile and fingerprints digests after it, the entry's signature) then make the module a miss, so
 the cost is a compile, never a wrong module.
+
+Nothing in the cache grows without bound: each job prunes its own cache by size and age and the caches of the other
+job names by age (a renamed or removed job's cache empties out within `--max-age-days`), quarantined caches and the
+leftovers of interrupted stores and removals go after an hour, and no ref has a cache of its own.
 
 `prune` removes, in this order: orphans older than an hour (an object without an entry, an entry without an object,
 an interrupted store or removal; a younger one can be a store in progress, and an object a job holds is skipped),
@@ -264,20 +278,22 @@ which `verify`, `stats` and `prune` read.
 |`QORE_QMOD_CACHE_DISABLE=1`|compile every module and store nothing
 |`QORE_QMOD_CACHE_READONLY=1`|look modules up, store nothing
 |`QORE_QMOD_CACHE_AUDIT=<rate>[:<seed>]`|audit a sample of the hits (see above)
-|`QORE_QMOD_CACHE_SIGNING_KEY=<key>`|sign the entries stored, and use only entries signed with the key (see "Trust levels")
-|`QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE=1`|for the tests only: a restored module is damaged after the copy
+|`QORE_QMOD_CACHE_SIGNING_KEY=<key>`|the Ed25519 private key (a file, PEM text or base64 of it): sign the entries stored, and use only signed entries (see "Trust levels")
+|`QORE_QMOD_CACHE_VERIFY_KEY=<key>`|the public key: use only entries signed with the private key; a job without the private key writes nothing
+|`QORE_QMOD_CACHE_OPENSSL=<path>`|the OpenSSL 3 command for the signatures
+|`QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE=1\|.d\|.d.fingerprints`|for the tests only: a restored file is damaged after the copy
 
 ## CI
 
 The cache of the CI jobs is a directory of the host that the runner mounts into every job: a directory of professor
 mounted into the macOS VM, and a directory of each Kubernetes node mounted into the build pods.  The runner names it
-in `QORE_QMOD_CACHE_DIR`; `test/docker_test/qmod-cache.sh` uses the directory of the job's trust level and name in it
-(see "Trust levels"), which the jobs of that level and name share, and builds without the cache when the variable is
-not set or the directory of the job's level is not mounted.  The key has absolute paths, so the checkout path of a
+in `QORE_QMOD_CACHE_DIR`; `test/docker_test/qmod-cache.sh` uses `protected/<job name>` in it (see "Trust levels"),
+written by the jobs of protected refs and read by the others, and builds without the cache when the variable is not
+set, the directory is not mounted, or the job lacks its key.  The key has absolute paths, so the checkout path of a
 job must not change between jobs (`GIT_CLONE_PATH`, which the runner must allow, for a runner whose default path has a
 concurrency number in it).  After every build it runs the
 guard and prunes the job's cache directory (`QORE_QMOD_CACHE_MAX_AGE_DAYS`, default 7, and `QORE_QMOD_CACHE_MAX_SIZE_MB`,
-default 3072, set in `.gitlab-ci.yml`), and prints the statistics line.
+default 3072, set in `.gitlab-ci.yml`) and the other job names' caches by age, and prints the statistics line.
 
 A host directory costs no network transfer and no object store, and keeps the cache across branches and pipelines;
 on Kubernetes a node only has the modules of the jobs that ran on it, so the hit rate depends on how jobs land on

@@ -106,7 +106,7 @@ cd build
 . "${QORE_SRC_DIR}/test/docker_test/qmod-cache.sh"
 qore_qmod_cache_setup
 cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-debug} -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
-    ${QMOD_CACHE_ARG:+"${QMOD_CACHE_ARG}"} ${QMOD_CACHE_READ_ARG:+"${QMOD_CACHE_READ_ARG}"}
+    ${QMOD_CACHE_ARG:+"${QMOD_CACHE_ARG}"}
 make -j${MAKE_JOBS}
 qore_qmod_cache_finish "${QORE_SRC_DIR}" "${QORE_SRC_DIR}/build"
 
