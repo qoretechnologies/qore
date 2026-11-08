@@ -187,8 +187,11 @@ hash<auto> desc = {
 
     @subsection MssqlSqlUtilBasev11 MssqlSqlUtilBase v1.1
     - the triggers of a table on SQL Server are read from the database: a table with triggers is aligned with no
-      change, a changed trigger is dropped and created, and a trigger that the template does not have is dropped; each
-      alignment created the triggers again, which failed as they existed
+      change, and a changed trigger, or an encrypted one, whose definition cannot be read, is dropped and created;
+      each alignment created the triggers again, which failed as they existed.  A trigger of the table that the
+      template does not have is now dropped, as on Oracle and PostgreSQL; the \c "triggers" value of the \c "omit"
+      alignment option keeps the triggers of a table as they are.  A trigger is dropped in the schema of its table
+    - fixed the existence of a table on SQL Server, which was a table of its name in any schema
     - added SQL Server's Unicode string types \c nchar, \c nvarchar, \c nvarchar(max) and \c ntext, and
       \c varchar(max); a column of one of them raised an error
     - a \c varchar(max), \c nvarchar(max) or \c varbinary(max) column is described with that type, and a \c text,
@@ -197,8 +200,9 @@ hash<auto> desc = {
     - the comments of columns are kept on SQL Server, as the \c MS_Description extended properties of the columns:
       they are created with a table or column, aligned, and described; they were ignored before
     - implemented the \c "returning" insert option (@ref SqlUtil::AbstractTable::InsertOptions) with SQL Server's
-      \c OUTPUT clause into a table variable, so also for a table with triggers; it raised \c UNIMPLEMENTED before,
-      as it still does on Sybase, which has no \c OUTPUT clause
+      \c OUTPUT clause into a table variable, so also for a table with triggers, and for each row of a bulk insert; a
+      column named more than once is returned once; it raised \c UNIMPLEMENTED before, as it still does on Sybase,
+      which has no \c OUTPUT clause
     - fixed the server version of a connection of the \c jdbc driver, which gives it as a hash: \c MERGE (upserts)
       and sequences were not used, as the version was taken for an unknown one
     - names of tables, columns, indexes, constraints, sequences, views, triggers, schemas, filegroups, partition
@@ -358,6 +362,25 @@ string sub mssql_get_sql_object_name(string name) {
 # returns a string for an SQL string literal: in single quotes, with each single quote doubled
 string sub mssql_get_string_literal(string str) {
     return "'" + replace(str, "'", "''") + "'";
+}
+
+# returns a string for a Unicode SQL string literal: N and the string in single quotes, with each single quote doubled
+string sub mssql_get_unicode_string_literal(string str) {
+    return "N'" + replace(str, "'", "''") + "'";
+}
+
+# returns the name that an SQL identifier gives: a bracketed identifier without its brackets and with each "]]" as
+# "]", a double-quoted one without its quotes and with each doubled quote as one, and any other as it is
+string sub mssql_unquote_identifier(string id) {
+    *string bracketed = (id =~ x/^\[((?:[^\]]|\]\])*+)\]$/s)[0];
+    if (exists bracketed) {
+        return replace(bracketed, "]]", "]");
+    }
+    *string dquoted = (id =~ x/^"((?:[^"]|"")*+)"$/s)[0];
+    if (exists dquoted) {
+        return replace(dquoted, "\"\"", "\"");
+    }
+    return id;
 }
 
 # returns the new name of an object for sp_rename, which takes it as given and not as SQL, as a string literal; the
@@ -1310,8 +1333,23 @@ public class MssqlView inherits SqlUtil::AbstractView {
 
 #! represents a Mssql-specific trigger
 public class MssqlTrigger inherits SqlUtil::AbstractTrigger {
+    public {
+        #! True if the definition of the trigger could not be read (an encrypted trigger)
+        /** @since MssqlSqlUtilBase 1.1
+        */
+        bool unreadable;
+    }
+
     #! creates the object and sets its name and the trigger source
-    constructor(string n, string n_src) : AbstractTrigger(n, n_src) {
+    /** @param n the name of the trigger
+        @param n_src the source of the trigger
+        @param unreadable True if the definition of the trigger in the database could not be read: the trigger is
+        never equal to another, so that alignment drops it and creates the trigger of the template
+
+        @since MssqlSqlUtilBase 1.1 the \a unreadable argument
+    */
+    constructor(string n, string n_src, bool unreadable = False) : AbstractTrigger(n, n_src) {
+        self.unreadable = unreadable;
     }
 
     #! returns a string that can be used to create the trigger in the database
@@ -1320,8 +1358,29 @@ public class MssqlTrigger inherits SqlUtil::AbstractTrigger {
     }
 
     #! returns a string that can be used to drop the trigger from the database
+    /** The trigger is in the schema of its table: its name is qualified with the schema of the table's name.  A name
+        that cannot be an SQL identifier (see @ref mssql_identifiers), which a trigger created outside SqlUtil may have,
+        is given to the statement in a string literal
+
+        @param table_name the name of the table, with its schema
+    */
     softlist getDropSql(string table_name) {
-        return sprintf("drop trigger %s", mssql_get_sql_identifier(name));
+        *string schema = mssql_get_sql_name_schema(table_name);
+        string id;
+        try {
+            id = mssql_get_sql_identifier(name);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "IDENTIFIER-ERROR") {
+                rethrow;
+            }
+            # the statement is made by the server from the names in string literals, with QUOTENAME()
+            string schema_exp = schema
+                ? sprintf("quotename(%s) + N'.' + ", mssql_get_unicode_string_literal(mssql_unquote_identifier(schema)))
+                : "";
+            return sprintf("declare @qore_drop_trigger nvarchar(max) = N'drop trigger ' + %squotename(%s); "
+                "exec sp_executesql @qore_drop_trigger", schema_exp, mssql_get_unicode_string_literal(name));
+        }
+        return sprintf("drop trigger %s%s", schema ? schema + "." : "", id);
     }
 
     #! returns the source for comparisons: lines end with a newline, and the source has no space around it
@@ -1334,8 +1393,10 @@ public class MssqlTrigger inherits SqlUtil::AbstractTrigger {
     }
 
     #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
+    /** A trigger whose definition could not be read is never equal to another
+    */
     private bool equalImpl(AbstractFunctionBase t) {
-        return True;
+        return !unreadable && !cast<MssqlTrigger>(t).unreadable;
     }
 
     #! returns the SQL that renames the trigger with sp_rename
@@ -2887,9 +2948,14 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
     }
 
     private bool checkExistenceImpl() {
-        *hash qh = ds.selectRow("select name from sysobjects where type = %v and name = %v", "U", name);
-        #*hash qh = ds.selectRow("select * from information_schema.tables where table_schema = %v and
-        #   table_name = %v", schema, name);
+        *hash<auto> qh;
+        if (is_sybase) {
+            qh = ds.selectRow("select name from sysobjects where type = %v and name = %v", "U", name);
+        } else {
+            # the table of the name in its schema: a table of the same name in another schema is another table
+            qh = ds.selectRow("select t.name from sys.tables t join sys.schemas s on s.schema_id = t.schema_id "
+                "where s.name = %v and t.name = %v", schema, name);
+        }
         if (qh)
             return inDb = True;
         return False;
@@ -3324,10 +3390,13 @@ tc.constraint_name, c1.ordinal_position", schema, name);
             "from sys.triggers tr "
             "join sys.tables t on t.object_id = tr.parent_id "
             "join sys.schemas s on s.schema_id = t.schema_id "
-            "where tr.parent_class = 1 and s.name = %v and t.name = %v order by tr.name", schema, name);
+            "where tr.parent_class = 1 and tr.is_ms_shipped = 0 and s.name = %v and t.name = %v order by tr.name",
+            schema, name);
         foreach hash<auto> row in (qh.contextIterator()) {
-            # the definition of an encrypted trigger cannot be read
+            # the definition of an encrypted trigger cannot be read: the trigger is never equal to the trigger of a
+            # template, which replaces it
             if (!row.definition.val()) {
+                rv.add(row.name, new MssqlTrigger(row.name, "", True));
                 continue;
             }
             rv.add(row.name, new MssqlTrigger(row.name, MssqlTable::getTriggerSource(row.definition)));
@@ -3336,8 +3405,8 @@ tc.constraint_name, c1.ordinal_position", schema, name);
     }
 
     #! returns the source of a trigger as MssqlTrigger has it: its definition after the trigger's name
-    /** SQL Server keeps the definition of a trigger as it was created (\c "CREATE TRIGGER name ON ..."); the source of
-        a trigger in a table description is the part after the name, from \c ON
+    /** SQL Server keeps the definition of a trigger as it was created (\c "CREATE TRIGGER name ON ..."), with any
+        comments before it; the source of a trigger in a table description is the part after the name, from \c ON
 
         @param definition the definition of the trigger as \c OBJECT_DEFINITION() gives it
 
@@ -3347,7 +3416,7 @@ tc.constraint_name, c1.ordinal_position", schema, name);
     static string getTriggerSource(string definition) {
         # a name part is a bracketed name ("]]" is a "]" of the name), a double-quoted name or an ordinary name; a
         # name can be qualified with its schema
-        *string src = (definition =~ x/^\s*create\s+(?:or\s+alter\s+)?trigger\s+(?:(?:\[(?:[^\]]|\]\])*\]|"[^"]*"|[^\s.\["]+)\.)?(?:\[(?:[^\]]|\]\])*\]|"[^"]*"|[^\s.\["]+)\s+(.*)$/is)[0];
+        *string src = (definition =~ x/^(?:\s|--[^\n]*(?:\n|$)|\/\*.*?\*\/)*create\s+(?:or\s+alter\s+)?trigger\s+(?:(?:\[(?:[^\]]|\]\])*\]|"[^"]*"|[^\s.\["]+)\.)?(?:\[(?:[^\]]|\]\])*\]|"[^"]*"|[^\s.\["]+)\s+(.*)$/is)[0];
         if (!src) {
             return definition;
         }
@@ -4215,7 +4284,10 @@ tc.constraint_name, c1.ordinal_position", schema, name);
             if (!c)
                 throw "COLUMN-ERROR", sprintf("%s.%s is not a valid column for the \"returning\" option (valid "
                     "columns: %y)", name, rh.key, columns.keys());
-            l += rh.key;
+            # a column given more than once is returned once, in the place of its first mention
+            if (!inlist(rh.key, l)) {
+                l += rh.key;
+            }
         }
         if (l) {
             if (is_sybase) {
@@ -4239,17 +4311,25 @@ tc.constraint_name, c1.ordinal_position", schema, name);
             }
             sql = decl + sql.substr(0, i + 2) + output + sql.substr(i + 1) + "; select "
                 + (foldl $1 + ", " + $2, names) + " from @qore_returning";
-            *hash<auto> h = execData(opt, sql, args);
-            # the batch gives the result of each statement that has one, as "query0", "query1", ...: the row count
-            # of the insert and the rows of the select, which is the last one
-            if (h && h.hasKey("query0")) {
-                h = h{"query" + (h.size() - 1)};
-            }
+            *hash<auto> h = execReturningImpl(opt, sql, args);
             return h ? map {$1.key: $1.value.typeCode() == NT_LIST ? $1.value[0] : $1.value}, h.pairIterator() : h;
         }
 
         *hash<auto> h = execData(opt, sql, args);
         return h ? map {$1.key: $1.value.typeCode() == NT_LIST ? $1.value[0] : $1.value}, h.pairIterator() : h;
+    }
+
+    #! executes the batch of an insert with the \c "returning" option that doReturningImpl() made
+    /** @return the values of the inserted row's columns that the option names, each in a list of one value
+    */
+    private *hash<auto> execReturningImpl(hash<auto> opt, string sql, list<auto> args) {
+        *hash<auto> h = execData(opt, sql, args);
+        # the batch gives the result of each statement that has one, as "query0", "query1", ...: the row count of the
+        # insert and the rows of the select, which is the last one
+        if (h && h.hasKey("query0")) {
+            h = h{"query" + (h.size() - 1)};
+        }
+        return h;
     }
 
     #! returns the type of a column of the table variable that the values of the \c "returning" option are output to

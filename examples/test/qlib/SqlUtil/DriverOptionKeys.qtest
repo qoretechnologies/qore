@@ -28,7 +28,12 @@ class CountingDatasource inherits Datasource {
         int real_calls = 0;
     }
 
-    constructor() : Datasource("sqlite3:@:memory:") {
+    private {
+        string real_name;
+    }
+
+    constructor(string real_name = "SQLite") : Datasource("sqlite3:@:memory:") {
+        self.real_name = real_name;
     }
 
     string getDriverName() {
@@ -37,7 +42,7 @@ class CountingDatasource inherits Datasource {
 
     string getDriverRealName() {
         ++real_calls;
-        return "SQLite";
+        return real_name;
     }
 }
 
@@ -120,6 +125,14 @@ class DriverOptionKeysTest inherits QUnit::Test {
         }
         assertEq(("sqlite3", "odbc"), t.getDriverOptionKeys());
         assertEq(1, ds.real_calls);
+
+        # another connection: its keys are read
+        CountingDatasource ds2("Oracle");
+        on_exit ds2.rollback();
+        ds2.exec("create table t (id integer)");
+        t.setDatasource(ds2);
+        assertEq(("oracle", "odbc"), t.getDriverOptionKeys());
+        assertEq(1, ds2.real_calls);
     }
 
     private order() {

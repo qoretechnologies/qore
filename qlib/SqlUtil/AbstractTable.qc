@@ -699,6 +699,8 @@ table.create();
 
         ds = nds;
         inDb = False;
+        # the keys of another connection's driver are read again
+        remove driver_option_keys;
     }
 
     private doTableOptions(*hash<auto> nopts) {
@@ -4010,7 +4012,8 @@ table.insert(row);
                             hash<auto> h = doReturningImpl(opt, \sql, targs);
                             map rv{$1.key} += ($1.value,), h.pairIterator();
                         } else {
-                            hash<auto> h = execData(opt, sql, targs);
+                            # the SQL made by doReturningImpl() for the first row
+                            *hash<auto> h = execReturningImpl(opt, sql, targs);
                             map rv{$1.key} += $1.value, h.pairIterator();
                         }
                     } else {
@@ -13573,6 +13576,24 @@ on_exit printf("SQL> %s\n", sql);
     private abstract AbstractDataProviderType getNumericTypeImpl(string type_name, bool nullable, *hash<auto> options);
 
     private abstract *hash<auto> doReturningImpl(hash<auto> opt, reference<string> sql, list<auto> args);
+
+    #! executes the SQL of an insert that doReturningImpl() made for another row, with the values of a row
+    /** A bulk insert on a driver without array binds inserts each row with the SQL that doReturningImpl() made for
+        the first row; a driver whose SQL gives the values in another form than one result (ex: SQL Server's batch of
+        statements) overrides it
+
+        @param opt the insert options
+        @param sql the SQL that doReturningImpl() made
+        @param args the values of the row
+
+        @return the values of the row's columns that the \c "returning" option names, each in a list of one value, as
+        @ref Qore::SQL::AbstractDatasource::exec() "exec()" gives a select's result
+
+        @since SqlUtil 3.11.0
+    */
+    private *hash<auto> execReturningImpl(hash<auto> opt, string sql, list<auto> args) {
+        return execData(opt, sql, args);
+    }
 
     private abstract bool emptyImpl();
 

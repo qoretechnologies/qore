@@ -205,7 +205,8 @@ class MssqlIdentifierQuotingTest inherits QUnit::Test {
         MssqlTrigger trig("trig x", "on dbo.t after insert as begin set nocount on end");
         assertEq(("create trigger [trig x] on dbo.t after insert as begin set nocount on end",),
             trig.getCreateSql("dbo.t"));
-        assertEq(("drop trigger [trig x]",), trig.getDropSql("dbo.t"));
+        # a trigger is dropped in the schema of its table
+        assertEq(("drop trigger dbo.[trig x]",), trig.getDropSql("dbo.t"));
         MssqlView v("v x", "select 1 a");
         assertEq("create view [v x] as select 1 a", v.getCreateSql());
         assertEq("drop view [v x]", v.getDropSql());
