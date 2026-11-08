@@ -37,6 +37,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/PollStateCloseHook.h"
 
 /** @cond INTERNAL */
 
@@ -326,6 +327,37 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
     return poll_info;
 }
 
+void WebSocketClientPollOperationPriv::setWsStateValue(WsState s, const char* site) {
+    if (s == WsState::CLOSED || s == WsState::ERROR) {
+        ws_state = s;
+        closing.store(true, std::memory_order_release);
+        return;
+    }
+#ifdef DEBUG
+    bool hook_fired = false;
+    if (site && PollStateCloseHook::take(this, site)) {
+        // what another thread does at this moment: the Qore-level abort(), or a timeout's worker abort
+        ExceptionSink abort_xsink;
+        abort(&abort_xsink);
+        abort_xsink.clear();
+        hook_fired = true;
+    }
+#endif
+    WsState cur = ws_state.load(std::memory_order_acquire);
+    while (cur != WsState::CLOSED && cur != WsState::ERROR
+            && !ws_state.compare_exchange_weak(cur, s, std::memory_order_acq_rel, std::memory_order_acquire)) {
+    }
+    if (s != WsState::CONNECTED) {
+        closing.store(true, std::memory_order_release);
+    }
+#ifdef DEBUG
+    if (hook_fired) {
+        WsState now = ws_state.load(std::memory_order_acquire);
+        PollStateCloseHook::fired(now == WsState::CLOSED || now == WsState::ERROR);
+    }
+#endif
+}
+
 void WebSocketClientPollOperationPriv::abort(ExceptionSink* xsink) {
     setWsStateValue(WsState::CLOSED);
     close_code = 1006;  // Abnormal Closure
@@ -462,7 +494,7 @@ void WebSocketClientPollOperationPriv::handleFrame(const WsFrame& frame, Excepti
                     if (*xsink) {
                         return;
                     }
-                    setWsStateValue(WsState::CLOSING);
+                    setWsStateValue(WsState::CLOSING, "peer-close");
                 }
                 break;
             }

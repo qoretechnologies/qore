@@ -450,6 +450,16 @@ private:
     */
     SocketPollOperationBase* send_op = nullptr;
 
+    //! Protects the @ref current_op and @ref send_op pointers
+    /** Only the I/O thread replaces and releases the operations, and it reads them without the lock; abort() and
+        getOutput() run on other threads too, and take a reference under the lock (refCurrentOp(), refSendOp()).  So
+        the I/O thread writes the pointers with the lock held (setCurrentOp(), setSendOp()) and nulls them before it
+        releases its reference (releaseCurrentOp(), releaseSendOp()), never releasing an operation that another
+        thread is about to reference.
+        @since %Qore 3.0
+    */
+    mutable QoreThreadLock op_lock;
+
     //! The socket object (ref'd)
     QoreSocketObject* sock_obj;
 
@@ -1048,6 +1058,24 @@ private:
 
     //! Release the current inner operation
     DLLLOCAL void releaseCurrentOp(ExceptionSink* xsink);
+
+    //! Sets @ref current_op with @ref op_lock held; the previous operation was released or moved by the caller
+    DLLLOCAL void setCurrentOp(SocketPollOperationBase* op) {
+        AutoLocker al(op_lock);
+        current_op = op;
+    }
+
+    //! Sets @ref send_op with @ref op_lock held; the previous operation was released or moved by the caller
+    DLLLOCAL void setSendOp(SocketPollOperationBase* op) {
+        AutoLocker al(op_lock);
+        send_op = op;
+    }
+
+    //! Returns a new reference to @ref current_op, or nullptr; any thread
+    DLLLOCAL SocketPollOperationBase* refCurrentOp() const;
+
+    //! Returns a new reference to @ref send_op, or nullptr; any thread
+    DLLLOCAL SocketPollOperationBase* refSendOp() const;
 
     //! Drives the concurrent buffered or chunked request-body send side (full-duplex).
     /** Sends as many queued request-body chunks as the socket will accept

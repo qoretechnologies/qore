@@ -870,9 +870,16 @@ thread), and the HTTP/3 client records a refused submission from the submitting 
 state and then sets the next one.  The client operations set every other state with a compare-exchange that never
 replaces `CLOSED` (`setStateUnlessClosed()`, `setOpenState()` for HTTP/3), so a close between the I/O thread's check
 and its store is not undone; a plain store made the closed connection ready again, and it took requests and was never
-closed by the I/O controller.  The HTTP/3 server operation sets its state with `op_lock` held, as `abort()` does, and
-the dispatcher's `getOutput()` does not reopen it.  In debug builds, `dbg_poll_close_before_open_state()` closes a
-client operation on its I/O thread right before a given state store, which makes the race deterministic in tests.
+closed by the I/O controller.  The HTTP/1.1 client operation also writes its `current_op` and `send_op` pointers with
+`op_lock` held and nulls them before it releases them, as `abort()` and `getOutput()` reference them from other
+threads.  The same rule holds for the WebSocket client operation (a close handshake does not leave `CLOSED` or
+`ERROR`) and for the HTTP server idle, keep-alive and accept operations (an aborted one reports no data, reads no
+request header and starts no TLS handshake): their I/O thread sets the next state with a compare-exchange from the
+state it found.  The HTTP/3 and HTTP/2 server operations and the HTTP server WebSocket operation set every state with
+their lock held (`op_lock`, `m`), as `abort()` does, so their I/O thread cannot interleave with it; the HTTP/3
+server's `getOutput()` does not reopen an operation that `abort()` closed.  In debug builds, `dbg_poll_close_before_open_state()` closes an
+operation on its I/O thread right before a given state store (or, for the HTTP/1.1 client, while it releases its
+operation), which makes the race deterministic in tests.
 
 **Callback dispatch pattern:**
 

@@ -72,6 +72,10 @@
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/QC_Http3ServerPollOperation.h"
 #include "qore/intern/PollStateCloseHook.h"
+#include "qore/intern/QC_HttpIdlePollOperationBase.h"
+#include "qore/intern/QC_HttpKeepAlivePollOperationBase.h"
+#include "qore/intern/QC_HttpAcceptPollOperationBase.h"
+#include "qore/intern/QC_WebSocketClientPollOperationBase.h"
 #include "qore/intern/NegotiatingConnectionPollOp.h"
 #include "qore/intern/RSection.h"
 #include "qore/intern/RSet.h"
@@ -16189,6 +16193,10 @@ static QoreValue f_dbg_run_llvm_target_init_tests(const QoreListNode* params, Ru
 extern qore_classid_t CID_HTTP1CLIENTPOLLOPERATIONBASE;
 extern qore_classid_t CID_HTTP2CLIENTPOLLOPERATIONBASE;
 extern qore_classid_t CID_HTTP3CLIENTPOLLOPERATIONBASE;
+extern qore_classid_t CID_HTTPIDLEPOLLOPERATIONBASE;
+extern qore_classid_t CID_HTTPKEEPALIVEPOLLOPERATIONBASE;
+extern qore_classid_t CID_HTTPACCEPTPOLLOPERATIONBASE;
+extern qore_classid_t CID_WEBSOCKETCLIENTPOLLOPERATIONBASE;
 
 namespace {
 // the state of PollStateCloseHook: the operation is compared only
@@ -16243,9 +16251,10 @@ static const void* dbg_poll_op_key(QoreObject* obj, qore_classid_t cid, Exceptio
     return *op ? static_cast<const void*>(*op) : nullptr;
 }
 
-//! Debug-only: dbg_poll_close_before_open_state(op, site): when the I/O thread of the HTTP client poll operation
-//! @a op (HTTP/1.1, HTTP/2 or HTTP/3) next sets its state at @a site, the operation is closed first as another
-//! thread closes it at that moment (see PollStateCloseHook); the caller keeps @a op until the hook fired
+//! Debug-only: dbg_poll_close_before_open_state(op, site): when the I/O thread of the poll operation @a op (an
+//! HTTP/1.1, HTTP/2 or HTTP/3 client, a WebSocket client, or an HTTP server idle, keep-alive or accept operation)
+//! next sets its state at @a site, the operation is closed first as another thread closes it at that moment (see
+//! PollStateCloseHook); the caller keeps @a op until the hook fired
 static QoreValue f_dbg_poll_close_before_open_state(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
@@ -16258,8 +16267,17 @@ static QoreValue f_dbg_poll_close_before_open_state(const QoreListNode* params, 
         key = dbg_poll_op_key<Http2ClientPollOperationPriv>(obj, CID_HTTP2CLIENTPOLLOPERATIONBASE, xsink);
     } else if (cls->getClass(CID_HTTP3CLIENTPOLLOPERATIONBASE)) {
         key = dbg_poll_op_key<Http3ClientPollOperationPriv>(obj, CID_HTTP3CLIENTPOLLOPERATIONBASE, xsink);
+    } else if (cls->getClass(CID_HTTPIDLEPOLLOPERATIONBASE)) {
+        key = dbg_poll_op_key<HttpIdlePollOperationPriv>(obj, CID_HTTPIDLEPOLLOPERATIONBASE, xsink);
+    } else if (cls->getClass(CID_HTTPKEEPALIVEPOLLOPERATIONBASE)) {
+        key = dbg_poll_op_key<HttpKeepAlivePollOperationPriv>(obj, CID_HTTPKEEPALIVEPOLLOPERATIONBASE, xsink);
+    } else if (cls->getClass(CID_HTTPACCEPTPOLLOPERATIONBASE)) {
+        key = dbg_poll_op_key<HttpAcceptPollOperationPriv>(obj, CID_HTTPACCEPTPOLLOPERATIONBASE, xsink);
+    } else if (cls->getClass(CID_WEBSOCKETCLIENTPOLLOPERATIONBASE)) {
+        key = dbg_poll_op_key<WebSocketClientPollOperationPriv>(obj, CID_WEBSOCKETCLIENTPOLLOPERATIONBASE, xsink);
     } else {
-        xsink->raiseException("DBG-POLL-ERROR", "class '%s' is not an HTTP client poll operation", cls->getName());
+        xsink->raiseException("DBG-POLL-ERROR", "class '%s' is not a poll operation with a state close hook",
+            cls->getName());
         return QoreValue();
     }
     if (*xsink) {

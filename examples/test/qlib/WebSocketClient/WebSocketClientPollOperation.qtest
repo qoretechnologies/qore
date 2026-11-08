@@ -159,6 +159,9 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         addTestCase("the server's close frame gives the close code and reason", \serverCloseFrameTest());
         addTestCase("a close the server does not answer ends at the close timeout", \unansweredCloseTest());
         addTestCase("a close the server starts is reported once", \serverInitiatedCloseTest());
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("an aborted operation does not go on with a close the server starts", \abortedDuringPeerCloseTest());
+        }
         addTestCase("no data frame is sent after a close frame", \noDataAfterCloseTest());
         addTestCase("WebSocketClient::startPollSend() sends no data frame after a close frame",
             \clientStartPollSendAfterCloseTest());
@@ -572,6 +575,28 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         list<hash<WsMsgInfo>> frames = server.getFrames();
         assertEq((WSOP_Close,), (map $1.op, frames), "the server receives the client's answer");
         assertEq(WSCC_NoStatusRcvd, frames[0].close, "the answer has no status code");
+    }
+
+    #! The operation is aborted (as by another thread) while it receives the close frame of a close the server starts:
+    #! the close handshake does not undo the abort
+    /** The debug hook aborts the operation right before it enters the closing state for the server's close frame, which
+        is where an abort() made at the same time by another thread lands: a plain store there made the aborted
+        operation go on with the close handshake.
+    */
+    abortedDuringPeerCloseTest() {
+        RawWsServer server("initiate", WSCC_GoingAway, "bye");
+        HTTPClient hc = wsHandshake(server.port);
+        on_exit hc.disconnect();
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, HangGuard, logger);
+        # disarms the hook if it did not fire
+        on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
+        call_function("dbg_poll_close_before_open_state", poll_op, "peer-close");
+        driveAndCollect(poll_op);
+        *bool closed = call_function("dbg_poll_wait_close_before_open_state", 0);
+        assertTrue(exists closed, "the hook fired");
+        assertTrue(closed, "the state store left the operation closed");
+        assertEq("closed", poll_op.getState());
+        assertEq(1006, poll_op.getCloseCode(), "the abort's close code is kept");
     }
 
     #! A close the server starts is answered, and its close frame is reported once

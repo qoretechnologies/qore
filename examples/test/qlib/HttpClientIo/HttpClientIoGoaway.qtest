@@ -82,6 +82,8 @@ public class HttpClientIoGoawayTest inherits QUnit::Test {
                 \abortedDuringStateChangeTest(), "h1");
             addTestCase("HTTP/2: a connection aborted while the I/O thread sets its state stays closed",
                 \abortedDuringStateChangeTest(), "h2");
+            addTestCase("HTTP/1.1: a connection aborted while the I/O thread releases its operation",
+                \abortedDuringOperationReleaseTest());
         }
         set_return_value(main());
     }
@@ -475,6 +477,50 @@ public class HttpClientIoGoawayTest inherits QUnit::Test {
         # the next request gets another connection
         assertNeq(conn_id, mgr.acquireStream(url).getConnection().getConnectionId(),
             "the next request gets another connection");
+        assertEq(200, mgr.request(url, "GET", "/ok").status_code);
+    }
+
+    #! Another thread aborts an HTTP/1.1 client connection while its I/O thread releases its current operation:
+    #! abort() takes its own reference to the operation, so it never uses one that the I/O thread released
+    /** The debug hook aborts the operation on the I/O thread at the point where the I/O thread has released the
+        operation for itself; the I/O thread nulls the operation with the lock held before it releases its reference,
+        so the abort() finds no operation (valgrind reports the use of a released one when the order is reversed).
+    */
+    abortedDuringOperationReleaseTest() {
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("h1-aborted-release",
+            LoggerLevel::getLevelInfo())});
+        on_exit server.stop();
+        server.setDefaultHandler("ok", new OkHandler());
+        server.waitForAsyncIo();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        string url = sprintf("http://127.0.0.1:%d", port);
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "connect_timeout": 10s,
+            "request_timeout": 20s,
+        });
+        on_exit mgr.closeAll();
+        assertEq(200, mgr.request(url, "GET", "/ok").status_code);
+
+        # the stream is released when it goes out of scope, so the request below can use the connection
+        HttpClientConnection conn = mgr.acquireStream(url).getConnection();
+        HttpClientPollOperation op = conn.getPollOperation();
+        # disarms the hook if it did not fire
+        on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
+        call_function("dbg_poll_close_before_open_state", op, "release-current-op");
+        # the connection is aborted while this request is processed: it fails, or is sent again on a new connection
+        try {
+            mgr.request(url, "GET", "/ok");
+        } catch (hash<ExceptionInfo> ex) {
+            # the abort of the connection that the request was on
+        }
+        *bool closed = call_function("dbg_poll_wait_close_before_open_state", 30000);
+        assertTrue(exists closed, "the hook fired");
+        assertTrue(closed, "the connection was aborted");
+        assertTrue(op.isClosed(), "the connection stays closed");
+        # the next request gets another connection
         assertEq(200, mgr.request(url, "GET", "/ok").status_code);
     }
 }

@@ -173,12 +173,10 @@ void Http1ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
     }
     connection_priv = nullptr;  // raw pointer - Qore data member (connection_ref) holds the ref
     if (current_op) {
-        current_op->deref(xsink);
-        current_op = nullptr;
+        releaseCurrentOp(xsink);
     }
     if (send_op) {
-        send_op->deref(xsink);
-        send_op = nullptr;
+        releaseSendOp(xsink);
     }
     if (sock_obj) {
         sock_obj->deref(xsink);
@@ -202,17 +200,52 @@ const char* Http1ClientPollOperationPriv::getStateImpl() const {
 }
 
 QoreValue Http1ClientPollOperationPriv::getOutput() const {
-    if (current_op) {
-        return current_op->getOutput();
+    // called from other threads too: the operation is referenced under op_lock
+    ExceptionSink xsink;
+    ReferenceHolder<SocketPollOperationBase> op(refCurrentOp(), &xsink);
+    if (op) {
+        return op->getOutput();
     }
     return QoreValue();
 }
 
 void Http1ClientPollOperationPriv::releaseCurrentOp(ExceptionSink* xsink) {
-    if (current_op) {
-        current_op->deref(xsink);
+    // nulled with op_lock held before the reference is released: abort() and getOutput() take their own reference
+    // under the lock (see refCurrentOp())
+    SocketPollOperationBase* op;
+    {
+        AutoLocker al(op_lock);
+        op = current_op;
         current_op = nullptr;
     }
+#ifdef DEBUG
+    // what another thread's abort() does while the operation is released
+    if (op && PollStateCloseHook::take(this, "release-current-op")) {
+        ExceptionSink abort_xsink;
+        abort(&abort_xsink);
+        abort_xsink.clear();
+        PollStateCloseHook::fired(isClosed());
+    }
+#endif
+    if (op) {
+        op->deref(xsink);
+    }
+}
+
+SocketPollOperationBase* Http1ClientPollOperationPriv::refCurrentOp() const {
+    AutoLocker al(op_lock);
+    if (current_op) {
+        current_op->ref();
+    }
+    return current_op;
+}
+
+SocketPollOperationBase* Http1ClientPollOperationPriv::refSendOp() const {
+    AutoLocker al(op_lock);
+    if (send_op) {
+        send_op->ref();
+    }
+    return send_op;
 }
 
 // --- continuePoll state machine (I/O thread) ---
@@ -336,10 +369,9 @@ void Http1ClientPollOperationPriv::startProxySslUpgrade(ExceptionSink* xsink) {
     printd(5, "Http1ClientPollOperationPriv::startProxySslUpgrade()\n");
     releaseCurrentOp(xsink);
     sock_obj->ref();
-    current_op = new SocketUpgradeClientSslPollOperation(xsink, sock_obj, false, SslUpgradeMode::Proxy);
+    setCurrentOp(new SocketUpgradeClientSslPollOperation(xsink, sock_obj, false, SslUpgradeMode::Proxy));
     if (*xsink) {
-        current_op->deref(xsink);
-        current_op = nullptr;
+        releaseCurrentOp(xsink);
         return;
     }
     current_op->setSelf(*self);
@@ -401,11 +433,10 @@ void Http1ClientPollOperationPriv::startProxyConnect(ExceptionSink* xsink) {
     releaseCurrentOp(xsink);
     sock_obj->ref();
     // SocketSendPollOperation takes ownership of the string ref
-    current_op = new SocketSendPollOperation(xsink, connect_req, sock_obj);
+    setCurrentOp(new SocketSendPollOperation(xsink, connect_req, sock_obj));
     if (*xsink) {
         // Must deref - the op was created but errored; it owns the sock ref
-        current_op->deref(xsink);
-        current_op = nullptr;
+        releaseCurrentOp(xsink);
         return;
     }
     current_op->setSelf(*self);
@@ -439,12 +470,15 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProxyConnectSend(ExceptionSink
         sock_obj->ref();
         // a read that cannot be started (the socket was closed) is reported with setError(), which notifies the
         // pending stream and marks the connection closed
-        current_op = newHeaderReadOp(xsink, "proxy-connect");
+        setCurrentOp(newHeaderReadOp(xsink, "proxy-connect"));
         if (!current_op) {
             return nullptr;
         }
         current_op->setSelf(*self);
-        setStateUnlessClosed(H1State::PROXY_CONNECT_RECV, "proxy-connect-recv");
+        // an operation aborted meanwhile does no more I/O
+        if (!setStateUnlessClosed(H1State::PROXY_CONNECT_RECV, "proxy-connect-recv")) {
+            return nullptr;
+        }
         return handleProxyConnectRecv(xsink);
     }
 
@@ -520,11 +554,10 @@ void Http1ClientPollOperationPriv::startSslUpgrade(ExceptionSink* xsink) {
     }
     sock_obj->ref();
     // through an HTTPS proxy, the TLS connection to the target server is carried by the TLS connection to the proxy
-    current_op = new SocketUpgradeClientSslPollOperation(xsink, sock_obj, false,
-        proxy_ssl && proxy_tunnel ? SslUpgradeMode::Layered : SslUpgradeMode::Normal);
+    setCurrentOp(new SocketUpgradeClientSslPollOperation(xsink, sock_obj, false,
+        proxy_ssl && proxy_tunnel ? SslUpgradeMode::Layered : SslUpgradeMode::Normal));
     if (*xsink) {
-        current_op->deref(xsink);
-        current_op = nullptr;
+        releaseCurrentOp(xsink);
         return;
     }
     current_op->setSelf(*self);
@@ -692,8 +725,8 @@ QoreHashNode* Http1ClientPollOperationPriv::startBufferedFullDuplex(ExceptionSin
     // Hand the partially-written request over to the concurrent send side.  The operation already holds the
     // whole remainder of the request, so unlike a chunked streaming send there is no queue behind it: when it
     // reaches its goal the request body is complete.
-    send_op = current_op;
-    current_op = read_op;
+    setSendOp(current_op);
+    setCurrentOp(read_op);
     send_state = SendState::SENDING;
     send_buffered_body = true;
     send_final_pending = false;
@@ -894,10 +927,9 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
             ASYNC_IO_TRACE("H1 driveSendSide: sending final chunk fd=%d\n",
                 sock_obj ? sock_obj->getSocket() : -1);
             sock_obj->ref();
-            send_op = new SocketSendPollOperation(xsink, final_chunk.release(), sock_obj);
+            setSendOp(new SocketSendPollOperation(xsink, final_chunk.release(), sock_obj));
             if (*xsink) {
-                send_op->deref(xsink);
-                send_op = nullptr;
+                releaseSendOp(xsink);
                 return -1;
             }
             send_op->setSelf(*self);
@@ -918,10 +950,9 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
         chunk->deref(xsink);
 
         sock_obj->ref();
-        send_op = new SocketSendPollOperation(xsink, chunk_data.release(), sock_obj);
+        setSendOp(new SocketSendPollOperation(xsink, chunk_data.release(), sock_obj));
         if (*xsink) {
-            send_op->deref(xsink);
-            send_op = nullptr;
+            releaseSendOp(xsink);
             return -1;
         }
         send_op->setSelf(*self);
@@ -999,7 +1030,7 @@ QoreHashNode* Http1ClientPollOperationPriv::recoverResponseAfterSendFailure(cons
     // the failed send operation is released, and the request is abandoned (send_state is not DONE, so a response
     // closes the connection)
     releaseCurrentOp(xsink);
-    current_op = read_op;
+    setCurrentOp(read_op);
     req_state = ReqState::RECV_HEADER;
     abandonFailedSend(err, desc, xsink);
 #ifdef DEBUG
@@ -1110,9 +1141,15 @@ QoreHashNode* Http1ClientPollOperationPriv::completeDeferredResponse(ExceptionSi
 }
 
 void Http1ClientPollOperationPriv::releaseSendOp(ExceptionSink* xsink) {
-    if (send_op) {
-        send_op->deref(xsink);
+    // nulled with op_lock held before the reference is released (see releaseCurrentOp())
+    SocketPollOperationBase* op;
+    {
+        AutoLocker al(op_lock);
+        op = send_op;
         send_op = nullptr;
+    }
+    if (op) {
+        op->deref(xsink);
     }
 }
 
@@ -1259,10 +1296,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
         streaming_send_io = is_streaming_send;
         request_header_len = header_len;
         interim_response_count = 0;
-        current_op = new SocketSendPollOperation(xsink, req_data, sock_obj);
+        setCurrentOp(new SocketSendPollOperation(xsink, req_data, sock_obj));
         if (*xsink) {
-            current_op->deref(xsink);
-            current_op = nullptr;
+            releaseCurrentOp(xsink);
             // the send never started: give the claim on the send direction
             // back, so no later poll cycle dispatches to handleSending()
             // without an operation to drive
@@ -1486,7 +1522,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
             sock_obj->ref();
             // a read that cannot be started (the socket was closed) is reported with setError(), which notifies the
             // pending stream and marks the connection closed
-            current_op = newHeaderReadOp(xsink, "streaming-send");
+            setCurrentOp(newHeaderReadOp(xsink, "streaming-send"));
             if (!current_op) {
                 return nullptr;
             }
@@ -1547,7 +1583,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
         sock_obj->ref();
         // a read that cannot be started (the socket was closed) is reported with setError(), which notifies the
         // pending stream and marks the connection closed
-        current_op = newHeaderReadOp(xsink, "request-sent");
+        setCurrentOp(newHeaderReadOp(xsink, "request-sent"));
         if (!current_op) {
             return nullptr;
         }
@@ -1888,7 +1924,11 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             // use separate send/recv ops for full-duplex raw I/O.
             protocol_switched = true;
             req_state = ReqState::PROTOCOL_SWITCHED;
-            setStateUnlessClosed(H1State::PROTOCOL_SWITCHED, "protocol-switched");
+            // an operation aborted meanwhile does no more I/O
+            if (!setStateUnlessClosed(H1State::PROTOCOL_SWITCHED, "protocol-switched")) {
+                releaseCurrentOp(xsink);
+                return nullptr;
+            }
             ASYNC_IO_TRACE("H1 handleRecvHeader: 101 -> PROTOCOL_SWITCHED\n");
             releaseCurrentOp(xsink);
             return handleProtocolSwitched(xsink);
@@ -1922,7 +1962,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             sock_obj->ref();
             // a read that cannot be started (the socket was closed) is reported with setError(), which notifies the
             // pending stream and marks the connection closed
-            current_op = newHeaderReadOp(xsink, "interim-response");
+            setCurrentOp(newHeaderReadOp(xsink, "interim-response"));
             if (!current_op) {
                 return nullptr;
             }
@@ -1967,10 +2007,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             releaseCurrentOp(xsink);
             sock_obj->ref();
             SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-            current_op = new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true);
+            setCurrentOp(new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true));
             if (*xsink) {
-                current_op->deref(xsink);
-                current_op = nullptr;
+                releaseCurrentOp(xsink);
                 return nullptr;
             }
             current_op->setSelf(*self);
@@ -1990,11 +2029,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
                     return nullptr;
                 }
                 sock_obj->ref();
-                current_op = new SocketRecvPollOperation(xsink, (ssize_t)response_content_length,
-                    sock_obj, false);
+                setCurrentOp(new SocketRecvPollOperation(xsink, (ssize_t)response_content_length,
+                    sock_obj, false));
                 if (*xsink) {
-                    current_op->deref(xsink);
-                    current_op = nullptr;
+                    releaseCurrentOp(xsink);
                     return nullptr;
                 }
                 current_op->setSelf(*self);
@@ -2020,10 +2058,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             }
             releaseCurrentOp(xsink);
             sock_obj->ref();
-            current_op = new SocketRecvDataPollOperation(xsink, sock_obj, false);
+            setCurrentOp(new SocketRecvDataPollOperation(xsink, sock_obj, false));
             if (*xsink) {
-                current_op->deref(xsink);
-                current_op = nullptr;
+                releaseCurrentOp(xsink);
                 return nullptr;
             }
             current_op->setSelf(*self);
@@ -2045,10 +2082,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             connection_close = true;
             releaseCurrentOp(xsink);
             sock_obj->ref();
-            current_op = new SocketRecvDataPollOperation(xsink, sock_obj, false);
+            setCurrentOp(new SocketRecvDataPollOperation(xsink, sock_obj, false));
             if (*xsink) {
-                current_op->deref(xsink);
-                current_op = nullptr;
+                releaseCurrentOp(xsink);
                 return nullptr;
             }
             current_op->setSelf(*self);
@@ -2220,10 +2256,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkSize(ExceptionSink* x
             releaseCurrentOp(xsink);
             sock_obj->ref();
             SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-            current_op = new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true);
+            setCurrentOp(new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true));
             if (*xsink) {
-                current_op->deref(xsink);
-                current_op = nullptr;
+                releaseCurrentOp(xsink);
                 return nullptr;
             }
             current_op->setSelf(*self);
@@ -2254,10 +2289,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkSize(ExceptionSink* x
         // Read chunk data + trailing CRLF (chunk_size + 2 bytes)
         releaseCurrentOp(xsink);
         sock_obj->ref();
-        current_op = new SocketRecvPollOperation(xsink, (ssize_t)(chunk_size + 2), sock_obj, false);
+        setCurrentOp(new SocketRecvPollOperation(xsink, (ssize_t)(chunk_size + 2), sock_obj, false));
         if (*xsink) {
-            current_op->deref(xsink);
-            current_op = nullptr;
+            releaseCurrentOp(xsink);
             return nullptr;
         }
         current_op->setSelf(*self);
@@ -2322,10 +2356,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkData(ExceptionSink* x
         }
         // the CRLF that ends the data of the chunk
         sock_obj->ref();
-        current_op = new SocketRecvPollOperation(xsink, 2, sock_obj, false);
+        setCurrentOp(new SocketRecvPollOperation(xsink, 2, sock_obj, false));
         if (*xsink) {
-            current_op->deref(xsink);
-            current_op = nullptr;
+            releaseCurrentOp(xsink);
             return nullptr;
         }
         current_op->setSelf(*self);
@@ -2417,10 +2450,9 @@ QoreHashNode* Http1ClientPollOperationPriv::readNextChunkSize(ExceptionSink* xsi
     releaseCurrentOp(xsink);
     sock_obj->ref();
     SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-    current_op = new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true);
+    setCurrentOp(new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true));
     if (*xsink) {
-        current_op->deref(xsink);
-        current_op = nullptr;
+        releaseCurrentOp(xsink);
         return nullptr;
     }
     current_op->setSelf(*self);
@@ -2434,10 +2466,9 @@ int Http1ClientPollOperationPriv::startStreamingBodyRecv(int64_t remaining, Exce
     ssize_t read_size = remaining < (int64_t)STREAMING_CHUNK_SIZE ? (ssize_t)remaining
         : (ssize_t)STREAMING_CHUNK_SIZE;
     sock_obj->ref();
-    current_op = new SocketRecvSomePollOperation(xsink, read_size, sock_obj, false);
+    setCurrentOp(new SocketRecvSomePollOperation(xsink, read_size, sock_obj, false));
     if (*xsink) {
-        current_op->deref(xsink);
-        current_op = nullptr;
+        releaseCurrentOp(xsink);
         return -1;
     }
     current_op->setSelf(*self);
@@ -2485,10 +2516,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkCrlf(ExceptionSink* x
             releaseCurrentOp(xsink);
             sock_obj->ref();
             SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-            current_op = new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true);
+            setCurrentOp(new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true));
             if (*xsink) {
-                current_op->deref(xsink);
-                current_op = nullptr;
+                releaseCurrentOp(xsink);
                 return nullptr;
             }
             current_op->setSelf(*self);
@@ -2557,10 +2587,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvBodyClose(ExceptionSink* x
             // Read more data
             releaseCurrentOp(xsink);
             sock_obj->ref();
-            current_op = new SocketRecvDataPollOperation(xsink, sock_obj, false);
+            setCurrentOp(new SocketRecvDataPollOperation(xsink, sock_obj, false));
             if (*xsink) {
-                current_op->deref(xsink);
-                current_op = nullptr;
+                releaseCurrentOp(xsink);
                 return nullptr;
             }
             current_op->setSelf(*self);
@@ -2970,11 +2999,19 @@ bool Http1ClientPollOperationPriv::setStateUnlessClosed(H1State s, const char* s
 
 void Http1ClientPollOperationPriv::abort(ExceptionSink* xsink) {
     h1_state.store(H1State::CLOSED, std::memory_order_release);
-    if (current_op) {
-        current_op->abort(xsink);
+    // abort() runs on any thread: the I/O thread replaces and releases the operations meanwhile, so they are
+    // referenced under op_lock (see releaseCurrentOp())
+    {
+        ReferenceHolder<SocketPollOperationBase> op(refCurrentOp(), xsink);
+        if (op) {
+            op->abort(xsink);
+        }
     }
-    if (send_op) {
-        send_op->abort(xsink);
+    {
+        ReferenceHolder<SocketPollOperationBase> op(refSendOp(), xsink);
+        if (op) {
+            op->abort(xsink);
+        }
     }
     // Close before notifying, so a caller woken by notifyPendingStreams() cannot
     // check out this connection again — see setError() for the full rationale.

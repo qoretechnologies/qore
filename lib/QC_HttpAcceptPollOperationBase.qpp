@@ -39,6 +39,7 @@
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/PollStateCloseHook.h"
 
 /** @cond INTERNAL */
 
@@ -146,6 +147,28 @@ QoreHashNode* HttpAcceptPollOperationPriv::continuePoll(ExceptionSink* xsink) {
                 return nullptr;
         }
     }
+}
+
+bool HttpAcceptPollOperationPriv::enterSslHandshake(const char* site) {
+#ifdef DEBUG
+    bool hook_fired = false;
+    if (PollStateCloseHook::take(this, site)) {
+        // what another thread does at this moment: the Qore-level abort(), or a timeout's worker abort
+        ExceptionSink abort_xsink;
+        abort(&abort_xsink);
+        abort_xsink.clear();
+        hook_fired = true;
+    }
+#endif
+    AcceptState expected = AcceptState::ACCEPTING;
+    bool rv = accept_state.compare_exchange_strong(expected, AcceptState::SSL_HANDSHAKE, std::memory_order_acq_rel,
+        std::memory_order_acquire);
+#ifdef DEBUG
+    if (hook_fired) {
+        PollStateCloseHook::fired(accept_state.load(std::memory_order_acquire) == AcceptState::COMPLETE);
+    }
+#endif
+    return rv;
 }
 
 void HttpAcceptPollOperationPriv::abort(ExceptionSink* xsink) {
@@ -359,8 +382,12 @@ int HttpAcceptPollOperationPriv::startSslHandshake(ExceptionSink* xsink) {
     // Release the accept operation before starting the SSL operation
     releaseCurrentOp(xsink);
 
-    // Transition to SSL handshake state
-    accept_state = AcceptState::SSL_HANDSHAKE;
+    // Transition to SSL handshake state, unless the operation was aborted meanwhile: the accepted connection is
+    // closed then
+    if (!enterSslHandshake("ssl-handshake")) {
+        client_sock->closeIo(xsink);
+        return -1;
+    }
 
     // Create the SSL upgrade operation — ref the socket for it
     client_sock->ref();

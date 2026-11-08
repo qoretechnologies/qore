@@ -398,12 +398,17 @@ private:
     DLLLOCAL void applyCloseRequest(const QoreHashNode* request, ExceptionSink* xsink);
 
     //! Sets the state of the operation; every change of the state is made with this method
-    DLLLOCAL void setWsStateValue(WsState s) {
-        ws_state = s;
-        if (s != WsState::CONNECTED) {
-            closing.store(true, std::memory_order_release);
-        }
-    }
+    /** WsState::CLOSED and WsState::ERROR are final for a change to WsState::CONNECTED or WsState::CLOSING:
+        abort() runs on any thread (the Qore-level abort() method, or a worker dispatched by the I/O controller for a
+        timeout) and sets WsState::CLOSED without a lock, while the I/O thread and the threads that request a close
+        check the state and then set WsState::CLOSING.  A compare-exchange that never leaves a final state keeps an
+        abort() made between the check and the store, after which the aborted operation would go on with a close
+        handshake.  A final state can still replace another one, as before.
+
+        @param s the new state
+        @param site where the state is set, for the debug hook (see PollStateCloseHook), or nullptr
+    */
+    DLLLOCAL void setWsStateValue(WsState s, const char* site = nullptr);
 
     //! Returns true while a close started by the client waits for the server's close frame
     /** The close handshake ends when the server's close frame arrives (RFC 6455 section 5.5.1), when the
