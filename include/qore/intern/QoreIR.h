@@ -3830,6 +3830,12 @@ public:
     mutable std::vector<uint8_t> interpreter_reference_slots;
     //! The local of each local slot (null for a slot of no local), for the release of the locals at the exit
     mutable std::vector<const LocalVar*> interpreter_slot_locals;
+    //! The place among the local slots of the iterator that each instruction creating the iterator of a foreach
+    //! statement creates (computeSlotIdsAndEmbed()): the iterator is released, when the frame is left with the
+    //! statement still running, after the slots from this one on and before the slot before it, as the AST
+    //! interpreter releases the value a foreach statement iterates after the locals of the loop's body and before the
+    //! loop variable and the locals declared before the statement (see IRActiveIterator in QoreIRInterpreter.cpp)
+    std::unordered_map<const QoreIRInstruction*, uint32_t> interpreter_iterator_slot_boundary;
     //! The locals the function owns (QoreIRFunction::pre_instantiated_locals and every body local), which the
     //! interpreter tells from the variables of an enclosing scope
     mutable std::unordered_set<const void*> interpreter_function_own_locals;

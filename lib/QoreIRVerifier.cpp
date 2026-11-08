@@ -2534,8 +2534,14 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
         }
     }
 
+    // the place of each foreach iterator among the slots (see interpreter_iterator_slot_boundary): the slots assigned
+    // before the instruction creating it, and the loop variable's if the first slot assigned after it is the loop
+    // variable's, assigned by its first element store
+    interpreter_iterator_slot_boundary.clear();
+    const QoreIRInstruction* pending_iterator = nullptr;
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {
+            const uint32_t slots_before = next_local_slot;
             if (inst->result.isValid() && inst->result.id > max_vid) {
                 max_vid = inst->result.id;
             }
@@ -2653,6 +2659,21 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                 assign_expr_slots(find_inst->exp);
                 assign_expr_slots(find_inst->find_exp);
                 assign_expr_slots(find_inst->where);
+            }
+            if (pending_iterator && next_local_slot != slots_before) {
+                // the first slot assigned after the iterator: the loop variable's goes before the iterator, which the
+                // AST interpreter releases before the loop variable
+                if (inst->opcode == QoreIROpcode::StoreLocal || inst->opcode == QoreIROpcode::StoreClosure) {
+                    if (static_cast<const QoreIRLocalInstruction*>(inst.get())->foreach_assignment) {
+                        interpreter_iterator_slot_boundary[pending_iterator] = next_local_slot;
+                    }
+                }
+                pending_iterator = nullptr;
+            }
+            if (inst->opcode == QoreIROpcode::IteratorCreate || inst->opcode == QoreIROpcode::IteratorCreateIterate
+                    || inst->opcode == QoreIROpcode::IteratorCreateReverse) {
+                interpreter_iterator_slot_boundary[inst.get()] = next_local_slot;
+                pending_iterator = inst.get();
             }
         }
     }

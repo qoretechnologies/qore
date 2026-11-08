@@ -1224,6 +1224,47 @@ private:
 // that depth reuse the same vectors/sets with retained capacity → zero malloc.
 // For recursive functions like fibonacci, this eliminates millions of
 // allocations that otherwise dominate execution time.
+//! The place of the iterator of a running foreach statement among the locals of its frame
+/** The AST interpreter releases the value a foreach statement iterates when the statement ends: after the locals of
+    the loop's body and before the loop variable (ForEachStatement::execImpl() holds the value in a local of its own,
+    declared after the variables' instantiator) and the locals declared before the loop.  A frame left by an exception
+    releases its iterators at their places among its slots (see QoreIRFunction::interpreter_iterator_slot_boundary):
+    an iterator is released after the slots from \a slot_boundary on and before the slot before it; iterators at the
+    same place are released last created first.
+*/
+struct IRActiveIterator {
+    //! the slots of the locals released before the iterator start here
+    uint32_t slot_boundary = 0;
+    //! the order in which the frame created its iterators
+    uint64_t seq = 0;
+};
+
+//! Releases the active iterators placed at or after \a pos (see IRActiveIterator), last placed first
+static void releaseActiveIteratorsFrom(std::unordered_map<FunctionalOperatorInterface*, IRActiveIterator>& iters,
+        size_t pos) {
+    if (iters.empty()) {
+        return;
+    }
+    std::vector<std::pair<FunctionalOperatorInterface*, IRActiveIterator>> released;
+    for (const auto& entry : iters) {
+        if (entry.second.slot_boundary >= pos) {
+            released.push_back(entry);
+        }
+    }
+    if (released.empty()) {
+        return;
+    }
+    std::sort(released.begin(), released.end(), [](const auto& a, const auto& b) {
+        return a.second.slot_boundary != b.second.slot_boundary
+            ? a.second.slot_boundary > b.second.slot_boundary
+            : a.second.seq > b.second.seq;
+    });
+    for (auto& [iter, info] : released) {
+        iters.erase(iter);
+        delete iter;
+    }
+}
+
 struct IRCallFrame {
     std::vector<QoreValue> values;
     IRCleanupSlots cleanup;
@@ -1256,7 +1297,9 @@ struct IRCallFrame {
     // every time.  Other threads can change a global or closure-bound variable at any time (see
     // design/closure-bound-locals.md), and a thread-local variable is changed in place by every lvalue path
     // (ex: tl.a = 1, tl[0] += 1), so a copy would go stale
-    std::unordered_set<FunctionalOperatorInterface*> active_iterators;
+    //! the iterators of the foreach statements running in the frame, with their places among the locals (see
+    //! IRActiveIterator)
+    std::unordered_map<FunctionalOperatorInterface*, IRActiveIterator> active_iterators;
     std::vector<IROnBlockExitHandler> on_block_exit_handlers;
     // Tracks which value slot IDs are associated with local variables (via StoreLocal).
     // Used by UninstantiateLocal's container DGC scan to distinguish temporary expression
@@ -6467,6 +6510,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
     // Use pooled containers from the frame (already cleared in reset())
     auto& active_iterators = frame.active_iterators;
+    // the order in which the frame creates its iterators (see IRActiveIterator)
+    uint64_t iterator_seq = 0;
+    // registers an iterator that a foreach statement created with the instruction \a create_inst
+    auto addActiveIterator = [&](FunctionalOperatorInterface* iter, const QoreIRInstruction* create_inst) {
+        auto it = func.interpreter_iterator_slot_boundary.find(create_inst);
+        active_iterators[iter] = IRActiveIterator{it != func.interpreter_iterator_slot_boundary.end()
+            ? it->second : 0, iterator_seq++};
+    };
     auto& on_block_exit_handlers = frame.on_block_exit_handlers;
     // Catch exception stack for rethrow support
     struct CatchEntry {
@@ -6588,6 +6639,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         // as the AST interpreter releases the variables of a frame (see SlotCacheCleanup)
         for (size_t ri = locals_slot_cache.size(); ri; --ri) {
             const size_t i = ri - 1;
+            // at the exit of the function, the iterator of a foreach statement still running is released at its
+            // place among the slots (see IRActiveIterator)
+            if (!preserve_ir_only) {
+                releaseActiveIteratorsFrom(active_iterators, ri);
+            }
             if (preserveParentSlotForWriteback(i)) {
                 continue;
             }
@@ -6603,6 +6659,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 releaseFrameRuntimeLocal(func.interpreter_slot_locals[i], instantiated_locals, pre_instantiated,
                     xsink);
             }
+        }
+        if (!preserve_ir_only) {
+            releaseActiveIteratorsFrom(active_iterators, 0);
         }
         std::fill(locals_lvar_cache.begin(), locals_lvar_cache.end(), nullptr);
     };
@@ -6735,6 +6794,18 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // this guard, every IR function execution leaks all cached references.
     // Constructed AFTER local_cleanup so it's destroyed BEFORE it — slot cache refs are
     // released while the underlying locals are still valid on the thread-local stack.
+    // RAII guard: delete active iterators on any function exit path.
+    // IteratorNext deletes iterators on the normal done path, but return/exception
+    // can exit without reaching done, leaking the iterator stored as raw int64_t.
+    // Declared before SlotCacheCleanup, which releases the iterators at their places among the slots (see
+    // IRActiveIterator), so that it releases only those left: a frame without slots
+    struct IteratorCleanupGuard {
+        std::unordered_map<FunctionalOperatorInterface*, IRActiveIterator>& iters;
+        ~IteratorCleanupGuard() {
+            releaseActiveIteratorsFrom(iters, 0);
+        }
+    } iter_cleanup{active_iterators};
+
     struct SlotCacheCleanup {
         IRLocalSlotCache& cache;
         ExceptionSink* xsink;
@@ -6742,6 +6813,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         const std::vector<uint8_t>& ir_only;
         const IRLocalVarSet& instantiated;
         const std::unordered_set<const LocalVar*>* pre_instantiated;
+        std::unordered_map<FunctionalOperatorInterface*, IRActiveIterator>& iters;
         // the slots of IR-only locals own their values: they are released last slot first, as the AST interpreter
         // releases the variables of a frame (a local's slot is assigned where it first appears, after those of the
         // locals declared before it), so that an object local's destructor runs before that of a local declared
@@ -6750,8 +6822,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         // declared before and after it (the variable is removed from the stack afterwards): a function left by an
         // exception releases all of its locals last declared first, as the AST interpreter does, whichever storage
         // they have
+        // they have.  The iterator of a foreach statement that is still running is released at its place among them
+        // (see IRActiveIterator)
         ~SlotCacheCleanup() {
             for (size_t i = cache.size(); i; --i) {
+                releaseActiveIteratorsFrom(iters, i);
                 // raw slot: the value the slot owns is released
                 QoreValue& v = cache.storage(i - 1);
                 v.discard(xsink);
@@ -6760,26 +6835,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     releaseFrameRuntimeLocal(slot_locals[i - 1], instantiated, pre_instantiated, xsink);
                 }
             }
+            releaseActiveIteratorsFrom(iters, 0);
         }
     } slot_cache_cleanup{locals_slot_cache, xsink, func.interpreter_slot_locals, locals_ir_only,
-        instantiated_locals, pre_instantiated};
+        instantiated_locals, pre_instantiated, active_iterators};
 
     // Declared after SlotCacheCleanup so dirty parent slots are published before
     // this frame releases its cached local references.
     ParentSlotWriteback parent_slot_writeback(func.parent_slot_count, locals_slot_cache, parent_slot_cache,
         parent_slot_to_lvar, parent_slot_dirty, parent_slot_cache_dirty, xsink);
-
-    // RAII guard: delete active iterators on any function exit path.
-    // IteratorNext deletes iterators on the normal done path, but return/exception
-    // can exit without reaching done, leaking the iterator stored as raw int64_t.
-    struct IteratorCleanupGuard {
-        std::unordered_set<FunctionalOperatorInterface*>& iters;
-        ~IteratorCleanupGuard() {
-            for (auto* iter : iters) {
-                delete iter;
-            }
-        }
-    } iter_cleanup{active_iterators};
 
     // Locals owned by this function.  Used by ensureLocalInstantiated() to
     // distinguish body locals from outer-scope variables (e.g. enclosing
@@ -11103,7 +11167,7 @@ load_local_done:
                 }
                 // Store as int (pointer) — same pattern as IteratorCreate
                 if (iter) {
-                    active_iterators.insert(iter);
+                    addActiveIterator(iter, inst);
                 }
                 setValueSlot(values, inst->result.id,
                         QoreValue(reinterpret_cast<int64_t>(iter)), xsink);
@@ -12518,7 +12582,7 @@ load_local_done:
                 // Store iterator pointer as int64_t in result
                 // A nullptr means the iterable was empty (nothing)
                 if (iter) {
-                    active_iterators.insert(iter);
+                    addActiveIterator(iter, inst);
                 }
                 setValueSlot(values, iter_inst->result.id, QoreValue(reinterpret_cast<int64_t>(iter)), xsink);
                 ++ip;

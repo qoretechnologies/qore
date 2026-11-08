@@ -570,8 +570,16 @@ entry (`qore_rt_aot_local_var()`). Left to the frame boundary, such a variable w
 the frame's other locals and without an exception sink, which lost an exception raised by a
 destructor (a debug build aborted). The IR interpreter clears a closure-bound slot's variable at its
 place when no closure holds it; its frame instantiation cleanup pops it afterwards.
-`ExceptionExitLocalOrder.qtest` and `ClosureLocalExitRelease.qtest` check the AST order in every
-mode, a qcc executable included.
+The IR interpreter also releases the iterator of a foreach statement still running at its place:
+the AST interpreter releases the value a foreach statement iterates when the statement ends, after
+the locals of the loop body and before the loop variable and the locals declared before the
+statement. `computeSlotIdsAndEmbed()` records, for each instruction creating such an iterator, the
+slots assigned before it, and the loop variable's slot if it is the first assigned after it
+(`QoreIRFunction::interpreter_iterator_slot_boundary`); `SlotCacheCleanup` and
+`cleanupLocalCaches(false)` release an iterator after the slots from that boundary on
+(`IRActiveIterator`, `releaseActiveIteratorsFrom()`), and the iterator guard only those left.
+`ExceptionExitLocalOrder.qtest`, `ClosureLocalExitRelease.qtest` and
+`ForeachExitIteratorOrder.qtest` check the AST order in every mode, a qcc executable included.
 `IRBlockScopedObjectLifetime.qtest` and `ObjectLocalLifetime.qtest` check exact
 constructor/destructor order for these shapes in every tier and in AOT (block exits, loops,
 returns, exceptions within and across functions, reassignment, `AutoLock`, recursive graphs).
