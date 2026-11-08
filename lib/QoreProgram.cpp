@@ -5426,10 +5426,10 @@ struct QoreSystemThreadArg {
 //! Releases the argument of a system thread that did not start, also when the start throws
 class QoreSystemThreadArgHolder {
 public:
-    DLLLOCAL QoreSystemThreadArgHolder(QoreSystemThreadArg* arg, ExceptionSink* xsink) : arg(arg), xsink(xsink) {
+    QoreSystemThreadArgHolder(QoreSystemThreadArg* arg, ExceptionSink* xsink) : arg(arg), xsink(xsink) {
     }
 
-    DLLLOCAL ~QoreSystemThreadArgHolder() {
+    ~QoreSystemThreadArgHolder() {
         if (arg) {
             arg->release(xsink);
             delete arg;
@@ -5437,11 +5437,11 @@ public:
     }
 
     //! the thread owns the argument
-    DLLLOCAL void disown() {
+    void disown() {
         arg = nullptr;
     }
 
-    DLLLOCAL QoreSystemThreadArg* get() const {
+    QoreSystemThreadArg* get() const {
         return arg;
     }
 
@@ -5453,7 +5453,7 @@ private:
 //! Releases a system thread start reserved in qore_start_system_thread() however the start ends
 class QoreSystemThreadStartReservation {
 public:
-    DLLLOCAL ~QoreSystemThreadStartReservation() {
+    ~QoreSystemThreadStartReservation() {
         std::lock_guard<std::mutex> l(exit_hook_lock);
         if (!--system_threads_starting) {
             exit_hook_cond.notify_all();
