@@ -502,6 +502,15 @@
     see @ref csvutil_rfc4180.
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Program Thread Coordination
+    @ref Qore::Program::waitForThreads() "Program::waitForThreads()" and
+    @ref Qore::Program::waitForThread() "waitForThread()" provide cancellable, condition-driven waits for Program
+    activity. @ref Qore::Program::cancelThread() "cancelThread()" and
+    @ref Qore::Program::cancelThreads() "cancelThreads()" request cooperative cancellation scoped to that Program.
+    The all-thread request includes starting threads and descendants until the Program becomes idle. These APIs
+    allow an embedding UI to keep responding while waiting for the Program to become safe to parse or reset;
+    they do not enable concurrent parsing or forcibly kill native threads.
+
     @par Waiting for a Thread to Terminate
     @ref Qore::thread_join() "thread_join()" waits until a thread started with @ref background has left the thread
     list, which is later than a Counter signalled from @ref on_exit; see the teardown order in its documentation
@@ -1484,7 +1493,11 @@
       objects held by its local variables could be destroyed in another order than with the AST interpreter (ex: the
       destructor of an object held by an \c auto local declared before an \c AutoLock ran while the lock was still
       held, or the locals of a block whose inner block's \c on_error handler rethrew the exception were destroyed
-      first declared first); local variables are now released last declared first, as with the AST interpreter
+      first declared first, or a local variable bound by a closure was destroyed after the other local variables of
+      the function, and an exception raised by its destructor was lost, or in the IR execution mode the value a
+      running \c foreach statement iterates was released after the local variables declared before the statement);
+      local variables are now released last declared first and the value a \c foreach statement iterates when the
+      statement ends, as with the AST interpreter
     - in the JIT and tiered execution modes, an exception raised by the destructor of the value that the loop
       variable of \c foreach held when an iterator's next element was assigned could crash the program
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, a type error assigning an element to the

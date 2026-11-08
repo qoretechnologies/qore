@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ForeachExitIteratorOrderTest
+
+#! Regression test: the value a foreach statement iterates is released in the order of the AST interpreter
+/** When a function is left by an exception while a foreach statement runs, the AST interpreter releases the value the
+    statement iterates when the statement ends: after the locals of the loop's body and before the loop variable and
+    the locals declared before the statement.  The IR interpreter released its iterators after all of the frame's
+    locals.  The iterators are now released at their places among the local slots
+    (QoreIRFunction::interpreter_iterator_slot_boundary).  The script checks a loop over a list literal, nested loops,
+    a typed loop variable in a block and a loop left by return, every case twice, in every execution mode, on the IR
+    tier of tiered execution and as a qcc executable (see ExecModeOutputTest).
+*/
+class ForeachExitIteratorOrderTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# a function left by an exception while foreach statements run: the values they iterate are released as the AST
+# interpreter releases them, after the locals of the loop body and before the loop variable and the locals
+# declared before the statement
+class E {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+sub k() {
+    E e("ke");
+    foreach auto v in ((new E("k3"),)) {
+        E f("kf");
+        throw "K";
+    }
+}
+# nested loops
+sub n() {
+    E e("ne");
+    foreach auto a in ((new E("na"),)) {
+        E f("nf");
+        foreach auto b in ((new E("nb"),)) {
+            E g("ng");
+            throw "N";
+        }
+    }
+}
+# a typed loop variable and a local declared after the loop in the same block
+sub t() {
+    E e("te");
+    {
+        foreach E v in ((new E("tl"),)) {
+            E f("tf");
+            throw "T";
+        }
+        E after("tafter");
+    }
+}
+# a loop left by return keeps the release at the end of the statement
+sub r() {
+    E e("re");
+    foreach auto v in ((new E("rl"),)) {
+        E f("rf");
+        return;
+    }
+}
+foreach string fn in (("k", "n", "t", "r")) {
+    for (int i = 0; i < 2; ++i) {
+        try {
+            call_function(fn);
+            printf("%s: returned\n", fn);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s: %s\n", fn, ex.err);
+        }
+    }
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "dtor kf",
+            "dtor k3",
+            "dtor ke",
+            "k: K",
+            "dtor kf",
+            "dtor k3",
+            "dtor ke",
+            "k: K",
+            "dtor ng",
+            "dtor nb",
+            "dtor nf",
+            "dtor na",
+            "dtor ne",
+            "n: N",
+            "dtor ng",
+            "dtor nb",
+            "dtor nf",
+            "dtor na",
+            "dtor ne",
+            "n: N",
+            "dtor tf",
+            "dtor tl",
+            "dtor te",
+            "t: T",
+            "dtor tf",
+            "dtor tl",
+            "dtor te",
+            "t: T",
+            "dtor rf",
+            "dtor rl",
+            "dtor re",
+            "r: returned",
+            "dtor rf",
+            "dtor rl",
+            "dtor re",
+            "r: returned",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ForeachExitIteratorOrder", Script, (map $1 + "\n", Expected).join(""),
+            "releases the value a foreach statement iterates in the order of the AST interpreter") {
+    }
+}

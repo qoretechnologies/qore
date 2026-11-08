@@ -1340,6 +1340,47 @@ private:
 // that depth reuse the same vectors/sets with retained capacity → zero malloc.
 // For recursive functions like fibonacci, this eliminates millions of
 // allocations that otherwise dominate execution time.
+//! The place of the iterator of a running foreach statement among the locals of its frame
+/** The AST interpreter releases the value a foreach statement iterates when the statement ends: after the locals of
+    the loop's body and before the loop variable (ForEachStatement::execImpl() holds the value in a local of its own,
+    declared after the variables' instantiator) and the locals declared before the loop.  A frame left by an exception
+    releases its iterators at their places among its slots (see QoreIRFunction::interpreter_iterator_slot_boundary):
+    an iterator is released after the slots from \a slot_boundary on and before the slot before it; iterators at the
+    same place are released last created first.
+*/
+struct IRActiveIterator {
+    //! the slots of the locals released before the iterator start here
+    uint32_t slot_boundary = 0;
+    //! the order in which the frame created its iterators
+    uint64_t seq = 0;
+};
+
+//! Releases the active iterators placed at or after \a pos (see IRActiveIterator), last placed first
+static void releaseActiveIteratorsFrom(std::unordered_map<FunctionalOperatorInterface*, IRActiveIterator>& iters,
+        size_t pos) {
+    if (iters.empty()) {
+        return;
+    }
+    std::vector<std::pair<FunctionalOperatorInterface*, IRActiveIterator>> released;
+    for (const auto& entry : iters) {
+        if (entry.second.slot_boundary >= pos) {
+            released.push_back(entry);
+        }
+    }
+    if (released.empty()) {
+        return;
+    }
+    std::sort(released.begin(), released.end(), [](const auto& a, const auto& b) {
+        return a.second.slot_boundary != b.second.slot_boundary
+            ? a.second.slot_boundary > b.second.slot_boundary
+            : a.second.seq > b.second.seq;
+    });
+    for (auto& [iter, info] : released) {
+        iters.erase(iter);
+        delete iter;
+    }
+}
+
 struct IRCallFrame {
     std::vector<QoreValue> values;
     IRCleanupSlots cleanup;
@@ -1372,7 +1413,9 @@ struct IRCallFrame {
     // every time.  Other threads can change a global or closure-bound variable at any time (see
     // design/closure-bound-locals.md), and a thread-local variable is changed in place by every lvalue path
     // (ex: tl.a = 1, tl[0] += 1), so a copy would go stale
-    std::unordered_set<FunctionalOperatorInterface*> active_iterators;
+    //! the iterators of the foreach statements running in the frame, with their places among the locals (see
+    //! IRActiveIterator)
+    std::unordered_map<FunctionalOperatorInterface*, IRActiveIterator> active_iterators;
     std::vector<IROnBlockExitHandler> on_block_exit_handlers;
     // Tracks which value slot IDs are associated with local variables (via StoreLocal).
     // Used by UninstantiateLocal's container DGC scan to distinguish temporary expression
@@ -1829,13 +1872,26 @@ static void ensureLocalInstantiated(LocalVar* var, IRLocalVarSet& locals,
 //! Releases the value of a local on the runtime stack that the frame instantiated, at the exit of the function
 /** The variable is removed from the stack afterwards (cleanupInstantiatedLocals(), or the caller for a pre-instantiated
     local); its value is released here, at its slot's place among the IR-only locals, so that a function left by an
-    exception releases all of its locals last declared first, as the AST interpreter does.  A closure-bound local and
-    a local that the frame has not instantiated (or has uninstantiated) are left alone.
+    exception releases all of its locals last declared first, as the AST interpreter does.  A closure-bound local of
+    the frame loses its value only if no closure holds it any longer (it stays on the closure stack); a local that the
+    frame has not instantiated (or has uninstantiated) is left alone.
 */
 static void releaseFrameRuntimeLocal(const LocalVar* lv, const IRLocalVarSet& instantiated,
         const std::unordered_set<const LocalVar*>* pre_instantiated, ExceptionSink* xsink) {
-    if (!lv || lv->closureUse()
-            || (!instantiated.count(lv) && !(pre_instantiated && pre_instantiated->count(lv)))) {
+    if (!lv) {
+        return;
+    }
+    if (lv->closureUse()) {
+        // a closure-bound variable of this frame loses its value at its place if no closure holds it any longer, as
+        // qore_rt_clear_local() releases it; left to the frame boundary, it was released after the frame's other
+        // locals
+        ClosureVarValue* cvv = thread_try_find_closure_var_in_current_frame(lv->getName());
+        if (cvv && cvv->references.load(std::memory_order_acquire) == 1) {
+            cvv->clearValue(xsink);
+        }
+        return;
+    }
+    if (!instantiated.count(lv) && !(pre_instantiated && pre_instantiated->count(lv))) {
         return;
     }
     if (LocalVarValue* lvv = thread_try_find_lvar(lv)) {
@@ -1865,7 +1921,12 @@ static QoreValue evalPlusEquals(const QoreValue& lvalue, const QoreValue& right,
 QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right, ExceptionSink* xsink);
 QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
 
-static void assignLocalVarValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
+//! Assigns a value to a local on the runtime stack
+/** @param desc the description of the lvalue in a type error: "<lvalue>", or "<foreach lvalue assignment>" for an
+    element given to the variable of a foreach loop, as the AST interpreter describes them
+*/
+static void assignLocalVarValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink,
+        const char* desc = "<lvalue>") {
     if (!var) {
         return;
     }
@@ -1875,7 +1936,7 @@ static void assignLocalVarValue(LocalVar* var, const QoreValue& value, Exception
     }
     // refSelf before assign — assign takes ownership of the reference
     QoreValue stored = value.needsRef() ? value.refSelf() : value;
-    helper.assign(stored);
+    helper.assign(stored, desc);
 }
 
 // Variant of assignLocalVarValue that TRANSFERS ownership of value's reference
@@ -1887,7 +1948,8 @@ static void assignLocalVarValue(LocalVar* var, const QoreValue& value, Exception
 // would bump refcount to 2, causing LValueHelper::assign to take the "non-unique"
 // branch for typed lvalues (e.g., hash<auto!>) and create an extra copy —
 // leaving the caller's pointer dangling after helper's saveTemp consumes it.
-static void assignLocalVarValueTransfer(LocalVar* var, QoreValue value, ExceptionSink* xsink) {
+static void assignLocalVarValueTransfer(LocalVar* var, QoreValue value, ExceptionSink* xsink,
+        const char* desc = "<lvalue>") {
     if (!var) {
         value.discard(xsink);
         return;
@@ -1898,7 +1960,7 @@ static void assignLocalVarValueTransfer(LocalVar* var, QoreValue value, Exceptio
         return;
     }
     // Transfer: no refSelf. helper.assign takes ownership of the passed ref.
-    helper.assign(value);
+    helper.assign(value, desc);
 }
 
 //! Mirrors a value that the IR slot cache already holds to the thread's local variable, if it has one
@@ -1917,28 +1979,6 @@ static void mirrorLocalVarValueTransfer(LocalVar* var, QoreValue value, Exceptio
         return;
     }
     helper.assign(value);
-}
-
-// documented in QoreIRInterpreter.h
-void qore_ir_describe_foreach_assignment_error(ExceptionSink* xsink) {
-    if (!xsink || !*xsink) {
-        return;
-    }
-    // the exception raised by the assignment is the last one
-    QoreException* e = qore_es_private::get(*xsink)->tail;
-    if (!e || e->err.getType() != NT_STRING || e->desc.getType() != NT_STRING
-            || strcmp(e->err.get<const QoreStringNode>()->c_str(), "RUNTIME-TYPE-ERROR")) {
-        return;
-    }
-    const QoreStringNode* desc = e->desc.get<const QoreStringNode>();
-    static const char lvalue_prefix[] = "<lvalue> ";
-    if (strncmp(desc->c_str(), lvalue_prefix, sizeof(lvalue_prefix) - 1)) {
-        return;
-    }
-    QoreStringNode* new_desc = new QoreStringNode("<foreach lvalue assignment> ", desc->getEncoding());
-    new_desc->concat(desc->c_str() + sizeof(lvalue_prefix) - 1);
-    e->desc.discard(nullptr);
-    e->desc = new_desc;
 }
 
 //! Returns the value stored in an IR-only local, with the reference its slot owns
@@ -1993,7 +2033,7 @@ static ClosureVarValue* resolve_closure_var_value(const LocalVar* var) {
 static ClosureVarValue* findClosureVarValueForIR(LocalVar* var);
 
 static void assignClosureVarValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink,
-        bool initial_assignment = false) {
+        bool initial_assignment = false, const char* desc = "<lvalue>") {
     if (!var) {
         return;
     }
@@ -2007,7 +2047,7 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
             return;
         }
         QoreValue stored = value.needsRef() ? value.refSelf() : value;
-        helper.assign(stored);
+        helper.assign(stored, desc);
         return;
     }
     LValueHelper helper(xsink);
@@ -2015,7 +2055,7 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
         return;
     }
     QoreValue stored = value.needsRef() ? value.refSelf() : value;
-    helper.assign(stored);
+    helper.assign(stored, desc);
 }
 
 static ClosureVarValue* findClosureVarValueForIR(LocalVar* var) {
@@ -4681,7 +4721,12 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     int8_t state = inst->inline_ir_state.load(std::memory_order_acquire);
     const QoreClass* object_class = self->getClass();
     if (state > 0) {
-        if (inst->cached_object_class != object_class || !inst->cached_method) {
+        // The cache can outlive the class it names: a call site in one Program calling an object of a class from a
+        // child Program keeps its cache when that Program is destroyed, and a later class can be allocated at the
+        // same address.  The serial of the live receiver's class proves that the cached class, and therefore the
+        // cached method, is this receiver's and still alive.
+        if (inst->cached_object_class != object_class || !inst->cached_method
+                || inst->cached_object_class_serial != qore_class_private::get(*object_class)->getInstanceSerial()) {
             return false;
         }
         if (!inst->cached_method->isPrivate()) {
@@ -4697,7 +4742,10 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     }
 
     if (state > 0) {
-        if (inst->cached_class_ctx != class_ctx) {
+        // the class context is live (it is the running code's class), so its serial can be read; the pointer
+        // alone could match a destroyed class whose address was reused
+        if (inst->cached_class_ctx != class_ctx
+                || inst->cached_class_ctx_serial != (class_ctx ? class_ctx->getInstanceSerial() : 0)) {
             return false;
         }
         return executeInterpreterInlineIRMethodTarget(inst, inst->cached_method, self, nullptr,
@@ -4749,7 +4797,9 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     }
 
     inst->cached_object_class = object_class;
+    inst->cached_object_class_serial = qore_class_private::get(*object_class)->getInstanceSerial();
     inst->cached_class_ctx = class_ctx;
+    inst->cached_class_ctx_serial = class_ctx ? class_ctx->getInstanceSerial() : 0;
     inst->cached_method = method;
     state = ensureInterpreterResolvedInlineIRCallState(inst, method, variant, caller_pgm, nargs, true, true);
     if (state <= 0) {
@@ -4759,6 +4809,20 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     return executeInterpreterInlineIRMethodTarget(inst, method, self, nullptr,
         state, args, nargs, result, xsink, may_invalidate_external_caches);
 }
+
+#ifdef DEBUG
+bool qore_ir_dbg_try_inline_dot_eval_method(QoreIRDotEvalMethodDirectInstruction* inst, QoreValue base,
+        const char* method_name, QoreProgram* caller_pgm, QoreValue& result, ExceptionSink* xsink) {
+    return tryExecuteInterpreterInlineIRDotEvalMethod(inst, base, method_name, nullptr, caller_pgm, nullptr, 0,
+        result, xsink);
+}
+
+bool qore_ir_dbg_try_inline_dot_eval_method(QoreIRInvokeDotEvalMethodDirectInstruction* inst, QoreValue base,
+        const char* method_name, QoreProgram* caller_pgm, QoreValue& result, ExceptionSink* xsink) {
+    return tryExecuteInterpreterInlineIRDotEvalMethod(inst, base, method_name, nullptr, caller_pgm, nullptr, 0,
+        result, xsink);
+}
+#endif
 
 static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInstruction* inst,
         QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
@@ -6652,6 +6716,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
     // Use pooled containers from the frame (already cleared in reset())
     auto& active_iterators = frame.active_iterators;
+    // the order in which the frame creates its iterators (see IRActiveIterator)
+    uint64_t iterator_seq = 0;
+    // registers an iterator that a foreach statement created with the instruction \a create_inst
+    auto addActiveIterator = [&](FunctionalOperatorInterface* iter, const QoreIRInstruction* create_inst) {
+        auto it = func.interpreter_iterator_slot_boundary.find(create_inst);
+        active_iterators[iter] = IRActiveIterator{it != func.interpreter_iterator_slot_boundary.end()
+            ? it->second : 0, iterator_seq++};
+    };
     auto& on_block_exit_handlers = frame.on_block_exit_handlers;
     // Catch exception stack for rethrow support
     struct CatchEntry {
@@ -6773,6 +6845,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         // as the AST interpreter releases the variables of a frame (see SlotCacheCleanup)
         for (size_t ri = locals_slot_cache.size(); ri; --ri) {
             const size_t i = ri - 1;
+            // at the exit of the function, the iterator of a foreach statement still running is released at its
+            // place among the slots (see IRActiveIterator)
+            if (!preserve_ir_only) {
+                releaseActiveIteratorsFrom(active_iterators, ri);
+            }
             if (preserveParentSlotForWriteback(i)) {
                 continue;
             }
@@ -6788,6 +6865,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 releaseFrameRuntimeLocal(func.interpreter_slot_locals[i], instantiated_locals, pre_instantiated,
                     xsink);
             }
+        }
+        if (!preserve_ir_only) {
+            releaseActiveIteratorsFrom(active_iterators, 0);
         }
         std::fill(locals_lvar_cache.begin(), locals_lvar_cache.end(), nullptr);
     };
@@ -6920,6 +7000,18 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // this guard, every IR function execution leaks all cached references.
     // Constructed AFTER local_cleanup so it's destroyed BEFORE it — slot cache refs are
     // released while the underlying locals are still valid on the thread-local stack.
+    // RAII guard: delete active iterators on any function exit path.
+    // IteratorNext deletes iterators on the normal done path, but return/exception
+    // can exit without reaching done, leaking the iterator stored as raw int64_t.
+    // Declared before SlotCacheCleanup, which releases the iterators at their places among the slots (see
+    // IRActiveIterator), so that it releases only those left: a frame without slots
+    struct IteratorCleanupGuard {
+        std::unordered_map<FunctionalOperatorInterface*, IRActiveIterator>& iters;
+        ~IteratorCleanupGuard() {
+            releaseActiveIteratorsFrom(iters, 0);
+        }
+    } iter_cleanup{active_iterators};
+
     struct SlotCacheCleanup {
         IRLocalSlotCache& cache;
         ExceptionSink* xsink;
@@ -6927,6 +7019,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         const std::vector<uint8_t>& ir_only;
         const IRLocalVarSet& instantiated;
         const std::unordered_set<const LocalVar*>* pre_instantiated;
+        std::unordered_map<FunctionalOperatorInterface*, IRActiveIterator>& iters;
         // the slots of IR-only locals own their values: they are released last slot first, as the AST interpreter
         // releases the variables of a frame (a local's slot is assigned where it first appears, after those of the
         // locals declared before it), so that an object local's destructor runs before that of a local declared
@@ -6934,9 +7027,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         // this frame instantiated is released at its slot's place too, between those of the IR-only locals
         // declared before and after it (the variable is removed from the stack afterwards): a function left by an
         // exception releases all of its locals last declared first, as the AST interpreter does, whichever storage
-        // they have
+        // they have.  The iterator of a foreach statement that is still running is released at its place among them
+        // (see IRActiveIterator)
         ~SlotCacheCleanup() {
             for (size_t i = cache.size(); i; --i) {
+                releaseActiveIteratorsFrom(iters, i);
                 // the object of an object local is released with the real reference it has from the slot
                 cache.release(i - 1, xsink);
                 cache.set(i - 1, QoreValue());
@@ -6944,26 +7039,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     releaseFrameRuntimeLocal(slot_locals[i - 1], instantiated, pre_instantiated, xsink);
                 }
             }
+            releaseActiveIteratorsFrom(iters, 0);
         }
     } slot_cache_cleanup{locals_slot_cache, xsink, func.interpreter_slot_locals, locals_ir_only,
-        instantiated_locals, pre_instantiated};
+        instantiated_locals, pre_instantiated, active_iterators};
 
     // Declared after SlotCacheCleanup so dirty parent slots are published before
     // this frame releases its cached local references.
     ParentSlotWriteback parent_slot_writeback(func.parent_slot_count, locals_slot_cache, parent_slot_cache,
         parent_slot_to_lvar, parent_slot_dirty, parent_slot_cache_dirty, xsink);
-
-    // RAII guard: delete active iterators on any function exit path.
-    // IteratorNext deletes iterators on the normal done path, but return/exception
-    // can exit without reaching done, leaking the iterator stored as raw int64_t.
-    struct IteratorCleanupGuard {
-        std::unordered_set<FunctionalOperatorInterface*>& iters;
-        ~IteratorCleanupGuard() {
-            for (auto* iter : iters) {
-                delete iter;
-            }
-        }
-    } iter_cleanup{active_iterators};
 
     // Locals owned by this function.  Used by ensureLocalInstantiated() to
     // distinguish body locals from outer-scope variables (e.g. enclosing
@@ -11308,7 +11392,7 @@ load_local_done:
                 }
                 // Store as int (pointer) — same pattern as IteratorCreate
                 if (iter) {
-                    active_iterators.insert(iter);
+                    addActiveIterator(iter, inst);
                 }
                 setValueSlot(values, inst->result.id,
                         QoreValue(reinterpret_cast<int64_t>(iter)), xsink);
@@ -11318,16 +11402,11 @@ load_local_done:
             case QoreIROpcode::StoreLocal: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 // a type error of the assignment of an element to the variable of a foreach loop is described as
-                // the AST interpreter describes it, whichever path the store takes
-                struct ForeachAssignmentErrorGuard {
-                    bool foreach_assignment;
-                    ExceptionSink* xsink;
-                    ~ForeachAssignmentErrorGuard() {
-                        if (foreach_assignment) {
-                            qore_ir_describe_foreach_assignment_error(xsink);
-                        }
-                    }
-                } foreach_error_guard{local_inst->foreach_assignment, xsink};
+                // the AST interpreter describes it; every path of the store passes the description to the type
+                // check, so that an error raised by code that the store runs (a destructor of the value replaced)
+                // keeps its own
+                const char* store_desc = local_inst->mode == AssignmentMode::Element || local_inst->foreach_assignment
+                    ? "<foreach lvalue assignment>" : "<lvalue>";
                 if (local_inst->operands.empty()) {
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "store.local missing operand");
@@ -11425,9 +11504,7 @@ load_local_done:
                             LValueHelper lvh(*reinterpret_cast<const ReferenceNode*>(
                                 locals_slot_cache.storage(local_inst->slot_id).getInternalNode()), xsink);
                             if (lvh) {
-                                lvh.assign(val.needsRef() ? val.refSelf() : val,
-                                    local_inst->mode == AssignmentMode::Element
-                                        ? "<foreach lvalue assignment>" : "<lvalue>");
+                                lvh.assign(val.needsRef() ? val.refSelf() : val, store_desc);
                             }
                         }
                         // the referenced lvalue can be another variable whose value a slot caches
@@ -11460,11 +11537,6 @@ load_local_done:
                         && !(operand.id < borrowed_temp_remaining.size()
                             && borrowed_temp_remaining[operand.id] > 0);
                     QoreValue stored;
-                    // the type error of an element given to the variable of a foreach loop is described as the AST
-                    // interpreter describes it
-                    const char* store_desc = local_inst->mode == AssignmentMode::Element
-                            || local_inst->foreach_assignment
-                        ? "<foreach lvalue assignment>" : "<lvalue>";
                     if (transfer) {
                         // the slot's reference belongs to the local now, or is released by a failed coercion
                         removeAllCleanupEntries(cleanup, operand.id);
@@ -11549,8 +11621,7 @@ load_local_done:
                     // the ownership that separates it from ':=', destroying a target whose only
                     // reference was the opaque one; an element store assigns its weak reference as
                     // a Normal store would assign it
-                    helper.assign(stored, local_inst->mode == AssignmentMode::Element
-                        ? "<foreach lvalue assignment>" : "<lvalue>", true, store_mode);
+                    helper.assign(stored, store_desc, true, store_mode);
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < local_init_slots.size()) {
                         local_init_slots[local_inst->slot_id] = UINT32_MAX;
@@ -11593,7 +11664,7 @@ load_local_done:
                             && local_inst->slot_id < locals_lvar_cache.size()) {
                         locals_lvar_cache[local_inst->slot_id] = nullptr;
                     }
-                    assignLocalVarValueTransfer(local_inst->local, val, xsink);
+                    assignLocalVarValueTransfer(local_inst->local, val, xsink, store_desc);
                     removeCleanupEntry(cleanup, operand.id);
                     values[operand.id] = QoreValue();
                     markLocalOwnedSlot(operand.id, false);
@@ -11657,7 +11728,7 @@ load_local_done:
                             if (local_inst->slot_id < locals_lvar_cache.size()) {
                                 locals_lvar_cache[local_inst->slot_id] = nullptr;
                             }
-                            assignLocalVarValue(local_inst->local, val, xsink);
+                            assignLocalVarValue(local_inst->local, val, xsink, store_desc);
                         } else {
                             // Type is compatible: pre-populate the cache to avoid a
                             // cache miss on the next LoadLocal
@@ -11678,13 +11749,13 @@ load_local_done:
                                     } else if (vt == NT_BOOLEAN) {
                                         discard(lvv->val.assign(val.getAsBool()), xsink);
                                     } else {
-                                        assignLocalVarValue(local_inst->local, val, xsink);
+                                        assignLocalVarValue(local_inst->local, val, xsink, store_desc);
                                     }
                                 } else {
-                                    assignLocalVarValue(local_inst->local, val, xsink);
+                                    assignLocalVarValue(local_inst->local, val, xsink, store_desc);
                                 }
                             } else {
-                                assignLocalVarValue(local_inst->local, val, xsink);
+                                assignLocalVarValue(local_inst->local, val, xsink, store_desc);
                             }
                         }
                     } else {
@@ -11696,10 +11767,10 @@ load_local_done:
                         if (local_inst->slot_id < locals_lvar_cache.size()) {
                             locals_lvar_cache[local_inst->slot_id] = nullptr;
                         }
-                        assignLocalVarValue(local_inst->local, val, xsink);
+                        assignLocalVarValue(local_inst->local, val, xsink, store_desc);
                     }
                 } else {
-                    assignLocalVarValue(local_inst->local, val, xsink);
+                    assignLocalVarValue(local_inst->local, val, xsink, store_desc);
                 }
 
                 // If the variable holds a reference, assignLocalVarValue wrote through the
@@ -12136,16 +12207,9 @@ load_local_done:
             case QoreIROpcode::StoreClosure: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 // a type error of the assignment of an element to the variable of a foreach loop is described as
-                // the AST interpreter describes it
-                struct ForeachClosureAssignmentErrorGuard {
-                    bool foreach_assignment;
-                    ExceptionSink* xsink;
-                    ~ForeachClosureAssignmentErrorGuard() {
-                        if (foreach_assignment) {
-                            qore_ir_describe_foreach_assignment_error(xsink);
-                        }
-                    }
-                } foreach_closure_error_guard{local_inst->foreach_assignment, xsink};
+                // the AST interpreter describes it (see StoreLocal)
+                const char* store_desc = local_inst->mode == AssignmentMode::Element || local_inst->foreach_assignment
+                    ? "<foreach lvalue assignment>" : "<lvalue>";
                 if (local_inst->operands.empty()) {
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "store.closure missing operand");
@@ -12178,7 +12242,7 @@ load_local_done:
                 ValueHolder no_narrow_holder(xsink);
                 if (store_mode == AssignmentMode::Normal
                         && local_inst->local->isNoNarrowContainer()) {
-                    no_narrow_holder = coerceIRLocalValue(local_inst->local, val, xsink);
+                    no_narrow_holder = coerceIRLocalValue(local_inst->local, val, xsink, false, store_desc);
                     if (xsink && *xsink) {
                         if (inst->exception_target) {
                             cleanupToTempScope(inst->temp_scope_id, true, false, true);
@@ -12207,7 +12271,7 @@ load_local_done:
                     }
                 }
                 // the value is only stored in the variable: other threads can change it, so the frame keeps no copy
-                assignClosureVarValue(local_inst->local, val, xsink, local_inst->initial_assignment);
+                assignClosureVarValue(local_inst->local, val, xsink, local_inst->initial_assignment, store_desc);
                 if (local_inst->result.isValid()) {
                     QoreValue res = val.needsRef() ? val.refSelf() : val;
                     setValueSlot(values, local_inst->result.id, res, xsink);
@@ -12743,7 +12807,7 @@ load_local_done:
                 // Store iterator pointer as int64_t in result
                 // A nullptr means the iterable was empty (nothing)
                 if (iter) {
-                    active_iterators.insert(iter);
+                    addActiveIterator(iter, inst);
                 }
                 setValueSlot(values, iter_inst->result.id, QoreValue(reinterpret_cast<int64_t>(iter)), xsink);
                 ++ip;

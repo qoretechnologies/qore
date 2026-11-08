@@ -3486,6 +3486,64 @@ int Program::getThreadCount() [flags=CONSTANT] {
     return p->getThreadCount();
 }
 
+//! Waits until no threads or parsing operations are active in this Program
+/** @param limit timeout in milliseconds or a relative date; omitted/zero waits indefinitely, negative checks only
+    @return true when idle, false on timeout
+    @throw PROGRAM-THREAD-ERROR the calling thread is active in this Program
+    @note Cancellable and event-driven. Does not wait for final thread-local cleanup or reserve the Program
+    for parsing; callers must still handle a new thread starting before their next operation.
+    @par Example:
+    @code{.py}
+background sub () { pgm.waitForThreads(); queue.push("program-idle"); }();
+    @endcode
+    @since %Qore 3.0
+*/
+bool Program::waitForThreads(*timeout limit) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {
+    return p->waitForThreads(xsink, limit == 0 ? -1 : (limit < 0 ? 0 : limit));
+}
+
+//! Waits for a specific thread to leave this Program
+/** @param tid positive thread ID @param limit same semantics as waitForThreads()
+    @return true if the thread has left or is not active here, false on timeout
+    @throw PROGRAM-THREAD-ERROR invalid ID or self-wait
+    @note Does not join final thread-local cleanup; use thread_join() for owned process-level threads.
+    @since %Qore 3.0
+*/
+bool Program::waitForThread(int tid, *timeout limit) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {
+    if (tid <= 0 || tid > INT_MAX) {
+        xsink->raiseException("PROGRAM-THREAD-ERROR", "thread ID must be a positive native integer");
+        return false;
+    }
+    return p->waitForThreads(xsink, limit == 0 ? -1 : (limit < 0 ? 0 : limit), tid);
+}
+
+//! Requests cooperative cancellation of one of this Program's threads
+/** @param tid positive thread ID @param reason optional explanation
+    @return true if cancellation was requested, false if the thread is no longer active here
+    @throw PROGRAM-THREAD-ERROR invalid ID or self-cancellation
+    @note The request is scoped to this Program even if the thread ID is recycled. Code can catch or defer
+    cancellation; waitForThreads() observes actual completion. This method never forcibly kills a native thread.
+    @since %Qore 3.0
+*/
+bool Program::cancelThread(int tid, *string reason) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {
+    if (tid <= 0 || tid > INT_MAX) {
+        xsink->raiseException("PROGRAM-THREAD-ERROR", "thread ID must be a positive native integer");
+        return false;
+    }
+    return p->cancelThread(tid, reason ? reason->c_str() : nullptr, xsink);
+}
+
+//! Requests cooperative cancellation of all threads in this Program
+/** @param reason optional explanation @return number of registered threads receiving a request
+    @throw PROGRAM-THREAD-ERROR called from inside this Program
+    @note Includes starting threads and descendants until the Program next becomes idle. Cancellation can
+    be caught or deferred; use waitForThreads() to observe completion. A later evaluation is unaffected.
+    @since %Qore 3.0
+*/
+int Program::cancelThreads(*string reason) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {
+    return p->cancelThreads(xsink, reason ? reason->c_str() : nullptr);
+}
+
 //! Get @ref Qore::ProgramControl "ProgramControl"
 /**
  */

@@ -196,8 +196,4 @@ public:
     }
 };
 
-//! Describes the type error of the assignment of an element to the variable of a foreach loop as the AST interpreter
-//! does: "<foreach lvalue assignment>" for the "<lvalue>" that the assignment of a local gives
-DLLLOCAL void qore_ir_describe_foreach_assignment_error(ExceptionSink* xsink);
-
 #endif

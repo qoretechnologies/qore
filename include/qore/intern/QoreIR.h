@@ -1616,7 +1616,8 @@ public:
     AssignmentMode mode = AssignmentMode::Normal;
     bool initial_assignment = false; // For StoreLocal/StoreClosure: declaration initializer write
     //! For StoreLocal/StoreClosure: the assignment of an element to the variable of a foreach loop, whose type error
-    //! the AST interpreter describes as "<foreach lvalue assignment>" (see qore_ir_describe_foreach_assignment_error())
+    //! the AST interpreter describes as "<foreach lvalue assignment>"; every path of the store gives that
+    //! description to its own type check, never to code the store runs (a destructor of the value replaced)
     bool foreach_assignment = false;
     bool is_closure = false;       // Pre-computed from local->closureUse() during IR analysis
     bool is_ref = false;           // Pre-computed from local->isRef() during IR analysis
@@ -2878,6 +2879,11 @@ public:
     mutable const QoreClass* cached_object_class = nullptr;
     mutable const qore_class_private* cached_class_ctx = nullptr;
     mutable const QoreMethod* cached_method = nullptr;
+    //! qore_class_private::getInstanceSerial() of cached_object_class: the cached class and method may be freed
+    //! with their Program and their addresses reused by another class, so the pointer alone does not identify them
+    mutable uint64_t cached_object_class_serial = 0;
+    //! qore_class_private::getInstanceSerial() of cached_class_ctx, or 0 if there is no class context
+    mutable uint64_t cached_class_ctx_serial = 0;
     //!< operands[0] is the base expression, operands[1..n-1] are arguments
 };
 
@@ -2928,8 +2934,29 @@ public:
     mutable const QoreClass* cached_object_class = nullptr;
     mutable const qore_class_private* cached_class_ctx = nullptr;
     mutable const QoreMethod* cached_method = nullptr;
+    //! qore_class_private::getInstanceSerial() of cached_object_class: the cached class and method may be freed
+    //! with their Program and their addresses reused by another class, so the pointer alone does not identify them
+    mutable uint64_t cached_object_class_serial = 0;
+    //! qore_class_private::getInstanceSerial() of cached_class_ctx, or 0 if there is no class context
+    mutable uint64_t cached_class_ctx_serial = 0;
     //!< operands[0] is the base expression, operands[1..n-1] are arguments
 };
+
+#ifdef DEBUG
+//! Debug-only: runs the inline-cache lookup of a dot-eval method call site with no arguments
+/** For the C++ unit tests (lib/ql_debug.cpp), which publish a cache entry by hand to model one made for a destroyed
+    class whose address a live class reuses.
+
+    @return true if the call was executed (or raised an exception) through the inline cache; false if the caller
+    must use the generic call path
+*/
+DLLLOCAL bool qore_ir_dbg_try_inline_dot_eval_method(QoreIRDotEvalMethodDirectInstruction* inst, QoreValue base,
+        const char* method_name, QoreProgram* caller_pgm, QoreValue& result, ExceptionSink* xsink);
+
+//! Debug-only: as above, for the call site in a try block
+DLLLOCAL bool qore_ir_dbg_try_inline_dot_eval_method(QoreIRInvokeDotEvalMethodDirectInstruction* inst,
+        QoreValue base, const char* method_name, QoreProgram* caller_pgm, QoreValue& result, ExceptionSink* xsink);
+#endif
 
 //! Creates a FunctionalOperatorInterface from a list or iterable expression
 //! result contains a pointer to the iterator (as int64_t)
@@ -3845,6 +3872,12 @@ public:
     mutable std::vector<uint8_t> interpreter_real_slots;
     //! The local of each local slot (null for a slot of no local), for the release of the locals at the exit
     mutable std::vector<const LocalVar*> interpreter_slot_locals;
+    //! The place among the local slots of the iterator that each instruction creating the iterator of a foreach
+    //! statement creates (computeSlotIdsAndEmbed()): the iterator is released, when the frame is left with the
+    //! statement still running, after the slots from this one on and before the slot before it, as the AST
+    //! interpreter releases the value a foreach statement iterates after the locals of the loop's body and before the
+    //! loop variable and the locals declared before the statement (see IRActiveIterator in QoreIRInterpreter.cpp)
+    std::unordered_map<const QoreIRInstruction*, uint32_t> interpreter_iterator_slot_boundary;
     //! The locals the function owns (QoreIRFunction::pre_instantiated_locals and every body local), which the
     //! interpreter tells from the variables of an enclosing scope
     mutable std::unordered_set<const void*> interpreter_function_own_locals;

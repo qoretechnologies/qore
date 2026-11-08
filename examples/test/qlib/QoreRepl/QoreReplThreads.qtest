@@ -1,0 +1,61 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires QoreRepl
+%exec-class ReplThreadsTest
+class ReplThreadsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("REPL thread commands", "1.0") {
+        addTestCase("help and request classification", \help());
+        addTestCase("blocked input is preserved and commands bypass parsing", \threads());
+        set_return_value(main());
+    }
+    private nothing help() {
+        QoreRepl::QoreRepl repl({"history_file": NOTHING});
+        foreach string cmd in (("/reset", "/threads", "/cancel", "/join", "/?")) {
+            assertTrue(repl.getHelpText(False).find(cmd) >= 0);
+        }
+        assertFalse(repl.getHelpText(False).find("linenoise") >= 0);
+        assertTrue(repl.getHelpText().find("linenoise") >= 0);
+        foreach string cmd in (("/reset", "/res", "/load some file", "/type 1", "1 + 1")) {
+            assertTrue(repl.inspectRequest(cmd).requires_idle, cmd);
+        }
+        foreach string cmd in (("/threads", "/cancel all", "/join all", "/help", "/clear", "/unknown", "")) {
+            assertFalse(repl.inspectRequest(cmd).requires_idle, cmd);
+        }
+        foreach string cmd in (("/help", "/?", "/hel", " /HELP ")) { assertTrue(repl.eval(cmd).help); }
+        assertTrue(repl.inspectRequest("!!").help); assertTrue(repl.eval("!!").help);
+        foreach string cmd in (("/cancel", "/join", "/cancel 0", "/join -1", "/cancel bad", "/join all extra", "/threads extra")) {
+            assertEq("REPL-ERROR", repl.eval(cmd).error.err, cmd);
+        }
+        assertTrue(repl.eval("/threads").value.find("No running") >= 0);
+        assertFalse(exists repl.eval("/join all").error);
+    }
+    private nothing threads() {
+        QoreRepl::QoreRepl repl({"history_file": NOTHING});
+        assertFalse(exists repl.eval("our Counter entered; our Counter gate;").error);
+        Counter entered(1); Counter gate(1); Program pgm = repl.getProgram();
+        pgm.setGlobalVarValue("entered", entered); pgm.setGlobalVarValue("gate", gate);
+        on_exit gate.dec();
+        assertFalse(exists repl.eval("background sub () { try { entered.dec(); gate.waitForZero(); } "
+            "catch (hash<ExceptionInfo> ex) { if (ex.err != \"THREAD-CANCELLED\") { rethrow; } clear_thread_cancel(); } }()").error);
+        entered.waitForZero();
+        list<int> tids = pgm.getThreadList(); assertEq(1, tids.size());
+        foreach string cmd in (("1 + 1", "/reset", "/res", "/load missing.q", "/type 1")) {
+            *hash<auto> result = repl.eval(cmd); assertEq("REPL-THREADS-ACTIVE", result.error.err);
+            assertEq(tids, result.error.arg); assertFalse(repl.eval("/history").value.find(cmd) >= 0);
+            assertFalse(repl.needsMoreInput());
+        }
+        assertTrue(repl.eval("/threads").value.find(string(tids[0])) >= 0);
+        assertEq("REPL-ERROR", repl.eval("/cancel " + gettid()).error.err);
+        assertEq("REPL-ERROR", repl.eval("/join " + gettid()).error.err);
+        assertFalse(exists repl.eval("/cancel all").error);
+        assertFalse(exists repl.eval("/join all").error);
+        assertTrue(thread_join(tids[0], 5000)); assertEq(2, repl.eval("1 + 1").value);
+        repl.eval("class Pending {"); assertTrue(repl.needsMoreInput());
+        repl.reset();
+        assertFalse(exists repl.eval("/reset").error); assertFalse(repl.needsMoreInput()); assertEq(0, repl.getIndentLevel());
+        assertEq(42, repl.eval("6 * 7").value);
+    }
+}

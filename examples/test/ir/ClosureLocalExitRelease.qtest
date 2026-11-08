@@ -1,0 +1,127 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ClosureLocalExitReleaseTest
+
+#! Regression test: a closure-bound local is released at its place when its function or block is left
+/** The AST interpreter releases a closure-bound local with the other locals of its block, last declared first.  The
+    compiled modes left one that an exception left on the closure stack to the frame boundary, which released it after
+    the frame's other locals and without an exception sink: an exception raised by its destructor was lost (a debug
+    build aborted).  The script checks a normal exit, a block and a foreach loop left by an exception, every case
+    twice, in every execution mode, on the IR tier of tiered execution and as a qcc executable (see
+    ExecModeOutputTest).
+*/
+class ClosureLocalExitReleaseTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+class D {
+    private { int n; }
+    constructor(int n) { self.n = n; }
+    destructor() {
+        printf("dtor %d\n", n);
+        auto v = "s" + n;
+        int x;
+        x = v;
+    }
+}
+class E {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+# a closure-bound local released at the normal exit of the function
+sub g() {
+    E e("ge");
+    auto v = new D(1);
+    code c = auto sub () { return v; };
+    E f("gf");
+}
+# a closure-bound local of a block left by an exception
+sub h() {
+    E e("he");
+    {
+        auto v = new D(2);
+        code c = auto sub () { return v; };
+        E f("hf");
+        throw "H";
+    }
+}
+class It inherits AbstractIterator {
+    private { int i = 0; }
+    bool next() { return ++i <= 1; }
+    auto getValue() { return new D(3); }
+    bool valid() { return i == 1; }
+}
+# a closure-bound foreach variable left by an exception; the iterator holds no reference to the element
+sub k() {
+    E e("ke");
+    foreach auto v in (new It()) {
+        code c = auto sub () { return v; };
+        E f("kf");
+        throw "K";
+    }
+}
+foreach string fn in (("g", "h", "k")) {
+    for (int i = 0; i < 2; ++i) {
+        try {
+            call_function(fn);
+            printf("%s: no exception\n", fn);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s: %s: %s\n", fn, ex.err, ex.desc);
+            while (ex.next) {
+                ex = ex.next;
+                printf("  next: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "dtor gf",
+            "dtor 1",
+            "dtor ge",
+            "g: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor gf",
+            "dtor 1",
+            "dtor ge",
+            "g: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor hf",
+            "dtor 2",
+            "dtor he",
+            "h: H: ",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor hf",
+            "dtor 2",
+            "dtor he",
+            "h: H: ",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor kf",
+            "dtor 3",
+            "dtor ke",
+            "k: K: ",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor kf",
+            "dtor 3",
+            "dtor ke",
+            "k: K: ",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ClosureLocalExitRelease", Script, (map $1 + "\n", Expected).join(""),
+            "releases closure-bound locals in the order of the AST interpreter") {
+    }
+}

@@ -832,6 +832,26 @@ After teardown, `thread_list.deleteDataRelease()` releases the TID slot, whose
 
 ### Program Scope: Who Can Cancel Whom?
 
+`Program::cancelThread(tid, reason)` uses the Program as an explicit target scope. It checks membership under the
+Program lock, releases that lock before entering the thread registry, and sends the Program ID with the request.
+The target's normal cancellation checkpoint rejects a request if the ID was recycled outside that scope.
+`Program::cancelThreads(reason)` also sets a cancellation wave under the Program lock: preregistered threads and
+descendants receive cancellation when they register. The wave ends when the Program's activity count reaches
+zero, so subsequent evaluations start normally. Calls from inside the target Program are rejected to avoid
+cancelling the coordinating caller itself.
+
+`Program::waitForThreads(limit)` waits on the existing Program condition for zero activity and no parse owner.
+`waitForThread(tid, limit)` waits for a specific ID to leave the Program. Thread exits and parse-owner release
+broadcast under the Program lock; cancellation wakes the same condition through the standard condition-waker
+path. The wait checks its predicate with the lock held, has one monotonic deadline, and rejects self-waits.
+It observes Program activity, not final process-level TLS teardown; `thread_join()` provides the latter guarantee.
+An idle notification does not reserve the Program or permit concurrent parsing. REPL embedders recheck before
+submitting pending work and deliver the worker's completion to their UI event queue rather than polling.
+
+Timed condition waits must not probe recursive mutex ownership with `pthread_mutex_trylock()`: success adds a
+recursion level and prevents the condition wait from releasing the mutex. The timed and untimed paths both
+delegate mutex-contract checking to the pthread condition operation.
+
 Self-cancellation (cancelling the current thread) is an error — use `throw "THREAD-CANCELLED"` directly.
 
 Otherwise a request carries a **scope**, computed on the requesting thread by

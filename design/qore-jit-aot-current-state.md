@@ -137,6 +137,38 @@ never held across execution of the callee, and a failed claim never blocks, so a
 site that re-enters itself recursively during resolution simply takes the generic
 path.
 
+Publication safety does not make the pointees live. A call site in one Program can
+call an object of a class from another Program (the ncurses widget gallery calls
+`QRepl::joinEvaluation()` on an untyped object whose class lives in a child Program
+that each story reset replaces), so a published dot-eval cache can name a class, method
+and callee that are freed with their Program, and a later class can be allocated at the
+same address (qore#5631). A raw pointer is therefore never a cache key on its own:
+
+- The dot-eval inline cache records `qore_class_private::getInstanceSerial()` of the
+  receiver's class and of the class context next to their pointers
+  (`cached_object_class_serial`, `cached_class_ctx_serial`) and a hit requires both to
+  match the live receiver's class and the running code's class context, which can be
+  read safely because they are in use. The serial is process-unique and never reused,
+  unlike the class ID (which a class copy keeps) and the address; a `QoreClass` wrapper
+  sharing its private class shares the serial, so it is the same class. A matching
+  serial proves that the cached class is the live receiver's, so the cached method,
+  which belongs to that class or one of its parents, is alive too. A mismatch takes the
+  generic path; the published state is never replaced, so the call site stays generic
+  after its class is gone, exactly as for any other receiver class.
+- The AOT method dispatch cache (`QoreAOTMethodDispatchCache`) keys its entries by class,
+  class context and argument type pointers, so `qore_get_method_dispatch_epoch()`, which
+  every entry must match, also increments when a class (`~qore_class_private()`) or a
+  hashdecl (`~typed_hash_decl_private()`) is destroyed: an entry naming one is stale
+  before its memory can be reused. Parameterized and derived types are purged with
+  their base class, so they are covered as well. The caller and object Programs are
+  keyed by their never-reused `QoreProgram::getProgramId()`, as a Program can be
+  destroyed without destroying a class.
+
+`examples/test/ir/InlineMethodCacheClassLifetime.qtest` runs persistent call sites over
+destroyed Programs and, with a debug build, the C++ unit tests
+(`dbg_run_method_cache_lifetime_tests()`), which model the reused address
+deterministically by giving a published entry the serial of an earlier class.
+
 ## AOT Compiler
 
 `qcc` is the dedicated AOT compiler. It supports:
@@ -550,8 +582,28 @@ declaration order, an owned IR-only cache as an alloca and a runtime-stack local
 with a runtime-stack local tagged with bit 1 and releases it last entry first. The inline form
 includes runtime-stack locals only at an exception exit; the array form, shared by every exit,
 includes them always, and a local already released at a normal exit is released again as no value.
-AOT code keeps the earlier sequence of IR-only locals only; `ExceptionExitLocalOrder.qtest` checks
-the AST order in every mode, a qcc executable included.
+AOT code includes no runtime-stack locals (the runtime stack releases them in that order).
+Closure-bound body locals are in the sequence too, in JIT and AOT code: one that the frame
+instantiated is popped from the closure stack at its place (`qore_rt_pop_closure_var()`, tag 3 in
+the array form, which looks it up in the current frame only), so that a closure still holding it
+keeps it and releases its value with an exception sink when the closure is released; one that the
+caller instantiated (`pre_instantiated_locals` of a function entered by `evalTiered()`) only loses
+its value if no closure holds it (`qore_rt_clear_local()`), as the caller pops it. AOT code knows a
+closure-bound variable only at runtime: the array form reads it from the context at the function's
+entry (`qore_rt_aot_local_var()`). Left to the frame boundary, such a variable was released after
+the frame's other locals and without an exception sink, which lost an exception raised by a
+destructor (a debug build aborted). The IR interpreter clears a closure-bound slot's variable at its
+place when no closure holds it; its frame instantiation cleanup pops it afterwards.
+The IR interpreter also releases the iterator of a foreach statement still running at its place:
+the AST interpreter releases the value a foreach statement iterates when the statement ends, after
+the locals of the loop body and before the loop variable and the locals declared before the
+statement. `computeSlotIdsAndEmbed()` records, for each instruction creating such an iterator, the
+slots assigned before it, and the loop variable's slot if it is the first assigned after it
+(`QoreIRFunction::interpreter_iterator_slot_boundary`); `SlotCacheCleanup` and
+`cleanupLocalCaches(false)` release an iterator after the slots from that boundary on
+(`IRActiveIterator`, `releaseActiveIteratorsFrom()`), and the iterator guard only those left.
+`ExceptionExitLocalOrder.qtest`, `ClosureLocalExitRelease.qtest` and
+`ForeachExitIteratorOrder.qtest` check the AST order in every mode, a qcc executable included.
 `IRBlockScopedObjectLifetime.qtest` and `ObjectLocalLifetime.qtest` check exact
 constructor/destructor order for these shapes in every tier and in AOT (block exits, loops,
 returns, exceptions within and across functions, reassignment, `AutoLock`, recursive graphs).

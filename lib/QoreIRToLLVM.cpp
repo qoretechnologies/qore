@@ -463,6 +463,33 @@ static bool isFastMethodCallEligible(
 
 // LLVM 23 made getTerminator() assert that the block is already well formed;
 // getTerminatorOrNull() preserves the nullable contract used while lowering.
+//! Returns the runtime helper that a store to a local calls: for the assignment of an element to the variable of a
+//! foreach loop, the variant of a helper that checks the value's type which describes a type error as the AST
+//! interpreter does ("<foreach lvalue assignment>"); the description is given to the store's own type check only,
+//! never to code the store runs (a destructor of the value replaced), whose errors keep their own
+static std::string qore_store_helper_name(const char* name, bool foreach_assignment) {
+    if (!foreach_assignment) {
+        return name;
+    }
+    static const char* const families[] = {"qore_rt_coerce_value", "qore_rt_assign_local", "qore_rt_store_closure"};
+    for (const char* family : families) {
+        size_t len = strlen(family);
+        if (strncmp(name, family, len)) {
+            continue;
+        }
+        const char* rest = name + len;
+        // a helper that does not check the type takes no description
+        if (*rest && *rest != '_') {
+            return name;
+        }
+        if (!strncmp(rest, "_no_coerce", 10)) {
+            return name;
+        }
+        return std::string(family) + "_foreach" + rest;
+    }
+    return name;
+}
+
 static llvm::Instruction* qoreGetTerminator(llvm::BasicBlock* block) {
 #if LLVM_VERSION_MAJOR >= 23
     return block->getTerminatorOrNull();
@@ -2982,14 +3009,15 @@ std::vector<QoreIRToLLVM::ExitReleaseEntry> QoreIRToLLVM::getExitReleaseSequence
     for (llvm::AllocaInst* alloca : fast_entry_param_allocas) {
         seq.push_back({alloca, nullptr});
     }
-    if (!runtime_locals || aot_mode || !current_ir_func) {
+    if (!runtime_locals || !current_ir_func) {
         for (llvm::AllocaInst* alloca : owned_ir_local_allocas) {
             seq.push_back({alloca, nullptr});
         }
         return seq;
     }
-    // the body locals in declaration order: the IR-only locals' caches and the variables on the runtime stack that the
-    // frame instantiated, interleaved
+    // the body locals in declaration order: the IR-only locals' caches, the variables on the runtime stack that the
+    // frame instantiated (not in AOT code, whose runtime-stack locals are released by the runtime stack in that
+    // order) and the closure-bound variables of the frame, interleaved
     std::vector<ExitReleaseEntry> body;
     std::unordered_set<const llvm::AllocaInst*> placed;
     for (LocalVar* var : current_ir_func->all_body_locals) {
@@ -3008,7 +3036,36 @@ std::vector<QoreIRToLLVM::ExitReleaseEntry> QoreIRToLLVM::getExitReleaseSequence
             }
             continue;
         }
-        if (var->closureUse() || (ir_only_locals_set && ir_only_locals_set->count(key))) {
+        if (ir_only_locals_set && ir_only_locals_set->count(key)) {
+            continue;
+        }
+        if (var->closureUse()) {
+            // a closure-bound variable that the frame has on the closure stack is given up at its place, as the AST
+            // interpreter gives up the variables of a block: it is popped (qore_rt_pop_closure_var(), which looks it
+            // up in the current frame only), so that a closure that still holds it keeps it and releases its value
+            // with an exception sink when the closure is released.  A variable that the code calling the function
+            // instantiated (pre_instantiated_locals of a JIT function entered by evalTiered()) is popped by that
+            // code: it only loses its value here if no closure holds it.  Left to the frame boundary, such
+            // variables were released after the frame's other locals and without an exception sink, so that an
+            // exception raised by a destructor was lost (and a debug build aborted).  A capture given to a direct
+            // fast entry as a parameter is not a variable of the frame
+            if (!(fast_entry_args && fast_entry_args->count(key))) {
+                ExitReleaseEntry entry{nullptr, var};
+                if (aot_mode) {
+                    // a variable the code never accesses has no slot (and no value)
+                    if (!aot_slots || !aot_slots->hasLocalSlot(key)) {
+                        continue;
+                    }
+                    entry.aot_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    entry.pop_closure = true;
+                } else {
+                    entry.pop_closure = !(pre_instantiated_locals && pre_instantiated_locals->count(key));
+                }
+                body.push_back(entry);
+            }
+            continue;
+        }
+        if (aot_mode) {
             continue;
         }
         if ((pre_instantiated_locals && pre_instantiated_locals->count(key)) || entry_locals_set.count(key)) {
@@ -3101,9 +3158,19 @@ bool QoreIRToLLVM::prepareBoxedExitCleanupArray(llvm::Function* llvm_func,
                 llvm::ConstantInt::get(i32_type, static_cast<unsigned>(i)),
                 "local_cleanup_slot_ptr");
         llvm::Value* entry_ptr;
-        if (slots[i].var) {
+        // a closure-bound variable that is popped is tagged in bits 0 and 1 (see qore_rt_cleanup_run_allocas())
+        const uint64_t var_tag = slots[i].pop_closure ? 3 : 2;
+        if (slots[i].var && slots[i].aot_slot >= 0) {
+            // AOT code knows the variable only at runtime: it is read from the context, at the function's entry
+            auto var_fn = llvm_func->getParent()->getOrInsertFunction("qore_rt_aot_local_var",
+                    llvm::FunctionType::get(ptr_type, {ptr_type, i32_type}, false));
+            llvm::Value* var_ptr = ab.CreateCall(var_fn, {aot_ctx_arg,
+                llvm::ConstantInt::get(i32_type, static_cast<unsigned>(slots[i].aot_slot))});
+            entry_ptr = ab.CreateIntToPtr(ab.CreateOr(ab.CreatePtrToInt(var_ptr, i64_type),
+                llvm::ConstantInt::get(i64_type, var_tag)), ptr_type, "runtime_local_entry");
+        } else if (slots[i].var) {
             entry_ptr = ab.CreateIntToPtr(llvm::ConstantInt::get(i64_type,
-                reinterpret_cast<uint64_t>(slots[i].var) | 2), ptr_type, "runtime_local_entry");
+                reinterpret_cast<uint64_t>(slots[i].var) | var_tag), ptr_type, "runtime_local_entry");
         } else if (isRealReferenceAlloca(slots[i].alloca)) {
             // the cache of an object local is tagged in the lowest bit of its address (an alloca of an i64 is
             // aligned), and qore_rt_cleanup_run_allocas() releases its object with the real reference it has from
@@ -3382,6 +3449,23 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module, bool excepti
     // afterwards
     const std::vector<ExitReleaseEntry> slots = getExitReleaseSequence(exception_exit, false);
     for (auto it = slots.rbegin(); it != slots.rend(); ++it) {
+        if (it->var && it->aot_slot >= 0) {
+            // a closure-bound variable of AOT code (see getExitReleaseSequence())
+            assert(it->pop_closure);
+            auto pop_fn = module.getOrInsertFunction("qore_rt_pop_closure_var_aot",
+                llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+            builder->CreateCall(pop_fn, {aot_ctx_arg,
+                llvm::ConstantInt::get(i32_type, static_cast<unsigned>(it->aot_slot)), xsink_arg});
+            continue;
+        }
+        if (it->var && it->pop_closure) {
+            // a closure-bound variable that the frame instantiated (see getExitReleaseSequence())
+            auto pop_fn = module.getOrInsertFunction("qore_rt_pop_closure_var",
+                llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+            builder->CreateCall(pop_fn, {builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                reinterpret_cast<uint64_t>(it->var)), ptr_type), xsink_arg});
+            continue;
+        }
         if (it->var) {
             // the references that the local's native cache holds are released before the variable's value, as
             // UninstantiateLocal releases them, so that releasing the value runs the destructor of an object it holds
@@ -4222,8 +4306,12 @@ void QoreIRToLLVM::finalizeDeferredLocalReleases(llvm::Module& module) {
             if (std::find(rel.released.begin(), rel.released.end(), value) != rel.released.end()) {
                 continue;
             }
-            // only an alloca of the entry block dominates the release point
+            // every alloca holding a reference to a local's value is created in the entry block (the cleanup allocas
+            // of trackResultForCleanup(), promoteSsaEntryToAlloca() and the StoreLocal coercions, the reload trackers
+            // and the deferred reload values), which dominates the release point; a value of any other kind would
+            // not dominate it and is never released here
             auto* alloca = llvm::dyn_cast<llvm::AllocaInst>(value);
+            assert(alloca && alloca->getParent() == &entry);
             if (!alloca || alloca->getParent() != &entry) {
                 continue;
             }
@@ -10102,26 +10190,6 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
         return;
     }
 
-    // a type error of the assignment of an element to the variable of a foreach loop is described as the AST
-    // interpreter describes it (see qore_ir_describe_foreach_assignment_error()); the description is fixed where an
-    // exception was raised, before the exception edge
-    if ((inst->opcode == QoreIROpcode::StoreLocal || inst->opcode == QoreIROpcode::StoreClosure)
-            && static_cast<const QoreIRLocalInstruction*>(inst)->foreach_assignment) {
-        llvm::Value* priv_ptr = builder->CreateLoad(ptr_type, xsink_arg, "foreach_xsink_priv");
-        llvm::Value* head = builder->CreateLoad(ptr_type, priv_ptr, "foreach_xsink_head");
-        llvm::BasicBlock* fix_bb = llvm::BasicBlock::Create(ctx, "foreach_assignment_error", llvm_func);
-        llvm::BasicBlock* fixed_bb = llvm::BasicBlock::Create(ctx, "foreach_assignment_checked", llvm_func);
-        builder->CreateCondBr(builder->CreateICmpNE(head,
-            llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type))), fix_bb, fixed_bb,
-            llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
-        builder->SetInsertPoint(fix_bb);
-        auto fix_fn = module.getOrInsertFunction("qore_rt_foreach_assignment_error",
-            llvm::FunctionType::get(void_type, {ptr_type}, false));
-        builder->CreateCall(fix_fn, {xsink_arg});
-        builder->CreateBr(fixed_bb);
-        builder->SetInsertPoint(fixed_bb);
-    }
-
     llvm::BasicBlock* exception_block = nullptr;
     if (!force_function_error && inst->exception_target) {
         auto except_it = block_map.find(inst->exception_target);
@@ -15103,9 +15171,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         auto cv_aot_ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false);
                         auto coerce_fn = module.getOrInsertFunction(
-                                "qore_rt_coerce_value_aot", cv_aot_ft);
+                                qore_store_helper_name("qore_rt_coerce_value_aot", linst->foreach_assignment), cv_aot_ft);
                         auto coerce_fn_throwing = module.getOrInsertFunction(
-                                "qore_rt_coerce_value_aot_throwing", cv_aot_ft);
+                                qore_store_helper_name("qore_rt_coerce_value_aot_throwing", linst->foreach_assignment), cv_aot_ft);
                         coerced = emitMaybeInvoke(coerce_fn, coerce_fn_throwing,
                                 {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
                                  boxed, cleanup, xsink_arg},
@@ -15114,9 +15182,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         auto cv_ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, i64_type, ptr_type, ptr_type}, false);
                         auto coerce_fn = module.getOrInsertFunction(
-                                "qore_rt_coerce_value", cv_ft);
+                                qore_store_helper_name("qore_rt_coerce_value", linst->foreach_assignment), cv_ft);
                         auto coerce_fn_throwing = module.getOrInsertFunction(
-                                "qore_rt_coerce_value_throwing", cv_ft);
+                                qore_store_helper_name("qore_rt_coerce_value_throwing", linst->foreach_assignment), cv_ft);
                         llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
                                 reinterpret_cast<uint64_t>(outer_ti));
                         llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
@@ -15144,9 +15212,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         auto cv_aot_ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false);
                         auto strip_fn = module.getOrInsertFunction(
-                                "qore_rt_coerce_value_aot", cv_aot_ft);
+                                qore_store_helper_name("qore_rt_coerce_value_aot", linst->foreach_assignment), cv_aot_ft);
                         auto strip_fn_throwing = module.getOrInsertFunction(
-                                "qore_rt_coerce_value_aot_throwing", cv_aot_ft);
+                                qore_store_helper_name("qore_rt_coerce_value_aot_throwing", linst->foreach_assignment), cv_aot_ft);
                         stripped = emitMaybeInvoke(strip_fn, strip_fn_throwing,
                                 {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
                                  boxed, cleanup, xsink_arg},
@@ -15155,9 +15223,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         auto cv_ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, i64_type, ptr_type, ptr_type}, false);
                         auto strip_fn = module.getOrInsertFunction(
-                                "qore_rt_coerce_value", cv_ft);
+                                qore_store_helper_name("qore_rt_coerce_value", linst->foreach_assignment), cv_ft);
                         auto strip_fn_throwing = module.getOrInsertFunction(
-                                "qore_rt_coerce_value_throwing", cv_ft);
+                                qore_store_helper_name("qore_rt_coerce_value_throwing", linst->foreach_assignment), cv_ft);
                         llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
                                 reinterpret_cast<uint64_t>(outer_ti));
                         llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
@@ -15186,7 +15254,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         : (linst->mode != AssignmentMode::Normal ? "qore_rt_assign_local_no_coerce_aot"
                             : (use_no_coerce_outer ? "qore_rt_assign_local_no_coerce_eval_weak_aot"
                                 : "qore_rt_assign_local_eval_weak_aot"));
-                    auto assign_helper = module.getOrInsertFunction(helper_name,
+                    auto assign_helper = module.getOrInsertFunction(qore_store_helper_name(helper_name, linst->foreach_assignment),
                             llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
                     builder->CreateCall(assign_helper, {aot_ctx_arg,
@@ -15197,7 +15265,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         : (linst->mode != AssignmentMode::Normal ? "qore_rt_assign_local_no_coerce"
                             : (use_no_coerce_outer_jit ? "qore_rt_assign_local_no_coerce_eval_weak"
                                 : "qore_rt_assign_local_eval_weak"));
-                    auto assign_helper = module.getOrInsertFunction(helper_name,
+                    auto assign_helper = module.getOrInsertFunction(qore_store_helper_name(helper_name, linst->foreach_assignment),
                             llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
                     llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(linst->local));
@@ -15318,14 +15386,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     auto cv_aot_ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, ptr_type, i64_type, ptr_type, ptr_type}, false);
                     checked = emitMaybeInvoke(
-                            module.getOrInsertFunction("qore_rt_coerce_value_by_type_path_aot", cv_aot_ft),
-                            module.getOrInsertFunction("qore_rt_coerce_value_by_type_path_aot_throwing", cv_aot_ft),
+                            module.getOrInsertFunction(qore_store_helper_name("qore_rt_coerce_value_by_type_path_aot", linst->foreach_assignment), cv_aot_ft),
+                            module.getOrInsertFunction(qore_store_helper_name("qore_rt_coerce_value_by_type_path_aot_throwing", linst->foreach_assignment), cv_aot_ft),
                             {aot_ctx_arg, getTypePathArg(local_type), val, cleanup, xsink_arg},
                             module, llvm_func, inst);
                 } else {
                     auto cv_ft = llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false);
-                    checked = emitMaybeInvoke(module.getOrInsertFunction("qore_rt_coerce_value", cv_ft),
-                            module.getOrInsertFunction("qore_rt_coerce_value_throwing", cv_ft),
+                    checked = emitMaybeInvoke(module.getOrInsertFunction(qore_store_helper_name("qore_rt_coerce_value", linst->foreach_assignment), cv_ft),
+                            module.getOrInsertFunction(qore_store_helper_name("qore_rt_coerce_value_throwing", linst->foreach_assignment), cv_ft),
                             {getTypeInfoPointerArg(local_type), val, cleanup, xsink_arg},
                             module, llvm_func, inst);
                 }
@@ -15533,7 +15601,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
                                  boxed, cleanup, read_flag, xsink_arg});
                     } else {
-                        auto coerce_fn = module.getOrInsertFunction("qore_rt_coerce_value_aot",
+                        auto coerce_fn = module.getOrInsertFunction(qore_store_helper_name("qore_rt_coerce_value_aot", linst->foreach_assignment),
                                 llvm::FunctionType::get(i64_type,
                                         {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
                         coerced = builder->CreateCall(coerce_fn,
@@ -15551,7 +15619,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         coerced = builder->CreateCall(coerce_fn,
                                 {ti_as_ptr, boxed, cleanup, read_flag, xsink_arg});
                     } else {
-                        auto coerce_fn = module.getOrInsertFunction("qore_rt_coerce_value",
+                        auto coerce_fn = module.getOrInsertFunction(qore_store_helper_name("qore_rt_coerce_value", linst->foreach_assignment),
                                 llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
                         coerced = builder->CreateCall(coerce_fn,
                                 {ti_as_ptr, boxed, cleanup, xsink_arg});
@@ -15581,14 +15649,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* stripped;
                 if (aot_mode) {
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
-                    auto strip_fn = module.getOrInsertFunction("qore_rt_coerce_value_aot",
+                    auto strip_fn = module.getOrInsertFunction(qore_store_helper_name("qore_rt_coerce_value_aot", linst->foreach_assignment),
                             llvm::FunctionType::get(i64_type,
                                     {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
                     stripped = builder->CreateCall(strip_fn,
                             {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
                              boxed, cleanup, xsink_arg});
                 } else {
-                    auto strip_fn = module.getOrInsertFunction("qore_rt_coerce_value",
+                    auto strip_fn = module.getOrInsertFunction(qore_store_helper_name("qore_rt_coerce_value", linst->foreach_assignment),
                             llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
                     llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(local_ti));
@@ -15899,9 +15967,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (aot_mode) {
                     auto aot_ft = llvm::FunctionType::get(void_type,
                             {ptr_type, i32_type, i64_type, ptr_type}, false);
-                    auto assign_helper = module.getOrInsertFunction(aot_helper_name, aot_ft);
+                    auto assign_helper = module.getOrInsertFunction(qore_store_helper_name(aot_helper_name, linst->foreach_assignment), aot_ft);
                     auto assign_helper_throwing = module.getOrInsertFunction(
-                            aot_helper_throwing_name, aot_ft);
+                            qore_store_helper_name(aot_helper_throwing_name, linst->foreach_assignment), aot_ft);
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
                     emitMaybeInvoke(assign_helper, assign_helper_throwing,
                             {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
@@ -15910,9 +15978,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 } else {
                     auto jit_ft = llvm::FunctionType::get(void_type,
                             {ptr_type, i64_type, ptr_type}, false);
-                    auto assign_helper = module.getOrInsertFunction(jit_helper_name, jit_ft);
+                    auto assign_helper = module.getOrInsertFunction(qore_store_helper_name(jit_helper_name, linst->foreach_assignment), jit_ft);
                     auto assign_helper_throwing = module.getOrInsertFunction(
-                            jit_helper_throwing_name, jit_ft);
+                            qore_store_helper_name(jit_helper_throwing_name, linst->foreach_assignment), jit_ft);
                     llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(linst->local));
                     llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
@@ -27095,8 +27163,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 const char* helper_throwing_name = linst->mode != AssignmentMode::Normal
                         ? "qore_rt_store_closure_aot_throwing"
                         : "qore_rt_store_closure_eval_weak_aot_throwing";
-                auto helper = module.getOrInsertFunction(helper_name, sc_ft);
-                auto helper_throwing = module.getOrInsertFunction(helper_throwing_name, sc_ft);
+                auto helper = module.getOrInsertFunction(qore_store_helper_name(helper_name, linst->foreach_assignment), sc_ft);
+                auto helper_throwing = module.getOrInsertFunction(qore_store_helper_name(helper_throwing_name, linst->foreach_assignment), sc_ft);
                 emitMaybeInvoke(helper, helper_throwing,
                         {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
                          val_boxed, xsink_arg},
@@ -27122,8 +27190,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 const char* helper_throwing_name = linst->mode != AssignmentMode::Normal
                         ? "qore_rt_assign_local_throwing"
                         : "qore_rt_assign_local_eval_weak_throwing";
-                auto helper = module.getOrInsertFunction(helper_name, al_ft);
-                auto helper_throwing = module.getOrInsertFunction(helper_throwing_name, al_ft);
+                auto helper = module.getOrInsertFunction(qore_store_helper_name(helper_name, linst->foreach_assignment), al_ft);
+                auto helper_throwing = module.getOrInsertFunction(qore_store_helper_name(helper_throwing_name, linst->foreach_assignment), al_ft);
                 emitMaybeInvoke(helper, helper_throwing,
                         {var_as_ptr, val_boxed, xsink_arg},
                         module, llvm_func, inst);
