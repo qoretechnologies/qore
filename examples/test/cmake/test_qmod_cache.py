@@ -1095,6 +1095,47 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertNotIn("Traceback", self.output)
         self.assertEqual("miss", self.origins()["Mid"])
 
+    def test_symbolic_links_are_not_followed(self):
+        """A symbolic link in the cache (an entry, a base key directory, an object directory or a stored file) is
+        never followed: the module is a miss, and the link's target is neither read nor removed"""
+        self.build_all()
+        keys = self.keys()
+        cache = qc.Cache(str(self.cache))
+        elsewhere = self.root / "elsewhere"
+        elsewhere.mkdir()
+        def entry_of(name):
+            return [e for e in self.entries() if e.stem == keys[name]][0]
+        # Base: the entry is a link to a copy of itself
+        e = entry_of("Base")
+        shutil.copy(str(e), str(elsewhere / "Base.json"))
+        e.unlink()
+        e.symlink_to(elsewhere / "Base.json")
+        # Mid: the object directory is a link to a copy of itself
+        obj = Path(cache.object_dir(keys["Mid"]))
+        shutil.copytree(str(obj), str(elsewhere / "Mid"))
+        shutil.rmtree(str(obj))
+        obj.symlink_to(elsewhere / "Mid")
+        # Top: the stored module is a link to a copy of itself
+        obj = Path(cache.object_dir(keys["Top"]))
+        shutil.copy(str(obj / "qmod"), str(elsewhere / "Top.qmod"))
+        (obj / "qmod").unlink()
+        (obj / "qmod").symlink_to(elsewhere / "Top.qmod")
+        # Other: the base key directory is a link to a copy of itself
+        base_dir = entry_of("Other").parent
+        shutil.copytree(str(base_dir), str(elsewhere / "Other"))
+        shutil.rmtree(str(base_dir))
+        base_dir.symlink_to(elsewhere / "Other")
+        before = sorted((str(p), p.read_bytes()) for p in elsewhere.rglob("*") if p.is_file())
+        self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all())
+        self.assertNotIn("Traceback", self.output)
+        self.assertEqual(before, sorted((str(p), p.read_bytes()) for p in elsewhere.rglob("*") if p.is_file()))
+        # the links were replaced by what the compiles stored
+        self.assertEqual([], self.build_all())
+        for p in (self.cache / qc.SCHEMA).rglob("*"):
+            self.assertFalse(p.is_symlink(), p)
+        self.prune("--max-size", "0")
+        self.assertEqual(before, sorted((str(p), p.read_bytes()) for p in elsewhere.rglob("*") if p.is_file()))
+
     def test_changed_binary_module_dependency(self):
         self.build_all()
         self.assertEqual([], self.build_all())

@@ -223,6 +223,13 @@ an entry with a temporary file renamed over it, so concurrent builds (`make -j`,
 directory) never see a partial entry; the first object stored for a key wins.  At most 8 entries are kept under one
 base key.
 
+No symbolic link below the cache directory is followed (the cache directory itself may be one, as the link through
+which CMake reaches a mount path with spaces): each directory is opened with `O_NOFOLLOW` from its parent's
+descriptor and each file with `O_NOFOLLOW`, so a link in the place of an entry, a base key directory, an object or one
+of its files makes the entry invalid; a job that writes the cache, and prune, remove the link itself, never what it
+points to.  Entries are written with a new file renamed over the old one in the same directory, which replaces a
+link rather than writing through it.
+
 ### Trust levels
 
 Whoever can write to a cache directory can make a build use a module that qcc never wrote, and the digests in an

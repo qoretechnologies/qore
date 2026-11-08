@@ -211,24 +211,6 @@ def atomic_write(path, data):
         raise
 
 
-def atomic_copy(src, dst, mode=None):
-    """Copies a file to a temporary file beside the destination and renames it over the destination"""
-    directory = os.path.dirname(dst) or "."
-    fd, tmp = tempfile.mkstemp(prefix=".qmod-cache.", dir=directory)
-    try:
-        with os.fdopen(fd, "wb") as out, open(src, "rb") as inp:
-            shutil.copyfileobj(inp, out, 1 << 20)
-        if mode is not None:
-            os.chmod(tmp, mode)
-        os.replace(tmp, dst)
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
-
-
 # ---------------------------------------------------------------------------------------------------------------------
 # depfiles, fingerprints and module metadata
 
@@ -1184,6 +1166,61 @@ def entry_problem(entry, key):
     return None
 
 
+O_CLOEXEC = getattr(os, "O_CLOEXEC", 0)
+O_DIRECTORY = getattr(os, "O_DIRECTORY", 0)
+#: the largest entry read: an entry has a few KiB, a larger file is no entry
+MAX_ENTRY_SIZE = 16 << 20
+
+
+def open_regular(name, dir_fd=None):
+    """Opens a regular file for reading without following a symbolic link (O_NOFOLLOW); raises OSError for a link
+    and CacheError for a file of another type"""
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | O_CLOEXEC, dir_fd=dir_fd)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise CacheError("'%s' is no regular file" % name)
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+def read_fd(fd, limit=None):
+    chunks = []
+    total = 0
+    while True:
+        block = os.read(fd, 1 << 20)
+        if not block:
+            return b"".join(chunks)
+        total += len(block)
+        if limit is not None and total > limit:
+            raise CacheError("the file is larger than %d bytes" % limit)
+        chunks.append(block)
+
+
+def remove_path(path):
+    """Removes a file, a symbolic link (never what it points to) or a directory tree; best effort"""
+    try:
+        st = os.lstat(path)
+    except OSError:
+        return
+    if stat.S_ISDIR(st.st_mode):
+        shutil.rmtree(path, ignore_errors=True)
+    else:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
+def is_real_dir(path):
+    """True for a directory that is not a symbolic link"""
+    try:
+        return stat.S_ISDIR(os.lstat(path).st_mode)
+    except OSError:
+        return False
+
+
 class Cache:
     """The cache directory: <dir>/<SCHEMA>/entries/<base key>/<result key>.json and objects/<result key>/
 
@@ -1198,20 +1235,121 @@ class Cache:
       entries are pruned first.
     Only one job prunes at a time (prune.lock, taken without waiting: a job finding another job pruning skips its
     own prune).
+
+    No symbolic link below <dir> is followed: every directory below it is opened with O_NOFOLLOW from its parent's
+    descriptor and every file with O_NOFOLLOW, so a link in the cache (an entry, a base key directory, an object or
+    one of its files) is an invalid entry, never what it points to; removing one removes the link only.
     """
 
     def __init__(self, directory):
-        self.root = os.path.join(os.path.abspath(directory), SCHEMA)
+        self.dir = os.path.abspath(directory)
+        self.root = os.path.join(self.dir, SCHEMA)
         self.entries = os.path.join(self.root, "entries")
         self.objects = os.path.join(self.root, "objects")
         self.trash = os.path.join(self.root, "trash")
+
+    # access without following symbolic links
+
+    def open_dir(self, *parts):
+        """Returns a descriptor of <root>/<parts>, following no symbolic link below the cache directory (which itself
+        may be one: a mount reached through a link)"""
+        fd = os.open(self.dir, os.O_RDONLY | O_DIRECTORY | O_CLOEXEC)
+        try:
+            for name in (SCHEMA,) + parts:
+                nfd = os.open(name, os.O_RDONLY | O_DIRECTORY | os.O_NOFOLLOW | O_CLOEXEC, dir_fd=fd)
+                os.close(fd)
+                fd = nfd
+                if not stat.S_ISDIR(os.fstat(fd).st_mode):
+                    raise CacheError("'%s' is no directory" % name)
+        except BaseException:
+            os.close(fd)
+            raise
+        return fd
+
+    def open_file(self, *parts):
+        """Returns a descriptor of the regular file <root>/<parts>, following no symbolic link"""
+        dfd = self.open_dir(*parts[:-1])
+        try:
+            return open_regular(parts[-1], dfd)
+        finally:
+            os.close(dfd)
+
+    def read_file(self, *parts, limit=None):
+        fd = self.open_file(*parts)
+        try:
+            return read_fd(fd, limit)
+        finally:
+            os.close(fd)
+
+    def file_sha256(self, *parts):
+        fd = self.open_file(*parts)
+        try:
+            h = hashlib.sha256()
+            while True:
+                block = os.read(fd, 1 << 20)
+                if not block:
+                    return h.hexdigest()
+                h.update(block)
+        finally:
+            os.close(fd)
+
+    def read_entry(self, base, key):
+        """Reads an entry; raises any exception for one that cannot be read (see candidates())"""
+        return json.loads(self.read_file("entries", base, key + ".json", limit=MAX_ENTRY_SIZE).decode("utf-8"))
+
+    def has_object(self, key):
+        return is_real_dir(self.object_dir(key))
+
+    def make_dirs(self, *parts):
+        """Creates <root>/<parts> as directories; a symbolic link or a file in the place of one is removed first (the
+        cache directory itself is created as needed, and may be a link)"""
+        os.makedirs(self.dir, exist_ok=True)
+        path = self.dir
+        for name in (SCHEMA,) + parts:
+            path = os.path.join(path, name)
+            try:
+                if stat.S_ISDIR(os.lstat(path).st_mode):
+                    continue
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
+            try:
+                os.mkdir(path)
+            except FileExistsError:
+                # another job created it; open_dir() refuses it if it is no directory
+                pass
+
+    def write_file(self, data, *parts, mode=0o644):
+        """Writes <root>/<parts> by renaming a new file over it in the same directory (a link there is replaced, not
+        followed)"""
+        self.make_dirs(*parts[:-1])
+        dfd = self.open_dir(*parts[:-1])
+        try:
+            tmp = ".qmod-cache.%d.%s" % (os.getpid(), os.urandom(8).hex())
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | O_CLOEXEC, mode, dir_fd=dfd)
+            try:
+                try:
+                    view = memoryview(data)
+                    while view:
+                        view = view[os.write(fd, view):]
+                finally:
+                    os.close(fd)
+                os.rename(tmp, parts[-1], src_dir_fd=dfd, dst_dir_fd=dfd)
+            except BaseException:
+                try:
+                    os.unlink(tmp, dir_fd=dfd)
+                except OSError:
+                    pass
+                raise
+        finally:
+            os.close(dfd)
 
     def last_use(self, entry_path, key):
         """The last use of an entry: its last hit (the mtime of its lock file) or when it was stored"""
         used = 0
         for p in (entry_path, self.lock_path(key)):
             try:
-                used = max(used, os.stat(p).st_mtime)
+                used = max(used, os.lstat(p).st_mtime)
             except OSError:
                 pass
         return used
@@ -1228,42 +1366,52 @@ class Cache:
         # a rename keeps the directory's modification time; prune ages the quarantine by the time in its name, and
         # this one is for tools that look at the modification time
         try:
-            os.utime(dst, (now, now))
-        except OSError:
+            os.utime(dst, (now, now), follow_symlinks=False)
+        except (OSError, NotImplementedError):
             pass
         return dst
 
     def candidates(self, base, remove_invalid=False):
         """Returns the valid entries stored under a base key, most recently used first
 
-        An entry that cannot be read (any exception while it is read or checked) or that entry_problem() refuses is
+        An entry that cannot be read (any exception while it is read or checked: a symbolic link, a file of another
+        type, malformed JSON, JSON nested deeper than the parser's recursion limit) or that entry_problem() refuses is
         left out, and removed with @p remove_invalid (a cache this job writes to).
         """
         d = os.path.join(self.entries, base)
         try:
-            names = [n for n in os.listdir(d) if n.endswith(".json")]
-        except OSError:
+            dfd = self.open_dir("entries", base)
+        except (OSError, CacheError):
+            # a base key directory that is a link is no directory of the cache
+            if remove_invalid and os.path.islink(d):
+                remove_path(d)
             return []
-        rv = []
-        for n in names:
-            p = os.path.join(d, n)
-            key = n[:-5]
-            try:
-                with open(p, "r", encoding="utf-8") as f:
-                    entry = json.load(f)
-                problem = entry_problem(entry, key) or (entry.get("base_key") != base and "another base key")
-            except FileNotFoundError:
-                # removed since it was listed
-                continue
-            except Exception as e:
-                # whatever an entry holds, reading it never fails the build: JSON nested deeper than the parser's
-                # recursion limit raises RecursionError, an entry of another file type OSError, and so on
-                problem = "the entry cannot be read: %s" % e.__class__.__name__
-            if problem:
-                if remove_invalid:
-                    self.remove(p, key)
-                continue
-            rv.append((self.last_use(p, key), p, entry))
+        try:
+            names = [n for n in os.listdir(dfd) if n.endswith(".json") and not n.startswith(".")]
+            rv = []
+            for n in names:
+                p = os.path.join(d, n)
+                key = n[:-5]
+                try:
+                    fd = open_regular(n, dfd)
+                    try:
+                        entry = json.loads(read_fd(fd, MAX_ENTRY_SIZE).decode("utf-8"))
+                    finally:
+                        os.close(fd)
+                    problem = entry_problem(entry, key) or (entry.get("base_key") != base and "another base key")
+                except FileNotFoundError:
+                    # removed since it was listed
+                    continue
+                except Exception as e:
+                    # whatever an entry holds, reading it never fails the build
+                    problem = "the entry cannot be read: %s" % e.__class__.__name__
+                if problem:
+                    if remove_invalid:
+                        self.remove(p, key)
+                    continue
+                rv.append((self.last_use(p, key), p, entry))
+        finally:
+            os.close(dfd)
         rv.sort(key=lambda e: e[0], reverse=True)
         return [(p, e) for _, p, e in rv]
 
@@ -1274,17 +1422,26 @@ class Cache:
         return os.path.join(self.objects, key + ".lock")
 
     def open_lock(self, key, create=True):
-        """Opens the lock file of an entry; returns None if it cannot be opened (a cache that cannot be written)"""
-        path = self.lock_path(key)
+        """Opens the lock file of an entry; returns None if it cannot be opened (a cache that cannot be written, or a
+        lock file that is a link)"""
+        flags = os.O_NOFOLLOW | O_CLOEXEC
         if create:
             try:
-                os.makedirs(self.objects, exist_ok=True)
-                return os.open(path, os.O_RDWR | os.O_CREAT, 0o666)
-            except OSError:
+                self.make_dirs("objects")
+                dfd = self.open_dir("objects")
+                try:
+                    return os.open(key + ".lock", os.O_RDWR | os.O_CREAT | flags, 0o666, dir_fd=dfd)
+                finally:
+                    os.close(dfd)
+            except (OSError, CacheError):
                 pass
         try:
-            return os.open(path, os.O_RDONLY)
-        except OSError:
+            dfd = self.open_dir("objects")
+            try:
+                return os.open(key + ".lock", os.O_RDONLY | flags, dir_fd=dfd)
+            finally:
+                os.close(dfd)
+        except (OSError, CacheError):
             return None
 
     def mark_used(self, fd):
@@ -1297,18 +1454,24 @@ class Cache:
             pass
 
     def remove(self, entry_path, key):
-        """Removes an entry and its object unless a job is reading it; returns False if it is in use"""
+        """Removes an entry and its object unless a job is reading it; returns False if it is in use
+
+        A link in the place of the entry or of the object is removed, never what it points to.
+        """
         fd = self.open_lock(key)
         if fd is None:
-            return False
-        try:
-            try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except OSError:
+            # a lock file that is a link: removed with what it guards
+            if not os.path.islink(self.lock_path(key)):
                 return False
-            os.makedirs(self.trash, exist_ok=True)
+        moved = []
+        try:
+            if fd is not None:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except OSError:
+                    return False
+            self.make_dirs("trash")
             tag = "%s.%d.%d" % (key, os.getpid(), int(time.time() * 1e6))
-            moved = []
             for src, dst in ((entry_path, os.path.join(self.trash, tag + ".json")),
                              (self.object_dir(key), os.path.join(self.trash, tag))):
                 try:
@@ -1322,42 +1485,35 @@ class Cache:
             except OSError:
                 pass
         finally:
-            os.close(fd)
+            if fd is not None:
+                os.close(fd)
         for p in moved:
-            if os.path.isdir(p):
-                shutil.rmtree(p, ignore_errors=True)
-            else:
-                try:
-                    os.unlink(p)
-                except OSError:
-                    pass
+            remove_path(p)
         return True
 
     def valid_object(self, base, key, signer=None):
         """True if the object of a key is backed by a valid entry: one that exists, is signed with the signing key
         (when one is set) and has the digests of the object's files"""
         try:
-            with open(os.path.join(self.entries, base, key + ".json"), "r", encoding="utf-8") as f:
-                entry = json.load(f)
+            entry = self.read_entry(base, key)
             if entry_problem(entry, key) or check_signature(entry, signer):
                 return False
-            obj = self.object_dir(key)
-            return all(sha256_file(os.path.join(obj, "qmod" + suffix)) == entry["files"][suffix or "qmod"]
+            return all(self.file_sha256("objects", key, "qmod" + suffix) == entry["files"][suffix or "qmod"]
                        for suffix in STORED_SUFFIXES)
         except Exception:
-            # any exception reading the entry (see candidates()) makes it invalid
+            # any exception reading the entry or its files (see candidates()) makes it invalid
             return False
 
     def store(self, base, key, entry, files, signer=None):
         """Stores the files of a compiled module
 
-        An object that no valid entry backs (a damaged or forged one, an interrupted store) is replaced.  When a valid
-        entry exists already (another job stored the key first), the files must be the same: KeyCollision is raised
-        otherwise, as the key then misses an input.
+        An object that no valid entry backs (a damaged or forged one, an interrupted store, a link) is replaced.  When
+        a valid entry exists already (another job stored the key first), the files must be the same: KeyCollision is
+        raised otherwise, as the key then misses an input.
         """
         obj = self.object_dir(key)
         entry_path = os.path.join(self.entries, base, key + ".json")
-        if os.path.isdir(obj) and not self.valid_object(base, key, signer):
+        if os.path.lexists(obj) and not self.valid_object(base, key, signer):
             if not self.remove(entry_path, key):
                 raise OSError("the invalid entry %s is being read by another job" % key)
         fd = self.open_lock(key)
@@ -1367,7 +1523,8 @@ class Cache:
             # shared: a store does not conflict with a reader, but an entry being stored is not pruned
             fcntl.flock(fd, fcntl.LOCK_SH)
             created = False
-            if not os.path.isdir(obj):
+            if not os.path.lexists(obj):
+                self.make_dirs("objects")
                 tmp = tempfile.mkdtemp(prefix=".tmp.", dir=self.objects)
                 try:
                     for suffix, src in files.items():
@@ -1377,19 +1534,18 @@ class Cache:
                         created = True
                     except OSError:
                         # another job stored it meanwhile
-                        if not os.path.isdir(obj):
+                        if not os.path.lexists(obj):
                             raise
                 finally:
                     shutil.rmtree(tmp, ignore_errors=True)
             if not created:
                 # the same key must give the same files: anything else means that the key misses an input
                 for suffix in files:
-                    stored = os.path.join(obj, "qmod" + suffix)
-                    if sha256_file(stored) != entry["files"][suffix or "qmod"]:
+                    if self.file_sha256("objects", key, "qmod" + suffix) != entry["files"][suffix or "qmod"]:
                         raise KeyCollision("the cache has another module for key %s (file 'qmod%s'): qcc wrote "
                                            "different files for the same inputs" % (key, suffix))
-            os.makedirs(os.path.dirname(entry_path), exist_ok=True)
-            atomic_write(entry_path, (json.dumps(entry, sort_keys=True, indent=1) + "\n").encode())
+            self.write_file((json.dumps(entry, sort_keys=True, indent=1) + "\n").encode(), "entries", base,
+                            key + ".json")
             self.mark_used(fd)
         finally:
             os.close(fd)
@@ -1509,7 +1665,6 @@ class Module:
                 if not readonly:
                     cache.remove(path, key)
                 continue
-            obj = cache.object_dir(key)
             # held while the entry is read, so that no job prunes it meanwhile
             fd = cache.open_lock(key, create=not readonly)
             damaged = None
@@ -1517,28 +1672,26 @@ class Module:
                 if fd is not None:
                     fcntl.flock(fd, fcntl.LOCK_SH)
                 try:
-                    if not os.path.isdir(obj):
-                        # removed since it was listed
-                        raise FileNotFoundError(obj)
-                    for suffix in STORED_SUFFIXES:
-                        if sha256_file(os.path.join(obj, "qmod" + suffix)) != entry["files"][suffix or "qmod"]:
-                            raise CacheError("stored file 'qmod%s' is damaged" % suffix)
-                    if not contains_identity(os.path.join(obj, "qmod"), self.identity):
-                        raise CacheError("stored module lacks the AOT runtime identity %s" % self.identity)
-                    target, _ = read_depfile(os.path.join(obj, "qmod.d"))
-                    if os.path.abspath(target) != self.out:
-                        raise CacheError("stored dependency file names '%s'" % target)
+                    restored = self.restore(cache, entry)
                 except FileNotFoundError:
+                    # removed since it was listed
                     reason = "entry removed"
                     continue
-                except (OSError, CacheError) as e:
-                    reason = damaged = str(e)
+                except Exception as e:
+                    reason = damaged = str(e) or e.__class__.__name__
                     continue
-                # the dependency file and fingerprints first, the module last, each renamed into place, the module
-                # with the mode qcc gave it
+                # the dependency file and fingerprints first, the module last, each renamed into place
                 for suffix in (".d", ".d.fingerprints", ""):
-                    atomic_copy(os.path.join(obj, "qmod" + suffix), self.out + suffix,
-                                None if suffix else int(entry["mode"]) & 0o777)
+                    try:
+                        os.replace(restored[suffix], self.out + suffix)
+                    except BaseException:
+                        for tmp in restored.values():
+                            try:
+                                os.unlink(tmp)
+                            except OSError:
+                                pass
+                        raise
+                    del restored[suffix]
                     corrupt = self.env.get("QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE")
                     if corrupt and (corrupt == suffix or (corrupt in ("1", "qmod") and suffix == "")):
                         # for the tests: a copy that went wrong
@@ -1558,6 +1711,52 @@ class Module:
                 if damaged and not readonly:
                     cache.remove(path, key)
         return None, reason
+
+    def restore(self, cache, entry):
+        """Copies the stored files of an entry to temporary files beside the module's files and checks them; returns
+        {suffix: temporary file}, or raises
+
+        Each stored file is opened without following a symbolic link and copied while its digest is computed, and must
+        have the digest of the entry; the module must contain the build's AOT runtime identity, and the depfile must
+        name the module.  The module gets the mode qcc gave it.
+        """
+        key = entry["key"]
+        if not cache.has_object(key):
+            raise FileNotFoundError(cache.object_dir(key))
+        tmps = {}
+        try:
+            for suffix in STORED_SUFFIXES:
+                src = cache.open_file("objects", key, "qmod" + suffix)
+                try:
+                    dst = self.out + suffix
+                    tfd, tmp = tempfile.mkstemp(prefix=".qmod-cache.", dir=os.path.dirname(dst) or ".")
+                    tmps[suffix] = tmp
+                    h = hashlib.sha256()
+                    with os.fdopen(tfd, "wb") as out:
+                        while True:
+                            block = os.read(src, 1 << 20)
+                            if not block:
+                                break
+                            h.update(block)
+                            out.write(block)
+                finally:
+                    os.close(src)
+                if h.hexdigest() != entry["files"][suffix or "qmod"]:
+                    raise CacheError("stored file 'qmod%s' is damaged" % suffix)
+            os.chmod(tmps[""], int(entry["mode"]) & 0o777)
+            if not contains_identity(tmps[""], self.identity):
+                raise CacheError("stored module lacks the AOT runtime identity %s" % self.identity)
+            target, _ = read_depfile(tmps[".d"])
+            if os.path.abspath(target) != self.out:
+                raise CacheError("stored dependency file names '%s'" % target)
+            rv, tmps = tmps, {}
+            return rv
+        finally:
+            for tmp in tmps.values():
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
 
     def run_qcc(self, argv=None):
         return subprocess.run(argv or self.argv, env=qcc_environment(self.env)).returncode
@@ -1919,34 +2118,36 @@ ORPHAN_AGE = 3600
 def cache_entries(cache):
     """Returns [last use, entry path, key, size] of every entry of the cache"""
     rv = []
+    # no symbolic link is followed (see Cache)
+    if not is_real_dir(cache.root) or not is_real_dir(cache.entries):
+        return rv
     try:
         bases = os.listdir(cache.entries)
     except OSError:
         return rv
     for base in bases:
         d = os.path.join(cache.entries, base)
+        if not is_real_dir(d):
+            continue
         try:
             names = os.listdir(d)
         except OSError:
             continue
         for n in names:
-            if not n.endswith(".json"):
+            if not n.endswith(".json") or n.startswith("."):
                 continue
             p = os.path.join(d, n)
             key = n[:-5]
             try:
-                used = os.stat(p).st_mtime
+                st = os.lstat(p)
             except OSError:
                 continue
+            used = st.st_mtime
             try:
-                used = max(used, os.stat(cache.lock_path(key)).st_mtime)
+                used = max(used, os.lstat(cache.lock_path(key)).st_mtime)
             except OSError:
                 pass
-            size = dir_size(cache.object_dir(key))
-            try:
-                size += os.stat(p).st_size
-            except OSError:
-                pass
+            size = st.st_size + (dir_size(cache.object_dir(key)) if cache.has_object(key) else 0)
             rv.append([used, p, key, size])
     return rv
 
@@ -1960,8 +2161,24 @@ def remove_orphans(cache, now):
             return False
     keys = set(k for _, _, k, _ in cache_entries(cache))
     removed = 0
+    # a symbolic link in the place of a directory of the cache is removed (the link, not what it points to)
+    for d in (cache.root, cache.entries, cache.objects, cache.trash):
+        if os.path.islink(d) and old(d):
+            remove_path(d)
+            removed += 1
+    if not is_real_dir(cache.root):
+        return removed
     try:
-        names = os.listdir(cache.objects)
+        bases = os.listdir(cache.entries) if is_real_dir(cache.entries) else []
+    except OSError:
+        bases = []
+    for base in bases:
+        d = os.path.join(cache.entries, base)
+        if not is_real_dir(d) and old(d):
+            remove_path(d)
+            removed += 1
+    try:
+        names = os.listdir(cache.objects) if is_real_dir(cache.objects) else []
     except OSError:
         names = []
     for n in names:
@@ -1972,17 +2189,19 @@ def remove_orphans(cache, now):
         if n.startswith(".tmp.") or not n.endswith(".lock"):
             # an interrupted store, or an object without an entry: taken out under its lock like an entry
             if n.startswith(".tmp."):
-                shutil.rmtree(p, ignore_errors=True)
+                remove_path(p)
                 removed += 1
             elif cache.remove(os.path.join(cache.entries, "-", key + ".json"), key):
                 removed += 1
-        elif not os.path.isdir(cache.object_dir(key)):
+        elif os.path.islink(p):
+            remove_path(p)
+        elif not cache.has_object(key):
             # a lock file without an object
             fd = cache.open_lock(key, create=False)
             if fd is not None:
                 try:
                     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    if not os.path.isdir(cache.object_dir(key)):
+                    if not cache.has_object(key):
                         os.unlink(p)
                 except OSError:
                     pass
@@ -1990,18 +2209,15 @@ def remove_orphans(cache, now):
                     os.close(fd)
     # entries without an object
     for used, p, key, _ in cache_entries(cache):
-        if not os.path.isdir(cache.object_dir(key)) and now - used > ORPHAN_AGE:
+        if not cache.has_object(key) and now - used > ORPHAN_AGE:
             if cache.remove(p, key):
                 removed += 1
     # the leftovers of interrupted removals
     try:
-        for n in os.listdir(cache.trash):
+        for n in os.listdir(cache.trash) if is_real_dir(cache.trash) else []:
             p = os.path.join(cache.trash, n)
             if old(p):
-                if os.path.isdir(p):
-                    shutil.rmtree(p, ignore_errors=True)
-                else:
-                    os.unlink(p)
+                remove_path(p)
     except OSError:
         pass
     return removed
@@ -2027,8 +2243,12 @@ def cmd_prune(args):
     before = dir_size(cache.root)
     stats = {"age": 0, "size": 0, "orphans": 0, "quarantined caches": 0, "in use": 0}
     note = ""
-    os.makedirs(cache.root, exist_ok=True)
-    lock_fd = os.open(os.path.join(cache.root, "prune.lock"), os.O_RDWR | os.O_CREAT, 0o666)
+    cache.make_dirs()
+    dfd = cache.open_dir()
+    try:
+        lock_fd = os.open("prune.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | O_CLOEXEC, 0o666, dir_fd=dfd)
+    finally:
+        os.close(dfd)
     try:
         try:
             fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -2041,7 +2261,7 @@ def cmd_prune(args):
             for n in os.listdir(parent):
                 p = os.path.join(parent, n)
                 if n.startswith(SCHEMA + ".quarantine.") and now - quarantine_time(n) > ORPHAN_AGE:
-                    shutil.rmtree(p, ignore_errors=True)
+                    remove_path(p)
                     stats["quarantined caches"] += 1
             entries = cache_entries(cache)
             keep = []
@@ -2072,7 +2292,7 @@ def cmd_prune(args):
                     else:
                         busy.add(key)
             stats["in use"] = len(busy)
-            for base in os.listdir(cache.entries) if os.path.isdir(cache.entries) else []:
+            for base in os.listdir(cache.entries) if is_real_dir(cache.entries) else []:
                 try:
                     os.rmdir(os.path.join(cache.entries, base))
                 except OSError:
