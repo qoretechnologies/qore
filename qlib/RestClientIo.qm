@@ -27,6 +27,7 @@
 %allow-weak-references
 
 %requires Logger
+%requires DataProvider
 %requires(reexport) RestClient >= 2.4
 %requires(reexport) HttpClientIo
 %requires(reexport) HttpClientStreamingIo
@@ -118,6 +119,9 @@ hash<RestResponseInfo> resp2 = f2.get(30s);
     Only explicitly transient HTTP and transport errors are retried. Cancellation interrupts backoff
     and pending response waits; final request exceptions retain their original error and add an
     attempts count to their argument. Observers receive metadata only, without request content.
+    No request is retried while
+    @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed" in the calling
+    thread, as while a data provider requests example data.
 
     @code{.py}
     RestRetryPolicy policy(<RestRetryOptions>{"max_retries": 2, "timeout": 5s});
@@ -292,6 +296,11 @@ public namespace RestClientIo {
         of one logical operation. Attempts are counted per execute() call. Create a new policy for each
         new operation. Retry state is local, so concurrent calls do not change each other's options.
 
+        No request is retried while
+        @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed" in the calling
+        thread (see @ref DataProvider::DataProviderRetryUtil::runWithoutRetries() "runWithoutRetries()"), as while
+        a data provider requests example data: the first error is raised with \c arg.attempts set to 1.
+
         @note Only opt in for operations that are safe to replay; the client cannot infer POST idempotency.
         Final request errors preserve their code/description and arguments, adding \c arg.attempts.
         Non-hash arguments are preserved in \c arg.original_arg. Cancellation is never retried.
@@ -371,7 +380,10 @@ public namespace RestClientIo {
                     hash<auto!> arg = ex.arg.typeCode() == NT_HASH ? {} + ex.arg
                         : (exists ex.arg ? {"original_arg": ex.arg} : {});
                     arg.attempts = attempts;
-                    bool retryable = isRetryableError(ex);
+                    # nothing is retried while a data provider requests example data in this thread (see
+                    # DataProvider::DataProviderRetryUtil::runWithoutRetries())
+                    bool retryable = !DataProvider::DataProviderRetryUtil::retriesSuppressed()
+                        && isRetryableError(ex);
                     remaining = (deadline_us - retryNow()) / 1000;
                     *int advised = retryAfter(ex);
                     int delay = advised ?? retryJitter(backoff);
