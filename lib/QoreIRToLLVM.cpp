@@ -16241,7 +16241,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Skip non-entry locals that were never instantiated (never had a first store).
             // This check is critical: if StoreLocal was never executed for this local
             // (e.g., control flow skipped the declaration), we must not uninstantiate it.
-            if (instantiated_non_entry_locals.count(key) == 0) {
+            // A closure-bound local is popped by a helper that checks at runtime that the current frame has it
+            // (qore_rt_pop_closure_var()): the store that instantiates it (StoreClosure) records nothing here, and an
+            // exception cleanup block can be lowered before that store, so that the variable of a foreach loop
+            // bound by a closure was never released at the end of the statement or on the way of an exception out
+            // of it, but by the exit of the function, after its on_exit and on_error handlers
+            const bool closure_local = linst->local->closureUse();
+            if (!closure_local && instantiated_non_entry_locals.count(key) == 0) {
                 return true;
             }
 
@@ -16305,8 +16311,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else {
                 // qore_rt_uninstantiate_local handles closure-use vars (clears
                 // CVV when refs==1) and non-closure vars (plain uninstantiate)
-                // uniformly, so there is no separate block-exit variant.
-                auto helper = module.getOrInsertFunction("qore_rt_uninstantiate_local",
+                // uniformly, so there is no separate block-exit variant; a closure-bound local is popped only if the
+                // current frame has it (see above)
+                auto helper = module.getOrInsertFunction(closure_local ? "qore_rt_pop_closure_var"
+                        : "qore_rt_uninstantiate_local",
                         llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
                 llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(linst->local));

@@ -558,7 +558,11 @@ declaration order, an owned IR-only cache as an alloca and a runtime-stack local
 with a runtime-stack local tagged with bit 1 and releases it last entry first. The inline form
 includes runtime-stack locals only at an exception exit; the array form, shared by every exit,
 includes them always, and a local already released at a normal exit is released again as no value.
-AOT code includes no runtime-stack locals (the runtime stack releases them in that order).
+AOT code instantiates its body locals on the runtime stack at entry (`aot_body_locals`): their
+values are released at their places too, by slot (`qore_rt_clear_local_aot()`, or the variable read
+from the context at entry in the array form), before the runtime stack removes the variables; left
+to the runtime stack, a closure-bound local popped at its place was still held by a closure in a
+later runtime-stack local, and closure-bound locals died in the order of their closures.
 Closure-bound body locals are in the sequence too, in JIT and AOT code: one that the frame
 instantiated is popped from the closure stack at its place (`qore_rt_pop_closure_var()`, tag 3 in
 the array form, which looks it up in the current frame only), so that a closure still holding it
@@ -569,15 +573,26 @@ closure-bound variable only at runtime: the array form reads it from the context
 entry (`qore_rt_aot_local_var()`). Left to the frame boundary, such a variable was released after
 the frame's other locals and without an exception sink, which lost an exception raised by a
 destructor (a debug build aborted). The IR interpreter clears a closure-bound slot's variable at its
-place when no closure holds it; its frame instantiation cleanup pops it afterwards.
-The IR interpreter also releases the iterator of a foreach statement still running at its place:
-the AST interpreter releases the value a foreach statement iterates when the statement ends, after
-the locals of the loop body and before the loop variable and the locals declared before the
-statement. `computeSlotIdsAndEmbed()` records, for each instruction creating such an iterator, the
-slots assigned before it, and the loop variable's slot if it is the first assigned after it
-(`QoreIRFunction::interpreter_iterator_slot_boundary`); `SlotCacheCleanup` and
-`cleanupLocalCaches(false)` release an iterator after the slots from that boundary on
+place when no closure holds it; its frame instantiation cleanup pops it afterwards. Native code
+lowers the `UninstantiateLocal` of a closure-bound block local as `qore_rt_pop_closure_var()`,
+which checks at runtime that the current frame has the variable: the store that instantiates it
+records nothing at lowering time, so that the variable of a foreach statement bound by a closure
+was released neither at the end of the statement nor by its exception cleanup. A foreach over a
+reference releases its loop variables on its exception path too.
+
+The value a foreach statement iterates is released at its place as well: the AST interpreter
+releases it when the statement ends, after the locals of the loop body and before the loop
+variable and the locals declared before the statement. `computeSlotIdsAndEmbed()` records, for each
+instruction creating such an iterator, the slots of the locals referenced before it in layout order
+(not the next slot to assign: a later run of the pass keeps the slots of an earlier one), and the
+loop variable's slot if it is the first assigned after it
+(`QoreIRFunction::interpreter_iterator_slot_boundary`). The IR interpreter's `SlotCacheCleanup`
+and `cleanupLocalCaches(false)` release an iterator after the slots from that boundary on
 (`IRActiveIterator`, `releaseActiveIteratorsFrom()`), and the iterator guard only those left.
+Native code places the iterator's cleanup alloca in the exit sequence before the first body local
+whose slot is from the boundary on (`positioned_iterator_allocas`, tag 4 in the array form, released
+with `qore_rt_iterator_cleanup()`); an exception exit's statement cleanup then leaves it
+(`emitExitStatementCleanup(..., exception_exit)`), unless the iterators use their own array form.
 `ExceptionExitLocalOrder.qtest`, `ClosureLocalExitRelease.qtest` and
 `ForeachExitIteratorOrder.qtest` check the AST order in every mode, a qcc executable included.
 `IRBlockScopedObjectLifetime.qtest` and `ObjectLocalLifetime.qtest` check exact

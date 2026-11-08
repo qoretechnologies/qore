@@ -13,13 +13,18 @@
 
 %exec-class ClosureLocalExitReleaseTest
 
-#! Regression test: a closure-bound local is released at its place when its function or block is left
-/** The AST interpreter releases a closure-bound local with the other locals of its block, last declared first.  The
-    compiled modes left one that an exception left on the closure stack to the frame boundary, which released it after
-    the frame's other locals and without an exception sink: an exception raised by its destructor was lost (a debug
-    build aborted).  The script checks a normal exit, a block and a foreach loop left by an exception, every case
-    twice, in every execution mode, on the IR tier of tiered execution and as a qcc executable (see
-    ExecModeOutputTest).
+#! Regression test: closure-bound locals are released at their places when their function or block is left
+/** The AST interpreter releases a closure-bound local with the other locals of its block, last declared first, and a
+    closure that still holds one releases it when the closure is released.  The compiled modes left one that an
+    exception left on the closure stack to the frame boundary, which released it after the frame's other locals and
+    without an exception sink: an exception raised by its destructor was lost (a debug build aborted).  AOT code
+    popped closure-bound locals before releasing the locals holding the closures, so that they died in the order of
+    the closures; the variable of a foreach statement bound by a closure, also over a reference, was released after
+    the on_exit handlers of the function and, at the normal end of the statement, only when the function returned.
+    The script checks normal exits, blocks, loops and foreach statements left by an exception, several closure-bound
+    locals held by closures declared in another order, locals assigned after a later closure and in a loop, and
+    destructors raising exceptions, every case twice, in every execution mode, on the IR tier of tiered execution and
+    as a qcc executable (see ExecModeOutputTest).
 */
 class ClosureLocalExitReleaseTest inherits ExecModeOutputTest {
     public {
@@ -86,6 +91,109 @@ foreach string fn in (("g", "h", "k")) {
         }
     }
 }
+# several closure-bound locals, each held by a closure declared in another order
+sub m1() {
+    E a("m1a");
+    E b("m1b");
+    code cb = auto sub () { return b; };
+    code ca = auto sub () { return a; };
+    throw "M1";
+}
+# closure-bound locals declared in one order and first assigned in another
+sub m2() {
+    E a;
+    E b("m2b");
+    code cb = auto sub () { return b; };
+    a = new E("m2a");
+    code ca = auto sub () { return a; };
+    throw "M2";
+}
+# the same, destructors raising exceptions, left by an exception and by return
+sub m3() {
+    *D a;
+    D b(31);
+    code cb = auto sub () { return b; };
+    a = new D(32);
+    code ca = auto sub () { return a; };
+    throw "M3";
+}
+sub m4() {
+    *D a;
+    D b(41);
+    code cb = auto sub () { return b; };
+    a = new D(42);
+    code ca = auto sub () { return a; };
+    return;
+}
+# closure-bound locals assigned in a loop and in a nested block left by return
+sub m5(bool ret) {
+    E a;
+    E c("m5c");
+    code cc = auto sub () { return c; };
+    for (int i = 0; i < 2; ++i) {
+        a = new E("m5a" + i);
+    }
+    code ca = auto sub () { return a; };
+    if (ret) {
+        E d("m5d");
+        code cd = auto sub () { return d; };
+        return;
+    }
+    throw "M5";
+}
+# a closure-bound foreach variable released before the on_exit handler of the function, for an exception and at the
+# end of the statement
+sub m6() {
+    on_exit printf("m6 on_exit\n");
+    list<E> l = (new E("m6l"),);
+    foreach E e in (l) {
+        code c = auto sub () { return e; };
+        remove l;
+        throw "M6";
+    }
+}
+sub m7() {
+    list<E> l = (new E("m7l"),);
+    foreach E e in (l) {
+        code c = auto sub () { return e; };
+    }
+    remove l;
+    printf("m7 after loop\n");
+}
+# a closure-bound variable of a foreach over a reference, left by an exception
+sub m8() {
+    list<auto> l = (new E("m8a"), new E("m8b"));
+    on_exit printf("m8 on_exit\n");
+    foreach auto v in (\l) {
+        code c = auto sub () { return v; };
+        v = new E("m8v");
+        throw "M8";
+    }
+}
+foreach string fn in (("m1", "m2", "m3", "m4", "m6", "m7", "m8")) {
+    for (int i = 0; i < 2; ++i) {
+        try {
+            call_function(fn);
+            printf("%s: no exception\n", fn);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s: %s: %s\n", fn, ex.err, ex.desc);
+            while (ex.next) {
+                ex = ex.next;
+                printf("  next: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+}
+for (int i = 0; i < 2; ++i) {
+    foreach bool ret in ((True, False)) {
+        try {
+            m5(ret);
+            printf("m5: no exception\n");
+        } catch (hash<ExceptionInfo> ex) {
+            printf("m5: %s\n", ex.err);
+        }
+    }
+}
 ';
 
         #! the AST interpreter's output
@@ -118,6 +226,76 @@ foreach string fn in (("g", "h", "k")) {
             "dtor ke",
             "k: K: ",
             "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor m1b",
+            "dtor m1a",
+            "m1: M1: ",
+            "dtor m1b",
+            "dtor m1a",
+            "m1: M1: ",
+            "dtor m2b",
+            "dtor m2a",
+            "m2: M2: ",
+            "dtor m2b",
+            "dtor m2a",
+            "m2: M2: ",
+            "dtor 31",
+            "dtor 32",
+            "m3: M3: ",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor 31",
+            "dtor 32",
+            "m3: M3: ",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor 41",
+            "dtor 42",
+            "m4: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor 41",
+            "dtor 42",
+            "m4: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor m6l",
+            "m6 on_exit",
+            "m6: M6: ",
+            "dtor m6l",
+            "m6 on_exit",
+            "m6: M6: ",
+            "dtor m7l",
+            "m7 after loop",
+            "m7: no exception",
+            "dtor m7l",
+            "m7 after loop",
+            "m7: no exception",
+            "dtor m8v",
+            "m8 on_exit",
+            "dtor m8a",
+            "dtor m8b",
+            "m8: M8: ",
+            "dtor m8v",
+            "m8 on_exit",
+            "dtor m8a",
+            "dtor m8b",
+            "m8: M8: ",
+            "dtor m5a0",
+            "dtor m5d",
+            "dtor m5c",
+            "dtor m5a1",
+            "m5: no exception",
+            "dtor m5a0",
+            "dtor m5c",
+            "dtor m5a1",
+            "m5: M5",
+            "dtor m5a0",
+            "dtor m5d",
+            "dtor m5c",
+            "dtor m5a1",
+            "m5: no exception",
+            "dtor m5a0",
+            "dtor m5c",
+            "dtor m5a1",
+            "m5: M5",
         );
     }
 
