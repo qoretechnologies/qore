@@ -1,6 +1,5 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-parallel: serial - it uses the test databases, whose schemas the database tests share
 
 # An insert-only upsert skips an existing row without a server error and never sends BEGIN
 # Copyright 2026 Qore Technologies, s.r.o.

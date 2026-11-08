@@ -2,7 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #
 # Copyright 2026 Qore Technologies, s.r.o.
-# test-parallel: serial - it uses the test databases, whose schemas the database tests share
+# test-parallel: serial - it creates fixed-name objects in the shared SQL Server/Sybase (FreeTDS) test database
 
 %modern
 
@@ -11,6 +11,7 @@
 %requires SqlUtil
 %requires Schema
 %requires ../SqlUtil/PgsqlTestIsolation.qm
+%requires ../SqlUtil/MysqlTestIsolation.qm
 
 %try-module pgsql
 %define NO_PGSQL
@@ -55,6 +56,7 @@ class ReconciledIndexAlignmentTest inherits QUnit::Test {
 
     globalTearDown() {
         PgsqlRunSchema::teardown();
+        MysqlRunDatabase::teardown();
     }
 
     sqlite() {
@@ -84,7 +86,9 @@ class ReconciledIndexAlignmentTest inherits QUnit::Test {
             testSkip("QORE_DB_CONNSTR_MYSQL is not set");
         }
         skipIfNoConnection(ENV.QORE_DB_CONNSTR_MYSQL);
-        checkDatabase(ENV.QORE_DB_CONNSTR_MYSQL);
+        # the run's own database: tests that run at the same time do not share the tables of this one
+        string connstr = MysqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_MYSQL, "ReconciledIndexAlignment");
+        checkDatabase(connstr);
     }
 
     #! Skips the test case if the server of a connection string cannot be reached

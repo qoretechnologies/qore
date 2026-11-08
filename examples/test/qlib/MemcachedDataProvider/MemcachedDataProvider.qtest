@@ -1,6 +1,5 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-parallel: serial - it uses the test services (Redis, Memcached, MongoDB), whose data the service tests share
 
 %modern
 

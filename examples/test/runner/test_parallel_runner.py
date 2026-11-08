@@ -34,6 +34,12 @@ exit 2
 """
 
 
+def valid_lane_declaration(line):
+    """A lane declaration names its lane and gives a reason of at least three words: the resource the test shares"""
+    match = re.match(r"^# test-parallel: (serial|exclusive) - (\S.*)$", line)
+    return bool(match) and len(match.group(2).split()) >= 3
+
+
 class ParallelRunnerTest(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory(prefix="qore-runner-parallel-")
@@ -340,16 +346,83 @@ kill -9 $shells
                          result.stdout.split("Failed tests:\n", 1)[1].split("\n*")[0].split())
 
     def test_lane_declarations(self):
-        # the lanes that tests declare are "serial" or "exclusive", with a reason
+        # the lanes that tests declare are "serial" or "exclusive", with the reason: the resource the test shares
         declaration = re.compile(r"(?m)^#\s*test-parallel:.*$")
-        valid = re.compile(r"^# test-parallel: (serial|exclusive) - \S.*$")
         found = 0
         for test in sorted((ROOT / "examples/test").rglob("*.qtest")) + sorted((ROOT / "modules").glob(
                 "*/test/**/*.qtest")):
             for line in declaration.findall(test.read_text(errors="replace")):
                 found += 1
-                self.assertRegex(line, valid, "%s: '# test-parallel: serial|exclusive - <why>'" % test)
+                self.assertTrue(valid_lane_declaration(line), "%s: '%s' is not '# test-parallel: serial|exclusive - "
+                                "<the resource it shares>'" % (test, line))
         self.assertGreater(found, 0)
+        # the check refuses a declaration without a reason
+        for line in ("# test-parallel: serial", "# test-parallel: serial -", "# test-parallel: serial - ",
+                     "# test-parallel: exclusive - yes", "# test-parallel: serial - shared", "#test-parallel: serial",
+                     "# test-parallel: parallel - it uses the test databases",
+                     "# test-parallel: serial: it uses the test databases"):
+            with self.subTest(line=line):
+                self.assertFalse(valid_lane_declaration(line))
+        self.assertTrue(valid_lane_declaration("# test-parallel: serial - it uses the server-wide settings"))
+
+    def test_database_tests_isolate_their_objects(self):
+        # A test that runs beside others (no lane) and uses the shared PostgreSQL or MySQL test database works in a
+        # schema or database of its own (PgsqlTestIsolation.qm, MysqlTestIsolation.qm), so that it neither shares an
+        # object with another test nor sees another test's objects in a listing; a test that does not need one says
+        # why here
+        no_objects = "it creates no database object"
+        unique = "every object it creates has a name of its own run (a random part or the process id)"
+        exempt = {
+            "PGSQL": {
+                "examples/test/misc/DbTestConnections.qtest": "it only parses datasource strings",
+                "examples/test/bin/run_tests/run-tests-credentials.qtest": "it only prints datasource strings",
+                "examples/test/qlib/QoreRagUtils/VectorStoreConformance.qtest": unique,
+                "examples/test/qlib/SqlUtil/PgsqlSearchPath.qtest": "it makes schemas of its own run and tests them",
+                "examples/test/qlib/SqlUtil/SqlUtilExpressionCast.qtest": "it does not connect",
+                "examples/test/qlib/SqlUtil/SqlUtilSchemaSections.qtest": "it makes a schema of its own run",
+                "examples/test/qore/classes/Datasource/Datasource.qtest": no_objects,
+                "examples/test/qore/classes/DatasourcePool/DatasourcePool.qtest": no_objects,
+                "modules/dataframe/test/dataframe-dbi.qtest": unique,
+                "modules/dataframe/test/dataframe.qtest": "its tables are temporary tables of its own session",
+            },
+            "MYSQL": {
+                "examples/test/misc/DbTestConnections.qtest": "it only parses datasource strings",
+                "examples/test/bin/run_tests/run-tests-credentials.qtest": "it only prints datasource strings",
+                "examples/test/qlib/SqlUtil/MysqlReferentialActions.qtest": unique,
+                "examples/test/qlib/SqlUtil/MysqlSequenceFunction.qtest": unique,
+                "examples/test/qlib/SqlUtil/SerializationConfig.qtest": no_objects,
+                "examples/test/qlib/SqlUtil/PgsqlKeyAlignment.qtest": "it does not connect to MySQL",
+                "examples/test/qlib/DbDataProvider/DbSqlUtilWhereOperators.qtest": unique,
+                "examples/test/qlib/DbDataProvider/DbMaterializedViewRefresh.qtest": no_objects + " in MySQL",
+                "examples/test/qore/classes/Datasource/Datasource.qtest": no_objects,
+                "examples/test/qore/classes/DatasourcePool/DatasourcePool.qtest": no_objects,
+                "modules/dataframe/test/dataframe-dbi.qtest": unique,
+            },
+        }
+        module = {"PGSQL": "PgsqlTestIsolation.qm", "MYSQL": "MysqlTestIsolation.qm"}
+        lane = re.compile(r"(?m)^# test-parallel: ")
+        checked = {"PGSQL": 0, "MYSQL": 0}
+        for test in sorted((ROOT / "examples/test").rglob("*.qtest")) + sorted((ROOT / "modules").glob(
+                "*/test/**/*.qtest")):
+            source = test.read_text(errors="replace")
+            if lane.search(source):
+                continue
+            name = str(test.relative_to(ROOT))
+            for db in ("PGSQL", "MYSQL"):
+                if "QORE_DB_CONNSTR_" + db not in source and "DbTestConnections::get" not in source:
+                    continue
+                checked[db] += 1
+                if module[db] in source:
+                    self.assertNotIn(name, exempt[db], "%s uses %s: it needs no exemption" % (name, module[db]))
+                    continue
+                self.assertIn(name, exempt[db], "%s uses the shared %s test database beside other tests: it must "
+                              "use %s" % (name, db, module[db]))
+        # the exemptions are of tests that exist and use the database
+        for db in exempt:
+            for name in exempt[db]:
+                self.assertTrue((ROOT / name).is_file(), name)
+        self.assertGreater(checked["PGSQL"], 20)
+        self.assertGreater(checked["MYSQL"], 5)
 
     def test_process_limit_tests_are_exclusive(self):
         # A test that reads the process or thread limit of the machine does so to reach it: while it holds every

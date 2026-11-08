@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-parallel: serial - it uses the test databases, whose schemas the database tests share
+# test-parallel: serial - it creates fixed-name objects in the shared Oracle and FreeTDS test schemas
 
 %modern
 
@@ -13,6 +13,7 @@
 %requires DataProvider
 %requires SqlUtil
 %requires QUnit
+%requires ./MysqlTestIsolation.qm
 
 %exec-class SqlUtilSelectGenerationTest
 
@@ -129,6 +130,10 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         contexts = map new SelectGenerationContext($1), DbTestConnections::get(m_options.connstr);
         # a run on PostgreSQL uses its own schema; this is set up before any connection is opened
         map PgsqlRunSchema::setup($1.conn.connstr, "SqlUtilSelectGeneration"), contexts;
+        # on MySQL, the run's own database
+        foreach SelectGenerationContext ctx in (contexts) {
+            ctx.conn.connstr = MysqlRunDatabase::getConnectionString(ctx.conn.connstr, "SqlUtilSelectGen");
+        }
         map setUpContext($1), contexts;
 
         if (!contexts) {
@@ -195,6 +200,7 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         }
         # drops the run's schema with everything left in it, if the connection is a PostgreSQL connection
         PgsqlRunSchema::teardown();
+        MysqlRunDatabase::teardown();
     }
 
     #! returns the name in the run's schema on PostgreSQL, so that it can never resolve to a table in another schema

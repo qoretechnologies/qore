@@ -894,8 +894,9 @@ FAILED_TEST_COUNT=0
 # The number of tests run at the same time: QORE_TEST_JOBS, a number or "auto" (the number of CPUs); 1 by default.
 # A parallel run prints the output of each test when the test has ended, as a whole.  A test that cannot run beside
 # others declares a lane on its own line:
-#   # test-parallel: serial - <why>     one serial test at a time, beside the other tests (ex: tests that share a
-#                                       database schema or service data)
+#   # test-parallel: serial - <why>     one serial test at a time, beside the other tests (ex: tests that create
+#                                       objects with fixed names in a database schema that has no per-run schema);
+#                                       <why> names the shared resource: tests that only share names are a bug
 #   # test-parallel: exclusive - <why>  no other test at the same time (ex: tests of the limits of the machine, or of
 #                                       timing that the load of other tests changes)
 # examples/test/runner/test_parallel_runner.py checks the parallel runner.

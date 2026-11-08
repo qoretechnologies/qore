@@ -1,7 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
-# test-parallel: serial - it uses the test databases, whose schemas the database tests share
 
 %modern
 
@@ -10,6 +9,7 @@
 %requires SqlUtil
 %requires MysqlSqlUtil
 %requires DbDataProvider
+%requires ./MysqlTestIsolation.qm
 
 %try-module mysql
 %define NoMysql
@@ -86,7 +86,9 @@ class MysqlListTablesTest inherits QUnit::Test {
 
     constructor() : Test("MysqlListTablesTest", "1.0", \ARGV, MyOpts) {
         try {
-            *string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_MYSQL;
+            # the run's own database: the listings of the database have only this run's objects
+            *string connstr = MysqlRunDatabase::getConnectionString(m_options.connstr ?? ENV.QORE_DB_CONNSTR_MYSQL,
+                "MysqlListTables");
             if (connstr) {
                 Datasource nds(connstr);
                 if (nds.getDriverName() != "mysql") {

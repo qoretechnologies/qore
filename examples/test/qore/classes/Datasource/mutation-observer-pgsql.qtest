@@ -1,12 +1,12 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-parallel: serial - it uses the test databases, whose schemas the database tests share
 
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../../qlib/SqlUtil/PgsqlTestIsolation.qm
 
 %try-module pgsql
 %define NoPgsql
@@ -117,6 +117,9 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
         }
         Datasource ds;
         try {
+            # the run's own schema, before the first connection: tests that run at the same time do not share the
+            # test table; the connections opened afterwards, those of the pool too, use it
+            PgsqlRunSchema::setup(connstr, "MutationObserver");
             ds = new Datasource(connstr);
             if (ds.getDriverName() != "pgsql") {
                 testSkip(sprintf("connection is for the %y driver, not pgsql", ds.getDriverName()));
