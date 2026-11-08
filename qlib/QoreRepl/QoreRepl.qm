@@ -292,7 +292,6 @@ server.start();
 
     @subsection qorerepl_v1_0 v1.0
     - initial release
-    - commands and history expansion are limited to the primary prompt; continuation lines remain literal Qore source
 */
 
 #! Main namespace for the QoreRepl module
