@@ -146,19 +146,25 @@ class Main inherits QUnit::Test {
             "columns" : columns,
             "indexes" : ( "schema_reverse_ix1" : ("columns" : ("id",), "unique" : True)),
         );
-        # named types data: an object type of the test's own, as a database need not have Oracle Spatial's
-        # sdo_geometry (Oracle Database Free has none)
+        # named types data: Oracle Spatial's sdo_geometry where the database has it, else an object type of the
+        # test's own (Oracle Database Free's "slim" container images have no Oracle Spatial)
         if (drv == "oracle") {
+            string type_name = OracleObjectType;
             try {
-                ctx.ds.exec("create or replace type " + OracleObjectType + " as object (x number, y number)");
-                ctx.ds.commit();
+                if (ctx.ds.selectRow("select count(*) as c from all_types where owner = 'MDSYS' and type_name = "
+                        "'SDO_GEOMETRY'").c) {
+                    type_name = "sdo_geometry";
+                } else {
+                    ctx.ds.exec("create or replace type " + OracleObjectType + " as object (x number, y number)");
+                    ctx.ds.commit();
+                }
             } catch (hash<ExceptionInfo> ex) {
                 ctx.ds.rollback();
                 # the connection's test cases fail with the error
                 ctx.setup_error = ex;
                 return;
             }
-            ref_table.columns.loc_col = ( "driver" : ( "oracle" : ("native_type" : OracleObjectType,
+            ref_table.columns.loc_col = ( "driver" : ( "oracle" : ("native_type" : type_name,
                 "notnull" : False )));
         }
         ctx.ref_table_reverse = ref_table;
