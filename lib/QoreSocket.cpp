@@ -6754,6 +6754,17 @@ std::string qore_dbg_cares_set_servers(const std::string& servers) {
     return prev;
 }
 
+//! the query options of the c-ares channels made from now on that ask the servers of qore_dbg_cares_set_servers();
+//! under qore_dbg_cares_servers_lock
+static QoreDbgCaresQueryOptions qore_dbg_cares_query_options;
+
+QoreDbgCaresQueryOptions qore_dbg_cares_set_query_options(const QoreDbgCaresQueryOptions& opts) {
+    std::lock_guard<std::mutex> lg(qore_dbg_cares_servers_lock);
+    QoreDbgCaresQueryOptions prev = std::move(qore_dbg_cares_query_options);
+    qore_dbg_cares_query_options = opts;
+    return prev;
+}
+
 //! guards @ref qore_dbg_cares_hosts_file
 static std::mutex qore_dbg_cares_hosts_file_lock;
 //! the hosts file of the name lookups started from now on; empty for the system's hosts file
@@ -6886,24 +6897,48 @@ static bool qore_hosts_file_has_address(const std::vector<QoreHostsFileAddress>&
     return false;
 }
 
+//! The storage of the debug options of a c-ares channel, which must stay valid until the channel is made
+struct QoreCaresDebugOptionStorage {
+    std::vector<std::string> domains;
+    std::vector<char*> domain_ptrs;
+};
+
 //! Returns the DNS servers that dbg_cares_set_servers() set for new c-ares channels, if any
-/** With servers set, the channel is also given a timeout of a second and three tries, so that a lookup that a test
-    makes does not depend on the options of the host's resolver configuration.
+/** With servers set, the channel is also given the query options of dbg_cares_set_query_options(): by default a
+    timeout of a second and three tries, so that a lookup that a test makes does not depend on the options of the
+    host's resolver configuration, and the search domains and \c ndots option if the test set them.
 
     @param options the options of the channel to make
     @param optmask the mask of the options set in \a options
+    @param storage the storage of the options, which must stay valid until the channel is made
 */
-static std::string qore_cares_debug_servers(struct ares_options& options, int& optmask) {
+static std::string qore_cares_debug_servers(struct ares_options& options, int& optmask,
+        QoreCaresDebugOptionStorage& storage) {
 #ifdef DEBUG
     std::string servers;
+    QoreDbgCaresQueryOptions opts;
     {
         std::lock_guard<std::mutex> lg(qore_dbg_cares_servers_lock);
         servers = qore_dbg_cares_servers;
+        opts = qore_dbg_cares_query_options;
     }
     if (!servers.empty()) {
-        options.timeout = 1000;
-        options.tries = 3;
+        options.timeout = opts.timeout_ms;
+        options.tries = opts.tries;
         optmask |= ARES_OPT_TIMEOUTMS | ARES_OPT_TRIES;
+        if (opts.domains_set) {
+            storage.domains = std::move(opts.domains);
+            for (std::string& d : storage.domains) {
+                storage.domain_ptrs.push_back(&d[0]);
+            }
+            options.domains = storage.domain_ptrs.empty() ? nullptr : storage.domain_ptrs.data();
+            options.ndomains = static_cast<int>(storage.domain_ptrs.size());
+            optmask |= ARES_OPT_DOMAINS;
+        }
+        if (opts.ndots >= 0) {
+            options.ndots = opts.ndots;
+            optmask |= ARES_OPT_NDOTS;
+        }
     }
     return servers;
 #else
@@ -6950,8 +6985,9 @@ static constexpr unsigned QORE_CARES_MAX_LOST_QUERY_RESTARTS = 3;
     query - ares_getaddrinfo() moving on to the next search domain, for example - and the new query is given the id
     of the query that completed: ares_flush_requeue() detaches the completed query before its callback, freeing the
     id, and ares_free_query() detaches it a second time afterwards, which removes the new query's id mapping.  The
-    answer to the new query is then dropped as unknown, and its retry is discarded when it times out.  The bundled
-    c-ares build is patched (cmake/PatchCaresLostQuery.cmake), but a system library can have the defect.
+    answer to the new query is then dropped as unknown, and its retry is discarded when it times out.  c-ares 1.34.9,
+    the minimum version (cmake/third-party-sources.cmake; an older system library is not used), releases only the id
+    that a query still holds; the check stays as a safety net for a defect that c-ares could have again.
 
     @param channel the channel of an unfinished lookup, after its events were processed
 */
@@ -7230,26 +7266,32 @@ QoreCaresAddrInfoResolver::QoreCaresAddrInfoResolver(const char* host, const cha
 }
 
 QoreCaresAddrInfoResolver::~QoreCaresAddrInfoResolver() {
+    if (channel) {
+        // ends the lookups and queries of the lookup and of its check with ARES_EDESTRUCTION; their callbacks record
+        // nothing that needs the channel
+        ares_destroy(channel);
+        channel = nullptr;
+    }
     if (result) {
         ares_freeaddrinfo(result);
         result = nullptr;
     }
-    if (channel) {
-        ares_destroy(channel);
-        channel = nullptr;
-    }
-    resetConfirmation();
 }
 
-void QoreCaresAddrInfoResolver::resetConfirmation() noexcept {
-    for (struct ares_addrinfo*& res : confirm_res) {
-        if (res) {
-            ares_freeaddrinfo(res);
-            res = nullptr;
-        }
-    }
-    confirm_pending = false;
-    confirm_remaining = 0;
+void QoreCaresAddrInfoResolver::resetCheck() noexcept {
+    pending_check = Check::None;
+    running_check = Check::None;
+    check_remaining = 0;
+    check_found = false;
+    lookup_definite = false;
+    check_finished = false;
+    server_failures = 0;
+    check_failures_start = 0;
+    repeated = false;
+}
+
+bool QoreCaresAddrInfoResolver::singleLabel() const {
+    return has_host && !host.empty() && host.find('.') == std::string::npos;
 }
 
 int QoreCaresAddrInfoResolver::continuePoll(ExceptionSink* xsink) {
@@ -7290,8 +7332,8 @@ int QoreCaresAddrInfoResolver::restart(ExceptionSink* xsink) {
     channel = nullptr;
     // the destroyed channel's sockets are closed; the new channel reports its own
     fd_events.clear();
-    // the lookup starts again: a confirmation of its failure that was started (see complete()) is dropped
-    resetConfirmation();
+    // the lookup starts again on a new channel: a check of its failure that was started (see complete()) is dropped
+    resetCheck();
     started = false;
     status = ARES_SUCCESS;
     return start(xsink);
@@ -7409,7 +7451,8 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
     options.sock_state_cb = sockStateCallback;
     options.sock_state_cb_data = this;
     int optmask = ARES_OPT_SOCK_STATE_CB;
-    std::string debug_servers = qore_cares_debug_servers(options, optmask);
+    QoreCaresDebugOptionStorage debug_storage;
+    std::string debug_servers = qore_cares_debug_servers(options, optmask, debug_storage);
     std::string debug_hosts_file = qore_cares_debug_hosts_file();
     if (!debug_hosts_file.empty()) {
         options.hosts_path = &debug_hosts_file[0];
@@ -7448,6 +7491,9 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
             ares_strerror(rc));
         return -1;
     }
+    // the queries that fail are counted, so that only a definite failure of a lookup during which one failed is
+    // checked (see complete())
+    ares_set_server_state_callback(channel, serverStateCallback, this);
 
     hints = {};
     // POSIX AI_* and c-ares ARES_AI_* flags have different values, including across operating systems.
@@ -7493,21 +7539,70 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
         ares_getaddrinfo(channel, has_host ? host.c_str() : nullptr, has_service ? service.c_str() : nullptr,
             &hints, callback, this);
     }
-    if (confirm_pending) {
-        startConfirmation();
-    }
+    advance();
     if (done) {
         return status == ARES_SUCCESS ? 0 : raiseError(xsink);
     }
     return 0;
 }
 
+void QoreCaresAddrInfoResolver::advance() {
+    while (!done) {
+        if (lookup_definite) {
+            lookup_definite = false;
+            // a query of the lookup failed, and c-ares can have hidden its failure behind the definite status (see
+            // complete()); a definite failure of a lookup during which no query failed is not checked: a check sends
+            // again a query whose answer the query cache of the channel does not keep, such as an NXDOMAIN answer
+            // without an SOA record (c-ares keeps an answer without records for its maximum TTL)
+            if (server_failures && family == AF_UNSPEC) {
+                pending_check = Check::Confirm;
+            } else if (server_failures && singleLabel()) {
+                pending_check = Check::Probe;
+            } else {
+                done = true;
+                break;
+            }
+        } else if (check_finished) {
+            check_finished = false;
+            finishCheck();
+            if (done) {
+                break;
+            }
+        }
+        if (pending_check == Check::None) {
+            break;
+        }
+        // a check can end at once, for example with answers from the query cache
+        startCheck();
+    }
+}
+
+void QoreCaresAddrInfoResolver::startCheck() {
+    Check check = pending_check;
+    pending_check = Check::None;
+    running_check = check;
+    check_found = false;
+    check_failures_start = server_failures;
+    switch (check) {
+        case Check::Confirm:
+            startConfirmation();
+            break;
+        case Check::Probe:
+            startProbe();
+            break;
+        case Check::Repeat:
+            startRepeat();
+            break;
+        case Check::None:
+            break;
+    }
+}
+
 void QoreCaresAddrInfoResolver::startConfirmation() {
-    assert(confirm_pending && family == AF_UNSPEC);
-    confirm_pending = false;
-    confirm_remaining = 2;
+    assert(family == AF_UNSPEC);
+    check_remaining = 2;
     // the status reported if the answers of both families are definite
-    confirm_status = status;
+    check_status = status;
     struct ares_addrinfo_hints family_hints = hints;
     QoreEnvironmentReadLock env_lock;
 #ifdef DEBUG
@@ -7516,10 +7611,43 @@ void QoreCaresAddrInfoResolver::startConfirmation() {
     // a callback can run here, before the second lookup has started; it only records its result
     family_hints.ai_family = AF_INET6;
     ares_getaddrinfo(channel, has_host ? host.c_str() : nullptr, has_service ? service.c_str() : nullptr,
-        &family_hints, confirmCallback6, this);
+        &family_hints, confirmCallback, this);
     family_hints.ai_family = AF_INET;
     ares_getaddrinfo(channel, has_host ? host.c_str() : nullptr, has_service ? service.c_str() : nullptr,
-        &family_hints, confirmCallback4, this);
+        &family_hints, confirmCallback, this);
+}
+
+void QoreCaresAddrInfoResolver::startProbe() {
+    assert(singleLabel());
+    // the record types that the lookup asked for: c-ares also asks for A records for an IPv6 lookup with
+    // AI_V4MAPPED
+    std::vector<ares_dns_rec_type_t> types;
+    if (family != AF_INET6) {
+        types.push_back(ARES_REC_TYPE_A);
+    }
+    if (family != AF_INET) {
+        types.push_back(ARES_REC_TYPE_AAAA);
+        if (family == AF_INET6 && (flags & AI_V4MAPPED)) {
+            types.push_back(ARES_REC_TYPE_A);
+        }
+    }
+    check_remaining = static_cast<int>(types.size());
+    check_status = status;
+    // a query names the host itself, without the search domains
+    for (ares_dns_rec_type_t type : types) {
+        ares_query_dnsrec(channel, host.c_str(), ARES_CLASS_IN, type, probeCallback, this, nullptr);
+    }
+}
+
+void QoreCaresAddrInfoResolver::startRepeat() {
+    repeated = true;
+    addrs.clear();
+    QoreEnvironmentReadLock env_lock;
+#ifdef DEBUG
+    qore_dbg_cares_lookup_env_read();
+#endif
+    ares_getaddrinfo(channel, has_host ? host.c_str() : nullptr, has_service ? service.c_str() : nullptr,
+        &hints, callback, this);
 }
 
 void QoreCaresAddrInfoResolver::process(ExceptionSink* xsink) {
@@ -7537,9 +7665,7 @@ void QoreCaresAddrInfoResolver::process(ExceptionSink* xsink) {
             }
         }
     }
-    if (confirm_pending) {
-        startConfirmation();
-    }
+    advance();
     if (done && status != ARES_SUCCESS) {
         raiseError(xsink);
     }
@@ -7549,12 +7675,25 @@ void QoreCaresAddrInfoResolver::callback(void* arg, int status, int, struct ares
     reinterpret_cast<QoreCaresAddrInfoResolver*>(arg)->complete(status, res);
 }
 
-void QoreCaresAddrInfoResolver::confirmCallback6(void* arg, int status, int, struct ares_addrinfo* res) {
-    reinterpret_cast<QoreCaresAddrInfoResolver*>(arg)->confirmed(0, status, res);
+void QoreCaresAddrInfoResolver::confirmCallback(void* arg, int status, int, struct ares_addrinfo* res) {
+    // only the status and whether the family has an address are used: an address makes the lookup start again
+    bool found = status == ARES_SUCCESS && res && res->nodes;
+    if (res) {
+        ares_freeaddrinfo(res);
+    }
+    reinterpret_cast<QoreCaresAddrInfoResolver*>(arg)->checked(status, found);
 }
 
-void QoreCaresAddrInfoResolver::confirmCallback4(void* arg, int status, int, struct ares_addrinfo* res) {
-    reinterpret_cast<QoreCaresAddrInfoResolver*>(arg)->confirmed(1, status, res);
+void QoreCaresAddrInfoResolver::probeCallback(void* arg, ares_status_t status, size_t,
+        const ares_dns_record_t*) {
+    // ARES_SUCCESS is an answer with records (ares_dns_query_reply_tostatus())
+    reinterpret_cast<QoreCaresAddrInfoResolver*>(arg)->checked(status, status == ARES_SUCCESS);
+}
+
+void QoreCaresAddrInfoResolver::serverStateCallback(const char*, ares_bool_t success, int, void* data) {
+    if (!success) {
+        ++reinterpret_cast<QoreCaresAddrInfoResolver*>(data)->server_failures;
+    }
 }
 
 void QoreCaresAddrInfoResolver::sockStateCallback(void* arg, ares_socket_t socket_fd, int readable, int writable) {
@@ -7585,6 +7724,10 @@ void QoreCaresAddrInfoResolver::complete(int new_status, struct ares_addrinfo* r
         return;
     }
     status = new_status;
+    if (result) {
+        // the result of the lookup before it was started again (see startRepeat())
+        ares_freeaddrinfo(result);
+    }
     result = res;
     if (status == ARES_SUCCESS && result) {
         addAddresses(result);
@@ -7592,43 +7735,48 @@ void QoreCaresAddrInfoResolver::complete(int new_status, struct ares_addrinfo* r
         if (addrs.empty()) {
             status = ARES_ENODATA;
         }
-    } else if (family == AF_UNSPEC && qore_cares_status_is_definite(status)) {
-        // c-ares gives the status of the query of the address family that finished last: a SERVFAIL answer for one
-        // family and a NODATA answer for the other, finishing last, gave ENODATA, which is definite, though the
-        // first was a failure that might not happen again; the failure is definite only if the answer for each
-        // family is, so each family is looked up again (see confirmed()); a definite answer that has an SOA record,
-        // as DNS servers give them, comes from the query cache of the channel
-        confirm_pending = true;
+    } else if (qore_cares_status_is_definite(status) && !repeated) {
+        // whether the failure is checked is decided after c-ares has returned (see advance()): c-ares 1.34.9 reports
+        // the failed queries (serverStateCallback()) when its public call returns, after the lookup's callback
+        lookup_definite = true;
         return;
     }
     done = true;
 }
 
-void QoreCaresAddrInfoResolver::confirmed(int index, int new_status, struct ares_addrinfo* res) {
+void QoreCaresAddrInfoResolver::checked(int new_status, bool found) {
     if (restarting) {
-        if (res) {
-            ares_freeaddrinfo(res);
-        }
         return;
     }
-    assert(confirm_remaining > 0 && !confirm_res[index]);
-    confirm_res[index] = res;
-    if (new_status != ARES_SUCCESS && !qore_cares_status_is_definite(new_status)
-            && qore_cares_status_is_definite(confirm_status)) {
-        // a family whose answer is not definite makes the failure one that might not happen again
-        confirm_status = new_status;
+    assert(check_remaining > 0);
+    if (found) {
+        check_found = true;
+    } else if (new_status != ARES_SUCCESS && !qore_cares_status_is_definite(new_status)
+            && qore_cares_status_is_definite(check_status)) {
+        // an answer that is not definite makes the failure one that might not happen again
+        check_status = new_status;
     }
-    if (--confirm_remaining) {
+    if (!--check_remaining) {
+        // ended after c-ares has returned (see advance())
+        check_finished = true;
+    }
+}
+
+void QoreCaresAddrInfoResolver::finishCheck() {
+    if (check_found) {
+        // the name has an address after all: the lookup is started again once, and its result is the answer, in
+        // the order that c-ares gives it
+        pending_check = Check::Repeat;
         return;
     }
-    // a family that has addresses now gives them as the answer, the IPv6 addresses first
-    for (const struct ares_addrinfo* r : confirm_res) {
-        if (r) {
-            addAddresses(r);
-        }
+    status = check_status;
+    // the lookups of a confirmation are of a single-label name with the search domains too: a SERVFAIL or REFUSED
+    // answer for the name itself is hidden again, and the name is asked for if a query failed meanwhile
+    if (running_check == Check::Confirm && qore_cares_status_is_definite(status) && singleLabel()
+            && server_failures > check_failures_start) {
+        pending_check = Check::Probe;
+        return;
     }
-    keepHostsFileAddresses();
-    status = addrs.empty() ? confirm_status : ARES_SUCCESS;
     done = true;
 }
 
@@ -8172,7 +8320,8 @@ private:
         options.sock_state_cb = sockStateCallback;
         options.sock_state_cb_data = this;
         int optmask = ARES_OPT_SOCK_STATE_CB;
-        std::string debug_servers = qore_cares_debug_servers(options, optmask);
+        QoreCaresDebugOptionStorage debug_storage;
+        std::string debug_servers = qore_cares_debug_servers(options, optmask, debug_storage);
 
         int rc = qore_cares_init_channel(&channel, &options, optmask);
         if (rc != ARES_SUCCESS) {
@@ -8748,7 +8897,8 @@ int QoreCaresNameInfoResolver::start(ExceptionSink* xsink) {
     options.sock_state_cb = sockStateCallback;
     options.sock_state_cb_data = this;
     int optmask = ARES_OPT_SOCK_STATE_CB;
-    std::string debug_servers = qore_cares_debug_servers(options, optmask);
+    QoreCaresDebugOptionStorage debug_storage;
+    std::string debug_servers = qore_cares_debug_servers(options, optmask, debug_storage);
 
     int rc = qore_cares_init_channel(&channel, &options, optmask);
     if (rc != ARES_SUCCESS) {

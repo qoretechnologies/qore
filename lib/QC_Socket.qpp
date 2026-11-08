@@ -7401,8 +7401,10 @@ int Socket::getHttp2MaxRequestBodySize() [flags=CONSTANT] {
     lookup gives again; others, such as \c "ETIMEOUT", \c "ESERVFAIL", \c "EREFUSED" and \c "ECONNREFUSED" (no DNS
     server answered, or one failed), can be temporary.  A lookup of both address families (\c AF_UNSPEC) fails with
     \c "ENOTFOUND" or \c "ENODATA" only if the answers for both families are definite; if one is not, the lookup
-    fails with its status.  An error that is not an answer of the resolver, such as a resolver that could not be
-    initialized, has no \c status.
+    fails with its status.  A single-label name (one without a dot), which is also looked up with the search domains
+    of the host, fails with \c "ESERVFAIL" or \c "EREFUSED" if the DNS server failed or refused the name itself,
+    though a search domain gave a definite answer.  An error that is not an answer of the resolver, such as a
+    resolver that could not be initialized, has no \c status.
 
     @since %Qore 3.0
  */

@@ -25,6 +25,9 @@ class CaresErrorStatusTest inherits QUnit::Test {
         addTestCase("getaddrinfo() gives the resolver's status", \getaddrinfoTest());
         addTestCase("getaddrinfo_async() gives the resolver's status", \getaddrinfoAsyncTest());
         addTestCase("a lookup of both families is definite only if both answers are", \mixedFamiliesTest());
+        addTestCase("a definite answer with no failed query makes no other query", \definiteQueriesTest());
+        addTestCase("a lookup canceled while its failure is checked", \cancelDuringCheckTest());
+        addTestCase("a lookup that times out while its failure is checked", \timeoutDuringCheckTest());
         addTestCase("Socket::resolveAddrInfo() gives the resolver's status", \resolveAddrInfoTest());
         addTestCase("Socket::connect() gives the resolver's status", \connectTest());
         addTestCase("HTTPClient gives the resolver's status", \httpClientTest());
@@ -70,6 +73,9 @@ class CaresErrorStatusTest inherits QUnit::Test {
     */
     mixedFamiliesTest() {
         checkDebug();
+        # each query is tried once, so that the server's answer for AAAA comes after the last one for A
+        hash<auto> opts = call_function("dbg_cares_set_query_options", {"tries": 1, "timeout_ms": 60000});
+        on_exit call_function("dbg_cares_set_query_options", opts);
         string name = "mixed.qore-test.";
         checkStatus(\getaddrinfo(), (name,), "ESERVFAIL");
         checkStatus(\getaddrinfo(), (name, NOTHING, AF_UNSPEC), "ESERVFAIL");
@@ -80,6 +86,62 @@ class CaresErrorStatusTest inherits QUnit::Test {
         # names whose answers are the same for both families keep their definite status
         checkStatus(\getaddrinfo(), ("nx.qore-test.", NOTHING, AF_UNSPEC), "ENOTFOUND");
         checkStatus(\getaddrinfo(), ("nodata.qore-test.", NOTHING, AF_UNSPEC), "ENODATA");
+    }
+
+    #! A definite failure is checked only if a query of the lookup failed
+    /** The lookup of each family that checks a definite failure of a lookup of both was made for every such failure,
+        so a name that does not exist was looked up twice: the server gives no SOA record, which c-ares needs to
+        cache a negative answer
+    */
+    definiteQueriesTest() {
+        checkDebug();
+        foreach hash<auto> i in ({"label": "nx", "status": "ENOTFOUND"}, {"label": "nodata", "status": "ENODATA"}) {
+            string name = i.label + ".qore-test.";
+            int before = dns.getQueries(i.label);
+            checkStatus(\getaddrinfo(), (name, NOTHING, AF_UNSPEC), i.status);
+            assertEq(2, dns.getQueries(i.label) - before, name + ": one query for A and one for AAAA");
+            before = dns.getQueries(i.label);
+            checkStatus(\getaddrinfo(), (name, NOTHING, AF_INET), i.status);
+            assertEq(1, dns.getQueries(i.label) - before, name + ": one query for A");
+        }
+    }
+
+    #! A lookup canceled while the lookup of each family checks its failure ends at once
+    /** The server drops the queries of the check, and the lookup's operation is canceled when it has received one
+    */
+    cancelDuringCheckTest() {
+        checkDebug();
+        hash<auto> opts = call_function("dbg_cares_set_query_options", {"tries": 1, "timeout_ms": 60000});
+        on_exit call_function("dbg_cares_set_query_options", opts);
+        dns.resetMixedDrop();
+        Future f = getaddrinfo_async("mixeddrop.qore-test.");
+        # the A query of the lookup of IPv4; the NODATA answer for AAAA comes from the query cache of the channel
+        assertEq("mixeddrop", dns.waitDropped(60s), "the check of the failure has started");
+        list<string> op_keys = select AsyncIoController::getInfo().cache_keys,
+            $1 =~ /^QoreDNS::getaddrinfo_async:/;
+        assertEq(1, op_keys.size(), "the lookup's operation is running");
+        assertTrue(AsyncIoController::cancelByKey(op_keys[0]));
+        hash<ExceptionInfo> ex = lookupError(sub () { f.get(); }, ());
+        assertEq("QOREADDRINFO-CANCELLED", ex.err);
+    }
+
+    #! The lookups of each family that time out make the failure a timeout
+    /** The server drops the queries of the check; c-ares tries each query once, with a timeout that the answers to
+        the lookup itself, which the server gives at once, come within
+    */
+    timeoutDuringCheckTest() {
+        checkDebug();
+        hash<auto> opts = call_function("dbg_cares_set_query_options", {"tries": 1, "timeout_ms": 1000});
+        on_exit call_function("dbg_cares_set_query_options", opts);
+        dns.resetMixedDrop();
+        int before = dns.getQueries("mixeddrop");
+        hash<ExceptionInfo> ex = lookupError(\getaddrinfo(), ("mixeddrop.qore-test.",));
+        assertEq("QOREADDRINFO-GETINFO-ERROR", ex.err);
+        assertEq("ETIMEOUT", ex.arg.status, "the check timed out");
+        # the queries of the lookup, and the A query of the lookup of IPv4, which was dropped (the NODATA answer for
+        # AAAA comes from the query cache of the channel)
+        assertEq(3, dns.getQueries("mixeddrop") - before, "the check of the failure ran");
+        assertEq("mixeddrop", dns.waitDropped(30s), "the A query of the check was dropped");
     }
 
     resolveAddrInfoTest() {

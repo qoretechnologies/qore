@@ -304,7 +304,11 @@ public:
 
     DLLLOCAL ~QuicTestSentCount() {
         if (counted && sent < total) {
+            // the caller reads errno after sendQuicPacketsBatch() returns -1; the take-back's system calls must not
+            // change it
+            int saved_errno = errno;
             qore_quic_test_take_back_sent(fd, addr, addrlen, total - sent);
+            errno = saved_errno;
         }
     }
 

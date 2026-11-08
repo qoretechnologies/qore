@@ -77,6 +77,15 @@
 - `exit()` ends the process without the library's cleanup, and valgrind reports the memory still in use then as lost:
   a `QoreValue` holds its node pointer with a tag in the high 16 bits, which valgrind's leak scan does not recognize
   as a pointer.  A script whose leak report should mean something must end normally.
+- A forked child that ends with `_exit()` (the fork tests in `AsyncIoController/asyncio_unit_tests.qtest`, for
+  example) reports its memory as lost for the same reason, and that noise hides real errors in the children.  Run such
+  a test twice: once with `--leak-check=full --child-silent-after-fork=yes` for the parent's leaks and errors, and
+  once with `--leak-check=no` (children are traced by default) so that the children's memory errors still show:
+  ```
+  QORE_PCRE2_NO_JIT=1 valgrind --leak-check=full --child-silent-after-fork=yes qore -b --exec-mode=ir \
+      --enable-debug <test>
+  QORE_PCRE2_NO_JIT=1 valgrind --leak-check=no qore -b --exec-mode=ir --enable-debug <test>
+  ```
 
 ## Running Tests Under ThreadSanitizer
 - Configure a build with `-fsanitize=thread` in the C, C++ and linker flags (a Debug build in its own directory, for

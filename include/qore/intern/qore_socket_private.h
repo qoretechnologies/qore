@@ -670,6 +670,8 @@ public:
     DLLLOCAL int getPollTimeoutMs() const;
 
 private:
+    friend class QoreCaresCheckTest;
+
     DLLLOCAL int start(ExceptionSink* xsink);
     //! Answers a numeric address without creating a c-ares channel; returns false if c-ares must resolve the host
     /** An IPv4 or IPv6 address literal with a numeric port (or none) needs no lookup, and creating a channel reads
@@ -684,32 +686,58 @@ private:
     DLLLOCAL void process(ExceptionSink* xsink);
     DLLLOCAL void updateFd(ares_socket_t socket_fd, int readable, int writable);
     //! Records the result of the lookup
-    /** A lookup of both address families (\c AF_UNSPEC) that failed with a definite answer (see
-        qore_cares_status_is_definite()) is confirmed by a lookup of each family (see startConfirmation()): c-ares
-        gives the status of the family whose query finished last, which hid a failure of the other family that
-        might not happen again
+    /** A definite failure (see qore_cares_status_is_definite()) of a lookup during which a query failed (a SERVFAIL,
+        NOTIMP or REFUSED answer, a timeout or a connection error; see serverStateCallback()) is checked (see
+        Check):
+        - a lookup of both address families (\c AF_UNSPEC) is confirmed by a lookup of each family: c-ares gives the
+          status of the family whose query finished last, which hid a failure of the other family that might not
+          happen again
+        - a lookup of a single-label name, which c-ares looks up with the search domains, asks for the name itself
+          (see startProbe()): c-ares goes on to the next name after a SERVFAIL or REFUSED answer for a single-label
+          name (c-ares issue #852), so a later definite answer hid it
+
+        A lookup during which no query failed is definite as c-ares gives it, with no other query.
     */
     DLLLOCAL void complete(int new_status, struct ares_addrinfo* res);
+    //! Decides what follows a definite failure or a finished check, after c-ares has returned
+    /** c-ares 1.34.9 reports the failed queries (serverStateCallback()) when its public call returns, after the
+        callbacks of the lookups, and a check takes the environment lock that the start of a lookup holds, so neither
+        is done in a callback
+    */
+    DLLLOCAL void advance();
+    //! Starts the check that pending_check names
+    DLLLOCAL void startCheck();
     //! Starts the lookup of each address family that confirms the definite failure of a lookup of both
-    /** Called after c-ares has returned, not from its callback, as it takes the environment lock that the start of a
-        lookup holds
-    */
     DLLLOCAL void startConfirmation();
-    //! Records the result of the lookup of one family that confirms a definite failure (0: IPv6, 1: IPv4)
-    /** The failure is definite if both answers are; a family that has addresses gives them as the result
+    //! Starts the queries for a single-label name itself, without the search domains
+    DLLLOCAL void startProbe();
+    //! Starts the lookup again once, after a check found that the name has addresses after all
+    /** The addresses are those of a lookup, in the order that c-ares gives them (RFC 6724), not those of the checks
     */
-    DLLLOCAL void confirmed(int index, int new_status, struct ares_addrinfo* res);
+    DLLLOCAL void startRepeat();
+    //! Records the result of a lookup or query of a check
+    /** @param new_status the status of the lookup or query
+        @param found true if it found an address or a record
+    */
+    DLLLOCAL void checked(int new_status, bool found);
+    //! Ends a check whose lookups and queries have all finished
+    DLLLOCAL void finishCheck();
     //! Adds the addresses of a c-ares result
     DLLLOCAL void addAddresses(const struct ares_addrinfo* res);
-    //! Drops the confirmation of a failure and frees its results
-    DLLLOCAL void resetConfirmation() noexcept;
+    //! Drops the check of a failure
+    DLLLOCAL void resetCheck() noexcept;
+    //! Returns true if the host is a single label, which c-ares looks up with the search domains
+    DLLLOCAL bool singleLabel() const;
     //! Removes the loopback addresses that c-ares added to the hosts file's answer for a localhost name
     DLLLOCAL void keepHostsFileAddresses() noexcept;
     DLLLOCAL int raiseError(ExceptionSink* xsink) const;
 
     DLLLOCAL static void callback(void* arg, int status, int, struct ares_addrinfo* res);
-    DLLLOCAL static void confirmCallback6(void* arg, int status, int, struct ares_addrinfo* res);
-    DLLLOCAL static void confirmCallback4(void* arg, int status, int, struct ares_addrinfo* res);
+    DLLLOCAL static void confirmCallback(void* arg, int status, int, struct ares_addrinfo* res);
+    DLLLOCAL static void probeCallback(void* arg, ares_status_t status, size_t timeouts,
+            const ares_dns_record_t* dnsrec);
+    //! Counts the queries that failed; see complete()
+    DLLLOCAL static void serverStateCallback(const char* server, ares_bool_t success, int flags, void* data);
     DLLLOCAL static void sockStateCallback(void* arg, ares_socket_t socket_fd, int readable, int writable);
 
     std::string host;
@@ -729,14 +757,36 @@ private:
     int status = ARES_SUCCESS;
     //! the hints of the lookup
     struct ares_addrinfo_hints hints = {};
-    //! set when a definite failure of a lookup of both families is to be confirmed (see complete())
-    bool confirm_pending = false;
-    //! the number of lookups of single families confirming a failure that have not finished
-    int confirm_remaining = 0;
-    //! the status of a confirmed failure: definite unless the lookup of a family fails otherwise
-    int confirm_status = ARES_SUCCESS;
-    //! the results of the lookups of single families that confirm a failure: IPv6, IPv4
-    struct ares_addrinfo* confirm_res[2] = {nullptr, nullptr};
+    //! The checks of a definite failure; see complete()
+    enum class Check {
+        None,
+        //! a lookup of each address family
+        Confirm,
+        //! the queries for a single-label name itself
+        Probe,
+        //! the lookup again, as a check found an address
+        Repeat,
+    };
+    //! the check to start after c-ares has returned
+    Check pending_check = Check::None;
+    //! the last check started
+    Check running_check = Check::None;
+    //! set when the lookup failed with a definite status, which advance() decides on
+    bool lookup_definite = false;
+    //! set when the lookups or queries of the running check have finished, which advance() decides on
+    bool check_finished = false;
+    //! the lookups or queries of the running check that have not finished
+    int check_remaining = 0;
+    //! the status of a checked failure: definite unless a lookup or query of the check fails otherwise
+    int check_status = ARES_SUCCESS;
+    //! set if a lookup or query of the check found an address or a record
+    bool check_found = false;
+    //! the queries that failed on the channel (see serverStateCallback())
+    unsigned server_failures = 0;
+    //! the queries that had failed when the running check started
+    unsigned check_failures_start = 0;
+    //! set when the lookup was started again (see startRepeat()), whose result is not checked again
+    bool repeated = false;
     //! the number of times the lookup was started again after c-ares lost its query
     unsigned lost_query_restarts = 0;
     bool started = false;
