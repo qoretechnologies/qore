@@ -5466,6 +5466,12 @@ void qore_system_thread_main(ExceptionSink* xsink, void* arg) {
     {
         ProgramThreadCountContextHelper tch(xsink, sta->pgm, true);
         if (!*xsink) {
+            // counted in the Program now: a cancellation of the Program's threads in progress includes this thread,
+            // as it includes the threads that the Program starts with background (see QoreProgram::cancelThreads())
+            if (qore_program_private::get(*sta->pgm)->cancellingNewThreads()) {
+                thread_list.cancelThread(q_gettid(), "Program thread cancellation requested",
+                    sta->pgm->getProgramId());
+            }
             sta->code->invoke(nullptr, xsink).discard(xsink);
         }
     }

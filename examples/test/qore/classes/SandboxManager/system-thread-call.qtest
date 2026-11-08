@@ -29,6 +29,8 @@ class SystemThreadCallTest inherits QUnit::Test {
         addTestCase("no thread starts in a Program whose exit hooks have started", \deletedProgramTest());
         addTestCase("a system thread is one of its Program's threads for waits and cancellation",
             \threadControlTest());
+        addTestCase("a system thread started during a cancellation of its Program's threads is cancelled",
+            \cancellationWaveTest());
         set_return_value(main());
     }
 
@@ -117,9 +119,26 @@ class SystemThreadCallTest inherits QUnit::Test {
         assertTrue(p.cancelThread(tid, "thread control test"));
         assertTrue(p.waitForThread(tid, SystemThreadWorker::Worker::Deadline));
         assertEq(0, p.callFunction("running"));
-        # a thread left running is released by the Program's exit hook at the end of the process
-        p.callFunction("start");
-        assertEq(1, p.callFunction("running"));
+    }
+
+    cancellationWaveTest() {
+        Program p = SystemThreadWorker::Worker::control;
+        # a thread of the Program that a cancellation does not end keeps the cancellation in progress
+        p.callFunction("hold");
+        on_exit p.callFunction("release_hold");
+        assertEq(1, p.cancelThreads("cancellation wave test"));
+        assertEq("THREAD-CANCELLED", p.callFunction("hold_cancelled"));
+        # a system thread started now is part of the cancellation
+        int tid = p.callFunction("start");
+        assertTrue(p.waitForThread(tid, SystemThreadWorker::Worker::Deadline), "the cancellation ended the thread");
+        assertEq(0, p.callFunction("running"));
+        # once the Program is idle, the cancellation has ended: a thread started then runs
+        p.callFunction("release_hold");
+        assertTrue(p.waitForThreads(SystemThreadWorker::Worker::Deadline));
+        tid = p.callFunction("start");
+        assertFalse(p.waitForThread(tid, -1), "the thread runs");
+        assertTrue(p.cancelThread(tid, "cancellation wave test"));
+        assertTrue(p.waitForThread(tid, SystemThreadWorker::Worker::Deadline));
     }
 
     #! Runs a child process with the test module and the code given; returns its exit code, output and lines

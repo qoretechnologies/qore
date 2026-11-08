@@ -185,7 +185,28 @@ public class Worker {
             "# the exit hook releases the threads still waiting\n"
             "register_exit_hook(sub () { map q.push(NOTHING), xrange(running.getCount()); });\n"
             "int sub start() { int tid = cap(); started.get(); return tid; }\n"
-            "int sub running() { return running.getCount(); }\n", "control");
+            "int sub running() { return running.getCount(); }\n"
+            "# a thread that keeps the Program busy through a cancellation of its threads, until it is released\n"
+            "our Queue hold_q();\n"
+            "our Queue hold_events();\n"
+            "our Counter hold_release(1);\n"
+            "our Queue hold_started();\n"
+            "# returns when the thread runs in the Program\n"
+            "sub hold() {\n"
+            "    background sub () {\n"
+            "        hold_started.push(True);\n"
+            "        try {\n"
+            "            hold_q.get();\n"
+            "        } catch (hash<ExceptionInfo> ex) {\n"
+            "            clear_thread_cancel();\n"
+            "            hold_events.push(ex.err);\n"
+            "            hold_release.waitForZero();\n"
+            "        }\n"
+            "    }();\n"
+            "    hold_started.get();\n"
+            "}\n"
+            "string sub hold_cancelled() { return hold_events.get(); }\n"
+            "sub release_hold() { if (hold_release.getCount()) { hold_release.dec(); } }\n", "control");
         p.run();
         return p;
     }

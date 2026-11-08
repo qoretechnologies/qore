@@ -1475,6 +1475,15 @@ public:
         return cancel_new_threads;
     }
 
+    //! Returns true if a cancellation of the Program's threads (cancelThreads()) is in progress
+    /** A thread that the Program counts already when it asks is part of the wave: either the wave's snapshot has it,
+        or the wave cannot end before the thread does, as the Program is not idle
+    */
+    DLLLOCAL bool cancellingNewThreads() {
+        AutoLocker al(plock);
+        return cancel_new_threads;
+    }
+
     /*
     DLLLOCAL int checkValid(ExceptionSink* xsink) {
         if (ptid && ptid != q_gettid()) {

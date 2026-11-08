@@ -3536,8 +3536,10 @@ bool Program::cancelThread(int tid, *string reason) [dom=THREAD_CONTROL,EMBEDDED
 //! Requests cooperative cancellation of all threads in this Program
 /** @param reason optional explanation @return number of registered threads receiving a request
     @throw PROGRAM-THREAD-ERROR called from inside this Program
-    @note Includes starting threads and descendants until the Program next becomes idle. Cancellation can
-    be caught or deferred; use waitForThreads() to observe completion. A later evaluation is unaffected.
+    @note Includes starting threads and descendants until the Program next becomes idle, also the threads that a
+    @ref Qore::SandboxManager::createSystemThreadCall() "system thread capability" of this Program starts.
+    Cancellation can be caught or deferred; use waitForThreads() to observe completion. A later evaluation is
+    unaffected.
     @since %Qore 3.0
 */
 int Program::cancelThreads(*string reason) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {
