@@ -86,6 +86,16 @@ tree.  If the watchdog cannot use its FIFO, it prints `WATCHDOG ERROR` and the
 test is run with a plain time limit; the test's own result is kept, but the run
 fails as a harness error, and the summary lists the test under "Harness errors".
 
+After each test, `run_tests.sh` kills the processes the test left running: those
+that inherited the test's `QORE_TEST_PROCESS_MARK`, and those that descend from
+the runner and hold the output of the tests (Linux).  Only descendants count, so
+that runners sharing one output (the shards of a job) never kill each other; a
+process without the mark that has left the runner's process tree is not found.
+A runner ended by `SIGHUP`, `SIGINT` or `SIGTERM` stops the test's watchdog,
+kills what the test left, sends the test the signal (`SIGTERM` for `SIGINT`),
+waits up to `QORE_TEST_INTERRUPT_WAIT` seconds (default 10) for it before it
+kills it, removes its files and then ends by the signal itself.
+
 When running tests or tools that load the `jni` module in the same process as
 other native runtimes that use synchronous signals, such as V8 or Python, set up
 the JVM signal-chaining library in the environment before starting `qore`. On

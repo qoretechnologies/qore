@@ -239,12 +239,15 @@ class InterruptedRunnerTest(unittest.TestCase):
     """A runner ended by a signal ends the test that runs, its watchdog and the processes the test left, removes its
     files, the directory of its event FIFO among them, and ends by the signal"""
 
-    def interrupt(self, sig, test_source="", wait=None, test_lines=()):
+    def interrupt(self, sig, test_source="", wait=None, test_lines=(), second_signal=False):
         """Runs a runner whose test blocks, sends the runner the signal and checks that it ends as it should
 
-        test_source: a line of Python that the test runs first, with {ready} and {alive} for the descriptors of the
-        harness's pipes
+        test_source: lines of Python (a string or a list) that the test runs first, with {ready} and {alive} for the
+        descriptors of the harness's pipes; second_signal: the runner is sent the signal again once it reports that
+        its trap waits for the test, and every process of the run must have ended when the runner has
         """
+        if isinstance(test_source, str):
+            test_source = [test_source]
         with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
             tree = RunnerTree(directory)
             # every process of the run inherits the write ends of these pipes, at descriptors the runner does not use
@@ -268,13 +271,21 @@ class InterruptedRunnerTest(unittest.TestCase):
                 tree.add_test("blocks.qtest", f"""\
                     # test-timeout: 600
                     import os
-                    {test_source.format(ready=ready_fd, alive=alive_fd)}
+                    {(chr(10) + " " * 20).join(line.format(ready=ready_fd, alive=alive_fd) for line in test_source)}
                     os.write({ready_fd}, b"running\\n")
                     open({str(hold)!r}).read()
                     """)
                 env = tree.env()
                 if wait is not None:
                     env["QORE_TEST_INTERRUPT_WAIT"] = str(wait)
+                trap_report = None
+                if second_signal:
+                    # the runner reports through it that its trap waits for the test; open for reading and writing,
+                    # so that the harness's wait for the report is bounded by the select below, not by an open
+                    report_path = tree.root / "trap-report"
+                    os.mkfifo(report_path)
+                    trap_report = os.open(report_path, os.O_RDWR | os.O_NONBLOCK)
+                    env["QORE_TEST_RUNNER_TRAP_REPORT"] = str(report_path)
                 # the output goes to a file, so that a process left holding it cannot keep the harness waiting: the
                 # alive pipe reports it
                 output_path = tree.root / "runner.out"
@@ -291,6 +302,11 @@ class InterruptedRunnerTest(unittest.TestCase):
                 self.assertEqual(1, len(list(tree.tmp.glob("qore-test-events.*"))),
                                  "the runner made its FIFO directory")
                 runner.send_signal(sig)
+                if second_signal:
+                    readable, _, _ = select.select([trap_report], [], [], 60)
+                    self.assertEqual([trap_report], readable, "the runner did not report that its trap waits")
+                    self.assertEqual(b"waiting\n", os.read(trap_report, 100))
+                    runner.send_signal(sig)
                 runner.wait(timeout=120)
                 output = output_path.read_text()
                 # the runner ends by the signal, so that its caller sees why
@@ -299,7 +315,9 @@ class InterruptedRunnerTest(unittest.TestCase):
                     self.assertIn(line, output)
                 # the read returns when no process holds the pipe anymore; one that is left keeps it open, which the
                 # time limit of the select ends as a failure
-                readable, _, _ = select.select([alive_r], [], [], 60)
+                # (a runner that has waited for every process it started ends after them: then the pipe is at its end
+                # at once)
+                readable, _, _ = select.select([alive_r], [], [], 0 if second_signal else 60)
                 self.assertEqual([alive_r], readable, "a process of the run is left after signal %d" % sig)
                 self.assertEqual(b"", os.read(alive_r, 1), "a process of the run is left after signal %d" % sig)
             finally:
@@ -312,7 +330,7 @@ class InterruptedRunnerTest(unittest.TestCase):
                 except OSError as e:
                     if e.errno not in (errno.ENXIO, errno.ENOENT):
                         raise
-                for fd in write_ends + [ready_r, alive_r]:
+                for fd in write_ends + [ready_r, alive_r, trap_report if second_signal else None]:
                     if fd is not None:
                         os.close(fd)
             self.assertEqual([], list(tree.tmp.glob("qore-test-events.*")),
@@ -334,6 +352,18 @@ class InterruptedRunnerTest(unittest.TestCase):
         # it ignores SIGTERM: the runner kills it after its wait
         self.interrupt(signal.SIGTERM, "import signal; signal.signal(signal.SIGTERM, signal.SIG_IGN)", 1,
                        ("the run is interrupted, and the test did not end within 1s: SIGKILL sent",))
+
+    @unittest.skipUnless(HAVE_TIMEOUT, "the runner bounds its wait for the test only with a timeout command")
+    def test_a_second_signal_while_the_trap_runs_is_ignored(self):
+        # The second signal re-entered the trap, which started a second helper and lost the first one: that one held
+        # the output until its wait ended and then signalled the test's old process ID.  The test ignores the first
+        # SIGTERM and ends at a second one, which it must not get (the runner ignores the second signal): it is
+        # killed after the wait, and when the runner has ended, every process of the run has ended.
+        self.interrupt(signal.SIGTERM, [
+            "import signal",
+            "terms = []",
+            "signal.signal(signal.SIGTERM, lambda *args: os._exit(0) if terms else terms.append(1))",
+        ], 1, ("the run is interrupted, and the test did not end within 1s: SIGKILL sent",), second_signal=True)
 
     @unittest.skipUnless(os.path.isdir("/proc/self/task"), "processes a test leaves are found through /proc (Linux)")
     def test_the_processes_a_test_left_are_ended(self):
@@ -402,6 +432,34 @@ class FailedFifoTest(unittest.TestCase):
             self.assertRegex(result.output, r"Passed 1 out of +2 tests\. 1 tests failed\.")
             self.assertIn("Harness errors: the watchdog of 2 tests failed", result.output)
             self.assertEqual(2, result.returncode, result.output)
+
+
+def runner_function(name):
+    """Returns the source of a function of the runner tested"""
+    match = re.search(r"^" + name + r"\(\) \{\n.*?^\}\n", RUN_TESTS.read_text(), re.S | re.M)
+    if match is None:
+        raise AssertionError(f"{name}() is not in {RUN_TESTS}")
+    return match.group(0)
+
+
+class RunnerDescendantsTest(unittest.TestCase):
+    """The processes that descend from a runner are found even when a process ends during the scan"""
+
+    def test_a_process_that_ends_during_the_scan_is_skipped(self):
+        # awk read the status files as its input files and ended at the first one that was gone, and printed nothing,
+        # which disabled the rule that finds the processes that hold the output of the tests.  A /proc of its own
+        # (QORE_TEST_PROC) has a process whose status file is gone, as when it ends between the glob and the read.
+        with tempfile.TemporaryDirectory(prefix="qore-runner-proc-") as directory:
+            proc = Path(directory)
+            for pid, ppid in ((100, 1), (101, 100), (103, 101), (104, 1)):
+                (proc / str(pid)).mkdir()
+                (proc / str(pid) / "status").write_text(f"Name:\tp{pid}\nPPid:\t{ppid}\n")
+            (proc / "102").mkdir()
+            (proc / "102" / "status").symlink_to(proc / "gone")
+            result = subprocess.run(["sh", "-c", runner_function("runner_descendants") + "runner_descendants 100"],
+                                    env=dict(os.environ, QORE_TEST_PROC=str(proc)), capture_output=True, text=True,
+                                    timeout=60)
+            self.assertEqual(["101", "103"], sorted(result.stdout.split()), result.stdout + result.stderr)
 
 
 def watchdog_functions():

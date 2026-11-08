@@ -27,6 +27,8 @@ print_usage () {
   echo "                           (-b in QORE_TEST_OPTS), is aborted at once."
   echo "  QORE_TEST_STACK_DUMP_WAIT"
   echo "                           Seconds to wait for those stacks before the test is ended (default: 30)."
+  echo "  QORE_TEST_INTERRUPT_WAIT Seconds a test may take to end after a signal ends the run (default: 10); it is"
+  echo "                           killed then."
   echo "  CI_NODE_INDEX            Shard index (1-based) for parallel test execution."
   echo "  CI_NODE_TOTAL            Total number of shards for parallel test execution."
   echo "  QORE_EXCLUDE_PERF_TESTS  Set to '1' to exclude performance tests (same as -E)."
@@ -471,29 +473,43 @@ fi
 # that has ended meanwhile
 . "$BASE_TEST_PATH/docker_test/ci-job-processes.sh"
 
-# Prints the processes that descend from this runner (Linux only): its children, theirs, and so on
+# Prints the processes that descend from the given process (this runner by default; Linux only): its children,
+# theirs, and so on.  Each status file is read with getline, which skips one that is gone (a process that ended
+# during the scan): awk given them as input files would end at a missing one, and print nothing.  /proc is
+# QORE_TEST_PROC if set, for the tests of run_tests.sh.
 runner_descendants() {
-    awk -v root=$$ '
-        FNR == 1 { pid = FILENAME; sub(/^\/proc\//, "", pid); sub(/\/status$/, "", pid) }
-        /^PPid:/ { parent[pid] = $2; nextfile }
-        END {
-            found[root] = 1
-            # each pass adds the children of the processes found so far, until a pass adds none
-            do {
-                added = 0
-                for (p in parent) {
-                    if (!(p in found) && (parent[p] in found)) {
-                        found[p] = 1
-                        added = 1
-                    }
-                }
-            } while (added)
-            for (p in found) {
-                if (p != root) {
-                    printf "%s ", p
+    awk -v root=${1:-$$} -v proc="${QORE_TEST_PROC:-/proc}" 'BEGIN {
+        for (i = 1; i < ARGC; ++i) {
+            f = ARGV[i]
+            pid = substr(f, length(proc) + 2)
+            sub(/\/status$/, "", pid)
+            while ((getline line < f) > 0) {
+                if (line ~ /^PPid:/) {
+                    split(line, field)
+                    parent[pid] = field[2]
+                    break
                 }
             }
-        }' /proc/[0-9]*/status 2>/dev/null
+            close(f)
+        }
+        found[root] = 1
+        # each pass adds the children of the processes found so far, until a pass adds none
+        do {
+            added = 0
+            for (p in parent) {
+                if (!(p in found) && (parent[p] in found)) {
+                    found[p] = 1
+                    added = 1
+                }
+            }
+        } while (added)
+        for (p in found) {
+            if (p != root) {
+                printf "%s ", p
+            }
+        }
+        exit
+    }' "${QORE_TEST_PROC:-/proc}"/[0-9]*/status 2>/dev/null
 }
 
 # Sets TEST_SURVIVORS to the processes the current test started that are still running (Linux only).  Every process a
@@ -502,7 +518,8 @@ runner_descendants() {
 # was not ended by the test.  Any other process that descends from this runner and holds the output of the tests as
 # its standard output or error, such as one a test started with an environment of its own, is one too: only one that
 # descends from it, as other runners (the shards of one job) can share the output and are no survivors of this one's
-# tests (a process without the mark that left this runner's process tree is not found).
+# tests.  The trade-off, chosen to protect sibling shards: a process without the mark that has left this runner's
+# process tree (adopted by init after its parent ended) holding the output is not found.
 find_test_survivors() {
     TEST_SURVIVORS=""
     if [ ! -r /proc/self/environ ]; then
@@ -697,6 +714,17 @@ test_before_pid=""
 watchdog_pid=""
 watchdog_starting=0
 watchdog_before_pid=""
+# Returns 0 if the given process has the given QORE_TEST_PROCESS_MARK in its environment (/proc on Linux, ps -E
+# elsewhere): it is then the test that got the mark, or a process it started, never a process that reused the test's
+# process ID after the test had ended (a zombie has no environment)
+test_has_mark() {
+    if [ -r /proc/self/environ ]; then
+        tr '\0' '\n' < /proc/$1/environ 2>/dev/null | grep -qx "QORE_TEST_PROCESS_MARK=$2"
+    else
+        ps -E -ww -o command= -p $1 2>/dev/null | grep -q "QORE_TEST_PROCESS_MARK=$2\( \|$\)"
+    fi
+}
+
 # Ends the processes the current test left (QORE_TEST_PROCESS_MARK, Linux only), except the given test process
 end_test_survivors() {
     if [ -z "$TEST_PROCESS_MARK" ]; then
@@ -738,6 +766,9 @@ EOF
 # A test that runs in the foreground (without the watchdog) is waited for before a trap runs, as a shell defers traps
 # until its foreground command has ended.
 runner_signaled() {
+    # a second signal while the trap runs is ignored: re-entered, the trap would start a second helper and lose the
+    # first one, which would hold the output and act on a test long gone; re-raising the signal below resets it
+    trap '' HUP INT TERM
     if [ -z "$test_pid" ] && [ $test_starting -eq 1 ] && [ "$!" != "$test_before_pid" ]; then
         test_pid=$!
     fi
@@ -757,19 +788,31 @@ runner_signaled() {
             kill -$1 $test_pid 2>/dev/null
         fi
         # the helper reads the trap's report that the test has ended from a FIFO of the runner's own, for at most
-        # TEST_INTERRUPT_WAIT seconds; the FIFO is open for reading and writing here, so that neither side blocks
+        # TEST_INTERRUPT_WAIT seconds, and then kills the test, but only a process that still has the test's
+        # QORE_TEST_PROCESS_MARK (see test_has_mark()): if the test ended and was waited for just before, its process
+        # ID may belong to another process by then, which has not.  The FIFO is open for reading and writing here, so
+        # that neither side blocks.  (A trapped signal does not interrupt this trap's wait in dash, so the helper does
+        # not signal the runner.)
         interrupt_fifo="$TEST_EVENT_DIR/interrupt"
         interrupt_helper=""
         if [ -n "$TIMEOUT_CMD" ] && mkfifo "$interrupt_fifo" 2>/dev/null && (exec 5<>"$interrupt_fifo") 2>/dev/null; then
             exec 5<>"$interrupt_fifo"
             (
-                if ! $TIMEOUT_CMD $TEST_INTERRUPT_WAIT sh -c 'read -r ended' <&5 2>/dev/null; then
+                # the signals the trap ignores would be ignored by the commands run here too (an ignored signal is
+                # inherited): the timeout command could not end its reader with SIGTERM
+                trap - HUP INT TERM
+                if ! $TIMEOUT_CMD $TEST_INTERRUPT_WAIT sh -c 'read -r ended' <&5 2>/dev/null \
+                        && test_has_mark $test_pid "$TEST_PROCESS_MARK"; then
                     echo "*** the run is interrupted, and the test did not end within ${TEST_INTERRUPT_WAIT}s:" \
                         "SIGKILL sent ***"
                     kill -KILL $test_pid 2>/dev/null
                 fi
             ) &
             interrupt_helper=$!
+        fi
+        # for the tests of run_tests.sh: reports that the trap waits for the test
+        if [ -n "$QORE_TEST_RUNNER_TRAP_REPORT" ]; then
+            echo waiting > "$QORE_TEST_RUNNER_TRAP_REPORT"
         fi
         wait $test_pid 2>/dev/null
         test_pid=""
