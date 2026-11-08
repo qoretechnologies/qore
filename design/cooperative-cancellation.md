@@ -798,7 +798,10 @@ wakes its waiters with a **`Queue` push or a `Counter` decrement**: none of thes
 point (the lock of a `synchronized` method is a `VRMutex` acquired without a `VLockCancellationPoint`,
 and `Queue::push()` and `Counter::dec()` never wait), so the cleanup completes on a cancelled
 thread.  Only the *waits* (`Queue::get()`, `Counter::waitForZero()`) are cancellation points, which
-is what the waiter wants.  A waiter registers itself in a synchronized method before it waits and
+is what the waiter wants.  The cleanup methods contain **no loop**: a loop statement is a cancellation
+point at each iteration, so on a cancelled thread it raises the cancellation again and skips the rest of
+the cleanup (a `map` expression is not one when run from source, but the code `qcc` compiles for it
+checks too, so cleanup code does not rely on it).  A waiter registers itself in a synchronized method before it waits and
 the cleanup pushes only while a waiter is registered, so no wakeup is lost and the queue does not
 grow without one:
 
@@ -819,8 +822,10 @@ waitOthers() {
 ```
 
 `WebSocketClient`'s thread accounting (`WscLibraryThreads`), its handoff of an action to a
-`connectAsync()` worker (`WscActionHandoff`, with `WscOrphanedActions` for an action that a
-cancelled thread cannot release), and the Discord heartbeat record (`DiscordHeartbeat`) use this
+`connectAsync()` worker (`WscActionHandoff`, with `WscActionWaiters` recording an action that a
+cancelled thread cannot release; each thread waiting for an action waits on a Queue of its own, so
+the wakeup of such a record is never lost; one waiter is woken at a time, and a waiter that stops
+waiting without the action wakes the next one as it unregisters, so no wakeup needs a loop), and the Discord heartbeat record (`DiscordHeartbeat`) use this
 pattern.  `WscLibraryThreads::waitOthers()` supports a single waiter (the destructor): it pushes
 one wakeup per change while a waiter is registered.
 

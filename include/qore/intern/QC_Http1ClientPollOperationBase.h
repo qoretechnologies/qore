@@ -61,7 +61,7 @@ class HttpClientEventSink;
     @since %Qore 3.0
 */
 class DLLLOCAL Http1ClientPollOperationPriv : public SocketPollOperationBase {
-    friend class Http1BufferedSendFailureTest;
+    friend class Http1DuplexSendFailureTest;
 public:
     //! HTTP/1.1 connection states
     enum class H1State {
