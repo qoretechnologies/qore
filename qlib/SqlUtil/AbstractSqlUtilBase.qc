@@ -35,6 +35,8 @@ public class AbstractSqlUtilBase inherits Qore::Serializable {
         transient AbstractDatasource ds;
         #! mutex for atomic actions
         transient Mutex l();
+        #! the keys of the driver-specific options of the connection, once read (see getDriverOptionKeys())
+        transient *list<string> driver_option_keys;
     }
 
     # assigs the object's members after deserialization
@@ -75,12 +77,15 @@ public class AbstractSqlUtilBase inherits Qore::Serializable {
     }
 
     #! returns the keys of the driver-specific options that apply to this connection, in the order they are applied
-    /** @see getDatasourceDriverOptionKeys()
+    /** The keys are read from the connection once for the object.
+
+        @see getDatasourceDriverOptionKeys()
 
         @since SqlUtil 3.11.0
     */
     list<string> getDriverOptionKeys() {
-        return AbstractSqlUtilBase::getDatasourceDriverOptionKeys(ds);
+        # read once: the real name of a generic driver's database takes calls of the driver, and a connection
+        return driver_option_keys ?? (driver_option_keys = AbstractSqlUtilBase::getDatasourceDriverOptionKeys(ds));
     }
 
     #! returns the keys of the driver-specific options that apply to a connection, in the order they are applied

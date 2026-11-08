@@ -14,7 +14,32 @@
 %requires ./PgsqlTestIsolation.qm
 %requires ./MssqlTestIsolation.qm
 
+%requires Sqlite3SqlUtil
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
 %exec-class DriverOptionKeysTest
+
+#! A datasource of the sqlite3 driver that is a generic driver, and counts the calls of getDriverRealName()
+class CountingDatasource inherits Datasource {
+    public {
+        int real_calls = 0;
+    }
+
+    constructor() : Datasource("sqlite3:@:memory:") {
+    }
+
+    string getDriverName() {
+        return "odbc";
+    }
+
+    string getDriverRealName() {
+        ++real_calls;
+        return "SQLite";
+    }
+}
 
 #! A datasource that does not connect, with the given driver name and real driver name
 class NameDatasource inherits Datasource {
@@ -46,6 +71,7 @@ class DriverOptionKeysTest inherits QUnit::Test {
         addTestCase("options are applied in order", \order());
         addTestCase("the value of the most specific key", \driverValue());
         addTestCase("a table on a jdbc connection", \jdbcTables());
+        addTestCase("the keys are read once for each object", \keysCached());
         set_return_value(main());
     }
 
@@ -77,6 +103,23 @@ class DriverOptionKeysTest inherits QUnit::Test {
             NameDatasource ds(i.value[0], i.value[1]);
             assertEq(i.value[2], AbstractSqlUtilBase::getDatasourceDriverOptionKeys(ds), i.key);
         }
+    }
+
+    #! the real name of the driver was read for each option validation, which on a jdbc connection is two calls in
+    #! Java, and acquires a connection for a pool or opens a closed datasource
+    private keysCached() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        CountingDatasource ds();
+        on_exit ds.rollback();
+        ds.exec("create table t (id integer)");
+        Sqlite3Table t(ds, "t");
+        for (int i = 0; i < 5; ++i) {
+            assertEq((), t.selectRows({"where": {"id": 1}}));
+        }
+        assertEq(("sqlite3", "odbc"), t.getDriverOptionKeys());
+        assertEq(1, ds.real_calls);
     }
 
     private order() {
