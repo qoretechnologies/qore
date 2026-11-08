@@ -16485,6 +16485,105 @@ static QoreValue f_dbg_hold_http1_send_failure_recovery(const QoreListNode* para
     return QoreValue();
 }
 
+namespace {
+//! the Counter armed by dbg_http_submit_after_close(), with a reference
+std::mutex dbg_submit_after_close_m;
+Counter* dbg_submit_after_close = nullptr;
+//! decremented when the submit is reached, before it waits
+Counter* dbg_submit_reached = nullptr;
+}
+
+void qore_dbg_http_note_closed() {
+    std::lock_guard<std::mutex> l(dbg_submit_after_close_m);
+    if (dbg_submit_after_close && dbg_submit_after_close->getCount()) {
+        ExceptionSink xsink;
+        dbg_submit_after_close->dec(&xsink);
+        xsink.clear();
+    }
+}
+
+void qore_dbg_http_wait_submit_after_close() {
+    Counter* c;
+    Counter* reached;
+    {
+        std::lock_guard<std::mutex> l(dbg_submit_after_close_m);
+        c = dbg_submit_after_close;
+        if (!c) {
+            return;
+        }
+        c->ref();
+        reached = dbg_submit_reached;
+        dbg_submit_reached = nullptr;
+    }
+    ExceptionSink xsink;
+    if (reached) {
+        reached->dec(&xsink);
+        reached->deref(&xsink);
+    }
+    c->waitForZero(&xsink);
+    {
+        std::lock_guard<std::mutex> l(dbg_submit_after_close_m);
+        if (dbg_submit_after_close == c) {
+            dbg_submit_after_close = nullptr;
+            c->deref(&xsink);
+        }
+    }
+    c->deref(&xsink);
+    xsink.clear();
+}
+
+//! the next HTTPClient::startPollSendRecv() that finds its connection ready submits its request only once a
+//! connection was marked closed (one-shot)
+/** Tests use it to have the server's close of the connection processed by the I/O thread between the check that the
+    connection is ready and the submit of the request, deterministically.
+
+    @param reached decremented when the submit is reached, before it waits (e.g. to have the server close then)
+    @param closed decremented when a connection is marked closed
+
+    @throw DBG-ARGUMENT-ERROR the hook is already armed
+*/
+static QoreValue f_dbg_http_submit_after_close(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    Counter* reached = get_counter_arg(params, 0, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    Counter* c = get_counter_arg(params, 1, xsink);
+    if (*xsink) {
+        reached->deref(xsink);
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> l(dbg_submit_after_close_m);
+    if (dbg_submit_after_close) {
+        c->deref(xsink);
+        reached->deref(xsink);
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_submit_after_close() is already armed");
+        return QoreValue();
+    }
+    dbg_submit_after_close = c;
+    dbg_submit_reached = reached;
+    return QoreValue();
+}
+
+//! disarms dbg_http_submit_after_close() if it was not reached
+static QoreValue f_dbg_http_submit_after_close_clear(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    Counter* c;
+    {
+        std::lock_guard<std::mutex> l(dbg_submit_after_close_m);
+        c = dbg_submit_after_close;
+        dbg_submit_after_close = nullptr;
+        if (dbg_submit_reached) {
+            dbg_submit_reached->deref(xsink);
+            dbg_submit_reached = nullptr;
+        }
+    }
+    if (c) {
+        c->deref(xsink);
+    }
+    return QoreValue();
+}
+
 //! has the peer of the next HTTP/1 client request answer and close its side (FIN) at a point of the request
 /** @param point \c "idle-check": before the check for data from the server that precedes the send of a request;
     \c "after-sent": after a request on a reused connection was sent, before the check for the server's close
@@ -17393,6 +17492,11 @@ void init_debug_functions(QoreNamespace& qns) {
         nothingTypeInfo, 4, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached", QC_SOCKET->getTypeInfo(),
         QORE_PARAM_NO_ARG, "peer", dataTypeInfo, QORE_PARAM_NO_ARG, "response", softBigIntOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "skip");
+    qns.addBuiltinVariant("dbg_http_submit_after_close", f_dbg_http_submit_after_close, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "closed");
+    qns.addBuiltinVariant("dbg_http_submit_after_close_clear", f_dbg_http_submit_after_close_clear, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http1_answer_at", f_dbg_http1_answer_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 4, stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "reached", QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataTypeInfo, QORE_PARAM_NO_ARG, "response");

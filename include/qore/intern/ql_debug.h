@@ -158,6 +158,13 @@ DLLLOCAL extern std::atomic<qore_dbg_socket_send_hook_t> qore_dbg_socket_send_ho
 typedef bool (*qore_dbg_conn_close_release_hook_t)(AbstractHttpPollConnectionPriv* conn);
 DLLLOCAL extern std::atomic<qore_dbg_conn_close_release_hook_t> qore_dbg_conn_close_release_hook;
 
+//! called by AbstractHttpPollConnectionPriv::setClosed() on the first close of a connection: decrements the Counter
+//! armed by dbg_http_submit_after_close()
+DLLLOCAL void qore_dbg_http_note_closed();
+//! called by HTTPClient::startPollSendRecv() right before it submits its request on a ready connection: waits until
+//! the Counter armed by dbg_http_submit_after_close() reaches zero (a connection was marked closed), then disarms it
+DLLLOCAL void qore_dbg_http_wait_submit_after_close();
+
 //! called by AbstractHttpPollConnectionPriv::setClosed() on the first close of a connection, holding a reference to
 //! it and no lock: once after the connection has been marked closed and its waiters woken, before the close hook
 //! (\a after false), and once after the close hook (\a after true); set by unit tests
