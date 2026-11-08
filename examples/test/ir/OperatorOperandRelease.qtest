@@ -34,7 +34,7 @@ class OperatorOperandReleaseTest inherits ExecModeOutputTest {
         const Script = '%new-style
 %require-types
 class T {
-    public { string n; }
+    public { string n; int v = 1; }
     constructor(string n) { self.n = n; }
     destructor() { printf("dtor %s\n", n); }
 }
@@ -43,6 +43,7 @@ class U {
     constructor(string n) { self.n = n; }
 }
 auto sub one(string n) { return new T(n); }
+T sub onet(string n) { return new T(n); }
 list<auto> sub mk(string p) { return (new T(p + "0"), new T(p + "1"), new T(p + "2")); }
 auto sub p(auto a) { printf("p\n"); return a; }
 sub f(auto a, auto b, auto c) { printf("f\n"); }
@@ -89,6 +90,11 @@ sub functional() {
     f(elements mk("el"), p(1), 1);
     printf("--\n");
     printf("%s\n", (map $1.n, one("sv")));
+    printf("--\n");
+    # an int value, which needs no reference of its own, still releases the source when the operator has run
+    f((map $1.v + 1, onet("iv")), p(1), 1);
+    printf("--\n");
+    f((foldl $1 + $2, (map $1.v, mk("fi"))), p(1), 1);
     printf("--\n");
 }
 class X {
@@ -223,6 +229,16 @@ for (int i = 0; i < 2; ++i) {
             "dtor sv",
             "sv",
             "--",
+            "dtor iv",
+            "p",
+            "f",
+            "--",
+            "dtor fi0",
+            "dtor fi1",
+            "dtor fi2",
+            "p",
+            "f",
+            "--",
             "dtor x0",
             "dtor x1",
             "caught DTOR \"x0\", DTOR \"x1\"",
@@ -336,6 +352,16 @@ for (int i = 0; i < 2; ++i) {
             "--",
             "dtor sv",
             "sv",
+            "--",
+            "dtor iv",
+            "p",
+            "f",
+            "--",
+            "dtor fi0",
+            "dtor fi1",
+            "dtor fi2",
+            "p",
+            "f",
             "--",
             "dtor x0",
             "dtor x1",

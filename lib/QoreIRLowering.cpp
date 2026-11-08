@@ -14790,6 +14790,13 @@ static QoreIROpcode analyzeSelectPattern(const QoreValue& select_expr,
     return QoreIROpcode::SelectAny;
 }
 
+//! Returns true if every value of the type is an immediate scalar (an int, a float or a bool), which is no node
+static bool qore_ir_type_is_immediate_scalar(const QoreTypeInfo* ti) {
+    return ti && QoreTypeInfo::hasType(ti) && (QoreTypeInfo::parseReturns(ti, NT_INT) == QTI_IDENT
+        || QoreTypeInfo::parseReturns(ti, NT_FLOAT) == QTI_IDENT
+        || QoreTypeInfo::parseReturns(ti, NT_BOOLEAN) == QTI_IDENT);
+}
+
 //! Lowers a functional operator and releases its source, if it is a temporary, once the operator has run
 /** The value of the operator can be the source's value or one of its elements, which the compiled modes give without a
     reference of its own: over a single value (a source that is not a list) map gives <tt>$1</tt> and select the value
@@ -14799,13 +14806,15 @@ static QoreIROpcode analyzeSelectPattern(const QoreValue& select_expr,
     @param always_ref true for a fold, whose value can be an element of a list source
 */
 template <typename F>
-QoreIRValue QoreIRLowering::lowerWithSourceRelease(const QoreValue& source, const QoreProgramLocation* loc,
-        bool always_ref, std::string& error, F&& lower) {
+QoreIRValue QoreIRLowering::lowerWithSourceRelease(const QoreValue& expr, const QoreValue& source,
+        const QoreProgramLocation* loc, bool always_ref, std::string& error, F&& lower) {
     FunctionalSourceRelease source_release(*this, source, loc, error);
     QoreIRValue result = lower();
     const FunctionalSourceCapture& capture = functional_source_captures.back();
+    // a value of a type that is never a node (int, float, bool) holds no reference to release with the source, so it
+    // needs no reference of its own; a string or a date can be the source's own node, so only those types are skipped
     if (result.isValid() && error.empty() && capture.node && capture.value.isValid()
-            && (always_ref || capture.may_alias)) {
+            && (always_ref || capture.may_alias) && !qore_ir_type_is_immediate_scalar(getExprTypeInfo(expr))) {
         QoreIRBasicBlock* block = builder.getBlock();
         if (block && (block->instructions.empty() || !isTerminator(block->instructions.back()->opcode))) {
             result = builder.createRefSelf(result, loc)->result;
@@ -14819,7 +14828,7 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
     if (!map) {
         return QoreIRValue();
     }
-    return lowerWithSourceRelease(map->getIteratorExpr(), map->loc, false, error,
+    return lowerWithSourceRelease(expr, map->getIteratorExpr(), map->loc, false, error,
         [&]() { return lowerMapImpl(expr, error); });
 }
 
@@ -14828,7 +14837,7 @@ QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& erro
     if (!select) {
         return QoreIRValue();
     }
-    return lowerWithSourceRelease(select->getSourceExpression(), select->loc, false, error,
+    return lowerWithSourceRelease(expr, select->getSourceExpression(), select->loc, false, error,
         [&]() { return lowerSelectImpl(expr, error); });
 }
 
@@ -14837,7 +14846,7 @@ QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& e
     if (!map_select) {
         return QoreIRValue();
     }
-    return lowerWithSourceRelease(map_select->getIteratorExpr(), map_select->loc, false, error,
+    return lowerWithSourceRelease(expr, map_select->getIteratorExpr(), map_select->loc, false, error,
         [&]() { return lowerMapSelectImpl(expr, error); });
 }
 
@@ -14846,7 +14855,7 @@ QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& err
     if (!map) {
         return QoreIRValue();
     }
-    return lowerWithSourceRelease(map->get(2), map->loc, false, error,
+    return lowerWithSourceRelease(expr, map->get(2), map->loc, false, error,
         [&]() { return lowerHashMapImpl(expr, error); });
 }
 
@@ -14855,7 +14864,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelect(const QoreValue& expr, std::strin
     if (!map_select) {
         return QoreIRValue();
     }
-    return lowerWithSourceRelease(map_select->get(2), map_select->loc, false, error,
+    return lowerWithSourceRelease(expr, map_select->get(2), map_select->loc, false, error,
         [&]() { return lowerHashMapSelectImpl(expr, error); });
 }
 
@@ -14865,7 +14874,7 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
     if (!foldl || dynamic_cast<const QoreFoldrOperatorNode*>(node)) {
         return lowerFoldlImpl(expr, error);
     }
-    return lowerWithSourceRelease(foldl->getIteratorExpr(), foldl->loc, true, error,
+    return lowerWithSourceRelease(expr, foldl->getIteratorExpr(), foldl->loc, true, error,
         [&]() { return lowerFoldlImpl(expr, error); });
 }
 
@@ -14874,7 +14883,7 @@ QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error
     if (!foldr) {
         return QoreIRValue();
     }
-    return lowerWithSourceRelease(foldr->getIteratorExpr(), foldr->loc, true, error,
+    return lowerWithSourceRelease(expr, foldr->getIteratorExpr(), foldr->loc, true, error,
         [&]() { return lowerFoldrImpl(expr, error); });
 }
 
