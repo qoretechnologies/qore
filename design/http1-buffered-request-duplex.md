@@ -67,6 +67,14 @@ of the write error that answer caused.
 The poll interests of both directions are merged into the returned poll info, so the controller
 wakes the operation for either one.
 
+Reading first does not eliminate the race: a response can arrive after the read would block and
+before the following write fails. For a buffered request, `driveSendSide()` therefore saves the
+send error and releases only the failed writer. The existing reader and receive state stay intact,
+including any partially received headers or body. Further cycles request only read readiness and
+never resume the abandoned upload. A complete response is delivered and the connection is closed;
+if receiving fails, the saved send error is reported. The caller's request timeout still bounds
+the operation. Chunked streaming sends retain their existing immediate-error behavior.
+
 ## When the first write fails
 
 The handover above needs a *partial* write.  A peer that answers from the request headers alone and closes at
@@ -132,6 +140,12 @@ TLS transports, string and binary bodies, `Content-Length` / chunked / close-del
 framing, an early fault from a peer that stops reading, `100 Continue` mid-upload, peer EOF,
 request timeout, caller cancellation, same-client recovery after each of those, and a small
 request that must still go out in one write and leave the connection poolable.
+
+In debug builds, `Http1BufferedSendFailureTest` also injects a write failure between incomplete
+response reads. It verifies that the existing reader survives multiple cycles, a complete `413`
+body is delivered exactly once, an incomplete response reports the original send error, and a
+chunked streaming send still fails immediately. These state transitions require no sleeps or
+thread scheduling assumptions.
 
 The chunked full-duplex path keeps its own acceptance gate in
 `examples/test/qlib/HttpClientIo/HttpClientIo.qtest` (`FullDuplexEchoRawServer`).
