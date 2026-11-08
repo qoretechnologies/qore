@@ -71,13 +71,15 @@ qore_ci_test_jobs() {
     _quota=""
     _period=""
     _limit=""
+    # a file a pod does not have is no limit; the callers run under set -e, where a failing read or command
+    # substitution in an assignment would end the job's script
     if [ -r "$_cgroup/cpu.max" ]; then
-        read -r _quota _period < "$_cgroup/cpu.max"
-        _limit=$(cat "$_cgroup/memory.max" 2>/dev/null)
+        read -r _quota _period < "$_cgroup/cpu.max" || _quota=""
+        _limit=$(cat "$_cgroup/memory.max" 2>/dev/null) || _limit=""
     else
-        _quota=$(cat "$_cgroup/cpu/cpu.cfs_quota_us" 2>/dev/null)
-        _period=$(cat "$_cgroup/cpu/cpu.cfs_period_us" 2>/dev/null)
-        _limit=$(cat "$_cgroup/memory/memory.limit_in_bytes" 2>/dev/null)
+        _quota=$(cat "$_cgroup/cpu/cpu.cfs_quota_us" 2>/dev/null) || _quota=""
+        _period=$(cat "$_cgroup/cpu/cpu.cfs_period_us" 2>/dev/null) || _period=""
+        _limit=$(cat "$_cgroup/memory/memory.limit_in_bytes" 2>/dev/null) || _limit=""
     fi
     awk -v cpus="$_cpus" -v quota="$_quota" -v period="$_period" -v limit="$_limit" -v per="$_memory_mb" \
             -v max="$_max" 'BEGIN {

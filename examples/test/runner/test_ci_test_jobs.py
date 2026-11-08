@@ -26,12 +26,22 @@ class CiTestJobsTest(unittest.TestCase):
                 path = Path(directory) / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(value + "\n")
-            result = subprocess.run(["sh", "-c", '. "$1"; qore_ci_test_jobs "$2" "$3"', "sh", str(REPORT),
+            # the test scripts of the jobs source the report under set -e
+            result = subprocess.run(["sh", "-c", 'set -e; . "$1"; jobs=$(qore_ci_test_jobs "$2" "$3"); echo "$jobs"',
+                                     "sh", str(REPORT),
                                      str(cpus), directory], env=env or {}, capture_output=True, text=True,
                                     timeout=60)
             self.assertEqual(0, result.returncode, result.stderr)
             self.assertEqual("", result.stderr)
             return int(result.stdout)
+
+    def test_no_cgroup_files(self):
+        # a pod that shows neither cpu.max nor the cgroup v1 files (the CI pods of pipeline 63612): the CPUs online,
+        # at most 4, and no failure under set -e
+        self.assertEqual(4, self.jobs(32, {}))
+        self.assertEqual(2, self.jobs(2, {}))
+        # cgroup v1 with only some of the files
+        self.assertEqual(3, self.jobs(32, {"cpu/cpu.cfs_quota_us": "250000", "cpu/cpu.cfs_period_us": "100000"}))
 
     def test_cgroup_v2(self):
         gib = 1024 ** 3
