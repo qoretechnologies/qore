@@ -962,11 +962,25 @@ typedef std::list<qore_conditional_block_exit_statement_t> block_list_t;
 
 #define DAH_TEXT(d) (d == DAH_RELEASE ? "RELEASE" : (d == DAH_ACQUIRE ? "ACQUIRE" : "NOCHANGE"))
 
+//! what an lvalue checked by check_lvalue() is used for
+enum class qore_lvalue_use_e : unsigned char {
+    //! assigned or modified in place: a cast checks the value of the lvalue inside it
+    MODIFY,
+    //! removed by the remove or delete operators: may end in a slice, but may not be a cast
+    REMOVE,
+    //! the lvalue of a reference: may not contain a cast, as the reference evaluates the variables and selectors of
+    //! its lvalue when it is made
+    REFERENCE,
+};
+
 //! checks an lvalue expression; returns 0 for OK, -1 if it is not an lvalue, -2 for an error already reported
-/** @param allow_slice true if the expression may be a slice (the remove and delete operators)
+/** @param assign true if the lvalue is assigned
+    @param use what the lvalue is used for; a cast is a converted value and not storage that can be removed, so it
+    can be the lvalue only when the lvalue is modified in place, and a step of the lvalue of an operator, but it cannot
+    be in the lvalue of a reference (issue #5640)
 */
-DLLLOCAL int check_lvalue(QoreValue n, bool assign = true, bool allow_slice = false);
-DLLLOCAL int check_lvalue(AbstractQoreNode* n, bool assign = true, bool allow_slice = false);
+DLLLOCAL int check_lvalue(QoreValue n, bool assign = true, qore_lvalue_use_e use = qore_lvalue_use_e::MODIFY);
+DLLLOCAL int check_lvalue(AbstractQoreNode* n, bool assign = true, qore_lvalue_use_e use = qore_lvalue_use_e::MODIFY);
 DLLLOCAL bool parse_is_readonly_receiver_expression(QoreValue n, int pflag);
 DLLLOCAL int check_const_method_lvalue(const QoreProgramLocation* loc, QoreValue n);
 DLLLOCAL int check_readonly_receiver_method_call(const QoreProgramLocation* loc, const char* name,
