@@ -147,7 +147,7 @@ qore_qmod_cache_setup() {
     else
         # the private key is the protected refs' only; this job only reads, and only signed entries
         unset _qmc_key
-        if [ -z "${QORE_QMOD_CACHE_VERIFY_KEY:-}" ]; then
+        if [ -z "${QORE_QMOD_CACHE_VERIFY_KEY:+set}" ]; then
             echo "qmod-cache: no QORE_QMOD_CACHE_VERIFY_KEY to verify the protected cache: building without the cache"
             return 0
         fi

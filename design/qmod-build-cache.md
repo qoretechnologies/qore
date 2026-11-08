@@ -344,7 +344,7 @@ which `verify`, `stats` and `prune` read.
 |`QORE_QMOD_CACHE_DISABLE=1`|compile every module and store nothing
 |`QORE_QMOD_CACHE_READONLY=1`|look modules up, store nothing
 |`QORE_QMOD_CACHE_AUDIT=<rate>[:<seed>]`|audit a sample of the hits (see above)
-|`QORE_QMOD_CACHE_VERIFY_KEY=<key>`|the Ed25519 public key (a file or PEM text): use only entries signed with the private key; write nothing, unless:
+|`QORE_QMOD_CACHE_VERIFY_KEY=<key>`|the Ed25519 public key, as its PEM text (several lines, as a CI variable of type env_var holds it) or the path of a file with it: use only entries signed with the private key; write nothing, unless:
 |`QORE_QMOD_CACHE_SIGN_AFTER_BUILD=1`|store entries unsigned, for `sign` to sign after the build (see "The private key")
 |`QORE_QMOD_CACHE_SIGNING_KEY`|must not be set: `exec` then uses no cache (only `sign` uses the private key, whose file path it reads on stdin)
 |`QORE_QMOD_CACHE_OPENSSL=<path>`|the OpenSSL 3 command for the signatures

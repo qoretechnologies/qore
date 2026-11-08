@@ -1411,6 +1411,36 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertIn("another epoch", self.output)
         self.assertNotEqual(bad, self.qmod("Mid").read_bytes())
 
+    def test_public_key_as_text_or_file(self):
+        """QORE_QMOD_CACHE_VERIFY_KEY is the public key's PEM text (a CI variable of type env_var: several lines, with
+        or without a final newline) or the path of a file with it (type file); exec, verify and signer-check take
+        both, and an entry signed with the private key is a hit with each"""
+        priv, pub = self.key_pair("k")
+        pub_file = self.root / "k.pub.pem"
+        self.assertEqual(pub, pub_file.read_text())
+        self.assertGreater(len(pub.strip().splitlines()), 2)
+        writer = {"QORE_QMOD_CACHE_VERIFY_KEY": pub, "QORE_QMOD_CACHE_SIGN_AFTER_BUILD": "1"}
+        self.build_all(env=writer)
+        self.assertEqual(0, sign_build(self.cache, self.build, priv).returncode)
+        for value in (pub, pub.rstrip("\n"), str(pub_file)):
+            self.assertEqual([], self.build_all(env={"QORE_QMOD_CACHE_VERIFY_KEY": value}))
+            res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build), "--qcc",
+                                  str(self.source / "qcc"), "--require-sidecars"], capture_output=True, text=True,
+                                 timeout=60, env=dict(os.environ, QORE_QMOD_CACHE_VERIFY_KEY=value))
+            self.assertEqual(0, res.returncode, res.stderr)
+            self.assertIn("4 supplied by the cache", res.stderr)
+            res = subprocess.run([sys.executable, str(TOOL), "signer-check", "--verify-only"], capture_output=True,
+                                 text=True, timeout=60, env=dict(os.environ, QORE_QMOD_CACHE_VERIFY_KEY=value))
+            self.assertEqual(0, res.returncode, res.stderr)
+            # and as the public key of the private key, which protected jobs check
+            res = subprocess.run([sys.executable, str(TOOL), "signer-check"], input=priv + "\n", capture_output=True,
+                                 text=True, timeout=60, env=dict(os.environ, QORE_QMOD_CACHE_VERIFY_KEY=value))
+            self.assertEqual(0, res.returncode, res.stderr)
+            self.assertEqual(pub, res.stdout)
+        # another key's text is no match
+        _, other = self.key_pair("other")
+        self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all(env={"QORE_QMOD_CACHE_VERIFY_KEY": other}))
+
     def test_keys_without_openssl(self):
         _, pub = self.key_pair("k")
         self.build_all()
@@ -1889,6 +1919,11 @@ class CiScriptTest(unittest.TestCase):
         self.assertEqual("", r["SIGN"])
         self.assertEqual("", r["HELD"])
         self.assertEqual(["k.pem", "k.pub.pem", "protected"], sorted(p.name for p in self.root.iterdir()))
+        # the public key as a file (a CI variable of type file)
+        pub_file = self.root / "k.pub.pem"
+        r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="false", CI_JOB_NAME="build-x",
+                       QORE_QMOD_CACHE_VERIFY_KEY=str(pub_file))
+        self.assertEqual("-DQORE_QMOD_CACHE_DIR=%s" % (self.root / "protected" / "build-x"), r["ARG"])
         # a public key that is none
         r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="false", CI_JOB_NAME="build-x",
                        QORE_QMOD_CACHE_VERIFY_KEY="pub")
