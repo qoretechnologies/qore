@@ -114,14 +114,58 @@ public class TestRun {
         }
         File f();
         f.open2(path, O_CREAT | O_RDWR, 0666);
+        # the file is shared by the users of the host, whose runs wait for one another: its mode is not the one that
+        # the user's umask leaves (only the owner of the file can change it, so a second user's run opens it as it is)
+        if (hstat(path).uid == getuid()) {
+            chmod(path, 0666);
+        }
         # an exclusive (write) lock: a shared (read) lock would not keep another run out
         f.lockBlocking(F_WRLCK);
         locks{path} = f;
     }
 
     #! Returns the path of the lock file of the given kind of database and datasource string
+    /** The name has the MD5 of the database that the datasource string names (its driver, user, host, port and
+        database), never of its password, which could be guessed from the name
+    */
     static string getLockPath(string kind, string connstr) {
-        return sprintf("%s/qore-test-%s-%s.lock", tmp_location(), kind, MD5(connstr));
+        string id;
+        try {
+            hash<auto> config = parse_datasource(connstr);
+            id = sprintf("%s:%s@%s:%s/%s", config.type ?? "", config.user ?? "", config.host ?? "", config.port ?? "",
+                config.db ?? "");
+        } catch (hash<ExceptionInfo> ex) {
+            # a string that cannot be parsed, without anything that can be a password
+            id = TestRun::maskSecrets(connstr);
+        }
+        return sprintf("%s/qore-test-%s-%s.lock", tmp_location(), kind, MD5(id));
+    }
+
+    #! Returns a text, such as an exception's description, with the passwords of the datasource strings in it masked
+    /** A datasource string's password is between its user's \c "/" and the last \c "@" before its database; a
+        message about a datasource string, such as the description of \c DATASOURCE-PARSE-ERROR, quotes the whole
+        string, and is printed where others can read it (CI job logs)
+
+        @param text the text
+        @param connstrs datasource strings whose passwords are masked wherever they are in the text, also when the
+        datasource string cannot be parsed
+    */
+    static string maskSecrets(string text, *softlist<string> connstrs) {
+        foreach string connstr in (connstrs) {
+            *string pass;
+            try {
+                pass = parse_datasource(connstr).pass;
+            } catch (hash<ExceptionInfo> ex) {
+                pass = (connstr =~ x/^(?:[^:\/@]*:)?[^\/@]*\/(.*)@/s)[0];
+            }
+            if (pass) {
+                text = replace(text, pass, "****");
+            }
+        }
+        # the password of any other datasource string: "user/password@" at the start, after a driver name, a quote or
+        # a space
+        text =~ s/(^|[:"' ])([^:\/@"' ]+)\/[^@"' ]*@/$1$2\/****@/g;
+        return text;
     }
 
     #! Returns the letters and digits of a string, in lower case, at most the given number of them

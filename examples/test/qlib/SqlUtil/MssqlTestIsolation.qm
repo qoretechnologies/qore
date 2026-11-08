@@ -128,6 +128,17 @@ public class MssqlRunDatabase {
         database can be created for the run (see the introduction); no value if none is given
     */
     static *string getConnectionString(*string connstr, string suite) {
+        try {
+            return MssqlRunDatabase::getConnectionStringIntern(connstr, suite);
+        } catch (hash<ExceptionInfo> ex) {
+            # a message about a datasource string, such as DATASOURCE-PARSE-ERROR's, quotes it with its password
+            throw ex.err, TestRun::maskSecrets(ex.desc ?? "", connstr), ex.arg.typeCode() == NT_STRING
+                ? TestRun::maskSecrets(ex.arg, connstr) : ex.arg;
+        }
+    }
+
+    #! Returns the datasource string of the run's database or schema (see getConnectionString())
+    private static *string getConnectionStringIntern(*string connstr, string suite) {
         if (!connstr) {
             return connstr;
         }

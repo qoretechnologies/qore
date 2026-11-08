@@ -41,7 +41,8 @@ class DropTestRunLeftovers {
                 printf("%s: %d leftover test run object(s) dropped%s\n", label, dropped.size(),
                     dropped ? ": " + (foldl $1 + ", " + $2, dropped) : "");
             } catch (hash<ExceptionInfo> ex) {
-                printf("%s: skipped: %s: %s\n", label, ex.err, ex.desc);
+                # a message about a datasource string quotes it with its password
+                printf("%s: skipped: %s: %s\n", label, ex.err, TestRun::maskSecrets(ex.desc ?? "", connstr));
             }
         };
         drop("MySQL", ENV.QORE_DB_CONNSTR_MYSQL, \MysqlRunDatabase::dropLeftovers());
