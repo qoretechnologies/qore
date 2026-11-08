@@ -1498,8 +1498,8 @@ qcc of this Qore installation
     A module is out of date as well when a module it requires, directly or through another module, or a module that
     one of them re-exports, is loaded from another module than the one it was compiled against, for example one that
     appeared in a directory of the module path that is searched first: the module loader raises
-    \c AOT-MODULE-STALE for it and loads its source module instead, or, without a source module, loads it with a
-    \c BINARY-MODULE-STALE warning that it must be rebuilt.  Another build of a binary module, even with the same name and
+    \c AOT-MODULE-STALE for it and loads its source module instead; without a source module, the module cannot be
+    loaded until it is rebuilt.  Another build of a binary module, even with the same name and
     module API version, such as an installed one, is a different module unless it is an identical copy.
 
     A module without a dependency file next to it is not checked: an installed module (the install rules do not

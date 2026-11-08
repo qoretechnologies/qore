@@ -113,10 +113,11 @@ API version in the file's name (`<name>-api-<x>.<y>.qmod`) is the version of the
 An AOT module without its depfile (an installed module, or one compiled by hand without `--depfile`) is not checked:
 what it was compiled from is not known, and the loader does not check such a module's own sources either.
 
-Otherwise the module is out of date.  With its source module in the module path, the loader raises
-`AOT-MODULE-STALE`, which, as for any AOT module that cannot be loaded, loads the source module instead with a
-`BINARY-MODULE-SOURCE-FALLBACK` warning.  Without one, the AOT module is loaded with a `BINARY-MODULE-STALE` warning
-that it must be rebuilt, as for an AOT module compiled without an optional module that is available now.  A builtin
+Otherwise the module is out of date: the loader raises `AOT-MODULE-STALE`, which, as for any AOT module that cannot
+be loaded, loads the source module instead with a `BINARY-MODULE-SOURCE-FALLBACK` warning.  Without a source module
+the error stands: AOT code compiled against another module than the one loaded for it can misbehave, so it is not
+loaded with a warning (unlike an AOT module compiled without an optional module that is available now).  A module
+that differs only in its path (an identical copy) is not another module, so it never gets here.  A builtin
 module, a file the sandbox does not let the loader read and a module loaded into a Program without filesystem access
 are not checked.  An incremental build cannot see such a module appear (a make prerequisite cannot be a file that
 does not exist); the loader reports it and asks for the module to be rebuilt.

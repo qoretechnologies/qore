@@ -49,8 +49,7 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
             \reexportShadowTest());
         addTestCase("a module further down the chain, loaded from another file, makes a module out of date",
             \chainShadowTest());
-        addTestCase("without a source module, an out-of-date AOT module is loaded with a warning",
-            \noSourceTest());
+        addTestCase("without a source module, an out-of-date AOT module is not loaded", \noSourceTest());
         addTestCase("another build of a native module is a different module unless it is an identical copy",
             \nativeModuleTest());
         addTestCase("a module compiled with a relative output path is checked", \relativeOutputTest());
@@ -297,11 +296,21 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         unlink(qmod_dir + "/Dep.qmod");
         writeModule(shadow_dir, "Dep", "", "public namespace Dep { public string sub value() { return \"other\"; } "
             "}");
-        # User's source is not in the module path: its AOT module is loaded, with a warning that it must be rebuilt
-        string out = runRequires(shadow_dir + ":" + qmod_dir, tmp.path, "User", "User::value()");
-        assertEq("other User.qmod", out.split("\n").last(), out);
-        assertRegex("BINARY-MODULE-STALE: .*AOT module '.*/User\\.qmod' for feature 'User' is out of date: it was "
-            "compiled against other files of module 'Dep'.*no source module was found", out);
+        # User's source is not in the module path: an identical copy of the Dep it was compiled against is the same
+        # module, so its AOT module is loaded
+        string copy_dir = tmp.path + "/copy";
+        mkdir(copy_dir);
+        write(copy_dir + "/Dep.qm", ReadOnlyFile::readTextFile(src_dir + "/Dep.qm"));
+        string out = runRequires(copy_dir + ":" + qmod_dir, tmp.path, "User", "User::value()");
+        assertEq("dep User.qmod", out, out);
+
+        # another Dep: the AOT module is out of date, and without its source no module can be loaded for User
+        out = runRequires(shadow_dir + ":" + qmod_dir, tmp.path, "User", "User::value()");
+        assertRegex("AOT-MODULE-STALE: AOT module '.*/User\\.qmod' for feature 'User' is out of date: it was "
+            "compiled against other files of module 'Dep' than '.*/shadow/Dep\\.qm'", out);
+        # the script did not run
+        assertNRegex("(?m)^other User", out);
+        assertNRegex("BINARY-MODULE-STALE", out);
     }
 
     nativeModuleTest() {

@@ -4455,17 +4455,11 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
             return nullptr;
         }
         if (stale) {
-            if (source_available) {
-                xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT module '%s' for feature "
-                    "'%s' is out of date: %s; rebuild the AOT module", path, feature, stale_desc.c_str());
-                return nullptr;
-            }
-            qore_report_module_load_warning(xsink, wsink != &xsink ? wsink : nullptr, warning_mask, true,
-                "BINARY-MODULE-STALE", feature, new QoreStringNodeMaker("AOT module '%s' for feature '%s' is out of "
-                "date: %s, and no source module was found; the binary module is loaded; rebuild the AOT module",
-                path, feature, stale_desc.c_str()));
-        }
-        if (xsink) {
+            // an error also when no source module can be loaded instead: AOT code compiled against another module
+            // than the one loaded for it can misbehave (see design/aot-linked-module-sources.md); an identical copy of
+            // the module compiled against is not another module, so it does not get here
+            xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT module '%s' for feature "
+                "'%s' is out of date: %s; rebuild the AOT module", path, feature, stale_desc.c_str());
             return nullptr;
         }
     }
