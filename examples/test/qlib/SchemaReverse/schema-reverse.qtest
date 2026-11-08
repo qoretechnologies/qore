@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-parallel: serial - it reverses the whole shared Oracle and FreeTDS test schemas
+# test-parallel: serial - it reverses the whole shared SQL Server/Sybase (FreeTDS) test database
 
 %modern
 
@@ -20,6 +20,7 @@
 # the test runs against every database connection that is configured
 %requires ../../DbTestConnections.qm
 %requires ../SqlUtil/MysqlTestIsolation.qm
+%requires ../SqlUtil/OracleTestIsolation.qm
 
 %exec-class Main
 
@@ -106,9 +107,10 @@ class Main inherits QUnit::Test {
         # on PostgreSQL, every connection of the run uses the run's own schema; this is set up before any
         # connection is opened
         map PgsqlRunSchema::setup($1.conn.connstr, "SchemaReverse"), contexts;
-        # on MySQL, the run's own database
+        # on MySQL and Oracle, the run's own database or schema
         foreach SchemaReverseContext ctx in (contexts) {
             ctx.conn.connstr = MysqlRunDatabase::getConnectionString(ctx.conn.connstr, "SchemaReverse");
+            ctx.conn.connstr = OracleRunSchema::getConnectionString(ctx.conn.connstr, "SchemaReverse");
         }
         map setUpContext($1), contexts;
     }
@@ -191,6 +193,7 @@ class Main inherits QUnit::Test {
         # drop the run's schema on PostgreSQL
         PgsqlRunSchema::teardown();
         MysqlRunDatabase::teardown();
+        OracleRunSchema::teardown();
     }
 
     #! skips the test case if the connection is not open; fails it if its schema could not be created

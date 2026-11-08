@@ -23,6 +23,7 @@
 */
 
 %modern
+%requires Util
 
 module MysqlTestIsolation {
     version = "1.0";
@@ -141,6 +142,10 @@ public class MysqlRunDatabase {
         on_exit lck.unlock();
         if (connstrs{connstr}) {
             return connstrs{connstr};
+        }
+        # a datasource string that this function returned is the run's already
+        if (inlist(connstr, connstrs.values())) {
+            return connstr;
         }
 
         Datasource ds(connstr);

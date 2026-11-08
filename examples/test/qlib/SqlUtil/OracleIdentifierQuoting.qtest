@@ -1,7 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
-# test-parallel: serial - it creates fixed-name objects in the shared Oracle test schema
 
 %modern
 
@@ -9,6 +8,7 @@
 %requires QUnit
 %requires SqlUtil
 %requires OracleSqlUtilBase
+%requires ./OracleTestIsolation.qm
 
 %try-module oracle
 %define NoOracle
@@ -322,7 +322,9 @@ class OracleIdentifierQuotingTest inherits QUnit::Test {
 %ifdef NoOracle
         testSkip("no oracle module");
 %else
-        *string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_ORACLE;
+        # the run's own schema: tests that run at the same time do not share the objects of this one
+        *string connstr = OracleRunSchema::getConnectionString(m_options.connstr ?? ENV.QORE_DB_CONNSTR_ORACLE,
+            "OracleIdentQuoting");
         if (!connstr) {
             testSkip("no Oracle connection; set QORE_DB_CONNSTR_ORACLE or use -c");
         }

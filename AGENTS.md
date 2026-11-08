@@ -71,16 +71,17 @@
   `examples/test/docker_test/ci-resource-report.sh`) and prints each test's output whole when it ends.  Tests must
   therefore not share state: listen on port 0, write under their own `make_tmp_dir()`/`TmpDir`, and use names of their
   own for shared objects.  A test that cannot run beside others declares `# test-parallel: serial - <why>` (one at a
-  time beside the others: the tests that create fixed-name objects in the Oracle, FreeTDS and Firebird test schemas,
-  which have no per-run schema) or `# test-parallel: exclusive - <why>` (alone: a test that reads the process limit of
-  the machine to reach it, such as `qore/threads/max-threads-count.qtest`, must, or the tests beside it cannot fork;
+  time beside the others: the tests that create fixed-name objects in the FreeTDS and Firebird test databases, which
+  have no per-run schema) or `# test-parallel: exclusive - <why>` (alone: a test that reads the process limit of the
+  machine to reach it, such as `qore/threads/max-threads-count.qtest`, must, or the tests beside it cannot fork;
   `examples/test/runner/test_parallel_runner.py` enforces it).  The reason names the shared resource; tests that
   interfere only by names they share are a bug: a PostgreSQL test takes a schema of its own with
   `examples/test/qlib/SqlUtil/PgsqlTestIsolation.qm`, a MySQL test a database of its own with `MysqlTestIsolation.qm`
-  there, and a Redis, Memcached or MongoDB test random key prefixes or a database of its own.  A test that takes more
-  than about two minutes is split into parts: its class adds each case with `addPartCase(<part>, ...)` and each
-  `<name>-<part>.qtest` runs one part (ex: `ir/CMakeBuildHelpers.qc`); `examples/test/runner/test_split_tests.py` checks
-  the parts.
+  there, an Oracle test a schema (user) of its own with `OracleTestIsolation.qm` there (given
+  `QORE_DB_CONNSTR_ORACLE_SYS`), and a Redis, Memcached or MongoDB test random key prefixes or a database of its own.  A
+  test that takes more than about two minutes is split into parts: its class adds each case with `addPartCase(<part>,
+  ...)` and each `<name>-<part>.qtest` runs one part (ex: `ir/CMakeBuildHelpers.qc`);
+  `examples/test/runner/test_split_tests.py` checks the parts.
 - The shards of a CI job are balanced by `examples/test/docker_test/test-durations.tsv`; refresh it from a green
   pipeline with `examples/test/docker_test/update-test-durations.py <pipeline ID>` after adding long tests or shards.
 
