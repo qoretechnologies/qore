@@ -1370,7 +1370,7 @@ public class DataProviderActionCatalog {
         */
         static *code lazy_worker_start = DataProviderActionCatalog::initLazyWorker();
 
-        #! Lazy values: ID -> \c builder, \c governed, \c value and \c built; see buildLazyValue()
+        #! Lazy values: ID -> \c builder, \c value and \c built; see buildLazyValue()
         /** See registerLazyValue()
         */
         static hash<string, hash<auto>> lazy_values = {};
@@ -1648,12 +1648,18 @@ DataProviderActionCatalog::registerLazyAppActions(AppName, sub () {
         thread for a reader that no sandbox governs, and on the catalog worker for a sandboxed reader, so that what
         the builder creates, which every reader shares afterwards, does not keep the reader's sandbox, including its
         interrupts, and the module's own resources are not denied to it (see @ref dataprovider_lazy_actions).  A
-        builder registered under a sandbox is built under that sandbox, for any reader.
+        module that sandboxed code loads, whose initialization a sandbox governs, gets its value built at once, as
+        before values were lazy: no code registered under a sandbox runs later on another thread.
+
+        The API is for modules: a value can only be registered while a module is being loaded, and lives until the
+        end of the process, as the module's Program does.
 
         @param builder the code that builds the value; it takes no arguments.  An exception that it raises is raised
         to the reader, and the next reader builds the value again
 
         @return the ID of the value, for getLazyValue()
+
+        @throw DATA-PROVIDER-LAZY-VALUE-ERROR no module is being loaded
 
         @par Example:
         @code{.py}
@@ -1677,16 +1683,20 @@ class MyProvider {
         @since %DataProvider 3.11
     */
     static int registerLazyValue(code builder) {
-        bool governed = DataProviderActionCatalog::isGoverned();
+        # the API is for modules, whose Programs live until the end of the process, as the values do
+        if (!get_module_context_path()) {
+            throw "DATA-PROVIDER-LAZY-VALUE-ERROR", "a lazy value can only be registered while a module is being "
+                "loaded";
+        }
+        # a hash of any values: the value replaces the builder's entry when it is built
         hash<auto> v;
-        # without the sandbox APIs, the value is built now, as it was when it was not lazy
-        if (!sandbox_apis) {
-            v = {"value": builder(), "built": True};
+        # without the sandbox APIs, and for a module that sandboxed code loads, the value is built now, as it was when
+        # it was not lazy: no code registered under a sandbox runs later, on another thread
+        if (!sandbox_apis || DataProviderActionCatalog::isGoverned()) {
+            v.value = builder();
+            v.built = True;
         } else {
-            v = {
-                "builder": governed ? SandboxManager::bindCall(builder) : builder,
-                "governed": governed,
-            };
+            v.builder = builder;
         }
         AutoLock al(lazy_worker_lck);
         int id = ++lazy_value_seq;
@@ -1714,7 +1724,7 @@ class MyProvider {
         if (v.built) {
             return v.value;
         }
-        if (v.governed || !DataProviderActionCatalog::isGoverned() || DataProviderActionCatalog::isLazyWorker()) {
+        if (!DataProviderActionCatalog::isGoverned() || DataProviderActionCatalog::isLazyWorker()) {
             return DataProviderActionCatalog::buildLazyValue(key);
         } else {
             # as for lazy registrations (see runLazy()): a sandboxed thread loading a module cannot wait for the worker,

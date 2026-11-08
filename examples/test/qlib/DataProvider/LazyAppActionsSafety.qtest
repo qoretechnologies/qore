@@ -86,6 +86,8 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
             \sandboxedValueLoadTest());
         addTestCase("lazy values whose builders need each other end with an error instead of a deadlock",
             \valueCycleTest());
+        addTestCase("lazy values are registered by modules; a module that sandboxed code loads builds them at once",
+            \valueRegistrationTest());
         addTestCase("a sandboxed reader is refused the worker while the worker waits for its initialization",
             \workerCycleTest());
         addTestCase("deregistering an app during its initialization retains nothing", \deregistrationTest());
@@ -487,6 +489,27 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
     }
 
+    valueRegistrationTest() {
+        # outside a module's initialization
+        assertThrows("DATA-PROVIDER-LAZY-VALUE-ERROR", "while a module is being loaded",
+            \DataProviderActionCatalog::registerLazyValue(), (sub () {},));
+        Program sandboxed(PO_NEW_STYLE, True);
+        sandboxed.parse("%requires DataProvider\nsub reg() { DataProviderActionCatalog::registerLazyValue(sub () {}); }\n",
+            "sandboxed-value");
+        sandboxed.setSandboxManager(new SandboxManager());
+        assertThrows("DATA-PROVIDER-LAZY-VALUE-ERROR", \sandboxed.callFunction(), ("reg",));
+        # a module that sandboxed code loads: its value is built while it is loaded
+        Program loader(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        loader.parse("sub load(string path) { load_module(path); }\n", "lazy-governed-value-loader");
+        loader.setSandboxManager(new SandboxManager());
+        loader.callFunction("load", get_script_dir() + "/LazyAppActionsGovernedValues.qm");
+        load_module(get_script_dir() + "/LazyAppActionsGovernedValues.qm");
+        assertEq(1, call_static_method("LazyAppActionsGovernedValues::GovernedValues", "getRuns"));
+        int id = call_static_method("LazyAppActionsGovernedValues::GovernedValues", "getId");
+        assertEq("governed", DataProviderActionCatalog::getLazyValue(id));
+        assertEq(1, call_static_method("LazyAppActionsGovernedValues::GovernedValues", "getRuns"));
+    }
+
     valueCycleTest() {
         # two threads build two values whose builders need each other
         Counter done(2);
@@ -766,9 +789,11 @@ string sub test() {
         \"display_name\": \"x\", \"short_desc\": \"x\", \"desc\": \"x\", \"groups\": (AppGroup::DataTransformation,),
         \"logo\": \"data\", \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\", \"dynamic\": True});
     DataProviderActionCatalog::registerLazyAppActions(\"RestrictedApp\", sub () { reg(\"RestrictedApp\", \"lazy-a\"); });
-    int id = DataProviderActionCatalog::registerLazyValue(auto sub () { return \"built\"; });
-    return sprintf(\"%y %y %y\", (map $1.action, DataProviderActionCatalog::getActionsNoInit(\"RestrictedApp\")),
-        DataProviderActionCatalog::hasLazyAppActions(\"RestrictedApp\"), DataProviderActionCatalog::getLazyValue(id));
+    # the module's lazy value was built when the module was loaded
+    return sprintf(\"%y %y %y %y\", (map $1.action, DataProviderActionCatalog::getActionsNoInit(\"RestrictedApp\")),
+        DataProviderActionCatalog::hasLazyAppActions(\"RestrictedApp\"),
+        LazyAppActionsGovernedValues::GovernedValues::runs,
+        DataProviderActionCatalog::getLazyValue(LazyAppActionsGovernedValues::GovernedValues::id));
 }
 ");
         string script = dir + "/restricted.q";
@@ -776,6 +801,7 @@ string sub test() {
 Program p(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS, True);
 try {
     p.loadModule(\"DataProvider\");
+    p.loadModule(\"" + get_script_dir() + "/LazyAppActionsGovernedValues.qm\");
 } catch (hash<ExceptionInfo> ex) {
     printf(\"load: %s\\n\", ex.err);
     exit(1);
@@ -789,7 +815,7 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
             output));
         string out = ReadOnlyFile::readTextFile(output);
         assertEq(0, rc, out);
-        assertLines(("[\"lazy-a\"] False \"built\"",), out);
+        assertLines(("[\"lazy-a\"] False 1 \"governed\"",), out);
     }
 
     #! Runs a child process with the test's lazy app helpers, and returns its exit code and output

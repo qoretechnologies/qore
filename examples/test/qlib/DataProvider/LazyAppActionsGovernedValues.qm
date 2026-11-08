@@ -1,0 +1,40 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# LazyAppActionsGovernedValues.qm - test module that sandboxed code loads and that registers a lazy value
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+
+module LazyAppActionsGovernedValues {
+    version = "1.0";
+    desc = "test module whose lazy value is registered under the sandbox of the Program loading it";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! The test module's lazy value
+public namespace LazyAppActionsGovernedValues {
+public class GovernedValues {
+    public {
+        #! the builds of the value
+        static int runs = 0;
+        #! the value
+        static int id = DataProviderActionCatalog::registerLazyValue(\GovernedValues::build());
+    }
+
+    static int getRuns() {
+        return runs;
+    }
+
+    static int getId() {
+        return id;
+    }
+
+    static string build() {
+        ++runs;
+        return "governed";
+    }
+}
+}
