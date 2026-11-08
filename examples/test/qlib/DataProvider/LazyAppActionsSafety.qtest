@@ -493,9 +493,7 @@ printf(\"threads: %d\\n\", num_threads());
     }
 
     stoppedWorkerTest() {
-%ifndef QoreDebug
-        testSkip("the test needs the catalog worker's test hooks of a debug build");
-%endif
+%ifdef QoreDebug
         # the catalog worker is stopped by the exit hook while it runs a sandboxed reader's job, and a second
         # sandboxed reader's job is queued behind it: the second reader gets DATA-PROVIDER-LAZY-WORKER-STOPPED.  The
         # child loads the DataProvider module after it registered the hook releasing the first job, so that the
@@ -525,12 +523,13 @@ DataProviderActionCatalog::waitForLazyInitsQueued(queued + 1, 60s);
         assertEq(0, r.rc, r.output);
         assertEq(("SafeStopBlocked: ok", "SafeStopQueued: DATA-PROVIDER-LAZY-WORKER-STOPPED"),
             sort(map $1, r.output.split("\n"), $1 =~ /^SafeStop/), r.output);
+%else
+        testSkip("the test needs the catalog worker's test hooks, which only debug builds have");
+%endif
     }
 
     workerEndTest() {
-%ifndef QoreDebug
-        testSkip("the test needs the catalog worker's test hooks of a debug build");
-%endif
+%ifdef QoreDebug
         # a registration ends the worker's thread while a second job is queued: both readers are told, the
         # registration is restored, and the next sandboxed reader starts a new worker
         string a = registerApp("SafeWorkerEnd");
@@ -565,6 +564,9 @@ DataProviderActionCatalog::waitForLazyInitsQueued(queued + 1, 60s);
         assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(b, False));
         assertEq(2, SafetyRuns::get(a));
         assertEq((), DataProviderActionCatalog::getInitializationFailures((a, b)));
+%else
+        testSkip("the test needs the catalog worker's test hooks, which only debug builds have");
+%endif
     }
 
     forkTest() {
