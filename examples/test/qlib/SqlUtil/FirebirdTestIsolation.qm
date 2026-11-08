@@ -285,9 +285,9 @@ public class FirebirdRunDatabase {
             "m.setPort(ARGV[1].toInt());\n"
             "m.start();\n"
             "on_exit m.stop();\n"
-            # the password is read from the standard input: it is not given on the command line, where any user of
-            # the host could see it
-            "m.dropDatabase(ARGV[2], ARGV[3], trim(stdin.readLine(False) ?? \"\"));\n";
+            # the password is read from the standard input, without its line's end but with any white space of its
+            # own: it is not given on the command line, where any user of the host could see it
+            "m.dropDatabase(ARGV[2], ARGV[3], stdin.readLine(False) ?? \"\");\n";
         string dir = make_tmp_dir("qore-firebird-drop-");
         on_exit {
             unlink(dir + "/password");
