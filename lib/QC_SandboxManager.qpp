@@ -974,13 +974,51 @@ hash<auto> sub admin_reset(string name) {
     - restricted to @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", like the other methods that
       expose or mask sandbox policy
 
-    @see getGoverningPolicies()
+    @see
+    - getGoverningPolicies()
+    - isSandboxed(), which also sees a sandbox through a policy barrier and is not restricted
 
     @since %Qore 3.0
 */
 static bool SandboxManager::isGoverned() [dom=UNCONTROLLED_API; flags=RET_VALUE_ONLY] {
     QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
     return static_cast<bool>(policy);
+}
+
+//! Returns @ref True if any sandbox governs the current thread's code, also inside a policy barrier
+/** Resolves the governing sandbox as interrupts and resource limits do, and as createSystemThreadCall() checks its
+    creator: the Programs on the call stack, the provenance of the objects and callbacks whose code runs, and the
+    sandbox inherited by a thread started for sandboxed code, through any policy barrier (callWithSystemPolicy()) or
+    system-policy capability (createSystemPolicyCall()).  Unlike isGoverned(), which answers whether a sandbox's
+    filesystem and network policy applies, it answers whether the thread serves sandboxed code at all: trusted
+    infrastructure that keeps state shared with every caller, or that starts work that outlives the call, uses it to
+    decide where that work runs, also when it is called under a policy barrier on behalf of a sandboxed caller.
+
+    It masks nothing and reveals only whether the calling code is itself sandboxed, so it is not restricted: trusted
+    modules use it also when they serve code restricted with
+    @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS".
+
+    @return @ref True if a sandbox governs the current thread's code, also through a policy barrier; @ref False if
+    not
+
+    @par Example:
+    @code{.py}
+# shared state is built only for trusted callers; sandboxed callers, also under a policy barrier, get it built
+# elsewhere
+if (SandboxManager::isSandboxed()) {
+    queueBuild();
+} else {
+    build();
+}
+    @endcode
+
+    @see isGoverned()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isSandboxed() [flags=RET_VALUE_ONLY] {
+    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+    return static_cast<bool>(governing);
 }
 
 //! Returns the configuration of each sandbox that governs the filesystem and network access of the current thread's code
