@@ -133,7 +133,8 @@ printf(\"callbacks: %s\\n\", trusted.callFunction(\"callbacks\"));
         string output = tmp.path + DirSep + "output.txt";
         # the test's module directory joins the module path of the test's own environment
         string module_dir = dir + PathSep + (ENV.QORE_MODULE_DIR ?? (get_script_dir() + "/../../../../qlib"));
-        int rc = system(sprintf("QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1", module_dir, QORE_ARGV[0],
+        int rc = system(sprintf("QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1", module_dir,
+            ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0],
             tmp.path + DirSep + "child.q", output));
         string out = ReadOnlyFile::readTextFile(output);
         assertEq(0, rc, out);
