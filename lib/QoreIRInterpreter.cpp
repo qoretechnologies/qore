@@ -12977,6 +12977,28 @@ load_local_done:
                     delete iter;
                     // Clear the iterator value so we don't double-delete
                     setValueSlot(values, iter_inst->iterator.id, QoreValue(static_cast<int64_t>(0)), xsink);
+                    // the last element is released when the loop ends, as the AST interpreter releases each element
+                    // when its iteration ends and native code releases the element's slot here (the next call of
+                    // qore_rt_iterator_next() releases the previous element and stores NOTHING when it is done)
+                    uint32_t elem_id = iter_inst->result.id;
+                    if (elem_id < values.size() && hasCleanupEntry(cleanup, elem_id)) {
+                        removeAllCleanupEntries(cleanup, elem_id);
+                        QoreValue elem = values[elem_id];
+                        values[elem_id] = QoreValue();
+                        elem.discard(xsink);
+                        if (xsink && *xsink) {
+                            if (inst->exception_target) {
+                                cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                                prev_block = block;
+                                block = inst->exception_target;
+                                ip = 0;
+                                break;
+                            }
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                    }
                     prev_block = block;
                     block = iter_inst->done_target;
                     ip = 0;

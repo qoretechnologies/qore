@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <exception>
 
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRLowering.h>
@@ -271,12 +272,25 @@ static bool qore_ir_type_is_iterator_class(const QoreTypeInfo* ti) {
     return qc && qore_class_private::parseCheckCompatibleClass(qc, QC_ABSTRACTITERATOR);
 }
 
-//! Returns true if the expression is a call, whose value is a temporary that the frame owns
-static bool qore_ir_expr_is_call(const QoreValue& expr) {
+//! Returns true if the expression gives a new value that the frame owns as a temporary
+/** a call (a function, method or static method call, a call through a call reference, \c new), a list or hash
+    literal, a slice, and the value of a functional operator; not the value of a variable, of an implicit argument
+    (<tt>$1</tt>, whose element slot a later <tt>$1</tt> reads again), of a constant or of an operator that can give an
+    operand's value
+*/
+static bool qore_ir_expr_is_temporary(const QoreValue& expr) {
     const AbstractQoreNode* node = expr.getInternalNode();
     return node && (dynamic_cast<const AbstractFunctionCallNode*>(node)
         || dynamic_cast<const QoreDotEvalOperatorNode*>(node)
-        || dynamic_cast<const CallReferenceCallNode*>(node));
+        || dynamic_cast<const CallReferenceCallNode*>(node)
+        || dynamic_cast<const QoreParseListNode*>(node)
+        || dynamic_cast<const QoreParseHashNode*>(node)
+        || dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)
+        || dynamic_cast<const QoreMapOperatorNode*>(node)
+        || dynamic_cast<const QoreSelectOperatorNode*>(node)
+        || dynamic_cast<const QoreMapSelectOperatorNode*>(node)
+        || dynamic_cast<const QoreHashMapOperatorNode*>(node)
+        || dynamic_cast<const QoreHashMapSelectOperatorNode*>(node));
 }
 
 //! Releases the temporaries that the operands of an operator gave once the operator has run
@@ -284,19 +298,18 @@ static bool qore_ir_expr_is_call(const QoreValue& expr) {
     last operand first (ex: <tt>f(new T("a") == new T("b"), g())</tt> destroys b and a before g() runs); the compiled
     modes release a statement's temporaries when the statement ends, unless an instruction releases them earlier.  A
     comparison, \c instanceof, \c exists and a slice give a value that holds no reference to an operand's temporary
-    (a slice references the elements, not the sequence), so the temporary that an operand's call gave (a function,
-    method or static method call, a call through a call reference, \c new) is released after the operator with
-    ReleaseOwnedTemp, which releases a value only when the frame owns it as a temporary.  Only a call's value is
-    released: the value of another operand can be a variable's, an implicit argument's (<tt>$1</tt>, whose element
-    slot the next use reads again) or an operator's that the operator holds itself.  An operand whose type cannot
-    hold an object runs no destructor when it is released, so it needs no instruction.
+    (a slice references the elements, not the sequence), so the temporary that an operand gave
+    (qore_ir_expr_is_temporary()) is released after the operator with ReleaseOwnedTemp, which releases a value only
+    when the frame owns it as a temporary.  The value of another operand can be a variable's, an implicit argument's
+    (<tt>$1</tt>, whose element slot the next use reads again) or an operator's that the operator holds itself.  An
+    operand whose type cannot hold an object runs no destructor when it is released, so it needs no instruction.
 
     @param operands the operands in the order of their release (the last evaluated first), with their expressions
 */
 static void qore_ir_release_operator_operand_temps(QoreIRBuilder& builder,
         std::initializer_list<std::pair<QoreIRValue, QoreValue>> operands, const QoreProgramLocation* loc) {
     for (const auto& [value, operand_expr] : operands) {
-        if (!value.isValid() || !qore_ir_expr_is_call(operand_expr)) {
+        if (!value.isValid() || !qore_ir_expr_is_temporary(operand_expr)) {
             continue;
         }
         const QoreTypeInfo* ti = getExprTypeInfo(operand_expr);
@@ -5921,19 +5934,17 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
 class QoreIRLowering::FunctionalSourceRelease {
 public:
     DLLLOCAL FunctionalSourceRelease(QoreIRLowering& lowering, const QoreValue& source, const QoreProgramLocation* loc,
-            std::string& error) : lowering(lowering), loc(loc), error(error) {
-        lowering.functional_source_captures.push_back({sourceNode(source), QoreIRValue()});
+            std::string& error) : lowering(lowering), loc(loc), error(error),
+            uncaught_exceptions(std::uncaught_exceptions()) {
+        lowering.functional_source_captures.push_back({sourceNode(source), QoreIRValue(), !isListSource(source)});
     }
 
-    //! The operator is lowered as a fused pipeline of stages over the given base source
-    DLLLOCAL void setBaseSource(const QoreValue& base_source) {
-        lowering.functional_source_captures.back().node = sourceNode(base_source);
-    }
 
     DLLLOCAL ~FunctionalSourceRelease() {
         QoreIRValue value = lowering.functional_source_captures.back().value;
         lowering.functional_source_captures.pop_back();
-        if (!value.isValid() || !error.empty()) {
+        // nothing is emitted while a C++ exception leaves the operator's lowering, which is abandoned
+        if (!value.isValid() || !error.empty() || std::uncaught_exceptions() > uncaught_exceptions) {
             return;
         }
         QoreIRBasicBlock* block = lowering.builder.getBlock();
@@ -5952,25 +5963,32 @@ private:
     QoreIRLowering& lowering;
     const QoreProgramLocation* loc;
     std::string& error;
+    //! the number of uncaught C++ exceptions when the operator's lowering started
+    int uncaught_exceptions;
 
+public:
     //! returns the node of a source of a list type, whose value is released, or nullptr
     DLLLOCAL static const AbstractQoreNode* sourceNode(const QoreValue& source) {
-        // a temporary list: the value of a call, a slice or another functional operator (a variable's value is not
-        // a temporary, and an implicit argument's is the element slot, which the operator's expressions read again)
-        const AbstractQoreNode* node = source.getInternalNode();
-        if (!node || !(qore_ir_expr_is_call(source)
-                || dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)
-                || dynamic_cast<const QoreMapOperatorNode*>(node)
-                || dynamic_cast<const QoreSelectOperatorNode*>(node)
-                || dynamic_cast<const QoreMapSelectOperatorNode*>(node))) {
+        // a temporary list (qore_ir_expr_is_temporary()): a variable's value is not a temporary, and an implicit
+        // argument's is the element slot, which the operator's expressions read again
+        if (!qore_ir_expr_is_temporary(source)) {
             return nullptr;
         }
-        if (!QoreTypeInfo::isType(getExprTypeInfo(source), NT_LIST)) {
-            return nullptr;
-        }
-        return node;
+        return source.getInternalNode();
+    }
+
+    //! returns true if the source is known to be a list, so that the operator's value is a new container
+    DLLLOCAL static bool isListSource(const QoreValue& source) {
+        return QoreTypeInfo::isType(getExprTypeInfo(source), NT_LIST);
     }
 };
+
+void QoreIRLowering::setFunctionalBaseSource(const QoreValue& base_source) {
+    if (!functional_source_captures.empty()) {
+        functional_source_captures.back().node = FunctionalSourceRelease::sourceNode(base_source);
+        functional_source_captures.back().may_alias = !FunctionalSourceRelease::isListSource(base_source);
+    }
+}
 
 QoreIRValue QoreIRLowering::lowerExpressionImpl(const QoreValue& expr, std::string& error) {
     if (stackReserveReached(error)) {
@@ -11934,6 +11952,28 @@ QoreIRValue QoreIRLowering::lowerContainerElement(const QoreValue& expr, std::st
     return lowerExpression(expr, error);
 }
 
+//! Releases the temporaries of the elements of a list or hash literal once the container holds them
+/** The AST interpreter evaluates each element into a holder that it releases once the element is in the container,
+    so the container's references are the elements' only ones (<tt>(map $1.n, (one("a"), one("b")))</tt> destroys a and
+    b when the list is released by the map); the compiled modes released the elements' temporaries when the statement
+    ended.  Each element that gave a temporary (qore_ir_expr_is_temporary()) is released with ReleaseOwnedTemp, which
+    releases a value only when the frame owns it as a temporary
+*/
+template <typename F>
+void QoreIRLowering::releaseContainerElementTemps(const std::vector<QoreIRValue>& values, F&& element_expr,
+        const QoreProgramLocation* loc) {
+    for (size_t i = values.size(); i > 0; --i) {
+        QoreValue element = element_expr(i - 1);
+        if (values[i - 1].isValid() && qore_ir_expr_is_temporary(element)) {
+            const QoreTypeInfo* ti = getExprTypeInfo(element);
+            if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::needsScan(ti)) {
+                continue;
+            }
+            builder.createReleaseOwnedTemp(values[i - 1], loc);
+        }
+    }
+}
+
 QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* hash = dynamic_cast<const QoreParseHashNode*>(node);
@@ -11985,7 +12025,9 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
                 [&values_vec](size_t i) { return values_vec[i]; })) {
             inst->exception_target = getCurrentExceptionTarget();
         }
-        return inst->result;
+        QoreIRValue result = inst->result;
+        releaseContainerElementTemps(value_operands, [&values_vec](size_t i) { return values_vec[i]; }, hash->loc);
+        return result;
     }
 
     // General path: alternating key-value operands
@@ -12004,7 +12046,16 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
         operands.push_back(value);
     }
     // a key that is evaluated at runtime can be invalid
-    return withExceptionTarget(builder.createMakeHash(operands, hash->loc, parse_ti))->result;
+    QoreIRValue result = withExceptionTarget(builder.createMakeHash(operands, hash->loc, parse_ti))->result;
+    {
+        std::vector<QoreIRValue> value_operands;
+        value_operands.reserve(keys.size());
+        for (size_t i = 1; i < operands.size(); i += 2) {
+            value_operands.push_back(operands[i]);
+        }
+        releaseContainerElementTemps(value_operands, [&values_vec](size_t i) { return values_vec[i]; }, hash->loc);
+    }
+    return result;
 }
 
 QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& error) {
@@ -12049,7 +12100,9 @@ QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& e
     if (qoreIrContainerLiteralMayRaise(parse_ti, false, list->size(), [list](size_t i) { return list->get(i); })) {
         inst->exception_target = getCurrentExceptionTarget();
     }
-    return inst->result;
+    QoreIRValue result = inst->result;
+    releaseContainerElementTemps(values, [list](size_t i) { return list->get(i); }, list->loc);
+    return result;
 }
 
 QoreIRValue QoreIRLowering::lowerExists(const QoreValue& expr, std::string& error) {
@@ -12099,7 +12152,11 @@ QoreIRValue QoreIRLowering::lowerElements(const QoreValue& expr, std::string& er
         && QoreTypeInfo::isType(analysis.known_type, NT_INT)) {
         opcode = QoreIROpcode::ElementsInt;
     }
-    return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
+    QoreIRValue result = lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
+    if (result.isValid()) {
+        qore_ir_release_operator_operand_temps(builder, {{operand, op->getExp()}}, op->loc);
+    }
+    return result;
 }
 
 static bool qore_ir_type_may_require_dot_eval_name_dispatch(const QoreTypeInfo* type_info) {
@@ -14718,7 +14775,95 @@ static QoreIROpcode analyzeSelectPattern(const QoreValue& select_expr,
     return QoreIROpcode::SelectAny;
 }
 
+//! Lowers a functional operator and releases its source, if it is a temporary, once the operator has run
+/** The value of the operator can be the source's value or one of its elements, which the compiled modes give without a
+    reference of its own: over a single value (a source that is not a list) map gives <tt>$1</tt> and select the value
+    itself, and a fold gives an element as its accumulator (<tt>foldl $2, l</tt>); so the operator's value then gets a
+    reference of its own (RefSelf) before the source is released (see FunctionalSourceRelease)
+
+    @param always_ref true for a fold, whose value can be an element of a list source
+*/
+template <typename F>
+QoreIRValue QoreIRLowering::lowerWithSourceRelease(const QoreValue& source, const QoreProgramLocation* loc,
+        bool always_ref, std::string& error, F&& lower) {
+    FunctionalSourceRelease source_release(*this, source, loc, error);
+    QoreIRValue result = lower();
+    const FunctionalSourceCapture& capture = functional_source_captures.back();
+    if (result.isValid() && error.empty() && capture.node && capture.value.isValid()
+            && (always_ref || capture.may_alias)) {
+        QoreIRBasicBlock* block = builder.getBlock();
+        if (block && (block->instructions.empty() || !isTerminator(block->instructions.back()->opcode))) {
+            result = builder.createRefSelf(result, loc)->result;
+        }
+    }
+    return result;
+}
+
+QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) {
+    auto* map = dynamic_cast<const QoreMapOperatorNode*>(expr.getInternalNode());
+    if (!map) {
+        return QoreIRValue();
+    }
+    return lowerWithSourceRelease(map->getIteratorExpr(), map->loc, false, error,
+        [&]() { return lowerMapImpl(expr, error); });
+}
+
+QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& error) {
+    auto* select = dynamic_cast<const QoreSelectOperatorNode*>(expr.getInternalNode());
+    if (!select) {
+        return QoreIRValue();
+    }
+    return lowerWithSourceRelease(select->getSourceExpression(), select->loc, false, error,
+        [&]() { return lowerSelectImpl(expr, error); });
+}
+
+QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& error) {
+    auto* map_select = dynamic_cast<const QoreMapSelectOperatorNode*>(expr.getInternalNode());
+    if (!map_select) {
+        return QoreIRValue();
+    }
+    return lowerWithSourceRelease(map_select->getIteratorExpr(), map_select->loc, false, error,
+        [&]() { return lowerMapSelectImpl(expr, error); });
+}
+
+QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& error) {
+    auto* map = dynamic_cast<const QoreHashMapOperatorNode*>(expr.getInternalNode());
+    if (!map) {
+        return QoreIRValue();
+    }
+    return lowerWithSourceRelease(map->get(2), map->loc, false, error,
+        [&]() { return lowerHashMapImpl(expr, error); });
+}
+
+QoreIRValue QoreIRLowering::lowerHashMapSelect(const QoreValue& expr, std::string& error) {
+    auto* map_select = dynamic_cast<const QoreHashMapSelectOperatorNode*>(expr.getInternalNode());
+    if (!map_select) {
+        return QoreIRValue();
+    }
+    return lowerWithSourceRelease(map_select->get(2), map_select->loc, false, error,
+        [&]() { return lowerHashMapSelectImpl(expr, error); });
+}
+
 QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* foldl = dynamic_cast<const QoreFoldlOperatorNode*>(node);
+    if (!foldl || dynamic_cast<const QoreFoldrOperatorNode*>(node)) {
+        return lowerFoldlImpl(expr, error);
+    }
+    return lowerWithSourceRelease(foldl->getIteratorExpr(), foldl->loc, true, error,
+        [&]() { return lowerFoldlImpl(expr, error); });
+}
+
+QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error) {
+    auto* foldr = dynamic_cast<const QoreFoldrOperatorNode*>(expr.getInternalNode());
+    if (!foldr) {
+        return QoreIRValue();
+    }
+    return lowerWithSourceRelease(foldr->getIteratorExpr(), foldr->loc, true, error,
+        [&]() { return lowerFoldrImpl(expr, error); });
+}
+
+QoreIRValue QoreIRLowering::lowerFoldlImpl(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     if (dynamic_cast<const QoreFoldrOperatorNode*>(node)) {
         return QoreIRValue();
@@ -14765,6 +14910,7 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
             }
         }
         if (!source_stages.empty() && !specialized_map_fold) {
+            setFunctionalBaseSource(base_source);
             LazyPipelineRoot root;
             root.kind = LazyPipelineRoot::Foldl;
             root.fold_expr = &foldl->getFoldExpression();
@@ -14970,7 +15116,7 @@ static QoreIROpcode foldlToFoldrOpcode(QoreIROpcode foldl_op) {
     }
 }
 
-QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error) {
+QoreIRValue QoreIRLowering::lowerFoldrImpl(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* foldr = dynamic_cast<const QoreFoldrOperatorNode*>(node);
     if (!foldr) {
@@ -15017,6 +15163,7 @@ QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error
             return QoreIRValue();
         }
         if (!source_stages.empty()) {
+            setFunctionalBaseSource(base_source);
             LazyPipelineRoot root;
             root.kind = LazyPipelineRoot::List;
             root.list_element_type = QoreTypeInfo::getUniqueReturnComplexList(getExprTypeInfo(foldr->getIteratorExpr()));
@@ -15082,14 +15229,12 @@ QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error
     return lowerFoldrNative(foldr, expr, error);
 }
 
-QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) {
+QoreIRValue QoreIRLowering::lowerMapImpl(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* map = dynamic_cast<const QoreMapOperatorNode*>(node);
     if (!map) {
         return QoreIRValue();
     }
-    // the source is released once the operator has run, as the AST interpreter releases it
-    FunctionalSourceRelease source_release(*this, map->getIteratorExpr(), map->loc, error);
 
     // If the iterator expression is known to be nothing, return NOTHING directly
     {
@@ -15106,7 +15251,7 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
             return QoreIRValue();
         }
         if (!source_stages.empty()) {
-            source_release.setBaseSource(base_source);
+            setFunctionalBaseSource(base_source);
             source_stages.push_back({LazyPipelineStage::Map, &map->getMapExpression(), nullptr, map->loc,
                 map->getMapExpType()});
             LazyPipelineRoot root;
@@ -15341,14 +15486,12 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
     return lowerMapNative(map, expr, error);
 }
 
-QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& error) {
+QoreIRValue QoreIRLowering::lowerSelectImpl(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* select = dynamic_cast<const QoreSelectOperatorNode*>(node);
     if (!select) {
         return QoreIRValue();
     }
-    // the source is released once the operator has run, as the AST interpreter releases it
-    FunctionalSourceRelease source_release(*this, select->getSourceExpression(), select->loc, error);
 
     {
         std::vector<LazyPipelineStage> source_stages;
@@ -15357,7 +15500,7 @@ QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& erro
             return QoreIRValue();
         }
         if (!source_stages.empty()) {
-            source_release.setBaseSource(base_source);
+            setFunctionalBaseSource(base_source);
             source_stages.push_back({LazyPipelineStage::Select, &select->getPredicateExpression(), nullptr,
                 select->loc});
             LazyPipelineRoot root;
@@ -15442,14 +15585,12 @@ QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& erro
     return lowerSelectNative(select, expr, error);
 }
 
-QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& error) {
+QoreIRValue QoreIRLowering::lowerMapSelectImpl(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* map_select = dynamic_cast<const QoreMapSelectOperatorNode*>(node);
     if (!map_select) {
         return QoreIRValue();
     }
-    // the source is released once the operator has run, as the AST interpreter releases it
-    FunctionalSourceRelease source_release(*this, map_select->getIteratorExpr(), map_select->loc, error);
 
     {
         std::vector<LazyPipelineStage> source_stages;
@@ -15458,7 +15599,7 @@ QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& e
             return QoreIRValue();
         }
         if (!source_stages.empty()) {
-            source_release.setBaseSource(base_source);
+            setFunctionalBaseSource(base_source);
             source_stages.push_back({LazyPipelineStage::MapSelect, &map_select->getMapExpression(),
                 &map_select->getSelectExpression(), map_select->loc, map_select->getMapExpType()});
             LazyPipelineRoot root;
@@ -15485,14 +15626,12 @@ static bool qore_ir_map_value_type_is_exact(const QoreTypeInfo* type) {
     return type == bigIntTypeInfo || type == floatTypeInfo || type == stringTypeInfo || type == boolTypeInfo;
 }
 
-QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& error) {
+QoreIRValue QoreIRLowering::lowerHashMapImpl(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* map = dynamic_cast<const QoreHashMapOperatorNode*>(node);
     if (!map) {
         return QoreIRValue();
     }
-    // the source is released once the operator has run, as the AST interpreter releases it
-    FunctionalSourceRelease source_release(*this, map->get(2), map->loc, error);
 
     // Try HashMapTwoKeys specialized opcode: map {$1.k1: $1.k2}, list; it evaluates each element as the AST
     // interpreter does when every element is a hash or no value, and it creates the result hash with the value type
@@ -15536,14 +15675,12 @@ QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& err
     return lowerHashMapNative(map, expr, error);
 }
 
-QoreIRValue QoreIRLowering::lowerHashMapSelect(const QoreValue& expr, std::string& error) {
+QoreIRValue QoreIRLowering::lowerHashMapSelectImpl(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* map_select = dynamic_cast<const QoreHashMapSelectOperatorNode*>(node);
     if (!map_select) {
         return QoreIRValue();
     }
-    // the source is released once the operator has run, as the AST interpreter releases it
-    FunctionalSourceRelease source_release(*this, map_select->get(2), map_select->loc, error);
 
     // Native IR lowering with hash building + filtering
     return lowerHashMapSelectNative(map_select, expr, error);
@@ -18559,6 +18696,31 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         : withExceptionTarget(builder.createIteratorCreate(source, nullptr, loc));
     QoreIRValue iter_val = iter_inst->result;
 
+    // an exception that leaves the pipeline for a handler of this function releases the iterator and the base
+    // source first, as the AST interpreter releases the operators' functional iterators, which hold the source, when
+    // the exception unwinds them (the iterator is released when it is exhausted, and the source after the operator,
+    // on the normal path)
+    QoreIRBasicBlock* pipeline_saved_exception_target = getCurrentExceptionTarget();
+    QoreIRBasicBlock* pipeline_exception_cleanup_block = nullptr;
+    if (pipeline_saved_exception_target) {
+        pipeline_exception_cleanup_block = createBlock("pipeline.fused.exception.cleanup");
+        if (!pipeline_exception_cleanup_block) {
+            error = "IR builder failed to create the fused pipeline exception cleanup block";
+            return QoreIRValue();
+        }
+        exception_stack.push_back(pipeline_exception_cleanup_block);
+    }
+    // the cleanup block is the handler of the pipeline's instructions until the pipeline's value is lowered
+    struct PipelineExceptionTarget {
+        std::vector<QoreIRBasicBlock*>& stack;
+        bool active;
+        ~PipelineExceptionTarget() {
+            if (active) {
+                stack.pop_back();
+            }
+        }
+    } pipeline_exception_target{exception_stack, pipeline_exception_cleanup_block != nullptr};
+
     auto lower_predicate = [&](const QoreValue* pred, const QoreProgramLocation* pred_loc, QoreIRValue element_val,
             QoreIRValue index_val) -> QoreIRValue {
         if (!pred || !static_cast<bool>(*pred)) {
@@ -19398,6 +19560,13 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         add_final(exit_result, loc);
     }
 
+    if (pipeline_exception_cleanup_block) {
+        assert(exception_stack.back() == pipeline_exception_cleanup_block);
+        exception_stack.pop_back();
+        pipeline_exception_target.active = false;
+        emitForeachExceptionCleanup(pipeline_exception_cleanup_block, pipeline_saved_exception_target, iter_val,
+            source, QoreIRValue(), nullptr, loc);
+    }
     builder.setBlock(final_block);
     auto* result_phi = builder.createPhi(final_incoming, loc);
     return result_phi->result;

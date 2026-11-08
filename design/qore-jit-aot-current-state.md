@@ -710,7 +710,18 @@ slice or another functional operator of a list type; for a fused pipeline, its b
 fold gives one of its source's elements without a reference of its own, so the source of `foldl`
 and `foldr`, and a source of another type, stay with the statement. `ReleaseOwnedTemp` releases a
 value only when the frame owns it as a temporary, so an operand read from a variable is left alone.
-`OperatorOperandRelease.qtest`.
+The elements of a list or hash literal that are temporaries are released once the container holds
+them (`releaseContainerElementTemps()`), as the AST interpreter's holders are, so the container's
+references are their only ones. The value of a functional operator can be its source's (over a single
+value `map` gives `$1` and `select` the value itself, the same IR value) or one of its elements (the
+accumulator of a fold), so when the source is not known to be a list, and for every fold, the
+operator's value gets a reference of its own (RefSelf) before the source is released
+(`lowerWithSourceRelease()`). The IR interpreter releases the last element of an iterator loop when
+the iterator is exhausted, as native code does (the next `qore_rt_iterator_next()` call releases the
+previous element and stores NOTHING when it is done). An exception that leaves a fused pipeline for a
+handler of the function releases the pipeline's iterator and base source in a cleanup block before
+the handler runs (`emitForeachExceptionCleanup()`), as the AST interpreter's functional iterators
+release them when the exception unwinds them.
 
 On the path of an exception, the IR interpreter releases the temporaries with the exception's sink
 (`cleanupValues()`, `cleanupToTempScope()`): an exception raised by a destructor is added to the one

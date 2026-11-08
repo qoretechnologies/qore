@@ -1539,7 +1539,11 @@
       comparison, \c instanceof, \c exists or a slice, and the elements of a list that is the source of \c map,
       \c select or the hash \c map operators, were destroyed when the statement ended instead of when the operator
       had run (ex: <tt>f(new T("a") == new T("b"), g())</tt> destroyed the objects after \c g() ran); they are now
-      destroyed when the operator has run, as with the AST interpreter
+      destroyed when the operator has run, as with the AST interpreter; so are now the elements of a list or hash
+      literal once the container holds them, the source of \c foldl and \c foldr and a single value that is the
+      source of a functional operator, and, in the IR execution mode, the last element of a \c map or \c select over
+      an iterator, and an exception that leaves a fused pipeline of functional operators for a \c catch block
+      releases the pipeline's source before the block runs
     - in the IR execution mode, an exception raised by a destructor while an exception left an expression (ex: when
       the arguments of a call were released) was lost, and a debug build aborted; it is now added to the exception
       raised, as with the AST interpreter
