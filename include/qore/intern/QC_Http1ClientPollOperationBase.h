@@ -267,6 +267,18 @@ public:
             || s == H1State::PROTOCOL_SWITCHED;
     }
 
+    //! Sets the state unless the operation was closed meanwhile; returns false if it was closed
+    /** H1State::CLOSED is final.  abort() runs on any thread (the Qore-level abort() method, a connection close or
+        cancel from the caller's thread) and stores H1State::CLOSED without the locks of the I/O thread, which checks
+        the state and then sets the next one; a close between the check and the store must not be undone, or the
+        closed connection would look ready again, take requests and never be closed by the I/O controller.  So every
+        state other than H1State::CLOSED is set with a compare-exchange that never replaces it.
+
+        @param s the new state, not H1State::CLOSED
+        @param site where the state is set, for the debug hook (see PollStateCloseHook)
+    */
+    DLLLOCAL bool setStateUnlessClosed(H1State s, const char* site);
+
     DLLLOCAL bool isProtocolSwitched() const {
         return h1_state.load(std::memory_order_acquire) == H1State::PROTOCOL_SWITCHED;
     }
@@ -437,6 +449,16 @@ private:
         @since %Qore 3.0
     */
     SocketPollOperationBase* send_op = nullptr;
+
+    //! Protects the @ref current_op and @ref send_op pointers
+    /** Only the I/O thread replaces and releases the operations, and it reads them without the lock; abort() and
+        getOutput() run on other threads too, and take a reference under the lock (refCurrentOp(), refSendOp()).  So
+        the I/O thread writes the pointers with the lock held (setCurrentOp(), setSendOp()) and nulls them before it
+        releases its reference (releaseCurrentOp(), releaseSendOp()), never releasing an operation that another
+        thread is about to reference.
+        @since %Qore 3.0
+    */
+    mutable QoreThreadLock op_lock;
 
     //! The socket object (ref'd)
     QoreSocketObject* sock_obj;
@@ -1036,6 +1058,24 @@ private:
 
     //! Release the current inner operation
     DLLLOCAL void releaseCurrentOp(ExceptionSink* xsink);
+
+    //! Sets @ref current_op with @ref op_lock held; the previous operation was released or moved by the caller
+    DLLLOCAL void setCurrentOp(SocketPollOperationBase* op) {
+        AutoLocker al(op_lock);
+        current_op = op;
+    }
+
+    //! Sets @ref send_op with @ref op_lock held; the previous operation was released or moved by the caller
+    DLLLOCAL void setSendOp(SocketPollOperationBase* op) {
+        AutoLocker al(op_lock);
+        send_op = op;
+    }
+
+    //! Returns a new reference to @ref current_op, or nullptr; any thread
+    DLLLOCAL SocketPollOperationBase* refCurrentOp() const;
+
+    //! Returns a new reference to @ref send_op, or nullptr; any thread
+    DLLLOCAL SocketPollOperationBase* refSendOp() const;
 
     //! Drives the concurrent buffered or chunked request-body send side (full-duplex).
     /** Sends as many queued request-body chunks as the socket will accept

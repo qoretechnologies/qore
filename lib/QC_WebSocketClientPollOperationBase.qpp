@@ -37,6 +37,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/PollStateCloseHook.h"
 
 /** @cond INTERNAL */
 
@@ -88,6 +89,15 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
 
     // --- Phase 1: Drive active send operation ---
     if (send_op) {
+#ifdef DEBUG
+        // what another thread's abort() does while the send operation is in progress: it closes the socket under it
+        if (PollStateCloseHook::take(this, "send-poll")) {
+            ExceptionSink abort_xsink;
+            abort(&abort_xsink);
+            abort_xsink.clear();
+            PollStateCloseHook::fired(goalReached());
+        }
+#endif
         QoreHashNode* send_info = send_op->continuePoll(xsink);
         if (*xsink) {
             setError(xsink);
@@ -326,12 +336,80 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
     return poll_info;
 }
 
+bool WebSocketClientPollOperationPriv::setWsStateValue(WsState s, const char* site) {
+#ifdef DEBUG
+    bool hook_fired = false;
+    if (site && PollStateCloseHook::take(this, site)) {
+        // what another thread does at this moment: the Qore-level abort(), or a timeout's worker abort
+        ExceptionSink abort_xsink;
+        abort(&abort_xsink);
+        abort_xsink.clear();
+        hook_fired = true;
+    }
+#endif
+    WsState cur = ws_state.load(std::memory_order_acquire);
+    while (cur != WsState::CLOSED && cur != WsState::ERROR
+            && !ws_state.compare_exchange_weak(cur, s, std::memory_order_acq_rel, std::memory_order_acquire)) {
+    }
+    bool rv = cur != WsState::CLOSED && cur != WsState::ERROR;
+    if (s != WsState::CONNECTED) {
+        closing.store(true, std::memory_order_release);
+    }
+#ifdef DEBUG
+    if (hook_fired) {
+        WsState now = ws_state.load(std::memory_order_acquire);
+        PollStateCloseHook::fired(now == WsState::CLOSED || now == WsState::ERROR);
+    }
+#endif
+    return rv;
+}
+
+void WebSocketClientPollOperationPriv::setCloseInfo(uint16_t code, const char* reason, bool final) {
+    AutoLocker al(close_lock);
+    if (close_info_final) {
+        return;
+    }
+    close_code = code;
+    if (reason) {
+        close_reason = reason;
+    }
+    if (final) {
+        close_info_final = true;
+    }
+}
+
 void WebSocketClientPollOperationPriv::abort(ExceptionSink* xsink) {
-    setWsStateValue(WsState::CLOSED);
-    close_code = 1006;  // Abnormal Closure
-    close_reason = "aborted";
-    releaseSendOp(xsink);
-    releaseRecvOp(xsink);
+    // an operation that ended already keeps its end; its inner operations are aborted all the same
+    bool ended_now = setWsStateValue(WsState::CLOSED);
+    if (ended_now) {
+        setCloseInfo(1006, "aborted", true);  // Abnormal Closure
+    }
+    // abort() runs on any thread, while the I/O thread may be running the inner operations: they are aborted with a
+    // reference taken under op_lock, and released by the I/O thread or by cleanup()
+    SocketPollOperationBase* sop;
+    SocketPollOperationBase* rop;
+    {
+        AutoLocker al(op_lock);
+        sop = send_op;
+        if (sop) {
+            sop->ref();
+        }
+        rop = recv_op;
+        if (rop) {
+            rop->ref();
+        }
+    }
+    if (sop) {
+        sop->abort(xsink);
+        sop->deref(xsink);
+    }
+    if (rop) {
+        rop->abort(xsink);
+        rop->deref(xsink);
+    }
+    if (!ended_now) {
+        return;
+    }
     // Push "closed" notification to recv_queue (not "close" — "closed" means terminal)
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
     h->setKeyValue("type", new QoreStringNode("closed"), xsink);
@@ -345,8 +423,12 @@ QoreValue WebSocketClientPollOperationPriv::getOutput() const {
     ExceptionSink xsink;
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
     h->setKeyValue("state", new QoreStringNode(getWsState()), &xsink);
-    h->setKeyValue("close_code", static_cast<int64>(close_code), &xsink);
-    h->setKeyValue("close_reason", new QoreStringNode(close_reason), &xsink);
+    // the code and reason are read as one pair
+    uint16_t code;
+    std::string reason;
+    getCloseInfo(code, reason);
+    h->setKeyValue("close_code", static_cast<int64>(code), &xsink);
+    h->setKeyValue("close_reason", new QoreStringNode(reason), &xsink);
     if (error_info) {
         error_info->ref();
         h->setKeyValue("error_info", error_info, &xsink);
@@ -437,8 +519,7 @@ void WebSocketClientPollOperationPriv::handleFrame(const WsFrame& frame, Excepti
                     }
                 }
 
-                close_code = code;
-                close_reason = reason;
+                setCloseInfo(code, reason.c_str());
 
                 // Push close frame to recv_queue
                 pushRecvCloseFrame(code, reason.c_str(), xsink);
@@ -462,7 +543,7 @@ void WebSocketClientPollOperationPriv::handleFrame(const WsFrame& frame, Excepti
                     if (*xsink) {
                         return;
                     }
-                    setWsStateValue(WsState::CLOSING);
+                    setWsStateValue(WsState::CLOSING, "peer-close");
                 }
                 break;
             }
@@ -594,10 +675,7 @@ void WebSocketClientPollOperationPriv::queueSendClose(uint16_t code, const char*
         return;
     }
     close_initiated = true;
-    close_code = code;
-    if (reason) {
-        close_reason = reason;
-    }
+    setCloseInfo(code, reason);
     startCloseWait();
 
     // Client->server: MUST mask
@@ -634,12 +712,11 @@ void WebSocketClientPollOperationPriv::applyCloseRequest(const QoreHashNode* req
     uint16_t code = static_cast<uint16_t>(request->getKeyValue("close_code").getAsBigInt());
     QoreStringValueHelper reason(request->getKeyValue("close_reason"));
     close_initiated = true;
-    close_code = code;
-    close_reason = reason->c_str();
+    setCloseInfo(code, reason->c_str());
     startCloseWait();
 
     // Client->server: MUST mask
-    SimpleRefHolder<BinaryNode> frame(WebSocketFrameEncoder::encodeClose(code, close_reason.c_str(), true));
+    SimpleRefHolder<BinaryNode> frame(WebSocketFrameEncoder::encodeClose(code, reason->c_str(), true));
     if (!pending_send) {
         pending_send = new BinaryNode();
     }
@@ -730,10 +807,14 @@ int WebSocketClientPollOperationPriv::checkDataSend(ExceptionSink* xsink) const 
 int WebSocketClientPollOperationPriv::startRecvOp(ExceptionSink* xsink) {
     assert(!recv_op);
     sock->ref();
-    recv_op = new SocketRecvDataPollOperation(xsink, sock, false);
+    {
+        // set with op_lock held: abort() reads it from other threads
+        SocketRecvDataPollOperation* op = new SocketRecvDataPollOperation(xsink, sock, false);
+        AutoLocker al(op_lock);
+        recv_op = op;
+    }
     if (*xsink) {
-        recv_op->deref(xsink);
-        recv_op = nullptr;
+        releaseRecvOp(xsink);
         setError(xsink);
         return -1;
     }
@@ -751,10 +832,14 @@ int WebSocketClientPollOperationPriv::startSendOp(ExceptionSink* xsink) {
     // Transfer ownership of pending_send to the send operation
     BinaryNode* data = pending_send.release();
     sock->ref();
-    send_op = new SocketSendPollOperation(xsink, data, sock);
+    {
+        // set with op_lock held: abort() reads it from other threads
+        SocketSendPollOperation* op = new SocketSendPollOperation(xsink, data, sock);
+        AutoLocker al(op_lock);
+        send_op = op;
+    }
     if (*xsink) {
-        send_op->deref(xsink);
-        send_op = nullptr;
+        releaseSendOp(xsink);
         setError(xsink);
         return -1;
     }
@@ -765,21 +850,47 @@ int WebSocketClientPollOperationPriv::startSendOp(ExceptionSink* xsink) {
 }
 
 void WebSocketClientPollOperationPriv::releaseSendOp(ExceptionSink* xsink) {
-    if (send_op) {
-        send_op->deref(xsink);
+    // nulled with op_lock held before the reference is released: abort() takes its own reference under the lock
+    SocketSendPollOperation* op;
+    {
+        AutoLocker al(op_lock);
+        op = send_op;
         send_op = nullptr;
+    }
+    if (op) {
+        op->deref(xsink);
     }
 }
 
 void WebSocketClientPollOperationPriv::releaseRecvOp(ExceptionSink* xsink) {
-    if (recv_op) {
-        recv_op->deref(xsink);
+    // nulled with op_lock held before the reference is released (see releaseSendOp())
+    SocketRecvDataPollOperation* op;
+    {
+        AutoLocker al(op_lock);
+        op = recv_op;
         recv_op = nullptr;
+    }
+#ifdef DEBUG
+    // what another thread's abort() does while the operation is released
+    if (op && PollStateCloseHook::take(this, "release-recv-op")) {
+        ExceptionSink abort_xsink;
+        abort(&abort_xsink);
+        abort_xsink.clear();
+        PollStateCloseHook::fired(goalReached());
+    }
+#endif
+    if (op) {
+        op->deref(xsink);
     }
 }
 
 void WebSocketClientPollOperationPriv::setError(ExceptionSink* xsink) {
-    setWsStateValue(WsState::ERROR);
+    // an operation that ended already (e.g. abort() closed the socket under the operation in progress) reports no
+    // error after its end: the error is a consequence of the end, and is not raised either
+    if (!setWsStateValue(WsState::ERROR)) {
+        xsink->clear();
+        return;
+    }
     if (!error_info) {
         error_info = new QoreHashNode(autoTypeInfo);
         ExceptionSink save_xsink;
@@ -805,16 +916,19 @@ void WebSocketClientPollOperationPriv::setError(ExceptionSink* xsink) {
     }
 }
 
-void WebSocketClientPollOperationPriv::setClosed(uint16_t code, const char* reason) {
-    setWsStateValue(WsState::CLOSED);
-    close_code = code;
-    if (reason) {
-        close_reason = reason;
+bool WebSocketClientPollOperationPriv::setClosed(uint16_t code, const char* reason) {
+    if (!setWsStateValue(WsState::CLOSED)) {
+        return false;
     }
+    setCloseInfo(code, reason);
+    return true;
 }
 
 void WebSocketClientPollOperationPriv::endClosed(uint16_t code, const char* reason, ExceptionSink* xsink) {
-    setClosed(code, reason);
+    // an operation that ended already reports no second end
+    if (!setClosed(code, reason)) {
+        return;
+    }
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
     h->setKeyValue("type", new QoreStringNode("closed"), xsink);
     h->setKeyValue("code", static_cast<int64>(code), xsink);

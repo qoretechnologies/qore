@@ -262,21 +262,10 @@ public:
         would take requests and never be closed by the I/O controller (see needsCloseOnComplete()).
 
         @param s the new state: H3State::READING or H3State::WAIT_READ
-        @param site where the state is set, for the debug hook (see dbgCloseBeforeOpenState())
+        @param site where the state is set, for the debug hook (see PollStateCloseHook)
     */
     DLLLOCAL void setOpenState(H3State s, const char* site);
 
-#ifdef DEBUG
-    //! Debug-only: arms a one-shot hook: when the I/O thread of @a op next sets its open state at @a site, the hook
-    //! first records a refused submission with setSubmitError(), as a submitting thread does at that moment
-    /** @a op is compared only, never dereferenced by the hook: the caller keeps the operation alive until the hook
-        fired (see dbgWaitCloseBeforeOpenState()) or until it disarms it (@a op = nullptr).
-    */
-    DLLLOCAL static void dbgArmCloseBeforeOpenState(Http3ClientPollOperationPriv* op, const char* site);
-
-    //! Debug-only: waits until the hook armed with dbgArmCloseBeforeOpenState() fired; returns false on timeout
-    DLLLOCAL static bool dbgWaitCloseBeforeOpenState(int64_t timeout_ms);
-#endif
 
     //! Can be called from any thread: the error is set by the I/O thread under the stream lock
     DLLLOCAL bool hasError() const {

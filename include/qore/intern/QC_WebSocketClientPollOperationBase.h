@@ -126,12 +126,21 @@ public:
 
     //! Returns the WebSocket close code
     DLLLOCAL uint16_t getCloseCode() const {
+        AutoLocker al(close_lock);
         return close_code;
     }
 
-    //! Returns the WebSocket close reason
-    DLLLOCAL const char* getCloseReason() const {
-        return close_reason.c_str();
+    //! Returns the close code and reason as one pair; any thread
+    DLLLOCAL void getCloseInfo(uint16_t& code, std::string& reason) const {
+        AutoLocker al(close_lock);
+        code = close_code;
+        reason = close_reason;
+    }
+
+    //! Returns a copy of the WebSocket close reason; any thread
+    DLLLOCAL std::string getCloseReason() const {
+        AutoLocker al(close_lock);
+        return close_reason;
     }
 
     //! Returns the current state as a string
@@ -259,9 +268,7 @@ public:
         @return the number of frames pushed since the last call
     */
     DLLLOCAL int getAndClearItemsPushed() override {
-        int result = frames_pushed_in_cycle;
-        frames_pushed_in_cycle = 0;
-        return result;
+        return frames_pushed_in_cycle.exchange(0);
     }
 
     //! Sets the heartbeat interval in milliseconds (0 = disabled)
@@ -340,6 +347,29 @@ private:
     std::atomic<uint16_t> close_code {1000};
     //! The close reason: the server's once its close frame has arrived
     std::string close_reason;
+
+    //! Protects @ref close_reason (and makes the close code and reason one change) and @ref close_info_final
+    /** abort() runs on any thread (the Qore-level abort() method, or a timeout's worker abort) and sets the close
+        code and reason, as the I/O thread and the threads that request a close do; the reason is read by any thread
+        (getCloseReason()).
+    */
+    mutable QoreThreadLock close_lock;
+
+    //! Set by abort(): the close code and reason of the abort are kept (see setCloseInfo())
+    bool close_info_final = false;
+
+    //! Protects the @ref send_op and @ref recv_op pointers
+    /** The I/O thread creates, runs and releases the operations, and reads them without the lock; abort() runs on
+        any thread and aborts them with a reference taken under the lock, so the I/O thread writes the pointers with
+        the lock held and nulls them before it releases them (see releaseSendOp()).  abort() does not release them:
+        the I/O thread may be running them.
+    */
+    mutable QoreThreadLock op_lock;
+
+    //! Sets the close code and the reason (@a reason nullptr keeps the reason), unless an abort() set them
+    /** @param final true for abort(): its close code and reason are kept
+    */
+    DLLLOCAL void setCloseInfo(uint16_t code, const char* reason, bool final = false);
     bool close_initiated = false;           //!< true if we initiated the close handshake
     //! How long a close started by the client waits for the server's close frame (milliseconds, 0 = no bound)
     int64 close_timeout_ms = DefaultCloseTimeoutMs;
@@ -352,7 +382,8 @@ private:
     /** Reset at the start of each continuePoll; incremented in pushRecvFrame.
         Read by the controller via getAndClearFramesPushed() to dispatch notifications.
     */
-    int frames_pushed_in_cycle = 0;
+    //! atomic: abort() pushes a frame from any thread
+    std::atomic<int> frames_pushed_in_cycle{0};
 
     //! Heartbeat ping interval (milliseconds, 0 = disabled)
     /** When positive and the connection is idle (no data received for this
@@ -398,12 +429,19 @@ private:
     DLLLOCAL void applyCloseRequest(const QoreHashNode* request, ExceptionSink* xsink);
 
     //! Sets the state of the operation; every change of the state is made with this method
-    DLLLOCAL void setWsStateValue(WsState s) {
-        ws_state = s;
-        if (s != WsState::CONNECTED) {
-            closing.store(true, std::memory_order_release);
-        }
-    }
+    /** WsState::CLOSED and WsState::ERROR are final: abort() runs on any thread (the Qore-level abort() method, or a
+        worker dispatched by the I/O controller for a timeout) and sets WsState::CLOSED without a lock, while the I/O
+        thread and the threads that request a close check the state and then set the next one.  A compare-exchange
+        that never leaves a final state keeps an abort() made between the check and the store, after which the
+        aborted operation would go on with a close handshake, or end again with an error or another close (e.g. when
+        abort() closed the socket under a send or receive operation in progress).  The first final state is kept.
+
+        @param s the new state
+        @param site where the state is set, for the debug hook (see PollStateCloseHook), or nullptr
+
+        @return true if the state was set, false if the operation had ended
+    */
+    DLLLOCAL bool setWsStateValue(WsState s, const char* site = nullptr);
 
     //! Returns true while a close started by the client waits for the server's close frame
     /** The close handshake ends when the server's close frame arrives (RFC 6455 section 5.5.1), when the
@@ -487,7 +525,7 @@ private:
     DLLLOCAL void setError(ExceptionSink* xsink);
 
     //! Transitions to CLOSED state with the given code and reason
-    DLLLOCAL void setClosed(uint16_t code, const char* reason);
+    DLLLOCAL bool setClosed(uint16_t code, const char* reason);
 };
 
 DLLLOCAL QoreClass* initWebSocketClientPollOperationBaseClass(QoreNamespace& qorens);

@@ -104,6 +104,10 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Http3ServerPollOperation interface tests
         addTestCase("Http3ServerPollOperation class", \testH3PollOpClass());
         addTestCase("Http3ServerPollOperation with UDP socket", \testH3PollOpWithUdpSocket());
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("Http3ServerPollOperation: an aborted operation stays closed when its request is dispatched",
+                \testH3PollOpClosedFinal());
+        }
 
         # HttpServer addQuicListener validation tests
         addTestCase("addQuicListener requires cert and key", \testAddQuicListenerRequiresCertKey());
@@ -185,6 +189,15 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Verify DefaultDrainTimeout class constant (5 seconds)
         assertEq(5s, Http3ServerPollOperation::DefaultDrainTimeout,
             "DefaultDrainTimeout is 5 seconds");
+    }
+
+    #! The closed state of an Http3ServerPollOperation is final: aborted after the I/O thread made a request ready, it
+    #! stays closed when the dispatcher takes the request (native assertions, see Http3ServerPollStateTest)
+    testH3PollOpClosedFinal() {
+        hash<auto> result = call_function("dbg_run_poll_state_tests");
+        assertEq(0, result.fail_count, sprintf("%d of %d native assertions failed: %y", result.fail_count,
+            result.test_count, result.failures));
+        assertTrue(result.test_count > 0);
     }
 
     #! Test Http3ServerPollOperation with a real bound UDP socket

@@ -41,6 +41,7 @@
 #include "qore/intern/HttpClientEventSink.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/RSet.h"
+#include "qore/intern/PollStateCloseHook.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -236,11 +237,12 @@ bool Http2ClientPollOperationPriv::replaceCurrentOp(SocketPollOperationBase* op,
     bool installed = false;
     {
         AutoLocker al(op_lock);
-        if (h2_state.load(std::memory_order_acquire) != H2State::CLOSED) {
+        // abort() does not take op_lock: the state is set only if the operation is still open (no hook: abort()
+        // takes op_lock in refCurrentOp())
+        if (setStateUnlessClosed(state, nullptr)) {
             old_op = current_op;
             current_op = op;
             current_op->setSelf(*self);
-            h2_state.store(state, std::memory_order_release);
             installed = true;
         }
     }
@@ -303,7 +305,7 @@ QoreHashNode* Http2ClientPollOperationPriv::continuePoll(ExceptionSink* xsink) {
                 return clampConnectDeadline(handleReading(xsink), xsink);
 
             case H2State::WAIT_READ:
-                h2_state.store(H2State::READING, std::memory_order_release);
+                setStateUnlessClosed(H2State::READING, "cycle-start");
                 continue;
 
             case H2State::CLOSED:
@@ -680,7 +682,7 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     // not block the I/O thread, since it may need to run the submit exec.
     if (submission_lock.trylock() != 0) {
         op->deref(xsink);
-        h2_state.store(H2State::WAIT_READ, std::memory_order_release);
+        setStateUnlessClosed(H2State::WAIT_READ, "submission-busy");
         return applyIdleTimeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
     }
     AutoLocker submission_al(submission_lock, true);
@@ -916,7 +918,7 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         dispatched = response_dispatched;
     }
     if (dispatched) {
-        h2_state.store(H2State::WAIT_READ, std::memory_order_release);
+        setStateUnlessClosed(H2State::WAIT_READ, "response-dispatched");
         // Use C++ events when available — they include SOCK_POLLOUT if there
         // are pending sends (e.g., WINDOW_UPDATE after receiving data)
         if (!poll_info) {
@@ -964,7 +966,7 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         return nullptr;
     }
 
-    h2_state.store(H2State::WAIT_READ, std::memory_order_release);
+    setStateUnlessClosed(H2State::WAIT_READ, "read-idle");
     op->deref(xsink);
     return applyIdleTimeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
 }
@@ -1088,6 +1090,31 @@ QoreHashNode* Http2ClientPollOperationPriv::applyIdleTimeout(QoreHashNode* poll_
         poll_info->setKeyValue("poll_timeout_ms", timeout_ms, xsink);
     }
     return poll_info;
+}
+
+bool Http2ClientPollOperationPriv::setStateUnlessClosed(H2State s, const char* site) {
+    assert(s != H2State::CLOSED);
+#ifdef DEBUG
+    bool hook_fired = false;
+    if (site && PollStateCloseHook::take(this, site)) {
+        // what another thread does at this moment: the Qore-level abort(), or a close of the connection
+        ExceptionSink abort_xsink;
+        abort(&abort_xsink);
+        abort_xsink.clear();
+        hook_fired = true;
+    }
+#endif
+    H2State cur = h2_state.load(std::memory_order_acquire);
+    while (cur != H2State::CLOSED
+            && !h2_state.compare_exchange_weak(cur, s, std::memory_order_acq_rel, std::memory_order_acquire)) {
+    }
+#ifdef DEBUG
+    // reports whether the store left the operation closed
+    if (hook_fired) {
+        PollStateCloseHook::fired(isClosed());
+    }
+#endif
+    return cur != H2State::CLOSED;
 }
 
 void Http2ClientPollOperationPriv::abort(ExceptionSink* xsink) {
