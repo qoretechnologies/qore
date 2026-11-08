@@ -2303,14 +2303,15 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
             (map $1.path, handler.requests));
         assertEq({"contact_name": "Gamma"}, handler.requests[1].body);
 
-        # when the rate limit is exhausted, the provider waits for the reset time given by the server
+        # when the rate limit is exhausted, the provider waits for the reset time given by the server; a provider
+        # that records its waits instead of waiting makes the request with the same client
+        RecordingZohoInvoiceNewContactWatchDataProvider watch(rest);
         handler.requests = ();
         handler.rate_limit_exhausted = True;
-        date start = now_us();
-        recs = map $1, provider.getChildProviderEx("contacts").searchRecords();
-        assertEq(({"contact_id": "c1", "contact_name": "Acme Co"},), recs);
-        assertGe(1s, now_us() - start);
+        assertEq(({"contact_id": "c1", "contact_name": "Acme Co"},), watch.requestResource().contacts);
+        assertEq((1s,), watch.waits);
         assertEq(1, handler.requests.size());
+        assertEq("invoice/v3/contacts?organization_id=org-2", handler.requests[0].path);
 
         # an error response is raised with the response
         try {

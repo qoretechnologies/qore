@@ -745,9 +745,8 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
             handler.requests[0].path);
         assertEq("Bearer test-token", handler.requests[0].authorization);
 
-        # a POST request sends the request body; a response reporting an exhausted rate limit is still returned
+        # a POST request sends the request body
         handler.requests = ();
-        handler.rate_limit_exhausted = True;
         auto result = provider.getChildProviderPath("create-client").doRequest({
             "account_id": "acct1",
             "email": "joe@example.com",
@@ -825,12 +824,22 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
         }
         assertEq("acct1", rest.getAccountId());
 
+        # a provider that records its waits instead of waiting makes the following requests with the same client:
+        # a response reporting an exhausted rate limit is returned after the time given by the server
+        RecordingFreshBooksNewClientWatchDataProvider watch_rec(rest, {"account_id": "acct1"});
+        handler.requests = ();
+        handler.rate_limit_exhausted = True;
+        assertEq(4, watch_rec.requestResource().clients[0].id);
+        assertEq(1, handler.requests.size());
+        assertEq((1s,), watch_rec.waits);
+
         # a rate-limited request is retried after the time given by the server
         handler.requests = ();
         handler.rate_limited = 1;
-        records = map $1, clients.searchRecords(NOTHING, {"account_id": "acct1", "email": "jane@example.com"});
-        assertEq(4, records[0].id);
+        assertEq(4, watch_rec.requestResource().clients[0].id);
         assertEq(2, handler.requests.size());
+        assertRegex("^accounting/account/acct1/users/clients", handler.requests[1].path);
+        assertEq((1s, 1s), watch_rec.waits);
 
         # an error response is raised with the response
         try {

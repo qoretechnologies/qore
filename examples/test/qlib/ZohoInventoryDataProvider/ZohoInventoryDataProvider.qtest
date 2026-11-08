@@ -898,19 +898,21 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
         }
         assertEq("org0", rest.getOrganizationId());
 
-        # the rate limit headers of the async response are used to wait for the rate limit reset
+        # the rate limit headers of the async response are used to wait for the rate limit reset; a provider that
+        # records its waits instead of waiting makes the requests with the same client
+        RecordingZohoInventoryNewInvoiceWatchDataProvider watch(rest);
         handler.requests = ();
         handler.rate_limit_hdr = {"X-Rate-Limit-Remaining": "0", "X-Rate-Limit-Reset": "1"};
-        date start = now_us();
-        assertEq("i3", provider.doGet("/items/i3").item.item_id);
-        assertGe(1s, now_us() - start);
+        assertEq("i3", watch.doGet("/items/i3").item.item_id);
+        assertEq((1s,), watch.waits);
         remove handler.rate_limit_hdr;
 
-        # a rate-limited request is retried
+        # a rate-limited request is retried after a wait
         handler.requests = ();
         handler.rate_limited = 1;
-        assertEq("i4", provider.doGet("/items/i4").item.item_id);
+        assertEq("i4", watch.doGet("/items/i4").item.item_id);
         assertEq(2, handler.requests.size());
+        assertEq((1s, 5s), watch.waits);
 
         # an error response is raised with the response
         try {
