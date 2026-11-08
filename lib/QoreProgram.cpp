@@ -563,11 +563,11 @@ thread_local std::vector<const QoreProgram*> qore_programs_torn_down;
 //! records that the calling thread deletes a Program's data while it exists
 class QoreProgramTeardownScope {
 public:
-    DLLLOCAL QoreProgramTeardownScope(const QoreProgram* pgm) {
+    QoreProgramTeardownScope(const QoreProgram* pgm) {
         qore_programs_torn_down.push_back(pgm);
     }
 
-    DLLLOCAL ~QoreProgramTeardownScope() {
+    ~QoreProgramTeardownScope() {
         qore_programs_torn_down.pop_back();
     }
 
@@ -1742,6 +1742,11 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
 }
 
 void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
+    // the code of the Program's classes that runs while it is deleted (its exit hooks, the cleanup callback and the
+    // destructors run when its data is deleted) runs in it although its last reference may have been released (see
+    // qore_class_private::getSourceProgramForCall()); the Program stays allocated until this function returns
+    QoreProgramTeardownScope teardown_scope(pgm);
+
     // the exit hooks that the Program registered can stop the threads waited for below
     qore_run_exit_hooks(pgm);
 
@@ -1811,10 +1816,6 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     }
 
     if (clr) {
-        // the code of the Program's classes that runs while its data is deleted (destructors) runs in it although
-        // its last reference may have been released (see qore_class_private::getSourceProgramForCall())
-        QoreProgramTeardownScope teardown_scope(pgm);
-
         // purge thread resources before clearing pgm
         purge_pgm_thread_resources(pgm, xsink);
 
