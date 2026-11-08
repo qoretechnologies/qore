@@ -12,6 +12,7 @@
 %requires Util
 %requires FsUtil
 %requires DataProvider
+%requires reflection
 %requires LazyAppActionsValues
 %requires ./LazyAppActionsHooks.qm
 
@@ -41,6 +42,9 @@ class SafetyRuns {
 
 #! The thread on which the registration of barrierRegistrationTest() ran
 our int barrier_registration_tid;
+
+#! The most catalog workers that run at once (DataProviderActionCatalog::MaxLazyWorkers)
+const MaxLazyWorkersForTest = 4;
 
 #! A catalog change listener that queues each call: its thread, revision, and whether it could read a file
 class QueueListener inherits DataProviderCatalogChangeListener {
@@ -160,6 +164,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("a listener runs under no tenant's policy", \listenerPolicyTest());
         addTestCase("the changes made on a sandboxed thread are delivered by a worker", \governedChangeDeliveryTest());
         addTestCase("a worker's change is delivered when the reader stopped waiting", \interruptedReaderDeliveryTest());
+        addTestCase("only a thread that the catalog started runs as a worker", \untrackedWorkerTest());
         addTestCase("without a worker, every deferred registration runs when it is made, from source and AOT",
             \noWorkerTest());
         addTestCase("sandboxed code cannot set or clear a process-wide callback", \callbackSetterTest());
@@ -1185,6 +1190,34 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         assertEq(("lazy-b",), map $1.action, DataProviderActionCatalog::getActionsNoInit(app));
     }
 
+    untrackedWorkerTest() {
+        # the worker's code, called by a thread that the catalog did not start, ends at once: it does not take the
+        # catalog's jobs
+        StaticMethod m = Class::forName("DataProviderActionCatalog").getStaticMethod("lazyWorkerMain");
+        Counter done(1);
+        Queue tids();
+        background LazyAppActionsSafetyTest::callWorkerMain(m, done, tids);
+        assertEq(0, done.waitForZero(Deadline), "the worker's code returned at once");
+%ifdef QoreDebug
+        assertFalse(inlist(tids.get(), DataProviderActionCatalog::getLazyWorkers()));
+%endif
+        # the capability, called otherwise than by the catalog, starts threads that end at once; the readers' jobs
+        # still run
+        code start = Class::forName("DataProviderActionCatalog").getStaticMember("lazy_worker_start").getValue();
+        map start(), xrange(MaxLazyWorkersForTest + 2);
+        string app = registerLazyApp("SafeUntrackedWorker");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        Program reader = readerProgram(new SandboxManager());
+        Counter read(1);
+        Queue errors();
+        background LazyAppActionsSafetyTest::readIn(reader, app, read, errors);
+        assertEq(0, read.waitForZero(Deadline));
+        assertEq(NOTHING, LazyAppActionsSafetyTest::describeError(errors));
+%ifdef QoreDebug
+        assertTrue(DataProviderActionCatalog::getLazyWorkers().size() <= MaxLazyWorkersForTest);
+%endif
+    }
+
     noWorkerTest() {
         string body = "Program loader(PO_NEW_STYLE, True);\n"
             "loader.parse(\"sub load() { load_module('DataProvider'); }\", \"loader\");\n"
@@ -1314,6 +1347,21 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         assertFalse(action.hasKey("get_dynamic_options") && exists action.get_dynamic_options);
         assertEq("SafeGovernedOutput", action.output_type.getName());
         assertEq("options set", action.desc);
+    }
+
+    #! Returns the error that readIn() queued, as text, or NOTHING if the read succeeded
+    private static *string describeError(Queue results) {
+        hash<auto> r = results.get();
+        if (r.err) {
+            return sprintf("%s: %s", r.err, r.desc);
+        }
+    }
+
+    #! Calls the catalog worker's code in a thread of the test
+    private static callWorkerMain(StaticMethod m, Counter done, Queue tids) {
+        on_exit done.dec();
+        tids.push(gettid());
+        m.call();
     }
 
     #! Returns the directory of the AOT library modules of the build that runs the test, if any

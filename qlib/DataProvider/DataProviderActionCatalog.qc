@@ -1353,8 +1353,13 @@ public class DataProviderActionCatalog {
         #! The last job ID
         static int lazy_job_seq = 0;
 
-        #! The catalog workers running: TID -> @ref True; see startLazyWorker()
+        #! The catalog workers running: TID -> @ref True; set under @ref lazy_worker_lck by each worker when it starts
         static hash<string, bool> lazy_workers = {};
+
+        #! The catalog workers started that have not registered in @ref lazy_workers yet; see startLazyWorker()
+        /** Set under @ref lazy_worker_lck: a thread runs as a worker only if it takes one of them (see lazyWorkerMain())
+        */
+        static int lazy_workers_starting = 0;
 
         #! The jobs queued or running: each worker runs one at a time; set under @ref lazy_worker_lck
         /** Counted when a job is queued and until it has ended, so that a job that a worker has taken from the queue
@@ -5556,7 +5561,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
     #! Starts a catalog worker if none runs, or if every worker is busy; lazy_worker_lck is held
     /** The workers run in threads that no sandbox governs (see initLazyWorker()), started when the sandboxed readers
-        need them, at most @ref MaxLazyWorkers; none is started after the exit hook stopped them
+        need them, at most @ref MaxLazyWorkers, counting those started that have not registered yet
+        (@ref lazy_workers_starting); none is started after the exit hook stopped them
 
         @param first @ref True to start one only if none runs, @ref False to start another one if every worker is
         busy
@@ -5568,25 +5574,29 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         # the child of a fork() has none of the parent's threads; the jobs queued for them are dropped
         if (lazy_worker_pid != pid) {
             lazy_workers = {};
+            lazy_workers_starting = 0;
             lazy_pending = 0;
             lazy_jobs.clear();
             lazy_delivery_queued = False;
             lazy_worker_pid = pid;
         }
-        int count = lazy_workers.size();
+        int count = lazy_workers.size() + lazy_workers_starting;
         if (first ? count : (lazy_pending <= count || count >= MaxLazyWorkers)) {
             return count > 0;
         }
         if (lazy_worker_shutdown || !lazy_worker_start) {
             return count > 0;
         }
+        # reserved before the thread starts: the thread registers itself when it takes the reservation
+        ++lazy_workers_starting;
         try {
             code start = lazy_worker_start;
-            lazy_workers{start().toString()} = True;
+            start();
         } catch (hash<ExceptionInfo> ex) {
             # the exit hooks have started: the process is ending
+            --lazy_workers_starting;
         }
-        return lazy_workers.size() > 0;
+        return (lazy_workers.size() + lazy_workers_starting) > 0;
     }
 
     #! The catalog worker: runs the jobs queued until it is stopped
@@ -5598,6 +5608,19 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     */
     private:internal static lazyWorkerMain() {
         int tid = gettid();
+        {
+            AutoLock al(lazy_worker_lck);
+            # only a thread that startLazyWorker() started runs as a worker, and no more than the pool's maximum:
+            # one that the capability starts otherwise, or that calls this method otherwise, ends at once
+            if (!lazy_workers_starting || lazy_worker_pid != getpid() || SandboxManager::isSandboxed()) {
+                return;
+            }
+            --lazy_workers_starting;
+            if (lazy_workers.size() >= MaxLazyWorkers) {
+                return;
+            }
+            lazy_workers{tid.toString()} = True;
+        }
         on_exit {
             DataProviderActionCatalog::endLazyWorker(tid);
         }
@@ -5658,8 +5681,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     private:internal static endLazyWorker(int tid) {
         AutoLock al(lazy_worker_lck);
         remove lazy_workers{tid.toString()};
-        # the other workers run the jobs queued
-        if (lazy_workers) {
+        # the other workers, and those starting, run the jobs queued
+        if (lazy_workers || lazy_workers_starting) {
             return;
         }
         while (lazy_jobs.size()) {
@@ -5686,8 +5709,9 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     private:internal static stopLazyWorker() {
         AutoLock al(lazy_worker_lck);
         lazy_worker_shutdown = True;
+        # one end marker for every worker, also for those started that have not registered yet
         if (lazy_worker_pid == getpid()) {
-            map lazy_jobs.push(NOTHING), xrange(lazy_workers.size());
+            map lazy_jobs.push(NOTHING), xrange(lazy_workers.size() + lazy_workers_starting);
         }
     }
 
