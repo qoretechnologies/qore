@@ -15388,7 +15388,10 @@ static void ut_quic_send_batch_take_back(UnitTestCounters& c) {
     // a send that fails with nothing sent takes back what it counted
     calls = 0;
     fail_call = 1;
+    errno = 0;
     UT_ASSERT_EQ(c, -1, sendQuicPacketsBatch(sfd, three, to, rlen), "QUIC send take-back: the first send fails");
+    // the take-back keeps the error of the send for the caller
+    UT_ASSERT_EQ(c, ENOBUFS, errno, "QUIC send take-back: errno is the error of the send");
     UT_ASSERT_EQ(c, 0LL, static_cast<long long>(qore_quic_test_undelivered_to(to)),
         "QUIC send take-back: a failed send leaves no datagram to wait for");
 
