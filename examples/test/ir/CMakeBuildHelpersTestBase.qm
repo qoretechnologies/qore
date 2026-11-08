@@ -124,6 +124,18 @@ public class CMakeBuildTest inherits QUnit::Test {
         return backquote("{ " + cmd + "; } 2>&1");
     }
 
+    #! Skips the test case unless the qcc of the build tree has its test hooks (CMake option QORE_QCC_TEST_HOOKS)
+    /** A step that changes a source while qcc compiles has qcc run the change itself, at the point it tests
+        (QORE_QCC_TEST_*_COMMAND); a qcc built without the hooks (a release build by default) ignores them
+    */
+    private requireQccTestHooks() {
+        string version = run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --version",
+            shellQuote(qore_build_dir), shellQuote(qore_build_dir), shellQuote(qore_build_dir + "/qcc")));
+        if (version !~ /^Test hooks: enabled$/m) {
+            testSkip("the qcc of the build tree has no test hooks: configure it with -DQORE_QCC_TEST_HOOKS=ON");
+        }
+    }
+
     private static string shellQuote(string value) {
         return "'" + replace(value, "'", "'\"'\"'") + "'";
     }
@@ -870,6 +882,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         string bootstrap_validation_marker = build_dir
             + "/qcc-bootstrap-input-validation.marker";
         write(bootstrap_replacement, initial_provider);
+        requireQccTestHooks();
         # qcc moves the source itself when it reaches its input validation (its test hook runs the command
         # there, synchronously), so the change happens exactly between the parse and the publication
         string build1 = run(sprintf(

@@ -156,6 +156,7 @@ class CMakeGenericIncrementalTest inherits CMakeBuildHelpersTestBase::GenericQcc
         # planting it now only collides with the real lock file.  What this case is
         # actually about is below: a provider source edited while qcc is publishing
         # is rebuilt exactly once.
+        requireQccTestHooks();
         # qcc's input validation hook moves the provider exactly between its parse and its publication
         string contract_change = run(sprintf(
             "QORE_QCC_TEST_INPUT_VALIDATION_MARKER=%s "
@@ -204,12 +205,13 @@ class CMakeGenericIncrementalTest inherits CMakeBuildHelpersTestBase::GenericQcc
         # A -> B right after qcc's input snapshot, B -> A at its input validation, each by qcc's own test hook
         string aba_change = run(sprintf(
             "QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_MARKER=%s "
+            "QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_SOURCE=%s "
             "QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_COMMAND=%s "
             "QORE_QCC_TEST_INPUT_VALIDATION_MARKER=%s "
             "QORE_QCC_TEST_INPUT_VALIDATION_SOURCE=%s "
             "QORE_QCC_TEST_INPUT_VALIDATION_COMMAND=%s "
             "cmake --build %s -- -j%d",
-            shellQuote(snapshot_marker),
+            shellQuote(snapshot_marker), shellQuote(provider),
             shellQuote(sprintf("cp %s %s", shellQuote(aba_transient_copy), shellQuote(provider))),
             shellQuote(aba_validation_marker), shellQuote(provider),
             shellQuote(sprintf("cp %s %s", shellQuote(aba_provider_copy), shellQuote(provider))),

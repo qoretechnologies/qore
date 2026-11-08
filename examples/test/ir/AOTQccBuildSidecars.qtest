@@ -318,6 +318,10 @@ public class QccSidecarConsumer {
     # it must be part of the initial input snapshot even when the current command
     # no longer asks qcc to emit declaration-contract dependencies.
     testExistingDeclarationContractSnapshot() {
+        string version = run(sprintf("%s %s --version", env, qcc_bin));
+        if (version !~ /^Test hooks: enabled$/m) {
+            testSkip("qcc has no test hooks: configure it with -DQORE_QCC_TEST_HOOKS=ON");
+        }
         TmpDir tmp("qore-aot-qcc-old-declaration-dep-");
         string src = tmp.path + "/consumer.qc";
         string qo = tmp.path + "/consumer.qo";

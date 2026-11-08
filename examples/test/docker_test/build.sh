@@ -102,7 +102,7 @@ echo && echo "-- building Qore --"
 cd ${QORE_SRC_DIR}
 mkdir -p build
 cd build
-cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-debug} -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-debug} -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
 make -j${MAKE_JOBS}
 
 # Remove intermediate object files to reduce artifact size

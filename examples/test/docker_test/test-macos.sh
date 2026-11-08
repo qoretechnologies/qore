@@ -183,6 +183,7 @@ fi
 # CMAKE_PREFIX_PATH includes package-manager dependencies and LLVM prefix if found
 cmake .. \
     -DCMAKE_BUILD_TYPE=release \
+    -DQORE_QCC_TEST_HOOKS=ON \
     -DSINGLE_COMPILATION_UNIT=1 \
     -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
     -DCMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH}"

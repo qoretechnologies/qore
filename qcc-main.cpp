@@ -62,6 +62,12 @@
 #include <sys/stat.h>
 #include <utime.h>
 #include <unistd.h>
+#include <fcntl.h>
+#ifdef QORE_QCC_TEST_HOOKS
+#include <spawn.h>
+#include <sys/wait.h>
+extern char** environ;
+#endif
 #include <zlib.h>
 #include <zstd.h>
 
@@ -1403,6 +1409,10 @@ static void print_version() {
     printf("Using Qore library v%s\n", qore_version_string);
     printf("AOT runtime identity: %s\n", qore_aot_runtime_identity);
     printf("Built with LLVM for JIT/AOT compilation\n");
+#ifdef QORE_QCC_TEST_HOOKS
+    // the tests that need them skip without them (see QORE_QCC_TEST_HOOKS in CMakeLists.txt)
+    printf("Test hooks: enabled\n");
+#endif
 }
 
 static bool qccHandleWarnings(ExceptionSink& wsink) {
@@ -7750,21 +7760,47 @@ static bool capture_qcc_observed_source_snapshots(QCCBuildManifest& manifest,
     return true;
 }
 
-//! Runs a test hook of qcc: creates \a marker and runs \a command_var's command, then lets qcc continue
-/** A test that changes a source while qcc compiles sets the hook's marker and command: the first time qcc reaches the
-    hook (no marker yet) it creates the marker and runs the command synchronously (with /bin/sh), so the change
-    happens exactly at that point, without a test process that polls for the marker and a delay for it to act in.  The
-    marker keeps a later qcc of the same build from running the command again.
+#ifdef QORE_QCC_TEST_HOOKS
+//! Returns true if the source a test hook names (in \a source_var) is an input of this qcc, or if it names none
+static bool qcc_test_hook_source_matches(const QCCBuildManifest& manifest, const char* source_var) {
+    QoreEnvironmentValue source_holder(source_var);
+    const char* source = source_holder.c_str();
+    if (!source || !*source) {
+        return true;
+    }
+    if (!manifest.input_snapshots) {
+        return false;
+    }
+    std::string canonical_source = canonical_existing_path(source);
+    for (const auto& snapshot : *manifest.input_snapshots) {
+        if (snapshot.first == canonical_source) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! Runs a test hook of qcc: claims \a marker and runs \a command_var's command, then lets qcc continue
+/** A test that changes a source while qcc compiles sets the hook's marker and command (and, optionally, the source
+    that the qcc it means compiles): the first qcc that reaches the hook creates the marker exclusively
+    (O_CREAT|O_EXCL; any other qcc of the build finds it and goes on) and runs the command synchronously (/bin/sh -c),
+    so the change happens exactly at that point, with no test process that polls for the marker and no delay for it to
+    act in.  The hooks exist only in a qcc built with QORE_QCC_TEST_HOOKS (CMake option of the same name), so that a
+    packaged qcc never runs a command taken from its environment.
 
     @return false with \a error set if the marker cannot be created or the command fails
 */
 static bool qcc_run_test_hook(const char* marker, const char* command_var, const char* what, std::string& error) {
-    FILE* f = fopen(marker, "wb");
-    if (!f) {
+    int fd = open(marker, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
+    if (fd < 0) {
+        if (errno == EEXIST) {
+            // another qcc of the build ran the hook
+            return true;
+        }
         error = std::string("cannot create qcc ") + what + " test marker '" + marker + "': " + strerror(errno);
         return false;
     }
-    if (fclose(f) != 0) {
+    if (close(fd) != 0) {
         error = std::string("cannot close qcc ") + what + " test marker '" + marker + "': " + strerror(errno);
         return false;
     }
@@ -7773,53 +7809,65 @@ static bool qcc_run_test_hook(const char* marker, const char* command_var, const
     if (!command || !*command) {
         return true;
     }
+    char sh_arg0[] = "sh";
+    char sh_arg1[] = "-c";
+    std::string command_copy(command);
+    char* const argv[] = {sh_arg0, sh_arg1, &command_copy[0], nullptr};
+    pid_t pid;
     int rc;
     {
-        // the command gets a copy of the environment, which must not change while it is copied
+        // the command gets a copy of the environment, which must not change while it is copied; the lock is not held
+        // while the command runs
         QoreEnvironmentReadLock env_lock;
-        rc = std::system(command);
+        rc = posix_spawn(&pid, "/bin/sh", nullptr, nullptr, argv, environ);
     }
-    if (rc != 0) {
-        error = std::string("qcc ") + what + " test command failed (rc=" + std::to_string(rc) + "): " + command;
+    if (rc) {
+        error = std::string("cannot run qcc ") + what + " test command '" + command_copy + "': " + strerror(rc);
+        return false;
+    }
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR) {
+            error = std::string("cannot wait for qcc ") + what + " test command '" + command_copy + "': "
+                + strerror(errno);
+            return false;
+        }
+    }
+    if (!WIFEXITED(status) || WEXITSTATUS(status)) {
+        error = std::string("qcc ") + what + " test command failed (status " + std::to_string(status) + "): "
+            + command_copy;
         return false;
     }
     return true;
 }
+#endif
 
-static bool qcc_test_wait_after_input_snapshot(std::string& error) {
+//! A test hook right after qcc took the snapshot of its inputs (see qcc_run_test_hook())
+static bool qcc_test_wait_after_input_snapshot(const QCCBuildManifest& manifest, std::string& error) {
+#ifdef QORE_QCC_TEST_HOOKS
     QoreEnvironmentValue marker_holder("QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_MARKER");
     const char* marker = marker_holder.c_str();
-    if (!marker || !*marker || is_file(marker)) {
+    if (!marker || !*marker || !qcc_test_hook_source_matches(manifest, "QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_SOURCE")) {
         return true;
     }
     return qcc_run_test_hook(marker, "QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_COMMAND", "post-snapshot", error);
+#else
+    return true;
+#endif
 }
 
-static bool qcc_test_wait_before_input_validation(
-        const QCCBuildManifest& manifest, std::string& error) {
+//! A test hook right before qcc validates its inputs against their snapshot (see qcc_run_test_hook())
+static bool qcc_test_wait_before_input_validation(const QCCBuildManifest& manifest, std::string& error) {
+#ifdef QORE_QCC_TEST_HOOKS
     QoreEnvironmentValue marker_holder("QORE_QCC_TEST_INPUT_VALIDATION_MARKER");
     const char* marker = marker_holder.c_str();
-    if (!marker || !*marker || is_file(marker)) {
+    if (!marker || !*marker || !qcc_test_hook_source_matches(manifest, "QORE_QCC_TEST_INPUT_VALIDATION_SOURCE")) {
         return true;
     }
-    if (QoreEnvironmentValue source_holder("QORE_QCC_TEST_INPUT_VALIDATION_SOURCE");
-            const char* source = source_holder.c_str()) {
-        std::string canonical_source = canonical_existing_path(source);
-        bool found = false;
-        if (!manifest.input_snapshots) {
-            return true;
-        }
-        for (const auto& snapshot : *manifest.input_snapshots) {
-            if (snapshot.first == canonical_source) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            return true;
-        }
-    }
     return qcc_run_test_hook(marker, "QORE_QCC_TEST_INPUT_VALIDATION_COMMAND", "input-validation", error);
+#else
+    return true;
+#endif
 }
 
 enum class QCCFinishResult {
@@ -10686,7 +10734,7 @@ int main(int argc, char** argv) {
         batch_input_manifest.extra_inputs = batch_script_aggregate_manifest_inputs;
         capture_qcc_input_snapshots(batch_input_manifest);
         std::string error;
-        if (!qcc_test_wait_after_input_snapshot(error)) {
+        if (!qcc_test_wait_after_input_snapshot(batch_input_manifest, error)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             return 1;
         }
@@ -11311,7 +11359,7 @@ int main(int argc, char** argv) {
         }
         return 0;
     }
-    if (!qcc_test_wait_after_input_snapshot(error)) {
+    if (!qcc_test_wait_after_input_snapshot(manifest, error)) {
         fprintf(stderr, "error: %s\n", error.c_str());
         return 1;
     }

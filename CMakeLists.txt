@@ -2942,6 +2942,20 @@ add_subdirectory(examples/plugins/sample-buffer EXCLUDE_FROM_ALL)
 
 # qcc - Qore Code Compiler (AOT)
 add_executable(qcc qcc-main.cpp)
+# qcc's test hooks run a command named in the environment at fixed points of a compile (QORE_QCC_TEST_*_COMMAND, see
+# qcc_run_test_hook() in qcc-main.cpp), for the tests that change a source while qcc compiles; a qcc that is
+# packaged must never run a command taken from its environment, so they are only in a debug build by default, and
+# CI's release builds enable them explicitly
+if (QORE_BUILD_TYPE_LWR STREQUAL "debug")
+    set(_QORE_QCC_TEST_HOOKS_DEFAULT ON)
+else()
+    set(_QORE_QCC_TEST_HOOKS_DEFAULT OFF)
+endif()
+option(QORE_QCC_TEST_HOOKS "build qcc with its test hooks, which run commands from the environment (tests only)"
+    ${_QORE_QCC_TEST_HOOKS_DEFAULT})
+if (QORE_QCC_TEST_HOOKS)
+    target_compile_definitions(qcc PRIVATE QORE_QCC_TEST_HOOKS=1)
+endif()
 add_dependencies(qcc qore-aot-link-config)
 target_include_directories(qcc PRIVATE ${ZSTD_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIR})
 target_link_libraries(qcc libqore ${ZLIB_LIBRARIES} ${QORE_ZSTD_LIBS} ${CMAKE_DL_LIBS})
