@@ -43,7 +43,15 @@ HAVE_QORE = (BUILD_DIR / "qore").exists() and LIBQORE is not None
 
 
 def no_core_dumps():
+    """Sets up a process of the harness: no core dumps, and the default action for the signals the runner traps
+
+    A signal that is ignored when a shell starts cannot be trapped (POSIX), and a CI job ran these tests with SIGINT
+    ignored (a background command of a non-interactive shell ignores it, and the process inherits that), so the runner
+    ignored the SIGINT of the interrupt cases, which waited for it until their time limit.
+    """
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    for sig in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, signal.SIG_DFL)
 
 
 class RunnerTree:
