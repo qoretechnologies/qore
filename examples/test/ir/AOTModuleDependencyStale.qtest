@@ -49,6 +49,8 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
             \reexportShadowTest());
         addTestCase("a module further down the chain, loaded from another file, makes a module out of date",
             \chainShadowTest());
+        addTestCase("without a source module, an out-of-date AOT module is loaded with a warning",
+            \noSourceTest());
         addTestCase("a module compiled with a relative output path is checked", \relativeOutputTest());
         set_return_value(main());
     }
@@ -274,6 +276,30 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         assertEq("other Top.qm", out.split("\n").last(), out);
         assertRegex("AOT module '.*/Top\\.qmod' for feature 'Top' is out of date: it was compiled against other "
             "files of module 'Base' than '.*/shadow/Base\\.qm'", out);
+    }
+
+    noSourceTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        string shadow_dir = tmp.path + "/shadow";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        mkdir(shadow_dir);
+        writeModule(src_dir, "Dep", "", "public namespace Dep { public string sub value() { return \"dep\"; } }");
+        writeModule(src_dir, "User", "%requires Dep", "public namespace User { public string sub value() { "
+            "return Dep::value(); } }");
+        string module_path = qmod_dir + ":" + src_dir;
+        compile(module_path, src_dir, qmod_dir, "Dep");
+        compile(module_path, src_dir, qmod_dir, "User");
+        unlink(qmod_dir + "/Dep.qmod");
+        writeModule(shadow_dir, "Dep", "", "public namespace Dep { public string sub value() { return \"other\"; } "
+            "}");
+        # User's source is not in the module path: its AOT module is loaded, with a warning that it must be rebuilt
+        string out = runRequires(shadow_dir + ":" + qmod_dir, tmp.path, "User", "User::value()");
+        assertEq("other User.qmod", out.split("\n").last(), out);
+        assertRegex("BINARY-MODULE-STALE: .*AOT module '.*/User\\.qmod' for feature 'User' is out of date: it was "
+            "compiled against other files of module 'Dep'.*no source module was found", out);
     }
 
     relativeOutputTest() {

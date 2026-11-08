@@ -107,8 +107,10 @@ A module is the one compiled against when:
 An AOT module without its depfile (an installed module, or one compiled by hand without `--depfile`) is not checked:
 what it was compiled from is not known, and the loader does not check such a module's own sources either.
 
-Otherwise the module is out of date: the loader raises `AOT-MODULE-STALE`, which, as for any AOT module that cannot
-be loaded, loads the source module instead with a `BINARY-MODULE-SOURCE-FALLBACK` warning.  A builtin
+Otherwise the module is out of date.  With its source module in the module path, the loader raises
+`AOT-MODULE-STALE`, which, as for any AOT module that cannot be loaded, loads the source module instead with a
+`BINARY-MODULE-SOURCE-FALLBACK` warning.  Without one, the AOT module is loaded with a `BINARY-MODULE-STALE` warning
+that it must be rebuilt, as for an AOT module compiled without an optional module that is available now.  A builtin
 module, a file the sandbox does not let the loader read and a module loaded into a Program without filesystem access
 are not checked.  An incremental build cannot see such a module appear (a make prerequisite cannot be a file that
 does not exist); the loader reports it and asks for the module to be rebuilt.
