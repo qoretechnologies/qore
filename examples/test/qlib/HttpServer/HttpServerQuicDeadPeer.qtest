@@ -829,6 +829,9 @@ const Server = \"127.0.0.1:%d\";
 call_function(\"dbg_quic_count_datagrams\");
 Socket ctl();
 ctl.connect(\"127.0.0.1:%d\", 30s);
+# each command and answer is small: without TCP_NODELAY, Nagle's algorithm and the delayed ACK of the peer make
+# each one wait
+ctl.setNoDelay(True);
 Queue echoes();
 WebSocketClient wsc(sub (*data msg) {
     if (exists msg) {
@@ -887,6 +890,9 @@ while (True) {
 ", get_module_path(), port, listener.getSocketInfo().port);
         Counter exited = startClientScript(script);
         Socket ctl = listener.accept(30s);
+        # each command and answer is small: without TCP_NODELAY, Nagle's algorithm and the delayed ACK of the peer
+        # make each one wait
+        ctl.setNoDelay(True);
         # the child has connected to the server
         assertEq(0, ctl.recvi8(30s), "the child connected");
         return new LiveChild(ctl, exited);
