@@ -13,10 +13,12 @@ limit of 0.
 Copyright (C) 2026 Qore Technologies, s.r.o.
 """
 
+import fcntl
 import os
 from pathlib import Path
 import re
 import resource
+import select
 import shutil
 import signal
 import subprocess
@@ -194,47 +196,71 @@ class EventFifoTest(unittest.TestCase):
 
 
 class InterruptedRunnerTest(unittest.TestCase):
-    """A runner ended by a signal removes its files, the directory of its event FIFO among them"""
+    """A runner ended by a signal stops the watchdog and the test that run, removes its files, the directory of its
+    event FIFO among them, and ends by the signal"""
 
     def interrupt(self, sig):
         with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
             tree = RunnerTree(directory)
-            # the test tells the harness that it runs (the runner has made its files by then) and blocks until the
-            # harness lets it end, after the runner has ended
+            # the test tells the harness that it runs (the runner has made its files and started its watchdog by then)
+            # and blocks; only the signal the runner passes on ends it
             ready = tree.root / "ready"
-            release = tree.root / "release"
+            hold = tree.root / "hold"
             os.mkfifo(ready)
-            os.mkfifo(release)
+            os.mkfifo(hold)
             tree.add_test("blocks.qtest", f"""\
+                # test-timeout: 600
                 with open({str(ready)!r}, "w") as f:
                     f.write("running\\n")
-                open({str(release)!r}).read()
+                open({str(hold)!r}).read()
                 """)
-            runner = subprocess.Popen(["sh", str(RUN_TESTS)], cwd=tree.root, env=tree.env(),
-                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, preexec_fn=no_core_dumps)
+            # every process of the run inherits the write end of this pipe: the read end is at its end when the last
+            # of them has ended, the runner, its watchdog and the test, so that none of them is left
+            alive_r, pipe_w = os.pipe()
+            # at a descriptor that the runner does not use (it opens its event FIFO at 4)
+            alive_w = fcntl.fcntl(pipe_w, fcntl.F_DUPFD, 50)
+            os.close(pipe_w)
             try:
-                with open(ready) as f:
-                    self.assertEqual("running\n", f.read())
-                self.assertEqual(1, len(list(tree.tmp.glob("qore-test-events.*"))), "the runner made its FIFO directory")
-                runner.send_signal(sig)
-                runner.wait(timeout=60)
+                runner = subprocess.Popen(["sh", str(RUN_TESTS)], cwd=tree.root, env=tree.env(),
+                                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, pass_fds=(alive_w,),
+                                          preexec_fn=no_core_dumps)
+                os.close(alive_w)
+                alive_w = -1
+                try:
+                    with open(ready) as f:
+                        self.assertEqual("running\n", f.read())
+                    self.assertEqual(1, len(list(tree.tmp.glob("qore-test-events.*"))),
+                                     "the runner made its FIFO directory")
+                    runner.send_signal(sig)
+                    returncode = runner.wait(timeout=60)
+                finally:
+                    if runner.poll() is None:
+                        runner.kill()
+                        runner.wait()
+                # the runner ends by the signal, so that its caller sees why
+                self.assertEqual(-sig, returncode)
+                # the read returns when no process holds the pipe anymore; one that is left keeps it open, which
+                # the time limit of the select ends as a failure
+                readable, _, _ = select.select([alive_r], [], [], 60)
+                self.assertEqual([alive_r], readable, "a process of the run is left after signal %d" % sig)
+                self.assertEqual(b"", os.read(alive_r, 1), "a process of the run is left after signal %d" % sig)
             finally:
-                if runner.poll() is None:
-                    runner.kill()
-                    runner.wait()
-                # lets the test end
-                with open(release, "w"):
-                    pass
+                os.close(alive_r)
+                if alive_w >= 0:
+                    os.close(alive_w)
             self.assertEqual([], list(tree.tmp.glob("qore-test-events.*")),
                              "the runner ended by signal %d left its FIFO directory" % sig)
             self.assertEqual([], sorted(p.name for p in tree.cores.iterdir()),
                              "the runner ended by signal %d left its files in the core directory" % sig)
 
-    def test_sigterm(self):
-        self.interrupt(signal.SIGTERM)
+    def test_sighup(self):
+        self.interrupt(signal.SIGHUP)
 
     def test_sigint(self):
         self.interrupt(signal.SIGINT)
+
+    def test_sigterm(self):
+        self.interrupt(signal.SIGTERM)
 
 
 @unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")

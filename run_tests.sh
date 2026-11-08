@@ -657,10 +657,34 @@ remove_runner_files() {
     fi
 }
 trap remove_runner_files 0
-# a shell does not run its EXIT trap when a signal ends it, so the files are removed for an interrupted run too
-trap 'remove_runner_files; trap - 0; exit 129' HUP
-trap 'remove_runner_files; trap - 0; exit 130' INT
-trap 'remove_runner_files; trap - 0; exit 143' TERM
+# The test that runs and its watchdog (see run_with_watchdog()), while one runs
+test_pid=""
+watchdog_pid=""
+# Ends the runner for a signal: a shell does not run its EXIT trap when a signal ends it, so this does what the end of
+# a run does.  The watchdog of the test that runs is stopped first: left running, it would end a process minutes later
+# that may have reused the test's process ID.  The test is ended too: it is sent the signal, but SIGTERM for a SIGINT,
+# which a command that a non-interactive shell runs in the background ignores (so a SIGINT from a terminal does not
+# reach it either).  Then the runner ends by the signal itself, so that its caller (a loop in bash, for example) sees
+# why.
+runner_signaled() {
+    if [ -n "$watchdog_pid" ]; then
+        echo exit >&4 2>/dev/null
+        wait $watchdog_pid 2>/dev/null
+    fi
+    if [ -n "$test_pid" ]; then
+        if [ "$1" = INT ]; then
+            kill -TERM $test_pid 2>/dev/null
+        else
+            kill -$1 $test_pid 2>/dev/null
+        fi
+    fi
+    remove_runner_files
+    trap - 0 $1
+    kill -$1 $$
+}
+trap 'runner_signaled HUP' HUP
+trap 'runner_signaled INT' INT
+trap 'runner_signaled TERM' TERM
 # A separate marker per runner also permits concurrent test shards.
 TEST_START_MARKER=$(mktemp "$CORE_DIR_ABS/test-start.XXXXXX") || exit 1
 # the core files there were when the current test started (see find_test_core())
@@ -867,9 +891,11 @@ event $1
     watchdog_pid=$!
     wait $test_pid
     WATCHDOG_TEST_EXIT=$?
+    test_pid=""
     echo exit >&4
     wait $watchdog_pid
     watchdog_rc=$?
+    watchdog_pid=""
     exec 4>&-
     rm -f "$TEST_EVENT_FIFO"
     case $watchdog_rc in
