@@ -1442,6 +1442,13 @@ public class DataProviderActionCatalog {
         #! The build of a lazy value, in @ref init_owners: no getter of an app initializes it
         const InitValue = (1 << 6);
 
+        #! runGated(): run every deferred registration
+        const RunAll = 0;
+        #! runGated(): run only the deferred registrations that trusted code made (on the catalog worker)
+        const RunTrusted = 1;
+        #! runGated(): run only the deferred registrations made under a sandbox (on a sandboxed reader's thread)
+        const RunGoverned = 2;
+
         #! What a thread waiting for the catalog worker waits for in @ref init_waits, which is never an application name
         const LazyWorkerKey = "<catalog-worker>";
 
@@ -1502,11 +1509,12 @@ public class DataProviderActionCatalog {
         }
 
         initmap{app} = {
-            "init": init,
+            "init": DataProviderActionCatalog::makeLazyCall(init),
             "kind": "app",
             "app": app,
             "module_context": module_context
                 ?? DataProviderActionCatalog::registrationModulePath(),
+            "governed": DataProviderActionCatalog::isGoverned(),
         };
         expected_initialization_map{app}{""} = True;
         DataProviderActionCatalog::addOpenDiscoveryExpectedIdentity(app,
@@ -1538,11 +1546,12 @@ public class DataProviderActionCatalog {
         }
 
         initactionmap{app}{action} = {
-            "init": init,
+            "init": DataProviderActionCatalog::makeLazyCall(init),
             "kind": "action",
             "app": app,
             "action": action,
             "module_context": DataProviderActionCatalog::registrationModulePath(),
+            "governed": DataProviderActionCatalog::isGoverned(),
         };
         expected_initialization_map{app}{action} = True;
         DataProviderActionCatalog::addOpenDiscoveryExpectedIdentity(app,
@@ -1727,7 +1736,7 @@ class MyProvider {
         if (!DataProviderActionCatalog::isGoverned() || DataProviderActionCatalog::isLazyWorker()) {
             return DataProviderActionCatalog::buildLazyValue(key);
         } else {
-            # as for lazy registrations (see runLazy()): a sandboxed thread loading a module cannot wait for the worker,
+            # as for lazy registrations (see initPending()): a sandboxed thread loading a module cannot wait for the worker,
             # whose builder can load the module that this thread is loading
             if (get_module_context_path()) {
                 throw "DATA-PROVIDER-LAZY-INIT-ERROR", sprintf("lazy value %d has not been built, and a sandboxed "
@@ -5033,7 +5042,27 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         it cannot lock again.  It reads what has been registered so far.
 
         Each pending registration runs once, and an exception it raises is retained as an initialization failure (see
-        doInit()); lazy registrations run as runLazy() describes.
+        doInit()); lazy registrations run as doLazyInit() describes.
+
+        A reader that no sandbox governs runs the registrations on its own thread, as the module would have run them
+        when it was loaded.  A sandboxed reader runs only those made under a sandbox (bound to it), as at load: what a
+        registration that trusted code made creates, which every reader of the catalog shares afterwards, would keep
+        the reader's sandbox, including its interrupts (an object created while serving sandboxed code keeps that
+        code's sandbox), and the module's own resources would be denied to it.  The catalog worker runs those for it:
+        a thread of the %DataProvider Program that no sandbox governs, started by the first sandboxed reader that needs
+        it (see initLazyWorker()).  The reader waits for the worker; an interrupt or limit of the reader ends only its
+        wait, and the registrations run to their end for every reader.
+
+        A sandboxed thread that is loading a module is refused with \c DATA-PROVIDER-LAZY-INIT-ERROR when trusted
+        registrations are pending: it cannot run them itself, and it cannot wait for the worker, because a
+        registration can load a module, and the module that this thread is loading cannot be loaded by another thread
+        until this thread has loaded it, whose wait the module loader does not see, so the threads would wait for
+        each other for ever.  Without a worker, as after the worker was stopped at the end of the process, a
+        sandboxed reader is refused as well.  The registrations stay pending for the next reader.
+
+        @throw DATA-PROVIDER-LAZY-INIT-ERROR a sandboxed reader needs a trusted registration and is loading a module,
+        or there is no worker
+        @throw DATA-PROVIDER-LAZY-WORKER-STOPPED the worker ended before it ran the registrations
     */
     private:internal static initPending(string app, int what, *string action) {
         # nothing to do when nothing is pending and no thread is initializing the app
@@ -5041,19 +5070,66 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             return;
         }
         DataProviderActionCatalog::checkFork();
+        int filter = RunAll;
+        # a sandboxed reader runs no registration that trusted code made: the catalog worker does (see initPending())
+        if (DataProviderActionCatalog::isGoverned() && !DataProviderActionCatalog::isLazyWorker()) {
+            if (DataProviderActionCatalog::hasTrustedPending(app, what, action)) {
+                if (get_module_context_path()) {
+                    throw "DATA-PROVIDER-LAZY-INIT-ERROR", sprintf("the deferred registrations of application %y "
+                        "have not run, and a sandboxed thread that is loading a module cannot run them or wait for "
+                        "them", app);
+                }
+                hash<auto> job = {"app": app, "what": what};
+                if (exists action) {
+                    job.action = action;
+                }
+                DataProviderActionCatalog::runOnWorker(job);
+            }
+            filter = RunGoverned;
+        }
+        DataProviderActionCatalog::runPending(app, what, action, filter);
+    }
+
+    #! Runs the deferred registrations of an app that a filter selects, in their order: the pending app, the lazy
+    #! actions, the pending actions
+    private:internal static runPending(string app, int what, *string action, int filter) {
         if (what & InitPendingApp) {
-            DataProviderActionCatalog::runGated(app, InitPendingApp);
+            DataProviderActionCatalog::runGated(app, InitPendingApp, NOTHING, filter);
         }
         if (what & InitLazyActions) {
-            DataProviderActionCatalog::runLazy(app);
+            DataProviderActionCatalog::runGated(app, InitLazyActions, NOTHING, filter);
         }
         if (what & (InitPendingActions | InitPendingAction)) {
-            DataProviderActionCatalog::runGated(app, what & (InitPendingActions | InitPendingAction), action);
+            DataProviderActionCatalog::runGated(app, what & (InitPendingActions | InitPendingAction), action, filter);
         }
     }
 
+    #! Returns @ref True if a deferred registration that trusted code made is pending for what the caller needs
+    private:internal static bool hasTrustedPending(string app, int what, *string action) {
+        if ((what & InitPendingApp) && initmap{app} && !initmap{app}.governed) {
+            return True;
+        }
+        if ((what & InitLazyActions) && (map 1, lazyactionmap{app}, !$1.governed)) {
+            return True;
+        }
+        if ((what & InitPendingActions) && (map 1, initactionmap{app}.iterator(), !$1.governed)) {
+            return True;
+        }
+        if ((what & InitPendingAction) && exists action && initactionmap{app}{action}
+                && !initactionmap{app}{action}.governed) {
+            return True;
+        }
+        # another thread initializes the app: the worker waits for it
+        return exists init_owners{app} && (init_owners{app}.what & what);
+    }
+
+    #! Returns @ref True if a filter of runGated() selects a registration
+    private:internal static bool selects(int filter, hash<auto> h) {
+        return filter == RunAll || ((filter == RunGoverned) == (h.governed ?? False));
+    }
+
     #! Runs deferred registrations of an app as the thread that initializes it; see initPending()
-    private:internal static runGated(string app, int what, *string action) {
+    private:internal static runGated(string app, int what, *string action, int filter = RunAll) {
         if (!DataProviderActionCatalog::isInitPending(app, what, action)) {
             return;
         }
@@ -5063,22 +5139,49 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             DataProviderActionCatalog::exitInit(app, done);
         }
         if (what & InitPendingApp) {
-            if (*hash<auto> h = remove initmap{app}) {
-                DataProviderActionCatalog::doInit(h);
+            if (initmap{app} && DataProviderActionCatalog::selects(filter, initmap{app})) {
+                if (*hash<auto> h = remove initmap{app}) {
+                    DataProviderActionCatalog::doInit(h);
+                }
             }
         }
         if (what & InitPendingActions) {
-            map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
+            foreach string act in (keys initactionmap{app}) {
+                *hash<auto> h = initactionmap{app}{act};
+                if (h && DataProviderActionCatalog::selects(filter, h)) {
+                    remove initactionmap{app}{act};
+                    DataProviderActionCatalog::doInit(h);
+                }
+            }
+            if (!initactionmap{app}) {
+                remove initactionmap{app};
+            }
         } else if (what & InitPendingAction) {
-            if (*hash<auto> init = remove initactionmap{app}{action}) {
-                DataProviderActionCatalog::doInit(init);
+            *hash<auto> h = initactionmap{app}{action};
+            if (h && DataProviderActionCatalog::selects(filter, h)) {
+                remove initactionmap{app}{action};
+                DataProviderActionCatalog::doInit(h);
                 if (!initactionmap{app}) {
                     remove initactionmap{app};
                 }
             }
         }
         if (what & InitLazyActions) {
-            if (*list<hash<auto>> lazy = remove lazyactionmap{app}) {
+            list<hash<auto>> lazy = ();
+            list<hash<auto>> keep = ();
+            foreach hash<auto> h in (lazyactionmap{app}) {
+                if (DataProviderActionCatalog::selects(filter, h)) {
+                    lazy += h;
+                } else {
+                    keep += h;
+                }
+            }
+            if (lazy) {
+                if (keep) {
+                    lazyactionmap{app} = keep;
+                } else {
+                    remove lazyactionmap{app};
+                }
                 # kept with the initialization, so that the child of a fork() can run them again
                 if (done) {
                     init_owners{app}.running = lazy;
@@ -5095,51 +5198,6 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 }
             }
         }
-    }
-
-    #! Runs the lazy registrations of an app
-    /** A reader that no sandbox governs runs them on its own thread, as the module would have run them when it was
-        loaded.  A sandboxed reader does not: what the registrations create, which every reader of the catalog shares
-        afterwards, would keep the reader's sandbox, including its interrupts (an object created while serving
-        sandboxed code keeps that code's sandbox), and the module's own resources would be denied to them.  The
-        catalog worker runs them for it instead: a thread of the %DataProvider Program that no sandbox governs,
-        started by the first sandboxed reader that needs it (see initLazyWorker()).  The reader waits for the worker;
-        an interrupt or limit of the reader ends only its wait, and the registrations run to their end for every
-        reader.
-
-        A registration made under a sandbox, as by a module that sandboxed code loads, runs under that sandbox on the
-        reading thread, as when the module registered its actions while it was loaded.
-
-        A sandboxed thread that is loading a module is refused with \c DATA-PROVIDER-LAZY-INIT-ERROR when trusted
-        registrations are pending: it cannot run them itself, and it cannot wait for the worker, because a
-        registration can load a module, and the module that this thread is loading cannot be loaded by another thread
-        until this thread has loaded it, whose wait the module loader does not see, so the threads would wait for
-        each other for ever.  Without a worker, as after the worker was stopped at the end of the process, a
-        sandboxed reader is refused as well.  The registrations stay pending for the next reader.
-
-        @throw DATA-PROVIDER-LAZY-INIT-ERROR a sandboxed reader is loading a module, or there is no worker
-        @throw DATA-PROVIDER-LAZY-WORKER-STOPPED the worker was stopped before it initialized the app
-    */
-    private:internal static runLazy(string app) {
-        if (!exists lazyactionmap{app} && !exists init_owners{app}) {
-            return;
-        }
-        if (!DataProviderActionCatalog::isGoverned() || DataProviderActionCatalog::isLazyWorker()) {
-            DataProviderActionCatalog::runGated(app, InitLazyActions);
-            return;
-        }
-        # only registrations made under a sandbox, or another thread runs them: nothing trusted runs on this thread
-        *list<hash<auto>> pending = lazyactionmap{app};
-        if (!pending || !(map 1, pending, !$1.governed)) {
-            DataProviderActionCatalog::runGated(app, InitLazyActions);
-            return;
-        }
-        if (get_module_context_path()) {
-            throw "DATA-PROVIDER-LAZY-INIT-ERROR", sprintf("the actions of application %y have not been "
-                "initialized, and a sandboxed thread that is loading a module cannot initialize them or wait for "
-                "them to be initialized", app);
-        }
-        DataProviderActionCatalog::runOnWorker({"app": app});
     }
 
     #! Builds a lazy value unless it is built, and returns it; see getLazyValue()
@@ -5308,7 +5366,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     /** Called when the module is loaded, in the context of the code loading it: the capability starts the worker in a
         thread that no sandbox governs, also when a sandboxed reader needs it first, and no worker runs until one
         does.  When the module is loaded by sandboxed code, or by code that may not use these APIs, there is no
-        worker, and sandboxed readers are refused trusted registrations (see runLazy()).
+        worker, and sandboxed readers are refused trusted registrations (see initPending()).
 
         @return the capability, or @ref NOTHING if there is no worker
     */
@@ -5400,7 +5458,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             }
             try {
                 if (exists job.app) {
-                    DataProviderActionCatalog::runGated(job.app, InitLazyActions);
+                    DataProviderActionCatalog::runPending(job.app, job.what, job.action, RunTrusted);
                 } else {
                     DataProviderActionCatalog::buildLazyValue(job.value.toString());
                 }
@@ -5447,7 +5505,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     #! Stops the catalog worker for good; the exit hook created when the module was loaded
     /** The worker ends after the job it runs, if any; the jobs queued for it end with
         \c DATA-PROVIDER-LAZY-WORKER-STOPPED for their readers, and no worker is started afterwards: a later sandboxed
-        reader is refused (see runLazy())
+        reader is refused (see initPending())
     */
     private:internal static stopLazyWorker() {
         AutoLock al(lazy_worker_lck);
@@ -5596,7 +5654,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     #! Returns the code that runs a lazy registration in the context of the module that makes it
     /** A registration made under a sandbox, as by a module that sandboxed code loads, is bound to that sandbox, as the
         actions it registers would have been when the module was loaded; any other registration runs only for code
-        that no sandbox governs; see runLazy()
+        that no sandbox governs; see initPending()
     */
     private:internal static code makeLazyCall(code init) {
         return DataProviderActionCatalog::isGoverned() ? SandboxManager::bindCall(init) : init;

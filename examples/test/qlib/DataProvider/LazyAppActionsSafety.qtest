@@ -79,6 +79,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("a registration that runs again replaces the actions its stopped run registered",
             \partialRunTest());
         addTestCase("a sandboxed reader's registration runs in its module's context", \sandboxedReaderTest());
+        addTestCase("a sandboxed reader's trusted pending registrations run on the worker", \pendingSandboxedReaderTest());
         addTestCase("a registration made under a sandbox runs under it for any reader", \governedRegistrationTest());
         addTestCase("a thread loading a module does not wait for an initialization", \moduleLoadTest());
         addTestCase("a sandboxed thread loading a module is refused trusted registrations", \sandboxedModuleLoadTest());
@@ -398,6 +399,38 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         assertEq("worked", probe.work());
     }
 
+    pendingSandboxedReaderTest() {
+        string app = registerApp("SafePendingSandboxed");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        string pending_app = "SafePendingSandboxedApp_" + get_random_string(8);
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(pending_app);
+        string script = get_script_path();
+        *SafetyProbe probe;
+        # trusted pending registrations of an action and of an app: they read the module's own resources, which the
+        # reader's sandbox denies, and create objects that every reader shares
+        DataProviderActionCatalog::registerPendingAppAction(app, "pending-a", sub () {
+            ReadOnlyFile::readTextFile(script);
+            probe = new SafetyProbe();
+            registerAction(app, "pending-a");
+        });
+        DataProviderActionCatalog::registerPendingApp(pending_app, sub () {
+            ReadOnlyFile::readTextFile(script);
+            registerAppIntern(pending_app);
+        });
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        Program reader = readerProgram(sm);
+        reader.callFunction("read", app);
+        reader.callFunction("read", pending_app);
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app, pending_app)));
+        assertEq(("pending-a",), map $1.action, DataProviderActionCatalog::getActions(app, False));
+        assertTrue(exists DataProviderActionCatalog::getApp(pending_app));
+        # what the registration created belongs to no sandbox
+        sm.requestInterrupt();
+        on_exit sm.clearInterrupt();
+        assertEq("worked", probe.work());
+    }
+
     governedRegistrationTest() {
         string app = registerApp("SafeGoverned");
         on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
@@ -464,21 +497,13 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
         string result = "not run";
         # what the module's initialization does under the sandbox of the Program loading it: it reads the app
-        string hook = registerHook("SafeSandboxedLoadHook", sub () {
+        loadSandboxed("LazyAppActionsSandboxedLoad", "LAZY_APP_ACTIONS_SANDBOXED_LOAD_HOOK", sub () {
             try {
                 result = sprintf("%y", map $1.action, DataProviderActionCatalog::getActions(app, False));
             } catch (hash<ExceptionInfo> ex) {
                 result = ex.err;
             }
         });
-        on_exit DataProviderActionCatalog::deregisterDynamicApp(hook);
-        setenv("LAZY_APP_ACTIONS_SANDBOXED_LOAD_HOOK", hook);
-        on_exit unsetenv("LAZY_APP_ACTIONS_SANDBOXED_LOAD_HOOK");
-        SandboxManager sm();
-        Program loader(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
-        loader.parse("sub load(string path) { load_module(path); }\n", "lazy-sandboxed-loader");
-        loader.setSandboxManager(sm);
-        loader.callFunction("load", get_script_dir() + "/LazyAppActionsSandboxedLoad.qm");
         # the module's initialization runs under the loader's sandbox and cannot wait for the worker: it is refused
         # instead of running the trusted registration under the sandbox
         assertEq("DATA-PROVIDER-LAZY-INIT-ERROR", result);
@@ -524,20 +549,13 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
     sandboxedValueLoadTest() {
         string result = "not run";
         # what the module's initialization does under the sandbox of the Program loading it: it reads the value
-        string hook = registerHook("SafeSandboxedValueLoadHook", sub () {
+        loadSandboxed("LazyAppActionsSandboxedValueLoad", "LAZY_APP_ACTIONS_SANDBOXED_VALUE_LOAD_HOOK", sub () {
             try {
                 result = DataProviderActionCatalog::getLazyValue(Values::counted);
             } catch (hash<ExceptionInfo> ex) {
                 result = ex.err;
             }
         });
-        on_exit DataProviderActionCatalog::deregisterDynamicApp(hook);
-        setenv("LAZY_APP_ACTIONS_SANDBOXED_VALUE_LOAD_HOOK", hook);
-        on_exit unsetenv("LAZY_APP_ACTIONS_SANDBOXED_VALUE_LOAD_HOOK");
-        Program loader(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
-        loader.parse("sub load(string path) { load_module(path); }\n", "lazy-sandboxed-value-loader");
-        loader.setSandboxManager(new SandboxManager());
-        loader.callFunction("load", get_script_dir() + "/LazyAppActionsSandboxedValueLoad.qm");
         # refused instead of waiting for the worker, which could be loading the same module
         assertEq("DATA-PROVIDER-LAZY-INIT-ERROR", result);
         assertEq(0, Values::runs);
@@ -967,6 +985,32 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
     private static loadModule(Counter done) {
         on_exit done.dec();
         load_module("LazyAppActionsLoadModule");
+    }
+
+    #! Loads a test module from a sandboxed Program, whose initialization runs the code given
+    /** The sandboxed Program registers a pending app whose initialization runs the code; it is made under the sandbox,
+        so the module's initialization, which reads the app named in the environment variable, runs it on the thread
+        loading the module
+    */
+    private loadSandboxed(string module, string env_var, code body) {
+        string hook = module + "Hook_" + get_random_string(8);
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(hook);
+        setenv(env_var, hook);
+        on_exit unsetenv(env_var);
+        Program loader(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        loader.parse("%requires DataProvider\n"
+            "sub load(string path, string hook, code body) {\n"
+            "    DataProviderActionCatalog::registerPendingApp(hook, sub () {\n"
+            "        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": hook,\n"
+            "            \"display_name\": hook, \"short_desc\": \"hook\", \"desc\": \"hook\",\n"
+            "            \"groups\": (AppGroup::DataTransformation,), \"logo\": \"data\", \"logo_mime_type\": MimeTypeSvg,\n"
+            "            \"logo_file_name\": \"hook.svg\", \"dynamic\": True});\n"
+            "        body();\n"
+            "    });\n"
+            "    load_module(path);\n"
+            "}\n", "lazy-sandboxed-loader");
+        loader.setSandboxManager(new SandboxManager());
+        loader.callFunction("load", get_script_dir() + "/" + module + ".qm", hook, body);
     }
 
     #! Registers a pending app whose initialization registers it and then runs the code given
