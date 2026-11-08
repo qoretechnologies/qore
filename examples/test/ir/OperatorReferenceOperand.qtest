@@ -22,8 +22,11 @@
     operators (qore_rt_binary_op()), so every compiled mode gave the referenced value (\c 3 and \c 4).  Container
     accesses (<tt>h.r[0]</tt>, <tt>h.r.a</tt>) and iterations (\c foreach, \c select, \c foldl, \c foldr) read the
     referenced lvalue in the same way.  The script applies the unary, binary and ternary operators, the container
-    accesses and the iterations to such a reference, twice, in every execution mode, on the IR tier of tiered
-    execution and as a qcc executable (see ExecModeOutputTest).
+    accesses and the iterations to such a reference, also with a missing hash key or an empty list or hash as the
+    other operand (<tt>h.r - h.missing</tt>, <tt>() + h.r</tt>), and the compound assignment operators with such a
+    reference as their right operand to locals of every kind, a hash element, a global, members and a closure-bound
+    local (<tt>a %= h.r</tt> gives \c 0, as <tt>a %= 0</tt> does), twice, in every execution mode, on the IR tier of
+    tiered execution and as a qcc executable (see ExecModeOutputTest).
 */
 class OperatorReferenceOperandTest inherits ExecModeOutputTest {
     public {
@@ -68,9 +71,50 @@ sub ops(hash h) {
     show("r ? 1 : 2", h.r ? 1 : 2);
     show("float r + 1.5", h.r + 1.5);
     show("r instanceof int", h.r instanceof int);
+    show("r - missing", h.r - h.missing);
+    show("missing - r", h.missing - h.r);
+    show("() + r", elements (() + h.r));
+    show("r + ()", elements (h.r + ()));
+    show("{} + r", {} + h.r);
+    show("r + missing", h.r + h.missing);
+    show("r * missing", h.r * h.missing);
+    show("r == missing", h.r == h.missing);
 }
 for (int i = 0; i < 2; ++i) {
     ops({"r": \x});
+}
+int gi = 5;
+auto sub getr(hash h) { return h.r; }
+class C {
+    public { int a = 5; auto b = 5; }
+    m(hash h) { a %= h.r; show("self.a %= r", a); b %= h.r; show("self.b %= r", b); }
+}
+# compound assignments with a reference that arrives as a value as their right operand
+sub compound(hash h, list l) {
+    int a = 5; a %= h.r; show("a %= r", a);
+    int b = 5; b %= l[0]; show("b %= l[0]", b);
+    int c = 5; c %= getr(h); show("c %= getr()", c);
+    hash<auto> g = {"a": 5}; g.a %= h.r; show("g.a %= r", g.a);
+    gi = 5; gi %= h.r; show("gi %= r", gi);
+    new C().m(h);
+    auto d = 5; d %= h.r; show("auto d %= r", d);
+    int e = 5; code cl = sub () { e %= h.r; }; cl(); show("closure e %= r", e);
+    softint f = 5; f %= h.r; show("softint f %= r", f);
+    int k = 5; show("value k %= r", k %= h.r);
+    int m = 5; m %= h.r + 0; show("m %= r + 0", m);
+    int n = 7; n &= l[0]; show("n &= l[0]", n);
+    int o = 7; o |= h.r; show("o |= r", o);
+    int p = 7; p ^= h.r; show("p ^= r", p);
+    int q = 7; q <<= h.r; show("q <<= r", q);
+    int r = 7; r >>= h.r; show("r >>= r", r);
+    int s = 5; s -= l[0]; show("s -= l[0]", s);
+    int t = 5; t += h.r; show("t += r", t);
+    int u = 5; u *= h.r; show("u *= r", u);
+    number v = 5n; v -= h.r; show("v -= r", v);
+    show("x", x);
+}
+for (int i = 0; i < 2; ++i) {
+    compound({"r": \x}, (\x,));
 }
 list<int> lx = (3, 4);
 hash<auto> hy = {"a": 1};
@@ -136,6 +180,14 @@ fe({"r": \lx});
             "r ? 1 : 2: 2",
             "float r + 1.5: 1.5",
             "r instanceof int: False",
+            "r - missing: 3",
+            "missing - r: null",
+            "() + r: 1",
+            "r + (): 1",
+            "{} + r: {}",
+            "r + missing: null",
+            "r * missing: null",
+            "r == missing: False",
             "nothing + r: null",
             "r + 1: 1",
             "1 + r: 1",
@@ -170,6 +222,58 @@ fe({"r": \lx});
             "r ? 1 : 2: 2",
             "float r + 1.5: 1.5",
             "r instanceof int: False",
+            "r - missing: 3",
+            "missing - r: null",
+            "() + r: 1",
+            "r + (): 1",
+            "{} + r: {}",
+            "r + missing: null",
+            "r * missing: null",
+            "r == missing: False",
+            "a %= r: 0",
+            "b %= l[0]: 0",
+            "c %= getr(): 0",
+            "g.a %= r: 0",
+            "gi %= r: 0",
+            "self.a %= r: 0",
+            "self.b %= r: 0",
+            "auto d %= r: 0",
+            "closure e %= r: 0",
+            "softint f %= r: 0",
+            "value k %= r: 0",
+            "m %= r + 0: 0",
+            "n &= l[0]: 0",
+            "o |= r: 7",
+            "p ^= r: 7",
+            "q <<= r: 7",
+            "r >>= r: 7",
+            "s -= l[0]: 5",
+            "t += r: 5",
+            "u *= r: 0",
+            "v -= r: 5",
+            "x: 3",
+            "a %= r: 0",
+            "b %= l[0]: 0",
+            "c %= getr(): 0",
+            "g.a %= r: 0",
+            "gi %= r: 0",
+            "self.a %= r: 0",
+            "self.b %= r: 0",
+            "auto d %= r: 0",
+            "closure e %= r: 0",
+            "softint f %= r: 0",
+            "value k %= r: 0",
+            "m %= r + 0: 0",
+            "n &= l[0]: 0",
+            "o |= r: 7",
+            "p ^= r: 7",
+            "q <<= r: 7",
+            "r >>= r: 7",
+            "s -= l[0]: 5",
+            "t += r: 5",
+            "u *= r: 0",
+            "v -= r: 5",
+            "x: 3",
             "r[0]: null",
             "r[i]: null",
             "r.a: null",
