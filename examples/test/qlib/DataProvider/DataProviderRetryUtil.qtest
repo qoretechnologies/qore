@@ -84,6 +84,7 @@ public class DataProviderRetryUtilTest inherits QUnit::Test {
     constructor() : Test("DataProviderRetryUtil Test", "1.0") {
         addTestCase("name resolution errors", \nameResolutionErrors());
         addTestCase("real name resolution errors", \realNameResolutionErrors());
+        addTestCase("local name resolution errors", \localNameResolutionErrors());
         addTestCase("retriable transport errors", \retriableTransportErrors());
         addTestCase("retry suppression", \retrySuppression());
         addTestCase("transport retry delay", \transportRetryDelay());
@@ -93,6 +94,10 @@ public class DataProviderRetryUtilTest inherits QUnit::Test {
     }
 
     nameResolutionErrors() {
+        # the definite answers of the resolver: the name does not exist, has no address, is not a valid name, or is
+        # not a numeric address where one is required, or the service is not known
+        assertEq(("ENOTFOUND", "ENODATA", "EBADNAME", "ENONAME", "ESERVICE"),
+            keys DataProviderRetryUtil::DefiniteResolverStatuses);
         # the error itself, for each definite answer of the resolver
         foreach string status in (keys DataProviderRetryUtil::DefiniteResolverStatuses) {
             assertTrue(DataProviderRetryUtil::isNameResolutionError({"err": "QOREADDRINFO-GETINFO-ERROR",
@@ -187,6 +192,60 @@ public class DataProviderRetryUtilTest inherits QUnit::Test {
         assertTrue(RetrySet{ex.err}, ex.err);
         assertFalse(DataProviderRetryUtil::isNameResolutionError(ex));
         assertTrue(DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet));
+    }
+
+    #! Lookups that the resolver refuses itself, without a DNS query, are definite answers
+    localNameResolutionErrors() {
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            # in a debug build, a local DNS server shows that no query was sent (see DnsTestServer)
+            DnsTestServer dns();
+            on_exit dns.stop();
+            string servers = call_function("dbg_cares_set_servers", dns.getServer());
+            on_exit call_function("dbg_cares_set_servers", servers);
+            checkLocalLookups();
+            assertEq(0, dns.getQueries("retry-util-test"), "no name was sent to the DNS server");
+        } else {
+            checkLocalLookups();
+        }
+    }
+
+    #! Checks the lookups that the resolver refuses without a DNS query
+    private checkLocalLookups() {
+        # a service that is not a port number, where a numeric service is required (AI_NUMERICSERV): no service
+        # database is read
+        checkLocalLookup("ESERVICE", sub () {
+            list<auto> l = getaddrinfo("127.0.0.1", "no-such-service-retry-util-test", AF_UNSPEC, AI_NUMERICSERV);
+        });
+        # a port number that is out of range
+        checkLocalLookup("ESERVICE", sub () {
+            list<auto> l = getaddrinfo("127.0.0.1", "70000", AF_UNSPEC, AI_NUMERICSERV);
+        });
+        # a service name that is not known, as a socket connects: the name of the host is numeric, so it is not
+        # looked up
+        checkLocalLookup("ESERVICE", sub () {
+            Socket s();
+            s.connectINET("127.0.0.1", "no-such-service-retry-util-test", 10s);
+        });
+        # a name that is not a numeric address, where one is required (AI_NUMERICHOST)
+        checkLocalLookup("ENONAME", sub () {
+            list<auto> l = getaddrinfo("retry-util-test.", NOTHING, AF_UNSPEC, AI_NUMERICHOST);
+        });
+        checkLocalLookup("ENONAME", sub () {
+            list<auto> l = Socket::resolveAddrInfo("retry-util-test.", NOTHING, AF_UNSPEC, AI_NUMERICHOST);
+        });
+    }
+
+    #! Checks that the given lookup fails with a definite answer of the resolver
+    private checkLocalLookup(string status, code lookup) {
+        hash<ExceptionInfo> ex = getError(lookup);
+        assertEq("QOREADDRINFO-GETINFO-ERROR", ex.err, status);
+        assertEq(status, ex.arg.status, status);
+        assertTrue(DataProviderRetryUtil::isNameResolutionError(ex), status);
+        assertFalse(DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet + {ex.err: True}), status);
+        # as the connection error of an asynchronous client
+        hash<auto> conn_ex = {"err": "HTTPCLIENT-CONNECT-ERROR", "desc": "connection failed", "arg": ex};
+        assertTrue(DataProviderRetryUtil::isNameResolutionError(conn_ex), status);
+        assertFalse(DataProviderRetryUtil::isRetriableTransportError(conn_ex, RetrySet), status);
     }
 
     #! Checks the errors of the synchronous and asynchronous REST clients for a URL whose name cannot be resolved

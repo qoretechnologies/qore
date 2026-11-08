@@ -30,8 +30,9 @@ public namespace DataProvider {
     of that policy that are the same for every provider:
 
     - a name that the resolver definitely cannot resolve is not retried (@ref isNameResolutionError()): a name that
-      does not exist, has no address or is not a valid name would give the same answer again, and the backoff would
-      only delay the error.  The synchronous \c RestClient raises the resolver's error
+      does not exist, has no address or is not a valid name, a name that is not a numeric address where one is
+      required, and a service that is not known would give the same answer again, and the backoff would only delay
+      the error.  The synchronous \c RestClient raises the resolver's error
       (\c QOREADDRINFO-GETINFO-ERROR) as it is, while the asynchronous \c RestClientIo raises
       \c HTTPCLIENT-CONNECT-ERROR with the resolver's error in the exception argument; both are matched by their
       error codes and the resolver's status, never by the text of the description.  A resolver failure that can be
@@ -79,13 +80,20 @@ public class DataProviderRetryUtil {
 
         #! The statuses of the resolver that are definite answers (see @ref isNameResolutionError())
         /** The status is in the argument of a \c QOREADDRINFO-GETINFO-ERROR exception (<tt>arg.status</tt>):
-            the name does not exist (\c ENOTFOUND), has no address (\c ENODATA) or is not a valid name
-            (\c EBADNAME)
+            - \c ENOTFOUND: the name does not exist
+            - \c ENODATA: the name has no address
+            - \c EBADNAME: the name is not a valid name, which the resolver refuses without a DNS query
+            - \c ENONAME: the name is not a numeric address, although the lookup requires one (\c AI_NUMERICHOST)
+            - \c ESERVICE: the service is not a known service name or a valid port number
+
+            The last three are answers of the resolver itself, given without a DNS query.
         */
         const DefiniteResolverStatuses = {
             "ENOTFOUND": True,
             "ENODATA": True,
             "EBADNAME": True,
+            "ENONAME": True,
+            "ESERVICE": True,
         };
     }
 
@@ -97,11 +105,11 @@ public class DataProviderRetryUtil {
     #! Returns @ref True if the exception, its argument or a chained exception is a definite name resolution failure
     /** A definite name resolution failure is a \c QOREADDRINFO-GETINFO-ERROR exception whose argument gives a status
         of the resolver in @ref DefiniteResolverStatuses: the name does not exist, has no address or is not a valid
-        name, which another lookup would answer again.  A failure that can be temporary (a DNS server that does not
-        answer or fails, a lookup that was canceled, a resolver that could not be initialized) is not one.  The
-        exception itself is checked, then its argument if that is an error hash (\c HTTPCLIENT-CONNECT-ERROR from
-        \c RestClientIo and \c HttpClientIo carries the connection's error in its argument), then the chained
-        exceptions in \c next.
+        name, the name is not a numeric address where one is required, or the service is not known, which another
+        lookup would answer again.  A failure that can be temporary (a DNS server that does not answer or fails, a
+        lookup that was canceled, a resolver that could not be initialized) is not one.  The exception itself is
+        checked, then its argument if that is an error hash (\c HTTPCLIENT-CONNECT-ERROR from \c RestClientIo and
+        \c HttpClientIo carries the connection's error in its argument), then the chained exceptions in \c next.
 
         @param ex the exception or error hash to check; may be @ref nothing
 
