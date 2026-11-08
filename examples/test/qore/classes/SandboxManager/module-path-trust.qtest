@@ -503,6 +503,9 @@ switch (case_name) {
         addTestCase("a module that a sandbox loads by path is not given to another sandbox", \crossTenantTest());
         addTestCase("a split AOT module in the module path cannot be replaced", \splitAotShadowTest());
         addTestCase("a module name is not a pattern", \patternNameTest());
+        addTestCase("parse defines", \definesTest());
+        addTestCase("parse defines set by code that is not trusted", \definesTenantTest());
+        addTestCase("classes re-exported by code that is not trusted", \reexportTest());
         set_return_value(main());
     }
 

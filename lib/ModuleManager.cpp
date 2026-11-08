@@ -2939,12 +2939,6 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     return nullptr;
 }
 
-//! Makes a source module Program subject to the importing Program's sandbox during initialization
-//! Returns true if a sandbox governs the code running on the current thread
-static bool qore_thread_is_sandboxed() {
-    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-    return static_cast<bool>(governing);
-}
 
 bool QoreModuleManager::isTrustedModulePath(const char* path, std::string* load_path) const {
     if (!path || !*path) {
@@ -3167,9 +3161,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     }
     // recorded on the module when it is registered
     QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner);
-    // a sandboxed loader's parse defines do not shape library code (see below); checked before the barrier masks it
-    const bool sandboxed_loader = trusted && qore_thread_is_sandboxed();
-    // library code loaded by code that is not trusted does not take what that code chose (see below)
+    // library code loaded by code that is not trusted does not take what that code chose (see below); checked before
+    // the barrier is set
     const bool untrusted_loader = trusted && qore_caller_is_untrusted();
     QoreModuleInitSandboxBarrierHelper init_barrier(trusted);
     if (init_barrier.failed()) {
@@ -3218,15 +3211,14 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
             qore_program_private::get(*mpgm)->library_module = true;
         }
         if (p) {
-            // library code is not shaped by the parse defines of sandboxed code that loads it
-            if (!sandboxed_loader) {
-                qore_program_private::inheritParseDefines(*mpgm, *p);
-            }
+            // library code loaded by code that is not trusted takes only the defines that that code's host set, and
+            // does not resolve its own dependencies, optional dependencies and child modules through that code's
+            // module paths; a library module's own Program has only library code's own
+            const bool from_untrusted = untrusted_loader && !qore_program_private::get(*p)->library_module;
+            qore_program_private::inheritParseDefines(*mpgm, *p, from_untrusted);
+            // only trusted code can mark imports for re-export (see Program::importClass())
             qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
-            // library code does not resolve its own dependencies, optional dependencies and child modules through
-            // the module paths of code that is not trusted; a library module's own Program has only library code's
-            // own
-            if (!untrusted_loader || qore_program_private::get(*p)->library_module) {
+            if (!from_untrusted) {
                 qore_program_private::inheritModulePathLists(*mpgm, *p);
             }
         }
@@ -4159,9 +4151,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     }
     // recorded on the module when it is registered
     QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner);
-    // a sandboxed loader's parse defines do not shape library code (see below); checked before the barrier masks it
-    const bool sandboxed_loader = trusted && qore_thread_is_sandboxed();
-    // library code loaded by code that is not trusted does not take what that code chose (see below)
+    // library code loaded by code that is not trusted does not take what that code chose (see below); checked before
+    // the barrier is set
     const bool untrusted_loader = trusted && qore_caller_is_untrusted();
     QoreModuleInitSandboxBarrierHelper init_barrier(trusted);
     if (init_barrier.failed()) {
@@ -4205,15 +4196,14 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
             qore_program_private::get(*mpgm)->library_module = true;
         }
         if (p) {
-            // library code is not shaped by the parse defines of sandboxed code that loads it
-            if (!sandboxed_loader) {
-                qore_program_private::inheritParseDefines(*mpgm, *p);
-            }
+            // library code loaded by code that is not trusted takes only the defines that that code's host set, and
+            // does not resolve its own dependencies, optional dependencies and child modules through that code's
+            // module paths; a library module's own Program has only library code's own
+            const bool from_untrusted = untrusted_loader && !qore_program_private::get(*p)->library_module;
+            qore_program_private::inheritParseDefines(*mpgm, *p, from_untrusted);
+            // only trusted code can mark imports for re-export (see Program::importClass())
             qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
-            // library code does not resolve its own dependencies, optional dependencies and child modules through
-            // the module paths of code that is not trusted; a library module's own Program has only library code's
-            // own
-            if (!untrusted_loader || qore_program_private::get(*p)->library_module) {
+            if (!from_untrusted) {
                 qore_program_private::inheritModulePathLists(*mpgm, *p);
             }
         }

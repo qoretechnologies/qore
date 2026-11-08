@@ -891,6 +891,13 @@ public:
     // define map
     dmap_t dmap;
 
+    //! the defines in dmap that were not set by the Program's host: defined in its source with %define, or with
+    //! Program::define() by code that is not trusted (see qore_caller_is_untrusted())
+    /** They do not shape library code that code that is not trusted loads (see inheritParseDefines()); guarded like
+        dmap
+    */
+    std::set<std::string> source_defines;
+
     struct source_parse_define_t {
         std::string source_file;
         std::string define;
@@ -2839,6 +2846,7 @@ public:
         if (i != dmap.end()) {
             i->second.discard(xsink);
             dmap.erase(i);
+            source_defines.erase(name);
             return true;
         }
         return false;
@@ -2883,7 +2891,8 @@ public:
         return 0;
     }
 
-    DLLLOCAL void parseDefine(const QoreProgramLocation* loc, const char* str, QoreValue val) {
+    //! a define set by the Program's host, or, with \a source, defined in its source
+    DLLLOCAL void parseDefine(const QoreProgramLocation* loc, const char* str, QoreValue val, bool source = false) {
         PreParseHelper pph(this);
 
         if (checkDefine(loc, str, parseSink))
@@ -2891,16 +2900,28 @@ public:
 
         recordSourceParseDefine(loc, str, val);
         setDefine(str, val, parseSink);
+        if (source) {
+            source_defines.insert(str);
+        } else {
+            source_defines.erase(str);
+        }
     }
 
+    //! a define set with Program::define(): by the Program's host unless the caller is not trusted
     DLLLOCAL void runTimeDefine(const char* str, QoreValue val, ExceptionSink* xsink) {
         const QoreProgramLocation* loc = get_runtime_location();
 
         if (checkDefine(loc, str, xsink))
             return;
 
+        const bool untrusted = qore_caller_is_untrusted();
         AutoLocker al(plock);
         setDefine(str, val, xsink);
+        if (untrusted) {
+            source_defines.insert(str);
+        } else {
+            source_defines.erase(str);
+        }
     }
 
     DLLLOCAL ResolvedCallReferenceNode* runtimeGetCallReference(const char* name, ExceptionSink* xsink) {
@@ -3603,9 +3624,10 @@ public:
         return pgm->priv->runTimeIsDefined(name);
     }
 
+    //! a define in the Program's source (%define)
     DLLLOCAL static void parseDefine(QoreProgram* pgm, const QoreProgramLocation* loc, const char* str,
             QoreValue val) {
-        pgm->priv->parseDefine(loc, str, val);
+        pgm->priv->parseDefine(loc, str, val, true);
     }
 
     DLLLOCAL static const std::vector<source_parse_define_t>& getSourceParseDefineRecords(QoreProgram* pgm) {
@@ -3651,8 +3673,12 @@ public:
         match the child's, this is idempotent for those entries; user-set entries
         propagate as intended.
      */
-    DLLLOCAL static void inheritParseDefines(QoreProgram& child, QoreProgram& parent) {
+    //! with \a host_only, only the defines that the parent's host set (see source_defines)
+    DLLLOCAL static void inheritParseDefines(QoreProgram& child, QoreProgram& parent, bool host_only = false) {
         for (const auto& i : parent.priv->dmap) {
+            if (host_only && parent.priv->source_defines.find(i.first) != parent.priv->source_defines.end()) {
+                continue;
+            }
             QoreValue val = i.second.refSelf();
             child.priv->setDefine(i.first.c_str(), val, child.priv->parseSink);
         }

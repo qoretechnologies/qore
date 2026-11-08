@@ -2134,6 +2134,12 @@ nothing Program::importClass(string class_name, *string import_as, *softbool inj
         if (nn->empty())
             return xsink->raiseException("CLASS-IMPORT-ERROR", "the new class name while importing class '%s' may not be empty", tmp->c_str());
     }
+    // a class re-exported to the modules that the Program loads is used by library code
+    if (reexport && qore_caller_is_untrusted()) {
+        return xsink->raiseException("CLASS-IMPORT-ERROR", "cannot import class '%s' for re-export: code that a "
+            "sandbox governs or whose functional domains are restricted cannot re-export classes to the modules "
+            "that a Program loads", tmp->c_str());
+    }
     qore_program_private::get(*p)->importClass(xsink, *qore_program_private::get(*getProgram()), tmp->c_str(),
         import_as ? nn->c_str() : nullptr, inject, static_cast<q_setpub_t>(module_visibility), reexport);
 }
@@ -2183,6 +2189,12 @@ nothing Program::importHashDecl(string hashdecl_name, *string import_as, bool re
 
         if (nn->empty())
             return xsink->raiseException("HASHDECL-IMPORT-ERROR", "the new hashdecl name while importing hashdecl '%s' may not be empty", tmp->c_str());
+    }
+    // a hashdecl re-exported to the modules that the Program loads is used by library code
+    if (reexport && qore_caller_is_untrusted()) {
+        return xsink->raiseException("HASHDECL-IMPORT-ERROR", "cannot import hashdecl '%s' for re-export: code that "
+            "a sandbox governs or whose functional domains are restricted cannot re-export hashdecls to the modules "
+            "that a Program loads", tmp->c_str());
     }
     qore_program_private::get(*p)->importHashDecl(xsink, *qore_program_private::get(*getProgram()),
         tmp->c_str(), import_as ? nn->c_str() : nullptr, CSP_UNCHANGED, reexport);
