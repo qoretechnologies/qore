@@ -11218,6 +11218,37 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
         return 0;
     }
+    // The release of a temporary once it has been used is not a use of it (see ReleaseOwnedTemp): the lowering releases
+    // the value of a call that exists or elements consumes once the operator has run, and a call that is projected
+    // gives the operator's value instead, so there is no aggregate to release; the releases of the values that the
+    // rewrite below leaves undefined are removed at its end.  Counted as a use, the release made the call's value one
+    // with two uses, which no projection takes.
+    for (auto& [value_id, value_uses] : uses) {
+        if (qore_ir_analysis_cancelled(check_count, "IR aggregate-return release use analysis")) {
+            return 0;
+        }
+        value_uses.erase(std::remove_if(value_uses.begin(), value_uses.end(), [](const QoreIRScalarUse& use) {
+            return use.inst && use.inst->opcode == QoreIROpcode::ReleaseOwnedTemp;
+        }), value_uses.end());
+    }
+    // the values that instructions define now, of which the rewrite can leave some undefined
+    auto collect_defined_values = [&func, &check_count](std::unordered_set<uint32_t>& defined) -> bool {
+        for (const auto& block : func.blocks) {
+            for (const auto& inst : block->instructions) {
+                if (qore_ir_analysis_cancelled(check_count, "IR aggregate-return defined value analysis")) {
+                    return false;
+                }
+                if (inst && inst->result.isValid()) {
+                    defined.insert(inst->result.id);
+                }
+            }
+        }
+        return true;
+    };
+    std::unordered_set<uint32_t> defined_before_rewrite;
+    if (!collect_defined_values(defined_before_rewrite)) {
+        return 0;
+    }
     bool enable_native_scalar_projection =
         !q_env_is_set("QORE_DISABLE_AOT_NATIVE_SCALAR_PROJECTION");
 
@@ -13880,6 +13911,21 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             apply_call_projection(projection, projection.result);
             ++inst;
         }
+    }
+    // the release of the aggregate of a call that is projected (see the uses above): the rewrite left its value
+    // undefined
+    std::unordered_set<uint32_t> defined_after_rewrite;
+    if (!collect_defined_values(defined_after_rewrite)) {
+        return 0;
+    }
+    for (auto& block : func.blocks) {
+        auto& instructions = block->instructions;
+        instructions.erase(std::remove_if(instructions.begin(), instructions.end(),
+            [&](const std::unique_ptr<QoreIRInstruction>& inst) {
+                return inst && inst->opcode == QoreIROpcode::ReleaseOwnedTemp && inst->operands.size() == 1
+                    && defined_before_rewrite.count(inst->operands[0].id)
+                    && !defined_after_rewrite.count(inst->operands[0].id);
+            }), instructions.end());
     }
     return projections.size() + virtualized.size()
         + virtualized_phis.size();
