@@ -414,10 +414,21 @@ SendCloudRestClient sendcloud({"public_key": "pub-key", "secret_key": "sec-key"}
                 return response;
             }
 
-            sleep(retry_delay);
+            waitForRateLimit(retry_delay);
 
             current_delay = SendCloudRestClientBase::nextBackoff(current_delay);
         }
+    }
+
+    #! Waits before a rate-limited request is made again
+    /** Called by @ref doRequest() after a rate-limited response (HTTP 429) before the request is made again; not
+        called while @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed".  A
+        subclass can override it, for example a test that records the waits instead of waiting.
+
+        @param delay the time to wait
+    */
+    private waitForRateLimit(date delay) {
+        usleep(delay);
     }
 }
 
