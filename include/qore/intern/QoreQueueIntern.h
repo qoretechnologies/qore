@@ -130,7 +130,29 @@ private:
     DLLLOCAL void pushIntern(QoreValue v);
     DLLLOCAL void insertIntern(QoreValue v);
 
-    DLLLOCAL void clearIntern(ExceptionSink* xsink);
+    //! Releases the values of the nodes taken from the queue when it goes out of scope
+    /** Declared before the queue's lock is taken, so that the values are released after the lock (see
+        design/dgc.md, "Scannable private data"): releasing a value can run a destructor that uses the queue, and a
+        recursive-set scan on the same thread tries the lock (scanMembers()).
+    */
+    class NodeListRelease {
+    public:
+        DLLLOCAL NodeListRelease(ExceptionSink* xsink) : xsink(xsink) {
+        }
+        DLLLOCAL NodeListRelease(const NodeListRelease&) = delete;
+        DLLLOCAL NodeListRelease& operator=(const NodeListRelease&) = delete;
+
+        DLLLOCAL ~NodeListRelease();
+
+        //! the first node of the list taken from the queue, or nullptr
+        QoreQueueNode* head = nullptr;
+
+    private:
+        ExceptionSink* xsink;
+    };
+
+    //! Takes every node from the queue, whose values \a release releases after the lock; called with the lock held
+    DLLLOCAL void takeAllIntern(NodeListRelease& release);
 
     //! Releases the weak reference to a scan holder when it goes out of scope
     /** Declared before the queue's lock is taken, so that the reference is released after the lock: the last weak

@@ -46,6 +46,55 @@ class MapValue {
     }
 }
 
+#! a value whose destructor uses the Queue holding it, so the queue must release it after the queue's lock
+class QueueUser {
+    public {
+        *Queue q;
+        #! the error raised in the destructor by the push, if any
+        static *string error;
+    }
+
+    constructor(*Queue q) {
+        self.q = q;
+    }
+
+    destructor() {
+        Destroyed::count.inc();
+        try {
+            q.push("pushed by the destructor");
+        } catch (hash<ExceptionInfo> ex) {
+            QueueUser::error = ex.err;
+        }
+    }
+}
+
+#! a value whose destructor uses the TreeMap holding it, so the map must release it after the map's lock
+class MapUser {
+    public {
+        *TreeMap tm;
+    }
+
+    constructor(*TreeMap tm) {
+        self.tm = tm;
+    }
+
+    destructor() {
+        Destroyed::count.inc();
+        tm.put("b", "put by the destructor");
+    }
+}
+
+#! holds a TreeMap for the threads of a test, so that the test can release the map whatever the threads still hold
+class MapBox {
+    public {
+        *TreeMap tm;
+    }
+
+    constructor(TreeMap tm) {
+        self.tm = tm;
+    }
+}
+
 #! Tests that values handed out by a container whose values are scanned through private data keep the cycle alive
 /** A Queue or TreeMap hands a value to the caller with its own reference; a recursive set that counted that
     reference as internal still reads the same number of references, now held from outside the set, and must not be
@@ -67,7 +116,12 @@ class DgcHandedOutValuesTest inherits QUnit::Test {
         addTestCase("Queue::get()", \queueGetTest());
         addTestCase("Queue::pop()", \queuePopTest());
         addTestCase("TreeMap::take()", \treeMapTakeTest());
+        addTestCase("TreeMap::put() replacing a value", \treeMapReplaceTest());
+        addTestCase("Queue::clear() releases its values after its lock", \queueClearReleaseTest());
+        addTestCase("Queue::setError() releases its values after its lock", \queueSetErrorReleaseTest());
+        addTestCase("TreeMap::put() releases the value it replaces after its lock", \treeMapPutReleaseTest());
         addTestCase("concurrent takes and scans", \concurrentTest());
+        addTestCase("a value released while a scan counts it", \releasedDuringScanTest());
         set_return_value(main());
     }
 
@@ -117,6 +171,67 @@ class DgcHandedOutValuesTest inherits QUnit::Test {
         assertEq(destroyed + 1, Destroyed::count.getCount(), "the value is destroyed");
     }
 
+    #! a value that TreeMap::put() replaces in a cycle is released after the map's lock
+    /** The map holds the value twice, so the release of one leaves a count below the one the set recorded, and the
+        dereference rescans on the thread that made the put; the scan tries the map's lock, which the put held while
+        it released the value, and debug builds aborted.
+    */
+    treeMapReplaceTest() {
+        int destroyed = Destroyed::count.getCount();
+        TreeMap tm();
+        {
+            MapValue v(tm);
+            tm.put("a", v);
+            tm.put("b", v);
+        }
+        assertSet(tm, "the map and its value");
+        tm.put("a", 1);
+        assertEq(destroyed, Destroyed::count.getCount(), "nothing collected");
+        assertEq(1, tm.get("a"), "the value is replaced");
+        assertSet(tm, "the map and the value it still holds");
+
+        remove tm;
+        assertEq(destroyed + 1, Destroyed::count.getCount(), "the map and its value are collected");
+    }
+
+    #! Queue::clear() releases the values after its lock, so that a destructor can use the queue
+    /** The values were released under the queue's lock, and a destructor that used the queue blocked forever on it.
+        See design/dgc.md, "Scannable private data".
+    */
+    queueClearReleaseTest() {
+        int destroyed = Destroyed::count.getCount();
+        Queue q();
+        q.push(new QueueUser(q));
+        q.clear();
+        assertEq(destroyed + 1, Destroyed::count.getCount(), "the value is destroyed");
+        assertEq(1, q.size(), "the destructor pushed to the queue");
+        assertEq("pushed by the destructor", q.get());
+    }
+
+    #! Queue::setError() releases the values after its lock, so that a destructor can use the queue
+    queueSetErrorReleaseTest() {
+        int destroyed = Destroyed::count.getCount();
+        QueueUser::error = NOTHING;
+        Queue q();
+        q.push(new QueueUser(q));
+        q.setError("QUEUE-TEST-ERROR", "the queue is closed");
+        assertEq(destroyed + 1, Destroyed::count.getCount(), "the value is destroyed");
+        assertEq("QUEUE-TEST-ERROR", QueueUser::error, "the destructor's push sees the queue's error");
+        q.clearError();
+        assertEq(0, q.size());
+    }
+
+    #! TreeMap::put() releases the value it replaces after its lock, so that a destructor can use the map
+    treeMapPutReleaseTest() {
+        int destroyed = Destroyed::count.getCount();
+        TreeMap tm();
+        tm.put("a", new MapUser(tm));
+        tm.put("a", 1);
+        assertEq(destroyed + 1, Destroyed::count.getCount(), "the value is destroyed");
+        assertEq(1, tm.get("a"), "the value is replaced");
+        assertEq("put by the destructor", tm.get("b"), "the destructor put a value in the map");
+    }
+
     #! threads push values that refer back to their queue and take them while the values are scanned
     /** Each push and each take changes the cycle the queue is in, and the scans that follow run while other threads
         take the values the scan reported and release them.  A scan may then commit counts that the values no
@@ -148,6 +263,80 @@ class DgcHandedOutValuesTest inherits QUnit::Test {
             # clearing the queue also releases the cycles made by its values
             q.clear();
         }
+    }
+
+    #! a value released after a scan read it does not keep the scan from making the map's set
+    /** A scan reads the values of a TreeMap under the map's lock and counts the references they hold after releasing
+        it; a value released meanwhile has fewer references than the scan counts as internal.  The scan still makes
+        the set, whose counts RSet::canDelete() does not trust because the map has given up a value since the scan read
+        it: the release rescans, and the cycle that remains is collected once its last outside reference goes.  A scan
+        that made no set for the component left the map and the value it still holds in no set, and they were never
+        collected.  See design/dgc.md, "Values handed out by a container".
+    */
+    releasedDuringScanTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs library debugging for the scan and dereference holds");
+        }
+        int destroyed = Destroyed::count.getCount();
+        # the threads reach the map through the box, which the test empties before the map's collection is checked:
+        # a reference that a thread held would otherwise be released when the thread ends, after the check
+        MapBox box(new TreeMap());
+        {
+            # the map holds the value twice, so that replacing one leaves a cycle
+            MapValue v(box.tm);
+            box.tm.put("a", v);
+            box.tm.put("b", v);
+        }
+        assertSet(box.tm, "the map and its value");
+
+        # the scan is held once it has read the map's values and entered the value
+        Counter scan_held(1);
+        Counter scan_release(1);
+        # the release of the value replaced is held once it has taken its count, before it reads the value's set
+        Counter deref_held(1);
+        Counter deref_release(1);
+        Counter scanned(1);
+        Counter done(2);
+        # an assertion that fails releases every hold and waits for the threads
+        on_exit {
+            if (scan_release.getCount()) {
+                scan_release.dec();
+            }
+            if (deref_release.getCount()) {
+                deref_release.dec();
+            }
+            done.waitForZero();
+        }
+
+        call_function("dbg_hold_scan_walked", "TreeMap", scan_held, scan_release);
+        background sub (MapBox b) {
+            on_exit done.dec();
+            on_exit scanned.dec();
+            call_function("dbg_rset_scan", (b.tm,), 0, True);
+        }(box);
+        scan_held.waitForZero();
+
+        call_function("dbg_hold_deref_decide", "MapValue", deref_held, deref_release);
+        background sub (MapBox b) {
+            on_exit done.dec();
+            # the map releases the value it replaces
+            b.tm.put("a", 1);
+        }(box);
+        deref_held.waitForZero();
+
+        # the scan counts two references from the map to a value that now has one
+        scan_release.dec();
+        scanned.waitForZero();
+        assertSet(box.tm, "the scan made the map's set");
+
+        # the release rescans, and the map and its value are a cycle again
+        deref_release.dec();
+        done.waitForZero();
+        assertSet(box.tm, "the map and its value after the release");
+        assertEq(destroyed, Destroyed::count.getCount(), "nothing collected");
+
+        box.tm = NOTHING;
+        assertEq(destroyed + 1, Destroyed::count.getCount(), "the map and its value are collected");
     }
 
     #! one thread's operations: a push followed by one of the ways to take values

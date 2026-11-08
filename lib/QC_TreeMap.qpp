@@ -165,12 +165,17 @@ v = tm.get("def/g/hi/five", \h.unmatched);  # returns "5" and h.unmatched is "fi
 }
 
 void TreeMapData::destructor(ExceptionSink* xsink) {
-    QoreAutoRWWriteLocker al(rwl);
-    for (Map::iterator i = data.begin(), e = data.end(); i != e; ++i) {
+    // the values are released after the lock: releasing one can run destructors and scans, and a scan on this thread
+    // tries the lock (scanMembers()), which it must not do while this thread holds it
+    Map values;
+    {
+        QoreAutoRWWriteLocker al(rwl);
+        values.swap(data);
+        scan_count = 0;
+    }
+    for (Map::iterator i = values.begin(), e = values.end(); i != e; ++i) {
         i->second.discard(xsink);
     }
-    data.clear();
-    scan_count = 0;
 }
 
 void TreeMapData::put(QoreObject* self, const QoreStringNode* key, const QoreValue value, ExceptionSink* xsink) {
@@ -185,6 +190,10 @@ void TreeMapData::put(QoreObject* self, const QoreStringNode* key, const QoreVal
 
     bool new_needs_scan = needs_scan(value);
 
+    // the value replaced is released after the lock (see design/dgc.md, "Scannable private data"): releasing it can
+    // rescan the recursive set of this map's object on this thread, and the scan tries the lock (scanMembers()); it
+    // can also run a destructor that uses the map
+    ValueHolder old_value(xsink);
     {
         QoreAutoRWWriteLocker al(rwl);
 
@@ -196,11 +205,11 @@ void TreeMapData::put(QoreObject* self, const QoreStringNode* key, const QoreVal
         if (it != data.end()) {
             old_needs_scan = needs_scan(it->second);
             if (old_needs_scan) {
-                // the value is released under the lock, which can take a reference that the object's recursive set
-                // counts as internal (see RObject::remove_gen)
+                // the value is given up under the lock, and its release can take a reference that the object's
+                // recursive set counts as internal (see RObject::remove_gen)
                 qore_object_private::get(*self)->edgesRemoved();
             }
-            it->second.discard(xsink);
+            old_value = it->second;
             // Reuse the existing map entry
             it->second = value.refSelf();
         } else {

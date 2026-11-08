@@ -16966,7 +16966,7 @@ static QoreValue f_dbg_hold_object_lock(const QoreListNode* params, RuntimeConfi
 }
 
 namespace {
-//! an armed hold of dbg_hold_scan()
+//! an armed hold of dbg_hold_scan() or dbg_hold_scan_walked()
 struct ScanRootHold {
     std::string cls;
     Counter* held;
@@ -16974,10 +16974,13 @@ struct ScanRootHold {
 };
 
 std::mutex scan_root_hold_lock;
+//! the holds of dbg_hold_scan(), guarded by scan_root_hold_lock
 std::vector<ScanRootHold> scan_root_holds;
+//! the holds of dbg_hold_scan_walked(), guarded by scan_root_hold_lock
+std::vector<ScanRootHold> scan_walked_holds;
 
-//! runs in a scan once it holds the rsection of its root; holds the first pass whose root matches an armed hold
-void dbg_scan_root_hold_hook(RObject& root) {
+//! holds the pass if its root matches a hold armed in \a holds; the hold is used once
+void dbg_run_scan_hold(std::vector<ScanRootHold>& holds, RObject& root) {
     const char* name = root.getName();
     if (!name) {
         return;
@@ -16987,11 +16990,11 @@ void dbg_scan_root_hold_hook(RObject& root) {
     ReferenceHolder<Counter> release(&xsink);
     {
         std::lock_guard<std::mutex> l(scan_root_hold_lock);
-        for (auto i = scan_root_holds.begin(), e = scan_root_holds.end(); i != e; ++i) {
+        for (auto i = holds.begin(), e = holds.end(); i != e; ++i) {
             if (i->cls == name) {
                 held = i->held;
                 release = i->release;
-                scan_root_holds.erase(i);
+                holds.erase(i);
                 break;
             }
         }
@@ -17003,6 +17006,37 @@ void dbg_scan_root_hold_hook(RObject& root) {
     if (!xsink) {
         release->waitForZero(&xsink);
     }
+}
+
+//! runs in a scan once it holds the rsection of its root; holds the first pass whose root matches an armed hold
+void dbg_scan_root_hold_hook(RObject& root) {
+    dbg_run_scan_hold(scan_root_holds, root);
+}
+
+//! runs in a scan once it has walked the graph; holds the first pass whose root matches an armed hold
+void dbg_scan_walked_hold_hook(RObject& root) {
+    dbg_run_scan_hold(scan_walked_holds, root);
+}
+
+//! arms a hold in \a holds from the arguments of dbg_hold_scan() or dbg_hold_scan_walked()
+/** @return true if an exception was raised
+*/
+bool dbg_arm_scan_hold(std::vector<ScanRootHold>& holds, const QoreListNode* params, ExceptionSink* xsink) {
+    QoreStringNodeValueHelper cls(get_param_value(params, 0));
+    ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return true;
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return true;
+    }
+    std::lock_guard<std::mutex> l(scan_root_hold_lock);
+    holds.push_back({cls->c_str(), *held, *release});
+    // the armed hold owns the references now
+    held.release();
+    release.release();
+    return false;
 }
 }
 
@@ -17016,24 +17050,30 @@ void dbg_scan_root_hold_hook(RObject& root) {
     @param release the pass goes on when this Counter reaches zero
 */
 static QoreValue f_dbg_hold_scan(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    QoreStringNodeValueHelper cls(get_param_value(params, 0));
-    ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
-    if (*xsink) {
+    if (dbg_arm_scan_hold(scan_root_holds, params, xsink)) {
         return QoreValue();
-    }
-    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
-    {
-        std::lock_guard<std::mutex> l(scan_root_hold_lock);
-        scan_root_holds.push_back({cls->c_str(), *held, *release});
-        // the armed hold owns the references now
-        held.release();
-        release.release();
     }
     // the hook stays installed; it does nothing while no hold is armed
     RSetHelper::dbg_root_locked.store(dbg_scan_root_hold_hook, std::memory_order_release);
+    return QoreValue();
+}
+
+//! holds the next pass of a recursive-reference scan whose root is an object of a class once it has walked the graph
+/** The pass holds the rsections of the objects it entered until \a release reaches zero, after it has read the
+    values of the containers in their private data and before it counts the references within each component; a
+    container can give up a value meanwhile, and tests use this to make that deterministic.  Each call arms one hold,
+    which is used once.
+
+    @param cls the class name of the root
+    @param held decremented once the pass has walked the graph
+    @param release the pass goes on when this Counter reaches zero
+*/
+static QoreValue f_dbg_hold_scan_walked(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    if (dbg_arm_scan_hold(scan_walked_holds, params, xsink)) {
+        return QoreValue();
+    }
+    // the hook stays installed; it does nothing while no hold is armed
+    RSetHelper::dbg_scan_walked.store(dbg_scan_walked_hold_hook, std::memory_order_release);
     return QoreValue();
 }
 
@@ -19271,6 +19311,9 @@ void init_debug_functions(QoreNamespace& qns) {
         nothingTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
     qns.addBuiltinVariant("dbg_hold_scan", f_dbg_hold_scan, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "cls", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
+    qns.addBuiltinVariant("dbg_hold_scan_walked", f_dbg_hold_scan_walked, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "cls", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
     qns.addBuiltinVariant("dbg_rset_scan", f_dbg_rset_scan, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

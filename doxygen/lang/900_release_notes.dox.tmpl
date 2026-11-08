@@ -1449,6 +1449,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::Thread::Queue::clear() "Queue::clear()", @ref Qore::Thread::Queue::setError() "Queue::setError()" and
+      @ref Qore::TreeMap::put() "TreeMap::put()" released values while holding the container's lock, so a destructor of
+      a released value that used the same container deadlocked; the values are now released after the lock
     - a separated module required by the path of its <tt>.qm</tt> file
       (<tt>%requires ../lib/ModuleName/ModuleName.qm</tt>) was loaded without its other files, so its classes and
       functions were missing; the whole module is loaded, as with the path of its directory (see
