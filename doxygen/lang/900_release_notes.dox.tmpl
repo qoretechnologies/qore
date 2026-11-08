@@ -1535,6 +1535,11 @@
     - in AOT-compiled code, a function called directly from compiled code left an entry on the runtime stack for each
       local variable of its own that is visible to the runtime at each call, so a loop of such calls in top-level code
       took time quadratic in the number of iterations, and memory grew with it
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the operands of a
+      comparison, \c instanceof, \c exists or a slice, and the elements of a list that is the source of \c map,
+      \c select or the hash \c map operators, were destroyed when the statement ended instead of when the operator
+      had run (ex: <tt>f(new T("a") == new T("b"), g())</tt> destroyed the objects after \c g() ran); they are now
+      destroyed when the operator has run, as with the AST interpreter
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the arguments of a
       call are now destroyed last argument first when the call returns, as with the AST interpreter (they were
       destroyed first argument first in calls of closures, of static methods and from top-level code, and of

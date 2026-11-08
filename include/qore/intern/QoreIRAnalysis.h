@@ -184,7 +184,7 @@ constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
 /** When an exception leaves an expression, the AST interpreter unwinds its evaluation: the arguments of each call (and
     the elements of each list or hash) whose evaluation the exception interrupted are released with their argument
     list, first argument first, the innermost call's first, and an operand that an operator holds is released as the
-    operator is unwound; a receiver (the object of a method call, the container of [], {} or a slice, the value of a
+    operator is unwound; a receiver (the object of a method call, the container of [] or {}, the value of a
     cast), which the statement holds until it ends (QoreStatementTempScope::holdReceiver()), is released last, last
     held first.  An engine that releases a statement's temporaries last registered first gives another order
     (f(new T("a"), new T("b"), thr()) destroys b before a).

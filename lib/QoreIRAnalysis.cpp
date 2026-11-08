@@ -585,7 +585,8 @@ static QoreIROpcode qore_ir_release_class_opcode(const QoreIRInstruction* inst) 
 
 // returns true for an operation whose first operand the AST interpreter holds as a receiver until the end of the
 // statement (QoreStatementTempScope::holdReceiver(): QoreDotEvalOperatorNode, QoreCastOperatorNode,
-// QoreHashObjectDereferenceOperatorNode, QoreSquareBracketsOperatorNode, QoreSquareBracketsRangeOperatorNode)
+// QoreHashObjectDereferenceOperatorNode, QoreSquareBracketsOperatorNode); a slice
+// (QoreSquareBracketsRangeOperatorNode) releases its sequence when it returns, as an operator releases an operand
 static bool qore_ir_opcode_holds_receiver(QoreIROpcode op) {
     switch (op) {
         case QoreIROpcode::DotEvalAny:
@@ -609,9 +610,6 @@ static bool qore_ir_opcode_holds_receiver(QoreIROpcode op) {
         case QoreIROpcode::HashDerefDynamic:
         case QoreIROpcode::ListIndexAccess:
         case QoreIROpcode::ListIndexDynamic:
-        case QoreIROpcode::RangeSliceAny:
-        case QoreIROpcode::RangeSliceInt:
-        case QoreIROpcode::RangeSliceFloat:
             return true;
         default:
             return false;

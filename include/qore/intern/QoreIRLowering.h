@@ -639,6 +639,19 @@ private:
     //! Returns true when a concrete constant container can be loaded once instead of rebuilt per read
     bool constantContainerLoadsByReference(const QoreValue& expr) const;
 
+    //! Lowers an expression (see lowerExpression(), which records the value of a functional operator's source)
+    QoreIRValue lowerExpressionImpl(const QoreValue& expr, std::string& error);
+
+    //! The source of a functional operator being lowered and the value it gave, for its release after the operator
+    struct FunctionalSourceCapture {
+        const AbstractQoreNode* node = nullptr;
+        QoreIRValue value;
+    };
+    //! The sources of the functional operators being lowered, innermost last
+    std::vector<FunctionalSourceCapture> functional_source_captures;
+    //! Releases the temporary that a functional operator's source gave once the operator has run (see the definition)
+    class FunctionalSourceRelease;
+
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
     const AOTConstantReverseMap* constant_reverse_map = nullptr;

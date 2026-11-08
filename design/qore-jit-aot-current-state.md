@@ -673,7 +673,7 @@ When an exception leaves an expression, the AST interpreter unwinds its evaluati
 of each call (and the elements of each list or hash literal) evaluated before the exception are
 released with their argument list, first argument first, the innermost call's first, and an
 operand that an operator holds is released as the operator is unwound; a receiver (the object of a
-method call, the container of `[]`, `{}` or a slice, the value of a cast, the callable of a call
+method call, the container of `[]` or `{}`, the value of a cast, the callable of a call
 through a call reference) is held by the statement (`QoreStatementTempScope::holdReceiver()`) and
 released when it ends, last held first. The compiled modes register a statement's temporaries as
 they are created and release them last registered first, which gave another order
@@ -692,6 +692,25 @@ an object, `QoreTypeInfo::needsScan()`) differs from the error return's (`getOrd
 a statement with more than 256 temporaries keeps the error return's order, as each exception check
 orders the temporaries registered before it).
 `ExceptionTempReleaseOrder.qtest`.
+
+The AST interpreter evaluates the operands of an operator into holders that the operator releases
+when it returns, and a functional operator (`map`, `select`, `foldl`, `foldr`, map-select and the
+hash `map` operators) holds its source until it returns, so `f(new T("a") == new T("b"), g())`
+destroys `b` and `a` before `g()` runs. The compiled modes release a statement's temporaries when
+the statement ends unless an instruction releases them earlier, so the lowering emits
+`ReleaseOwnedTemp` for the operands of comparisons, `instanceof`, `exists` and slices that are calls
+once the operator has run (`qore_ir_release_operator_operand_temps()`; their values hold no reference
+to an operand's temporary; another operand's value can be a variable's or an implicit argument's,
+whose element slot a later `$1` reads again, and an operand whose type cannot hold an object is
+skipped), and for the value of
+the source of `map`, `select`, map-select and the hash `map` operators once the operator is lowered
+(`QoreIRLowering::FunctionalSourceRelease`, which records the source's value in `lowerExpression()`;
+the iterator of the loop holds a reference of its own). Only a temporary list is released (a call, a
+slice or another functional operator of a list type; for a fused pipeline, its base source): over a single value the compiled modes give the value itself, and a
+fold gives one of its source's elements without a reference of its own, so the source of `foldl`
+and `foldr`, and a source of another type, stay with the statement. `ReleaseOwnedTemp` releases a
+value only when the frame owns it as a temporary, so an operand read from a variable is left alone.
+`OperatorOperandRelease.qtest`.
 
 The runtime frame wrapper (`execJITWithDeopt()`) pushes the body locals of a native function that
 need runtime storage (not IR-only, not closure-bound) on the thread's local variable stack and pops
