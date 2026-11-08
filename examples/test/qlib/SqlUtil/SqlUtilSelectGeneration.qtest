@@ -352,7 +352,9 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         assertNeq("", mem.getSelectSql(sh, \args));
 
         # change the table's definition outside of any SqlUtil table object
-        ds.execRaw("alter table " + q(tmp_table) + " add column extra integer");
+        # the syntax of every database: Oracle and SQL Server have no COLUMN keyword in "add", and Sybase adds a
+        # column only with an explicit null
+        ds.execRaw("alter table " + q(tmp_table) + " add extra integer null");
         ds.commit();
 
         # generation must see the new column without anything being cleared
