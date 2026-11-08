@@ -16491,11 +16491,13 @@ std::mutex dbg_submit_after_close_m;
 Counter* dbg_submit_after_close = nullptr;
 //! decremented when the submit is reached, before it waits
 Counter* dbg_submit_reached = nullptr;
+//! set once the submit was reached: only the closes after it are counted
+bool dbg_submit_reached_fired = false;
 }
 
 void qore_dbg_http_note_closed() {
     std::lock_guard<std::mutex> l(dbg_submit_after_close_m);
-    if (dbg_submit_after_close && dbg_submit_after_close->getCount()) {
+    if (dbg_submit_after_close && dbg_submit_reached_fired && dbg_submit_after_close->getCount()) {
         ExceptionSink xsink;
         dbg_submit_after_close->dec(&xsink);
         xsink.clear();
@@ -16514,13 +16516,16 @@ void qore_dbg_http_wait_submit_after_close() {
         c->ref();
         reached = dbg_submit_reached;
         dbg_submit_reached = nullptr;
+        // the closes counted from now on are the ones that the test has the server make
+        dbg_submit_reached_fired = true;
     }
     ExceptionSink xsink;
     if (reached) {
         reached->dec(&xsink);
         reached->deref(&xsink);
     }
-    c->waitForZero(&xsink);
+    // a hang guard only: the test's server closes the connection once reached is decremented
+    c->waitForZero(&xsink, 60000);
     {
         std::lock_guard<std::mutex> l(dbg_submit_after_close_m);
         if (dbg_submit_after_close == c) {
@@ -16562,6 +16567,7 @@ static QoreValue f_dbg_http_submit_after_close(const QoreListNode* params, Runti
     }
     dbg_submit_after_close = c;
     dbg_submit_reached = reached;
+    dbg_submit_reached_fired = false;
     return QoreValue();
 }
 
@@ -16577,6 +16583,7 @@ static QoreValue f_dbg_http_submit_after_close_clear(const QoreListNode* params,
             dbg_submit_reached->deref(xsink);
             dbg_submit_reached = nullptr;
         }
+        dbg_submit_reached_fired = false;
     }
     if (c) {
         c->deref(xsink);

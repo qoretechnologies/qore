@@ -9265,9 +9265,8 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         return rv.release();
     };
 
-    if (conn->isClosed()) {
-        // Rare: the connection transitioned to CLOSED between async acquire
-        // and here.
+    // the error of a connection found closed, as the poll operation reports it
+    auto closed_conn_error = [&] () -> QoreObject* {
         ReferenceHolder<QoreHashNode> err_info(
             conn->getReferencedErrorInfo(), xsink);
         std::string err_str = "HTTP-CLIENT-CONNECT-ERROR";
@@ -9285,6 +9284,45 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             }
         }
         return deferred_error(err_str, desc_str);
+    };
+
+    // true if the submit failed because the connection was closed meanwhile: the connection is closed and the error
+    // is the one a submit on a closed connection raises (the connection's own error, or the closed-state error)
+    auto closed_submit_error = [&] () -> bool {
+        if (!*xsink || !conn->isClosed()) {
+            return false;
+        }
+        QoreStringValueHelper err(xsink->getExceptionErr());
+        if (!strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR")) {
+            return true;
+        }
+        ExceptionSink info_xsink;
+        ReferenceHolder<QoreHashNode> err_info(conn->getReferencedErrorInfo(), &info_xsink);
+        if (!err_info) {
+            return false;
+        }
+        QoreValue ev = err_info->getKeyValue("err");
+        if (ev.getType() != NT_STRING) {
+            return false;
+        }
+        QoreStringValueHelper conn_err(ev);
+        return !strcmp(err->c_str(), conn_err->c_str());
+    };
+
+    // reports the error of a submit on a connection closed meanwhile through the poll operation
+    auto deferred_submit_error = [&] () -> QoreObject* {
+        QoreStringValueHelper err(xsink->getExceptionErr());
+        QoreStringValueHelper desc(xsink->getExceptionDesc());
+        std::string err_str(err->c_str());
+        std::string desc_str(desc->c_str());
+        xsink->clear();
+        return deferred_error(err_str, desc_str);
+    };
+
+    if (conn->isClosed()) {
+        // Rare: the connection transitioned to CLOSED between async acquire
+        // and here.
+        return closed_conn_error();
     }
 
     // An ALPN-negotiating connection is transitional and cannot carry a request.
@@ -9330,15 +9368,10 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
 #endif
         int64_t stream_id = conn->submitRequestWithAction(method, msgpath,
             *nh, data, size, action, xsink);
-        if (*xsink && conn->isClosed()) {
+        if (closed_submit_error()) {
             // the server closed the connection after it was found ready (the I/O thread marked it closed in the
             // meantime): reported like a connection found closed above
-            QoreStringValueHelper err(xsink->getExceptionErr());
-            QoreStringValueHelper desc(xsink->getExceptionDesc());
-            std::string err_str(*err ? err->c_str() : "HTTP1-CONNECTION-CLOSED");
-            std::string desc_str(*desc ? desc->c_str() : "server closed the connection");
-            xsink->clear();
-            return deferred_error(err_str, desc_str);
+            return deferred_submit_error();
         }
         if (*xsink || stream_id < 0) {
             mgr.releaseConnection(conn);
@@ -9374,39 +9407,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
                 // poll op, not synchronously — same rationale as the early
                 // isClosed() path above (SSE async connect test expects
                 // SOCKET-CONNECT-ERROR to come through drivePoll()).
-                ReferenceHolder<QoreHashNode> err_info(
-                    conn->getReferencedErrorInfo(), xsink);
-                std::string err_str = "HTTP-CLIENT-CONNECT-ERROR";
-                std::string desc_str = "connection closed before poll send/recv request";
-                if (err_info) {
-                    QoreValue ev = err_info->getKeyValue("err");
-                    QoreValue dv = err_info->getKeyValue("desc");
-                    if (ev.getType() == NT_STRING) {
-                        QoreStringValueHelper err(ev);
-                        err_str = err->c_str();
-                    }
-                    if (dv.getType() == NT_STRING) {
-                        QoreStringValueHelper desc(dv);
-                        desc_str = desc->c_str();
-                    }
-                }
-                mgr.closeAndEvict(conn, xsink);
-                release_local_conn_ref();
-
-                notifier_holder->notify();
-
-                poller = new HttpClientConnMgrPollOp(err_str.c_str(),
-                    desc_str.c_str(), notifier_for_op, this, self);
-
-                SocketPollOperationBase* p = *poller;
-                ReferenceHolder<QoreObject> rv(
-                    new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
-                if (!*xsink) {
-                    p->setSelf(*rv);
-                    rv->setValue("sock", notifier_obj.release(), xsink);
-                    rv->setValue("goal", new QoreStringNode("received"), xsink);
-                }
-                return rv.release();
+                return closed_conn_error();
             }
             // READY now — fall into the fast-path synchronous submit.
             AbstractAsyncAction* action = streaming_response
@@ -9421,14 +9422,9 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
 #endif
             int64_t stream_id = conn->submitRequestWithAction(method,
                 msgpath, *nh, data, size, action, xsink);
-            if (*xsink && conn->isClosed()) {
+            if (closed_submit_error()) {
                 // closed by the server meanwhile: reported by the poll operation, as above
-                QoreStringValueHelper err(xsink->getExceptionErr());
-                QoreStringValueHelper desc(xsink->getExceptionDesc());
-                std::string err_str(*err ? err->c_str() : "HTTP1-CONNECTION-CLOSED");
-                std::string desc_str(*desc ? desc->c_str() : "server closed the connection");
-                xsink->clear();
-                return deferred_error(err_str, desc_str);
+                return deferred_submit_error();
             }
             if (*xsink || stream_id < 0) {
                 mgr.releaseConnection(conn);
