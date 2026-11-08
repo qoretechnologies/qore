@@ -84,6 +84,8 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("a sandboxed thread loading a module is refused trusted registrations", \sandboxedModuleLoadTest());
         addTestCase("a sandboxed thread loading a module is refused a lazy value that is not built",
             \sandboxedValueLoadTest());
+        addTestCase("lazy values whose builders need each other end with an error instead of a deadlock",
+            \valueCycleTest());
         addTestCase("a sandboxed reader is refused the worker while the worker waits for its initialization",
             \workerCycleTest());
         addTestCase("deregistering an app during its initialization retains nothing", \deregistrationTest());
@@ -485,6 +487,17 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
     }
 
+    valueCycleTest() {
+        # two threads build two values whose builders need each other
+        Counter done(2);
+        Queue results();
+        background LazyAppActionsSafetyTest::getValue(Values::cycle_a, done, results);
+        background LazyAppActionsSafetyTest::getValue(Values::cycle_b, done, results);
+        assertEq(0, done.waitForZero(Deadline), "neither thread waits for ever");
+        assertEq(("DATA-PROVIDER-LAZY-VALUE-ERROR", "DATA-PROVIDER-LAZY-VALUE-ERROR"),
+            (results.get(), results.get()));
+    }
+
     sandboxedValueLoadTest() {
         string result = "not run";
         # what the module's initialization does under the sandbox of the Program loading it: it reads the value
@@ -853,6 +866,16 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
             "sub read(string app) { DataProviderActionCatalog::getActions(app, False); }\n", "lazy-reader");
         reader.setSandboxManager(sm);
         return reader;
+    }
+
+    #! Gets a lazy value in a thread of the test, and returns the value or the error
+    private static getValue(int id, Counter done, Queue results) {
+        on_exit done.dec();
+        try {
+            results.push(DataProviderActionCatalog::getLazyValue(id));
+        } catch (hash<ExceptionInfo> ex) {
+            results.push(ex.err);
+        }
     }
 
     #! Reads an app in a thread of the test while it holds a lock

@@ -1370,7 +1370,7 @@ public class DataProviderActionCatalog {
         */
         static *code lazy_worker_start = DataProviderActionCatalog::initLazyWorker();
 
-        #! Lazy values: ID -> \c builder, \c governed, \c value, \c built and the \c lock that serializes building
+        #! Lazy values: ID -> \c builder, \c governed, \c value and \c built; see buildLazyValue()
         /** See registerLazyValue()
         */
         static hash<string, hash<auto>> lazy_values = {};
@@ -1438,6 +1438,9 @@ public class DataProviderActionCatalog {
         const InitLazyActions = (1 << 3);
         #! Deferred initialization of an app: everything deferred
         const InitAll = InitPendingApp | InitPendingActions | InitLazyActions;
+
+        #! The build of a lazy value, in @ref init_owners: no getter of an app initializes it
+        const InitValue = (1 << 6);
 
         #! What a thread waiting for the catalog worker waits for in @ref init_waits, which is never an application name
         const LazyWorkerKey = "<catalog-worker>";
@@ -1683,7 +1686,6 @@ class MyProvider {
             v = {
                 "builder": governed ? SandboxManager::bindCall(builder) : builder,
                 "governed": governed,
-                "lock": new Mutex(),
             };
         }
         AutoLock al(lazy_worker_lck);
@@ -1713,7 +1715,7 @@ class MyProvider {
             return v.value;
         }
         if (v.governed || !DataProviderActionCatalog::isGoverned() || DataProviderActionCatalog::isLazyWorker()) {
-            DataProviderActionCatalog::buildLazyValue(key);
+            return DataProviderActionCatalog::buildLazyValue(key);
         } else {
             # as for lazy registrations (see runLazy()): a sandboxed thread loading a module cannot wait for the worker,
             # whose builder can load the module that this thread is loading
@@ -5130,16 +5132,36 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         DataProviderActionCatalog::runOnWorker({"app": app});
     }
 
-    #! Builds a lazy value unless it is built; see getLazyValue()
-    private:internal static buildLazyValue(string key) {
-        hash<auto> v = lazy_values{key};
-        AutoLock al(v.lock);
+    #! Builds a lazy value unless it is built, and returns it; see getLazyValue()
+    /** One thread builds a value at a time, as one thread initializes an app (see enterInit()): another thread that
+        needs the value meanwhile waits for it, unless it is loading a module, or the wait would close a cycle of
+        waits; such a thread builds a copy of the value for itself, which is not kept.  A value whose builder needs
+        the value itself, directly or through other values, cannot be built.
+
+        @throw DATA-PROVIDER-LAZY-VALUE-ERROR the value is needed while this thread builds it
+    */
+    private:internal static auto buildLazyValue(string key) {
         if (lazy_values{key}.built) {
-            return;
+            return lazy_values{key}.value;
         }
-        auto value = v.builder();
-        lazy_values{key}.value = value;
-        lazy_values{key}.built = True;
+        string owner_key = "<value:" + key + ">";
+        if (init_owners{owner_key}.tid == gettid()) {
+            throw "DATA-PROVIDER-LAZY-VALUE-ERROR", sprintf("lazy value %s is needed by its own builder", key);
+        }
+        *Counter done = DataProviderActionCatalog::enterInit(owner_key, InitValue);
+        # ending the build cannot fail
+        on_exit if (done) {
+            DataProviderActionCatalog::exitInit(owner_key, done);
+        }
+        if (lazy_values{key}.built) {
+            return lazy_values{key}.value;
+        }
+        auto value = lazy_values{key}.builder();
+        if (done) {
+            lazy_values{key}.value = value;
+            lazy_values{key}.built = True;
+        }
+        return value;
     }
 
     #! Returns @ref True if the current thread is the catalog worker
