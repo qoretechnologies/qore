@@ -34,6 +34,8 @@
 #include <qore/Restrictions.h>
 #include <qore/QoreCounter.h>
 #include <qore/QoreSandboxManager.h>
+#include <chrono>
+#include "qore/intern/QoreThreadList.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/QoreLibIntern.h"
@@ -4145,6 +4147,87 @@ QoreListNode* QoreProgram::getThreadList() const {
 
 unsigned QoreProgram::getThreadCount() const {
    return priv->getThreadCount();
+}
+
+bool QoreProgram::waitForThreads(ExceptionSink* xsink, int64 timeout_ms, int tid) const {
+    if (tid < 0) {
+        xsink->raiseException("PROGRAM-THREAD-ERROR", "thread ID must be nonnegative");
+        return false;
+    }
+    AutoLocker al(priv->plock);
+    if ((!tid && (priv->tidmap.find(q_gettid()) != priv->tidmap.end() || priv->parse_tid == q_gettid()))
+            || tid == q_gettid()) {
+        xsink->raiseException("PROGRAM-THREAD-ERROR", "cannot wait for the calling thread's Program activity");
+        return false;
+    }
+    auto now = std::chrono::steady_clock::now();
+    int64 max_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::time_point::max() - now).count();
+    auto deadline = now + std::chrono::milliseconds(timeout_ms > 0 ? std::min(timeout_ms, max_ms) : 0);
+    while (tid ? priv->tidmap.find(tid) != priv->tidmap.end() : (priv->thread_count || priv->parse_count)) {
+        int64 remaining = -1;
+        if (timeout_ms >= 0) {
+            remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - std::chrono::steady_clock::now()).count();
+            if (remaining <= 0) {
+                return false;
+            }
+        }
+        ++priv->thread_waiting;
+        int rc = remaining < 0 ? priv->pcond.waitWithInterrupt(&priv->plock, xsink)
+            : priv->pcond.waitWithInterrupt(&priv->plock, remaining, xsink);
+        --priv->thread_waiting;
+        if (rc == QORE_COND_RESULT_INTERRUPTED) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool QoreProgram::cancelThread(int tid, const char* reason, ExceptionSink* xsink) const {
+    if (tid <= 0 || tid == q_gettid()) {
+        xsink->raiseException("PROGRAM-THREAD-ERROR", "cannot cancel invalid thread ID %d or the calling thread", tid);
+        return false;
+    }
+    {
+        AutoLocker al(priv->plock);
+        if (priv->tidmap.find(tid) == priv->tidmap.end()) {
+            return false;
+        }
+    }
+    // Do not hold the Program lock while acquiring the thread registry lock. If the TID was
+    // recycled, the cancellation checkpoint rejects the request outside this Program's scope.
+    return !thread_list.cancelThread(tid, reason, getProgramId());
+}
+
+unsigned QoreProgram::cancelThreads(ExceptionSink* xsink, const char* reason) const {
+    std::vector<int> tids;
+    {
+        AutoLocker al(priv->plock);
+        if (priv->tidmap.find(q_gettid()) != priv->tidmap.end()) {
+            xsink->raiseException("PROGRAM-THREAD-ERROR", "cannot cancel all threads from inside the Program");
+            return 0;
+        }
+        unsigned checked = 0;
+        for (auto& i : priv->tidmap) {
+            if (!(checked++ % 100) && qore_check_cancel(xsink, "Program::cancelThreads()")) {
+                return 0;
+            }
+            tids.push_back(i.first);
+        }
+        priv->cancel_new_threads = !!priv->thread_count;
+    }
+    unsigned count = 0;
+    unsigned checked = 0;
+    for (int tid : tids) {
+        if (!(checked++ % 100) && qore_check_cancel(xsink, "Program::cancelThreads()")) {
+            return count;
+        }
+        if (!thread_list.cancelThread(tid, reason, getProgramId())) {
+            ++count;
+        }
+    }
+    return count;
 }
 
 AbstractQoreProgramExternalData::~AbstractQoreProgramExternalData() {

@@ -104,6 +104,8 @@ public:
         }
         // the next hashdecl allocated can reuse these addresses
         qore_purge_derived_types(thd, typeInfo, orNothingTypeInfo);
+        // method dispatch caches keyed by these type pointers must miss from now on
+        qore_bump_method_dispatch_epoch();
         delete typeInfo;
         delete orNothingTypeInfo;
         delete parse_parent;

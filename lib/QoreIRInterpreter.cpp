@@ -4263,7 +4263,12 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     int8_t state = inst->inline_ir_state.load(std::memory_order_acquire);
     const QoreClass* object_class = self->getClass();
     if (state > 0) {
-        if (inst->cached_object_class != object_class || !inst->cached_method) {
+        // The cache can outlive the class it names: a call site in one Program calling an object of a class from a
+        // child Program keeps its cache when that Program is destroyed, and a later class can be allocated at the
+        // same address.  The serial of the live receiver's class proves that the cached class, and therefore the
+        // cached method, is this receiver's and still alive.
+        if (inst->cached_object_class != object_class || !inst->cached_method
+                || inst->cached_object_class_serial != qore_class_private::get(*object_class)->getInstanceSerial()) {
             return false;
         }
         if (!inst->cached_method->isPrivate()) {
@@ -4279,7 +4284,10 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     }
 
     if (state > 0) {
-        if (inst->cached_class_ctx != class_ctx) {
+        // the class context is live (it is the running code's class), so its serial can be read; the pointer
+        // alone could match a destroyed class whose address was reused
+        if (inst->cached_class_ctx != class_ctx
+                || inst->cached_class_ctx_serial != (class_ctx ? class_ctx->getInstanceSerial() : 0)) {
             return false;
         }
         return executeInterpreterInlineIRMethodTarget(inst, inst->cached_method, self, nullptr,
@@ -4331,7 +4339,9 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     }
 
     inst->cached_object_class = object_class;
+    inst->cached_object_class_serial = qore_class_private::get(*object_class)->getInstanceSerial();
     inst->cached_class_ctx = class_ctx;
+    inst->cached_class_ctx_serial = class_ctx ? class_ctx->getInstanceSerial() : 0;
     inst->cached_method = method;
     state = ensureInterpreterResolvedInlineIRCallState(inst, method, variant, caller_pgm, nargs, true, true);
     if (state <= 0) {
@@ -4341,6 +4351,20 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     return executeInterpreterInlineIRMethodTarget(inst, method, self, nullptr,
         state, args, nargs, result, xsink, may_invalidate_external_caches);
 }
+
+#ifdef DEBUG
+bool qore_ir_dbg_try_inline_dot_eval_method(QoreIRDotEvalMethodDirectInstruction* inst, QoreValue base,
+        const char* method_name, QoreProgram* caller_pgm, QoreValue& result, ExceptionSink* xsink) {
+    return tryExecuteInterpreterInlineIRDotEvalMethod(inst, base, method_name, nullptr, caller_pgm, nullptr, 0,
+        result, xsink);
+}
+
+bool qore_ir_dbg_try_inline_dot_eval_method(QoreIRInvokeDotEvalMethodDirectInstruction* inst, QoreValue base,
+        const char* method_name, QoreProgram* caller_pgm, QoreValue& result, ExceptionSink* xsink) {
+    return tryExecuteInterpreterInlineIRDotEvalMethod(inst, base, method_name, nullptr, caller_pgm, nullptr, 0,
+        result, xsink);
+}
+#endif
 
 static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInstruction* inst,
         QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,

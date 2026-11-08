@@ -26,6 +26,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+# QoreRepl is a separated module: an explicit path to its main .qm file loads only that file, not QoreRepl.qc
 %requires QoreRepl
 
 %exec-class QoreReplSaveTest

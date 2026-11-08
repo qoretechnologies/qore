@@ -80,6 +80,8 @@ public class QoreReplTest inherits QUnit::Test {
         addTestCase("Multi-line: class definition", \testMultiLineClass());
         addTestCase("Multi-line: nested blocks", \testNestedBlocks());
         addTestCase("Multi-line: trailing operators", \testTrailingOperators());
+        addTestCase("Multi-line: slash commands and history shortcuts stay source", \testContinuationCommands());
+        addTestCase("Multi-line: command completion follows input mode", \testContinuationCompletion());
 
         # Error handling tests
         addTestCase("Error: parse error", \testParseError());
@@ -394,7 +396,8 @@ public class QoreReplTest inherits QUnit::Test {
         assertTrue(repl.needsMoreInput(), "Should be in multi-line mode");
         assertEq("    > ", repl.getPrompt(), "Should show continuation prompt");
 
-        # Clear the pending input
+        # Cancel unfinished source through the frontend/API, then commands are available again.
+        repl.reset();
         result = repl.eval("/clear");
         assertTrue(exists result, "Should return result");
         assertFalse(exists result.error, "Should not have error");
@@ -1026,6 +1029,49 @@ public class QoreReplTest inherits QUnit::Test {
         assertEq(3, repl.getProgram().getGlobalVariable("x"), "1 + 2 = 3");
     }
 
+    testContinuationCommands() {
+        QoreRepl repl({"history_file": NOTHING});
+        assertTrue(repl.eval("/help").help);
+        assertFalse(exists repl.eval("?"));
+        assertFalse(exists repl.eval("/?"));
+        *hash<auto> result = repl.eval("/threads");
+        assertTrue(result.error.err =~ /PARSE/);
+        assertFalse(!!result.help); assertFalse(exists result.value); assertFalse(repl.needsMoreInput());
+
+        list<string> lines = ("/?", "  /threads  ", "/reset", "/clear", "/exit", "!!");
+        assertFalse(exists repl.eval("our string literal = \"first"));
+        foreach string line in (lines) {
+            hash<ReplRequestInfo> request = repl.inspectRequest(line);
+            assertTrue(request.requires_idle); assertFalse(exists request.command); assertFalse(!!request.help);
+            assertFalse(exists repl.eval(line)); assertTrue(repl.needsMoreInput());
+        }
+        assertTrue(repl.inspectRequest("").requires_idle);
+        result = repl.eval("last\";"); assertFalse(exists result.error);
+        assertEq("first\n" + lines.join("\n") + "\nlast", repl.getProgram().getGlobalVariable("literal"));
+        assertFalse(exists repl.eval("(84")); assertEq(42, repl.eval("/ 2)").value);
+        assertFalse(exists repl.eval("if (True) {"));
+        assertFalse(exists repl.eval("/reset")); assertTrue(repl.needsMoreInput());
+        Program original = repl.getProgram(); repl.reset();
+        assertEq(original, repl.getProgram()); assertFalse(repl.needsMoreInput()); assertEq(0, repl.getIndentLevel());
+        assertTrue(repl.eval("/?").help);
+        assertFalse(exists repl.eval("/reset").error); assertTrue(original != repl.getProgram());
+    }
+
+    testContinuationCompletion() {
+        QoreRepl repl({"history_file": NOTHING});
+        assertEq(5, repl.extractCompletionContext("/hel").kind);
+        assertTrue(inlist("/help", repl.getCompletions("/hel")));
+        assertFalse(exists repl.eval("if (True) {"));
+        assertTrue(repl.extractCompletionContext("/hel").kind != 5);
+        assertFalse(inlist("/help", repl.getCompletions("/hel")));
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (repl.getCompletionDetails("/hel")) {
+            assertTrue(item.label != "/help");
+        }
+        repl.reset();
+        assertEq(5, repl.extractCompletionContext("/hel").kind);
+        assertEq("/help", repl.getCompletionDetails("/hel")[0].label);
+    }
+
     #! Test parse error handling
     testParseError() {
         QoreRepl repl();
@@ -1130,26 +1176,20 @@ public class QoreReplTest inherits QUnit::Test {
     testLoadWithActiveThreads() {
         QoreRepl repl();
 
-        # Start a background thread
-        repl.eval("our bool stop = False;");
-        repl.eval("sub worker() { while (!stop) usleep(10ms); }");
-        repl.eval("background worker();");
-
-        # Wait for thread to start
+        repl.eval("our Counter entered; our Counter gate;");
+        Counter entered(1); Counter gate(1); bool released = False;
         Program pgm = repl.getProgram();
-        while (pgm.getThreadCount() == 0) usleep(10ms);
+        pgm.setGlobalVarValue("entered", entered); pgm.setGlobalVarValue("gate", gate);
+        on_exit { if (!released) { gate.dec(); } pgm.waitForThreads(); }
+        repl.eval("background sub () { entered.dec(); gate.waitForZero(); }()");
+        entered.waitForZero();
         assertTrue(pgm.getThreadCount() > 0, "Thread should be running");
-
-        # Try to /load a file - should fail with helpful message
         *hash<auto> result = repl.eval("/load /nonexistent/file.q");
         assertTrue(exists result, "Should return result");
         assertTrue(exists result.error, "Should have error");
-        assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
-        assertRegex("background threads", result.error.desc, "Should mention background threads");
-
-        # Stop the thread
-        repl.getProgram().setGlobalVarValue("stop", True);
-        while (pgm.getThreadCount() > 0) usleep(10ms);
+        assertEq("REPL-THREADS-ACTIVE", result.error.err);
+        assertRegex("Running threads", result.error.desc);
+        gate.dec(); released = True; pgm.waitForThreads();
     }
 
     #! Test negative max_connections validation
