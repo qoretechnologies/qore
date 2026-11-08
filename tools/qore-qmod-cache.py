@@ -134,6 +134,10 @@ class CacheError(Exception):
     """An inconsistency that makes a module a miss, or makes "verify" fail"""
 
 
+class NoOpenSSL(CacheError):
+    """Signed entries are configured, but there is no OpenSSL 3 command to make or check the signatures"""
+
+
 class KeyCollision(Exception):
     """qcc wrote other files than the cache has for the same key: the key misses an input"""
 
@@ -855,7 +859,7 @@ class Signer:
     def __init__(self, env):
         self.openssl = find_openssl(env)
         if not self.openssl:
-            raise CacheError("signed entries need OpenSSL 3 (set QORE_QMOD_CACHE_OPENSSL)")
+            raise NoOpenSSL("signed entries need OpenSSL 3 (set QORE_QMOD_CACHE_OPENSSL)")
         self.dir = tempfile.mkdtemp(prefix="qmod-cache-keys.")
         atexit.register(self.close)
         self.private = None
@@ -1994,8 +1998,15 @@ def cmd_verify(args):
     except (OSError, ValueError, CacheError) as e:
         log("FAIL: %s" % e)
         return 1
+    no_signer = False
     try:
         signer = Signer.from_env(os.environ)
+    except NoOpenSSL:
+        # "exec" built every module without the cache (qore_qmod_cache_setup does not even enable it): nothing the
+        # cache supplied needs a signature check, and a module it did supply fails below
+        log("no OpenSSL 3 to check signatures: the build ran without the cache")
+        signer = None
+        no_signer = True
     except (OSError, CacheError) as e:
         log("FAIL: %s" % e)
         return 1
@@ -2017,6 +2028,8 @@ def cmd_verify(args):
             if rec["origin"] != "hit":
                 continue
             entry = rec["entry"]
+            if no_signer:
+                raise CacheError("its signature cannot be checked without OpenSSL 3")
             reason = check_signature(entry, signer)
             if reason:
                 raise CacheError(reason)
@@ -2059,7 +2072,7 @@ def cmd_verify(args):
         return 1
     log("verified %d modules: %d supplied by the cache, %d compiled, %d compiled and not cacheable; AOT runtime "
         "identity %s" % (len(sidecars), counts["hit"], counts["miss"], counts["uncacheable"], identity))
-    if args.require_sidecars and not sidecars:
+    if args.require_sidecars and not sidecars and not no_signer:
         log("FAIL: no module was built through the cache")
         return 1
     return 0
@@ -2310,6 +2323,15 @@ def cmd_prune(args):
     return 0
 
 
+def cmd_check_openssl(args):
+    """Exits with 0 when an OpenSSL 3 command for the signatures is there (see find_openssl())"""
+    openssl = find_openssl(os.environ)
+    if not openssl:
+        log("no OpenSSL 3 command (Ed25519 with -rawin); set QORE_QMOD_CACHE_OPENSSL")
+        return 1
+    return 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="qore-qmod-cache", description=__doc__.split("\n")[0])
     sub = p.add_subparsers(dest="command")
@@ -2338,6 +2360,7 @@ def main(argv=None):
     s = sub.add_parser("stats", help="print the hits and misses of a build and the size of the cache")
     s.add_argument("--cache-dir", required=True)
     s.add_argument("--build-dir")
+    sub.add_parser("check-openssl", help="check that there is an OpenSSL 3 command for the signatures")
     r = sub.add_parser("prune", help="remove old cache entries")
     r.add_argument("--cache-dir", required=True)
     r.add_argument("--max-age-days", type=float, help="remove the entries not used for this many days")
@@ -2348,7 +2371,7 @@ def main(argv=None):
     if args.command == "exec" and args.qcc_argv and args.qcc_argv[0] == "--":
         args.qcc_argv = args.qcc_argv[1:]
     handlers = {"context": cmd_context, "exec": cmd_exec, "verify": cmd_verify, "stats": cmd_stats,
-                "prune": cmd_prune}
+                "prune": cmd_prune, "check-openssl": cmd_check_openssl}
     if args.command not in handlers:
         p.print_help()
         return 2

@@ -1300,6 +1300,22 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all(env=env))
         self.assertIn("signed entries need OpenSSL 3", self.output)
         self.assertEqual(entries, self.entries())
+        # the guard of such a build: the cache was cold, which is no failure
+        res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build), "--qcc",
+                              str(self.source / "qcc"), "--require-sidecars"], capture_output=True, text=True,
+                             timeout=60, env=dict(os.environ, QORE_QMOD_CACHE_VERIFY_KEY="pub",
+                                                  QORE_QMOD_CACHE_OPENSSL="/nonexistent/openssl"))
+        self.assertEqual(0, res.returncode, res.stderr)
+        self.assertIn("no OpenSSL 3 to check signatures: the build ran without the cache", res.stderr)
+        # but a module that the cache supplied, which cannot be checked now, fails it
+        self.build_all()
+        self.assertEqual([], self.build_all())
+        res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build), "--qcc",
+                              str(self.source / "qcc")], capture_output=True, text=True, timeout=60,
+                             env=dict(os.environ, QORE_QMOD_CACHE_VERIFY_KEY="pub",
+                                      QORE_QMOD_CACHE_OPENSSL="/nonexistent/openssl"))
+        self.assertEqual(1, res.returncode, res.stderr)
+        self.assertIn("its signature cannot be checked without OpenSSL 3", res.stderr)
 
     def test_qcc_gets_no_cache_settings(self):
         priv, pub = self.key_pair("k")
@@ -1543,8 +1559,8 @@ class CiScriptTest(unittest.TestCase):
 
     def setup(self, **env):
         """Runs qore_qmod_cache_setup and returns its variables"""
-        res = self.run_sh('qore_qmod_cache_setup; echo "ARG=$QMOD_CACHE_ARG"; echo "PRUNE=$QMOD_CACHE_PRUNE_DIR"; '
-                          'echo "RO=${QORE_QMOD_CACHE_READONLY:-}"; echo "KEY=${QORE_QMOD_CACHE_SIGNING_KEY:-}"',
+        res = self.run_sh('qore_qmod_cache_setup "%s"; echo "ARG=$QMOD_CACHE_ARG"; echo "PRUNE=$QMOD_CACHE_PRUNE_DIR"; '
+                          'echo "RO=${QORE_QMOD_CACHE_READONLY:-}"; echo "KEY=${QORE_QMOD_CACHE_SIGNING_KEY:-}"' % ROOT,
                           **env)
         self.assertEqual(0, res.returncode, res.stderr)
         rv = {"out": res.stdout}
@@ -1616,6 +1632,17 @@ class CiScriptTest(unittest.TestCase):
         r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_JOB_NAME="build-z", QORE_QMOD_CACHE_VERIFY_KEY="pub")
         self.assertEqual("", r["ARG"])
 
+    def test_without_openssl(self):
+        """A job with a key but no OpenSSL 3 to make or check the signatures builds without the cache"""
+        (self.root / "protected" / "build-x").mkdir(parents=True)
+        for env in ({"CI_COMMIT_REF_PROTECTED": "true", "QORE_QMOD_CACHE_SIGNING_KEY": "k"},
+                    {"CI_COMMIT_REF_PROTECTED": "false", "QORE_QMOD_CACHE_VERIFY_KEY": "pub"}):
+            r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_JOB_NAME="build-x",
+                           QORE_QMOD_CACHE_OPENSSL="/nonexistent/openssl", **env)
+            self.assertEqual("", r["ARG"], env)
+            self.assertIn("no OpenSSL 3 for the signatures: building without the cache", r["out"])
+            self.assertEqual("", r["KEY"])
+
     def test_mount_path_with_spaces(self):
         mount = self.root / "My Shared Files"
         (mount / "protected").mkdir(parents=True)
@@ -1652,8 +1679,8 @@ class CiScriptTest(unittest.TestCase):
 
     def test_finish_unsets_the_private_key(self):
         (self.root / "protected").mkdir()
-        res = self.run_sh('qore_qmod_cache_setup >/dev/null; qore_qmod_cache_finish "%s" "%s" >/dev/null 2>&1; '
-                          'echo "rc=$? key=${QORE_QMOD_CACHE_SIGNING_KEY:-}"' % (ROOT, self.root / "no-build"),
+        res = self.run_sh('qore_qmod_cache_setup "%s" >/dev/null; qore_qmod_cache_finish "%s" "%s" >/dev/null 2>&1; '
+                          'echo "rc=$? key=${QORE_QMOD_CACHE_SIGNING_KEY:-}"' % (ROOT, ROOT, self.root / "no-build"),
                           QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="true", CI_JOB_NAME="b",
                           QORE_QMOD_CACHE_SIGNING_KEY="k")
         # the guard fails for a build tree that does not exist, and the key is unset all the same

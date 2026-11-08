@@ -183,7 +183,7 @@ fi
 # CMAKE_PREFIX_PATH includes package-manager dependencies and LLVM prefix if found
 # the qmod build cache, when the job has one (see qmod-cache.sh)
 . "${QORE_SRC_DIR}/test/docker_test/qmod-cache.sh"
-qore_qmod_cache_setup
+qore_qmod_cache_setup "${QORE_SRC_DIR}"
 cmake .. \
     -DCMAKE_BUILD_TYPE=release \
     -DSINGLE_COMPILATION_UNIT=1 \

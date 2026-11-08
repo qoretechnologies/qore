@@ -10,9 +10,9 @@
 #   a miss; they write no cache that another job reads.  Without the public key they build without the cache.
 # Without QORE_QMOD_CACHE_DIR, or when protected/<job name> is not there, the build runs without the cache.
 #
-# - qore_qmod_cache_setup sets QMOD_CACHE_ARG, the CMake argument that enables the cache (empty without one), and
-#   exports QORE_QMOD_CACHE_READONLY=1 when the job only reads the cache; it must run in the shell of the build (not in
-#   a subshell);
+# - qore_qmod_cache_setup <source dir> sets QMOD_CACHE_ARG, the CMake argument that enables the cache (empty without
+#   one), and exports QORE_QMOD_CACHE_READONLY=1 when the job only reads the cache; it must run in the shell of the
+#   build (not in a subshell).  A job with a key but no OpenSSL 3 command for the signatures builds without the cache;
 # - qore_qmod_cache_finish, run after the build:
 #   - runs the guard, which fails when a qmod the cache supplied is not what it verified (or not signed), or when any
 #     qmod of the build does not carry the build's AOT runtime identity;
@@ -44,6 +44,16 @@ qore_qmod_cache_link() {
     esac
 }
 
+# qore_qmod_cache_has_openssl <source dir>: true when there is an OpenSSL 3 command for the signatures
+qore_qmod_cache_has_openssl() {
+    if python3 -I "$1/tools/qore-qmod-cache.py" check-openssl; then
+        return 0
+    fi
+    echo "qmod-cache: no OpenSSL 3 for the signatures: building without the cache"
+    return 1
+}
+
+# qore_qmod_cache_setup <source dir>
 qore_qmod_cache_setup() {
     QMOD_CACHE_ARG=
     QMOD_CACHE_PRUNE_DIR=
@@ -64,6 +74,10 @@ qore_qmod_cache_setup() {
             echo "qmod-cache: a protected ref without QORE_QMOD_CACHE_SIGNING_KEY: building without the cache"
             return 0
         fi
+        if ! qore_qmod_cache_has_openssl "$1"; then
+            unset QORE_QMOD_CACHE_SIGNING_KEY
+            return 0
+        fi
         if [ -w "${_qmc_prot}" ]; then
             mkdir -p "${_qmc_own}" || return 0
             QMOD_CACHE_PRUNE_DIR=1
@@ -78,6 +92,7 @@ qore_qmod_cache_setup() {
             echo "qmod-cache: no QORE_QMOD_CACHE_VERIFY_KEY to verify the protected cache: building without the cache"
             return 0
         fi
+        qore_qmod_cache_has_openssl "$1" || return 0
         export QORE_QMOD_CACHE_READONLY=1
     fi
     if [ ! -d "${_qmc_own}" ]; then

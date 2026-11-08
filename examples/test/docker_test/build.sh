@@ -104,7 +104,7 @@ mkdir -p build
 cd build
 # the qmod build cache, when the job has one (see qmod-cache.sh)
 . "${QORE_SRC_DIR}/test/docker_test/qmod-cache.sh"
-qore_qmod_cache_setup
+qore_qmod_cache_setup "${QORE_SRC_DIR}"
 cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-debug} -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
     ${QMOD_CACHE_ARG:+"${QMOD_CACHE_ARG}"}
 make -j${MAKE_JOBS}
