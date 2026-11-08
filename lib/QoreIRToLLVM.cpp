@@ -10068,6 +10068,26 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
         return;
     }
 
+    // a type error of the assignment of an element to the variable of a foreach loop is described as the AST
+    // interpreter describes it (see qore_ir_describe_foreach_assignment_error()); the description is fixed where an
+    // exception was raised, before the exception edge
+    if ((inst->opcode == QoreIROpcode::StoreLocal || inst->opcode == QoreIROpcode::StoreClosure)
+            && static_cast<const QoreIRLocalInstruction*>(inst)->foreach_assignment) {
+        llvm::Value* priv_ptr = builder->CreateLoad(ptr_type, xsink_arg, "foreach_xsink_priv");
+        llvm::Value* head = builder->CreateLoad(ptr_type, priv_ptr, "foreach_xsink_head");
+        llvm::BasicBlock* fix_bb = llvm::BasicBlock::Create(ctx, "foreach_assignment_error", llvm_func);
+        llvm::BasicBlock* fixed_bb = llvm::BasicBlock::Create(ctx, "foreach_assignment_checked", llvm_func);
+        builder->CreateCondBr(builder->CreateICmpNE(head,
+            llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type))), fix_bb, fixed_bb,
+            llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
+        builder->SetInsertPoint(fix_bb);
+        auto fix_fn = module.getOrInsertFunction("qore_rt_foreach_assignment_error",
+            llvm::FunctionType::get(void_type, {ptr_type}, false));
+        builder->CreateCall(fix_fn, {xsink_arg});
+        builder->CreateBr(fixed_bb);
+        builder->SetInsertPoint(fixed_bb);
+    }
+
     llvm::BasicBlock* exception_block = nullptr;
     if (!force_function_error && inst->exception_target) {
         auto except_it = block_map.find(inst->exception_target);

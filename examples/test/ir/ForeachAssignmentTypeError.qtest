@@ -1,0 +1,64 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ForeachAssignmentTypeErrorTest
+
+#! Regression test: the type error of an element assigned to the variable of a foreach loop
+/** The AST interpreter describes the type error of the assignment of an element to the variable of a foreach loop as
+    "<foreach lvalue assignment> expects type ..."; the compiled modes described it as "<lvalue> expects type ...".
+    The store of the element is marked (QoreIRLocalInstruction::foreach_assignment) and its type error is described as
+    the AST interpreter describes it.  The script runs in every execution mode, on the IR tier of tiered execution and
+    as a qcc executable (see ExecModeOutputTest).
+*/
+class ForeachAssignmentTypeErrorTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+sub f(list<auto> l) {
+    foreach int v in (l) {
+        printf("v=%y\n", v);
+    }
+}
+try { f((1, "a")); } catch (hash<ExceptionInfo> ex) { printf("%s: %s\n", ex.err, ex.desc); }
+sub g(list<auto> l) {
+    int x = 1;
+    reference r = \x;
+    foreach int v in (l) {
+        printf("g v=%y\n", v);
+    }
+}
+try { g((1, "a")); } catch (hash<ExceptionInfo> ex) { printf("%s: %s\n", ex.err, ex.desc); }
+sub h(list<auto> l) {
+    foreach auto v in (l) {
+        int i = v;
+        v = "x";
+    }
+}
+int y = 1;
+try { h((\y, 2)); } catch (hash<ExceptionInfo> ex) { printf("%s: %s\n", ex.err, ex.desc); }
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "v=1",
+            "RUNTIME-TYPE-ERROR: <foreach lvalue assignment> expects type 'int', but got type 'string' instead",
+            "g v=1",
+            "RUNTIME-TYPE-ERROR: <foreach lvalue assignment> expects type 'int', but got type 'string' instead",
+            "RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ForeachAssignmentTypeError", Script, (map $1 + "\n", Expected).join(""),
+            "describes the type error of a foreach element as the AST interpreter does") {
+    }
+}

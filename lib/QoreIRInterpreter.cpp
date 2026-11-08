@@ -1810,15 +1810,39 @@ static void mirrorLocalVarValueTransfer(LocalVar* var, QoreValue value, Exceptio
     helper.assign(value);
 }
 
+// documented in QoreIRInterpreter.h
+void qore_ir_describe_foreach_assignment_error(ExceptionSink* xsink) {
+    if (!xsink || !*xsink) {
+        return;
+    }
+    // the exception raised by the assignment is the last one
+    QoreException* e = qore_es_private::get(*xsink)->tail;
+    if (!e || e->err.getType() != NT_STRING || e->desc.getType() != NT_STRING
+            || strcmp(e->err.get<const QoreStringNode>()->c_str(), "RUNTIME-TYPE-ERROR")) {
+        return;
+    }
+    const QoreStringNode* desc = e->desc.get<const QoreStringNode>();
+    static const char lvalue_prefix[] = "<lvalue> ";
+    if (strncmp(desc->c_str(), lvalue_prefix, sizeof(lvalue_prefix) - 1)) {
+        return;
+    }
+    QoreStringNode* new_desc = new QoreStringNode("<foreach lvalue assignment> ", desc->getEncoding());
+    new_desc->concat(desc->c_str() + sizeof(lvalue_prefix) - 1);
+    e->desc.discard(nullptr);
+    e->desc = new_desc;
+}
+
 //! Returns the value stored in an IR-only local, with the reference its slot owns
 /** @param transfer true if \a value's reference is given to the local (it is released if the value is refused)
+    @param desc the description of the lvalue in a type error: "<lvalue>", or "<foreach lvalue assignment>" for an
+    element given to the variable of a foreach loop, as the AST interpreter describes them
 */
 static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink,
-        bool transfer = false) {
+        bool transfer = false, const char* desc = "<lvalue>") {
     QoreValue stored = !transfer && value.needsRef() ? value.refSelf() : value;
     const QoreTypeInfo* ti = var ? var->getTypeInfoForLValue() : nullptr;
     ti = qore_substitute_type_params_if_needed(ti);
-    QoreTypeInfo::acceptAssignment(ti, "<lvalue>", stored, xsink);
+    QoreTypeInfo::acceptAssignment(ti, desc, stored, xsink);
     if (xsink && *xsink) {
         stored.discard(xsink);
         return QoreValue();
@@ -11067,6 +11091,17 @@ load_local_done:
             }
             case QoreIROpcode::StoreLocal: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
+                // a type error of the assignment of an element to the variable of a foreach loop is described as
+                // the AST interpreter describes it, whichever path the store takes
+                struct ForeachAssignmentErrorGuard {
+                    bool foreach_assignment;
+                    ExceptionSink* xsink;
+                    ~ForeachAssignmentErrorGuard() {
+                        if (foreach_assignment) {
+                            qore_ir_describe_foreach_assignment_error(xsink);
+                        }
+                    }
+                } foreach_error_guard{local_inst->foreach_assignment, xsink};
                 if (local_inst->operands.empty()) {
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "store.local missing operand");
@@ -11164,7 +11199,9 @@ load_local_done:
                             LValueHelper lvh(*reinterpret_cast<const ReferenceNode*>(
                                 locals_slot_cache.storage(local_inst->slot_id).getInternalNode()), xsink);
                             if (lvh) {
-                                lvh.assign(val.needsRef() ? val.refSelf() : val, "<lvalue>");
+                                lvh.assign(val.needsRef() ? val.refSelf() : val,
+                                    local_inst->mode == AssignmentMode::Element
+                                        ? "<foreach lvalue assignment>" : "<lvalue>");
                             }
                         }
                         // the referenced lvalue can be another variable whose value a slot caches
@@ -11197,13 +11234,18 @@ load_local_done:
                         && !(operand.id < borrowed_temp_remaining.size()
                             && borrowed_temp_remaining[operand.id] > 0);
                     QoreValue stored;
+                    // the type error of an element given to the variable of a foreach loop is described as the AST
+                    // interpreter describes it
+                    const char* store_desc = local_inst->mode == AssignmentMode::Element
+                            || local_inst->foreach_assignment
+                        ? "<foreach lvalue assignment>" : "<lvalue>";
                     if (transfer) {
                         // the slot's reference belongs to the local now, or is released by a failed coercion
                         removeAllCleanupEntries(cleanup, operand.id);
                         values[operand.id] = QoreValue();
-                        stored = coerceIRLocalValue(local_inst->local, val, xsink, true);
+                        stored = coerceIRLocalValue(local_inst->local, val, xsink, true, store_desc);
                     } else {
-                        stored = coerceIRLocalValue(local_inst->local, val, xsink);
+                        stored = coerceIRLocalValue(local_inst->local, val, xsink, false, store_desc);
                     }
                     if (xsink && *xsink) {
                         if (inst->exception_target) {
@@ -11281,7 +11323,8 @@ load_local_done:
                     // the ownership that separates it from ':=', destroying a target whose only
                     // reference was the opaque one; an element store assigns its weak reference as
                     // a Normal store would assign it
-                    helper.assign(stored, "<lvalue>", true, store_mode);
+                    helper.assign(stored, local_inst->mode == AssignmentMode::Element
+                        ? "<foreach lvalue assignment>" : "<lvalue>", true, store_mode);
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < local_init_slots.size()) {
                         local_init_slots[local_inst->slot_id] = UINT32_MAX;
@@ -11866,6 +11909,17 @@ load_local_done:
             }
             case QoreIROpcode::StoreClosure: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
+                // a type error of the assignment of an element to the variable of a foreach loop is described as
+                // the AST interpreter describes it
+                struct ForeachClosureAssignmentErrorGuard {
+                    bool foreach_assignment;
+                    ExceptionSink* xsink;
+                    ~ForeachClosureAssignmentErrorGuard() {
+                        if (foreach_assignment) {
+                            qore_ir_describe_foreach_assignment_error(xsink);
+                        }
+                    }
+                } foreach_closure_error_guard{local_inst->foreach_assignment, xsink};
                 if (local_inst->operands.empty()) {
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "store.closure missing operand");

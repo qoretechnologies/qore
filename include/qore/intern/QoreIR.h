@@ -1615,6 +1615,9 @@ public:
     //! For StoreLocal: selects the representation the store uses (see AssignmentMode)
     AssignmentMode mode = AssignmentMode::Normal;
     bool initial_assignment = false; // For StoreLocal/StoreClosure: declaration initializer write
+    //! For StoreLocal/StoreClosure: the assignment of an element to the variable of a foreach loop, whose type error
+    //! the AST interpreter describes as "<foreach lvalue assignment>" (see qore_ir_describe_foreach_assignment_error())
+    bool foreach_assignment = false;
     bool is_closure = false;       // Pre-computed from local->closureUse() during IR analysis
     bool is_ref = false;           // Pre-computed from local->isRef() during IR analysis
     bool is_block_exit = false;    // For UninstantiateLocal: true = block scope exit (clear CVV unconditionally)

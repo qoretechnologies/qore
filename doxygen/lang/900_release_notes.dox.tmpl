@@ -1487,6 +1487,9 @@
       first declared first); local variables are now released last declared first, as with the AST interpreter
     - in the JIT and tiered execution modes, an exception raised by the destructor of the value that the loop
       variable of \c foreach held when an iterator's next element was assigned could crash the program
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, a type error assigning an element to the
+      loop variable of \c foreach is now described as a <tt>&lt;foreach lvalue assignment&gt;</tt> error, as with
+      the AST interpreter
     - the IR execution mode runs <tt>i += v</tt> on an \c int local with an \c auto local \c v as fast as with an
       \c int local again
     - in the IR execution mode and wherever the JIT and tiered execution modes run a function with the IR

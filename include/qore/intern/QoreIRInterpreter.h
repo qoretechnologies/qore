@@ -178,4 +178,8 @@ DLLLOCAL bool qore_ir_is_native_leaf(const QoreIRFunction* ir,
 DLLLOCAL bool qore_ir_get_aot_scalar_leaf(const QoreIRFunction* ir,
         const UserVariantBase* uvb, int nargs, AOTScalarLeafInfo& result);
 
+//! Describes the type error of the assignment of an element to the variable of a foreach loop as the AST interpreter
+//! does: "<foreach lvalue assignment>" for the "<lvalue>" that the assignment of a local gives
+DLLLOCAL void qore_ir_describe_foreach_assignment_error(ExceptionSink* xsink);
+
 #endif

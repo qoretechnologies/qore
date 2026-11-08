@@ -419,6 +419,9 @@ uint64_t qore_rt_load_local_raw(LocalVar* var, ExceptionSink* xsink);
 uint64_t qore_rt_read_reference_local(uint64_t value, ExceptionSink* xsink);
 //! Assigns a value (whose reference is taken) through the reference in the native cache of an IR-only local
 void qore_rt_reference_slot_write(uint64_t ref, uint64_t value, ExceptionSink* xsink);
+//! Describes the type error of the assignment of an element to the variable of a foreach loop as the AST interpreter
+//! does
+void qore_rt_foreach_assignment_error(ExceptionSink* xsink);
 //! Stores an element to the native cache of the IR-only variable of a foreach loop; returns the value of the cache
 uint64_t qore_rt_element_local_replace(uint64_t old_value, uint64_t value, ExceptionSink* xsink);
 
