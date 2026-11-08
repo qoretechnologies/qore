@@ -6939,6 +6939,11 @@ static std::string qore_cares_debug_servers(struct ares_options& options, int& o
             options.ndots = opts.ndots;
             optmask |= ARES_OPT_NDOTS;
         }
+        if (!opts.query_cache) {
+            // a maximum TTL of 0 disables the query cache
+            options.qcache_max_ttl = 0;
+            optmask |= ARES_OPT_QUERY_CACHE;
+        }
     }
     return servers;
 #else
@@ -6976,21 +6981,6 @@ static int qore_cares_set_debug_servers(ares_channel_t* channel, const std::stri
 //! The number of times a lookup is started again after c-ares lost its query before it fails
 static constexpr unsigned QORE_CARES_MAX_LOST_QUERY_RESTARTS = 3;
 
-//! Returns true if an unfinished lookup on the channel can never complete, because c-ares lost its query
-/** c-ares keeps every query it has sent on its timeout list until the query is answered or ended, so an unfinished
-    lookup whose channel has active queries but no timeout has lost a query: nothing will ever send it again, answer
-    it, or end it, and the lookup would wait forever.
-
-    c-ares 1.34.7 and 1.34.8 lose a query when a completion callback started from ares_flush_requeue() starts a new
-    query - ares_getaddrinfo() moving on to the next search domain, for example - and the new query is given the id
-    of the query that completed: ares_flush_requeue() detaches the completed query before its callback, freeing the
-    id, and ares_free_query() detaches it a second time afterwards, which removes the new query's id mapping.  The
-    answer to the new query is then dropped as unknown, and its retry is discarded when it times out.  c-ares 1.34.9,
-    the minimum version (cmake/third-party-sources.cmake; an older system library is not used), releases only the id
-    that a query still holds; the check stays as a safety net for a defect that c-ares could have again.
-
-    @param channel the channel of an unfinished lookup, after its events were processed
-*/
 QoreSharedDescriptor::~QoreSharedDescriptor() {
     if (close_on_release) {
         qore_socket_private::closeDescriptor(fd);
@@ -7236,6 +7226,21 @@ const char* QoreCaresSockets::aif_indextoname(unsigned int ifindex, char* ifname
 #endif
 #endif
 
+//! Returns true if an unfinished lookup on the channel can never complete, because c-ares lost its query
+/** c-ares keeps every query it has sent on its timeout list until the query is answered or ended, so an unfinished
+    lookup whose channel has active queries but no timeout has lost a query: nothing will ever send it again, answer
+    it, or end it, and the lookup would wait forever.
+
+    c-ares 1.34.7 and 1.34.8 lose a query when a completion callback started from ares_flush_requeue() starts a new
+    query - ares_getaddrinfo() moving on to the next search domain, for example - and the new query is given the id
+    of the query that completed: ares_flush_requeue() detaches the completed query before its callback, freeing the
+    id, and ares_free_query() detaches it a second time afterwards, which removes the new query's id mapping.  The
+    answer to the new query is then dropped as unknown, and its retry is discarded when it times out.  c-ares 1.34.9,
+    the minimum version (cmake/third-party-sources.cmake; an older system library is not used), releases only the id
+    that a query still holds; the check stays as a safety net for a defect that c-ares could have again.
+
+    @param channel the channel of an unfinished lookup, after its events were processed
+*/
 static bool qore_cares_channel_lost_query(ares_channel_t* channel) {
 #ifdef DEBUG
     // a lookup made to lose its query by dbg_cares_lose_query()
@@ -7285,6 +7290,7 @@ void QoreCaresAddrInfoResolver::resetCheck() noexcept {
     check_found = false;
     lookup_definite = false;
     check_finished = false;
+    repeat_failure = ARES_SUCCESS;
     server_failures = 0;
     check_failures_start = 0;
     repeated = false;
@@ -7619,21 +7625,21 @@ void QoreCaresAddrInfoResolver::startConfirmation() {
 
 void QoreCaresAddrInfoResolver::startProbe() {
     assert(singleLabel());
-    // the record types that the lookup asked for: c-ares also asks for A records for an IPv6 lookup with
-    // AI_V4MAPPED
+    // the record types that the lookup asked for: c-ares 1.34.9 asks for AAAA records only for an IPv6 lookup, also
+    // with AI_V4MAPPED, so an A record of the name would hide a failure for AAAA
     std::vector<ares_dns_rec_type_t> types;
     if (family != AF_INET6) {
         types.push_back(ARES_REC_TYPE_A);
     }
     if (family != AF_INET) {
         types.push_back(ARES_REC_TYPE_AAAA);
-        if (family == AF_INET6 && (flags & AI_V4MAPPED)) {
-            types.push_back(ARES_REC_TYPE_A);
-        }
     }
     check_remaining = static_cast<int>(types.size());
     check_status = status;
-    // a query names the host itself, without the search domains
+    // a query names the host itself, without the search domains; c-ares looks up a single-label name with the name
+    // that HOSTALIASES gives it, if any (ares_lookup_hostaliases()), and the query names the host as given: the
+    // SERVFAIL or REFUSED answer that c-ares hid is one for a name that the DNS server was asked for, which an alias
+    // is not, so a host with an alias is asked for as given, and its answer only tells whether that name fails
     for (ares_dns_rec_type_t type : types) {
         ares_query_dnsrec(channel, host.c_str(), ARES_CLASS_IN, type, probeCallback, this, nullptr);
     }
@@ -7740,6 +7746,11 @@ void QoreCaresAddrInfoResolver::complete(int new_status, struct ares_addrinfo* r
         // the failed queries (serverStateCallback()) when its public call returns, after the lookup's callback
         lookup_definite = true;
         return;
+    } else if (qore_cares_status_is_definite(status) && repeated && repeat_failure != ARES_SUCCESS) {
+        // the lookup started again failed with a definite status, but the check before it saw a failure that might
+        // not happen again: the answers of the server changed, and a definite failure is never reported after a
+        // temporary one was seen
+        status = repeat_failure;
     }
     done = true;
 }
@@ -7765,7 +7776,9 @@ void QoreCaresAddrInfoResolver::checked(int new_status, bool found) {
 void QoreCaresAddrInfoResolver::finishCheck() {
     if (check_found) {
         // the name has an address after all: the lookup is started again once, and its result is the answer, in
-        // the order that c-ares gives it
+        // the order that c-ares gives it (RFC 6724); a temporary failure that the check saw is reported if the
+        // lookup started again fails with a definite status (see complete())
+        repeat_failure = qore_cares_status_is_definite(check_status) ? ARES_SUCCESS : check_status;
         pending_check = Check::Repeat;
         return;
     }

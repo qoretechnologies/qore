@@ -80,7 +80,8 @@
 - A forked child that ends with `_exit()` (the fork tests in `AsyncIoController/asyncio_unit_tests.qtest`, for
   example) reports its memory as lost for the same reason, and that noise hides real errors in the children.  Run such
   a test twice: once with `--leak-check=full --child-silent-after-fork=yes` for the parent's leaks and errors, and
-  once with `--leak-check=no` (children are traced by default) so that the children's memory errors still show:
+  once with `--leak-check=no` so that the children's memory errors still show (a forked child that does not exec
+  stays under valgrind; only `--child-silent-after-fork=yes` hides its output):
   ```
   QORE_PCRE2_NO_JIT=1 valgrind --leak-check=full --child-silent-after-fork=yes qore -b --exec-mode=ir \
       --enable-debug <test>
