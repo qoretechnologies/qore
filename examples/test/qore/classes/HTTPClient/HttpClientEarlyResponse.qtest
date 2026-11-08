@@ -333,6 +333,9 @@ public class HttpClientEarlyResponseTest inherits QUnit::Test {
 
         #! the size of each chunk of a streamed request body
         const ChunkSize = 65536;
+
+        #! the error of a response header read started on a closed socket
+        const HeaderReadStartError = "SOCKET-NOT-OPEN";
     }
 
     private {
@@ -379,6 +382,12 @@ public class HttpClientEarlyResponseTest inherits QUnit::Test {
         addTestCase("arming an armed send-side hook again leaves its parameters", \sendSideHookArmedTwiceTest());
         addTestCase("a response header read that cannot be started fails the request at once",
             \headerReadStartFailureTest());
+        addTestCase("a response header read that cannot be started for a streamed request fails it at once",
+            \streamingHeaderReadStartFailureTest());
+        addTestCase("a response header read that cannot be started after a 100 Continue fails the request at once",
+            \interimHeaderReadStartFailureTest());
+        addTestCase("a response header read that cannot be started after a failed write fails the request at once",
+            \recoveryHeaderReadStartFailureTest());
         addTestCase("a 408 before the request on a reused connection repeats an idempotent request",
             \idle408RetryTest());
         addTestCase("a 408 after the request was sent on a reused connection repeats an idempotent request",
@@ -910,53 +919,100 @@ public class HttpClientEarlyResponseTest inherits QUnit::Test {
         HTTPClient hc = client(peer);
         on_exit hc.disconnect();
         hc.connect();
-
-        call_function("dbg_fail_http1_header_read_op");
-        hash<auto> rv;
-        date start = now_us();
-        try {
-            rv.response = hc.send("x", "POST", "/header-read", {"Content-Type": "application/octet-stream"}, True);
-        } catch (hash<ExceptionInfo> ex) {
-            rv.err = ex.err;
-            rv.desc = ex.desc;
-        }
-        assertEq("DBG-HEADER-READ-ERROR", rv.err, sprintf("the request fails with the error of the read (got %y: %y "
-            "after %y)", rv.err, rv.desc, now_us() - start));
+        headerReadFailure("request-sent", hash<auto> sub () {
+            return hc.send("x", "POST", "/header-read", {"Content-Type": "application/octet-stream"}, True);
+        });
         peer.getObserved();
     }
 
-    #! A second arming of the send-side hook fails and leaves the parameters of the first
-    sendSideHookArmedTwiceTest() {
+    #! The same for the response read started once the header block of a streamed request has been sent
+    streamingHeaderReadStartFailureTest() {
         requireDebugHooks();
-        Counter reached(1);
-        EarlyPeer peer((<EarlyPlan>{"read": "handover", "status": 0},), False, reached);
+        EarlyPeer peer((<EarlyPlan>{"read": "header", "status": 0},));
         on_exit peer.stopAndCheck();
         HTTPClient hc = client(peer);
         on_exit hc.disconnect();
         hc.connect();
+        int calls = 0;
+        code send_callback = *data sub () {
+            return ++calls == 1 ? binary(strmul(Pattern, ChunkSize / Pattern.size())) : NOTHING;
+        };
+        headerReadFailure("streaming-send", hash<auto> sub () {
+            return hc.sendWithSendCallback(send_callback, "POST", "/streamed",
+                {"Content-Type": "application/octet-stream"}, NOTHING, True);
+        });
+        peer.getObserved();
+    }
 
-        Socket conn = peer.takeConnection();
-        call_function("dbg_fail_http1_send_side", reached, conn, faultResponse(413));
-        hash<auto> result;
-        on_exit if (!result) {
-            call_function("dbg_http1_send_failure_result");
+    #! The same for the read of the final response header after a \c 100 \c Continue
+    interimHeaderReadStartFailureTest() {
+        requireDebugHooks();
+        Counter done(1);
+        EarlyPeer peer((<EarlyPlan>{"read": "handover", "status": 0},), False, done);
+        on_exit peer.stopAndCheck();
+        on_exit if (done.getCount()) {
+            done.dec();
         }
-        # armed already: the second call fails, and its skip count is not taken
-        Counter other(1);
-        assertThrows("DBG-ARGUMENT-ERROR", \call_function(), ("dbg_fail_http1_send_side", other, new Socket(),
-            faultResponse(413), 1000000));
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+        hc.connect();
+        Socket conn = peer.takeConnection();
 
+        call_function("dbg_fail_http1_header_read_op", "interim-response");
+        on_exit call_function("dbg_clear_http1_header_read_op_failure");
+        Queue res();
+        background sub () {
+            hash<auto> rv;
+            try {
+                rv.response = hc.send("x", "POST", "/interim", {"Content-Type": "application/octet-stream"}, True);
+            } catch (hash<ExceptionInfo> ex) {
+                rv.err = ex.err;
+                rv.desc = ex.desc;
+            }
+            res.push(rv);
+        }();
+        hash<auto> hdr = conn.readHTTPHeader(EarlyPeer::PeerTimeout);
+        assertEq("/interim", hdr.path);
+        conn.send("HTTP/1.1 100 Continue\r\n\r\n", EarlyPeer::PeerTimeout);
+        checkHeaderReadFailure("interim-response", res.get(ClientTimeout));
+    }
+
+    #! The same for the read of the response after the write of the request failed: the request fails with the
+    #! error of the write, since the response cannot be read
+    recoveryHeaderReadStartFailureTest() {
+        requireDebugHooks();
+        # the peer answers and resets the connection while the large header block is written
+        EarlyPeer peer((<EarlyPlan>{},));
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+        headerReadFailure("send-failure-recovery", hash<auto> sub () {
+            return hc.send("x", "POST", "/large-header", largeHeaders(), True);
+        }, "SOCKET-SEND-ERROR");
+        assertEq("POST /large-header HTTP/1.1", peer.getObserved(), "the peer read the start of the request");
+    }
+
+    #! Makes the response header read at @a site fail and runs @a request, which must fail at once with its error
+    private headerReadFailure(string site, code request, string err = HeaderReadStartError) {
+        call_function("dbg_fail_http1_header_read_op", site);
+        on_exit call_function("dbg_clear_http1_header_read_op_failure");
         hash<auto> rv;
         try {
-            rv.response = hc.send(upload, "POST", "/toobig", {"Content-Type": "application/octet-stream"}, True);
+            rv.response = request();
         } catch (hash<ExceptionInfo> ex) {
             rv.err = ex.err;
             rv.desc = ex.desc;
         }
-        result = call_function("dbg_http1_send_failure_result");
-        assertEq(0, reached.getCount(), "the hook acted on the first send side, as first armed");
-        checkFault(rv, 413);
-        assertEq("handover", peer.getObserved(), "the peer's connection was answered by the hook");
+        checkHeaderReadFailure(site, rv, err);
+    }
+
+    #! Asserts that the read could not be created at @a site, and that the request failed with the error of the
+    #! closed socket
+    private checkHeaderReadFailure(string site, hash<auto> rv, string err = HeaderReadStartError) {
+        assertEq(site, call_function("dbg_http1_header_read_op_failure_site"),
+            "the response header read could not be created there");
+        assertEq(NOTHING, rv.response, "no response is delivered");
+        assertEq(err, rv.err, sprintf("the request fails with the error of the read (got %y: %y)", rv.err, rv.desc));
     }
 
     #! The server answers with a 408 and closes the reused connection at @a point of the second request

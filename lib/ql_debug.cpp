@@ -13406,11 +13406,66 @@ static QoreValue f_dbg_ssl_close_notify_count(const QoreListNode* params, Runtim
     return qore_dbg_ssl_close_notify_count.load(std::memory_order_relaxed);
 }
 
-//! Debug-only: the next response header read operation of an HTTP/1 client cannot be created (one-shot)
+namespace {
+//! the state of the dbg_fail_http1_header_read_op() hook
+struct DbgHeaderReadOpFailure {
+    QoreThreadLock m;
+    bool armed = false;
+    //! the site where the operation fails; empty: any
+    std::string target;
+    //! the site where it failed; empty: none yet
+    std::string failed_at;
+};
+
+DbgHeaderReadOpFailure dbg_header_read_op_failure;
+}
+
+bool qore_dbg_http1_header_read_op_must_fail(const char* site) {
+    DbgHeaderReadOpFailure& f = dbg_header_read_op_failure;
+    AutoLocker al(f.m);
+    if (!f.armed || (!f.target.empty() && f.target != site)) {
+        return false;
+    }
+    f.armed = false;
+    f.failed_at = site;
+    return true;
+}
+
+//! Debug-only: a response header read operation of an HTTP/1 client cannot be created (one-shot)
+/** The socket is closed right before the operation is created, so its real construction fails.  Tests clear it with
+    dbg_clear_http1_header_read_op_failure() when they end.
+
+    @param site the site where the operation fails (\c "request-sent", \c "streaming-send", \c "full-duplex",
+    \c "interim-response", \c "send-failure-recovery", \c "proxy-connect"); none: the next creation fails
+*/
 static QoreValue f_dbg_fail_http1_header_read_op(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    qore_dbg_http1_fail_header_read_op.store(true);
+    const QoreStringNode* site = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgHeaderReadOpFailure& f = dbg_header_read_op_failure;
+    AutoLocker al(f.m);
+    f.armed = true;
+    f.target = site ? site->c_str() : "";
+    f.failed_at.clear();
     return QoreValue();
+}
+
+//! Debug-only: disarms dbg_fail_http1_header_read_op() if the hook was not reached
+static QoreValue f_dbg_clear_http1_header_read_op_failure(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    DbgHeaderReadOpFailure& f = dbg_header_read_op_failure;
+    AutoLocker al(f.m);
+    f.armed = false;
+    f.target.clear();
+    f.failed_at.clear();
+    return QoreValue();
+}
+
+//! Debug-only: where dbg_fail_http1_header_read_op() closed the socket, or NOTHING if it has not
+static QoreValue f_dbg_http1_header_read_op_failure_site(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    DbgHeaderReadOpFailure& f = dbg_header_read_op_failure;
+    AutoLocker al(f.m);
+    return f.failed_at.empty() ? QoreValue() : new QoreStringNode(f.failed_at);
 }
 
 //! Debug-only: returns the number of records that a session of a socket keeps for its streams, by kind
@@ -15990,7 +16045,6 @@ static QoreValue f_dbg_release_http1_connection_close(const QoreListNode* params
 
 std::atomic<qore_dbg_http1_send_hook_t> qore_dbg_http1_send_hook{nullptr};
 std::atomic<qore_dbg_socket_send_hook_t> qore_dbg_socket_send_hook{nullptr};
-std::atomic<bool> qore_dbg_http1_fail_header_read_op{false};
 std::atomic<int64_t> qore_dbg_ssl_close_notify_count{0};
 
 namespace {
@@ -17164,7 +17218,11 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_ssl_close_notify_count", f_dbg_ssl_close_notify_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_fail_http1_header_read_op", f_dbg_fail_http1_header_read_op, QCF_NO_FLAGS,
-        QDOM_DEBUG_HOOK, nothingTypeInfo);
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "site");
+    qns.addBuiltinVariant("dbg_http1_header_read_op_failure_site", f_dbg_http1_header_read_op_failure_site,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, stringOrNothingTypeInfo);
+    qns.addBuiltinVariant("dbg_clear_http1_header_read_op_failure", f_dbg_clear_http1_header_read_op_failure,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_socket_stream_records", f_dbg_socket_stream_records,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 2,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock",

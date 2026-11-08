@@ -438,7 +438,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProxyConnectSend(ExceptionSink
         sock_obj->ref();
         // a read that cannot be started (the socket was closed) is reported with setError(), which notifies the
         // pending stream and marks the connection closed
-        current_op = newHeaderReadOp(xsink);
+        current_op = newHeaderReadOp(xsink, "proxy-connect");
         if (!current_op) {
             return nullptr;
         }
@@ -671,6 +671,9 @@ QoreHashNode* Http1ClientPollOperationPriv::startBufferedFullDuplex(ExceptionSin
     SocketPollOperationBase* read_op;
     {
         ExceptionSink read_xsink;
+#ifdef DEBUG
+        dbgFailHeaderReadOp("full-duplex");
+#endif
         read_op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
         if (read_xsink) {
             read_op->deref(&read_xsink);
@@ -926,22 +929,21 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
     }
 }
 
-SocketPollOperationBase* Http1ClientPollOperationPriv::newHeaderReadOp(ExceptionSink* xsink) {
+#ifdef DEBUG
+void Http1ClientPollOperationPriv::dbgFailHeaderReadOp(const char* site) {
+    // test hook: the socket is closed, so the response header read operation that follows cannot be created
+    if (qore_dbg_http1_header_read_op_must_fail(site)) {
+        ExceptionSink close_xsink;
+        sock_obj->closeIo(&close_xsink);
+        close_xsink.clear();
+    }
+}
+#endif
+
+SocketPollOperationBase* Http1ClientPollOperationPriv::newHeaderReadOp(ExceptionSink* xsink, const char* site) {
     ExceptionSink read_xsink;
 #ifdef DEBUG
-    // test hook: the operation cannot be created, as when the socket was closed
-    if (qore_dbg_http1_fail_header_read_op.exchange(false)) {
-        sock_obj->deref(&read_xsink);
-        read_xsink.raiseException("DBG-HEADER-READ-ERROR", "the response header read could not be started (debug "
-            "hook)");
-        QoreStringValueHelper err_str(read_xsink.getExceptionErr());
-        QoreStringValueHelper desc_str(read_xsink.getExceptionDesc());
-        std::string err(err_str->c_str());
-        std::string desc(desc_str->c_str());
-        read_xsink.clear();
-        setError(err.c_str(), desc.c_str(), xsink);
-        return nullptr;
-    }
+    dbgFailHeaderReadOp(site);
 #endif
     SocketPollOperationBase* op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
     if (!read_xsink) {
@@ -974,6 +976,9 @@ QoreHashNode* Http1ClientPollOperationPriv::recoverResponseAfterSendFailure(cons
         // the read cannot be started (the socket was closed): the send error is reported through setError(), so
         // the pending stream is notified and the connection is marked closed
         ExceptionSink read_xsink;
+#ifdef DEBUG
+        dbgFailHeaderReadOp("send-failure-recovery");
+#endif
         read_op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
         if (read_xsink) {
             read_op->deref(&read_xsink);
@@ -1480,7 +1485,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
             sock_obj->ref();
             // a read that cannot be started (the socket was closed) is reported with setError(), which notifies the
             // pending stream and marks the connection closed
-            current_op = newHeaderReadOp(xsink);
+            current_op = newHeaderReadOp(xsink, "streaming-send");
             if (!current_op) {
                 return nullptr;
             }
@@ -1541,7 +1546,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
         sock_obj->ref();
         // a read that cannot be started (the socket was closed) is reported with setError(), which notifies the
         // pending stream and marks the connection closed
-        current_op = newHeaderReadOp(xsink);
+        current_op = newHeaderReadOp(xsink, "request-sent");
         if (!current_op) {
             return nullptr;
         }
@@ -1916,7 +1921,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             sock_obj->ref();
             // a read that cannot be started (the socket was closed) is reported with setError(), which notifies the
             // pending stream and marks the connection closed
-            current_op = newHeaderReadOp(xsink);
+            current_op = newHeaderReadOp(xsink, "interim-response");
             if (!current_op) {
                 return nullptr;
             }

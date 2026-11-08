@@ -801,7 +801,15 @@ private:
 
         @since %Qore 3.0
     */
-    DLLLOCAL SocketPollOperationBase* newHeaderReadOp(ExceptionSink* xsink);
+    /** @param site where the operation is created, reported by the dbg_fail_http1_header_read_op() hook
+    */
+    DLLLOCAL SocketPollOperationBase* newHeaderReadOp(ExceptionSink* xsink, const char* site);
+
+#ifdef DEBUG
+    //! Debug-only: closes the socket if the dbg_fail_http1_header_read_op() hook is armed (one-shot), so the response
+    //! header read operation that follows cannot be created
+    DLLLOCAL void dbgFailHeaderReadOp(const char* site);
+#endif
 
     //! Gives up the send of a request body that failed, so that the response can still be read
     /** Releases the send operation, enters @ref SendState::ABANDONED and saves the send error, which setError()
