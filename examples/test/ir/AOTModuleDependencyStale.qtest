@@ -60,6 +60,8 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         addTestCase("a dependency of the descriptor is loaded as the module's own module path directives find it",
             \modulePathDescriptorDependencyTest());
         addTestCase("a dependency or fingerprint file that is not a regular file is not read", \fifoDepfileTest());
+        addTestCase("a module required by the path of its AOT module is checked as when found by name",
+            \explicitPathTest());
         set_return_value(main());
     }
 
@@ -553,5 +555,50 @@ try {
             unlink(path);
             write(path, saved);
         }
+    }
+
+    #! runs a script that requires \a spec (a path or a name) and prints Sep::value(); returns its output
+    private string runSep(string module_path, string script_dir, string spec) {
+        string script = script_dir + "/sep.q";
+        write(script, sprintf("%%modern\n%%requires %s\nprintf(\"%%s\\n\", Sep::value());\n", spec));
+        return trim(run(sprintf("%s QORE_MODULE_DIR=%s %s %s", env, module_path, qore_bin, script)));
+    }
+
+    explicitPathTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        mkdir(src_dir + "/Sep", 0755, True);
+        mkdir(qmod_dir + "/Sep", 0755, True);
+        # a module directory whose main source includes nothing of the code that changes: only Part.qc does
+        write(src_dir + "/Sep/Sep.qm", "%modern\nmodule Sep { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; "
+            "license = \"MIT\"; }\n");
+        write(src_dir + "/Sep/Part.qc", "public namespace Sep { public string sub value() { return \"v1\"; } }\n");
+        string qmod = qmod_dir + "/Sep/Sep.qmod";
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m --depfile=%s.d --depfile-module-deps=source -o %s %s",
+            env, src_dir, qcc_bin, qmod, qmod, src_dir + "/Sep"));
+        assertTrue(is_file(qmod), "compiled Sep: " + out);
+        # the build tree links the AOT module into the source tree, where the tests require it by its path
+        symlink(qmod, src_dir + "/Sep/Sep.qmod");
+        list<string> specs = (src_dir + "/Sep/Sep.qmod", "Sep");
+        foreach string spec in (specs + qmod) {
+            assertEq("v1", runSep(src_dir, tmp.path, spec), spec);
+        }
+
+        # only the included file changed: whether the module is required by name or by the path of its AOT module
+        # through the link next to its source, the AOT module is out of date and its source is loaded
+        write(src_dir + "/Sep/Part.qc", "public namespace Sep { public string sub value() { return \"v2\"; } }\n");
+        touchLater(src_dir + "/Sep/Part.qc");
+        foreach string spec in (specs) {
+            out = runSep(src_dir, tmp.path, spec);
+            assertEq("v2", out.split("\n").last(), spec + ": " + out);
+            assertRegex("is out of date: its source '.*/Part\\.qc' has changed", out, spec);
+        }
+        # by its path in the build tree, with no source module next to it: the out-of-date module is not loaded
+        out = runSep(src_dir, tmp.path, qmod);
+        assertRegex("AOT-MODULE-STALE: AOT module '.*/build/qlib-qmod/Sep/Sep\\.qmod' for feature 'Sep' is out of "
+            "date: its source '.*/Part\\.qc' has changed since it was compiled, and there is no source module next to "
+            "it to load instead", out);
+        assertNRegex("(?m)^v[12]$", out);
     }
 }

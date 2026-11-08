@@ -2750,6 +2750,58 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             QoreString source_path;
             QoreString separated_path;
             bool source_available = qore_find_explicit_qmod_source(raw_path, name, source_path, separated_path);
+            // an AOT module of a build tree named by its path is out of date as when it is found in the module path
+            // (see load_source_for_stale_aot_module below): when one of its sources (an included file among them) has
+            // changed, its source module is loaded instead, with the same warning
+            if (source_available) {
+                // the directory where the source module is: that of the module directory, or of the file
+                std::string source_dir = separated_path.size() ? separated_path.c_str() : source_path.c_str();
+                const char* dsep = q_find_last_path_sep(source_dir.c_str());
+                source_dir = dsep ? source_dir.substr(0, dsep - source_dir.c_str()) : std::string(".");
+                std::string stale_source;
+                if (qore_build_aot_module_is_stale(raw_path, source_dir, name, p, stale_source, xsink)) {
+                    const char* src = separated_path.size() ? separated_path.c_str() : source_path.c_str();
+                    mi = separated_path.size()
+                        ? loadSeparatedModule(xsink, wsink, src, name, pgm, reexport, pholder.release(),
+                            load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask)
+                        : loadUserModuleFromPath(xsink, wsink, src, name, pgm, reexport, pholder.release(),
+                            load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
+                    if (mi && !xsink) {
+                        qore_warn_stale_aot_module(xsink, wsink, warning_mask, name, raw_path, source_path.c_str(),
+                            stale_source.c_str());
+                    } else {
+                        ExceptionSink stale_xsink;
+                        stale_xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(raw_path), "AOT module "
+                            "'%s' for feature '%s' is out of date: its source '%s' has changed since it was compiled; "
+                            "rebuild the AOT module", raw_path, name, stale_source.c_str());
+                        qore_raise_binary_module_source_fallback_error(xsink, name, raw_path, source_path.c_str(),
+                            stale_xsink);
+                    }
+                    return qore_check_load_module_intern(mi, op, version, pgm, xsink, wsink, warning_mask,
+                        unlock_lock) ? nullptr : mi;
+                }
+                if (xsink) {
+                    return nullptr;
+                }
+            } else {
+                // no source module next to it (a module of a build tree named by its path in the build tree): an
+                // out-of-date module cannot be replaced by its source, and is not loaded, as an AOT module whose
+                // dependency is another module than the one it was compiled against
+                std::string module_dir = raw_path;
+                const char* dsep = q_find_last_path_sep(module_dir.c_str());
+                module_dir = dsep ? module_dir.substr(0, dsep - module_dir.c_str()) : std::string(".");
+                std::string stale_source;
+                if (qore_build_aot_module_is_stale(raw_path, module_dir, name, p, stale_source, xsink)) {
+                    xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(raw_path), "AOT module '%s' for "
+                        "feature '%s' is out of date: its source '%s' has changed since it was compiled, and there "
+                        "is no source module next to it to load instead; rebuild the AOT module", raw_path, name,
+                        stale_source.c_str());
+                    return nullptr;
+                }
+                if (xsink) {
+                    return nullptr;
+                }
+            }
             ExceptionSink binary_xsink;
             mi = loadBinaryModuleFromPath(binary_xsink, raw_path, name, reexport, pholder.release(), p,
                 load_opt, mod_desc_func, source_available,
