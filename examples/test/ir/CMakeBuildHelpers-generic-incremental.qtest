@@ -156,15 +156,16 @@ class CMakeGenericIncrementalTest inherits CMakeBuildHelpersTestBase::GenericQcc
         # planting it now only collides with the real lock file.  What this case is
         # actually about is below: a provider source edited while qcc is publishing
         # is rebuilt exactly once.
+        # qcc's input validation hook moves the provider exactly between its parse and its publication
         string contract_change = run(sprintf(
-            "(i=0; while [ ! -f %s ] && [ $i -lt 500 ]; do sleep 0.01; i=$((i + 1)); done; "
-            "[ -f %s ] && cp %s %s) & watcher=$!; "
             "QORE_QCC_TEST_INPUT_VALIDATION_MARKER=%s "
             "QORE_QCC_TEST_INPUT_VALIDATION_SOURCE=%s "
-            "QORE_QCC_TEST_INPUT_VALIDATION_DELAY_MS=500 "
-            "cmake --build %s -- -j%d; rc=$?; wait $watcher || rc=$?; exit $rc",
-            validation_marker, validation_marker, replacement, provider,
-            validation_marker, provider, build_dir, buildJobs()));
+            "QORE_QCC_TEST_INPUT_VALIDATION_COMMAND=%s "
+            "cmake --build %s -- -j%d",
+            shellQuote(validation_marker), shellQuote(provider),
+            shellQuote(sprintf("cp %s %s", shellQuote(replacement), shellQuote(provider))),
+            shellQuote(build_dir), buildJobs()));
+        assertTrue(is_file(validation_marker), "qcc reached its input validation hook: " + contract_change);
         # The planner announces the per-component path itself.  Matching the source name instead
         # does not test this: that name reaches the output from the separate qo-objects target's
         # "qcc -c:" recipe, which only echoes when that target happens to have work to do, so the
@@ -200,20 +201,21 @@ class CMakeGenericIncrementalTest inherits CMakeBuildHelpersTestBase::GenericQcc
         write(provider, aba_provider);
         write(aba_provider_copy, aba_provider);
         write(aba_transient_copy, aba_transient_provider);
+        # A -> B right after qcc's input snapshot, B -> A at its input validation, each by qcc's own test hook
         string aba_change = run(sprintf(
-            "(i=0; while [ ! -f %s ] && [ $i -lt 500 ]; do sleep 0.01; i=$((i + 1)); done; "
-            "[ -f %s ] && cp %s %s; "
-            "i=0; while [ ! -f %s ] && [ $i -lt 1000 ]; do sleep 0.01; i=$((i + 1)); done; "
-            "[ -f %s ] && cp %s %s) & watcher=$!; "
             "QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_MARKER=%s "
-            "QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_DELAY_MS=500 "
+            "QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_COMMAND=%s "
             "QORE_QCC_TEST_INPUT_VALIDATION_MARKER=%s "
             "QORE_QCC_TEST_INPUT_VALIDATION_SOURCE=%s "
-            "QORE_QCC_TEST_INPUT_VALIDATION_DELAY_MS=500 "
-            "cmake --build %s -- -j%d; rc=$?; wait $watcher || rc=$?; exit $rc",
-            snapshot_marker, snapshot_marker, aba_transient_copy, provider,
-            aba_validation_marker, aba_validation_marker, aba_provider_copy, provider,
-            snapshot_marker, aba_validation_marker, provider, build_dir, buildJobs()));
+            "QORE_QCC_TEST_INPUT_VALIDATION_COMMAND=%s "
+            "cmake --build %s -- -j%d",
+            shellQuote(snapshot_marker),
+            shellQuote(sprintf("cp %s %s", shellQuote(aba_transient_copy), shellQuote(provider))),
+            shellQuote(aba_validation_marker), shellQuote(provider),
+            shellQuote(sprintf("cp %s %s", shellQuote(aba_provider_copy), shellQuote(provider))),
+            shellQuote(build_dir), buildJobs()));
+        assertTrue(is_file(snapshot_marker), "qcc reached its post-snapshot hook: " + aba_change);
+        assertTrue(is_file(aba_validation_marker), "qcc reached its input validation hook: " + aba_change);
         assertTrue(aba_change.find(
                 "qcc parsed input changed after its initial snapshot") == -1,
             "a successful A -> B -> A rebuild suppresses the superseded qcc error: "

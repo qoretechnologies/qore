@@ -870,16 +870,17 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         string bootstrap_validation_marker = build_dir
             + "/qcc-bootstrap-input-validation.marker";
         write(bootstrap_replacement, initial_provider);
+        # qcc moves the source itself when it reaches its input validation (its test hook runs the command
+        # there, synchronously), so the change happens exactly between the parse and the publication
         string build1 = run(sprintf(
-            "(i=0; while [ ! -f %s ] && [ $i -lt 500 ]; do sleep 0.01; i=$((i + 1)); done; "
-            "[ -f %s ] && cp %s %s) & watcher=$!; "
             "QORE_QCC_TEST_INPUT_VALIDATION_MARKER=%s "
             "QORE_QCC_TEST_INPUT_VALIDATION_SOURCE=%s "
-            "QORE_QCC_TEST_INPUT_VALIDATION_DELAY_MS=500 "
-            "cmake --build %s -- -j%d; rc=$?; wait $watcher || rc=$?; exit $rc",
-            bootstrap_validation_marker, bootstrap_validation_marker,
-            bootstrap_replacement, provider, bootstrap_validation_marker,
-            provider, build_dir, buildJobs()));
+            "QORE_QCC_TEST_INPUT_VALIDATION_COMMAND=%s "
+            "cmake --build %s -- -j%d",
+            shellQuote(bootstrap_validation_marker), shellQuote(provider),
+            shellQuote(sprintf("cp %s %s", shellQuote(bootstrap_replacement), shellQuote(provider))),
+            shellQuote(build_dir), buildJobs()));
+        assertTrue(is_file(bootstrap_validation_marker), "qcc reached its input validation hook: " + build1);
         assertTrue(build1.find("batch bootstrapping cmake-smoke (24 sources)") != -1,
             "clean object-group build uses one shared-parse batch bootstrap: " + build1);
         # A source rewritten by an agent outside the build is the only reason a

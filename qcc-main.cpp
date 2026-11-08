@@ -7750,42 +7750,49 @@ static bool capture_qcc_observed_source_snapshots(QCCBuildManifest& manifest,
     return true;
 }
 
+//! Runs a test hook of qcc: creates \a marker and runs \a command_var's command, then lets qcc continue
+/** A test that changes a source while qcc compiles sets the hook's marker and command: the first time qcc reaches the
+    hook (no marker yet) it creates the marker and runs the command synchronously (with /bin/sh), so the change
+    happens exactly at that point, without a test process that polls for the marker and a delay for it to act in.  The
+    marker keeps a later qcc of the same build from running the command again.
+
+    @return false with \a error set if the marker cannot be created or the command fails
+*/
+static bool qcc_run_test_hook(const char* marker, const char* command_var, const char* what, std::string& error) {
+    FILE* f = fopen(marker, "wb");
+    if (!f) {
+        error = std::string("cannot create qcc ") + what + " test marker '" + marker + "': " + strerror(errno);
+        return false;
+    }
+    if (fclose(f) != 0) {
+        error = std::string("cannot close qcc ") + what + " test marker '" + marker + "': " + strerror(errno);
+        return false;
+    }
+    QoreEnvironmentValue command_holder(command_var);
+    const char* command = command_holder.c_str();
+    if (!command || !*command) {
+        return true;
+    }
+    int rc;
+    {
+        // the command gets a copy of the environment, which must not change while it is copied
+        QoreEnvironmentReadLock env_lock;
+        rc = std::system(command);
+    }
+    if (rc != 0) {
+        error = std::string("qcc ") + what + " test command failed (rc=" + std::to_string(rc) + "): " + command;
+        return false;
+    }
+    return true;
+}
+
 static bool qcc_test_wait_after_input_snapshot(std::string& error) {
     QoreEnvironmentValue marker_holder("QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_MARKER");
     const char* marker = marker_holder.c_str();
     if (!marker || !*marker || is_file(marker)) {
         return true;
     }
-    FILE* f = fopen(marker, "wb");
-    if (!f) {
-        error = "cannot create qcc post-snapshot test marker '"
-            + std::string(marker) + "': " + strerror(errno);
-        return false;
-    }
-    if (fclose(f) != 0) {
-        error = "cannot close qcc post-snapshot test marker '"
-            + std::string(marker) + "': " + strerror(errno);
-        return false;
-    }
-    long delay_ms = 1000;
-    if (QoreEnvironmentValue delay_holder("QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_DELAY_MS");
-            const char* delay = delay_holder.c_str()) {
-        char* end = nullptr;
-        long parsed = strtol(delay, &end, 10);
-        if (end && !*end && parsed >= 0 && parsed <= 10000) {
-            delay_ms = parsed;
-        }
-    }
-    while (delay_ms > 0) {
-        long sleep_ms = std::min(delay_ms, 10L);
-        usleep(static_cast<useconds_t>(sleep_ms * 1000));
-        delay_ms -= sleep_ms;
-        if (qcc_check_cancel("qcc post-snapshot test delay")) {
-            error = "operation cancelled during qcc post-snapshot test delay";
-            return false;
-        }
-    }
-    return true;
+    return qcc_run_test_hook(marker, "QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_COMMAND", "post-snapshot", error);
 }
 
 static bool qcc_test_wait_before_input_validation(
@@ -7812,38 +7819,7 @@ static bool qcc_test_wait_before_input_validation(
             return true;
         }
     }
-
-    FILE* f = fopen(marker, "wb");
-    if (!f) {
-        error = "cannot create qcc input-validation test marker '"
-            + std::string(marker) + "': " + strerror(errno);
-        return false;
-    }
-    if (fclose(f) != 0) {
-        error = "cannot close qcc input-validation test marker '"
-            + std::string(marker) + "': " + strerror(errno);
-        return false;
-    }
-
-    long delay_ms = 1000;
-    if (QoreEnvironmentValue delay_holder("QORE_QCC_TEST_INPUT_VALIDATION_DELAY_MS");
-            const char* delay = delay_holder.c_str()) {
-        char* end = nullptr;
-        long parsed = strtol(delay, &end, 10);
-        if (end && !*end && parsed >= 0 && parsed <= 10000) {
-            delay_ms = parsed;
-        }
-    }
-    while (delay_ms > 0) {
-        long sleep_ms = std::min(delay_ms, 10L);
-        usleep(static_cast<useconds_t>(sleep_ms * 1000));
-        delay_ms -= sleep_ms;
-        if (qcc_check_cancel("qcc input-validation test delay")) {
-            error = "operation cancelled during qcc input-validation test delay";
-            return false;
-        }
-    }
-    return true;
+    return qcc_run_test_hook(marker, "QORE_QCC_TEST_INPUT_VALIDATION_COMMAND", "input-validation", error);
 }
 
 enum class QCCFinishResult {
