@@ -772,6 +772,12 @@ const PO_NO_TERMINAL_IO = PO_NO_TERMINAL_IO;
 /** Examples of unavailable functionality: the @ref background "background operator" and the
     @ref thread_exit "thread_exit statement"
 
+    The option restricts the code of the Program itself and is checked when the code is parsed (and for a dynamic call
+    such as @ref Qore::call_function() "call_function()" when the call is made); module code that the
+    Program calls keeps its own options and can start threads, also threads that run the Program's code.  Such threads
+    are governed by the Program's @ref Qore::SandboxManager "SandboxManager"; to bound their number, set
+    @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()" (see @ref sandbox_po_threads)
+
     @see @ref no-thread-control "%no-thread-control"
 */
 const PO_NO_THREAD_CONTROL = PO_NO_THREAD_CONTROL;

@@ -5802,7 +5802,12 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         # Let synchronous preparation errors, such as signer failures, propagate
         # from the public async call before a Future is returned.
         prepareAttempt();
-        *hash<SocketPollInfo> poll_info = continuePollIntern();
+        # The first step can complete the whole request: a response that has already arrived when it is checked,
+        # as a fast response on a loopback connection can, is processed in this call, and so are the redirects it
+        # leads to.  Every error from here on, a failed redirect for example, is reported with the Future, as when
+        # the controller drives the operation, so whether an error is raised by the public async call or by the
+        # Future does not depend on how fast the server answers.
+        *hash<SocketPollInfo> poll_info = continuePoll();
         if (!poll_info) {
             return;
         }

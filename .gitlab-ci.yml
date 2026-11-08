@@ -217,7 +217,6 @@ test-ubuntu-amd64:
     - k8s
     - amd64
   variables:
-    QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
     TEST_TIMEOUT: "600"
   script:
     - |
@@ -248,7 +247,6 @@ test-ubuntu-arm64:
     - k8s
     - arm64
   variables:
-    QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
     TEST_TIMEOUT: "600"
   script:
     - |
@@ -281,7 +279,6 @@ test-alpine-amd64:
     - k8s
     - amd64
   variables:
-    QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
     TEST_TIMEOUT: "600"
   script:
     - |
@@ -312,7 +309,6 @@ test-alpine-arm64:
     - k8s
     - arm64
   variables:
-    QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
     TEST_TIMEOUT: "600"
   script:
     - |
@@ -343,7 +339,6 @@ test-ast-ubuntu-amd64:
     - k8s
     - amd64
   variables:
-    QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
     # %modern code runs in tiered mode by default, so no other job runs it with the AST interpreter; this job runs
     # the core language tests with it, which cover the AST engine's own code paths without repeating the module,
     # I/O and network tests, which do not depend on the execution mode
@@ -389,7 +384,6 @@ test-ir-ubuntu-amd64:
     - k8s
     - amd64
   variables:
-    QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
     QORE_TEST_OPTS: '-penable-debug --exec-mode=ir --ir-fallback-warn'
     # the harness tests whose checks all run in child processes with their own execution modes run in the
     # default-mode jobs (see run_tests.sh)
@@ -431,7 +425,6 @@ test-jit-ubuntu-amd64:
     - k8s
     - amd64
   variables:
-    QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
     QORE_TEST_OPTS: '-penable-debug --exec-mode=jit'
     # the harness tests whose checks all run in child processes with their own execution modes run in the
     # default-mode jobs (see run_tests.sh)
@@ -473,7 +466,6 @@ test-tiered-ubuntu-amd64:
     - k8s
     - amd64
   variables:
-    QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
     QORE_TEST_OPTS: '-penable-debug --exec-mode=tiered --jit-ir-threshold=3 --jit-jit-threshold=10'
     # the harness tests whose checks all run in child processes with their own execution modes run in the
     # default-mode jobs (see run_tests.sh)

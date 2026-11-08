@@ -1690,6 +1690,17 @@ public class Lookup {
     run the module's own code asynchronously, are checked differently when module code calls them; see
     @ref OWN_PROGRAM_STATE, @ref CURRENT_THREAD_ONLY and @ref MODULE_OWNED.
 
+    The @ref background "background" operator in module code is checked against the module's own options when the
+    module is parsed, so module code can start threads for a caller with
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL", also threads that run the caller's code.  Such threads are
+    governed by the caller's @ref Qore::SandboxManager "SandboxManager", whose thread limit bounds their number (see
+    @ref sandbox_po_threads).  A module that runs its callers' code asynchronously should use
+    @ref Qore::call_async() "call_async()" or @ref Qore::AsyncIoController "AsyncIoController", which apply the
+    caller's restrictions (see @ref MODULE_OWNED) and its sandbox, or a @ref Qore::Thread::ThreadPool "ThreadPool",
+    which applies the sandbox of the code that submits each task; the threads of a pool count against the thread limit
+    of the sandbox of the %Program that created it, which for module code is the sandbox of the %Program that loaded
+    the module first, if it has one.
+
     @subsection module_parse_option_masks Module Restrictions and Parse Option Masks
 
     A user module inherits the restrictions (the @ref parse_options "parse options" that restrict functionality) of

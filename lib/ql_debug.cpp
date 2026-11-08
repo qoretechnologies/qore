@@ -10173,8 +10173,10 @@ static ssize_t ut_read_request_headers(int fd, char* buf, size_t max) {
 }
 
 #ifdef DEBUG
-//! Makes the read/write race deterministic without sockets, timing assumptions, or controller hooks.
-class Http1BufferedSendFailureTest {
+//! Drives Http1ClientPollOperationPriv::handleFullDuplex() through a failed write of the request body, buffered or
+//! streamed, between incomplete response reads, before and after the final response header; makes the read/write
+//! race deterministic without sockets, timing assumptions, or controller hooks.
+class Http1DuplexSendFailureTest {
     class ReceiveOp : public SocketPollOperationBase {
     public:
         explicit ReceiveOp(bool fail) : fail(fail) {
@@ -10335,6 +10337,79 @@ public:
                 xsink.clear();
             }
         }
+
+        // No final response header has arrived yet (no response, or only a 100 Continue) when the write of the
+        // request body fails, buffered or streamed: the send is abandoned and its error is armed, the header read
+        // goes on, and when it fails, no response having arrived, the send error is reported once instead of the
+        // read error; on a connection that served a request before, the connection-closed error is reported, so an
+        // idempotent request is repeated on a new connection.
+        for (bool buffered : {true, false}) {
+            for (int status : {0, 100}) {
+                for (bool reused : {false, true}) {
+                    runPreHeaderSendFailure(c, buffered, status, reused);
+                }
+            }
+        }
+    }
+
+private:
+    static void runPreHeaderSendFailure(UnitTestCounters& c, bool buffered, int status, bool reused) {
+        ExceptionSink xsink;
+        Result result;
+        ReferenceHolder<Http1ClientPollOperationPriv> op(new Http1ClientPollOperationPriv(nullptr,
+            nullptr, false, "localhost", 80, nullptr), &xsink);
+        op->h1_state = Http1ClientPollOperationPriv::H1State::READING;
+        op->req_state = Http1ClientPollOperationPriv::ReqState::RECV_HEADER;
+        op->send_state = Http1ClientPollOperationPriv::SendState::SENDING;
+        op->send_buffered_body = buffered;
+        // the header read finds nothing twice, then fails: no response arrives
+        op->current_op = new ReceiveOp(true);
+        op->send_op = new SendOp;
+        op->stream_action = new Action(result);
+        op->active_stream_count = 1;
+        op->active_sid = 1;
+        // the number of requests submitted on the connection; this one is the second on a reused connection
+        op->next_stream_id = reused ? 2 : 1;
+        op->response_status_code = status;
+
+        ReferenceHolder<QoreHashNode> info(op->handleFullDuplex(&xsink), &xsink);
+        UT_ASSERT(c, !xsink, "a send failure before the final response header raises no exception");
+        UT_ASSERT(c, info && !result.errors && !result.delivered,
+            "a send failure before the final response header keeps the header read going");
+        if (!info || xsink || result.errors || result.delivered) {
+            xsink.clear();
+            return;
+        }
+        UT_ASSERT_EQ(c, SOCK_POLLIN, info->getKeyValue("events").getAsBigInt(),
+            "after a send failure before the final response header only read readiness is requested");
+        UT_ASSERT(c, !op->send_op && op->current_op,
+            "the failed writer is released and the header read is kept");
+        UT_ASSERT(c, op->send_state == Http1ClientPollOperationPriv::SendState::ABANDONED,
+            "the failed send is abandoned");
+        UT_ASSERT(c, op->send_failure_pending, "the send error is armed before the final response header");
+        UT_ASSERT(c, op->send_failure_reused == reused, "the send error records whether the connection was reused");
+
+        // another incomplete read: nothing is written again and nothing is reported
+        info = op->handleFullDuplex(&xsink);
+        UT_ASSERT(c, info && !xsink && !result.errors && !result.delivered && !op->send_op,
+            "the header read goes on without writing again");
+
+        // the header read fails: no response arrived, so the send error is reported, once
+        info = op->handleFullDuplex(&xsink);
+        UT_ASSERT(c, !info && !xsink, "the failed header read ends the operation");
+        UT_ASSERT(c, !result.delivered && result.errors == 1, "the error is reported exactly once, with no response");
+        if (reused) {
+            UT_ASSERT(c, result.err == "HTTP1-CONNECTION-CLOSED"
+                && result.desc.find("SOCKET-SEND-ERROR: test broken pipe") != std::string::npos,
+                "on a reused connection the connection-closed error is reported, naming the send error");
+        } else {
+            UT_ASSERT(c, result.err == "SOCKET-SEND-ERROR" && result.desc == "test broken pipe",
+                "the send error is reported instead of the read error");
+        }
+        UT_ASSERT(c, !op->send_failure_pending, "the send error is reported once");
+        UT_ASSERT(c, op->h1_state == Http1ClientPollOperationPriv::H1State::CLOSED,
+            "a failed upload cannot leave a reusable connection");
+        xsink.clear();
     }
 };
 #endif
@@ -16083,11 +16158,12 @@ static QoreValue f_dbg_run_llvm_target_init_tests(const QoreListNode* params, Ru
 #endif
 
 #ifdef DEBUG
-//! Debug-only: exercises response recovery after a concurrent buffered request write fails.
+//! Debug-only: runs Http1DuplexSendFailureTest: response recovery after a concurrent write of the request body
+//! (buffered or streamed) fails, before and after the final response header, on a new and on a reused connection
 static QoreValue f_dbg_run_http1_duplex_tests(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     UnitTestCounters c;
-    Http1BufferedSendFailureTest::run(c);
+    Http1DuplexSendFailureTest::run(c);
     return make_unit_test_result(c, xsink);
 }
 #endif
@@ -16389,7 +16465,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_promise_notifier_action_lifetime(c);
     ut_http1_connection_simple_request(c);
 #ifdef DEBUG
-    Http1BufferedSendFailureTest::run(c);
+    Http1DuplexSendFailureTest::run(c);
 #endif
     ut_http1_connection_timeout(c);
     ut_http1_connection_connect_refused(c);

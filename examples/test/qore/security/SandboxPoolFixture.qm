@@ -1,0 +1,23 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+
+#! Test-only module that creates thread pools for its callers
+/** @section sandboxpoolfixtureintro Introduction
+    Module code that creates a @ref Qore::Thread::ThreadPool "ThreadPool".  The module's Program gets the sandbox of the
+    Program that loads it first, so a pool that it creates for a sandboxed Program that loaded it counts against that
+    sandbox's thread limit.  It must not be loaded by the test script itself.
+*/
+module SandboxPoolFixture {
+    version = "1.0";
+    desc = "Sandbox thread limit fixture: module code that creates thread pools";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace SandboxPoolFixture {
+    #! Creates a ThreadPool in the module's Program
+    public ThreadPool sub make_pool(int max_threads) {
+        return new ThreadPool(max_threads);
+    }
+}

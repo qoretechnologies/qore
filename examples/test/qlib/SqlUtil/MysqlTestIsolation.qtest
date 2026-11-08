@@ -35,6 +35,14 @@ class MysqlTestIsolationTest inherits QUnit::Test {
         connstr = ENV.QORE_DB_CONNSTR_MYSQL;
         if (!connstr) {
             skip_reason = "QORE_DB_CONNSTR_MYSQL is not configured";
+        } else if (!skip_reason) {
+            # a configured server that this host cannot reach skips the cases, as the other database tests do
+            try {
+                Datasource connstr_ds(connstr);
+                connstr_ds.open();
+            } catch (hash<ExceptionInfo> ex) {
+                skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+            }
         }
         addTestCase("a non-MySQL connection has no run database", \notMysql());
         # the leftover databases are made before the run's database, whose setup drops the ones that may be dropped
