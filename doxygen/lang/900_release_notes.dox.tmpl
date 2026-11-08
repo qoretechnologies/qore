@@ -513,6 +513,12 @@
     thread that runs until it is told to stop instead of keeping the process from ending (see
     @ref user_module_exit_hooks)
 
+    @par System Thread Capabilities
+    @ref Qore::SandboxManager::createSystemThreadCall() "SandboxManager::createSystemThreadCall()" creates, during a
+    module's initialization, a capability that starts a fixed operation in a new thread that no sandbox governs, so that
+    trusted infrastructure can do work for sandboxed callers, such as building shared state, without the callers'
+    sandbox, interrupts or limits reaching it
+
     @par HTTP Server Fast Routes
     A path can be registered with @ref HttpServer::HttpServer::addFastRoute() "addFastRoute()" so that the async I/O
     thread answers its qualifying requests in microseconds, with no worker hand-off and a response identical to the

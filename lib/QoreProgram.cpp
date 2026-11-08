@@ -5275,6 +5275,62 @@ void qore_run_exit_hooks(QoreProgram* pgm) {
     } while (qore_take_last_exit_hook(pgm, hook));
 }
 
+bool qore_exit_hooks_started() {
+    std::lock_guard<std::mutex> l(exit_hook_lock);
+    return exit_hooks_closed;
+}
+
+namespace {
+//! The argument of a thread started by qore_start_system_thread()
+struct QoreSystemThreadArg {
+    //! the callback; referenced
+    ResolvedCallReferenceNode* code;
+    //! the Program the callback runs in; with a dependency reference
+    QoreProgram* pgm;
+
+    DLLLOCAL void release(ExceptionSink* xsink) {
+        code->deref(xsink);
+        pgm->depDeref();
+    }
+};
+
+void qore_system_thread_main(ExceptionSink* xsink, void* arg) {
+    std::unique_ptr<QoreSystemThreadArg> sta(static_cast<QoreSystemThreadArg*>(arg));
+    {
+        ProgramThreadCountContextHelper tch(xsink, sta->pgm, true);
+        if (!*xsink) {
+            sta->code->invoke(nullptr, xsink).discard(xsink);
+        }
+    }
+    sta->release(xsink);
+}
+}
+
+int qore_start_system_thread(const ResolvedCallReferenceNode* code, QoreProgram* pgm, ExceptionSink* xsink) {
+    std::unique_ptr<QoreSystemThreadArg> arg(new QoreSystemThreadArg{code->refRefSelf(), pgm});
+    pgm->depRef();
+    int tid;
+    {
+        // the check and the start are atomic with respect to the start of the exit hooks, so that the hook that stops
+        // the thread runs after it was started
+        std::lock_guard<std::mutex> l(exit_hook_lock);
+        if (exit_hooks_closed) {
+            tid = -1;
+            xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system thread cannot be started after the exit hooks "
+                "of the process have started");
+        } else {
+            tid = q_start_thread(xsink, qore_system_thread_main, arg.get(), QTF_NO_SANDBOX_INHERIT);
+        }
+    }
+    if (tid < 0) {
+        arg->release(xsink);
+        return -1;
+    }
+    // the thread owns the argument
+    arg.release();
+    return tid;
+}
+
 void qore_drop_exit_hooks(QoreProgram* pgm) {
     // the Program is destroyed: its hooks are released without their dependency references, which belong to the
     // destruction already

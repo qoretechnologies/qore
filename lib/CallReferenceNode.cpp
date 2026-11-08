@@ -1346,6 +1346,83 @@ ResolvedCallReferenceNode* qore_bind_sandbox_call(const ResolvedCallReferenceNod
     return new SandboxBoundCallReference(callback, trusted);
 }
 
+namespace {
+//! A capability that starts a fixed callback in a new thread that no sandbox governs
+/** See SandboxManager::createSystemThreadCall(); the callback and its Program are fixed when the capability is
+    created, and a call of the capability takes no arguments
+*/
+class SystemThreadCallReference : public ResolvedCallReferenceNode {
+public:
+    DLLLOCAL SystemThreadCallReference(const ResolvedCallReferenceNode* callback, QoreProgram* pgm)
+            : callback(callback->refRefSelf()), pgm(pgm) {
+        pgm->depRef();
+    }
+
+    QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const override {
+        // the capability starts only the fixed callback: nothing of the caller reaches the thread
+        if (args && !args->empty()) {
+            xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system thread capability takes no arguments");
+            return QoreValue();
+        }
+        int tid = qore_start_system_thread(callback, pgm, xsink);
+        return tid < 0 ? QoreValue() : QoreValue(static_cast<int64>(tid));
+    }
+
+    QoreFunction* getFunction() const override { return callback->getFunction(); }
+    QoreProgram* getProgram() const override { return callback->getProgram(); }
+
+protected:
+    bool derefImpl(ExceptionSink* xsink) override {
+        callback->deref(xsink);
+        pgm->depDeref();
+        return ResolvedCallReferenceNode::derefImpl(xsink);
+    }
+
+private:
+    ResolvedCallReferenceNode* const callback;
+    //! the Program that created the capability, in which the thread runs; with a dependency reference
+    QoreProgram* const pgm;
+};
+}
+
+ResolvedCallReferenceNode* qore_create_system_thread_call(const ResolvedCallReferenceNode* callback,
+        ExceptionSink* xsink) {
+    // any governing sandbox, whatever policy barrier is active: the capability escapes every sandbox
+    {
+        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+        if (governing) {
+            xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system thread capability cannot be created by code "
+                "that a sandbox governs");
+            return nullptr;
+        }
+    }
+    if (QoreSandboxContext* creation = qore_get_call_reference_provenance(callback)) {
+        creation->deref();
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the callback of a system thread capability must not have "
+            "sandbox provenance");
+        return nullptr;
+    }
+    if (qore_get_sandbox_bound_callback(callback) || dynamic_cast<const SystemThreadCallReference*>(callback)) {
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the callback of a system thread capability must be a plain "
+            "callback, not a bound callback or a capability");
+        return nullptr;
+    }
+    if (qore_exit_hooks_started()) {
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system thread capability cannot be created after the exit "
+            "hooks of the process have started");
+        return nullptr;
+    }
+    // trusted initialization: the module's init, before any code it serves runs
+    if (!get_module_context_path()) {
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system thread capability can only be created while a "
+            "module is being loaded");
+        return nullptr;
+    }
+    QoreProgram* pgm = ::getProgram();
+    assert(pgm);
+    return new SystemThreadCallReference(callback, pgm);
+}
+
 QoreProgram* ResolvedCallReferenceNode::getProgram() const {
     return nullptr;
 }

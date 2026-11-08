@@ -1,0 +1,158 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# SystemThreadWorker.qm - test module with a worker started by a system thread capability
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module SystemThreadWorker {
+    version = "1.0";
+    desc = "test module with a worker that sandboxed callers start through a system thread capability";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        SystemThreadWorker::Worker::init();
+    };
+}
+
+#! The test module's worker
+public namespace SystemThreadWorker {
+public class Worker {
+    public {
+        #! the most a result is waited for; reached only when the worker does not answer
+        const Deadline = 60s;
+
+        #! what each refused creation of a capability raised during the module's initialization: case -> error
+        static hash<string, string> refusals = {};
+    }
+
+    private {
+        #! the capability that starts a worker
+        static code starter;
+        #! the module's file, which a worker reads
+        static string path;
+        #! the work of the workers
+        static Queue jobs();
+        #! the results of the workers
+        static Queue results();
+        #! released by the test while a worker waits on it
+        static Counter go(1);
+        #! the number of workers started
+        static int started = 0;
+        #! guards started
+        static Mutex lck();
+    }
+
+    #! Creates the capability and the exit hook, and records the creations that are refused
+    static init() {
+        path = get_module_context_path();
+        starter = SandboxManager::createSystemThreadCall(\Worker::run());
+        register_exit_hook(\Worker::stop());
+        refusals = {
+            "provenance": Worker::tryCreate(Worker::sandboxedCallback()),
+            "bound": Worker::tryCreate(SandboxManager::bindCall(\Worker::run())),
+            "capability": Worker::tryCreate(starter),
+            "governed": Worker::createGoverned(),
+        };
+    }
+
+    #! Starts a worker, also for a sandboxed caller; returns its TID
+    static int start() {
+        AutoLock al(lck);
+        code start = starter;
+        int tid = start();
+        ++started;
+        return tid;
+    }
+
+    #! Calls the capability with an argument
+    static startWith(auto arg) {
+        code start = starter;
+        start(arg);
+    }
+
+    #! Gives a worker an operation: "probe" or "wait"
+    static submit(string op) {
+        jobs.push(op);
+    }
+
+    #! Returns the next result of a worker
+    static auto result() {
+        return results.get(Deadline);
+    }
+
+    #! Releases a worker that waits
+    static release() {
+        go.dec();
+    }
+
+    #! The exit hook: stops every worker started
+    private static stop() {
+        AutoLock al(lck);
+        map jobs.push(NOTHING), xrange(started);
+    }
+
+    #! A worker: runs the operations it is given until it is stopped
+    private static run() {
+        while (*string op = jobs.get()) {
+            switch (op) {
+                case "probe": {
+                    string fs;
+                    try {
+                        ReadOnlyFile::readTextFile(path);
+                        fs = "read";
+                    } catch (hash<ExceptionInfo> ex) {
+                        fs = ex.err;
+                    }
+                    results.push({"governed": SandboxManager::isGoverned(), "fs": fs});
+                    break;
+                }
+                case "wait": {
+                    try {
+                        go.waitForZero();
+                        Mutex m();
+                        m.lock();
+                        m.unlock();
+                        results.push("waited");
+                    } catch (hash<ExceptionInfo> ex) {
+                        results.push(ex.err);
+                    }
+                    break;
+                }
+            }
+        }
+        printf("worker stopped\n");
+    }
+
+    #! Tries to create a capability; returns the error
+    private static string tryCreate(code c) {
+        try {
+            code cap = SandboxManager::createSystemThreadCall(c);
+            return cap ? "created" : "none";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + ": " + ex.desc;
+        }
+    }
+
+    #! Returns a callback that sandboxed code created
+    private static code sandboxedCallback() {
+        SandboxManager sm();
+        Program p(PO_NEW_STYLE, True);
+        p.parse("code sub get() { return sub () {}; }", "sandboxed-callback");
+        p.setSandboxManager(sm);
+        return p.callFunction("get");
+    }
+
+    #! Returns what sandboxed code gets when it creates a capability
+    private static string createGoverned() {
+        SandboxManager sm();
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse("string sub create() {\n"
+            "    try { code c = SandboxManager::createSystemThreadCall(sub () {}); return c ? \"created\" : \"none\"; }\n"
+            "    catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; }\n"
+            "}\n", "sandboxed-creator");
+        p.setSandboxManager(sm);
+        return p.callFunction("create");
+    }
+}
+}

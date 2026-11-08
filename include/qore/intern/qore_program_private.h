@@ -4722,6 +4722,18 @@ DLLLOCAL bool qore_deregister_exit_hook(int64 id, ExceptionSink* xsink);
 */
 DLLLOCAL void qore_run_exit_hooks(QoreProgram* pgm);
 
+//! Returns true if the exit hooks of the process have started to run
+DLLLOCAL bool qore_exit_hooks_started();
+
+//! Starts a callback in a new thread of a Program that no sandbox governs; see SandboxManager::createSystemThreadCall()
+/** The thread does not inherit the sandbox of the starting code and does not count against its limits.  Refused,
+    with SANDBOX-CAPABILITY-ERROR, once the exit hooks of the process have started, so that every such thread is
+    started before the hooks that stop it run
+
+    @return the TID of the new thread, or -1 if an exception was raised
+*/
+DLLLOCAL int qore_start_system_thread(const ResolvedCallReferenceNode* code, QoreProgram* pgm, ExceptionSink* xsink);
+
 //! Releases the exit hooks of a Program without running them; called when the Program is destroyed
 /** A Program that is cleared runs its hooks first (see qore_run_exit_hooks()), so this releases only the hooks of a
     Program destroyed without being cleared

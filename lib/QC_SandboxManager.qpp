@@ -872,6 +872,53 @@ static code SandboxManager::createSystemPolicyCall(code call) [dom=UNCONTROLLED_
     return qore_bind_sandbox_call(call, true, xsink);
 }
 
+//! Creates a capability that starts a fixed operation in a new thread that no sandbox governs
+/** Trusted infrastructure that does work for sandboxed callers, such as building shared state that every caller then
+    uses, cannot do that work on the caller's thread: what it creates there keeps the caller's sandbox (its
+    provenance), including its interrupts, and a thread that it starts there inherits the sandbox and counts against
+    its limits (see createSystemPolicyCall()).  The capability returned by this method starts @p call in a new thread
+    of the Program that created the capability, which:
+    - does not inherit the sandbox of the code that calls the capability: no sandbox governs it, the sandbox's
+      interrupts and limits do not reach it, and it does not count against the sandbox's thread limit
+    - runs only @p call, fixed when the capability is created: the capability takes no arguments, so nothing of the
+      caller reaches the thread; work for it must arrive through the module's own state, such as a queue that the
+      module created during its initialization
+
+    The thread is counted as any other thread: the library waits for it to end before the process ends, so the module
+    stops it from an exit hook (see register_exit_hook()).  No thread is started once the exit hooks of the process
+    have started, so the hook that stops the thread always runs after it was started.
+
+    @param call the operation that the thread runs; a plain callback created by trusted code
+
+    @return a capability that starts a new thread running @p call each time it is called, and returns its TID
+
+    @throw SANDBOX-CAPABILITY-ERROR a sandbox governs the code creating the capability; @p call has sandbox provenance,
+    or is a bound callback or a capability; the exit hooks of the process have started; or no module is being loaded:
+    the capability can only be created during a module's initialization, before any code it serves runs.  A call of
+    the capability raises \c SANDBOX-CAPABILITY-ERROR if it is given arguments, or once the exit hooks of the process
+    have started
+
+    @par Example:
+    @code{.py}
+# in a module's initialization: the worker reads its work from the module's own queue
+our Queue jobs();
+our code start_worker = SandboxManager::createSystemThreadCall(\worker_main());
+register_exit_hook(sub () { jobs.push(NOTHING); });
+# later, also while serving a sandboxed caller:
+start_worker();
+    @endcode
+
+    @note Restricted to @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS" and
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL"
+
+    @see design/module-sandboxing-audit-guide.md
+
+    @since %Qore 3.0
+*/
+static code SandboxManager::createSystemThreadCall(code call) [dom=UNCONTROLLED_API,THREAD_CONTROL;flags=RET_VALUE_ONLY] {
+    return qore_create_system_thread_call(call, xsink);
+}
+
 //! Returns @ref True if a sandbox governs the filesystem and network access of the current thread's code
 /** Resolves the sandbox exactly as the filesystem and network checks do: the Programs on the call stack, the
     provenance of the objects and callbacks whose code runs, the sandbox inherited by a thread started for sandboxed

@@ -189,6 +189,20 @@ capability enters that registration Program, masks pre-existing filesystem/netwo
 preserves interruption and thread accounting. A tenant callback invoked inside it reactivates its own provenance.
 The callback must validate its arguments and avoid granting arbitrary file, network, or callback execution access.
 
+##### Work done for sandboxed callers on a trusted thread
+
+A system-policy capability masks filesystem and network policy only: what trusted code creates while it serves a
+sandboxed caller still keeps the caller's sandbox, interrupts included, and a thread it starts there inherits the
+sandbox and counts against the sandbox's thread limit. Shared state built for every caller (a schema type, a catalog
+entry) therefore cannot be built on the caller's thread. `SandboxManager::createSystemThreadCall()` returns a
+capability, created during a module's initialization only, that starts a fixed callback in a new thread of the
+module's Program that no sandbox governs: the sandbox's interrupts and limits do not reach it, and it is not counted
+against them. The capability takes no arguments; work reaches the thread only through the module's own state (a
+queue the module created during its initialization), and the thread may run only operations the module fixed during
+its initialization (for example, the registrations that trusted modules made), never code supplied by the caller. No
+such thread starts once the exit hooks have started; the module stops it from its exit hook. The DataProvider catalog
+worker is the reference user (`design/data-provider-rest-schema-apps.md`).
+
 ##### Methods that a sandboxed subclass inherits from a trusted class
 
 An object that sandboxed code creates carries the creating Program's sandbox as its provenance, also when its class
