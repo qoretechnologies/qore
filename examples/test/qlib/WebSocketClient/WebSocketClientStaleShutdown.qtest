@@ -86,6 +86,28 @@ class LifecycleWsConnection inherits WebSocketConnection {
 }
 
 class LifecycleWsHandler inherits WebSocketHandler {
+    public {
+        #! gets True for each HTTP/2 or HTTP/3 handshake with \c X-Silent, which is held and never answered
+        static Queue silent_tunnel();
+        #! gets True for each HTTP/1.1 Upgrade handshake with \c X-Silent
+        static Queue silent_upgrade();
+        #! released by the test to let the held handshakes go on
+        static Counter silent_release(1);
+    }
+
+    #! holds an HTTP/2 or HTTP/3 handshake with \c X-Silent before it is answered
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+        if (exists hdr."x-silent") {
+            if (exists hdr.upgrade) {
+                LifecycleWsHandler::silent_upgrade.push(True);
+            } else {
+                LifecycleWsHandler::silent_tunnel.push(True);
+                LifecycleWsHandler::silent_release.waitForZero(LifecycleWsClient::HandoffTimeout * 2);
+            }
+        }
+        return WebSocketHandler::handleRequest(cx, hdr, b);
+    }
+
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
         LifecycleWsConnection c(self, exists hdr."x-greet");
         c.discord = exists hdr."x-discord";
@@ -805,6 +827,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             # TLS listeners not available: the HTTP/2 and HTTP/3 cases are skipped
         }
 
+        addTestCase("a canceled HTTP/2 WebSocket handshake does not fall back to HTTP/1.1",
+            \destroyDuringTunnelHandshakeTest());
         # last: an exception that no thread of the tests handled fails the run
         addTestCase("no unhandled exception in a thread of the tests", \noUnhandledThreadExceptionsTest());
         set_return_value(main());
@@ -2057,6 +2081,33 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertTrue(ctx.wsc.isOpen(), "the connection is open");
         checkCurrentConnection(ctx, 0);
     }
+    #! The client is destroyed while its HTTP/2 extended CONNECT is not answered: the canceled handshake is not taken
+    #! for a server that cannot tunnel WebSocket, so no HTTP/1.1 Upgrade request is made
+    destroyDuringTunnelHandshakeTest() {
+        if (!ports.h2) {
+            testSkip("h2 listener not available");
+        }
+        on_exit if (LifecycleWsHandler::silent_release.getCount()) {
+            LifecycleWsHandler::silent_release.dec();
+        }
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "wss://localhost:" + ports.h2, "http_version": "auto",
+            "ssl_verify_cert": False, "logger": logger, "timeout": LifecycleWsClient::HandoffTimeout * 4,
+            "connect_timeout": LifecycleWsClient::HandoffTimeout * 4});
+        Queue ready();
+        c.connectAsync({"hdr": {"X-Silent": "1"}}, ready);
+        assertTrue(LifecycleWsHandler::silent_tunnel.get(LifecycleWsClient::HandoffTimeout),
+            "the extended CONNECT reached the server, which holds it");
+        Queue deleted();
+        background TestThreads::run(sub () {
+            delete c;
+            deleted.push(True);
+        });
+        assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout), "the client is destroyed");
+        auto r = ready.get(LifecycleWsClient::HandoffTimeout);
+        assertEq("WEBSOCKET-ERROR", r.error.err, "the handshake was canceled");
+        assertEq(0, LifecycleWsHandler::silent_upgrade.size(), "no HTTP/1.1 Upgrade request was made");
+    }
+
     #! Every thread that the tests or the clients' start_thread hooks started ended without an unhandled exception
     noUnhandledThreadExceptionsTest() {
         list<string> errs = ();

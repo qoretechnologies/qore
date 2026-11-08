@@ -4166,6 +4166,21 @@ ws.setEventQueue();
         return rv;
     }
 
+    #! Raises \c WEBSOCKET-ERROR if the destructor canceled the handshakes
+    /** Called before each step of a connect that sends a request, so a connect continued after the destructor
+        began does not go on.
+
+        @throw WEBSOCKET-ERROR the client is being destroyed
+
+        @since WebSocketClient 2.5
+    */
+    private checkHandshakeCanceled() {
+        AutoLock al(handshake_lock);
+        if (handshake_canceled) {
+            throw "WEBSOCKET-ERROR", "the client is being destroyed";
+        }
+    }
+
     #! Cancels a handshake in progress, and every later one, for the destructor
     /** @since WebSocketClient 2.5
     */
@@ -4760,6 +4775,8 @@ ws.setEventQueue();
 
         int retries = 0;
         while (True) {
+            # not after the destructor began, also not as a retry
+            checkHandshakeCanceled();
             # Acquire a stream — the manager negotiates the best protocol via
             # ALPN (H1/H2) and Alt-Svc (H3). We use the same stream for the
             # WS handshake — no probe-and-discard.
@@ -4775,6 +4792,11 @@ ws.setEventQueue();
             try {
                 return connectH2H3WebSocketOnStream(stream, hdr, \info, reconnect, is_h3);
             } catch (hash<ExceptionInfo> ex) {
+                # the destructor canceled the handshake: neither retried nor taken for a server that cannot tunnel
+                # WebSocket
+                if (handshake_canceled) {
+                    rethrow;
+                }
                 # A connection that died while it was still being established (e.g. a
                 # peer FIN in the middle of the TLS handshake, or a pooled connection
                 # the server closed under us) is transient and unrelated to whether the
@@ -4871,6 +4893,7 @@ ws.setEventQueue();
         # not as a chunked HTTP request body.  Passing True here would add
         # "Transfer-Encoding: chunked" to the upgrade request and the server
         # would reject the handshake.
+        checkHandshakeCanceled();
         stream.startStreaming("GET", path, hdr, False);
         hcio_stream = stream;
 
@@ -4933,6 +4956,7 @@ ws.setEventQueue();
         string path = getUrlPath();
 
         # Start bidirectional CONNECT on the already-acquired stream
+        checkHandshakeCanceled();
         stream.startStreaming("CONNECT", path, hdr, True);
         hcio_stream = stream;
 
@@ -5030,8 +5054,8 @@ ws.setEventQueue();
         # Switching Protocols, not as a chunked HTTP request body.  Passing
         # True here would add "Transfer-Encoding: chunked" to the upgrade
         # request and the server would reject the handshake.
-        hcio_stream = hcio_mgr.acquireAndStartStreaming(http_opts.url, "GET", path, hdr,
-            False);
+        checkHandshakeCanceled();
+        hcio_stream = hcio_mgr.acquireAndStartStreaming(http_opts.url, "GET", path, hdr, False);
 
         # Read the 101 response headers from the Channel
         auto rh = readHandshakeResponse();
