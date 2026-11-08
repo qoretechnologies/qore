@@ -235,6 +235,8 @@ $function$
 
 
     @section pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - fixed @ref SqlUtil::AbstractDatabase::getSequence() "getSequence()" on a connection of the \c jdbc driver, which
+      gives the server version as a hash: the sequence was read as before PostgreSQL 10, which raised an error
     - added support for the procedures of PostgreSQL 11 and later (@ref PgsqlSqlUtilBase::PgsqlProcedure
       "PgsqlProcedure"), which were taken for functions, so that describing one raised \c FUNCTION-ERROR:
       - functions (@ref SqlUtil::AbstractDatabase::listFunctions() "listFunctions()",
@@ -558,6 +560,16 @@ public string sub get_pgsql_default_schema(AbstractDatasource ds) {
     # current_schema() returns NULL when search_path names no existing schema
     *string schema = ds.selectRow("select current_schema() as \"schema\"").schema;
     return schema ?? "public";
+}
+
+# returns the server version of a connection as PostgreSQL's server_version_num gives it (ex: 160004 for 16.4); the
+# pgsql driver gives this number, and the jdbc driver a hash with the major and minor version numbers
+int sub pgsql_get_server_version_num(AbstractDatasource ds) {
+    auto version = ds.getServerVersion();
+    if (version.typeCode() == NT_HASH) {
+        return version.major_version.toInt() * 10000 + version.minor_version.toInt() * 100;
+    }
+    return version.toInt();
 }
 
 # returns an SQL expression giving a relation's name as the connection resolves it: unqualified when the
@@ -2106,7 +2118,7 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         # which has only its current value since.  The sequence was described with the default attributes, as the
         # columns read from the relation (start, increment and max) did not exist in any version
         *hash<auto> row;
-        if (ds.getServerVersion() >= 100000) {
+        if (pgsql_get_server_version_num(ds) >= 100000) {
             row = ds.selectRow("select s.seqstart as start, s.seqincrement as increment, s.seqmax as max, "
                 "s.seqmin as min, s.seqcycle as cycle from pg_catalog.pg_sequence s "
                 "join pg_catalog.pg_class c on c.oid = s.seqrelid "

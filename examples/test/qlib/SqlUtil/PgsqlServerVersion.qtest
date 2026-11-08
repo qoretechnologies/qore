@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+
+%exec-class PgsqlServerVersionTest
+
+#! A datasource that does not connect: it reports the given server version and records the SQL it is given
+class VersionDatasource inherits Datasource {
+    public {
+        list<string> sql = ();
+    }
+
+    private {
+        auto version;
+    }
+
+    constructor(auto version) : Datasource("jdbc:u/p@x{url=postgresql://h:5432/db}") {
+        self.version = version;
+    }
+
+    auto getServerVersion() {
+        return version;
+    }
+
+    string getDriverRealName() {
+        return "PostgreSQL";
+    }
+
+    auto selectRow(string sql, ...) {
+        self.sql += sql;
+        if (sql =~ /current_schema/) {
+            return {"schema": "public"};
+        }
+        if (sql =~ /select c\.relname from pg_class/) {
+            return {"relname": "s"};
+        }
+        return {"start": 1, "increment": 1, "max": 9223372036854775807, "min": 1, "cycle": False};
+    }
+}
+
+#! The server version of a PostgreSQL connection, as the pgsql driver gives it (server_version_num) and as the jdbc
+#! driver gives it (a hash with the major and minor version numbers): the jdbc hash was compared with a number, so
+#! that a sequence was read as before PostgreSQL 10 (column "start_value" does not exist)
+class PgsqlServerVersionTest inherits QUnit::Test {
+    constructor() : Test("PgsqlServerVersionTest", "1.0", \ARGV) {
+        addTestCase("the sequence catalog of each version", \sequences());
+        set_return_value(main());
+    }
+
+    private sequences() {
+        hash<string, list<auto>> cases = {
+            "pgsql 16": (160004, "pg_sequence"),
+            "pgsql 9.6": (90624, "start_value"),
+            "jdbc 16": ({"name": "PostgreSQL", "version": "16.4", "major_version": 16, "minor_version": 4},
+                "pg_sequence"),
+            "jdbc 10": ({"name": "PostgreSQL", "version": "10.0", "major_version": 10, "minor_version": 0},
+                "pg_sequence"),
+            "jdbc 9.6": ({"name": "PostgreSQL", "version": "9.6.24", "major_version": 9, "minor_version": 6},
+                "start_value"),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            VersionDatasource ds(i.value[0]);
+            PgsqlDatabase db(ds);
+            *AbstractSequence seq = db.getSequence("s");
+            assertEq("s", seq.name, i.key);
+            assertTrue((select ds.sql, $1 =~ /from pg_catalog\.pg_sequence/).size() == (i.value[1] == "pg_sequence" ? 1 : 0),
+                i.key + ": " + ds.sql.join("; "));
+            assertTrue((select ds.sql, $1 =~ /start_value/).size() == (i.value[1] == "start_value" ? 1 : 0),
+                i.key + ": " + ds.sql.join("; "));
+        }
+    }
+}
