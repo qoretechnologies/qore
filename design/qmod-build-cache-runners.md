@@ -70,7 +70,23 @@ Copyright (C) 2026 Qore Technologies, s.r.o.
 
 ## The jobs
 
-The build jobs (`build-ubuntu-*`, `build-alpine-*`, `build-perf`) and `test-macos` must request the writer's tags on
-protected refs and the reader's (or, for macOS, the existing runner's) on the others, for example with a
-`workflow:rules` variable used in their `tags`.  Until the runners exist, the jobs keep their current tags and build
-without the cache.
+The build jobs (`build-ubuntu-*`, `build-alpine-*`, `build-perf`) and `test-macos` choose their runner by tag (the
+`.qmod-cache` template in `.gitlab-ci.yml`): `QORE_QMOD_CACHE_RUNNER_TAG` replaces `k8s` in the build jobs' tags
+(the architecture tag stays), and `QORE_QMOD_CACHE_MACOS_RUNNER_TAG` is `test-macos`'s tag.  The template's rules set
+them:
+
+| `QORE_QMOD_CACHE_RUNNERS` | `CI_COMMIT_REF_PROTECTED` | Kubernetes tags | macOS tag |
+|---|---|---|---|
+| unset (default) | any | `k8s`, architecture (shared runners, no cache) | `macos` (existing runner) |
+| `1` | `true` | `qmod-cache-writer`, architecture | `macos-qmod-cache-writer` |
+| `1` | otherwise | `qmod-cache-reader`, architecture | `macos` (existing runner, mounted `:ro`) |
+
+`QORE_QMOD_CACHE_RUNNERS` is a CI/CD variable of mirror/qore, set to `1` only after the writer and reader runners are
+registered (infrastructure/k8s!85 and the macOS registration above): until then every job keeps the shared runners'
+tags and builds without the cache, so this configuration can be merged before the runners exist.  Setting the variable
+before they exist leaves the jobs pending, as no runner has the tags.  The rules also keep the jobs out of merge request
+pipelines, as for jobs without rules.
+
+`develop` is not a protected branch of mirror/qore yet: until it is, `CI_COMMIT_REF_PROTECTED` is false for its
+pipelines, so no job gets the signing key or runs on the writer's runner, and no job writes the cache.  Protecting
+`develop` (and the release branches and tags) is the step that starts filling it.
