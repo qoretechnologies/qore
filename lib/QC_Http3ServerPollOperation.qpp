@@ -228,7 +228,11 @@ QoreValue Http3ServerPollOperationPriv::getOutput() const {
         QoreHashNode* rv = cached_request;
         cached_request = nullptr;
         empty_read_count = 0;
-        h3_state.store(H3State::READING, std::memory_order_release);
+        // CLOSED is final: abort() (any thread) can close the operation after the I/O thread made the request ready
+        // and before the dispatcher takes it; every state store holds op_lock, so the check is enough here
+        if (h3_state.load(std::memory_order_acquire) != H3State::CLOSED) {
+            h3_state.store(H3State::READING, std::memory_order_release);
+        }
         return rv;
     }
     return QoreValue();

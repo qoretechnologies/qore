@@ -864,6 +864,16 @@ CONNECTING → SSL_UPGRADE → READING ⇄ WAIT_READ → CLOSED
 | `wait_read`     | Paused after callback dispatch; `continueReading()` transitions back to `reading` |
 | `closed`        | Connection closed (GOAWAY, error, or max empty reads)               |
 
+`closed` is final, in the HTTP/1.1, HTTP/2 and HTTP/3 client poll operations and in the HTTP/3 server poll operation.
+`abort()` runs on any thread (the Qore-level `abort()` method, or a close or cancel of the connection from the caller's
+thread), and the HTTP/3 client records a refused submission from the submitting thread; the I/O thread checks the
+state and then sets the next one.  The client operations set every other state with a compare-exchange that never
+replaces `CLOSED` (`setStateUnlessClosed()`, `setOpenState()` for HTTP/3), so a close between the I/O thread's check
+and its store is not undone; a plain store made the closed connection ready again, and it took requests and was never
+closed by the I/O controller.  The HTTP/3 server operation sets its state with `op_lock` held, as `abort()` does, and
+the dispatcher's `getOutput()` does not reopen it.  In debug builds, `dbg_poll_close_before_open_state()` closes a
+client operation on its I/O thread right before a given state store, which makes the race deterministic in tests.
+
 **Callback dispatch pattern:**
 
 1. `continuePoll()` calls `current_op.getOutput()` to get completed responses.

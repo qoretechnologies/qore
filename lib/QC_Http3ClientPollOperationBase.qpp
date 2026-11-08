@@ -42,11 +42,7 @@
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/SocketSyncPoll.h"
 
-#ifdef DEBUG
-#include <chrono>
-#include <condition_variable>
-#include <mutex>
-#endif
+#include "qore/intern/PollStateCloseHook.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -1302,52 +1298,27 @@ void Http3ClientPollOperationPriv::installSseState(int64_t stream_id, Queue* que
     }
 }
 
-#ifdef DEBUG
-namespace {
-// the hook of dbgArmCloseBeforeOpenState(): the operation is compared only
-std::mutex dbg_close_mutex;
-std::condition_variable dbg_close_cond;
-Http3ClientPollOperationPriv* dbg_close_target = nullptr;
-std::string dbg_close_site;
-bool dbg_close_fired = false;
-}
-
-void Http3ClientPollOperationPriv::dbgArmCloseBeforeOpenState(Http3ClientPollOperationPriv* op, const char* site) {
-    std::lock_guard<std::mutex> lk(dbg_close_mutex);
-    dbg_close_target = op;
-    dbg_close_site = site ? site : "";
-    dbg_close_fired = false;
-}
-
-bool Http3ClientPollOperationPriv::dbgWaitCloseBeforeOpenState(int64_t timeout_ms) {
-    std::unique_lock<std::mutex> lk(dbg_close_mutex);
-    return dbg_close_cond.wait_for(lk, std::chrono::milliseconds(timeout_ms), [] { return dbg_close_fired; });
-}
-#endif
 
 void Http3ClientPollOperationPriv::setOpenState(H3State s, const char* site) {
     assert(s == H3State::READING || s == H3State::WAIT_READ);
 #ifdef DEBUG
-    bool fire = false;
-    {
-        std::lock_guard<std::mutex> lk(dbg_close_mutex);
-        if (dbg_close_target == this && dbg_close_site == site) {
-            dbg_close_target = nullptr;
-            fire = true;
-        }
-    }
-    if (fire) {
+    bool hook_fired = false;
+    if (PollStateCloseHook::take(this, site)) {
         // what a submitting thread does when the QUIC layer refuses its request at this moment
         setSubmitError("QUIC-HTTP3-ERROR", "debug hook: a submission was refused while the I/O thread set the state");
-        std::lock_guard<std::mutex> lk(dbg_close_mutex);
-        dbg_close_fired = true;
-        dbg_close_cond.notify_all();
+        hook_fired = true;
     }
 #endif
     H3State cur = h3_state.load(std::memory_order_acquire);
     while (cur != H3State::CLOSED
             && !h3_state.compare_exchange_weak(cur, s, std::memory_order_acq_rel, std::memory_order_acquire)) {
     }
+#ifdef DEBUG
+    // reports whether the store left the operation closed
+    if (hook_fired) {
+        PollStateCloseHook::fired(isClosed());
+    }
+#endif
 }
 
 void Http3ClientPollOperationPriv::setSubmitError(const char* err, const char* desc) {

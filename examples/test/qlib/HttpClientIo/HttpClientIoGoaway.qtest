@@ -78,6 +78,10 @@ public class HttpClientIoGoawayTest inherits QUnit::Test {
         if (Option::HAVE_LIBRARY_DEBUGGING) {
             addTestCase("a submission refused while the I/O thread sets the connection's state closes the connection",
                 \refusedDuringStateChangeTest());
+            addTestCase("HTTP/1.1: a connection aborted while the I/O thread sets its state stays closed",
+                \abortedDuringStateChangeTest(), "h1");
+            addTestCase("HTTP/2: a connection aborted while the I/O thread sets its state stays closed",
+                \abortedDuringStateChangeTest(), "h2");
         }
         set_return_value(main());
     }
@@ -402,11 +406,13 @@ public class HttpClientIoGoawayTest inherits QUnit::Test {
         HttpClientConnection conn = stream.getConnection();
         HttpClientPollOperation op = conn.getPollOperation();
         # disarms the hook if it did not fire
-        on_exit call_function("dbg_http3_wait_close_before_open_state", 0);
-        call_function("dbg_http3_close_before_open_state", op, "response-dispatched");
+        on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
+        call_function("dbg_poll_close_before_open_state", op, "response-dispatched");
         # the response of this request is dispatched before the state store at which the hook records the refusal
         assertEq(200, mgr.request(url, "GET", "/ok").status_code);
-        assertTrue(call_function("dbg_http3_wait_close_before_open_state", 30000), "the hook fired");
+        *bool closed_after_store = call_function("dbg_poll_wait_close_before_open_state", 30000);
+        assertTrue(exists closed_after_store, "the hook fired");
+        assertTrue(closed_after_store, "the I/O thread's state store left the connection closed");
         assertTrue(op.isClosed(), "the connection stays closed");
 
         EventNotifier notifier();
@@ -415,6 +421,60 @@ public class HttpClientIoGoawayTest inherits QUnit::Test {
         assertFalse(stream.isSubmitted(), "nothing was submitted");
 
         # the next request gets another connection
+        assertEq(200, mgr.request(url, "GET", "/ok").status_code);
+    }
+
+    #! Another thread aborts an HTTP/1.1 or HTTP/2 client connection while the I/O thread is about to set its state
+    #! after a response: the connection stays closed and the next request gets another connection
+    /** The debug hook aborts the operation on the I/O thread right before the state store that follows the response,
+        which is where an abort() made at the same time by another thread lands: a plain store there made the aborted
+        connection ready again.
+    */
+    abortedDuringStateChangeTest(string proto) {
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger(proto + "-aborted-state-change",
+            LoggerLevel::getLevelInfo())});
+        on_exit server.stop();
+        server.setDefaultHandler("ok", new OkHandler());
+        server.waitForAsyncIo();
+        hash<HttpListenerOptionInfo> lopts = <HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0};
+        if (proto == "h2") {
+            lopts += <HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            };
+        }
+        int port = server.addListener(lopts).port;
+        server.waitForAsyncIo();
+        string url = sprintf("%s://127.0.0.1:%d", proto == "h2" ? "https" : "http", port);
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": proto,
+            "accept_all_certs": True,
+            "connect_timeout": 10s,
+            "request_timeout": 20s,
+        });
+        on_exit mgr.closeAll();
+        assertEq(200, mgr.request(url, "GET", "/ok").status_code);
+
+        # the stream is released when it goes out of scope, so the requests below can use the connection
+        HttpClientConnection conn = mgr.acquireStream(url).getConnection();
+        HttpClientPollOperation op = conn.getPollOperation();
+        int conn_id = conn.getConnectionId();
+        # disarms the hook if it did not fire
+        on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
+        call_function("dbg_poll_close_before_open_state", op,
+            proto == "h2" ? "response-dispatched" : "response-done");
+        # the response of this request is delivered before the state store at which the hook aborts the connection
+        assertEq(200, mgr.request(url, "GET", "/ok").status_code);
+        *bool closed_after_store = call_function("dbg_poll_wait_close_before_open_state", 30000);
+        assertTrue(exists closed_after_store, "the hook fired");
+        assertTrue(closed_after_store, "the I/O thread's state store left the connection closed");
+        assertTrue(op.isClosed(), "the connection stays closed");
+        assertFalse(op.isReady(), "the connection is not ready");
+
+        # the next request gets another connection
+        assertNeq(conn_id, mgr.acquireStream(url).getConnection().getConnectionId(),
+            "the next request gets another connection");
         assertEq(200, mgr.request(url, "GET", "/ok").status_code);
     }
 }

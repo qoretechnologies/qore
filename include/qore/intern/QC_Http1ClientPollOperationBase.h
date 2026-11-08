@@ -267,6 +267,18 @@ public:
             || s == H1State::PROTOCOL_SWITCHED;
     }
 
+    //! Sets the state unless the operation was closed meanwhile; returns false if it was closed
+    /** H1State::CLOSED is final.  abort() runs on any thread (the Qore-level abort() method, a connection close or
+        cancel from the caller's thread) and stores H1State::CLOSED without the locks of the I/O thread, which checks
+        the state and then sets the next one; a close between the check and the store must not be undone, or the
+        closed connection would look ready again, take requests and never be closed by the I/O controller.  So every
+        state other than H1State::CLOSED is set with a compare-exchange that never replaces it.
+
+        @param s the new state, not H1State::CLOSED
+        @param site where the state is set, for the debug hook (see PollStateCloseHook)
+    */
+    DLLLOCAL bool setStateUnlessClosed(H1State s, const char* site);
+
     DLLLOCAL bool isProtocolSwitched() const {
         return h1_state.load(std::memory_order_acquire) == H1State::PROTOCOL_SWITCHED;
     }

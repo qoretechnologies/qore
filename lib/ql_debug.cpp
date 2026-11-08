@@ -70,6 +70,8 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
+#include "qore/intern/QC_Http3ServerPollOperation.h"
+#include "qore/intern/PollStateCloseHook.h"
 #include "qore/intern/NegotiatingConnectionPollOp.h"
 #include "qore/intern/RSection.h"
 #include "qore/intern/RSet.h"
@@ -9101,6 +9103,32 @@ public:
 
     Each round runs both sides at the same time on two threads, released together, for a new stream.
 */
+//! The closed state of an HTTP/3 server poll operation is final
+class Http3ServerPollStateTest {
+public:
+    DLLLOCAL static void run(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<Http3ServerPollOperationPriv> op(new Http3ServerPollOperationPriv(nullptr, nullptr,
+            std::chrono::microseconds(0), false), &xsink);
+        // the I/O thread made a request ready for the dispatcher
+        ReferenceHolder<QoreHashNode> request(new QoreHashNode(autoTypeInfo), &xsink);
+        request->setKeyValue("stream_id", (int64)1, &xsink);
+        op->cached_request = request->hashRefSelf();
+        op->request_pending = true;
+        op->h3_state.store(Http3ServerPollOperationPriv::H3State::REQUEST_READY, std::memory_order_release);
+        // another thread aborts the operation before the dispatcher takes the request
+        op->abort(&xsink);
+        UT_ASSERT(c, !xsink, "abort() raises no exception");
+        UT_ASSERT(c, op->h3_state.load() == Http3ServerPollOperationPriv::H3State::CLOSED, "abort() closes");
+        // the dispatcher takes the request: the operation stays closed
+        ValueHolder rv(op->getOutput(), &xsink);
+        UT_ASSERT(c, rv->getType() == NT_HASH, "the request is still handed to the dispatcher");
+        UT_ASSERT(c, op->h3_state.load() == Http3ServerPollOperationPriv::H3State::CLOSED,
+            "the dispatcher taking the request does not make the closed operation read again");
+        xsink.clear();
+    }
+};
+
 class Http3ClientResponseRegistrationTest {
 public:
     //! Counts the responses delivered to a request
@@ -16158,36 +16186,100 @@ static QoreValue f_dbg_run_llvm_target_init_tests(const QoreListNode* params, Ru
 #endif
 
 #ifdef DEBUG
+extern qore_classid_t CID_HTTP1CLIENTPOLLOPERATIONBASE;
+extern qore_classid_t CID_HTTP2CLIENTPOLLOPERATIONBASE;
 extern qore_classid_t CID_HTTP3CLIENTPOLLOPERATIONBASE;
 
-//! Debug-only: dbg_http3_close_before_open_state(op, site): when the I/O thread of the HTTP/3 poll operation @a op
-//! next sets its open state at @a site, a refused submission is recorded first (see
-//! Http3ClientPollOperationPriv::dbgArmCloseBeforeOpenState()); the caller keeps @a op until the hook fired
-static QoreValue f_dbg_http3_close_before_open_state(const QoreListNode* params, RuntimeConfig& rc,
+namespace {
+// the state of PollStateCloseHook: the operation is compared only
+std::mutex poll_close_hook_mutex;
+std::condition_variable poll_close_hook_cond;
+const void* poll_close_hook_op = nullptr;
+std::string poll_close_hook_site;
+bool poll_close_hook_fired = false;
+bool poll_close_hook_closed = false;
+}
+
+void PollStateCloseHook::arm(const void* op, const char* site) {
+    std::lock_guard<std::mutex> lk(poll_close_hook_mutex);
+    poll_close_hook_op = op;
+    poll_close_hook_site = site ? site : "";
+    poll_close_hook_fired = false;
+    poll_close_hook_closed = false;
+}
+
+bool PollStateCloseHook::take(const void* op, const char* site) {
+    std::lock_guard<std::mutex> lk(poll_close_hook_mutex);
+    if (!poll_close_hook_op || poll_close_hook_op != op || !site || poll_close_hook_site != site) {
+        return false;
+    }
+    poll_close_hook_op = nullptr;
+    return true;
+}
+
+void PollStateCloseHook::fired(bool closed) {
+    std::lock_guard<std::mutex> lk(poll_close_hook_mutex);
+    poll_close_hook_fired = true;
+    poll_close_hook_closed = closed;
+    poll_close_hook_cond.notify_all();
+}
+
+bool PollStateCloseHook::closedAfterStore() {
+    std::lock_guard<std::mutex> lk(poll_close_hook_mutex);
+    return poll_close_hook_closed;
+}
+
+bool PollStateCloseHook::wait(int64_t timeout_ms) {
+    std::unique_lock<std::mutex> lk(poll_close_hook_mutex);
+    return poll_close_hook_cond.wait_for(lk, std::chrono::milliseconds(timeout_ms > 0 ? timeout_ms : 0),
+        [] { return poll_close_hook_fired; });
+}
+
+//! Returns the address of the private data of an HTTP/1.1, HTTP/2 or HTTP/3 client poll operation, as the
+//! operation passes it to PollStateCloseHook, or nullptr with an exception
+template <class T>
+static const void* dbg_poll_op_key(QoreObject* obj, qore_classid_t cid, ExceptionSink* xsink) {
+    PrivateDataRefHolder<T> op(obj, cid, xsink);
+    return *op ? static_cast<const void*>(*op) : nullptr;
+}
+
+//! Debug-only: dbg_poll_close_before_open_state(op, site): when the I/O thread of the HTTP client poll operation
+//! @a op (HTTP/1.1, HTTP/2 or HTTP/3) next sets its state at @a site, the operation is closed first as another
+//! thread closes it at that moment (see PollStateCloseHook); the caller keeps @a op until the hook fired
+static QoreValue f_dbg_poll_close_before_open_state(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
     const QoreStringNode* site = get_param_value(params, 1).get<const QoreStringNode>();
-    PrivateDataRefHolder<Http3ClientPollOperationPriv> op(obj, CID_HTTP3CLIENTPOLLOPERATIONBASE, xsink);
-    if (!op) {
-        if (!*xsink) {
-            xsink->raiseException("DBG-HTTP3-ERROR", "the object is not an HTTP/3 client poll operation");
-        }
+    const QoreClass* cls = obj->getClass();
+    const void* key = nullptr;
+    if (cls->getClass(CID_HTTP1CLIENTPOLLOPERATIONBASE)) {
+        key = dbg_poll_op_key<Http1ClientPollOperationPriv>(obj, CID_HTTP1CLIENTPOLLOPERATIONBASE, xsink);
+    } else if (cls->getClass(CID_HTTP2CLIENTPOLLOPERATIONBASE)) {
+        key = dbg_poll_op_key<Http2ClientPollOperationPriv>(obj, CID_HTTP2CLIENTPOLLOPERATIONBASE, xsink);
+    } else if (cls->getClass(CID_HTTP3CLIENTPOLLOPERATIONBASE)) {
+        key = dbg_poll_op_key<Http3ClientPollOperationPriv>(obj, CID_HTTP3CLIENTPOLLOPERATIONBASE, xsink);
+    } else {
+        xsink->raiseException("DBG-POLL-ERROR", "class '%s' is not an HTTP client poll operation", cls->getName());
         return QoreValue();
     }
-    Http3ClientPollOperationPriv::dbgArmCloseBeforeOpenState(*op, site->c_str());
+    if (*xsink) {
+        return QoreValue();
+    }
+    PollStateCloseHook::arm(key, site->c_str());
     return QoreValue();
 }
 
-//! Debug-only: dbg_http3_wait_close_before_open_state(timeout_ms): waits until the hook armed with
-//! dbg_http3_close_before_open_state() fired; returns False on timeout and disarms the hook
-static QoreValue f_dbg_http3_wait_close_before_open_state(const QoreListNode* params, RuntimeConfig& rc,
+//! Debug-only: dbg_poll_wait_close_before_open_state(timeout_ms): waits until the hook armed with
+//! dbg_poll_close_before_open_state() fired; returns NOTHING on timeout (and disarms the hook), otherwise whether the
+//! operation was still closed right after the state store
+static QoreValue f_dbg_poll_wait_close_before_open_state(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
-    bool fired = Http3ClientPollOperationPriv::dbgWaitCloseBeforeOpenState(timeout_ms);
-    if (!fired) {
-        Http3ClientPollOperationPriv::dbgArmCloseBeforeOpenState(nullptr, "");
+    if (!PollStateCloseHook::wait(timeout_ms)) {
+        PollStateCloseHook::arm(nullptr, "");
+        return QoreValue();
     }
-    return fired;
+    return PollStateCloseHook::closedAfterStore();
 }
 #endif
 
@@ -16201,6 +16293,13 @@ static QoreValue f_dbg_run_http1_duplex_tests(const QoreListNode* params, Runtim
     return make_unit_test_result(c, xsink);
 }
 #endif
+
+//! Debug-only: runs the unit tests of the poll operation states that need no connection (Http3ServerPollStateTest)
+static QoreValue f_dbg_run_poll_state_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    UnitTestCounters c;
+    Http3ServerPollStateTest::run(c);
+    return make_unit_test_result(c, xsink);
+}
 
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
@@ -16476,6 +16575,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_once_init_concurrent(c);
     ut_llvm_target_init_once(c);
     Http3ClientResponseRegistrationTest::run(c);
+    Http3ServerPollStateTest::run(c);
     ut_fast_real_deref_releases_last(c);
     ut_superseded_snapshot_lock_free_release(c);
     ut_contended_queue_scan(c);
@@ -19503,17 +19603,19 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_global_vars", f_dbg_global_vars, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, listTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_run_poll_state_tests", f_dbg_run_poll_state_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo);
     qns.addBuiltinVariant("run_unit_tests", f_run_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_llvm_target_init_tests", f_dbg_run_llvm_target_init_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_run_http1_duplex_tests", f_dbg_run_http1_duplex_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
-    qns.addBuiltinVariant("dbg_http3_close_before_open_state", f_dbg_http3_close_before_open_state, QCF_NO_FLAGS,
+    qns.addBuiltinVariant("dbg_poll_close_before_open_state", f_dbg_poll_close_before_open_state, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 2, objectTypeInfo, QORE_PARAM_NO_ARG, "op", stringTypeInfo,
         QORE_PARAM_NO_ARG, "site");
-    qns.addBuiltinVariant("dbg_http3_wait_close_before_open_state", f_dbg_http3_wait_close_before_open_state,
-        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_poll_wait_close_before_open_state", f_dbg_poll_wait_close_before_open_state,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_run_method_cache_lifetime_tests", f_dbg_run_method_cache_lifetime_tests,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

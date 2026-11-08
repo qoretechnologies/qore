@@ -42,6 +42,7 @@
 #include "qore/intern/QoreHttpBodyCharset.h"
 #include "qore/intern/QoreHttpHeaderPairs.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/PollStateCloseHook.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -250,7 +251,7 @@ QoreHashNode* Http1ClientPollOperationPriv::continuePoll(ExceptionSink* xsink) {
                 return handleReading(xsink);
 
             case H1State::WAIT_READ:
-                h1_state.store(H1State::READING, std::memory_order_release);
+                setStateUnlessClosed(H1State::READING, "cycle-start");
                 continue;
 
             case H1State::PROTOCOL_SWITCHED:
@@ -342,7 +343,7 @@ void Http1ClientPollOperationPriv::startProxySslUpgrade(ExceptionSink* xsink) {
         return;
     }
     current_op->setSelf(*self);
-    h1_state.store(H1State::PROXY_SSL_UPGRADE, std::memory_order_release);
+    setStateUnlessClosed(H1State::PROXY_SSL_UPGRADE, "proxy-ssl-upgrade");
 }
 
 QoreHashNode* Http1ClientPollOperationPriv::handleProxySslUpgrade(ExceptionSink* xsink) {
@@ -408,7 +409,7 @@ void Http1ClientPollOperationPriv::startProxyConnect(ExceptionSink* xsink) {
         return;
     }
     current_op->setSelf(*self);
-    h1_state.store(H1State::PROXY_CONNECT_SEND, std::memory_order_release);
+    setStateUnlessClosed(H1State::PROXY_CONNECT_SEND, "proxy-connect-send");
 }
 
 QoreHashNode* Http1ClientPollOperationPriv::handleProxyConnectSend(ExceptionSink* xsink) {
@@ -443,7 +444,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProxyConnectSend(ExceptionSink
             return nullptr;
         }
         current_op->setSelf(*self);
-        h1_state.store(H1State::PROXY_CONNECT_RECV, std::memory_order_release);
+        setStateUnlessClosed(H1State::PROXY_CONNECT_RECV, "proxy-connect-recv");
         return handleProxyConnectRecv(xsink);
     }
 
@@ -527,7 +528,7 @@ void Http1ClientPollOperationPriv::startSslUpgrade(ExceptionSink* xsink) {
         return;
     }
     current_op->setSelf(*self);
-    h1_state.store(H1State::SSL_UPGRADE, std::memory_order_release);
+    setStateUnlessClosed(H1State::SSL_UPGRADE, "ssl-upgrade");
 }
 
 QoreHashNode* Http1ClientPollOperationPriv::handleSslUpgrade(ExceptionSink* xsink) {
@@ -606,10 +607,10 @@ void Http1ClientPollOperationPriv::startReady(bool protocol_switched, ExceptionS
     // req_state is set first, so the release store of h1_state publishes it
     if (protocol_switched) {
         req_state = ReqState::PROTOCOL_SWITCHED;
-        h1_state.store(H1State::PROTOCOL_SWITCHED, std::memory_order_release);
+        setStateUnlessClosed(H1State::PROTOCOL_SWITCHED, "ready-switched");
     } else {
         req_state = ReqState::IDLE;
-        h1_state.store(H1State::READING, std::memory_order_release);
+        setStateUnlessClosed(H1State::READING, "ready");
     }
     fireReadyCallback(xsink);
 }
@@ -1330,7 +1331,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
         return nullptr;
     }
 
-    h1_state.store(H1State::WAIT_READ, std::memory_order_release);
+    setStateUnlessClosed(H1State::WAIT_READ, "idle");
     // armIdleDeadline arms idle_deadline_us (if not already armed) and
     // annotates poll_info with poll_timeout_ms so the controller wakes us
     // at the deadline.
@@ -1887,7 +1888,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             // use separate send/recv ops for full-duplex raw I/O.
             protocol_switched = true;
             req_state = ReqState::PROTOCOL_SWITCHED;
-            h1_state.store(H1State::PROTOCOL_SWITCHED, std::memory_order_release);
+            setStateUnlessClosed(H1State::PROTOCOL_SWITCHED, "protocol-switched");
             ASYNC_IO_TRACE("H1 handleRecvHeader: 101 -> PROTOCOL_SWITCHED\n");
             releaseCurrentOp(xsink);
             return handleProtocolSwitched(xsink);
@@ -2718,7 +2719,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
     // Return to idle - arm the proactive idle deadline so the controller
     // wakes us up at the timeout (nginx upstream keepalive_timeout pattern).
     idle_deadline_us = 0;  // fresh idle period after completing a request
-    h1_state.store(H1State::WAIT_READ, std::memory_order_release);
+    setStateUnlessClosed(H1State::WAIT_READ, "response-done");
     return armIdleDeadline(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
 }
 
@@ -2875,7 +2876,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
     // Return to idle - arm the proactive idle deadline for nginx-style
     // upstream keepalive_timeout behavior.
     idle_deadline_us = 0;  // fresh idle period after completing a streaming request
-    h1_state.store(H1State::WAIT_READ, std::memory_order_release);
+    setStateUnlessClosed(H1State::WAIT_READ, "streaming-done");
     return armIdleDeadline(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
 }
 
@@ -2941,6 +2942,31 @@ QoreValue Http1ClientPollOperationPriv::convertBodyEncoding(ExceptionSink* xsink
 }
 
 // --- Error handling ---
+
+bool Http1ClientPollOperationPriv::setStateUnlessClosed(H1State s, const char* site) {
+    assert(s != H1State::CLOSED);
+#ifdef DEBUG
+    bool hook_fired = false;
+    if (PollStateCloseHook::take(this, site)) {
+        // what another thread does at this moment: the Qore-level abort(), or a close of the connection
+        ExceptionSink abort_xsink;
+        abort(&abort_xsink);
+        abort_xsink.clear();
+        hook_fired = true;
+    }
+#endif
+    H1State cur = h1_state.load(std::memory_order_acquire);
+    while (cur != H1State::CLOSED
+            && !h1_state.compare_exchange_weak(cur, s, std::memory_order_acq_rel, std::memory_order_acquire)) {
+    }
+#ifdef DEBUG
+    // reports whether the store left the operation closed
+    if (hook_fired) {
+        PollStateCloseHook::fired(isClosed());
+    }
+#endif
+    return cur != H1State::CLOSED;
+}
 
 void Http1ClientPollOperationPriv::abort(ExceptionSink* xsink) {
     h1_state.store(H1State::CLOSED, std::memory_order_release);
