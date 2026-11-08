@@ -1,0 +1,39 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# xthread-child.qinc - code of the child Program of xthread-delete.q: the guard's destructor creates two Programs
+# while the child's static variables are released, and deletes them in another thread
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+public class Alpha {
+    public {
+        static int v = 5;
+    }
+}
+
+public class Guard {
+    destructor() {
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("int sub get() { return Alpha::v ?? -1; }", "guard");
+            printf("guard Program result: %y\n", p.callFunction("get"));
+            del_elsewhere(p);
+        }
+        Program p2(PO_NEW_STYLE);
+        p2.parse("int sub getz() { return Zed::z ?? -1; } int sub geta() { return Alpha::v ?? -1; }", "guard2");
+        printf("guard p2 z: %y a: %y\n", p2.callFunction("getz"), p2.callFunction("geta"));
+        kept += p2;
+        printf("guard done\n");
+    }
+}
+
+public class Holder {
+    public {
+        static Guard guard = new Guard();
+    }
+}
+
+public class Zed {
+    public {
+        static int z = 7;
+    }
+}

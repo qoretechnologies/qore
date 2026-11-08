@@ -19,12 +19,19 @@ class Results {
         static list<string> reports = ();
         #! the Programs that destructors created and kept
         static list<Program> kept = ();
+        #! the number of calls of the initializer of the evalInit case
+        static int calls = 0;
     }
 }
 
 #! records a report of a destructor run in a Program of an in-process case
 sub svr_report(string msg) {
     Results::reports += msg;
+}
+
+#! returns the number of the call of the initializer of the evalInit case
+int sub svr_next_call() {
+    return ++Results::calls;
 }
 
 #! keeps a Program that a destructor created
@@ -55,7 +62,7 @@ class StaticVarReleaseTest inherits QUnit::Test {
 public class Guard {
     destructor() {
         Program p(PO_NEW_STYLE);
-        p.parse(\"int sub get() { return Holder::value(); }\", \"guard\");
+        p.parse(\"int sub get() { return Holder::value(); } auto sub before() { return Holder::before; }\", \"guard\");
         svr_report(sprintf(\"guard Program result: %d\", p.callFunction(\"get\")));
         if (Holder::keep) {
             svr_keep(p);
@@ -201,6 +208,47 @@ list<Program> sub make(int n) {
 }
 ";
 
+        #! the code of the in-process Program whose static variable's initializer fails, and that a destructor reads
+        #! after the values have been released
+        const EvalInitSrc = "
+class Obj {
+    destructor() {
+        svr_report(\"Obj destructor\");
+    }
+}
+
+public class Alpha {
+    public {
+        static *Obj o = Alpha::make();
+    }
+
+    static Obj make() {
+        int calls = svr_next_call();
+        if (calls == 1) {
+            throw \"FIRST\", \"first initialization fails\";
+        }
+        svr_report(sprintf(\"initializer ran (call %d)\", calls));
+        return new Obj();
+    }
+}
+
+class Reader {
+    destructor() {
+        svr_report(sprintf(\"reader read: %y\", Alpha::o));
+    }
+}
+
+class Zulu {
+    public {
+        static Reader reader = new Reader();
+    }
+}
+
+int sub get() {
+    return 42;
+}
+";
+
         #! the number of static variables read by the Programs deleted with the Program of their class
         const ParallelGuardVars = 50;
         #! the number of iterations of the parallel deletion with the Program of the class
@@ -226,6 +274,13 @@ list<Program> sub make(int n) {
         */
         const LateLoadExitOutput = ("main done", "loaded at teardown: LateHolder", "late marker released",
             "late marker released");
+
+        #! the output of the exit script whose Programs created by a destructor are deleted in another thread
+        /** The first is deleted while the values are released; the second, which sees the values of Zed (not released
+            yet) and not those of Alpha (released already), after its creator has been deleted
+        */
+        const XThreadExitOutput = ("guard Program result: -1", "guard p2 z: 7 a: -1", "guard done",
+            "after delete: kept 1", "main done");
 
         #! the reports of the in-process Programs whose guard Program shares a class whose variables have been
         #! released
@@ -300,6 +355,8 @@ int sub get() {
             "deleted afterwards", \deletedProgramSharedKeptTest());
         addTestCase("deleted Program; the Program created by the destructor is kept in a static variable of a "
             "class it shares", \deletedProgramCycleTest());
+        addTestCase("a static variable whose initializer failed is read after the values were released",
+            \evalInitAfterReleaseTest());
         addTestCase("Programs sharing a class deleted in parallel", \parallelDeleteTest());
         addTestCase("Programs sharing a class deleted in parallel with the Program of the class",
             \parallelGuardDeleteTest());
@@ -311,10 +368,29 @@ int sub get() {
             \exitTest(), ("module-exit-shared.q", SharedExitOutput));
         addTestCase("main Program at exit; a destructor loads a module whose classes are added to the cleared "
             "class lists", \exitTest(), ("main-exit-late-load.q", LateLoadExitOutput));
+        addTestCase("Programs created by a destructor deleted in another thread", \exitTest(),
+            ("xthread-delete.q", XThreadExitOutput));
+        addTestCase("AOT: main Program at exit", \aotExitTest(), ("main-exit.q", ExitOutput));
+        addTestCase("AOT: main Program at exit; the Program created by the destructor shares released variables",
+            \aotExitTest(), ("main-exit-shared.q", SharedExitOutput));
+        addTestCase("AOT: main Program at exit; a destructor loads a module", \aotExitTest(),
+            ("main-exit-late-load.q", LateLoadExitOutput));
+        addTestCase("AOT: user module at exit", \aotModuleExitTest(),
+            ("module-exit.q", "StaticVarReleaseGuard", ExitOutput));
+        addTestCase("AOT: user module at exit; the Program created by the destructor shares released variables",
+            \aotModuleExitTest(), ("module-exit-shared.q", "StaticVarReleaseShared", SharedExitOutput));
         set_return_value(main());
     }
 
     #! returns a Program with the guard class; the Program created by the guard's destructor is kept if keep is set
+    #! returns the qcc executable to use
+    private static string getQcc(string qore_bin) {
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        return is_file(qcc_bin) ? qcc_bin : "qcc";
+    }
+
     private Program getProgram(bool keep, string src = ChildSrc) {
         Program p(PO_NEW_STYLE);
         p.importFunction("svr_report");
@@ -345,7 +421,10 @@ int sub get() {
         # the Program created by the destructor still shares the class; the code of the class cannot run, as its
         # Program has been deleted
         assertThrows("PROGRAM-ERROR", "already been deleted", \Results::kept[0].callFunction(), "get");
-        # deleting it releases the static variables, which have no values now
+        # its own code still reads the static variables, which have no values now: the Program of the class did not
+        # delete them, as the kept Program still shares the class (see qore_class_private::data_refs)
+        assertEq(NOTHING, Results::kept[0].callFunction("before"));
+        # deleting it releases the static variables
         delete Results::kept[0];
         Results::kept = ();
         assertEq(("guard Program result: 42",), Results::reports);
@@ -379,6 +458,24 @@ int sub get() {
         }
         # the kept Program and the values of Xray's static variables are released with the Program
         assertEq(("guard Program: 42 7 null", "marker released"), Results::reports);
+    }
+
+    #! A static variable whose initializer failed is not initialized by a read after the values were released
+    /** Its value stays NOTHING, as for the other variables; it was evaluated again, and its value, assigned after the
+        release, was released only when the variables were deleted
+    */
+    evalInitAfterReleaseTest() {
+        Results::reports = ();
+        Results::calls = 0;
+        {
+            Program p(PO_NEW_STYLE);
+            p.importFunction("svr_report");
+            p.importFunction("svr_next_call");
+            assertThrows("FIRST", \p.parse(), (EvalInitSrc, "evalinit"));
+            assertEq(42, p.callFunction("get"));
+            delete p;
+        }
+        assertEq(("reader read: null",), Results::reports);
     }
 
     #! Programs sharing a class are deleted at the same time in different threads after the Program of the class
@@ -435,7 +532,7 @@ int sub get() {
             foreach Program child in (children) {
                 background StaticVarReleaseTest::runAndDeleteProgram(child, ready, start, done);
             }
-            background StaticVarReleaseTest::deleteProgram(p, ready, start, done);
+            background StaticVarReleaseTest::deleteGuardProgram(p, ready, start, done);
             # only the threads reference the Programs now
             remove p;
             children = ();
@@ -455,9 +552,34 @@ int sub get() {
                 p.callFunction("get");
             }
         } catch (hash<ExceptionInfo> ex) {
-            # the values can have been released
+            # the Program of the class can have been deleted
+            if (ex.err != "PROGRAM-ERROR") {
+                rethrow;
+            }
         }
-        delete p;
+        StaticVarReleaseTest::deleteSharingProgram(p);
+    }
+
+    #! deletes a Program sharing a class whose Program can have been deleted
+    /** If this deletion releases the values of the static variables, the destructor of the guard cannot run when the
+        Program of its class has been deleted
+    */
+    private static deleteSharingProgram(Program p) {
+        try {
+            delete p;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "PROGRAM-ERROR") {
+                rethrow;
+            }
+        }
+    }
+
+    #! deletes the Program of the class once all the threads deleting Programs have started
+    private static deleteGuardProgram(Program p, Counter ready, Counter start, Counter done) {
+        on_exit done.dec();
+        ready.dec();
+        start.waitForZero();
+        StaticVarReleaseTest::deleteSharingProgram(p);
     }
 
     #! deletes the Program once all the threads deleting Programs have started
@@ -475,6 +597,43 @@ int sub get() {
             hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("env QORE_MODULE_DIR=%s "
                 "%s --exec-mode=%s %s", StaticVarReleaseTest::shellQuote(dir),
                 StaticVarReleaseTest::shellQuote(qore_bin), mode,
+                StaticVarReleaseTest::shellQuote(dir + DirSep + script)));
+            assertEq(0, r.rc, sprintf("%s exits normally: %s", what, r.out));
+            assertEq(output, (select r.stdout.split("\n"), $1.val()), sprintf("%s output: %s", what, r.out));
+            assertEq("", r.stderr, what + " writes nothing to stderr");
+        }
+    }
+
+    #! the exit script compiled to an executable with qcc, run with signal handling disabled
+    aotExitTest(string script, list<string> output) {
+        string dir = get_script_dir() + "static-var-release";
+        TmpDir tmp("svr-aot-");
+        string exe = tmp.path + DirSep + replace(basename(script), ".q", "");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -o %s %s",
+            StaticVarReleaseTest::shellQuote(StaticVarReleaseTest::getQcc(qore_bin)),
+            StaticVarReleaseTest::shellQuote(exe), StaticVarReleaseTest::shellQuote(dir + DirSep + script)));
+        assertEq(0, r.rc, sprintf("qcc %s: %s", script, r.out));
+        r = ExecModeHarness::run_command(sprintf("env QORE_MODULE_DIR=%s %s -b",
+            StaticVarReleaseTest::shellQuote(dir), StaticVarReleaseTest::shellQuote(exe)));
+        assertEq(0, r.rc, sprintf("%s exits normally: %s", exe, r.out));
+        assertEq(output, (select r.stdout.split("\n"), $1.val()), sprintf("%s output: %s", exe, r.out));
+        assertEq("", r.stderr, exe + " writes nothing to stderr");
+    }
+
+    #! the module compiled with qcc -m, loaded by the exit script in each execution mode
+    aotModuleExitTest(string script, string module, list<string> output) {
+        string dir = get_script_dir() + "static-var-release";
+        TmpDir tmp("svr-aot-");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -m -o %s %s",
+            StaticVarReleaseTest::shellQuote(StaticVarReleaseTest::getQcc(qore_bin)),
+            StaticVarReleaseTest::shellQuote(tmp.path + DirSep + module + ".qmod"),
+            StaticVarReleaseTest::shellQuote(dir + DirSep + module + ".qm")));
+        assertEq(0, r.rc, sprintf("qcc -m %s: %s", module, r.out));
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string what = sprintf("%s with %s and %s.qmod", script, mode, module);
+            # only the compiled module is on the module path
+            r = ExecModeHarness::run_command(sprintf("env QORE_MODULE_DIR=%s %s --exec-mode=%s %s",
+                StaticVarReleaseTest::shellQuote(tmp.path), StaticVarReleaseTest::shellQuote(qore_bin), mode,
                 StaticVarReleaseTest::shellQuote(dir + DirSep + script)));
             assertEq(0, r.rc, sprintf("%s exits normally: %s", what, r.out));
             assertEq(output, (select r.stdout.split("\n"), $1.val()), sprintf("%s output: %s", what, r.out));
