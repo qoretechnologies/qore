@@ -10933,9 +10933,14 @@ static QoreProgram* qore_rt_method_execution_program(const QoreMethod* method, c
         }
     }
     QoreProgram* pgm = uvb->pgm;
-    // a Program whose data this thread deletes runs the code of its classes (destructors) without a reference: its
-    // last one can have been released
-    if (!pgm || pgm == getProgram() || qore_program_torn_down_by_current_thread(pgm)) {
+    if (!pgm) {
+        return pgm;
+    }
+    // the current Program, and a Program that this thread deletes, which runs the code of its classes (destructors)
+    // without a reference, as its last one can have been released, are allocated; the ID tells the variant's Program
+    // from a later one at the same address
+    if ((pgm == getProgram() || qore_program_torn_down_by_current_thread(pgm))
+            && pgm->getProgramId() == uvb->pgm_id) {
         return pgm;
     }
     vholder.pgm = qore_program_private::getReferencedProgram(pgm, uvb->pgm_id);

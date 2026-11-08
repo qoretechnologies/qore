@@ -44,9 +44,11 @@ calls (`qore_get_method_pgm_context()`), the native code's method calls (`qore_r
 (`qore_class_private::getMethodForEval()`), the IR interpreter's inlined method calls and `CodeContextHelperBase`
 (thread.cpp).  A source Program whose last reference has been released is being deleted: the reference cannot be
 taken, and the call raises `PROGRAM-ERROR` (`QoreSourceProgramHolder::sourceDeleted()`), as entering a Program whose
-teardown has started does, unless the calling thread is the one deleting it: the destructors run while its data is
-deleted call into its classes after its last reference has been released (a Program container released by
-`load_user_module_with_program()`, for example), and the Program stays allocated until that deletion returns.  The
+teardown has started does, unless the calling thread is the one deleting it: its exit hooks, its cleanup callback and
+the destructors run while its data is deleted call into its classes, directly or through other Programs, after its
+last reference has been released (a Program container released by `load_user_module_with_program()`, for example),
+and the Program stays allocated until that deletion returns.  The record covers all of
+`waitForTerminationAndClear()`.  The
 thread records the Programs whose data it deletes in a thread-local list (`qore_program_torn_down_by_current_thread()`,
 which compares addresses only).  A method that does not switch Programs runs in the caller's; the native code never falls back to the
 Program of the variant, which is the deleted source Program.
