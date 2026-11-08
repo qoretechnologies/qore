@@ -1,0 +1,298 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ObjectLocalRealReferenceTest
+
+#! Regression test: an object held by an object local has a real reference exactly while the local holds it
+/** A local variable on the runtime stack marks the object it holds with a real reference, which tells the collector
+    that the object is reachable from a stack.  The locals of an object type (a class, \c object, also optional) now
+    keep their value in IR storage in the IR, JIT and tiered execution modes and in AOT-compiled code, which marks
+    the object it holds in the same way (QoreIRFunction::real_reference_locals).  The script checks the real
+    references of an object (with a library with debugging, through \c dbg_node_info()) relative to those it had at
+    the start of a function as a local is assigned it, reassigned, cleared, and as the local's scope ends in a block, in
+    a loop, by an exception, and as a foreach variable, and that no real reference is left at the end (a real
+    reference left over would keep the collector from deciding on the object, an extra release would assert in a
+    library with debugging); that recursive graphs held by object locals are collected when the locals no longer
+    hold them; and that a recursive graph reachable only from IR storage is never collected, in one thread and with
+    other threads releasing references to it.  Every case runs twice, in every execution mode, on the IR tier of
+    tiered execution and as a qcc executable (see ExecModeOutputTest).
+*/
+class ObjectLocalRealReferenceTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+%strict-args
+# the real references of objects held by object locals, and the collection of recursive graphs that they hold
+int created = 0;
+int destroyed = 0;
+class Node {
+    public {
+        *Node peer;
+        string name;
+    }
+    constructor(string n) { name = n; ++created; }
+    destructor() { ++destroyed; }
+}
+class Holder {
+    public { *Queue q; }
+    constructor(*Queue q) { self.q = q; ++created; }
+    destructor() { ++destroyed; }
+}
+# the real references of an object, which a library with debugging gives
+int sub rrefs(object o) {
+    if (!Option::HAVE_LIBRARY_DEBUGGING) {
+        return 0;
+    }
+    *list<auto> m = (call_function("dbg_node_info", o) =~ x/rrefs: ([0-9]+)/);
+    return m[0].toInt();
+}
+# the real references of an object, read through one more frame, as check() reads them
+int sub base_of(object o) {
+    return rrefs(o);
+}
+# the real references of an object relative to those it had at the start of the function giving the base
+sub check(string n, object o, int base) {
+    if (Option::HAVE_LIBRARY_DEBUGGING) {
+        printf("%s: %d\n", n, rrefs(o) - base);
+    }
+}
+sub assigned(Node n0) {
+    int base = base_of(n0);
+    Node n = n0;
+    check("assigned", n0, base);
+    n = new Node("other");
+    check("reassigned", n0, base);
+    n = n0;
+    check("assigned again", n0, base);
+}
+sub block(Node n0) {
+    int base = base_of(n0);
+    {
+        Node n = n0;
+        check("in block", n0, base);
+    }
+    check("after block", n0, base);
+}
+sub loop(Node n0) {
+    int base = base_of(n0);
+    for (int i = 0; i < 3; ++i) {
+        Node n = n0;
+        if (i == 1) {
+            check("in loop", n0, base);
+        }
+    }
+    check("after loop", n0, base);
+}
+sub thrower(Node n0) {
+    Node n = n0;
+    throw "ERR";
+}
+sub exception(Node n0) {
+    int base = base_of(n0);
+    try {
+        thrower(n0);
+    } catch (hash<ExceptionInfo> ex) {
+        check("after exception", n0, base);
+    }
+}
+sub optional(Node n0) {
+    int base = base_of(n0);
+    *Node n = n0;
+    check("optional", n0, base);
+    n = NOTHING;
+    check("optional cleared", n0, base);
+}
+sub object_typed(Node n0) {
+    int base = base_of(n0);
+    object o = n0;
+    check("object", n0, base);
+    *object p = n0;
+    check("optional object", n0, base);
+    o = new Node("o");
+    p = NOTHING;
+    check("object cleared", n0, base);
+}
+sub foreach_var(list<Node> l, Node n0) {
+    int base = base_of(n0);
+    foreach Node n in (l) {
+        if (n == n0) {
+            check("foreach", n0, base);
+        }
+    }
+    check("after foreach", n0, base);
+}
+Node sub returned(Node n0) {
+    Node n = n0;
+    return n;
+}
+# recursive graphs held by object locals are collected when the locals no longer hold them
+sub cycles(int count) {
+    for (int i = 0; i < count; ++i) {
+        Node a("a");
+        Node b("b");
+        a.peer = b;
+        b.peer = a;
+    }
+}
+sub queue_cycle(int count) {
+    Queue q();
+    for (int i = 0; i < count; ++i) {
+        q.push(new Holder(q));
+        q.clear();
+    }
+}
+sub run() {
+    Node n0("n0");
+    int base = base_of(n0);
+    check("start", n0, base);
+    assigned(n0);
+    check("after assigned", n0, base);
+    block(n0);
+    loop(n0);
+    exception(n0);
+    optional(n0);
+    object_typed(n0);
+    foreach_var((new Node("x"), n0), n0);
+    Node r = returned(n0);
+    check("returned", n0, base);
+    remove r;
+    check("end", n0, base);
+    created = destroyed = 0;
+    cycles(50);
+    printf("cycles: created=%d destroyed=%d\n", created, destroyed);
+    created = destroyed = 0;
+    queue_cycle(50);
+    printf("queue cycle: created=%d destroyed=%d\n", created, destroyed);
+}
+for (int i = 0; i < 2; ++i) {
+    run();
+}
+
+# a recursive graph reachable only from IR storage is never collected
+# a recursive graph reachable only from IR storage (an untyped local, IR-only) must never be collected
+class GraphNode {
+    public {
+        *GraphNode peer;
+        int id;
+        hash<auto> data;
+    }
+    constructor(int i) { id = i; data = {"i": i}; }
+}
+GraphNode sub make_cycle(int i) {
+    GraphNode a(i);
+    GraphNode b(i + 1);
+    a.peer = b;
+    b.peer = a;
+    return a;
+}
+sub hold(int n) {
+    # the only reference to the graph is held by IR storage
+    auto a = make_cycle(1);
+    auto keep = a.peer;
+    keep = NOTHING;
+    for (int i = 0; i < n; ++i) {
+        # references to the graph taken and released: each release of the last other reference is a collection
+        # decision for an object in a recursive set
+        auto tmp = a.peer;
+        tmp = NOTHING;
+        auto tmp2 = a;
+        tmp2 = NOTHING;
+        # garbage cycles that the collector scans and deletes
+        make_cycle(i * 2);
+    }
+    printf("hold: %d %d %y %y\n", a.id, a.peer.id, a.peer.peer == a, a.peer.data);
+}
+sub hold_threads(int n) {
+    auto a = make_cycle(10);
+    Counter c(4);
+    for (int t = 0; t < 4; ++t) {
+        background sub (GraphNode g) {
+            on_exit c.dec();
+            for (int i = 0; i < n; ++i) {
+                GraphNode p = g.peer;
+                p = g;
+                make_cycle(i);
+            }
+        }(a);
+    }
+    # the graph is released by the other threads while this frame holds it in IR storage only
+    c.waitForZero();
+    printf("threads: %d %d %y\n", a.id, a.peer.id, a.peer.peer == a);
+}
+for (int i = 0; i < 2; ++i) {
+    hold(500);
+    hold_threads(200);
+}
+';
+
+        #! the AST interpreter's output with a library with debugging
+        const Expected = (
+            "start: 0",
+            "assigned: 1",
+            "reassigned: 0",
+            "assigned again: 1",
+            "after assigned: 0",
+            "in block: 1",
+            "after block: 0",
+            "in loop: 1",
+            "after loop: 0",
+            "after exception: 0",
+            "optional: 1",
+            "optional cleared: 0",
+            "object: 1",
+            "optional object: 2",
+            "object cleared: 0",
+            "foreach: 1",
+            "after foreach: 0",
+            "returned: 1",
+            "end: 0",
+            "cycles: created=100 destroyed=100",
+            "queue cycle: created=50 destroyed=50",
+            "start: 0",
+            "assigned: 1",
+            "reassigned: 0",
+            "assigned again: 1",
+            "after assigned: 0",
+            "in block: 1",
+            "after block: 0",
+            "in loop: 1",
+            "after loop: 0",
+            "after exception: 0",
+            "optional: 1",
+            "optional cleared: 0",
+            "object: 1",
+            "optional object: 2",
+            "object cleared: 0",
+            "foreach: 1",
+            "after foreach: 0",
+            "returned: 1",
+            "end: 0",
+            "cycles: created=100 destroyed=100",
+            "queue cycle: created=50 destroyed=50",
+            "hold: 1 2 True {i: 2}",
+            "threads: 10 11 True",
+            "hold: 1 2 True {i: 2}",
+            "threads: 10 11 True",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ObjectLocalRealReference", Script,
+            (map $1 + "\n", ObjectLocalRealReferenceTest::expectedOutput()).join(""),
+            "marks an object held by an object local with a real reference as the AST interpreter does") {
+    }
+
+    #! the expected output: without library debugging, the script gives no real reference counts
+    private static list<string> expectedOutput() {
+        return Option::HAVE_LIBRARY_DEBUGGING ? Expected : (select Expected, $1 !~ /^[a-z ]+: -?[0-9]+$/);
+    }
+}

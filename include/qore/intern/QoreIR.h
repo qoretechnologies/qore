@@ -3645,9 +3645,25 @@ public:
     */
     std::unordered_set<const void*> reference_slot_locals;
 
+    //! Body locals whose type names a class that keep their value in IR storage, marked with a real reference
+    /** A local variable on the runtime stack marks the object it holds with a real reference
+        (check_lvalue_object_in_out()): the collector takes an object with real references to be reachable from a
+        stack and makes no collection decision when another reference to it is released.  IR storage (the slot of the
+        IR interpreter, the native cache) holds a plain reference, so an object in a recursive graph held only by IR
+        storage made the collector decide at every release of a reference to it (a loop pushing objects that refer to a
+        Queue to the Queue held by such a local ran 1.5 times the instructions).  The engines give the object held by
+        one of these locals a real reference of its own (QoreObject::realRef()), taken when the local is assigned the
+        object and released when it is assigned another value, when its scope ends and when the function is left, so
+        that the object has a real reference exactly while the local holds it, as for a variable on the runtime stack
+        (see qore_ir_real_slot_set()).  These locals are not in ir_only_locals, so that the IR optimizations keyed on
+        that set, which take an IR-only local's storage to be its value, leave them alone; the engines store them as
+        IR-only locals (see hasIRStorage()).  Parameters stay on the runtime stack.
+    */
+    std::unordered_set<const void*> real_reference_locals;
+
     //! Returns true if a local keeps its value in IR storage only and has none on the runtime stack
     bool hasIRStorage(const void* key) const {
-        return ir_only_locals.count(key) || reference_slot_locals.count(key);
+        return ir_only_locals.count(key) || reference_slot_locals.count(key) || real_reference_locals.count(key);
     }
 
     // Locals referenced by AST expression subtrees retained in otherwise
@@ -3742,7 +3758,8 @@ public:
     //! never accessed via thread-local stack).  When true, callers can skip
     //! instantiating/uninstantiating body locals on the thread-local stack.
     bool areAllBodyLocalsIROnly() const {
-        return !all_body_locals.empty() && (!ir_only_locals.empty() || !reference_slot_locals.empty())
+        return !all_body_locals.empty() && (!ir_only_locals.empty() || !reference_slot_locals.empty()
+                || !real_reference_locals.empty())
             && std::all_of(all_body_locals.begin(), all_body_locals.end(),
                 [this](const LocalVar* lv) {
                     return hasIRStorage(reinterpret_cast<const void*>(lv));
@@ -3791,6 +3808,8 @@ public:
     //! Non-zero for the local slots of reference_slot_locals, whose slot can hold a reference that a store writes
     //! through
     mutable std::vector<uint8_t> interpreter_reference_slots;
+    //! Non-zero for the local slots of real_reference_locals, whose object has a real reference from the slot
+    mutable std::vector<uint8_t> interpreter_real_slots;
     //! The locals the function owns (QoreIRFunction::pre_instantiated_locals and every body local), which the
     //! interpreter tells from the variables of an enclosing scope
     mutable std::unordered_set<const void*> interpreter_function_own_locals;

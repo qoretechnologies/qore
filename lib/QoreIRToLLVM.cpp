@@ -2941,6 +2941,20 @@ size_t QoreIRToLLVM::getReloadChainCallThreshold() {
     return threshold;
 }
 
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::isRealReferenceAlloca(const llvm::AllocaInst* alloca) const {
+    if (!current_ir_func || current_ir_func->real_reference_locals.empty()) {
+        return false;
+    }
+    for (const void* key : current_ir_func->real_reference_locals) {
+        auto it = local_allocas.find(key);
+        if (it != local_allocas.end() && it->second.storage() == alloca && isRealReferenceLocal(key)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::vector<llvm::AllocaInst*> QoreIRToLLVM::getBoxedExitCleanupSlots() const {
     std::vector<llvm::AllocaInst*> slots;
     slots.reserve(preinstantiated_entry_cleanup_allocas.size()
@@ -3002,7 +3016,14 @@ bool QoreIRToLLVM::prepareBoxedExitCleanupArray(llvm::Function* llvm_func,
                 llvm::ConstantInt::get(i32_type,
                     static_cast<unsigned>(count - 1 - i)),
                 "local_cleanup_slot_ptr");
-        ab.CreateStore(slots[i], gep);
+        // the cache of an object local is tagged in the lowest bit of its address (an alloca of an i64 is aligned),
+        // and qore_rt_cleanup_run_allocas() releases its object with the real reference it has from the cache
+        llvm::Value* slot_ptr = slots[i];
+        if (isRealReferenceAlloca(slots[i])) {
+            slot_ptr = ab.CreateIntToPtr(ab.CreateOr(ab.CreatePtrToInt(slots[i], i64_type),
+                llvm::ConstantInt::get(i64_type, 1)), ptr_type, "real_reference_slot_ptr");
+        }
+        ab.CreateStore(slot_ptr, gep);
     }
     boxed_exit_cleanup_array = array;
     boxed_exit_cleanup_array_count = static_cast<unsigned>(count);
@@ -3272,7 +3293,14 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
         llvm::Value* val = builder->CreateLoad(i64_type, alloca);
         builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
                 alloca);
-        builder->CreateCall(helper, {val, xsink_arg});
+        if (isRealReferenceAlloca(alloca)) {
+            // the object of an object local is released with the real reference it has from the cache
+            auto release_fn = module.getOrInsertFunction("qore_rt_object_slot_release",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+            builder->CreateCall(release_fn, {val, xsink_arg});
+        } else {
+            builder->CreateCall(helper, {val, xsink_arg});
+        }
     }
 }
 
@@ -10662,13 +10690,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
     // Propagate IR-only locals set for optimization (skip runtime sync for these); the locals that keep a reference
     // they hold in their cache are stored as IR-only locals (see QoreIRFunction::reference_slot_locals)
-    if (func.reference_slot_locals.empty()) {
+    // locals that keep a reference they hold in their cache are stored as IR-only locals (see
+    // QoreIRFunction::reference_slot_locals), as are object locals, whose object has a real reference from the cache
+    // (see QoreIRFunction::real_reference_locals)
+    if (func.reference_slot_locals.empty() && func.real_reference_locals.empty()) {
         ir_storage_locals.clear();
         ir_only_locals_set = func.ir_only_locals.empty()
             ? nullptr : &func.ir_only_locals;
     } else {
         ir_storage_locals = func.ir_only_locals;
         ir_storage_locals.insert(func.reference_slot_locals.begin(), func.reference_slot_locals.end());
+        ir_storage_locals.insert(func.real_reference_locals.begin(), func.real_reference_locals.end());
         ir_only_locals_set = &ir_storage_locals;
     }
     reload_exempt_locals_set = ir_only_locals_set;
@@ -15420,7 +15452,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // dropping the old one so `x = x` remains safe.
                     // raw local cache: the stored value is released
                     llvm::Value* old_val = builder->CreateLoad(i64_type, it->second.storage());
-                    builder->CreateCall(decref_fn, {old_val, xsink_arg});
+                    if (isRealReferenceLocal(key)) {
+                        // the object of an object local has a real reference from the cache, as a variable on the
+                        // runtime stack marks the object it holds (see QoreIRFunction::real_reference_locals)
+                        auto replace_fn = module.getOrInsertFunction("qore_rt_object_slot_replace",
+                            llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
+                        builder->CreateCall(replace_fn, {old_val, owned_boxed, xsink_arg});
+                    } else {
+                        builder->CreateCall(decref_fn, {old_val, xsink_arg});
+                    }
 
                     if (!fast_entry_param_allocas_by_local.count(key)
                             && owned_ir_local_alloca_keys.insert(key).second) {
@@ -15694,7 +15734,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::Value* old_val = builder->CreateLoad(i64_type, alloca_it->second.storage());
                         builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
                                 alloca_it->second.storage());
-                        builder->CreateCall(decref_fn, {old_val, xsink_arg});
+                        if (isRealReferenceLocal(key)) {
+                            // the object of an object local is released with the real reference it has from the
+                            // cache
+                            auto release_fn = module.getOrInsertFunction("qore_rt_object_slot_release",
+                                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                            builder->CreateCall(release_fn, {old_val, xsink_arg});
+                        } else {
+                            builder->CreateCall(decref_fn, {old_val, xsink_arg});
+                        }
                         return true;
                     }
                 }

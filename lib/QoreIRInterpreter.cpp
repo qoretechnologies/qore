@@ -1122,7 +1122,51 @@ public:
         return slots[i];
     }
 
+    //! Releases the value stored in the given slot, which the caller then replaces
+    /** The object held by the slot of an object local (QoreIRFunction::real_reference_locals) has a real reference
+        from the slot, which is released with it
+    */
+    DLLLOCAL void release(size_t i, ExceptionSink* xsink) {
+        QoreValue& v = slots[i];
+        if (isRealSlot(i) && v.getType() == NT_OBJECT) {
+            v.get<QoreObject>()->realDeref(xsink);
+            return;
+        }
+        v.discard(xsink);
+    }
+
+    //! Stores a value in the given slot, which takes its reference; the slot's value has been released
+    /** An object stored in the slot of an object local is marked with a real reference, as a variable on the runtime
+        stack marks the object it holds (see QoreIRFunction::real_reference_locals)
+    */
+    DLLLOCAL void set(size_t i, QoreValue v) {
+        slots[i] = v;
+        if (isRealSlot(i) && v.getType() == NT_OBJECT) {
+            qore_object_private::get(*v.get<QoreObject>())->setRealReference();
+        }
+    }
+
+    //! Returns true if the slot is that of an object local, whose object has a real reference from the slot
+    DLLLOCAL bool isRealSlot(size_t i) const {
+        return i < real_slots.size() && real_slots[i];
+    }
+
+    //! Sets the slots of the object locals of the function the frame runs (see interpreter_real_slots)
+    DLLLOCAL void setRealSlots(const std::vector<uint8_t>& real) {
+        real_slots = real;
+    }
+
+    //! Releases the values of every slot, last slot first, and resets them
+    DLLLOCAL void releaseAll(ExceptionSink* xsink) {
+        for (size_t i = slots.size(); i; --i) {
+            release(i - 1, xsink);
+            slots[i - 1] = QoreValue();
+        }
+    }
+
     //! Returns the vector of the stored values, for the frames and the native code that share the slots
+    /** The slots of object locals are never shared: their locals are not referenced by any other frame
+    */
     DLLLOCAL std::vector<QoreValue>& vector() {
         return slots;
     }
@@ -1133,6 +1177,7 @@ public:
 
     DLLLOCAL void clear() {
         slots.clear();
+        real_slots.clear();
     }
 
     DLLLOCAL void resize(size_t size) {
@@ -1149,6 +1194,8 @@ public:
 
 private:
     std::vector<QoreValue> slots;
+    //! non-zero for the slots of object locals (see QoreIRFunction::real_reference_locals); empty if none
+    std::vector<uint8_t> real_slots;
 };
 
 //! A set of local variables that allocates no memory once its capacity covers the locals it holds
@@ -1352,10 +1399,7 @@ struct IRCallFrame {
             }
         }
         cleanup.clear();
-        for (auto& val : locals_slot_cache) {
-            val.discard(xsink);
-            val = QoreValue();
-        }
+        locals_slot_cache.releaseAll(xsink);
     }
 
     void reset(size_t reserve_size, size_t local_slot_count) {
@@ -1378,9 +1422,7 @@ struct IRCallFrame {
             borrowed_temp_remaining.resize(reserve_size, 0);
         }
         if (local_slot_count > 0) {
-            for (auto& val : locals_slot_cache) {
-                val.discard(nullptr);
-            }
+            locals_slot_cache.releaseAll(nullptr);
             locals_slot_cache.clear();
             locals_slot_cache.resize(local_slot_count);
             locals_lvar_cache.assign(local_slot_count, nullptr);
@@ -1390,9 +1432,7 @@ struct IRCallFrame {
             local_load_slots.clear();
             local_load_slots.resize(local_slot_count);
         } else {
-            for (auto& val : locals_slot_cache) {
-                val.discard(nullptr);
-            }
+            locals_slot_cache.releaseAll(nullptr);
             locals_slot_cache.clear();
             locals_lvar_cache.clear();
             locals_ir_only.clear();
@@ -2319,6 +2359,9 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     std::vector<uint8_t> locals_ir_only;
     // the slots of locals that keep a reference they hold in their slot (see QoreIRFunction::reference_slot_locals)
     std::vector<uint8_t> reference_slots;
+    // the slots of object locals, whose object has a real reference from the slot (see
+    // QoreIRFunction::real_reference_locals)
+    std::vector<uint8_t> real_slots;
     bool has_non_ir_only_locals = false;
     size_t local_slot_count = func.local_var_slots.empty()
         ? 0 : static_cast<size_t>(func.max_local_slot_id) + 1;
@@ -2335,6 +2378,12 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                         }
                         reference_slots[sid] = 1;
                     }
+                    if (func.real_reference_locals.count(key)) {
+                        if (real_slots.empty()) {
+                            real_slots.assign(local_slot_count, 0);
+                        }
+                        real_slots[sid] = 1;
+                    }
                 } else {
                     has_non_ir_only_locals = true;
                 }
@@ -2349,6 +2398,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_param_local_vars = std::move(param_local_vars);
     func.interpreter_locals_ir_only = std::move(locals_ir_only);
     func.interpreter_reference_slots = std::move(reference_slots);
+    func.interpreter_real_slots = std::move(real_slots);
     // the loads of IR-only locals whose only use is the base of a method call in the same block, with no write to
     // the local between: when the value is an object, they borrow it, as the AST interpreter evaluates the base of a
     // method call without a reference of its own; each reference taken and released was a dereference of the object,
@@ -6166,6 +6216,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     if (!ensureInterpreterAnalysis(func, xsink)) {
         return false;
     }
+    // the slots of the object locals, whose object has a real reference from the slot
+    if (!func.interpreter_real_slots.empty()) {
+        locals_slot_cache.setRealSlots(func.interpreter_real_slots);
+    }
     // nothing has been registered for cleanup yet
     assert(cleanup.empty() && cleanup.slotOwnedEntries().empty());
     cleanup.setSlotOwned(&func.interpreter_slot_owned_values);
@@ -6225,7 +6279,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             // Copy parent's value into handler's slot (with reference counting); raw slot: the value is copied
             // as it is stored
             const QoreValue& parent_val = (*parent_slot_cache)[i];
-            locals_slot_cache.storage(i) = parent_val;
+            locals_slot_cache.set(i, parent_val);
             if (parent_val.needsRef()) {
                 // raw slot: the copy of the parent's value takes its own reference
                 locals_slot_cache.storage(i).refSelf();
@@ -6243,7 +6297,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 bool needs_deref = true;
                 QoreValue parent_val = lvar->eval(needs_deref, xsink);
                 if (!parent_val.isNothing()) {
-                    locals_slot_cache.storage(i) = parent_val.needsRef() ? parent_val.refSelf() : parent_val;
+                    locals_slot_cache.set(i, parent_val.needsRef() ? parent_val.refSelf() : parent_val);
                     if (needs_deref && parent_val.needsRef()) {
                         parent_val.discard(xsink);
                     }
@@ -6398,8 +6452,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             uint32_t cleanup_sid = func.interpreter_param_slot_ids[static_cast<size_t>(j)];
             if (cleanup_sid < local_slot_count && locals_instantiated[cleanup_sid]) {
-                locals_slot_cache.storage(cleanup_sid).discard(xsink);
-                locals_slot_cache.storage(cleanup_sid) = QoreValue();
+                locals_slot_cache.release(cleanup_sid, xsink);
+                locals_slot_cache.set(cleanup_sid, QoreValue());
                 locals_instantiated[cleanup_sid] = false;
             }
         }
@@ -6433,7 +6487,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         }
                     }
 
-                    locals_slot_cache.storage(sid) = val;
+                    locals_slot_cache.set(sid, val);
                     locals_instantiated[sid] = true;
                     if (sid < locals_ir_only.size()) {
                         // Direct params intentionally bypass the runtime local
@@ -6549,8 +6603,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     if (preserveParentSlotForWriteback(i)) {
                         continue;
                     }
-                    locals_slot_cache.storage(i).discard(xsink);
-                    locals_slot_cache.storage(i) = QoreValue();
+                    locals_slot_cache.release(i, xsink);
+                    locals_slot_cache.set(i, QoreValue());
                 }
                 std::fill(locals_lvar_cache.begin(), locals_lvar_cache.end(), nullptr);
             }
@@ -6587,8 +6641,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             if (preserve_ir_only && i < locals_ir_only.size() && locals_ir_only[i]) {
                 continue;  // Preserve IR-only locals
             }
-            locals_slot_cache.storage(i).discard(xsink);
-            locals_slot_cache.storage(i) = QoreValue();
+            locals_slot_cache.release(i, xsink);
+            locals_slot_cache.set(i, QoreValue());
         }
         std::fill(locals_lvar_cache.begin(), locals_lvar_cache.end(), nullptr);
     };
@@ -6612,8 +6666,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     continue;
                 }
                 if (!locals_ir_only[i]) {
-                    locals_slot_cache.storage(i).discard(xsink);
-                    locals_slot_cache.storage(i) = QoreValue();
+                    locals_slot_cache.release(i, xsink);
+                    locals_slot_cache.set(i, QoreValue());
                 }
             }
         }
@@ -6697,11 +6751,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto releaseContainerBookkeepingRefs = [&](uint32_t container_slot_id, uint32_t operand_slot_id) {
         clearLoadSlots(container_slot_id);
         if (container_slot_id != UINT32_MAX && container_slot_id < locals_slot_cache.size()) {
-            locals_slot_cache.storage(container_slot_id).discard(xsink);
+            locals_slot_cache.release(container_slot_id, xsink);
             // reset to the cache-miss sentinel so the next load re-reads TLS;
             // leaving the stale value would hand out a cache hit backed by a
             // released reference
-            locals_slot_cache.storage(container_slot_id) = QoreValue();
+            locals_slot_cache.set(container_slot_id, QoreValue());
         }
         discardContainerValueSlot(operand_slot_id, container_slot_id, false);
     };
@@ -6729,12 +6783,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         // locals declared before it), so that an object local's destructor runs before that of a local declared
         // before it when the function is left by an exception too
         ~SlotCacheCleanup() {
-            for (size_t i = cache.size(); i; --i) {
-                // raw slot: the value the slot owns is released
-                QoreValue& v = cache.storage(i - 1);
-                v.discard(xsink);
-                v = QoreValue();
-            }
+            cache.releaseAll(xsink);
         }
     } slot_cache_cleanup{locals_slot_cache, xsink};
 
@@ -6879,13 +6928,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (j < locals_ir_only.size() && locals_ir_only[j]) {
                     continue;
                 }
-                locals_slot_cache.storage(j).discard(xsink);
-                locals_slot_cache.storage(j) = QoreValue();
+                locals_slot_cache.release(j, xsink);
+                locals_slot_cache.set(j, QoreValue());
             }
         } else {
             if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                locals_slot_cache.storage(path_inst->lvalue_slot_id).discard(xsink);
-                locals_slot_cache.storage(path_inst->lvalue_slot_id) = QoreValue();
+                locals_slot_cache.release(path_inst->lvalue_slot_id, xsink);
+                locals_slot_cache.set(path_inst->lvalue_slot_id, QoreValue());
             }
             clearLoadSlots(path_inst->lvalue_slot_id);
         }
@@ -6906,14 +6955,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         if (lval_inst->hasLocalTarget()) {
             if (lval_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                locals_slot_cache.storage(lval_inst->lvalue_slot_id).discard(xsink);
-                locals_slot_cache.storage(lval_inst->lvalue_slot_id) = QoreValue();
+                locals_slot_cache.release(lval_inst->lvalue_slot_id, xsink);
+                locals_slot_cache.set(lval_inst->lvalue_slot_id, QoreValue());
             }
             clearLoadSlots(lval_inst->lvalue_slot_id);
         } else if (lval_inst->lvalue_slot_id == UINT32_MAX) {
             for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                locals_slot_cache.storage(i).discard(xsink);
-                locals_slot_cache.storage(i) = QoreValue();
+                locals_slot_cache.release(i, xsink);
+                locals_slot_cache.set(i, QoreValue());
             }
         }
         return lval_vrn;
@@ -6963,11 +7012,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
         }
         if (sid < locals_slot_cache.size()) {
-            locals_slot_cache.storage(sid).discard(xsink);
+            locals_slot_cache.release(sid, xsink);
             if (repopulate) {
-                locals_slot_cache.storage(sid) = res.needsRef() ? res.refSelf() : res;
+                locals_slot_cache.set(sid, res.needsRef() ? res.refSelf() : res);
             } else {
-                locals_slot_cache.storage(sid) = QoreValue();
+                locals_slot_cache.set(sid, QoreValue());
             }
             clearLoadSlots(sid);
             markParentLValueDirty(lval_inst, lval_vrn);
@@ -8478,8 +8527,8 @@ next_instruction:
                             if (inv_slot_it != func.local_var_slots.end()) {
                                 inv_lvalue_sid = inv_slot_it->second;
                                 if (inv_lvalue_sid < locals_slot_cache.size()) {
-                                    locals_slot_cache.storage(inv_lvalue_sid).discard(xsink);
-                                    locals_slot_cache.storage(inv_lvalue_sid) = QoreValue();
+                                    locals_slot_cache.release(inv_lvalue_sid, xsink);
+                                    locals_slot_cache.set(inv_lvalue_sid, QoreValue());
                                 }
                                 clearLoadSlots(inv_lvalue_sid);
                             }
@@ -8499,8 +8548,8 @@ next_instruction:
                 // operation modifies TLS. Always invalidate (not repopulate) since
                 // the invoke expression may be a complex lvalue.
                 if (inv_lvalue_sid < locals_slot_cache.size()) {
-                    locals_slot_cache.storage(inv_lvalue_sid).discard(xsink);
-                    locals_slot_cache.storage(inv_lvalue_sid) = QoreValue();
+                    locals_slot_cache.release(inv_lvalue_sid, xsink);
+                    locals_slot_cache.set(inv_lvalue_sid, QoreValue());
                     clearLoadSlots(inv_lvalue_sid);
                 }
                 // Invalidate external caches after Invoke — the AST call may have
@@ -8906,7 +8955,7 @@ next_instruction:
                                     // The runtime local remains the persistent
                                     // owner. Drop only the interpreter cache's
                                     // duplicate ref before the CoW guard runs.
-                                    locals_slot_cache.storage(sid) = QoreValue();
+                                    locals_slot_cache.set(sid, QoreValue());
                                     cached_val.discard(xsink);
                                 }
                                 result_slot_owned = false;
@@ -8990,17 +9039,17 @@ next_instruction:
                         }
                         // Store in slot cache for fast access on next load (unless weak-ref)
                         if (sid != UINT32_MAX && sid < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(sid).discard(xsink);
+                            locals_slot_cache.release(sid, xsink);
                             if (reference_value) {
                                 // the slot holds the reference itself, which the fast path above reads through on
                                 // every load; for an IR-only local an empty slot would read as no value
-                                locals_slot_cache.storage(sid) = reference_value->refRefSelf();
+                                locals_slot_cache.set(sid, reference_value->refRefSelf());
                             } else if (is_weak_ref_local) {
                                 // Clear cache entirely for weak-ref locals so next
                                 // access re-evaluates via TLS (weak-ref target check)
-                                locals_slot_cache.storage(sid) = QoreValue();
+                                locals_slot_cache.set(sid, QoreValue());
                             } else {
-                                locals_slot_cache.storage(sid) = val.needsRef() ? val.refSelf() : val;
+                                locals_slot_cache.set(sid, val.needsRef() ? val.refSelf() : val);
                             }
                         }
                         if (is_weak_ref_local && val.hasNode()) {
@@ -9379,7 +9428,7 @@ load_local_done:
                         // Release the slot cache ref.
                         uint32_t csid = hks_inst->container_slot_id;
                         if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(csid).discard(xsink);
+                            locals_slot_cache.release(csid, xsink);
                         }
 
                         // Clear the container slot so cleanup doesn't try to discard it
@@ -9425,7 +9474,7 @@ load_local_done:
                         clearLoadSlots(hks_inst->container_slot_id);
                         uint32_t csid = hks_inst->container_slot_id;
                         if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(csid).discard(xsink);
+                            locals_slot_cache.release(csid, xsink);
                         }
                         discardContainerValueSlot(hks_inst->operands[0].id, hks_inst->container_slot_id,
                             isClosureContainer(hks_inst->container_lv, hks_inst->container));
@@ -9519,7 +9568,7 @@ load_local_done:
                         clearLoadSlots(hksd_inst->container_slot_id);
                         uint32_t csid = hksd_inst->container_slot_id;
                         if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(csid).discard(xsink);
+                            locals_slot_cache.release(csid, xsink);
                         }
                         discardContainerValueSlot(hksd_inst->operands[0].id, hksd_inst->container_slot_id,
                             isClosureContainer(hksd_inst->container_lv, hksd_inst->container));
@@ -9563,7 +9612,7 @@ load_local_done:
                         clearLoadSlots(hksd_inst->container_slot_id);
                         uint32_t csid = hksd_inst->container_slot_id;
                         if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(csid).discard(xsink);
+                            locals_slot_cache.release(csid, xsink);
                         }
                         discardContainerValueSlot(hksd_inst->operands[0].id, hksd_inst->container_slot_id,
                             isClosureContainer(hksd_inst->container_lv, hksd_inst->container));
@@ -9725,7 +9774,7 @@ load_local_done:
                         // Release the slot cache ref.
                         uint32_t csid = lis_inst->container_slot_id;
                         if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(csid).discard(xsink);
+                            locals_slot_cache.release(csid, xsink);
                         }
 
                         // Clear the container slot so cleanup doesn't try to discard it
@@ -9794,7 +9843,7 @@ load_local_done:
                         clearLoadSlots(lis_inst->container_slot_id);
                         uint32_t csid = lis_inst->container_slot_id;
                         if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(csid).discard(xsink);
+                            locals_slot_cache.release(csid, xsink);
                         }
                         discardContainerValueSlot(lis_inst->operands[0].id, lis_inst->container_slot_id,
                             isClosureContainer(lis_inst->container_lv, lis_inst->container));
@@ -9845,7 +9894,7 @@ load_local_done:
                     target_val = tv.getAsBigInt();
                     // the slot is set to the result below; until then it may only hold what the variable holds
                     if (tv.getType() == NT_INT && fused_inst->target_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(fused_inst->target_slot_id) = tv;
+                        locals_slot_cache.set(fused_inst->target_slot_id, tv);
                     }
                     if (nd && tv.needsRef()) {
                         tv.discard(xsink);
@@ -9910,10 +9959,10 @@ load_local_done:
                                 reference_value = reinterpret_cast<ReferenceNode*>(lvv->val.v.n);
                             }
                         }
-                        locals_slot_cache.storage(fused_inst->source_slot_id).discard(xsink);
-                        locals_slot_cache.storage(fused_inst->source_slot_id) = reference_value
+                        locals_slot_cache.release(fused_inst->source_slot_id, xsink);
+                        locals_slot_cache.set(fused_inst->source_slot_id, reference_value
                             ? QoreValue(reference_value->refRefSelf())
-                            : (sv.needsRef() ? sv.refSelf() : sv);
+                            : (sv.needsRef() ? sv.refSelf() : sv));
                     }
                     if (nd && sv.needsRef()) {
                         sv.discard(xsink);
@@ -9923,8 +9972,8 @@ load_local_done:
                 // Update slot cache (always); a result outside the immediate int range is a heap
                 // value, so the slot must release the value it replaces
                 if (fused_inst->target_slot_id < locals_slot_cache.size()) {
-                    locals_slot_cache.storage(fused_inst->target_slot_id).discard(xsink);
-                    locals_slot_cache.storage(fused_inst->target_slot_id) = QoreValue(result_val);
+                    locals_slot_cache.release(fused_inst->target_slot_id, xsink);
+                    locals_slot_cache.set(fused_inst->target_slot_id, QoreValue(result_val));
                 }
                 // Write through to thread-local variable only if not IR-only
                 if (!fused_inst->target_ir_only) {
@@ -9984,8 +10033,8 @@ load_local_done:
                         }
                     }
                     if (fused_inst->slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(fused_inst->slot_id).discard(xsink);
-                        locals_slot_cache.storage(fused_inst->slot_id) = QoreValue(result_val);
+                        locals_slot_cache.release(fused_inst->slot_id, xsink);
+                        locals_slot_cache.set(fused_inst->slot_id, QoreValue(result_val));
                     }
                     markParentSlotDirty(fused_inst->slot_id);
                     if (fused_inst->result.isValid()) {
@@ -10017,7 +10066,7 @@ load_local_done:
                     }
                     local_val = lv.getAsBigInt();
                     if (fused_inst->slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(fused_inst->slot_id) = QoreValue(local_val);
+                        locals_slot_cache.set(fused_inst->slot_id, QoreValue(local_val));
                     }
                     if (nd && lv.needsRef()) {
                         lv.discard(xsink);
@@ -10027,8 +10076,8 @@ load_local_done:
                 // Update slot cache (always); a result outside the immediate int range is a heap
                 // value, so the slot must release the value it replaces
                 if (fused_inst->slot_id < locals_slot_cache.size()) {
-                    locals_slot_cache.storage(fused_inst->slot_id).discard(xsink);
-                    locals_slot_cache.storage(fused_inst->slot_id) = QoreValue(result_val);
+                    locals_slot_cache.release(fused_inst->slot_id, xsink);
+                    locals_slot_cache.set(fused_inst->slot_id, QoreValue(result_val));
                 }
                 // Write through to thread-local variable only if not IR-only; a closure-bound variable was
                 // changed above
@@ -10085,7 +10134,7 @@ load_local_done:
                     // a comparison only reads its operands: the slot may only cache the value the variable holds,
                     // never the int it is read as (ex: an int local with no value is read as 0 but holds none)
                     if (lv.getType() == NT_INT && fused_inst->lhs_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(fused_inst->lhs_slot_id) = lv;
+                        locals_slot_cache.set(fused_inst->lhs_slot_id, lv);
                     }
                     if (nd && lv.needsRef()) {
                         lv.discard(xsink);
@@ -10115,7 +10164,7 @@ load_local_done:
                     // a comparison only reads its operands: the slot may only cache the value the variable holds,
                     // never the int it is read as (ex: an int local with no value is read as 0 but holds none)
                     if (rv.getType() == NT_INT && fused_inst->rhs_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(fused_inst->rhs_slot_id) = rv;
+                        locals_slot_cache.set(fused_inst->rhs_slot_id, rv);
                     }
                     if (nd && rv.needsRef()) {
                         rv.discard(xsink);
@@ -11123,8 +11172,8 @@ load_local_done:
                             && val.getInternalNode()
                             && locals_slot_cache.storage(sid).getInternalNode()
                                 != val.getInternalNode()) {
-                        locals_slot_cache.storage(sid).discard(xsink);
-                        locals_slot_cache.storage(sid) = val.refSelf();
+                        locals_slot_cache.release(sid, xsink);
+                        locals_slot_cache.set(sid, val.refSelf());
                         if (sid < locals_instantiated.size()) {
                             locals_instantiated[sid] = true;
                         }
@@ -11244,8 +11293,8 @@ load_local_done:
                     assert(local_inst->mode != AssignmentMode::Normal || qore_ir_value_node_type(stored) != NT_REFERENCE
                         || (local_inst->slot_id < func.interpreter_reference_slots.size()
                             && func.interpreter_reference_slots[local_inst->slot_id]));
-                    locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                    locals_slot_cache.storage(local_inst->slot_id) = stored;
+                    locals_slot_cache.release(local_inst->slot_id, xsink);
+                    locals_slot_cache.set(local_inst->slot_id, stored);
                     if (local_inst->slot_id < locals_instantiated.size()) {
                         // For IR-only locals, this bit also records that the slot
                         // cache contains a valid value; QoreValue() is both
@@ -11278,8 +11327,8 @@ load_local_done:
                 if (store_mode != AssignmentMode::Normal) {
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                        locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                        locals_slot_cache.release(local_inst->slot_id, xsink);
+                        locals_slot_cache.set(local_inst->slot_id, QoreValue());
                     }
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < locals_lvar_cache.size()) {
@@ -11336,8 +11385,8 @@ load_local_done:
                     // storage and can also force unnecessary CoW in typed lvalues.
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                        locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                        locals_slot_cache.release(local_inst->slot_id, xsink);
+                        locals_slot_cache.set(local_inst->slot_id, QoreValue());
                     }
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < locals_lvar_cache.size()) {
@@ -11402,8 +11451,8 @@ load_local_done:
                         if (!QoreTypeInfo::parseAcceptsReturns(target_ti, val.getType())) {
                             // Type mismatch: invalidate caches and use full
                             // type-checking path (will raise RUNTIME-TYPE-ERROR)
-                            locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                            locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                            locals_slot_cache.release(local_inst->slot_id, xsink);
+                            locals_slot_cache.set(local_inst->slot_id, QoreValue());
                             if (local_inst->slot_id < locals_lvar_cache.size()) {
                                 locals_lvar_cache[local_inst->slot_id] = nullptr;
                             }
@@ -11411,8 +11460,8 @@ load_local_done:
                         } else {
                             // Type is compatible: pre-populate the cache to avoid a
                             // cache miss on the next LoadLocal
-                            locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                            locals_slot_cache.storage(local_inst->slot_id) = val;
+                            locals_slot_cache.release(local_inst->slot_id, xsink);
+                            locals_slot_cache.set(local_inst->slot_id, val);
                             // Use cached LocalVarValue* for direct write-through (avoids TLS lookup)
                             if (local_inst->slot_id < locals_lvar_cache.size()) {
                                 LocalVarValue*& lvv = locals_lvar_cache[local_inst->slot_id];
@@ -11440,8 +11489,8 @@ load_local_done:
                     } else {
                         // Complex type: invalidate because assignLocalVarValue() →
                         // acceptAssignment() may coerce the value
-                        locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                        locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                        locals_slot_cache.release(local_inst->slot_id, xsink);
+                        locals_slot_cache.set(local_inst->slot_id, QoreValue());
                         // Also invalidate lvar cache for complex types
                         if (local_inst->slot_id < locals_lvar_cache.size()) {
                             locals_lvar_cache[local_inst->slot_id] = nullptr;
@@ -11465,8 +11514,8 @@ load_local_done:
                     // value is now stale even though this store landed in the local's own
                     // slot (a reference-capable local need not actually hold a reference).
                     // Drop just this entry; the next load re-reads the runtime stack.
-                    locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                    locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                    locals_slot_cache.release(local_inst->slot_id, xsink);
+                    locals_slot_cache.set(local_inst->slot_id, QoreValue());
                     if (local_inst->slot_id < locals_lvar_cache.size()) {
                         locals_lvar_cache[local_inst->slot_id] = nullptr;
                     }
@@ -11563,8 +11612,8 @@ load_local_done:
                         // to trigger destructors at block scope exit (e.g., AutoLock).
                         if (local_inst->slot_id != UINT32_MAX
                                 && local_inst->slot_id < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                            locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                            locals_slot_cache.release(local_inst->slot_id, xsink);
+                            locals_slot_cache.set(local_inst->slot_id, QoreValue());
                         }
                         // Also clear the init slot (from StoreLocal) to drop that reference
                         if (local_inst->slot_id != UINT32_MAX) {
@@ -11599,8 +11648,8 @@ load_local_done:
                     // Drop slot cache reference FIRST (before lvar->del)
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                        locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                        locals_slot_cache.release(local_inst->slot_id, xsink);
+                        locals_slot_cache.set(local_inst->slot_id, QoreValue());
                     }
 
                     // Helper lambda: drop all value slots associated with this local
@@ -11676,8 +11725,8 @@ load_local_done:
                             // Clear slot cache for closure-use locals
                             if (local_inst->slot_id != UINT32_MAX
                                     && local_inst->slot_id < locals_slot_cache.size()) {
-                                locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                                locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                                locals_slot_cache.release(local_inst->slot_id, xsink);
+                                locals_slot_cache.set(local_inst->slot_id, QoreValue());
                             }
                             // Clear init/load slots for closure vars
                             cleanupLocalSlots(local_inst->slot_id);
@@ -11823,8 +11872,8 @@ load_local_done:
                         // Clear slot cache
                         if (local_inst->slot_id != UINT32_MAX
                                 && local_inst->slot_id < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                            locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                            locals_slot_cache.release(local_inst->slot_id, xsink);
+                            locals_slot_cache.set(local_inst->slot_id, QoreValue());
                         }
                         // For closure-use vars: release all extra refs BEFORE
                         // clearValue so clearValue is the final deref that triggers
@@ -13810,8 +13859,8 @@ load_local_done:
                 if (lval_inst->hasLocalTarget()) {
                     // Fast path: pre-computed slot_id for the lvalue target
                     if (lval_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(lval_inst->lvalue_slot_id).discard(xsink);
-                        locals_slot_cache.storage(lval_inst->lvalue_slot_id) = QoreValue();
+                        locals_slot_cache.release(lval_inst->lvalue_slot_id, xsink);
+                        locals_slot_cache.set(lval_inst->lvalue_slot_id, QoreValue());
                     }
                     // Also discard values[] entries from LoadLocal results for the
                     // target variable.  These hold +1 references (from guard loads
@@ -13825,16 +13874,16 @@ load_local_done:
                         if (bv_slot_it != func.local_var_slots.end()) {
                             uint32_t sid = bv_slot_it->second;
                             if (sid < locals_slot_cache.size()) {
-                                locals_slot_cache.storage(sid).discard(xsink);
-                                locals_slot_cache.storage(sid) = QoreValue();
+                                locals_slot_cache.release(sid, xsink);
+                                locals_slot_cache.set(sid, QoreValue());
                             }
                             clearLoadSlots(sid);
                         }
                     } else {
                         // Truly unknown lvalue target - full slot cache wipe for safety
                         for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                            locals_slot_cache.storage(i).discard(xsink);
-                            locals_slot_cache.storage(i) = QoreValue();
+                            locals_slot_cache.release(i, xsink);
+                            locals_slot_cache.set(i, QoreValue());
                         }
                     }
                 }
@@ -14548,8 +14597,8 @@ load_local_done:
                     return false;
                 }
                 if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                    locals_slot_cache.storage(path_inst->lvalue_slot_id).discard(xsink);
-                    locals_slot_cache.storage(path_inst->lvalue_slot_id) = QoreValue();
+                    locals_slot_cache.release(path_inst->lvalue_slot_id, xsink);
+                    locals_slot_cache.set(path_inst->lvalue_slot_id, QoreValue());
                     clearLoadSlots(path_inst->lvalue_slot_id);
                     if (path_inst->lvalue_slot_id < local_init_slots.size()
                             && local_init_slots[path_inst->lvalue_slot_id] != UINT32_MAX) {
@@ -14945,12 +14994,12 @@ load_local_done:
                             if (j < locals_ir_only.size() && locals_ir_only[j]) {
                                 continue;
                             }
-                            locals_slot_cache.storage(j).discard(xsink);
-                            locals_slot_cache.storage(j) = QoreValue();
+                            locals_slot_cache.release(j, xsink);
+                            locals_slot_cache.set(j, QoreValue());
                         }
                     } else if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(path_inst->lvalue_slot_id).discard(xsink);
-                        locals_slot_cache.storage(path_inst->lvalue_slot_id) = QoreValue();
+                        locals_slot_cache.release(path_inst->lvalue_slot_id, xsink);
+                        locals_slot_cache.set(path_inst->lvalue_slot_id, QoreValue());
                         clearLoadSlots(path_inst->lvalue_slot_id);
                     }
                 }
@@ -14973,14 +15022,14 @@ load_local_done:
                 // Targeted cache invalidation before the lvalue operation
                 if (lval_inst->hasLocalTarget()) {
                     if (lval_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(lval_inst->lvalue_slot_id).discard(xsink);
-                        locals_slot_cache.storage(lval_inst->lvalue_slot_id) = QoreValue();
+                        locals_slot_cache.release(lval_inst->lvalue_slot_id, xsink);
+                        locals_slot_cache.set(lval_inst->lvalue_slot_id, QoreValue());
                     }
                     clearLoadSlots(lval_inst->lvalue_slot_id);
                 } else if (lval_inst->lvalue_slot_id == UINT32_MAX) {
                     for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                        locals_slot_cache.storage(i).discard(xsink);
-                        locals_slot_cache.storage(i) = QoreValue();
+                        locals_slot_cache.release(i, xsink);
+                        locals_slot_cache.set(i, QoreValue());
                     }
                 }
                 // evalLValueUnary returns the old value for post-inc/dec, new value for pre-inc/dec.

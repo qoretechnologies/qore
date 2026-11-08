@@ -393,6 +393,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_raise_typed_foreach_nothing) },
     { "qore_rt_load_local_aot", reinterpret_cast<void*>(&qore_rt_load_local_aot) },
     { "qore_rt_cleanup_run_allocas", reinterpret_cast<void*>(&qore_rt_cleanup_run_allocas) },
+    { "qore_rt_object_slot_release", reinterpret_cast<void*>(&qore_rt_object_slot_release) },
+    { "qore_rt_object_slot_replace", reinterpret_cast<void*>(&qore_rt_object_slot_replace) },
     { "qore_rt_iterator_cleanup_allocas", reinterpret_cast<void*>(&qore_rt_iterator_cleanup_allocas) },
     { "qore_rt_reload_chain_rotate", reinterpret_cast<void*>(&qore_rt_reload_chain_rotate) },
     { "qore_rt_reload_chain_clear", reinterpret_cast<void*>(&qore_rt_reload_chain_clear) },
@@ -1034,15 +1036,48 @@ extern "C" DLLEXPORT void qore_rt_cleanup_push(uint64_t** stack, int32_t* count,
     the value from each alloca and decrefs it. Used by emitInvokeCleanup() for
     large functions (50+ cleanup allocas) to avoid O(N) error_return blocks.
 */
+//! Releases the value that the native cache of an object local holds, with the real reference it has from the cache
+/** See QoreIRFunction::real_reference_locals: an object stored in the cache of an object local is marked with a real
+    reference, as a variable on the runtime stack marks the object it holds (check_lvalue_object_in_out())
+*/
+extern "C" DLLEXPORT void qore_rt_object_slot_release(uint64_t value, ExceptionSink* xsink) {
+    QoreValue v = fromBits(value);
+    if (v.getType() == NT_OBJECT) {
+        v.get<QoreObject>()->realDeref(xsink);
+        return;
+    }
+    v.discard(xsink);
+}
+
+//! Stores a value in the native cache of an object local: the object stored is marked with a real reference, and the
+//! value replaced is released with its mark
+/** @param old_value the value the cache holds, released
+    @param value the value stored, whose reference the cache takes
+*/
+extern "C" DLLEXPORT void qore_rt_object_slot_replace(uint64_t old_value, uint64_t value, ExceptionSink* xsink) {
+    QoreValue v = fromBits(value);
+    if (v.getType() == NT_OBJECT) {
+        qore_object_private::get(*v.get<QoreObject>())->setRealReference();
+    }
+    qore_rt_object_slot_release(old_value, xsink);
+}
+
 extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, int32_t count, ExceptionSink* xsink) {
     // Cleanup slots are registered in construction order.  Destruct in LIFO
     // order so dependent temporaries (for example iterators) are released
     // before the values they reference.
     for (int32_t i = count - 1; i >= 0; --i) {
-        uint64_t* slot = alloca_ptrs[i];
-        QoreValue v = fromBits(*slot);
+        // the cache of an object local is tagged in the lowest bit of its address; its object is released with the
+        // real reference it has from the cache (see qore_rt_object_slot_release())
+        uintptr_t tagged = reinterpret_cast<uintptr_t>(alloca_ptrs[i]);
+        uint64_t* slot = reinterpret_cast<uint64_t*>(tagged & ~static_cast<uintptr_t>(1));
+        uint64_t bits = *slot;
         *slot = 0;
-        v.discard(xsink);
+        if (tagged & 1) {
+            qore_rt_object_slot_release(bits, xsink);
+        } else {
+            fromBits(bits).discard(xsink);
+        }
     }
 }
 

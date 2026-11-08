@@ -749,6 +749,19 @@ private:
             && ir_only_locals_set && ir_only_locals_set->count(key);
     }
 
+    //! Returns true if a local is an object local whose object has a real reference from its native cache
+    /** See QoreIRFunction::real_reference_locals: a store marks the object stored and releases the object replaced
+        with its mark (qore_rt_object_slot_replace()), and a release of the cache releases the mark with the value
+        (qore_rt_object_slot_release())
+    */
+    bool isRealReferenceLocal(const void* key) const {
+        return current_ir_func && current_ir_func->real_reference_locals.count(key)
+            && ir_only_locals_set && ir_only_locals_set->count(key);
+    }
+
+    //! Returns true if an alloca is the native cache of an object local (see isRealReferenceLocal())
+    bool isRealReferenceAlloca(const llvm::AllocaInst* alloca) const;
+
     //! Returns the reference flag of a local (an i8 that is non-zero if its native cache holds a reference)
     /** Created in the entry block, cleared, the first time it is needed; null if the local has none (see
         usesReferenceFlag())

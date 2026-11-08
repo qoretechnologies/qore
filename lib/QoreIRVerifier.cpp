@@ -1983,6 +1983,7 @@ void QoreIRFunction::computeIROnlyLocals() {
     computeReferenceStoreLocals();
     ir_only_locals.clear();
     reference_slot_locals.clear();
+    real_reference_locals.clear();
     cow_container_locals.clear();
     lvalue_path_locals.clear();
     weak_store_locals.clear();
@@ -2289,14 +2290,16 @@ void QoreIRFunction::computeIROnlyLocals() {
             printd(5, "  local '%s' (%p): may hold a reference (non-IR-only)\n", lv->getName(), key);
             continue;
         }
-        // A local whose type names a class stays on the runtime stack.  As an IR-only local it is released at the
-        // same points (UninstantiateLocal clears the IR interpreter's slot and the native cache; a function's IR-only
-        // locals are released last local first), and a loop holding an object in a typed local ran 2.5 times faster
-        // than this way, but an object in a recursive graph held by such a local (a Queue that the values pushed to
-        // it refer to) then made the collector decide at every dereference of the object: such a loop ran 1.5 times
-        // the instructions of the runtime-stack variable (benchmark_exec_modes.qr queue_cycle).
-        if (QoreTypeInfo::getUniqueReturnClass(lv->getTypeInfo())) {
-            printd(5, "  local '%s' (%p): block-scoped object type (non-IR-only)\n", lv->getName(), key);
+        // A body local of an object type (a class, object, also as an optional type: *T) keeps its value in IR
+        // storage, where the object it holds has a real reference of its own, as on the runtime stack (see
+        // real_reference_locals); a parameter stays on the runtime stack
+        if (QoreTypeInfo::getBaseType(get_or_nothing_base_type(lv->getTypeInfo())) == NT_OBJECT) {
+            if (body_local_keys.count(key)) {
+                printd(5, "  local '%s' (%p): object type (IR storage, real reference)\n", lv->getName(), key);
+                real_reference_locals.insert(key);
+            } else {
+                printd(5, "  local '%s' (%p): object type parameter (non-IR-only)\n", lv->getName(), key);
+            }
             continue;
         }
         printd(5, "  local '%s' (%p): IR-ONLY\n", lv->getName(), key);

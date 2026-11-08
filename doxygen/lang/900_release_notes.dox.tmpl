@@ -1487,6 +1487,9 @@
       takes the reference as it is, as with the AST interpreter, instead of reading the referenced lvalue (ex:
       <tt>NOTHING + h.r</tt> and <tt>h.r.a</tt> gave the referenced value or its member, <tt>foreach</tt> and
       \c select iterated the referenced list)
+    - the IR, JIT and tiered execution modes and AOT-compiled code keep the locals of an object type (a class,
+      \c object) out of the runtime stack as they keep other locals, with the same garbage-collection behavior: a loop
+      assigning an object to such a local runs up to 1.4 times faster
     - in the IR execution mode and wherever the JIT and tiered execution modes run a function with the IR
       interpreter, the first call of a large function in a thread with a pending cancellation (ex: in code that
       caught a \c THREAD-CANCELLED exception) raised the exception before the function ran; it is now raised at the

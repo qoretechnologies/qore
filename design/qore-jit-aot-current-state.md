@@ -499,13 +499,25 @@ Two rules keep its lifetime lexical, matching the AST interpreter:
   assigns the local); its inline cleanup would otherwise omit the local and leak
   the value.
 
-Object-typed locals whose type names a unique class stay on the runtime stack, but
-`*Class`, `auto`, and container-typed locals holding objects are IR-only, so
-destructor timing depends on these rules. As IR-only locals, object-typed locals ran a loop
-holding an object 2.5 times faster, but an object in a recursive graph held by such a local (a
-Queue that the values pushed to it refer to) made the collector decide at every dereference of
-the object, and such a loop ran 1.5 times the instructions of the runtime-stack variable; the
-cause is not known yet (see `computeIROnlyLocals()`). A third rule completes the lexical
+Body locals of an object type (a class, `object`, also optional: `*Class`) keep their value in
+IR storage (`QoreIRFunction::real_reference_locals`), as `auto` and container-typed locals
+holding objects do, so destructor timing depends on these rules. A variable on the runtime
+stack marks the object it holds with a real reference (`check_lvalue_object_in_out()`), which
+tells the collector that the object is reachable from a stack, so that releasing another
+reference to it needs no collection decision (see `design/dgc.md`). IR storage held a plain
+reference: an object in a recursive graph held only by IR storage (a Queue that the values
+pushed to it refer to) made the collector decide at every release of a reference to it, and a
+loop over such an object ran 1.5 times the instructions of the runtime-stack variable. The
+engines therefore mark the object an object local holds with a real reference from its storage:
+the IR interpreter's slot cache (`IRLocalSlotCache::set()` marks, `release()` releases with
+`realDeref()`; the frame's object slots are `interpreter_real_slots`) and native code
+(`qore_rt_object_slot_replace()` for a store, `qore_rt_object_slot_release()` for a scope exit
+and the exit release, where the array form tags the cache of an object local in the lowest bit
+of its address for `qore_rt_cleanup_run_allocas()`). The object has a real reference exactly
+while the local holds it, released in the same order as the value; a parameter stays on the
+runtime stack, and an `auto` local holding an object is not marked
+(`ObjectLocalRealReference.qtest` checks the counts against the AST interpreter's). A third rule
+completes the lexical
 lifetime of IR-only locals: when a function is left, the values they own are released last
 local first, as the AST interpreter releases the variables of a frame, by an exception too (the
 IR interpreter's `SlotCacheCleanup` and `cleanupLocalCaches()` walk the slots in reverse, a
