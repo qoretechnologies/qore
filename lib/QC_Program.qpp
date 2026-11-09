@@ -2606,9 +2606,24 @@ pgm.setSandboxManager(sm);
     @note Once set, the sandbox manager restricts filesystem and network access for code
     running in this program.
 
+    @throw SANDBOX-ACCESS-ERROR the code of a sandboxed %Program, or of a %Program that restricts a functional domain,
+    cannot replace the sandbox manager of a %Program that has one; it can only give one to a %Program that has none,
+    which only adds restrictions (since %Qore 3.0)
+
     @since Qore 3.0
  */
 nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sandbox_manager) [flags=NAMED_ARGS] {
+   // sandboxed or restricted code could otherwise loosen the sandbox of a Program that it can reach, its own included,
+   // by replacing its manager with a laxer one; giving a manager to a Program that has none only adds restrictions
+   // (issue #5659).  A composition of the old and new managers is not stored instead: the old manager would no
+   // longer be the one that its owner's limits, interrupt requests and configuration changes act on
+   if (qore_calling_code_is_untrusted()) {
+       QoreSandboxManagerHelper current(p);
+       if (current && current.get() != *sandbox_manager) {
+           return xsink->raiseException("SANDBOX-ACCESS-ERROR", "sandboxed code, or code whose functional domains "
+               "are restricted, cannot replace the sandbox manager of a Program");
+       }
+   }
    // setSandboxManager() takes its own strong reference; ReferenceHolder from QPP macro handles the arg ref
    p->setSandboxManager(*sandbox_manager);
 }

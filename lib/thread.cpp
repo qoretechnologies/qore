@@ -4076,6 +4076,20 @@ QoreSandboxManager* qore_caller_sandbox_ref() {
     return find_thread_sandbox_manager_ref_intern();
 }
 
+bool qore_calling_code_is_untrusted() {
+    ThreadData* td = thread_data.get();
+    if (!td || !td->current_pgm) {
+        return false;
+    }
+    if (qore_program_is_sandboxed(td->current_pgm)) {
+        return true;
+    }
+    // the in-module domain only marks the Programs of modules
+    static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
+        & ~QoreParseOptions(QDOM_IN_MODULE);
+    return !!(td->current_pgm->getParseOptions() & restricting);
+}
+
 bool qore_caller_is_sandboxed() {
     ThreadData* td = thread_data.get();
     // before the library is initialized, only the embedding application runs

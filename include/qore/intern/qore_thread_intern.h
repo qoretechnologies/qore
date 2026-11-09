@@ -988,6 +988,33 @@ DLLLOCAL bool qore_program_is_sandboxed(const QoreProgram* pgm);
 //! Marks the Program's code as sandboxed (see qore_program_is_sandboxed())
 DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
 
+//! Returns true if the code that calls the current builtin is not trusted itself (issue #5659)
+/** True if the current Program is sandboxed (see qore_program_is_sandboxed()) or restricts a functional domain.
+    Unlike qore_caller_is_untrusted(), trusted code that a sandbox governs because sandboxed code called it (a
+    callback of the host, for example) is trusted: it acts on its own behalf when it changes a sandbox manager or
+    issues a module command, and passing such an API what a sandboxed caller supplied is that code's responsibility.
+*/
+DLLLOCAL bool qore_calling_code_is_untrusted();
+
+//! Records that code that is not trusted (see qore_calling_code_is_untrusted()) in the current Program created \a sm
+/** Called by the SandboxManager constructors that %Qore code calls; see qore_sandbox_manager_check_change()
+*/
+DLLLOCAL void qore_sandbox_manager_record_creator(const QoreSandboxManager* sm);
+
+//! Checks that the code running on the current thread may change \a sm (issue #5659)
+/** Trusted code may change any sandbox manager; code that is not trusted (see qore_calling_code_is_untrusted()) may
+    change only one that code of its own Program created (see qore_sandbox_manager_record_creator()): not the one that governs
+    it, which it can get with Program::getSandboxManager(), nor one that governs another Program, which could
+    otherwise be loosened or have its interrupt cleared.
+
+    @param sm the manager to change
+    @param what the API, for the exception
+    @param xsink raises \c SANDBOX-ACCESS-ERROR if the change is refused
+
+    @return 0 if the change is allowed, -1 if an exception was raised
+*/
+DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, const char* what, ExceptionSink* xsink);
+
 //! Returns true if the code running on the current thread is sandboxed, or acts for sandboxed code
 /** Decides whether a Program is sandboxed (issue #5659):
     - when it is created, in the QoreProgram constructors (qore_program_private), so that it holds wherever a
