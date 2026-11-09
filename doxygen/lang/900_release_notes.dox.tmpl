@@ -769,7 +769,8 @@
 
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
-    @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes; see
+    @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes, and check
+    an operation against a captured policy on any thread; see
     @ref interruptible_io_sandbox_threads "Carrying the Caller's Sandbox onto Another Thread".
 
     @par C++ API: Cancellable Waits in Binary Modules

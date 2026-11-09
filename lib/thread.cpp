@@ -4509,8 +4509,23 @@ void QoreInheritedSandboxHelper::reset() {
 QoreSandboxCapture::QoreSandboxCapture() : ctx(new QoreSandboxContext) {
 }
 
+QoreSandboxCapture::QoreSandboxCapture(const QoreSandboxCapture& other) : ctx(other.ctx) {
+    // the context is immutable, so the copy shares it
+    ctx->ref();
+}
+
 QoreSandboxCapture::~QoreSandboxCapture() {
     ctx->deref();
+}
+
+QoreSandboxManager* QoreSandboxCapture::getPolicyManagerRef() const {
+    // as find_thread_sandbox_manager_ref_intern() resolves the policy manager on a thread with no Qore context of
+    // its own while QoreSandboxCaptureHelper applies the capture (td->inherited_sandbox_context): the context's
+    // policy manager combined with the policy managers of its provenance
+    if (!isSandboxed()) {
+        return nullptr;
+    }
+    return QoreSandboxComposition::combine({ctx->policy_manager, ctx->provenance_policy_manager});
 }
 
 bool QoreSandboxCapture::isSandboxed() const {

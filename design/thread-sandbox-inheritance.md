@@ -64,6 +64,22 @@ everyone's work. Such a thread sets `QTF_NO_SANDBOX_INHERIT` and instead:
 
 `ThreadPool` (`include/qore/intern/ThreadPool.h`) is the reference implementation of this pattern.
 
+An applied capture governs the thread only as its **outermost caller** (step 4 of the lookup in
+`find_thread_sandbox_stack_ref_intern()`): a sandboxed Program that the thread runs decides with its own sandbox, and
+inside a system-policy call (`SandboxManager::createSystemPolicyCall()`) no sandbox does.  That is right for running
+work on behalf of the submitter, but not for an object that checks later operations against the policy of the code
+that created it, wherever they run (module-jni's `QoreSandbox.Policy`, qore#5644).  Such an object checks against
+`QoreSandboxCapture::getPolicyManagerRef()` — the manager that a thread with no Qore context of its own resolves with
+the capture applied, whatever thread calls it — **in addition to** the policy of the current thread
+(`QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy)`), so that the stricter one wins and a capture never
+lowers the sandbox of the code that uses it.  A capture made inside a system-policy call is sandboxed
+(`isSandboxed()`) but has no policy manager, as the call has the system policy.  The `QoreSandboxCapture` copy
+constructor derives a capture from a held one without applying it.  An object that also applies the capture (for its
+call budgets and interrupts) resolves the thread's policy **before** applying it: the applied capture replaces
+`td->inherited_sandbox_context` (an unsandboxed capture clears it), so on a thread that only an inherited sandbox
+governs — a thread started by sandboxed code, or one inside another applied capture — the policy resolved afterwards
+loses that sandbox, and a trusted or looser captured policy would pass checks that it denies.
+
 An applied context never lowers the sandbox of code that runs inside its scope: a sandbox check on the worker uses
 the context's manager together with the managers of the Programs entered after the context was applied (the
 current Program and the program-context frames above `ThreadData::sandbox_context_pgm_ctx`), combined so that the
@@ -165,6 +181,8 @@ change.
 | `QTF_NO_SANDBOX_INHERIT` | `qore/qore_thread.h` | `q_start_thread()` flag: the new thread does not inherit and is not counted; for shared pools that capture per task |
 | `QoreSandboxCapture` | `qore/QoreSandboxManager.h` | capture the current thread's sandbox at submit time |
 | `QoreSandboxCaptureHelper` | `qore/QoreSandboxManager.h` | apply a capture around a task on a worker thread |
+| `QoreSandboxCapture::getPolicyManagerRef()` | `qore/QoreSandboxManager.h` | the captured policy manager, for explicit checks on any thread (with the thread's own policy) |
+| `QoreSandboxCapture(const QoreSandboxCapture&)` | `qore/QoreSandboxManager.h` | copy a capture without applying it |
 | `QoreInheritedSandbox` / `QoreInheritedSandboxHelper` | internal (`qore_thread_intern.h`) | libqore-internal capture/apply for `background` and `q_start_thread()`, with thread-limit accounting |
 
 A module that starts a per-caller thread with `q_start_thread()` needs no change: inheritance is automatic. A module
