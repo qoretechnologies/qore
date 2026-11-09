@@ -44,7 +44,11 @@
     - that the values released by threads that end and by pool workers that clear their values while the variable's
       Program is deleted in another thread are released while the Program can run their destructors: the threads
       enter the Program to release them, or hand them over to its teardown (deterministic in its result; before,
-      PROGRAM-ERROR in the destructors of up to 4% of the values).
+      PROGRAM-ERROR in the destructors of up to 4% of the values);
+    - that the deletion of a Program does not wait for the destructor of an object of another Program's class run by
+      a thread that ends, which takes a lock that the deleting thread holds (it waited for ever);
+    - that the cleanup of a thread resource between the tasks of a pool worker can assign a thread_local variable,
+      which the next task does not see.
 */
 class ThreadLocalProgramReuseTest inherits QUnit::Test {
     public {
@@ -100,6 +104,46 @@ Program sub new_program(string code, string label) {
 }
 
 const N = 40;
+
+#! signals that its destructor runs, which then waits for the lock given
+class Blocker {
+    private {
+        Mutex m;
+        Counter in_dtor;
+    }
+
+    constructor(Mutex m, Counter in_dtor) {
+        self.m = m;
+        self.in_dtor = in_dtor;
+    }
+
+    destructor() {
+        in_dtor.dec();
+        m.lock();
+        m.unlock();
+    }
+}
+
+#! a thread resource whose cleanup assigns a thread_local variable and reports the result
+thread_local *int tlr;
+class AssigningResource inherits AbstractThreadResource {
+    private {
+        code report;
+    }
+
+    constructor(code r) {
+        report = r;
+    }
+
+    cleanup() {
+        try {
+            tlr = 1;
+            report("assigned " + tlr);
+        } catch (hash<ExceptionInfo> ex) {
+            report(ex.err);
+        }
+    }
+}
 
 #! reports its destruction through the closure given; a class of this Program, which lives as long as the driver
 class Tracker {
@@ -308,6 +352,40 @@ const ClearCode = "%modern\nthread_local *string tly;\n"
         "worker ends: %d; released with the importer: %d\n", with_owner, kept, at_end, destroyed - with_owner - at_end);
 }
 
+# a thread that ends releases a value of a variable of a Program that another thread deletes, whose destructor is code
+# of another Program: the teardown does not wait for it, as the deleting thread holds a lock that the destructor takes
+{
+    Mutex m();
+    Counter in_dtor(1);
+    Program p = new_program("%modern\nthread_local *object tlx;\nsub set(object o) { tlx = o; }\n", "teardown-wait");
+    m.lock();
+    # the thread sets the value of its own Blocker, whose destructor runs when the thread ends
+    code set = sub () { p.callFunction("set", new Blocker(m, in_dtor)); };
+    int tid = background set();
+    in_dtor.waitForZero();
+    delete p;
+    m.unlock();
+    thread_join(tid);
+    printf("the teardown does not wait for the destructor of a class of another Program run when a thread ends\n");
+}
+
+# the cleanup of a thread resource between the tasks of a pool worker can assign thread_local variables: the value is
+# released with the values of the task, and the next task reads none
+{
+    list<string> events = ();
+    code report = sub (string e) { events += e; };
+    ThreadPool tp(1, 1, 1);
+    Counter c(1);
+    AssigningResource res(report);
+    tp.submit(sub () { on_exit c.dec(); set_thread_resource(res); });
+    c.waitForZero();
+    Queue q();
+    tp.submit(sub () { q.push(tlr); });
+    auto next = q.get();
+    tp.stopWait();
+    printf("thread resource cleanup between tasks: %y; read by the next task: %y\n", events, next);
+}
+
 # the values that threads release when they end, and that pool workers clear between their tasks, while the Program of
 # the variables is deleted in another thread: every value is released while the Program can run its destructor, by
 # the thread, which the teardown waits for, or by the teardown, which the thread hands the value over to
@@ -404,6 +482,8 @@ printf("done\n");
                 "next callback in the same thread (True): null, assigned: \"assigned\"\n"
             "owner deleted first: released with the owner: 1; kept for the importer in a worker: True; released when "
                 "a worker ends: 0; released with the importer: 2\n"
+            "the teardown does not wait for the destructor of a class of another Program run when a thread ends\n"
+            "thread resource cleanup between tasks: [\"assigned 1\"]; read by the next task: null\n"
             "values released by ending threads and pool workers while their Program is deleted: 640 of 640\n"
             "done\n";
     }

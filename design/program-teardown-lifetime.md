@@ -157,20 +157,26 @@ another Program imports (a public variable inherited by a child Program), when t
 can still use it through the importing Program.  They were released only in the deleting thread, and every other
 thread kept them until it ended, with objects of the deleted Program's classes.
 
-A thread that ends, or whose values are cleared between tasks, releases its values itself, and enters the Program
-owning each variable first, once for all of its values (`Var::tl_pgm`, the Program that parses or loads it,
-identified by its ID; `ThreadData::releaseThreadLocalVarsOfProgram()` and
-`qore_program_private::enterWithoutContext()`): the Program can be deleted in another thread at the same time,
-and its teardown waits for the thread (step 1 or 3), so the Program can still run the destructors of the values,
-which enter the Programs of their classes as nested calls.  A Program that it
-cannot enter (its teardown has marked it, or it has been deleted) releases the variable itself, or has released it,
-or, for a variable that another Program imports, the last Program holding it does: the thread hands the value over to
-the registry (`ThreadLocalVarRegistry::Entry::orphans`), and the release of the variable releases it.  The values
-were released in whichever state their Program was, often after another thread had deleted it, and their destructors
-raised `PROGRAM-ERROR` (up to 4% of the values of pool workers clearing their values while Programs were deleted).
-The owner of an imported variable that is deleted first releases the value of the deleting thread only; the values of
-the other threads, also those handed over by threads that ended or cleared their values since, are released with
-the last Program importing the variable.
+A thread that ends, or whose values are cleared between tasks, releases its values itself.  It enters the Program owning
+each variable first, once for all of its values (`Var::tl_pgm`, the Program that parses or loads it, identified by its
+ID; `ThreadData::releaseThreadLocalVarsOfProgram()` and `qore_program_private::enterWithoutContext()`), and takes the
+values out of the registry: the Program can be deleted in another thread at the same time, and its teardown waits for
+the thread (step 1 or 3).  The thread releases the values whose release runs code of the Program while it is in the
+Program (`ThreadData::tlvReleaseRunsCodeOf()`: an object of a class of the Program or created in it, a closure of the
+Program, and lists and hashes holding such values), so that the Program can still run their destructors, which enter the
+Programs of their classes as nested calls; it leaves the Program before it releases the others, as the teardown must not
+wait for code of other Programs, which can wait for the thread deleting the Program (a lock that it holds: the teardown
+waited for ever).  The members of an object of another class are not checked: their release follows the destructor of
+the object, and a destructor of a member of a class of the Program enters it itself, which raises `PROGRAM-ERROR` if the
+teardown has marked the Program by then.  A Program that the thread cannot enter (its teardown has marked it, or it has
+been deleted) releases the variable itself, or has released it, or, for a variable that another Program imports, the
+last Program holding it does: the thread hands the value over to the registry
+(`ThreadLocalVarRegistry::Entry::orphans`), and the release of the variable releases it.  The values were released in
+whichever state their Program was, often after another thread had deleted it, and their destructors raised
+`PROGRAM-ERROR` (up to 4% of the values of pool workers clearing their values while Programs were deleted).  The owner
+of an imported variable that is deleted first releases the value of the deleting thread only; the values of the other
+threads, also those handed over by threads that ended or cleared their values since, are released with the last Program
+importing the variable.
 
 `ThreadLocalVarRegistry` records the value of every thread by the variable's serial (`release_thread_local_var()`).
 No thread uses a variable that is released this way, so the releasing thread takes the value out of the other
@@ -179,8 +185,10 @@ variable (`ThreadData::eraseDeletedThreadLocalVars()`).  A thread that ends, or 
 (`clear_all_program_thread_local_data()`), takes its entries out of the registry before it releases their values
 (`ThreadData::releaseThreadLocalVars()`).  The destructors that the release runs cannot assign the thread's
 variables then (`thread_local_vars_finalizing()`: `ThreadData::finalizing` while the thread ends,
-`ThreadData::tlv_clearing` while a ThreadPool or AsyncIoController worker clears the data of its task, for the whole
-of `clear_all_program_thread_local_data()`), so a second pass finds no value: the clearing between tasks allowed it,
+`ThreadData::tlv_clearing` while a ThreadPool or AsyncIoController worker releases the values of its task in
+`clear_all_program_thread_local_data()`, which releases the values again after clearing its other data: the code
+clearing the thread resources and the thread-local data of the Programs can assign the variables), so a second pass
+finds no value: the clearing between tasks allowed it,
 and a destructor giving a variable a value whose destructor gave it a value again kept the worker releasing values for
 ever, and `ThreadPool::stopWait()` waiting for it.  The registry's lock is a leaf lock: no value is released under it.
 `examples/test/qore/vars/thread-local-program-reuse.qtest` checks the release with the variable's Program in a worker
