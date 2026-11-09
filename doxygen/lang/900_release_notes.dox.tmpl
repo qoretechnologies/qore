@@ -86,6 +86,15 @@
     lookup delayed every accept, and \c source (the peer's IP address) is set as before.  Socket::getPeerInfo()
     still resolves the hostname on request.
 
+    @par Modules May Not Declare Public thread_local Variables
+    A user module that declares a <tt>public thread_local</tt> variable no longer loads: the declaration raises a
+    \c MODULE-PUBLIC-THREAD-LOCAL parse exception, also when the module is compiled with \c qcc.  A module's public
+    variable is shared by every %Program that imports the module, so a public thread-local variable let any importer
+    set a value that another importer reads on the same thread.  A third-party module that declares one must keep the
+    variable private and export public functions or methods that read and set it; see @ref thread_local.  A
+    <tt>public thread_local</tt> variable of a %Program, which is passed to the child Programs it creates, is still
+    supported.  None of the modules distributed with %Qore declare one.
+
     @par Final Methods Hold for the Whole Class Hierarchy
     A subclass can no longer bypass a @ref final_methods "final" method with an overload that accepts the same
     arguments or with a parent class listed before the final method's class that declares or inherits its name;

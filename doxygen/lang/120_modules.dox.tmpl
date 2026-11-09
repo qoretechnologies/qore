@@ -1403,7 +1403,8 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
 
     Note that global variables exported from a module's @ref Qore::Program "Program" object are exported as
     references; each global variable declared in a module is unique, and they reside in the module's
-    @ref Qore::Program "Program" object.
+    @ref Qore::Program "Program" object.  A module cannot export a @ref thread_local "thread_local" variable; see
+    @ref mod_public "public".
 
     Furthermore, when using an environment with multiple @ref Qore::Program "Program" objects, if a user module has
     already been loaded and initialized, then it's functional domain mask is compared against any importing
@@ -1650,6 +1651,11 @@ public MyNamespace {
 public namespace MyNamespace {
     public our int OurInt;
 }@endcode
+      A module may not declare a @ref thread_local "thread_local" variable <b><tt>public</tt></b>; doing so raises a
+      \c MODULE-PUBLIC-THREAD-LOCAL parse exception.  A public variable of a module is one variable shared by every
+      @ref Qore::Program "Program" that imports the module, so a public thread-local variable would let any importer
+      set a value on a thread that any other importer reads on the same thread.  Keep thread-local variables private
+      to the module and export public functions or methods that read and set them instead; see @ref thread_local.
 
     @note Global variable declarations in a namespace declaration cannot be initialized at the point they are
     declared, also, since @ref Qore::PO_NO_TOP_LEVEL_STATEMENTS is set for user module @ref Qore::Program "Program"

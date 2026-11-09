@@ -3208,11 +3208,50 @@ int qore_ns_private::checkGlobalVarDecl(Var* v, const NamedScope& vname) {
     return err;
 }
 
+//! the guidance given when a module declares or exports a public thread_local variable
+#define QORE_MODULE_PUBLIC_THREAD_LOCAL_HELP "a module's public variable is one variable shared by every Program " \
+    "that imports the module, so any importer could set a value on a thread that any other importer reads on the " \
+    "same thread; keep it private (declare it without 'public') and export public functions or methods that read " \
+    "and set it"
+
+// static
+int qore_ns_private::checkPublicThreadLocalDecl(const Var& v) {
+    assert(v.isThreadLocal());
+    assert(v.isPublic());
+    if (!parse_check_parse_option(PO_IN_MODULE)) {
+        return 0;
+    }
+    parseException(*v.getParseLocation(), "MODULE-PUBLIC-THREAD-LOCAL", "public thread_local variable '%s' cannot " \
+        "be declared in a module: " QORE_MODULE_PUBLIC_THREAD_LOCAL_HELP, v.getName());
+    return -1;
+}
+
+// static
+void qore_ns_private::scanExportedThreadLocals(const qore_ns_private& mns, QoreModuleContext& qmc,
+        const std::string& path) {
+    for (const auto& i : mns.var_list.vmap) {
+        if (i.second->isPublic() && i.second->isThreadLocal()) {
+            qmc.error("cannot export public thread_local variable '%s%s'; the module was compiled before modules " \
+                "were refused public thread_local variables and must be changed and recompiled: "
+                QORE_MODULE_PUBLIC_THREAD_LOCAL_HELP, path.c_str(), i.first);
+        }
+    }
+    for (const auto& i : mns.nsl.nsmap) {
+        if (i.second->priv->pub && isExportedNamespace(*i.second)) {
+            scanExportedThreadLocals(*i.second->priv, qmc, path + i.first + "::");
+        }
+    }
+}
+
 void qore_ns_private::parseAddGlobalVarDecl(const QoreProgramLocation* loc, char* name, const QoreTypeInfo* typeInfo,
         QoreParseTypeInfo* parseTypeInfo, bool pub, qore_var_t type) {
     GVEntryBase e(loc, name, typeInfo, parseTypeInfo, type);
-    if (pub)
+    if (pub) {
         e.var->setPublic();
+        if (type == VT_THREAD_LOCAL) {
+            checkPublicThreadLocalDecl(*e.var);
+        }
+    }
     pend_gvblist.push_back(e);
     //printd(5, "qore_ns_private::parseAddGlobalVarDecl() this: %p var: %p '%s' %d-%d\n", this, e.var, e.var->getName(), loc.start_line, loc.end_line);
 

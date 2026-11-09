@@ -728,6 +728,27 @@ public:
     DLLLOCAL int parseInitGlobalVars();
 
     DLLLOCAL int checkGlobalVarDecl(Var* v, const NamedScope& vname);
+
+    //! raises a parse exception if a public thread_local variable is declared in a module
+    /** A module's public variable is one variable shared by every Program that imports the module, so a public
+        thread_local variable would let any importer set a value on a thread that any other importer reads on the same
+        thread (qore#5662).  A public thread_local variable of a Program, which the Program passes to the child Programs
+        it creates, is allowed.
+
+        @return 0 if the declaration is allowed, -1 if a parse exception was raised
+    */
+    DLLLOCAL static int checkPublicThreadLocalDecl(const Var& v);
+
+    //! raises a module load error for each public thread_local variable in an exported namespace tree
+    /** A module parsed from source cannot declare one (see checkPublicThreadLocalDecl()); this check refuses one that
+        an AOT module image compiled before the declaration was refused still holds.
+
+        @param mns the namespace to scan, with its exported subnamespaces
+        @param qmc the module context that collects the errors
+        @param path the namespace path of \a mns, ending with \c "::", or empty for the root namespace
+    */
+    DLLLOCAL static void scanExportedThreadLocals(const qore_ns_private& mns, QoreModuleContext& qmc,
+            const std::string& path = std::string());
     DLLLOCAL void parseAddGlobalVarDecl(const QoreProgramLocation* loc, char* name, const QoreTypeInfo* typeInfo,
             QoreParseTypeInfo* parseTypeInfo, bool pub, qore_var_t type);
 
@@ -3089,6 +3110,8 @@ public:
 
     DLLLOCAL static void scanMergeCommittedNamespace(const RootQoreNamespace& ns, const RootQoreNamespace& mns,
             QoreModuleContext& qmc) {
+        // every module merge (source, AOT, and runtime) scans the module first, so this check covers each of them
+        qore_ns_private::scanExportedThreadLocals(*(mns.priv), qmc);
         ns.priv->scanMergeCommittedNamespace(*(mns.priv), qmc);
     }
 
