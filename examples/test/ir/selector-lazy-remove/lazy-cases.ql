@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # the cases of selector-lazy-remove.qtest: lists of selectors with ranges that a foreach statement or a functional
 # or streaming operator iterates lazily, and remove and delete with a list of selectors whose later selector raises;
-# included by lazy-plain.q and lazy-negative-offsets.q
+# included by lazy-plain.q
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -343,8 +343,8 @@ auto sub foreach_map_pipeline() {
     }
 }
 
-# --- inert selectors: constants and int locals, whose evaluation cannot be observed; with %negative-offsets the
-# ranges of a list of selectors that is iterated give their indices one by one ---
+# --- inert selectors: constants and int locals, whose evaluation cannot be observed; a list of selectors that is
+# iterated gives the elements of its value ---
 
 auto sub inert_foreach() {
     int z = 0;
@@ -407,6 +407,82 @@ auto sub inert_remove() {
     int e = -1;
     auto r = remove m[z, 2..e];
     return (r, m);
+}
+
+# --- iterated elements are the elements of the value: a list of selectors with a range that a foreach statement or
+# an operator iterates gives the elements that it gives as a value, for every bound (qore#5688) ---
+
+#! the bounds of the ranges compared: negative, reversed, out of range and single
+const RangeBounds = ((1, -1), (-2, -5), (-1, 1), (1, 9), (-9, 2), (4, -9), (-9, -7), (2, 2), (-3, -3));
+
+#! prints whether the elements iterated are those of the value
+sub check_same(string name, auto value, auto iterated) {
+    if (value == iterated) {
+        printf("  %s: same %y\n", name, value);
+    } else {
+        printf("  %s: MISMATCH iterated %y value %y\n", name, iterated, value);
+    }
+}
+
+auto sub same_list() {
+    foreach list<int> bounds in (RangeBounds) {
+        int z = 0;
+        int st = bounds[0];
+        int en = bounds[1];
+        string tag = sprintf("list [0, %d..%d]", st, en);
+        auto value = l[z, st..en];
+        list<auto> it = ();
+        foreach auto x in (l[z, st..en]) {
+            push it, x;
+        }
+        check_same(tag + " foreach", value, it);
+        it = ();
+        foreach auto x in (l[f("z", z), f("s", st)..f("e", en)]) {
+            push it, x;
+        }
+        check_same(tag + " foreach lazy", value, it);
+        check_same(tag + " map", value, (map $1, l[z, st..en]));
+        check_same(tag + " map lazy", value, (map $1, l[f("z", z), f("s", st)..f("e", en)]));
+        check_same(tag + " select", value, (select l[z, st..en], True));
+        check_same(tag + " select lazy", value, (select l[f("z", z), f("s", st)..f("e", en)], True));
+        check_same(tag + " foldl", (foldl $1 + ($2 ?? 0), value), (foldl $1 + ($2 ?? 0), l[z, st..en]));
+        check_same(tag + " foldl lazy", (foldl $1 + ($2 ?? 0), value),
+            (foldl $1 + ($2 ?? 0), l[f("z", z), f("s", st)..f("e", en)]));
+    }
+}
+
+auto sub same_string() {
+    foreach list<int> bounds in (RangeBounds) {
+        int z = 0;
+        int st = bounds[0];
+        int en = bounds[1];
+        string tag = sprintf("string [0, %d..%d]", st, en);
+        auto value = s[z, st..en];
+        list<auto> it = ();
+        foreach auto x in (s[f("z", z), f("s", st)..f("e", en)]) {
+            push it, x;
+        }
+        check_same(tag + " foreach lazy", (value,), it);
+        check_same(tag + " map lazy", value, (map $1, s[f("z", z), f("s", st)..f("e", en)]));
+        check_same(tag + " map", value, (map $1, s[z, st..en]));
+    }
+}
+
+auto sub same_binary() {
+    foreach list<int> bounds in (RangeBounds) {
+        int z = 0;
+        int st = bounds[0];
+        int en = bounds[1];
+        string tag = sprintf("binary [0, %d..%d]", st, en);
+        auto value = b[z, st..en];
+        list<auto> it = ();
+        foreach auto x in (b[f("z", z), f("s", st)..f("e", en)]) {
+            push it, x;
+        }
+        check_same(tag + " foreach lazy", (value,), it);
+        check_same(tag + " map lazy", value, (map $1, b[f("z", z), f("s", st)..f("e", en)]));
+        check_same(tag + " map", value, (map $1, b[z, st..en]));
+    }
 }
 
 # --- remove and delete with a raising later selector ---
@@ -616,6 +692,9 @@ sub main() {
         t("inert pipeline", \inert_pipeline());
         t("inert value", \inert_value());
         t("inert remove", \inert_remove());
+        t("same list", \same_list());
+        t("same string", \same_string());
+        t("same binary", \same_binary());
         t("remove partial", \remove_partial());
         t("remove partial two", \remove_partial_two());
         t("remove partial range", \remove_partial_range());

@@ -13,24 +13,26 @@
 
 %exec-class SelectorLazyRemoveTest
 
-#! issue #5675: lists of selectors that are iterated lazily, and remove and delete with a raising later selector
+#! issues #5675 and #5688: lists of selectors that are iterated lazily, and remove and delete with a raising later
+#! selector
 /** The AST interpreter iterates a list of selectors with ranges (l[a, b..c]) that a foreach statement or a map,
     select, map/select, foldl or streaming operator uses as its source lazily: each selector is evaluated only when
-    the values of the previous ones have been used, and a range gives its indices one at a time, each normalized as
-    an index of its own with %negative-offsets.  The IR interpreter, native code and AOT built the whole list first.
+    the values of the previous ones have been used.  The IR interpreter, native code and AOT built the whole list
+    first.  The elements iterated are those of the list of selectors as a value, also for ranges with negative,
+    reversed and out-of-range bounds (qore#5688); the AST interpreter iterated the indices of such a range one by one
+    instead of the range that it selects, and the scripts check that iterated elements and value are the same.
 
     When a later selector of a remove or delete expression raises an exception, the AST interpreter has removed what
     the earlier selectors selected; the other execution modes removed nothing.  The removed values are released before
     the handler runs, and a delete expression ended by an exception does not delete the objects that it removed.
 
-    The scripts next to the test (without and with %negative-offsets) run in every execution mode, on the IR tier and
-    as AOT executables, and their output, which shows each evaluation and destruction, must be that of the AST
-    interpreter.
+    The script next to the test runs in every execution mode, on the IR tier and as AOT executables, and its output,
+    which shows each evaluation and destruction, must be that of the AST interpreter.
 */
 class SelectorLazyRemoveTest inherits QUnit::Test {
     public {
-        #! the scripts: without and with %negative-offsets
-        const Scripts = ("lazy-plain", "lazy-negative-offsets");
+        #! the scripts
+        const Scripts = ("lazy-plain",);
 
         #! lines of the output of the AST interpreter that show its semantics, in this order
         const AstLines = (
@@ -86,6 +88,9 @@ class SelectorLazyRemoveTest inherits QUnit::Test {
                     pos = next + line.size();
                 }
             }
+            # a list of selectors that is iterated gives the elements that it gives as a value (qore#5688)
+            assertEq((), (map $1, out.split("\n"), $1 =~ /MISMATCH/), name + ": iterated elements are the value's");
+            assertTrue((select out.split("\n"), $1 =~ /: same /).size() > 100, name + ": the comparisons ran");
             # the lines of the remove and delete cases do not show an abort of the AST interpreter
             assertTrue(out =~ /remove partial unhandled:\n  sel a\n  caught RANGE-ERROR\n  = \[0, 2, 3, 4\]\n/,
                 name + ": partial removal of an unhandled exception");

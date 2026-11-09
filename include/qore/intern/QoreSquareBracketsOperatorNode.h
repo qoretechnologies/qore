@@ -139,7 +139,9 @@ public:
         lhs.clearTemp();
     }
 
-    DLLLOCAL virtual ~QoreFunctionalSquareBracketsComplexOperator() {}
+    DLLLOCAL virtual ~QoreFunctionalSquareBracketsComplexOperator() {
+        clearRange(nullptr);
+    }
 
     DLLLOCAL virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink);
 
@@ -149,9 +151,32 @@ protected:
     ValueOptionalRefHolder leftValue;
     const QoreParseListNode* rightParseList;
     qore_offset_t offset = -1;
-    std::unique_ptr<class QoreFunctionalRangeOperator> rangeIter;
+    //! the indices of the current range selector, as the range operator gives them, or nullptr
+    QoreListNode* rangeList = nullptr;
+    //! the position of the next index in \a rangeList
+    size_t rangePos = 0;
+    //! true while the current range selector is iterated over the effective range of the sequence
+    bool inEffectiveRange = false;
+    //! the next index and the last index of the effective range, and the step between them
+    int64 effectiveIndex = 0;
+    int64 effectiveStop = 0;
+    int64 effectiveStep = 1;
+    //! counts the indices of an effective range for the cancellation check
+    unsigned cancelCheck = 0;
     bool string_index_char = true;
     bool negative_offsets = false;
+
+    //! Starts the iteration of the range selector \a range, which it evaluates; returns -1 for an exception
+    DLLLOCAL int startRange(const QoreValue& range, ExceptionSink* xsink);
+
+    //! Releases the indices of the current range selector
+    DLLLOCAL void clearRange(ExceptionSink* xsink) {
+        if (rangeList) {
+            rangeList->deref(xsink);
+            rangeList = nullptr;
+        }
+        inEffectiveRange = false;
+    }
 };
 
 #endif
