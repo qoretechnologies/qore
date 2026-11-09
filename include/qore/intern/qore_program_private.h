@@ -1579,6 +1579,38 @@ public:
     }
     */
 
+    //! Enters the Program to release the current thread's value of one of its thread_local variables
+    /** A thread that ends, or whose values are cleared between tasks, releases its values in the Program owning the
+        variable (see ThreadLocalVarRegistry in lib/thread.cpp): its teardown waits for the thread to leave it with
+        decThreadCount(QoreProgram&, int, ExceptionSink*), as for every thread in the Program, so that it can still
+        run the destructors of the value.  No code of the Program runs and the thread's current Program does not
+        change: the destructors enter the Programs of their classes themselves, which they can while the thread is
+        in the Program, also once the teardown has marked it (see canEnterIntern()).
+
+        @return true if the thread entered the Program, false if its teardown has passed the point after which no
+        other thread can enter it (it releases the variable itself then, or has released it)
+    */
+    DLLLOCAL bool enterForThreadLocalRelease() {
+        int tid = q_gettid();
+        AutoLocker al(plock);
+        if (!canEnterIntern(tid)) {
+            return false;
+        }
+        ++tidmap[tid];
+        ++thread_count;
+        return true;
+    }
+
+    //! Returns true if the given thread can enter the Program; called with plock held
+    /** Once the teardown has marked the Program (ptid, see waitForTerminationAndClear()), no other thread can enter it,
+        but a thread that is in it can enter it again: the teardown waits for it to leave, and its nested calls into
+        the Program, as those of the destructors of the thread_local values that it releases in the Program when it
+        ends (see enterForThreadLocalRelease()), must not fail while the Program's data is valid
+    */
+    DLLLOCAL bool canEnterIntern(int tid) const {
+        return !ptid || ptid == tid || tidmap.find(tid) != tidmap.end();
+    }
+
     // returns 0 for OK, -1 for error
     DLLLOCAL int incThreadCount(ExceptionSink* xsink) {
         int tid = q_gettid();
@@ -1586,7 +1618,7 @@ public:
         // grab program-level lock
         AutoLocker al(plock);
 
-        if (ptid && ptid != tid) {
+        if (!canEnterIntern(tid)) {
             xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and therefore "
                 "cannot be accessed at runtime");
             return -1;
@@ -1608,7 +1640,7 @@ public:
         // grab program-level lock
         AutoLocker al(plock);
 
-        if (ptid && ptid != tid) {
+        if (!canEnterIntern(tid)) {
             throw QoreStandardException("PROGRAM-ERROR", "the Program accessed has already been deleted and "
                 "therefore cannot be accessed at runtime");
         }

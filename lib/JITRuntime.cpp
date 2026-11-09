@@ -3917,58 +3917,79 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl_from_hash_by_path(const char
     return qore_rt_new_hash_decl_from_hash(hd, hash_bits, runtime_check, xsink);
 }
 
-static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext* ctx, const char* hd_path,
-        bool receiver_dependent, ExceptionSink* xsink) {
-    if (!ctx || !hd_path || !*hd_path) {
-        return nullptr;
+//! The most entries a context's path cache holds; once it is full, an entry is evicted for each new one
+static constexpr size_t QORE_AOT_PATH_CACHE_MAX_ENTRIES = 1024;
+
+//! Returns the serial that identifies the receiver's type in the type and hashdecl path caches of an AOT context
+/** The entries are keyed by the receiver's type and give the types and hashdecls found for it, while the context
+    lives as long as its module.  A class's own type is freed with the class, and the type of a class created later
+    can be given its address, so it is identified with the class's instance serial, which is never reused
+    (qore_class_private::instance_serial): an entry made for the type of a destroyed class is never found for
+    another one.  A parameterized class type is never freed before the library is cleaned up (a type built on a
+    destroyed one is retired by qore_purge_derived_types(), not freed), so its address cannot be reused; it is
+    identified with the serial of its base class as well.  The receiver is the object running the call, or the
+    class of a static call, so its class is alive.  A type of another kind is not the type of a receiver; nothing is
+    cached for it, as its address could be reused (the type of a hashdecl is freed with the hashdecl).
+
+    The entries of the contexts' maps recorded the method dispatch epoch instead, which every class or hashdecl
+    destroyed, and every method added at parse time, increments: a context's maps were cleared at each change, and
+    while another thread created and deleted Programs the module's generic code resolved the paths of each of its
+    receivers again (calls of two generic methods of 300 receivers took 48% longer than without the other thread,
+    10% longer now).  The thread-local front caches still record the epoch, which a call compares at no cost, and
+    refill an entry of an earlier epoch from the map.
+
+    @param ti the receiver's type, or nullptr for a path that does not depend on the receiver
+    @param serial set to the serial, or 0 without a receiver
+
+    @return true if the path can be cached for the receiver
+*/
+static bool qore_rt_aot_path_cache_receiver_serial(const QoreTypeInfo* ti, uint64_t& serial) {
+    serial = 0;
+    if (!ti) {
+        return true;
     }
-
-    const QoreTypeInfo* receiver_type_info = receiver_dependent
-        ? qore_get_current_receiver_type_info()
-        : nullptr;
-
-    struct HashDeclFrontCacheEntry {
-        uint64_t generation = 0;
-        const char* path_address = nullptr;
-        std::string path;
-        const QoreTypeInfo* receiver_type_info = nullptr;
-        const TypedHashDecl* hd = nullptr;
-    };
-    static constexpr size_t HASHDECL_FRONT_CACHE_SIZE = 8;
-    thread_local HashDeclFrontCacheEntry front_cache[HASHDECL_FRONT_CACHE_SIZE];
-    uintptr_t hash = reinterpret_cast<uintptr_t>(hd_path) >> 4;
-    hash ^= reinterpret_cast<uintptr_t>(receiver_type_info) >> 4;
-    hash ^= ctx->hashdecl_cache_generation;
-    HashDeclFrontCacheEntry& front_entry = front_cache[hash & (HASHDECL_FRONT_CACHE_SIZE - 1)];
-    static constinit QoreEnvFlag disable_front_cache_env("QORE_DISABLE_AOT_HASHDECL_FRONT_CACHE");
-    const bool disable_front_cache = disable_front_cache_env.get();
-    if (!disable_front_cache
-            && front_entry.generation == ctx->hashdecl_cache_generation
-            && front_entry.path_address == hd_path
-            // Concrete paths come from AOT globals whose lifetime matches the context.
-            // Receiver-dependent debug/JIT paths also verify content across module reuse.
-            && (!receiver_dependent || front_entry.path == hd_path)
-            && front_entry.receiver_type_info == receiver_type_info) {
-        return front_entry.hd;
-    }
-
-    QoreAOTHashDeclPathCacheKey key{hd_path, receiver_type_info};
-
-    {
-        std::lock_guard<std::mutex> lock(ctx->hashdecl_path_cache_mutex);
-        auto i = ctx->hashdecl_path_cache.find(key);
-        if (i != ctx->hashdecl_path_cache.end()) {
-            if (!disable_front_cache) {
-                front_entry.generation = ctx->hashdecl_cache_generation;
-                front_entry.path_address = hd_path;
-                front_entry.path = hd_path;
-                front_entry.receiver_type_info = receiver_type_info;
-                front_entry.hd = i->second;
-            }
-            return i->second;
+    // the type of an object of a class, the usual receiver
+    if (const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(ti)) {
+        const qore_class_private* qcp = qore_class_private::get(*qc);
+        // the class's own type, which is freed with it
+        if (ti == qcp->getTypeInfo()) {
+            serial = qcp->instance_serial;
+            return true;
         }
     }
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
+        const QoreClass* base = pti->getBaseClass();
+        if (!base) {
+            return false;
+        }
+        serial = qore_class_private::get(*base)->instance_serial;
+        return true;
+    }
+    if (const QoreClass* qc = QoreTypeInfo::getUniqueReturnClassOrNothing(ti)) {
+        const qore_class_private* qcp = qore_class_private::get(*qc);
+        if (ti == qcp->getOrNothingTypeInfo()) {
+            serial = qcp->instance_serial;
+            return true;
+        }
+    }
+    return false;
+}
 
+//! Makes room for an entry in a context's path cache; called with its mutex held
+/** The entries of the receivers of destroyed classes are never found again; a cache that is full evicts an entry
+    for each new one, instead of being cleared, which made a working set larger than the cache resolve every path
+    again
+*/
+template <typename M>
+static void qore_rt_aot_path_cache_make_room(M& cache) {
+    if (cache.size() >= QORE_AOT_PATH_CACHE_MAX_ENTRIES) {
+        cache.erase(cache.begin());
+    }
+}
+
+//! Resolves a hashdecl path of an AOT context for the receiver given, without the caches
+static const TypedHashDecl* qore_rt_resolve_hashdecl_path(QoreAOTContext* ctx, const char* hd_path,
+        const QoreTypeInfo* receiver_type_info, ExceptionSink* xsink) {
     QoreProgram* pgm = ctx->pgm ? ctx->pgm : getProgram();
     if (!pgm) {
         if (xsink) {
@@ -3987,19 +4008,91 @@ static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext*
             hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
         }
     }
-    if (!hd) {
-        if (xsink) {
-            xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s'", hd_path);
+    if (!hd && xsink) {
+        xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s'", hd_path);
+    }
+    return hd;
+}
+
+static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext* ctx, const char* hd_path,
+        bool receiver_dependent, ExceptionSink* xsink) {
+    if (!ctx || !hd_path || !*hd_path) {
+        return nullptr;
+    }
+
+    const QoreTypeInfo* receiver_type_info = receiver_dependent
+        ? qore_get_current_receiver_type_info()
+        : nullptr;
+    // a front-cache entry is used in the method dispatch epoch it was made in: no class or hashdecl was destroyed
+    // since, so the receiver's type has not been given to another class (see
+    // qore_rt_aot_path_cache_receiver_serial())
+    const uint64_t epoch = qore_get_method_dispatch_epoch();
+
+    struct HashDeclFrontCacheEntry {
+        uint64_t generation = 0;
+        uint64_t epoch = 0;
+        const char* path_address = nullptr;
+        std::string path;
+        const QoreTypeInfo* receiver_type_info = nullptr;
+        const TypedHashDecl* hd = nullptr;
+    };
+    static constexpr size_t HASHDECL_FRONT_CACHE_SIZE = 8;
+    thread_local HashDeclFrontCacheEntry front_cache[HASHDECL_FRONT_CACHE_SIZE];
+    uintptr_t hash = reinterpret_cast<uintptr_t>(hd_path) >> 4;
+    hash ^= reinterpret_cast<uintptr_t>(receiver_type_info) >> 4;
+    hash ^= ctx->hashdecl_cache_generation;
+    HashDeclFrontCacheEntry& front_entry = front_cache[hash & (HASHDECL_FRONT_CACHE_SIZE - 1)];
+    static constinit QoreEnvFlag disable_front_cache_env("QORE_DISABLE_AOT_HASHDECL_FRONT_CACHE");
+    const bool disable_front_cache = disable_front_cache_env.get();
+    if (!disable_front_cache
+            && front_entry.generation == ctx->hashdecl_cache_generation
+            && front_entry.epoch == epoch
+            && front_entry.path_address == hd_path
+            // Concrete paths come from AOT globals whose lifetime matches the context.
+            // Receiver-dependent debug/JIT paths also verify content across module reuse.
+            && (!receiver_dependent || front_entry.path == hd_path)
+            && front_entry.receiver_type_info == receiver_type_info) {
+        return front_entry.hd;
+    }
+
+    // the context's map is keyed by the receiver's type and the serial of its class, which is never reused, so it
+    // is not cleared in a new epoch; a context without a Program resolves its paths in the current Program, whose
+    // types can be freed before the context, so nothing is cached for it
+    uint64_t receiver_serial;
+    if (!ctx->pgm || !qore_rt_aot_path_cache_receiver_serial(receiver_type_info, receiver_serial)) {
+        return qore_rt_resolve_hashdecl_path(ctx, hd_path, receiver_type_info, xsink);
+    }
+    QoreAOTHashDeclPathCacheKey key{hd_path, receiver_type_info, receiver_serial};
+
+    {
+        std::lock_guard<std::mutex> lock(ctx->hashdecl_path_cache_mutex);
+        auto i = ctx->hashdecl_path_cache.find(key);
+        if (i != ctx->hashdecl_path_cache.end()) {
+            if (!disable_front_cache) {
+                front_entry.generation = ctx->hashdecl_cache_generation;
+                front_entry.epoch = epoch;
+                front_entry.path_address = hd_path;
+                front_entry.path = hd_path;
+                front_entry.receiver_type_info = receiver_type_info;
+                front_entry.hd = i->second;
+            }
+            return i->second;
         }
+    }
+
+    const TypedHashDecl* hd = qore_rt_resolve_hashdecl_path(ctx, hd_path, receiver_type_info, xsink);
+    if (!hd) {
         return nullptr;
     }
 
     {
         std::lock_guard<std::mutex> lock(ctx->hashdecl_path_cache_mutex);
+        qore_rt_aot_path_cache_make_room(ctx->hashdecl_path_cache);
         ctx->hashdecl_path_cache.emplace(std::move(key), hd);
     }
     if (!disable_front_cache) {
         front_entry.generation = ctx->hashdecl_cache_generation;
+        front_entry.epoch = epoch;
         front_entry.path_address = hd_path;
         front_entry.path = hd_path;
         front_entry.receiver_type_info = receiver_type_info;
@@ -4236,46 +4329,9 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path(const char* type_path,
     return ti;
 }
 
-static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext* ctx,
-        const char* type_path, const char* op, ExceptionSink* xsink) {
-    static constinit QoreEnvFlag cache_enabled_env("QORE_DISABLE_AOT_FULL_TYPE_PATH_CACHE");
-    const bool cache_enabled = !cache_enabled_env.get();
-    // the type of a signature type parameter depends on the instantiation of the current call, so it is not cached
-    if (!cache_enabled || !ctx || !type_path || !*type_path || qore_aot_type_path_has_signature_type_param(type_path)) {
-        return qore_rt_resolve_full_type_path(type_path, op, xsink);
-    }
-
-    const QoreTypeInfo* receiver_type_info = qore_get_current_receiver_type_info();
-    struct TypePathFrontCacheEntry {
-        uint64_t generation = 0;
-        const char* path_address = nullptr;
-        const QoreTypeInfo* receiver_type_info = nullptr;
-        const QoreTypeInfo* type_info = nullptr;
-    };
-    static constexpr size_t TYPE_PATH_FRONT_CACHE_SIZE = 8;
-    thread_local TypePathFrontCacheEntry front_cache[TYPE_PATH_FRONT_CACHE_SIZE];
-    uintptr_t hash = reinterpret_cast<uintptr_t>(type_path) >> 4;
-    hash ^= reinterpret_cast<uintptr_t>(receiver_type_info) >> 4;
-    hash ^= ctx->hashdecl_cache_generation;
-    TypePathFrontCacheEntry& front_entry =
-        front_cache[hash & (TYPE_PATH_FRONT_CACHE_SIZE - 1)];
-    if (front_entry.generation == ctx->hashdecl_cache_generation
-            && front_entry.path_address == type_path
-            && front_entry.receiver_type_info == receiver_type_info) {
-        return front_entry.type_info;
-    }
-
-    QoreAOTHashDeclPathCacheKey key{type_path, receiver_type_info};
-    {
-        std::lock_guard<std::mutex> lock(ctx->type_path_cache_mutex);
-        auto i = ctx->type_path_cache.find(key);
-        if (i != ctx->type_path_cache.end()) {
-            front_entry = {ctx->hashdecl_cache_generation, type_path,
-                receiver_type_info, i->second};
-            return i->second;
-        }
-    }
-
+//! Resolves a full type path of an AOT context for the receiver given, without the caches
+static const QoreTypeInfo* qore_rt_resolve_ctx_type_path(QoreAOTContext* ctx, const char* type_path,
+        const QoreTypeInfo* receiver_type_info, const char* op, ExceptionSink* xsink) {
     QoreProgram* pgm = ctx->pgm ? ctx->pgm : getProgram();
     if (!pgm) {
         if (xsink) {
@@ -4291,21 +4347,74 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
     const QoreTypeInfo* type_info = resolver.resolve(type_path, error);
     type_info = qore_substitute_type_params_if_needed(type_info,
         receiver_type_info);
-    if (!type_info) {
-        if (xsink) {
-            xsink->raiseException("AOT-TYPE-ERROR",
-                "%s cannot resolve container type '%s': %s", op, type_path,
-                error.c_str());
+    if (!type_info && xsink) {
+        xsink->raiseException("AOT-TYPE-ERROR",
+            "%s cannot resolve container type '%s': %s", op, type_path,
+            error.c_str());
+    }
+    return type_info;
+}
+
+static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext* ctx,
+        const char* type_path, const char* op, ExceptionSink* xsink) {
+    static constinit QoreEnvFlag cache_enabled_env("QORE_DISABLE_AOT_FULL_TYPE_PATH_CACHE");
+    const bool cache_enabled = !cache_enabled_env.get();
+    // the type of a signature type parameter depends on the instantiation of the current call, so it is not cached
+    if (!cache_enabled || !ctx || !type_path || !*type_path || qore_aot_type_path_has_signature_type_param(type_path)) {
+        return qore_rt_resolve_full_type_path(type_path, op, xsink);
+    }
+
+    const QoreTypeInfo* receiver_type_info = qore_get_current_receiver_type_info();
+    // a front-cache entry is used in the epoch it was made in (see qore_rt_resolve_hashdecl_path_cached())
+    const uint64_t epoch = qore_get_method_dispatch_epoch();
+    struct TypePathFrontCacheEntry {
+        uint64_t generation = 0;
+        uint64_t epoch = 0;
+        const char* path_address = nullptr;
+        const QoreTypeInfo* receiver_type_info = nullptr;
+        const QoreTypeInfo* type_info = nullptr;
+    };
+    static constexpr size_t TYPE_PATH_FRONT_CACHE_SIZE = 8;
+    thread_local TypePathFrontCacheEntry front_cache[TYPE_PATH_FRONT_CACHE_SIZE];
+    uintptr_t hash = reinterpret_cast<uintptr_t>(type_path) >> 4;
+    hash ^= reinterpret_cast<uintptr_t>(receiver_type_info) >> 4;
+    hash ^= ctx->hashdecl_cache_generation;
+    TypePathFrontCacheEntry& front_entry =
+        front_cache[hash & (TYPE_PATH_FRONT_CACHE_SIZE - 1)];
+    if (front_entry.generation == ctx->hashdecl_cache_generation
+            && front_entry.epoch == epoch
+            && front_entry.path_address == type_path
+            && front_entry.receiver_type_info == receiver_type_info) {
+        return front_entry.type_info;
+    }
+
+    // the context's map is keyed by the receiver's type and the serial of its class; nothing is cached for a context
+    // without a Program (see qore_rt_resolve_hashdecl_path_cached())
+    uint64_t receiver_serial;
+    if (!ctx->pgm || !qore_rt_aot_path_cache_receiver_serial(receiver_type_info, receiver_serial)) {
+        return qore_rt_resolve_ctx_type_path(ctx, type_path, receiver_type_info, op, xsink);
+    }
+    QoreAOTHashDeclPathCacheKey key{type_path, receiver_type_info, receiver_serial};
+    {
+        std::lock_guard<std::mutex> lock(ctx->type_path_cache_mutex);
+        auto i = ctx->type_path_cache.find(key);
+        if (i != ctx->type_path_cache.end()) {
+            front_entry = {ctx->hashdecl_cache_generation, epoch, type_path, receiver_type_info, i->second};
+            return i->second;
         }
+    }
+
+    const QoreTypeInfo* type_info = qore_rt_resolve_ctx_type_path(ctx, type_path, receiver_type_info, op, xsink);
+    if (!type_info) {
         return nullptr;
     }
 
     {
         std::lock_guard<std::mutex> lock(ctx->type_path_cache_mutex);
+        qore_rt_aot_path_cache_make_room(ctx->type_path_cache);
         ctx->type_path_cache.emplace(std::move(key), type_info);
     }
-    front_entry = {ctx->hashdecl_cache_generation, type_path,
-        receiver_type_info, type_info};
+    front_entry = {ctx->hashdecl_cache_generation, epoch, type_path, receiver_type_info, type_info};
     return type_info;
 }
 
@@ -7349,13 +7458,26 @@ static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
         }
 
         const UserVariantBase* uvb = nullptr;
+        //! the id of the Program of the variant, which is never reused
+        qore_program_id_t pgm_id = 0;
         int nargs = -1;
         QoreIRCallDirectInstruction descriptor;
     };
     static thread_local NativeClosureLeafCache cache;
-    if (cache.uvb != uvb || cache.nargs != nargs
+    // the entry is found by the id of the variant's Program as well: the variant and its IR live as long as their
+    // Program, but the variant and IR of a Program created after it was deleted can have their addresses, and the
+    // descriptor's analysis of the deleted IR (the leaf's operation) and its return type would then be used for them
+    // (see tryExecuteInterpreterInlineIRClosure())
+    const qore_program_id_t pgm_id = uvb->pgm_id;
+#ifdef DEBUG
+    if (cache.uvb == uvb && cache.descriptor.cached_callee_ir == callee_ir && cache.pgm_id != pgm_id) {
+        qore_dbg_closure_call_cache_program_misses.fetch_add(1, std::memory_order_relaxed);
+    }
+#endif
+    if (cache.uvb != uvb || cache.pgm_id != pgm_id || cache.nargs != nargs
             || cache.descriptor.cached_callee_ir != callee_ir) {
         cache.uvb = uvb;
+        cache.pgm_id = pgm_id;
         cache.nargs = nargs;
         cache.descriptor.cached_callee_ir = callee_ir;
         cache.descriptor.cached_uvb = uvb;

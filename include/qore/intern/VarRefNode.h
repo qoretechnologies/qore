@@ -168,7 +168,8 @@ public:
     }
 
     DLLLOCAL void setPublic() {
-        assert(type == VT_GLOBAL);
+        // a thread_local variable can be public as well: a child Program and the importers of a module inherit it
+        assert(type == VT_GLOBAL || type == VT_THREAD_LOCAL);
         ref.var->setPublic();
     }
 

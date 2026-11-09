@@ -947,7 +947,8 @@ DLLLOCAL int qore_cancellable_sleep(int64 usecs, ExceptionSink* xsink, const cha
 
     Unlike delete_thread_local_data(), this does not unregister the thread from any
     QoreProgram or set the finalizing flag — the thread continues to be available for
-    new tasks.
+    new tasks.  While it clears the data, the code it runs (destructors) cannot assign the
+    thread's thread_local variables, as at the end of a thread (see thread_local_vars_finalizing()).
 */
 DLLLOCAL void clear_all_program_thread_local_data();
 DLLLOCAL void parse_cond_push(bool mark = false);
@@ -1659,10 +1660,63 @@ protected:
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread is exhausted; see thread.cpp
 DLLLOCAL int check_stack(ExceptionSink* xsink);
 
+//! Keeps the Program of a reference while the reference's lvalue is used
+/** A reference can outlive the Program whose lvalue it refers to: a function of the Program can return one, and the
+    Program's variables and code are freed with the Program, while the reference keeps their addresses
+    (lvalue_ref::pgm and its lvalue expression).  Its Program is identified by its ID as well (lvalue_ref::pgm_id), as
+    a Program created after it was deleted can have its address, and a reference to a lvalue of a deleted Program
+    raises PROGRAM-ERROR: its use entered the freed Program and crashed.
+
+    The Program is referenced while the helper exists, unless it is the current Program, which the thread is in, or
+    one that the current thread deletes.  A helper that enters another Program (\a enter) keeps its teardown from
+    deleting its data while the helper exists, which raises PROGRAM-ERROR as well once the teardown has marked it;
+    RuntimeReferenceHelperBase enters it with its context.
+*/
+class QoreReferenceProgramHelper {
+public:
+    //! Takes the Program of the reference; raises PROGRAM-ERROR in \a xsink if it has been deleted
+    /** @param r the reference
+        @param xsink for exceptions; also used to release the Program
+        @param enter true to enter the Program without switching to it (its thread count)
+    */
+    DLLLOCAL QoreReferenceProgramHelper(const lvalue_ref& r, ExceptionSink* xsink, bool enter);
+
+    DLLLOCAL ~QoreReferenceProgramHelper();
+
+    DLLLOCAL QoreReferenceProgramHelper(const QoreReferenceProgramHelper&) = delete;
+    DLLLOCAL QoreReferenceProgramHelper& operator=(const QoreReferenceProgramHelper&) = delete;
+
+    //! Returns false if the reference's Program has been deleted, or could not be entered
+    DLLLOCAL operator bool() const {
+        return valid;
+    }
+
+    //! Returns the reference's Program, or nullptr if it has none or has been deleted
+    DLLLOCAL QoreProgram* getProgram() const {
+        return valid ? pgm : nullptr;
+    }
+
+private:
+    //! the Program of the reference, if it is valid
+    QoreProgram* pgm = nullptr;
+    //! the reference taken to the Program, if any
+    QoreProgram* ref = nullptr;
+    ExceptionSink* xsink;
+    bool valid = true;
+    bool entered = false;
+};
+
 class RuntimeReferenceHelperBase {
 public:
     DLLLOCAL RuntimeReferenceHelperBase(const lvalue_ref& r, ExceptionSink* n_xsink)
-            : ref(&r), pch(n_xsink, r.pgm, true), osh(r.self, r.cls) {
+            : ref(&r), pgm_holder(r, n_xsink, false), pch(n_xsink, pgm_holder.getProgram(), true),
+              osh(r.self, r.cls) {
+        // the Program of the reference has been deleted
+        if (!pgm_holder) {
+            ref = nullptr;
+            valid = false;
+            return;
+        }
         //printd(5, "RuntimeReferenceHelperBase::RuntimeReferenceHelperBase() this: %p vexp: %p %s %d\n", this,
         //  r.vexp, get_type_name(r.vexp), get_node_type(r.vexp));
         // a reference is resolved by evaluating its lvalue expression, which can be a reference itself; each step of a
@@ -1692,6 +1746,8 @@ public:
 
 protected:
     const lvalue_ref* ref;
+    //! keeps the reference's Program; declared before pch, which enters it and leaves it before it is released
+    QoreReferenceProgramHelper pgm_holder;
     ProgramThreadCountContextHelper pch;
     ObjectSubstitutionHelper osh;
     bool valid = true;
