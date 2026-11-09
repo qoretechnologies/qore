@@ -56,6 +56,12 @@ extern char **environ;
 #ifndef _Q_WINDOWS
 #include <pthread.h>
 #endif
+#ifdef DARWIN
+#include <libproc.h>
+#include <sys/event.h>
+#include <set>
+#include <vector>
+#endif
 
 BackquoteNode::BackquoteNode(const QoreProgramLocation* loc, char *c_str) : ParseNode(loc, NT_BACKQUOTE), str(c_str) {
 }
@@ -126,26 +132,147 @@ int qore_wait_child_exit(pid_t pid) {
     }
 }
 
-// called after the child process \a pid, killed with SIGKILL sent to \a kill_target, has ended and before it is
-// reaped: when \a kill_target is the process group that the child leads, SIGKILL is sent to the group again
-/* A signal sent to a process group does not reach a process that a member of the group is creating with fork() at
-   that moment on macOS, for example: the new process is left running in the group, as an orphan once its parent has
-   been killed.  Once the leader has ended, it can create no more processes, and the processes that it created are
-   all in the group; its PID, which is the ID of the group, cannot be reused until it is reaped, so the signal cannot
-   reach another process group.
-*/
-void qore_kill_child_process_group_again(pid_t pid, pid_t kill_target) {
-    if (kill_target != pid) {
-        assert(kill_target == -pid);
-        kill(kill_target, SIGKILL);
+#ifdef DARWIN
+// the time that the processes of a killed process group are waited for while none of them ends
+constexpr int QORE_PGROUP_EXIT_STALL_MS = 2000;
+
+// returns the PIDs of the processes in the process group, including the zombies listed by the system
+void qore_list_pgroup_pids(pid_t pgid, std::vector<pid_t>& pids) {
+    // proc_listpgrppids() with no buffer returns an estimate of the number of processes; the list is read again with
+    // a larger buffer while it fills the buffer, as processes may be created in the meantime
+    int cap = proc_listpgrppids(pgid, nullptr, 0);
+    if (cap < 16) {
+        cap = 16;
     }
+    while (true) {
+        pids.resize(cap);
+        int n = proc_listpgrppids(pgid, pids.data(), static_cast<int>(cap * sizeof(pid_t)));
+        if (n < cap) {
+            pids.resize(n > 0 ? n : 0);
+            return;
+        }
+        cap *= 2;
+    }
+}
+
+// closes a kqueue descriptor on every path out of its scope
+class QoreKqueueHolder {
+public:
+    QoreKqueueHolder() : fd(kqueue()) {
+    }
+
+    ~QoreKqueueHolder() {
+        if (fd >= 0) {
+            close(fd);
+        }
+    }
+
+    int fd;
+};
+#endif
+
+// called after the child process \a pid, killed with SIGKILL sent to \a kill_target, has ended and before it is
+// reaped: when \a kill_target is the process group that the child leads, every other process in the group is killed
+/* The child's PID, which is the ID of the group, cannot be reused until it is reaped, so the signals sent here
+   cannot reach another process group.
+
+   On Linux, a signal sent to a process group reaches every process in the group, including one that a member is
+   creating with fork() at that moment (the kernel restarts a fork() that a signal interrupts), so the first SIGKILL
+   has reached every process in the group, and nothing is done here.
+
+   On macOS, a process that a member of the group is creating with fork() when the signal is sent does not receive
+   it, and is left running in the group.  The member that created it has been sent SIGKILL, and it ends once fork()
+   returns, so the new process is in the group before its creator has ended.  The other processes in the group are
+   therefore listed and waited for with kqueue (EVFILT_PROC, NOTE_EXIT):
+   - SIGKILL is sent to the group, and the processes in the group are listed;
+   - when the list has a process that was not waited for, or a process that has ended that was not known to have
+     ended, the group may have a process created after the signal was sent: the signal is sent and the group listed
+     again;
+   - otherwise, every process in the group has been sent SIGKILL after it was created, and every one of them is waited
+     for; a process created after the list was made was created by one of them, and is in the group when its creator
+     has ended: when one or more of them end, the signal is sent and the group is listed again;
+   - it ends when no process but the leader is left in the group.
+   A killed process that does not end, for example one in an uninterruptible wait, would hold the wait indefinitely:
+   the wait ends when no process in the group has ended for QORE_PGROUP_EXIT_STALL_MS.  Every process left in the
+   group has been sent SIGKILL after it was created then, and it ends when the wait that holds it ends.
+
+   Elsewhere, SIGKILL is sent to the group again once, which reaches every process that the leader itself created.
+*/
+void qore_kill_child_process_group(pid_t pid, pid_t kill_target) {
+    if (kill_target == pid) {
+        return;
+    }
+    assert(kill_target == -pid);
+#if defined(__linux__)
+    // the first signal has reached every process in the group
+#elif defined(DARWIN)
+    const pid_t pgid = pid;
+    QoreKqueueHolder kq;
+    if (kq.fd < 0) {
+        // the processes cannot be waited for; the signal reaches every process that the leader itself created
+        kill(kill_target, SIGKILL);
+        return;
+    }
+    // the processes in the group that are waited for
+    std::set<pid_t> waiting;
+    // the processes in the group known to have ended; zombies are listed until they are reaped
+    std::set<pid_t> ended;
+    std::vector<pid_t> pids;
+    while (true) {
+        kill(kill_target, SIGKILL);
+        qore_list_pgroup_pids(pgid, pids);
+        bool changed = false;
+        for (pid_t member : pids) {
+            if (member == pgid || waiting.find(member) != waiting.end()) {
+                continue;
+            }
+            struct kevent ev, receipt;
+            EV_SET(&ev, member, EVFILT_PROC, EV_ADD | EV_ONESHOT | EV_RECEIPT, NOTE_EXIT, 0, nullptr);
+            // the receipt reports the result of the registration: ESRCH if the process has ended
+            if (kevent(kq.fd, &ev, 1, &receipt, 1, nullptr) == 1 && (receipt.flags & EV_ERROR) && !receipt.data) {
+                // a process that has not been waited for, also one with the PID of a process that has ended
+                waiting.insert(member);
+                ended.erase(member);
+                changed = true;
+            } else if (ended.insert(member).second) {
+                changed = true;
+            }
+        }
+        if (changed) {
+            continue;
+        }
+        if (waiting.empty()) {
+            return;
+        }
+        struct kevent events[64];
+        struct timespec timeout = {QORE_PGROUP_EXIT_STALL_MS / 1000, (QORE_PGROUP_EXIT_STALL_MS % 1000) * 1000000};
+        int n = kevent(kq.fd, nullptr, 0, events, 64, &timeout);
+        if (!n) {
+            // no process in the group has ended within the stall time
+            return;
+        }
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return;
+        }
+        for (int i = 0; i < n; ++i) {
+            pid_t member = static_cast<pid_t>(events[i].ident);
+            waiting.erase(member);
+            ended.insert(member);
+        }
+    }
+#else
+    kill(kill_target, SIGKILL);
+#endif
 }
 }
 
 void qore_kill_child_process(pid_t pid, pid_t kill_target) {
     kill(kill_target, SIGKILL);
     if (!qore_wait_child_exit(pid)) {
-        qore_kill_child_process_group_again(pid, kill_target);
+        qore_kill_child_process_group(pid, kill_target);
     }
     int ignored;
     qore_reap_child_process(pid, ignored);
@@ -252,7 +379,7 @@ QoreChildWaitResult qore_wait_child_process(pid_t pid, pid_t kill_target, int& s
 
     if (interrupted) {
         if (!w.wait_errno) {
-            qore_kill_child_process_group_again(pid, kill_target);
+            qore_kill_child_process_group(pid, kill_target);
             int ignored;
             qore_reap_child_process(pid, ignored);
         }
@@ -356,13 +483,10 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
         posix_spawn_file_actions_destroy(&actions);
         posix_spawnattr_destroy(&attr);
         close(pipefd[1]);
-        bool pgroup_ok = false;
-        if (use_pgroup) {
-            // Best-effort safeguard in case POSIX_SPAWN_SETPGROUP is not applied.
-            if (setpgid(pid, pid) == 0 || errno == EACCES) {
-                pgroup_ok = true;
-            }
-        }
+        // posix_spawn() succeeded, so POSIX_SPAWN_SETPGROUP made the child the leader of a new process group before
+        // the command was executed (calling setpgid() here instead fails once the child has ended, ESRCH on macOS,
+        // and would kill only the child)
+        const bool pgroup_ok = use_pgroup;
 
         QoreStringNodeHolder s(new QoreStringNode);
         char buf[READ_BLOCK];
@@ -458,7 +582,10 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
             xsink->raiseException("BACKQUOTE-ERROR", q_strerror(errno));
             return nullptr;
         }
-        if (use_pgroup && (setpgid(pid, pid) == 0 || errno == EACCES)) {
+        // the child makes itself the leader of a new process group as well, so that the group exists whichever of
+        // the two calls is made first: EACCES means the child has executed the command, and ESRCH (macOS) that it has
+        // ended, after its own call
+        if (use_pgroup && (setpgid(pid, pid) == 0 || errno == EACCES || errno == ESRCH)) {
             pgroup_ok = true;
         }
         close(pipefd[1]);
