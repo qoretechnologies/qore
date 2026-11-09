@@ -174,7 +174,7 @@ auto v = pgm.callFunction("eval");
     @endcode
 
     @throw PROGRAM-OPTION-ERROR the parse options contain options that can only be set by the system
-    @throw PROGRAM-ERROR this Program is being parsed
+    @throw PROGRAM-ERROR this Program is being parsed, or has been deleted
 
     @since %Qore 3.0
 */
@@ -183,13 +183,25 @@ Program ProgramControl::createEvalProgram(softint parse_options = PO_DEFAULT) [f
         return xsink->raiseException("PROGRAM-OPTION-ERROR", "parse options (0x" QLLX ") contain restricted "
             "options that can only be set by the system", parse_options);
     }
-    // the namespace of this Program is copied when the new Program is created
-    if (qore_program_private::get(*p)->parsing_in_progress) {
-        return xsink->raiseException("PROGRAM-ERROR", "the Program is currently undergoing parsing; its code "
-            "cannot be inherited");
+    // the namespace of this Program is copied when the new Program is created: the Program is held while it is
+    // copied, so that its data cannot be cleared meanwhile; a Program that is deleted or being parsed is refused
+    if (qore_program_private::incThreadCountForCopy(*p, xsink)) {
+        return QoreValue();
     }
     QoreProgram* pgm;
     {
+        // released on every path, also if the copy throws
+        class CopyHolder {
+        public:
+            DLLLOCAL CopyHolder(QoreProgram* p, ExceptionSink* xsink) : p(p), xsink(xsink) {
+            }
+            DLLLOCAL ~CopyHolder() {
+                qore_program_private::decThreadCount(*p, q_gettid(), xsink);
+            }
+        private:
+            QoreProgram* p;
+            ExceptionSink* xsink;
+        } copy_holder(p, xsink);
         InheritAllUserCodeHelper all_user_code;
         pgm = new QoreProgram(p, parse_options);
     }

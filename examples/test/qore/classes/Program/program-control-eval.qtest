@@ -42,6 +42,7 @@ public nothing sub write_file(string path) { File f(); f.open2(path, O_CREAT | O
         addTestCase("the controlled Program is not changed", \unchangedTest());
         addTestCase("the restrictions of the evaluation Program", \restrictionTest());
         addTestCase("errors", \errorTest());
+        addTestCase("a deleted Program", \deletedTest());
         set_return_value(main());
     }
 
@@ -131,5 +132,33 @@ auto sub e6() { return acct; }
         # the evaluation Program can be used after a parse error
         epgm.parse("auto sub e() { return twice(4); }", "eval2");
         assertEq(8, epgm.callFunction("e"));
+    }
+
+    #! createEvalProgram() on a Program that has been deleted raises PROGRAM-ERROR, also when sandboxed code calls it
+    deletedTest() {
+        {
+            Program pgm = getProgram();
+            ProgramControl pc = pgm.getProgram();
+            delete pgm;
+            assertThrows("PROGRAM-ERROR", "deleted", \pc.createEvalProgram(), (PO_NEW_STYLE,));
+        }
+        {
+            Program s(PO_NEW_STYLE | PO_ALLOW_DEBUGGER);
+            s.setSandboxManager(new SandboxManager());
+            s.parse("%modern
+string sub go() {
+    Program p(PO_NEW_STYLE);
+    ProgramControl pc = p.getProgram();
+    delete p;
+    try {
+        pc.createEvalProgram(PO_NEW_STYLE);
+        return 'created';
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+", "sandboxed");
+            assertEq("PROGRAM-ERROR", s.callFunction("go"));
+        }
     }
 }

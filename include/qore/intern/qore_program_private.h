@@ -1589,7 +1589,33 @@ public:
     }
     */
 
-    // returns 0 for OK, -1 for error
+    //! Enters the Program's thread count for a copy of its code (ProgramControl::createEvalProgram())
+    /** Refuses a Program that is deleted or being deleted, also by the current thread, or that is being parsed, with
+        \c PROGRAM-ERROR; while the count is held, the Program's data are not cleared (see
+        waitForTerminationAndClear()).  Released with decThreadCount().
+
+        @return 0 if the count was taken, -1 if an exception was raised
+    */
+    DLLLOCAL int incThreadCountForCopy(ExceptionSink* xsink) {
+        assert(xsink);
+        int tid = q_gettid();
+        AutoLocker al(plock);
+        if (ptid) {
+            xsink->raiseException("PROGRAM-ERROR", "the Program has already been deleted; its code cannot be "
+                "inherited");
+            return -1;
+        }
+        if (parsing_in_progress) {
+            xsink->raiseException("PROGRAM-ERROR", "the Program is currently undergoing parsing; its code cannot be "
+                "inherited");
+            return -1;
+        }
+        ++tidmap[tid];
+        ++thread_count;
+        return 0;
+    }
+
+    // returns 0 for OK, -1 for error; the exceptions are not raised without \a xsink
     DLLLOCAL int incThreadCount(ExceptionSink* xsink) {
         int tid = q_gettid();
 
@@ -1597,11 +1623,13 @@ public:
         AutoLocker al(plock);
 
         if (ptid && ptid != tid) {
-            xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and therefore "
-                "cannot be accessed at runtime");
+            if (xsink) {
+                xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and "
+                    "therefore cannot be accessed at runtime");
+            }
             return -1;
         }
-        if (parsing_in_progress) {
+        if (parsing_in_progress && xsink) {
             xsink->raiseException("PROGRAM-ERROR", "the Program accessed is currently undergoing parsing and cannot "
                 "be accessed at runtime");
         }
@@ -3609,6 +3637,10 @@ public:
 
     DLLLOCAL static const AbstractQoreZoneInfo* currentTZIntern(QoreProgram& pgm) {
         return pgm.priv->TZ;
+    }
+
+    DLLLOCAL static int incThreadCountForCopy(QoreProgram& pgm, ExceptionSink* xsink) {
+        return pgm.priv->incThreadCountForCopy(xsink);
     }
 
     DLLLOCAL static int lockParsing(QoreProgram& pgm, ExceptionSink* xsink) {
