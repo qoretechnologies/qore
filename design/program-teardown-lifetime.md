@@ -149,10 +149,16 @@ No thread uses a variable that is released this way, so the releasing thread tak
 thread's entry without changing that thread's map; the thread erases the empty entry the next time it looks up a
 variable (`ThreadData::eraseDeletedThreadLocalVars()`).  A thread that ends, or whose values are cleared between tasks
 (`clear_all_program_thread_local_data()`), takes its entries out of the registry before it releases their values
-(`ThreadData::releaseThreadLocalVars()`), repeatedly while the destructors give its variables values again.  The
-registry's lock is a leaf lock: no value is released under it.  `examples/test/qore/vars/thread-local-program-reuse.qtest`
-checks the release with the variable's Program in a worker thread, reads in a worker thread and in the deleting thread
-with Programs created one after another, the release at the end of a thread, and an inherited variable.
+(`ThreadData::releaseThreadLocalVars()`).  The destructors that the release runs cannot assign the thread's
+variables then (`thread_local_vars_finalizing()`: `ThreadData::finalizing` while the thread ends,
+`ThreadData::tlv_clearing` while a ThreadPool or AsyncIoController worker clears the data of its task, for the whole
+of `clear_all_program_thread_local_data()`), so a second pass finds no value: the clearing between tasks allowed it,
+and a destructor giving a variable a value whose destructor gave it a value again kept the worker releasing values for
+ever, and `ThreadPool::stopWait()` waiting for it.  The registry's lock is a leaf lock: no value is released under it.
+`examples/test/qore/vars/thread-local-program-reuse.qtest` checks the release with the variable's Program in a worker
+thread, reads in a worker thread and in the deleting thread with Programs created one after another, the release at
+the end of a thread, an inherited variable, and the clearing between the tasks of a ThreadPool worker and between the
+callbacks of an AsyncIoController worker.
 
 ## Where the teardown can wait for ever
 

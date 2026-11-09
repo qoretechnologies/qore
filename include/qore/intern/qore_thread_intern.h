@@ -947,7 +947,8 @@ DLLLOCAL int qore_cancellable_sleep(int64 usecs, ExceptionSink* xsink, const cha
 
     Unlike delete_thread_local_data(), this does not unregister the thread from any
     QoreProgram or set the finalizing flag — the thread continues to be available for
-    new tasks.
+    new tasks.  While it clears the data, the code it runs (destructors) cannot assign the
+    thread's thread_local variables, as at the end of a thread (see thread_local_vars_finalizing()).
 */
 DLLLOCAL void clear_all_program_thread_local_data();
 DLLLOCAL void parse_cond_push(bool mark = false);

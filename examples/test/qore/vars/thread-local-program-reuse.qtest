@@ -216,6 +216,47 @@ const DClass = "class D { private { code report; } constructor(code r) { report 
     printf("inherited values released with the child: %d, with the parent: %d\n", after_child,
         destroyed - after_child);
 }
+# the values that a worker clears between its tasks: the destructors run then cannot assign the variables of the
+# thread, as at the end of a thread, or a destructor giving a variable a value whose destructor gives it one again would keep
+# the clearing going for ever; the next task of the worker assigns them again
+const ClearCode = "%modern\nthread_local *string tly;\n"
+    "class D { private { code report; } constructor(code r) { report = r; } "
+    "destructor() { report(\"destroyed\"); try { tly = \"from the destructor\"; } "
+    "catch (hash<ExceptionInfo> ex) { report(ex.err); } } }\n"
+    "thread_local *D tlx;\nsub set(code r) { tlx = new D(r); }\n*string sub get() { return tly; }\n"
+    "string sub assign() { tly = \"assigned\"; return tly; }\n";
+{
+    list<string> events = ();
+    code report = sub (string e) { events += e; };
+    Program p = new_program(ClearCode, "pool-clear");
+    ThreadPool tp(1, 1, 1);
+    Counter c(1);
+    tp.submit(sub () { on_exit c.dec(); p.callFunction("set", report); });
+    c.waitForZero();
+    # the pool has one worker, which runs the next task once it has cleared the values of the first one
+    Queue q();
+    tp.submit(sub () { q.push((p.callFunction("get"), p.callFunction("assign"))); });
+    list<auto> next = q.get();
+    tp.stopWait();
+    printf("pool worker values cleared between tasks: %y; read by the next task: %y, assigned: %y\n", events,
+        next[0], next[1]);
+    delete p;
+}
+{
+    list<string> events = ();
+    code report = sub (string e) { events += e; };
+    Program p = new_program(ClearCode, "async-io-clear");
+    # one callback worker, which runs the next callback once it has cleared the values of the first one
+    AsyncIoController::setMaxCallbackWorkers(1);
+    Queue q();
+    AsyncIoController::addTimer(now_us(), sub () { on_exit q.push(gettid()); p.callFunction("set", report); });
+    int tid = q.get();
+    AsyncIoController::addTimer(now_us(), sub () { q.push((gettid(), p.callFunction("get"), p.callFunction("assign"))); });
+    list<auto> next = q.get();
+    printf("async I/O worker values cleared between callbacks: %y; read by the next callback in the same thread "
+        "(%y): %y, assigned: %y\n", events, tid == next[0], next[1], next[2]);
+    delete p;
+}
 printf("done\n");
 ';
     }
@@ -273,6 +314,10 @@ printf("done\n");
             "values of another type: 0 of 40\n"
             "values released when their thread ends: 1 of 1; assigned in another thread afterwards: 1\n"
             "inherited values released with the child: 0, with the parent: 2\n"
+            "pool worker values cleared between tasks: [\"destroyed\", \"DESTRUCTOR-ERROR\"]; read by the next "
+                "task: null, assigned: \"assigned\"\n"
+            "async I/O worker values cleared between callbacks: [\"destroyed\", \"DESTRUCTOR-ERROR\"]; read by the "
+                "next callback in the same thread (True): null, assigned: \"assigned\"\n"
             "done\n";
     }
 

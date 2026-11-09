@@ -725,7 +725,12 @@ public:
     bool
         foreign : 1, // true if the thread is a foreign thread
         try_reexport : 1,
-        finalizing : 1;
+        finalizing : 1,
+        //! true while the values of a task are cleared between the tasks of a pool worker
+        /** see clear_all_program_thread_local_data(): the code run by the clearing (destructors) cannot give the
+            thread's thread_local variables values, as at the end of a thread (finalizing)
+        */
+        tlv_clearing : 1;
 
     DLLLOCAL ThreadData(int ptid, QoreProgram* p, bool n_foreign = false,
             int n_flags = QTF_NONE) :
@@ -735,7 +740,8 @@ public:
             tpd(new ThreadProgramData(this)),
             foreign(n_foreign),
             try_reexport(false),
-            finalizing(false) {
+            finalizing(false),
+            tlv_clearing(false) {
 #ifdef QORE_MANAGE_STACK
         if (n_flags & QTF_NO_STACK_GUARD) {
             // No stack guard for lightweight threads (e.g. dedicated async I/O threads)
@@ -920,12 +926,15 @@ public:
 
     //! Releases the thread's values of thread_local variables
     /** The entries are taken out of the registry first, so that the deletion of a variable in another thread does not
-        release their values as well; the destructors run by the release can give the variables values again, which
-        the next pass releases
+        release their values as well.  Called while the thread's variables cannot be assigned (finalizing or
+        tlv_clearing, see thread_local_vars_finalizing()): the destructors run by the release cannot give them
+        values again, so the second pass finds none; the destructors can still look variables up, which gives the
+        thread entries without values, which the second pass takes out of the registry
 
         @param xsink for the exceptions of the destructors, or nullptr to handle the exceptions of each value here
     */
     DLLLOCAL void releaseThreadLocalVars(ExceptionSink* xsink) {
+        assert(finalizing || tlv_clearing);
         // ends after taking the entries out of the registry when none has a value: no code runs after that
         while (true) {
             // the entries of deleted variables are empty
@@ -2107,7 +2116,9 @@ void inc_active_exceptions(int diff) {
 
 bool thread_local_vars_finalizing() {
     ThreadData* td = thread_data.get();
-    return td && td->finalizing;
+    // the values of a thread are released when it ends, and between the tasks of a pool worker: the destructors run
+    // then cannot give its variables values again, or the release would never end
+    return td && (td->finalizing || td->tlv_clearing);
 }
 
 void get_thread_local_lvalue(uint64_t serial, QoreLValue<qore_gvar_ref_u>*& lvar, bool& is_new) {
@@ -6387,6 +6398,27 @@ void ThreadProgramData::clearAllProgramThreadData(ExceptionSink* xsink) {
     }
 }
 
+namespace {
+//! Refuses the assignment of the current thread's thread_local variables while the data of its task is cleared
+class ThreadLocalVarClearingHelper {
+public:
+    DLLLOCAL ThreadLocalVarClearingHelper(ThreadData& td) : td(td) {
+        assert(!td.tlv_clearing);
+        td.tlv_clearing = true;
+    }
+
+    DLLLOCAL ~ThreadLocalVarClearingHelper() {
+        td.tlv_clearing = false;
+    }
+
+    ThreadLocalVarClearingHelper(const ThreadLocalVarClearingHelper&) = delete;
+    ThreadLocalVarClearingHelper& operator=(const ThreadLocalVarClearingHelper&) = delete;
+
+private:
+    ThreadData& td;
+};
+}
+
 void clear_all_program_thread_local_data() {
     ThreadData* td = thread_data.get();
     if (!td) {
@@ -6401,9 +6433,15 @@ void clear_all_program_thread_local_data() {
     // NOTE: do NOT clear td->runtime_loc here — it is needed for exception call stack
     // generation if subsequent cleanup code (e.g. object destructors) throws
 
-    // clear all thread_local variable values without setting the finalizing flag
+    // while the task's data is cleared, the code that the clearing runs (destructors) cannot give the thread's
+    // thread_local variables values, as at the end of a thread (see thread_local_vars_finalizing()): a destructor
+    // that gave a variable a value whose destructor gave it a value again kept the release going for ever between
+    // two tasks of a ThreadPool or AsyncIoController worker, and stopWait() never returned; the thread is not
+    // finalized, so its next task assigns them again
+    ThreadLocalVarClearingHelper tlvch(*td);
+
+    // clear all thread_local variable values
     td->releaseThreadLocalVars(nullptr);
-    td->tlvmap.clear();
 
     // clear thread-local hash (tld) in all programs this thread has data in
     {
@@ -6418,6 +6456,10 @@ void clear_all_program_thread_local_data() {
         purge_thread_resources(&xsink);
         xsink.handleExceptions();
     }
+
+    // the code run above can have looked variables up, which gave the thread entries without values
+    td->releaseThreadLocalVars(nullptr);
+    td->tlvmap.clear();
 }
 
 void delete_thread_local_data() {
