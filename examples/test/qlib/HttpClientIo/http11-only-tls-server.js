@@ -16,10 +16,13 @@ if (process.argv.length < 4) {
   process.exit(2);
 }
 
+// ALPNCallback (node >= 18.18 and 20.0) refuses a client that does not offer http/1.1 with the no_application_protocol
+// alert (RFC 7301 section 3.2); with ALPNProtocols alone, some node versions (e.g. 18.17) complete the handshake without
+// ALPN instead, which the test detects and skips
 const server = https.createServer({
   cert: fs.readFileSync(process.argv[2]),
   key: fs.readFileSync(process.argv[3]),
-  ALPNProtocols: ['http/1.1'],
+  ALPNCallback: ({ protocols }) => (protocols.includes('http/1.1') ? 'http/1.1' : undefined),
 }, (req, res) => {
   res.writeHead(200, { 'content-type': 'text/plain' });
   res.end('http/1.1 ok');

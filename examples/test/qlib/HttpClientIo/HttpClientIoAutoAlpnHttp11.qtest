@@ -153,6 +153,24 @@ l50Xb2GWQesIt9k5jF5IOw==
         if (!exists port) {
             throw "TEST-ERROR", "the node server reported no port: " + line;
         }
+        # the server must refuse a client that offers only "h2" with the no_application_protocol alert, as nginx does;
+        # a node without ALPNCallback (before 18.18) completes the handshake without ALPN instead, which a client
+        # without the fix also handles, so the test would prove nothing
+        Socket probe();
+        probe.setAlpnProtocols(("h2",));
+        probe.acceptAllCertificates(True);
+        bool refused;
+        try {
+            probe.connectSSL("127.0.0.1:" + port, 10s);
+            probe.close();
+        } catch (hash<ExceptionInfo> ex) {
+            refused = ex.desc =~ /no application protocol/;
+        }
+        if (!refused) {
+            stopServer(p);
+            testSkip(sprintf("node %s does not refuse a client without http/1.1 with no_application_protocol (node "
+                ">= 18.18 is needed)", trim(`node -v`)));
+        }
         # the certificate files are read at startup
         return {"process": p, "port": port};
     }
