@@ -68,6 +68,10 @@ class SelectSpecializedTypesTest inherits QUnit::Test {
 
         #! the script prints its lines this many times
         const Iterations = 3;
+
+        #! the scripts with the cases from the review, compared with the AST interpreter's output at run time
+        const ReviewScripts = ("review-operand-types", "review-select-gating", "review-reassigned-locals",
+            "review-map-in-try");
     }
 
     private {
@@ -82,11 +86,13 @@ class SelectSpecializedTypesTest inherits QUnit::Test {
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
-        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
         path = get_script_dir() + "/select-types.q";
 
         addTestCase("execution modes", \modesTest());
         addTestCase("AOT executable", \aotTest());
+        addTestCase("review cases: execution modes and AOT", \reviewTest());
+        addTestCase("or-nothing lists keep the specialized select", \orNothingListTest());
         set_return_value(main());
     }
 
@@ -111,6 +117,53 @@ class SelectSpecializedTypesTest inherits QUnit::Test {
         string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, path));
         assertTrue(is_file(exe), "qcc compiles the script: " + out);
         assertEq(expected(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT");
+    }
+
+    #! runs each review script with the AST interpreter, then in every other execution mode, on the IR tier and as an
+    #! AOT executable, and checks that they give the AST interpreter's output
+    /** The scripts cover: map operands of types that the specialized opcodes do not compute with as they are (number,
+        or-nothing, string, date and bool elements, hash-key values), select predicates with non-zero float constants,
+        the specialized map opcodes in a try block (which qcc could not compile), and the gating of fused and
+        reassigned operands.
+    */
+    private reviewTest() {
+        TmpDir dir("select-specialized-types-review-");
+        foreach string name in (ReviewScripts) {
+            string script = get_script_dir() + "/" + name + ".q";
+            string exp = ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, script));
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, script)),
+                    name + ": " + mode);
+            }
+            assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+                script)), name + ": " + ExecModeHarness::IRTierName);
+            if (!is_file(qcc_bin)) {
+                continue;
+            }
+            string exe = dir.path + "/" + name;
+            string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, script));
+            assertTrue(is_file(exe), name + ": qcc compiles the script: " + out);
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), name + ": AOT");
+        }
+    }
+
+    #! a select over an or-nothing list of ints or floats keeps the specialized opcode (it was 13 times slower without)
+    private orNothingListTest() {
+        TmpFile script("select-specialized-types-or-nothing-", ".q");
+        script.file.write("%modern
+*list<int> li = (1, -2, 3);
+*list<float> lf = (1.5, -2.0);
+printf(\"%y %y\\n\", (select li, \$1 > 0), (select lf, \$1 != 0));
+");
+        script.file.close();
+        string dump = ExecModeHarness::run(sprintf("%s %s -b --exec-mode=jit --ir-dump %s", env, qore_bin,
+            script.path), NativeCheck::Jit);
+        assertTrue(dump =~ /select\.positive\.int/, "*list<int> uses the specialized select opcode");
+        assertTrue(dump =~ /select\.nonzero\.float/, "*list<float> uses the specialized select opcode");
+        assertTrue(dump =~ /\[1, 3\] \[1\.5, -2\.0\]/, "the selects give the right results");
     }
 
     #! the expected output: the lines, printed once per iteration

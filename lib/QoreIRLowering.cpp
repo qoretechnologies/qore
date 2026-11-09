@@ -14410,8 +14410,8 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
 // Pattern analysis for optimized foldl operations
 // Returns optimized opcode if pattern is detected, or FoldlAny for fallback
 // list_type is the type info of the list being folded, used as fallback for type detection
-static QoreIROpcode analyzeFoldPattern(const QoreValue& fold_expr, const QoreTypeInfo*& result_type,
-        const QoreTypeInfo* list_type = nullptr) {
+static QoreIROpcode analyzeFoldPatternIntern(const QoreValue& fold_expr, const QoreTypeInfo*& result_type,
+        const QoreTypeInfo* list_type) {
     const AbstractQoreNode* node = fold_expr.getInternalNode();
     if (!node) {
         return QoreIROpcode::FoldlAny;
@@ -14550,6 +14550,30 @@ static QoreIROpcode analyzeFoldPattern(const QoreValue& fold_expr, const QoreTyp
     return QoreIROpcode::FoldlAny;
 }
 
+//! Returns the specialized foldl opcode for the expression of a foldl over a list of the given type, or FoldlAny
+/** The int and float variants compute with the elements converted to an int or a float, so they are used only when
+    the elements of the list are exactly ints or floats; the parse type of the operator alone is not reliable (it is
+    wrong for some operand types, qore#5663), and neither is the type of a list that a map returns whose elements are
+    not of an exact type, which the callers do not pass (qore#5654).
+*/
+static QoreIROpcode analyzeFoldPattern(const QoreValue& fold_expr, const QoreTypeInfo*& result_type,
+        const QoreTypeInfo* list_type = nullptr) {
+    QoreIROpcode opcode = analyzeFoldPatternIntern(fold_expr, result_type, list_type);
+    const QoreTypeInfo* elem_type = QoreTypeInfo::getReturnComplexListOrNothing(list_type);
+    switch (opcode) {
+        case QoreIROpcode::FoldlSumInt:
+        case QoreIROpcode::FoldlProdInt:
+        case QoreIROpcode::FoldlDiffInt:
+            return QoreTypeInfo::isType(elem_type, NT_INT) ? opcode : QoreIROpcode::FoldlAny;
+        case QoreIROpcode::FoldlSumFloat:
+        case QoreIROpcode::FoldlProdFloat:
+        case QoreIROpcode::FoldlDiffFloat:
+            return QoreTypeInfo::isType(elem_type, NT_FLOAT) ? opcode : QoreIROpcode::FoldlAny;
+        default:
+            return opcode;
+    }
+}
+
 // Detect the left-associative string join body `$1 + <literal> + $2`.
 static bool analyzeStringJoinFoldPattern(const QoreValue& fold_expr, QoreValue& separator) {
     const auto* outer = dynamic_cast<const QorePlusOperatorNode*>(fold_expr.getInternalNode());
@@ -14574,6 +14598,76 @@ static bool analyzeStringJoinFoldPattern(const QoreValue& fold_expr, QoreValue& 
 // Pattern analysis for optimized map operations
 // Returns optimized opcode if pattern detected, or MapAny for fallback
 // For scale/offset patterns, constant_val is set to the constant operand
+//! Returns the type of the value of a key of the elements of a list, or nullptr if not known
+/** For a hashdecl element, the type of the member; for a hash element, the value type of the hash.
+*/
+static const QoreTypeInfo* qore_ir_hash_key_value_type(const QoreTypeInfo* elem_type, const std::string& key) {
+    if (const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(elem_type)) {
+        const HashDeclMemberInfo* mem = typed_hash_decl_private::get(*hd)->findMember(key.c_str());
+        return mem ? mem->getTypeInfo() : nullptr;
+    }
+    if (QoreTypeInfo::isType(elem_type, NT_HASH)) {
+        return QoreTypeInfo::getUniqueReturnComplexHash(elem_type);
+    }
+    return nullptr;
+}
+
+//! Returns true if a constant of a specialized select predicate is exactly zero: an int 0 or a float 0.0
+/** A float such as 0.5 is not zero, although its int value is (qore#5654).
+*/
+static bool qore_ir_is_zero_constant(const QoreValue& v) {
+    if (v.hasNode()) {
+        return false;
+    }
+    switch (v.getType()) {
+        case NT_INT:
+            return !v.getAsBigInt();
+        case NT_FLOAT:
+            return v.getAsFloat() == 0.0;
+        default:
+            return false;
+    }
+}
+
+//! Returns true if the operand of a specialized map opcode has a type that the opcode computes with as it is
+/** The opcodes convert the operand to an int or a float, which gives the result of the operator only for these
+    types: for a number, an or-nothing type or an untyped value the operator gives another result or raises
+    (qore#5654).  The parse result type of the operator cannot be used instead: it is wrong for some operand types
+    (qore#5663).
+*/
+static bool qore_ir_map_operand_is_exact(const QoreTypeInfo* ti) {
+    return QoreTypeInfo::isType(ti, NT_INT) || QoreTypeInfo::isType(ti, NT_FLOAT)
+        || QoreTypeInfo::isType(ti, NT_BOOLEAN);
+}
+
+//! Returns the int or float variant of a specialized map opcode for the given operand types, or MapAny
+/** @param int_op the int variant
+    @param float_op the float variant
+    @param elem_type the type of the elements of the list (the operand $1)
+    @param constant the constant operand, or nullptr if the expression has none ($1 * $1)
+    @param result_type set to the type of the result of the selected variant
+*/
+static QoreIROpcode qore_ir_map_opcode_for_operands(QoreIROpcode int_op, QoreIROpcode float_op,
+        const QoreTypeInfo* elem_type, const QoreValue* constant, const QoreTypeInfo*& result_type) {
+    if (!qore_ir_map_operand_is_exact(elem_type)) {
+        return QoreIROpcode::MapAny;
+    }
+    bool is_float = QoreTypeInfo::isType(elem_type, NT_FLOAT);
+    if (constant) {
+        if (constant->hasNode()) {
+            return QoreIROpcode::MapAny;
+        }
+        qore_type_t ct = constant->getType();
+        if (ct == NT_FLOAT) {
+            is_float = true;
+        } else if (ct != NT_INT) {
+            return QoreIROpcode::MapAny;
+        }
+    }
+    result_type = is_float ? floatTypeInfo : bigIntTypeInfo;
+    return is_float ? float_op : int_op;
+}
+
 //! Returns the specialized map opcode for the expression of a map, or MapAny
 /** The specialized map opcodes compute with each element converted to an int or a float, so they are used only when
     the operator returns exactly an int or a float for the type of the elements; for any other result type, such as
@@ -14581,7 +14675,7 @@ static bool analyzeStringJoinFoldPattern(const QoreValue& fold_expr, QoreValue& 
     (qore#5654): "2" + 1 is "21" and 1.5 * 2 is 3.0.
 */
 static QoreIROpcode analyzeMapPattern(const QoreValue& map_expr, const QoreTypeInfo*& result_type,
-        QoreValue& constant_val) {
+        QoreValue& constant_val, const QoreTypeInfo* elem_type) {
     const AbstractQoreNode* node = map_expr.getInternalNode();
     if (!node) {
         return QoreIROpcode::MapAny;
@@ -14597,13 +14691,12 @@ static QoreIROpcode analyzeMapPattern(const QoreValue& map_expr, const QoreTypeI
 
         // Pattern: $1 * $1 (square)
         if (arg_left && arg_right && arg_left->getOffset() == 0 && arg_right->getOffset() == 0) {
-            result_type = mul_op->getTypeInfo();
-            if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
-                return QoreIROpcode::MapSquareInt;
-            } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
-                return QoreIROpcode::MapSquareFloat;
+            // bool * bool is not a number (the AST interpreter gives NOTHING): only ints and floats are squared
+            if (!QoreTypeInfo::isType(elem_type, NT_INT) && !QoreTypeInfo::isType(elem_type, NT_FLOAT)) {
+                return QoreIROpcode::MapAny;
             }
-            return QoreIROpcode::MapAny;
+            return qore_ir_map_opcode_for_operands(QoreIROpcode::MapSquareInt, QoreIROpcode::MapSquareFloat,
+                elem_type, nullptr, result_type);
         }
 
         // Pattern: $1 * const
@@ -14611,13 +14704,8 @@ static QoreIROpcode analyzeMapPattern(const QoreValue& map_expr, const QoreTypeI
             // Check if right is a constant
             if (right.getType() == NT_INT || right.getType() == NT_FLOAT || !right.hasNode()) {
                 constant_val = right;
-                result_type = mul_op->getTypeInfo();
-                if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
-                    return QoreIROpcode::MapScaleInt;
-                } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
-                    return QoreIROpcode::MapScaleFloat;
-                }
-                return QoreIROpcode::MapAny;
+                return qore_ir_map_opcode_for_operands(QoreIROpcode::MapScaleInt, QoreIROpcode::MapScaleFloat,
+                    elem_type, &constant_val, result_type);
             }
         }
 
@@ -14625,13 +14713,8 @@ static QoreIROpcode analyzeMapPattern(const QoreValue& map_expr, const QoreTypeI
         if (arg_right && arg_right->getOffset() == 0 && !arg_left) {
             if (left.getType() == NT_INT || left.getType() == NT_FLOAT || !left.hasNode()) {
                 constant_val = left;
-                result_type = mul_op->getTypeInfo();
-                if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
-                    return QoreIROpcode::MapScaleInt;
-                } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
-                    return QoreIROpcode::MapScaleFloat;
-                }
-                return QoreIROpcode::MapAny;
+                return qore_ir_map_opcode_for_operands(QoreIROpcode::MapScaleInt, QoreIROpcode::MapScaleFloat,
+                    elem_type, &constant_val, result_type);
             }
         }
     }
@@ -14648,13 +14731,8 @@ static QoreIROpcode analyzeMapPattern(const QoreValue& map_expr, const QoreTypeI
         if (arg_left && arg_left->getOffset() == 0 && !arg_right) {
             if (right.getType() == NT_INT || right.getType() == NT_FLOAT || !right.hasNode()) {
                 constant_val = right;
-                result_type = plus_op->getTypeInfo();
-                if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
-                    return QoreIROpcode::MapOffsetInt;
-                } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
-                    return QoreIROpcode::MapOffsetFloat;
-                }
-                return QoreIROpcode::MapAny;
+                return qore_ir_map_opcode_for_operands(QoreIROpcode::MapOffsetInt, QoreIROpcode::MapOffsetFloat,
+                    elem_type, &constant_val, result_type);
             }
         }
 
@@ -14662,18 +14740,33 @@ static QoreIROpcode analyzeMapPattern(const QoreValue& map_expr, const QoreTypeI
         if (arg_right && arg_right->getOffset() == 0 && !arg_left) {
             if (left.getType() == NT_INT || left.getType() == NT_FLOAT || !left.hasNode()) {
                 constant_val = left;
-                result_type = plus_op->getTypeInfo();
-                if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
-                    return QoreIROpcode::MapOffsetInt;
-                } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
-                    return QoreIROpcode::MapOffsetFloat;
-                }
-                return QoreIROpcode::MapAny;
+                return qore_ir_map_opcode_for_operands(QoreIROpcode::MapOffsetInt, QoreIROpcode::MapOffsetFloat,
+                    elem_type, &constant_val, result_type);
             }
         }
     }
 
     return QoreIROpcode::MapAny;
+}
+
+//! Returns the type of the list that a fold iterates, or nullptr if its parse type cannot be relied on
+/** The parse type of a map whose expression multiplies or adds an element of no exact type is not reliable (qore#5663:
+    float * number is typed float), so it does not select a specialized fold (qore#5654).
+*/
+static const QoreTypeInfo* qore_ir_fold_source_type(const QoreValue& source) {
+    if (const auto* map = dynamic_cast<const QoreMapOperatorNode*>(source.getInternalNode())) {
+        const AbstractQoreNode* expr = map->getLeft().getInternalNode();
+        if (dynamic_cast<const QoreMultiplicationOperatorNode*>(expr) || dynamic_cast<const QorePlusOperatorNode*>(expr)) {
+            const QoreTypeInfo* rt = nullptr;
+            QoreValue cv;
+            if (analyzeMapPattern(map->getLeft(), rt, cv,
+                    QoreTypeInfo::getReturnComplexListOrNothing(getExprTypeInfo(map->getRight())))
+                    == QoreIROpcode::MapAny) {
+                return nullptr;
+            }
+        }
+    }
+    return getExprTypeInfo(source);
 }
 
 // Helper: check if an expression is $1.key (hash object dereference with implicit arg and constant string key)
@@ -14816,17 +14909,10 @@ static QoreIROpcode qore_ir_select_opcode_for_element_type(QoreIROpcode opcode, 
                     : QoreIROpcode::SelectNonZeroFloat;
             }
             return QoreIROpcode::SelectAny;
-        case QoreIROpcode::SelectHashKeyPositiveInt: {
+        case QoreIROpcode::SelectHashKeyPositiveInt:
             // the value of the key must be an int: a member of a hashdecl or the value type of a hash
-            const QoreTypeInfo* value_type = nullptr;
-            if (const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(elem_type)) {
-                const HashDeclMemberInfo* mem = typed_hash_decl_private::get(*hd)->findMember(hash_key.c_str());
-                value_type = mem ? mem->getTypeInfo() : nullptr;
-            } else if (QoreTypeInfo::isType(elem_type, NT_HASH)) {
-                value_type = QoreTypeInfo::getUniqueReturnComplexHash(elem_type);
-            }
-            return QoreTypeInfo::isType(value_type, NT_INT) ? opcode : QoreIROpcode::SelectAny;
-        }
+            return QoreTypeInfo::isType(qore_ir_hash_key_value_type(elem_type, hash_key), NT_INT) ? opcode
+                : QoreIROpcode::SelectAny;
         default:
             return opcode;
     }
@@ -14848,16 +14934,15 @@ static QoreIROpcode analyzeSelectPattern(const QoreValue& select_expr,
 
         std::string key;
         if (!q_env_is_set("QORE_DISABLE_SELECT_HASH_KEY_POSITIVE_INT")
-                && hash_key && getImplicitHashKeyAccess(left, key) && !right.hasNode()
-                && right.getType() == NT_INT && right.getAsBigInt() == 0) {
+                && hash_key && getImplicitHashKeyAccess(left, key) && qore_ir_is_zero_constant(right)) {
             *hash_key = std::move(key);
             result_type = gt_op->getTypeInfo();
             return QoreIROpcode::SelectHashKeyPositiveInt;
         }
 
         // Pattern: $1 > 0
-        if (arg_left && arg_left->getOffset() == 0 && !right.hasNode()) {
-            if (right.getAsBigInt() == 0) {
+        if (arg_left && arg_left->getOffset() == 0) {
+            if (qore_ir_is_zero_constant(right)) {
                 result_type = gt_op->getTypeInfo();
                 // Determine type from expression analysis or default to int
                 return QoreIROpcode::SelectPositiveInt;
@@ -14873,8 +14958,8 @@ static QoreIROpcode analyzeSelectPattern(const QoreValue& select_expr,
         const auto* arg_left = dynamic_cast<const QoreImplicitArgumentNode*>(left.getInternalNode());
 
         // Pattern: $1 != 0
-        if (arg_left && arg_left->getOffset() == 0 && !right.hasNode()) {
-            if (right.getAsBigInt() == 0) {
+        if (arg_left && arg_left->getOffset() == 0) {
+            if (qore_ir_is_zero_constant(right)) {
                 result_type = nullptr;  // Type will be inferred from list
                 return QoreIROpcode::SelectNonZeroInt;
             }
@@ -15005,13 +15090,14 @@ QoreIRValue QoreIRLowering::lowerFoldlImpl(const QoreValue& expr, std::string& e
                 const QoreTypeInfo* source_type = getExprTypeInfo(inner_map->getRight());
                 bool exact_list_source = source_type && QoreTypeInfo::isListType(source_type);
                 const QoreTypeInfo* fold_type = nullptr;
-                const QoreTypeInfo* list_type = getExprTypeInfo(foldl->getRight());
+                const QoreTypeInfo* list_type = qore_ir_fold_source_type(foldl->getRight());
                 QoreIROpcode fold_opcode = analyzeFoldPattern(
                     foldl->getLeft(), fold_type, list_type);
                 const QoreTypeInfo* map_type = nullptr;
                 QoreValue map_constant;
                 QoreIROpcode map_opcode = analyzeMapPattern(
-                    inner_map->getLeft(), map_type, map_constant);
+                    inner_map->getLeft(), map_type, map_constant,
+                    QoreTypeInfo::getReturnComplexListOrNothing(getExprTypeInfo(inner_map->getRight())));
                 bool sum = fold_opcode == QoreIROpcode::FoldlSumInt
                     || fold_opcode == QoreIROpcode::FoldlSumFloat;
                 bool product = fold_opcode == QoreIROpcode::FoldlProdInt
@@ -15078,7 +15164,7 @@ QoreIRValue QoreIRLowering::lowerFoldlImpl(const QoreValue& expr, std::string& e
     // Try to detect optimizable pattern first
     const QoreTypeInfo* result_type = nullptr;
     // Get list type info for fallback type detection
-    const QoreTypeInfo* list_type = getExprTypeInfo(foldl->getRight());
+    const QoreTypeInfo* list_type = qore_ir_fold_source_type(foldl->getRight());
     QoreIROpcode opt_opcode = analyzeFoldPattern(foldl->getLeft(), result_type, list_type);
 
     if (opt_opcode != QoreIROpcode::FoldlAny) {
@@ -15092,7 +15178,8 @@ QoreIRValue QoreIRLowering::lowerFoldlImpl(const QoreValue& expr, std::string& e
             // Analyze the map pattern
             const QoreTypeInfo* map_result_type = nullptr;
             QoreValue map_constant_val;
-            QoreIROpcode map_opcode = analyzeMapPattern(inner_map->getLeft(), map_result_type, map_constant_val);
+            QoreIROpcode map_opcode = analyzeMapPattern(inner_map->getLeft(), map_result_type, map_constant_val,
+                QoreTypeInfo::getReturnComplexListOrNothing(getExprTypeInfo(inner_map->getRight())));
 
             // Only fuse patterns with direct single-pass implementations.
             QoreIROpcode fused_opcode = QoreIROpcode::FoldlAny;
@@ -15308,7 +15395,7 @@ QoreIRValue QoreIRLowering::lowerFoldrImpl(const QoreValue& expr, std::string& e
 
     // Try to detect optimizable pattern (reuse analyzeFoldPattern from foldl)
     const QoreTypeInfo* result_type = nullptr;
-    const QoreTypeInfo* list_type = getExprTypeInfo(foldr->getRight());
+    const QoreTypeInfo* list_type = qore_ir_fold_source_type(foldr->getRight());
     QoreIROpcode foldl_opcode = analyzeFoldPattern(foldr->getLeft(), result_type, list_type);
 
     if (foldl_opcode != QoreIROpcode::FoldlAny) {
@@ -15405,6 +15492,13 @@ QoreIRValue QoreIRLowering::lowerMapImpl(const QoreValue& expr, std::string& err
             QoreValue hk_constant;
             QoreIROpcode hk_opcode = analyzeMapHashKeyPattern(map->getLeft(), key_name, hk_constant);
 
+            // the int offset and scale variants compute with the value of the key converted to an int: only an
+            // exact int value gives the result of the operator (qore#5654)
+            if ((hk_opcode == QoreIROpcode::MapHashKeyOffsetInt || hk_opcode == QoreIROpcode::MapHashKeyScaleInt)
+                    && !QoreTypeInfo::isType(qore_ir_hash_key_value_type(elem_type, key_name), NT_INT)) {
+                hk_opcode = QoreIROpcode::MapAny;
+            }
+
             // Check if value type is known int for MapHashKeyInt detection
             if (hk_opcode == QoreIROpcode::MapHashKeyValue) {
                 // Check if the value type for this key is known to be int
@@ -15461,7 +15555,8 @@ QoreIRValue QoreIRLowering::lowerMapImpl(const QoreValue& expr, std::string& err
     // Try pattern analysis for optimized opcodes (untyped lists only)
     const QoreTypeInfo* result_type = nullptr;
     QoreValue constant_val;
-    QoreIROpcode opt_opcode = analyzeMapPattern(map->getLeft(), result_type, constant_val);
+    QoreIROpcode opt_opcode = analyzeMapPattern(map->getLeft(), result_type, constant_val,
+        QoreTypeInfo::getReturnComplexListOrNothing(getExprTypeInfo(map->getRight())));
 
     // For optimized patterns, check if we can fuse with a select operand
     if (opt_opcode != QoreIROpcode::MapAny) {
@@ -15507,15 +15602,21 @@ QoreIRValue QoreIRLowering::lowerMapImpl(const QoreValue& expr, std::string& err
                     list_type = list_analysis.known_type;
                 }
                 select_opcode = qore_ir_select_opcode_for_element_type(select_opcode,
-                    QoreTypeInfo::getUniqueReturnComplexList(list_type), std::string());
+                    QoreTypeInfo::getReturnComplexListOrNothing(list_type), std::string());
             }
             if (select_opcode == QoreIROpcode::SelectPositiveInt
                     || select_opcode == QoreIROpcode::SelectPositiveFloat) {
                 bool is_float = select_opcode == QoreIROpcode::SelectPositiveFloat;
+                // the fused opcode computes with the elements' type: a map variant of the other type (an int element
+                // and a float constant) is not fused, as an int variant would truncate the constant
+                bool map_float = opt_opcode == QoreIROpcode::MapScaleFloat || opt_opcode == QoreIROpcode::MapOffsetFloat
+                    || opt_opcode == QoreIROpcode::MapSquareFloat;
 
                 // Select the fused opcode based on map pattern and element type
                 QoreIROpcode fused_opcode = QoreIROpcode::MapAny;
-                if (opt_opcode == QoreIROpcode::MapScaleInt || opt_opcode == QoreIROpcode::MapScaleFloat) {
+                if (map_float != is_float) {
+                    // not fused
+                } else if (opt_opcode == QoreIROpcode::MapScaleInt || opt_opcode == QoreIROpcode::MapScaleFloat) {
                     fused_opcode = is_float ? QoreIROpcode::FusedMapSelectScalePositiveFloat
                                            : QoreIROpcode::FusedMapSelectScalePositiveInt;
                 } else if (opt_opcode == QoreIROpcode::MapOffsetInt || opt_opcode == QoreIROpcode::MapOffsetFloat) {
@@ -15546,21 +15647,8 @@ QoreIRValue QoreIRLowering::lowerMapImpl(const QoreValue& expr, std::string& err
                         }
                     }
 
-                    QoreIRValue result;
-                    if (!exception_stack.empty()) {
-                        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
-                        if (!normal_block) {
-                            error = "IR builder failed to create invoke continuation block";
-                            return QoreIRValue();
-                        }
-                        QoreIRBasicBlock* handler = exception_stack.back();
-                        auto* inst = builder.createInvoke(expr, {list_val, const_ir}, normal_block, handler, map->loc);
-                        inst->invoke_opcode = fused_opcode;
-                        builder.setBlock(normal_block);
-                        result = inst->result;
-                    } else {
-                        result = builder.createBinaryOp(fused_opcode, list_val, const_ir, map->loc)->result;
-                    }
+                    // the fused opcodes iterate a list or NOTHING, which raises nothing: no exception edge is needed
+                    QoreIRValue result = builder.createBinaryOp(fused_opcode, list_val, const_ir, map->loc)->result;
                     maybeInsertNotNothingGuard(result, &expr, map->loc, nullptr);
                     return result;
                 }
@@ -15586,21 +15674,12 @@ QoreIRValue QoreIRLowering::lowerMapImpl(const QoreValue& expr, std::string& err
             }
         }
 
-        QoreIRValue result;
-        if (!exception_stack.empty()) {
-            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
-            if (!normal_block) {
-                error = "IR builder failed to create invoke continuation block";
-                return QoreIRValue();
-            }
-            QoreIRBasicBlock* handler = exception_stack.back();
-            auto* inst = builder.createInvoke(expr, {list_val, const_ir}, normal_block, handler, map->loc);
-            inst->invoke_opcode = opt_opcode;
-            builder.setBlock(normal_block);
-            result = inst->result;
-        } else {
-            result = builder.createBinaryOp(opt_opcode, list_val, const_ir, map->loc)->result;
-        }
+        // the opcodes are used only for a list (or NOTHING) whose elements have an exact type (see
+        // analyzeMapPattern()), which they iterate without raising; only an iterator object source can raise (through
+        // its methods), which these opcodes are never used for.  An exception edge therefore is not needed: lowered as
+        // an Invoke in a try block, the opcodes had no native lowering, so qcc could not compile the function and JIT
+        // left it on the IR tier (qore#5654)
+        QoreIRValue result = builder.createBinaryOp(opt_opcode, list_val, const_ir, map->loc)->result;
         maybeInsertNotNothingGuard(result, &expr, map->loc, nullptr);
         return result;
     }
@@ -15650,7 +15729,7 @@ QoreIRValue QoreIRLowering::lowerSelectImpl(const QoreValue& expr, std::string& 
             list_type = list_analysis.known_type;
         }
         opt_opcode = qore_ir_select_opcode_for_element_type(opt_opcode,
-            QoreTypeInfo::getUniqueReturnComplexList(list_type), select_hash_key);
+            QoreTypeInfo::getReturnComplexListOrNothing(list_type), select_hash_key);
     }
 
     // For optimized patterns, emit optimized opcode with just the list
