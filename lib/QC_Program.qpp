@@ -2839,6 +2839,9 @@ pgm.setExecMode(EM_JIT);
 
     @note IR, JIT, and tiered modes require @ref PO_MODERN "%modern" parse options.
 
+    @note A child Program created afterwards inherits the mode for as long as its own parse options support it; see
+    @ref exec_mode_child_programs
+
     @see Program::getExecMode()
 
     @since %Qore 3.0
@@ -2857,6 +2860,9 @@ if (mode == EM_JIT) {
     printf("Using JIT compilation\n");
 }
     @endcode
+
+    @note The mode of a child Program that inherited an explicitly requested mode depends on its current parse options;
+    see @ref exec_mode_child_programs
 
     @see Program::setExecMode()
 

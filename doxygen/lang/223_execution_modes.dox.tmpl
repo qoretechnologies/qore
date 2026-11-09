@@ -580,6 +580,18 @@ pgm.parse("int sub compute() { return 42; }", "code");
 int result = pgm.callFunction("compute");
     @endcode
 
+    @subsection exec_mode_child_programs Child Programs
+
+    A @ref Qore::Program "Program" created while the execution mode of its parent was requested explicitly (with
+    <tt>--exec-mode</tt> or @ref Qore::Program::setExecMode() "Program::setExecMode()") runs in that mode for as long as
+    its own parse options support it, including after they change: by its own \c %%modern directive, for example, or
+    by @ref Qore::Program::setParseOptions() "Program::setParseOptions()".  While its parse options do not meet the
+    @ref exec_mode_requirements "requirements" of the mode, it runs on the AST interpreter, without an error, and
+    @ref Qore::Program::getExecMode() "Program::getExecMode()" returns @ref Qore::ExecMode::EM_AST "EM_AST"; the mode
+    applies again once they do.  A child whose parent's mode was not requested explicitly selects its mode from its
+    own parse options: tiered execution for \c %%modern code, AST otherwise.  Calling
+    @ref Qore::Program::setExecMode() "Program::setExecMode()" on the child sets its own mode instead.
+
     @subsection exec_mode_enum ExecMode Enum
 
     |!Value|!Description

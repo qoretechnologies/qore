@@ -1582,22 +1582,14 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     }
     QoreNS = RootNS->rootGetQoreNamespace();
 
-    // Inherit an explicit parent execution mode only while the child has the
-    // same effective parse options.  Otherwise the child must select its
-    // automatic mode from its own parse options (modern -> tiered, legacy ->
-    // AST), even if the parent was started with an explicit optimized mode.
+    // An explicit parent execution mode is inherited for as long as the child's parse options support it, including
+    // after they change (by the child's own %modern, for example); otherwise the child selects its automatic mode from
+    // its own parse options (modern -> tiered, legacy -> AST); see syncExecModeWithParseOptions()
     applyParseOptionImplications();
-    if (p_pgm->priv->user_requested_exec_mode
-        && pwo.parse_options == p_pgm->priv->pwo.parse_options) {
-        exec_mode = p_pgm->priv->exec_mode;
-        user_requested_exec_mode = true;
-        inherited_user_requested_exec_mode = true;
-        inherited_exec_mode_parse_options = pwo.parse_options;
-    } else {
-        inherited_user_requested_exec_mode = false;
-        user_requested_exec_mode = false;
-        applyDefaultExecMode();
-    }
+    inherited_user_requested_exec_mode = p_pgm->priv->user_requested_exec_mode;
+    inherited_exec_mode = p_pgm->priv->user_requested_exec_mode ? p_pgm->priv->exec_mode : QEM_AST;
+    user_requested_exec_mode = false;
+    syncExecModeWithParseOptions();
 
     // copy parent feature list; this Program is not visible to other threads yet, but the parent's list gains
     // entries while a module is loaded into the parent in another thread
