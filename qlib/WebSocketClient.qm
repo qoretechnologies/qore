@@ -1835,6 +1835,9 @@ ws.connect();
         option hash
         @throw WEBSOCKET-ACTION-TIMEOUT another connect, disconnect or reconnect did not end within the connect timeout; see
         @ref websocketclient_lifecycle
+        @throw HTTP2-EXTENDED-CONNECT-UNSUPPORTED with the \c http_version option set to \c "2.0", the HTTP/2 server did
+        not advertise \c SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 8441), so it does not support WebSocket connections over
+        HTTP/2; this is not retried; with \c http_version \c "auto", the client tries an HTTP/1.1 Upgrade instead
 
         @note An open connection replaced by this call is reported closed after the new connection is open, before
         this method returns
@@ -1854,6 +1857,9 @@ ws.connect();
 
         @throw WEBSOCKET-ACTION-TIMEOUT another connect, disconnect or reconnect did not end within the connect timeout; see
         @ref websocketclient_lifecycle
+        @throw HTTP2-EXTENDED-CONNECT-UNSUPPORTED with the \c http_version option set to \c "2.0", the HTTP/2 server did
+        not advertise \c SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 8441); see
+        @ref WebSocketClient::WebSocketClient::connect() "WebSocketClient::connect()"
 
         @since WebSocketClient 2.4
     */

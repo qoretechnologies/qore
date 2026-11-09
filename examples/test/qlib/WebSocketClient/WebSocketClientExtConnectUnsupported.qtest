@@ -178,6 +178,20 @@ l50Xb2GWQesIt9k5jF5IOw==
         }
         list<string> retries = select log_capture.takeMessages(), $1 =~ /retrying on a fresh connection/;
         assertEq((), retries, http_version + ": the refusal is not retried as a connection error");
+        # the server counts the TLS connections: the refusal costs one connection, and the HTTP/1.1 Upgrade of "auto"
+        # one more
+        p.write("COUNT\n");
+        line = "";
+        while (line !~ /CONNECTIONS [0-9]+\n/) {
+            *string s = p.readStdout(1024, 60s);
+            if (!exists s) {
+                throw "TEST-ERROR", sprintf("the node server did not report its connections: %s",
+                    p.readStderr(4096, 0) ?? "");
+            }
+            line += s;
+        }
+        assertEq(http_version == "auto" ? 2 : 1, (line =~ x/CONNECTIONS ([0-9]+)/)[0].toInt(),
+            http_version + ": TLS connections");
         if (http_version == "auto") {
             # the HTTP/1.1 Upgrade gets the page
             assertRegex("^WEBSOCKET-ERROR: HTTP server at URL .* returned status code '200' to our WebSocket request; "
