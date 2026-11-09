@@ -3598,7 +3598,7 @@ pgm.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_co
 
     @since %Qore 0.9
 */
-nothing Program::issueModuleCmd(string module_name, string command) [flags=NAMED_ARGS] {
+nothing Program::issueModuleCmd(string module_name, string command) [dom=MODULES; flags=NAMED_ARGS] {
     TempEncodingHelper tmp_module(module_name, QCS_DEFAULT, xsink);
     if (!tmp_module) {
         return QoreValue();

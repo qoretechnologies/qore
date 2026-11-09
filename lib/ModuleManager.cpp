@@ -5947,12 +5947,20 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
 #define QORE_MAX_MODULE_ERROR_DESC 200
 int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd,
         ExceptionSink* xsink) {
-    // ensure the program is in context
-    QoreProgramContextHelper pch(pgm);
-
-    // issue #4254: must run module commands unlocked
+    // the module is loaded as with Program::loadModule() (see runTimeLoadModule()): a sandboxed caller stays the
+    // caller of the load, so that a module that it chose by path is checked and governed as one that it loads itself
+    // (issue #5659), and the target Program's parse lock is held while the module is loaded into it
     QoreAbstractModule* mi;
     {
+        QoreModuleLoadLockHelper aot_init_al;
+        QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        ProgramRuntimeParseContextHelper pah(xsink, pgm);
+        if (*xsink) {
+            return -1;
+        }
         OptLocker ol(&mutex);
         mi = loadModuleIntern(*xsink, *xsink, mname, pgm);
         if (!mi && !*xsink) {
@@ -5965,6 +5973,10 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
         assert(mi);
     }
 
+    // ensure the program is in context
+    QoreProgramContextHelper pch(pgm);
+
+    // issue #4254: module commands run unlocked
     mi->issueModuleCmd(&loc_builtin, cmd, xsink);
     // enrich exception description if present
     if (*xsink) {

@@ -78,6 +78,15 @@ Program sub load_into_with_warnings(Program p, string path) {
     p.loadModuleWarn(path);
     return p;
 }
+string sub module_cmd(Program p, string path) {
+    try {
+        p.issueModuleCmd(path, 'x');
+    } catch (hash<ExceptionInfo> ex) {
+        # the module has no command handler
+        return ex.err;
+    }
+    return 'no-exception';
+}
 Program sub parse_into_library_program(string src) {
     Program p = call_function('NpsLibrary::shared_program');
     p.parse(src, 'sandbox-supplied');
@@ -444,6 +453,32 @@ bool sub governed() {
 }
 ");
     return h.callFunction("governed") ? "governed" : "not-governed";
+});
+
+# sandboxed code issues a module command with the path of a user module to a trusted Program that it was handed
+# (Program::issueModuleCmd()): the module is loaded as with Program::loadModule()
+run("module-cmd-into-trusted-governed", string sub () {
+    SandboxManager sm();
+    sm.addFilesystemAllowedPath(dir, QSEC_READ);
+    Program s = sandboxed(sm, mode);
+    Program t = loader(mode);
+    string name = "NpsModuleCmd" + mode.upr();
+    string err = s.callFunction("module_cmd", t, write_module(dir, name));
+    if (err != "PARSE-COMMAND-ERROR") {
+        return "unexpected: " + err;
+    }
+    return t.callFunction("call", name + "::governed") ? "governed" : "not-governed";
+});
+
+# the same: the module's class is sandboxed
+run("module-cmd-into-trusted", string sub () {
+    SandboxManager sm();
+    sm.addFilesystemAllowedPath(dir, QSEC_READ);
+    Program s = sandboxed(sm, mode);
+    Program t = loader(mode);
+    string name = "NpsModuleCmdClass" + mode.upr();
+    s.callFunction("module_cmd", t, write_module(dir, name));
+    return probe_module(t, name);
 });
 
 # trusted code loads a user module by path into a trusted Program with Program::loadModule()

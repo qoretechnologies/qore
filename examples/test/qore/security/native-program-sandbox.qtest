@@ -56,6 +56,11 @@ class NativeProgramSandboxTest inherits QUnit::Test {
             "parse-into-trusted-governed": "governed",
             # the caller's sandbox governs the initializers that Program::parseCommit() runs for sandboxed code
             "parse-pending-into-trusted-governed": "governed",
+            # sandboxed code issues a module command with the path of a user module to a trusted Program
+            # (Program::issueModuleCmd()): the caller's sandbox governs the module's initialization
+            "module-cmd-into-trusted-governed": "governed",
+            # the same: the module's class is sandboxed
+            "module-cmd-into-trusted": "sandboxed",
             # trusted code loads a user module by path into a trusted Program with Program::loadModule()
             "load-module-trusted": "trusted",
             # trusted code creates a Program
