@@ -358,6 +358,13 @@ public:
     void setExceptionTempScopeId(uint32_t id);
     //! Return the statement temp scope currently assigned to invoke instructions.
     uint32_t getExceptionTempScopeId() const;
+    //! Return a new temp scope id that no PushTempMark opens
+    /** An instruction that records it releases no temporaries when it raises an exception and branches to a handler
+        in the frame (the interpreter's and native code's drain finds no mark), and the call arguments that code in
+        the scope creates are still the call's own (they are defined in the call's temp scope); see
+        QoreIRLowering::lowerWithImplicitContext()
+    */
+    uint32_t allocateUnmarkedTempScopeId();
     //! Drop the current temp scope after lowering emits a terminating instruction.
     void abandonTempScope();
     //! Emit a debug-only StatementBlock entry marker.  It is a no-op outside

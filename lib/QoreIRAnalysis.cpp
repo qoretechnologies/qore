@@ -711,6 +711,80 @@ void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vec
 }
 
 // documented in QoreIRAnalysis.h
+void qore_ir_find_open_implicit_contexts(const QoreIRFunction& func,
+        std::unordered_map<const QoreIRInstruction*, std::vector<const QoreIRInstruction*>>& open) {
+    open.clear();
+    bool any = false;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if ((inst->opcode == QoreIROpcode::PushImplicitArg || inst->opcode == QoreIROpcode::PushImplicitElement)
+                    && inst->restore_on_exception_exit) {
+                any = true;
+                break;
+            }
+        }
+        if (any) {
+            break;
+        }
+    }
+    if (!any || func.blocks.empty()) {
+        return;
+    }
+    using State = std::vector<const QoreIRInstruction*>;
+    // the state of each block on its first visit: the lowering restores the contexts on every path, so every path
+    // into a block gives it the same state
+    std::unordered_map<const QoreIRBasicBlock*, State> entry_state;
+    std::vector<const QoreIRBasicBlock*> work;
+    const QoreIRBasicBlock* entry = func.blocks.front().get();
+    entry_state.emplace(entry, State());
+    work.push_back(entry);
+    size_t count = 0;
+    while (!work.empty()) {
+        const QoreIRBasicBlock* block = work.back();
+        work.pop_back();
+        State state = entry_state[block];
+        auto enqueue = [&](const QoreIRBasicBlock* target) {
+            if (target && entry_state.emplace(target, state).second) {
+                work.push_back(target);
+            }
+        };
+        for (const auto& inst_ptr : block->instructions) {
+            const QoreIRInstruction* inst = inst_ptr.get();
+            if (!(++count % 100) && qore_check_cancel(nullptr, "IR open implicit context analysis")) {
+                open.clear();
+                return;
+            }
+            if ((inst->opcode == QoreIROpcode::PushImplicitArg || inst->opcode == QoreIROpcode::PushImplicitElement)
+                    && inst->restore_on_exception_exit) {
+                state.push_back(inst);
+                continue;
+            }
+            if ((inst->opcode == QoreIROpcode::PopImplicitArg || inst->opcode == QoreIROpcode::PopImplicitElement)
+                    && !inst->operands.empty()) {
+                uint32_t id = inst->operands[0].id;
+                for (size_t i = state.size(); i > 0; --i) {
+                    if (state[i - 1]->result.id == id) {
+                        state.erase(state.begin() + (i - 1));
+                        break;
+                    }
+                }
+                continue;
+            }
+            if (inst->exception_target) {
+                enqueue(inst->exception_target);
+            } else if (!state.empty()) {
+                open.emplace(inst, state);
+            }
+        }
+        if (!block->instructions.empty()) {
+            qore_ir_visit_successors(*block->instructions.back(), [&](QoreIRBasicBlock* target) {
+                enqueue(target);
+            });
+        }
+    }
+}
+
+// documented in QoreIRAnalysis.h
 bool qore_ir_order_exception_release(const std::vector<uint32_t>& groups, const uint32_t* ids, size_t count,
         std::vector<size_t>& order) {
     order.clear();
