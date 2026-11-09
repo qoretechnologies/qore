@@ -5977,12 +5977,25 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
         }
     }
 
-    QoreAbstractModule* mi;
-    {
+    QoreAbstractModule* mi = nullptr;
+    // a module that the Program has already loaded is not loaded again: as in runTimeLoadModule(), its parse lock is
+    // not needed then, so the command does not wait for a parse of the Program in another thread
+    const std::string feature = get_module_feature_name(mname);
+    if (pgm && qore_program_private::get(*pgm)->hasCommittedFeature(feature.c_str())) {
+        OptLocker ol(&mutex);
+        mi = findModuleUnlocked(feature.c_str());
+        // a module that a tenant chose is used only as for any lookup of it (see mayUseTenantModule())
+        if (mi && mi->isTenantChosen() && !mayUseTenantModule(*mi, pgm)) {
+            mi = nullptr;
+        }
+    }
+    if (!mi) {
         // the module is loaded as with Program::loadModule() (see runTimeLoadModule()), with the target Program's
-        // parse lock held
+        // parse lock held; the lock is not waited for: a parse of the Program in another thread could be waiting for
+        // this thread (two commits that issue module commands to each other's Program, or a parse that waits for a
+        // lock that this thread's caller holds, such as the Python GIL), so the command is refused then
         QoreModuleLoadLockHelper aot_init_al;
-        ProgramRuntimeParseContextHelper pah(xsink, pgm);
+        ProgramRuntimeParseContextHelper pah(xsink, pgm, true);
         if (*xsink) {
             return -1;
         }

@@ -4724,6 +4724,33 @@ ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink
     sync_runtime_config_program(td);
 }
 
+ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink* xsink, QoreProgram* pgm,
+        bool no_wait) : restore(false) {
+    if (!pgm) {
+        return;
+    }
+
+    if (no_wait) {
+        int rc = qore_program_private::tryLockParsing(*pgm, xsink);
+        if (rc < 0) {
+            return;
+        }
+        if (rc > 0) {
+            xsink->raiseException("PROGRAM-ERROR", "the Program is currently undergoing parsing in another thread");
+            return;
+        }
+    } else if (qore_program_private::lockParsing(*pgm, xsink)) {
+        return;
+    }
+
+    restore = true;
+
+    ThreadData* td = thread_data.get();
+    old_pgm = td->current_pgm;
+    td->current_pgm = pgm;
+    sync_runtime_config_program(td);
+}
+
 ProgramRuntimeParseContextHelper::~ProgramRuntimeParseContextHelper() {
     if (!restore)
         return;

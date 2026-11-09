@@ -1819,6 +1819,14 @@ protected:
 
 public:
     DLLLOCAL ProgramRuntimeParseContextHelper(ExceptionSink* xsink, QoreProgram* pgm);
+
+    //! Takes the Program's parse lock without waiting if \a no_wait is true
+    /** If another thread holds the parse lock, \c PROGRAM-ERROR is raised in \a xsink instead of waiting for it (see
+        qore_program_private::tryLockParsing()); used where waiting could deadlock (see
+        QoreModuleManager::issueRuntimeCmd())
+    */
+    DLLLOCAL ProgramRuntimeParseContextHelper(ExceptionSink* xsink, QoreProgram* pgm, bool no_wait);
+
     DLLLOCAL ~ProgramRuntimeParseContextHelper();
 };
 

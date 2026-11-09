@@ -3792,6 +3792,10 @@ public:
         return pgm.priv->TZ;
     }
 
+    DLLLOCAL static int tryLockParsing(QoreProgram& pgm, ExceptionSink* xsink) {
+        return pgm.priv->tryLockParsing(xsink);
+    }
+
     DLLLOCAL static int incThreadCountForCopy(QoreProgram& pgm, ExceptionSink* xsink) {
         return pgm.priv->incThreadCountForCopy(xsink);
     }
