@@ -37,6 +37,8 @@
 #include "qore/SocketPollOperation.h"
 #include "qore/QoreSocketObject.h"
 
+#include <atomic>
+
 //! Default header read timeout: 5 seconds in microseconds (slow-loris protection)
 constexpr int64_t DEFAULT_HEADER_READ_TIMEOUT_US = 5000000LL;
 
@@ -135,11 +137,35 @@ protected:
     DLLLOCAL const char* getStateImpl() const override;
 
 private:
+    //! Changes the state from @a from to @a to unless it changed meanwhile; returns false if it did
+    /** abort() runs on any thread (the Qore-level abort() method, or a worker dispatched by the I/O controller for a
+        timeout) and sets State::CLOSED; the I/O thread checks the state and the socket, then sets the next state.
+        A compare-exchange from the state that the I/O thread found keeps an abort() made between the check and the
+        store: the operation would otherwise read a request header (or report one) after it was aborted.
+
+        @param from the state that the I/O thread found
+        @param to the next state
+        @param site where the state is set, for the debug hook (see PollStateCloseHook)
+    */
+    DLLLOCAL bool transitionState(State from, State to, const char* site);
+
     QoreSocketObject* sock_obj;                     //!< ref'd socket
     SocketReadHttpHeaderPollOperation* header_op;    //!< ref'd inner op for header phase
+
+    //! Protects the @ref header_op pointer
+    /** The I/O thread creates the operation and reads it without the lock; resetForIdle() (the owner's thread) and
+        cleanup() release it; abort() runs on any thread (the Qore-level abort() method, or a timeout's worker abort)
+        and takes a reference under the lock.  So the pointer is written with the lock held and nulled before its
+        reference is released (see releaseHeaderOp()).
+    */
+    mutable QoreThreadLock op_lock;
+
+    //! Nulls @ref header_op with @ref op_lock held, then releases it
+    DLLLOCAL void releaseHeaderOp(ExceptionSink* xsink);
     QoreHashNode* header_output;                     //!< ref'd result from header read
     Phase phase;
-    State op_state;
+    //! the state; atomic: abort() sets it from any thread (see transitionState())
+    std::atomic<State> op_state;
     int64_t deadline_us;                            //!< absolute deadline for idle phase
     int64_t header_deadline_us;                     //!< absolute deadline for header phase
     int64_t ttl_us;                                 //!< keep-alive timeout duration in microseconds

@@ -1,0 +1,185 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class DgcOpaqueObjectLocalReleaseTest
+
+#! Regression test: a local that keeps its value in IR storage releases an object read through an opaque reference with the reference's registration
+/** Every strong reference held through an opaque reference (the \c \@= operator) is registered with the opaque
+    target registry, which the teardown of the target's Program uses to break the cycles that the collector cannot
+    see (see design/dgc.md, "Opaque references").  A value read through an opaque reference keeps its opaque
+    representation, and with it one registration for its reference.
+
+    The locals of an object type (a class, \c object, also optional) and the IR-only locals of no type keep their
+    value in IR storage in the IR, JIT and tiered execution modes, which marks the object it holds with a real
+    reference; their release (the IR interpreter's slot cache and qore_rt_object_slot_release() for native code)
+    released the object with QoreObject::realDeref() and left the registration of an opaque value in place.  The
+    target then stayed registered after its last reference was released:
+    - an object that the Program's teardown found still registered was deleted by it although other code still held
+      it;
+    - an object freed while registered was read after it had been freed by the teardown of its Program
+      (qore_program_private_base::clearOpaqueTargets()); the qualification of the Pipedrive app schema of module-v8
+      crashed at exit in tiered execution so (QoreModuleManager::delUser()), and a library with debugging aborts when
+      such an object is freed.
+
+    The driver script parses each case in a child Program in the execution mode given, calls a function that stores
+    two objects with \c \@= and reads them into a local, and checks that the objects it returns are still alive
+    after the child Program is deleted; a second function lets the objects be freed when it returns, before the
+    Program is deleted.  Each function is called three times, so that JIT and tiered execution run it as native code
+    (ExecModeHarness::TraceEnv); the tiered run on the IR tier (ExecModeHarness::run_ir_tier()) runs it with the IR
+    interpreter in every call.
+*/
+class DgcOpaqueObjectLocalReleaseTest inherits QUnit::Test {
+    public {
+        #! the local of each case and how it is given a value read through an opaque reference
+        const Cases = {
+            "class local": "N x = h.a;",
+            "object local": "object x = h.a;",
+            "optional class local given by a call": "*N x = get_a(h);",
+            "class local reassigned": "N x = h.b; x = h.a;",
+            "class local read from an object member": "Holder hold(); hold.slot @= a; N x = hold.slot;",
+            "class local read from a nested hash": "hash<auto> m = {\"k\": {}}; m.k.v @= a; *N x = m.k.v;",
+            "class local read from a list": "list<auto> l = (); l[0] @= a; N x = l[0];",
+            "foreach variable of a class": "list<auto> l = (); l[0] @= a; foreach N x in (l) { x.other = 1; }",
+            "local of no type": "auto x = h.a; x.other = 1;",
+            "class local assigned with @=": "N x; x @= h.a;",
+            "hash value assigned with @=": "hash<auto> h2 = {}; h2.c @= h.a;",
+            "object member assigned with @=": "Holder hold(); hold.slot @= h.a;",
+            "class local assigned with :=": "N x; x := h.a;",
+            "hash value assigned with :=": "hash<auto> h2 = {}; h2.c := h.a;",
+        };
+
+        #! the driver script; ARGV[0] is the execution mode of the child Programs
+        const Script = '%%modern
+%%no-child-restrictions
+const Cases = %s;
+const Code = "%%modern\n"
+    "class N { public { auto other; } }\n"
+    "class Holder { public { auto slot; } }\n"
+    "*N sub get_a(hash<auto> h) { return h.a; }\n"
+    # returns an object stored with @= that a local was given
+    "N sub build() {\n"
+    "    hash<auto> h = {};\n"
+    "    N a();\n"
+    "    N b();\n"
+    "    h.a @= a;\n"
+    "    h.b @= b;\n"
+    "    %%s\n"
+    "    return a;\n"
+    "}\n"
+    # the objects stored with @= are freed when it returns
+    "sub release() {\n"
+    "    hash<auto> h = {};\n"
+    "    N a();\n"
+    "    N b();\n"
+    "    h.a @= a;\n"
+    "    h.b @= b;\n"
+    "    %%s\n"
+    "}\n";
+const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+ExecMode mode = Modes{ARGV[0]};
+foreach hash<auto> i in (Cases.pairIterator()) {
+    list<object> kept = ();
+    {
+        Program p(new ParseOptions(("allow-opaque-references", "allow-weak-references")));
+        p.setExecMode(mode);
+        p.parse(sprintf(Code, i.value, i.value), i.key);
+        # several calls, so that JIT and tiered execution run the functions as native code
+        for (int n = 0; n < 3; ++n) {
+            kept += p.callFunction("build");
+            p.callFunction("release");
+        }
+        # the teardown deletes only the objects that are still registered as opaque targets
+        delete p;
+    }
+    printf("%%s: %%d of %%d kept\n", i.key, (select kept, $1).size(), kept.size());
+}
+printf("done\n");
+';
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("DgcOpaqueObjectLocalReleaseTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(sprintf("the targets are released with their registration in %s mode", mode),
+                getModeTest(mode));
+        }
+        addTestCase("the targets are released with their registration on the IR tier", \runIrTier());
+        set_return_value(main());
+    }
+
+    #! returns the test case of the given mode
+    /** The mode is a parameter of its own for each closure: a closure created in the loop over the modes would see
+        the loop variable's last value
+    */
+    private code getModeTest(string mode) {
+        return sub () { runMode(mode); };
+    }
+
+    #! runs the driver in the given mode
+    private runMode(string mode) {
+        TmpDir tmp("qore-dgc-opaque-object-local-");
+        string path = writeScript(tmp);
+        string out = ExecModeHarness::run(getCommand(mode, mode, path));
+        assertEq(getExpected(), out, mode);
+    }
+
+    #! runs the driver with tiered execution on the IR tier
+    runIrTier() {
+        TmpDir tmp("qore-dgc-opaque-object-local-");
+        string path = writeScript(tmp);
+        string out = ExecModeHarness::run_ir_tier(getCommand("tiered", "tiered", path));
+        assertEq(getExpected(), out, ExecModeHarness::IRTierName);
+    }
+
+    #! returns the command running the driver
+    /** @param mode the execution mode of the driver
+        @param child_mode the execution mode of the child Programs
+        @param path the path of the driver
+    */
+    private string getCommand(string mode, string child_mode, string path) {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, path, child_mode);
+    }
+
+    #! returns the output of the driver: every target is kept, and the driver ends
+    private static string getExpected() {
+        return (foldl $1 + $2, (map sprintf("%s: 3 of 3 kept\n", $1), keys Cases)) + "done\n";
+    }
+
+    #! writes the driver into the directory given and returns its path
+    private static string writeScript(TmpDir tmp) {
+        string path = tmp.path + DirSep + "dgc-opaque-object-local-driver.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit f.close();
+        f.write(sprintf(Script, getCasesLiteral()));
+        return path;
+    }
+
+    #! returns Cases as a Qore hash literal
+    private static string getCasesLiteral() {
+        return "{" + (foldl $1 + ", " + $2, (map sprintf("%s: %s", quote($1.key), quote($1.value)),
+            Cases.pairIterator())) + "}";
+    }
+
+    #! returns a Qore string literal for the given string
+    private static string quote(string str) {
+        return "\"" + replace(replace(str, "\\", "\\\\"), "\"", "\\\"") + "\"";
+    }
+}

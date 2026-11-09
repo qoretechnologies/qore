@@ -1081,11 +1081,7 @@ extern "C" DLLEXPORT void qore_rt_cleanup_push(uint64_t** stack, int32_t* count,
 */
 extern "C" DLLEXPORT void qore_rt_object_slot_release(uint64_t value, ExceptionSink* xsink) {
     QoreValue v = fromBits(value);
-    if (v.getType() == NT_OBJECT) {
-        v.get<QoreObject>()->realDeref(xsink);
-        return;
-    }
-    v.discard(xsink);
+    qore_release_real_reference_value(v, xsink);
 }
 
 //! Stores a value in the native cache of an object local: the object stored is marked with a real reference, and the

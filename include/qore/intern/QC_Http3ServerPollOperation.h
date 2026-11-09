@@ -75,6 +75,7 @@ class QoreSSLPrivateKey;
     @since %Qore 3.0
 */
 class Http3ServerPollOperationPriv : public SocketPollOperationBase {
+    friend class Http3ServerPollStateTest;
 public:
     //! HTTP/3 server connection states
     enum class H3State {

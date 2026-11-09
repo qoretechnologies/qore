@@ -36,6 +36,7 @@
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/PollStateCloseHook.h"
 
 /** @cond INTERNAL */
 
@@ -68,13 +69,13 @@ QoreHashNode* HttpIdlePollOperationPriv::continuePoll(ExceptionSink* xsink) {
 
     // Check for timeout
     if (nowUs() > deadline_us) {
-        idle_state = IdleState::TIMEOUT;
+        finish(IdleState::TIMEOUT, "timeout");
         return nullptr;
     }
 
     // Check if socket is still connected
     if (!sock_obj->isOpen()) {
-        idle_state = IdleState::CLOSED;
+        finish(IdleState::CLOSED, "peer-closed");
         return nullptr;
     }
 
@@ -83,17 +84,40 @@ QoreHashNode* HttpIdlePollOperationPriv::continuePoll(ExceptionSink* xsink) {
     // post-handshake records do not look like application data forever.
     int idle_rc = sock_obj->checkIdleDataForAsyncPoll(xsink, true);
     if (*xsink || idle_rc < 0) {
-        idle_state = IdleState::CLOSED;
+        finish(IdleState::CLOSED, "error");
         sock_obj->closeIo(xsink);
         return nullptr;
     }
     if (idle_rc > 0) {
-        idle_state = IdleState::DATA_AVAILABLE;
+        finish(IdleState::DATA_AVAILABLE, "data-available");
         return nullptr;
     }
 
     // Need to wait for data — return poll info
     return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+}
+
+bool HttpIdlePollOperationPriv::finish(IdleState s, const char* site) {
+    assert(s != IdleState::IDLE);
+#ifdef DEBUG
+    bool hook_fired = false;
+    if (PollStateCloseHook::take(this, site)) {
+        // what another thread does at this moment: the Qore-level abort(), or a timeout's worker abort
+        ExceptionSink abort_xsink;
+        abort(&abort_xsink);
+        abort_xsink.clear();
+        hook_fired = true;
+    }
+#endif
+    IdleState expected = IdleState::IDLE;
+    bool rv = idle_state.compare_exchange_strong(expected, s, std::memory_order_acq_rel, std::memory_order_acquire);
+#ifdef DEBUG
+    if (hook_fired) {
+        // whether the abort's close was kept: the store did not replace it
+        PollStateCloseHook::fired(!rv && idle_state.load(std::memory_order_acquire) == IdleState::CLOSED);
+    }
+#endif
+    return rv;
 }
 
 void HttpIdlePollOperationPriv::abort(ExceptionSink* xsink) {

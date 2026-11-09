@@ -1985,6 +1985,9 @@ QoreObject::~QoreObject() {
         qore_alloc_tracking_object_destroyed(priv->theclass->getName());
     }
 #endif
+#ifdef DEBUG
+    qore_debug_check_freed_node_not_opaque_target(this);
+#endif
     delete priv;
 }
 

@@ -864,6 +864,28 @@ CONNECTING → SSL_UPGRADE → READING ⇄ WAIT_READ → CLOSED
 | `wait_read`     | Paused after callback dispatch; `continueReading()` transitions back to `reading` |
 | `closed`        | Connection closed (GOAWAY, error, or max empty reads)               |
 
+`closed` is final, in the HTTP/1.1, HTTP/2 and HTTP/3 client poll operations and in the HTTP/3 server poll operation.
+`abort()` runs on any thread (the Qore-level `abort()` method, or a close or cancel of the connection from the caller's
+thread), and the HTTP/3 client records a refused submission from the submitting thread; the I/O thread checks the
+state and then sets the next one.  The client operations set every other state with a compare-exchange that never
+replaces `CLOSED` (`setStateUnlessClosed()`, `setOpenState()` for HTTP/3), so a close between the I/O thread's check
+and its store is not undone; a plain store made the closed connection ready again, and it took requests and was never
+closed by the I/O controller.  The HTTP/1.1 client operation also writes its `current_op` and `send_op` pointers with
+`op_lock` held and nulls them before it releases them, as `abort()` and `getOutput()` reference them from other
+threads; the WebSocket client and the HTTP server keep-alive and accept operations do the same for their inner
+operations and accepted socket, and `abort()` only aborts the inner operations, with a reference of its own, and never
+releases them.  The WebSocket client's close code and reason are changed under a lock, and an `abort()`'s are kept.
+An HTTP server keep-alive operation that was closed is not made idle again by `resetForIdle()`, and a connection that
+an accept operation accepts after an `abort()` is closed.  The same rule holds for the WebSocket client operation (a close handshake does not leave `CLOSED` or
+`ERROR`) and for the HTTP server idle, keep-alive and accept operations (an aborted one reports no data, reads no
+request header and starts no TLS handshake): their I/O thread sets the next state with a compare-exchange from the
+state it found.  The HTTP/3 and HTTP/2 server operations and the HTTP server WebSocket operation set every state with
+their lock held (`op_lock`, `m`), as `abort()` does, so their I/O thread cannot interleave with it (the HTTP/2 server's
+state is atomic, as its accessors read it without the lock); the HTTP/3
+server's `getOutput()` does not reopen an operation that `abort()` closed.  In debug builds, `dbg_poll_close_before_open_state()` closes an
+operation on its I/O thread right before a given state store (or, for the HTTP/1.1 client, while it releases its
+operation), which makes the race deterministic in tests.
+
 **Callback dispatch pattern:**
 
 1. `continuePoll()` calls `current_op.getOutput()` to get completed responses.

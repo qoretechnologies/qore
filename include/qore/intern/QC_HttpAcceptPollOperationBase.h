@@ -39,6 +39,8 @@
 #include "qore/QoreSSLPrivateKey.h"
 #include "qore/ReferenceHolder.h"
 
+#include <atomic>
+
 //! C++ private data for HttpAcceptPollOperationBase
 /** Composite poll operation for TCP accept + optional SSL handshake.
 
@@ -134,6 +136,7 @@ public:
 
     //! Returns the client socket QoreObject (ref'd), or nullptr if not yet accepted
     DLLLOCAL QoreObject* getReferencedClientSocketObj() const {
+        AutoLocker al(op_lock);
         if (client_sock_obj) {
             client_sock_obj->ref();
         }
@@ -157,12 +160,34 @@ protected:
     DLLLOCAL const char* getStateImpl() const override;
 
 private:
+    //! Enters AcceptState::SSL_HANDSHAKE unless the operation ended meanwhile; returns false if it had ended
+    /** abort() runs on any thread (the Qore-level abort() method, or a worker dispatched by the I/O controller for a
+        timeout) and sets AcceptState::COMPLETE; the I/O thread checks the state and then starts the TLS handshake.
+        A compare-exchange from AcceptState::ACCEPTING keeps an abort() made between the check and the store, after
+        which the aborted operation would go on with the handshake of the accepted connection.
+
+        @param site where the state is set, for the debug hook (see PollStateCloseHook)
+    */
+    DLLLOCAL bool enterSslHandshake(const char* site);
+
     QoreSocketObject* listener_sock;        //!< ref'd listener socket
     SocketPollOperationBase* current_op;     //!< ref'd inner poll operation (accept or ssl)
     QoreObject* current_op_obj;             //!< ref'd QoreObject wrapping current_op (for DGC)
     QoreSocketObject* client_sock;          //!< ref'd client socket (after accept completes)
     QoreObject* client_sock_obj;            //!< ref'd QoreObject wrapping client_sock (prevents close)
-    AcceptState accept_state;
+
+    //! Protects the @ref current_op, @ref current_op_obj, @ref client_sock and @ref client_sock_obj pointers
+    /** Only the I/O thread sets and releases them, and it reads them without the lock; abort() and getOutput() run
+        on other threads too (the Qore-level abort() method, or a timeout's worker abort), and take a reference
+        under the lock.  So the pointers are written with the lock held and nulled before their references are
+        released (see releaseCurrentOp()).
+    */
+    mutable QoreThreadLock op_lock;
+
+    //! Set by abort() with @ref op_lock held: a connection accepted afterwards is closed (see handleAcceptComplete())
+    bool aborted = false;
+    //! the state; atomic: abort() sets it from any thread (see enterSslHandshake())
+    std::atomic<AcceptState> accept_state;
 
     // Configuration
     bool ssl;                               //!< SSL required

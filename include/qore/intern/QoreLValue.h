@@ -65,6 +65,20 @@ enum class AssignmentMode : unsigned char {
 */
 DLLLOCAL void check_lvalue_object_in_out(AbstractQoreNode* in, AbstractQoreNode* out);
 
+//! Releases a value held by IR storage that marks the object it holds with a real reference
+/** The slot of an object local in the IR interpreter and the native cache of one (QoreIRFunction::real_reference_locals
+    and real_reference_ir_only_locals) mark the object they hold with a real reference, which is released with the
+    value: an object is released with QoreObject::realDeref(), and any other value with QoreValue::discard().
+
+    Such storage holds the value it is given as it is, and a value read through an opaque reference (the \c \@=
+    operator) keeps its opaque representation, which carries one registration with the opaque target registry for
+    its reference (QoreValue::opaqueRegister()).  The release must end that registration with the reference, as
+    QoreValue::discard() does: a registration left over keeps the target in the registry after the object is freed,
+    and the teardown of the Program that owns it (qore_program_private_base::clearOpaqueTargets()) then reads freed
+    memory.  The value is NOTHING afterwards.
+*/
+DLLLOCAL void qore_release_real_reference_value(QoreValue& v, ExceptionSink* xsink);
+
 template <typename U = qore_value_u>
 #if defined(__GNUC__) || defined(__clang__)
 class __attribute__((may_alias)) QoreLValue {

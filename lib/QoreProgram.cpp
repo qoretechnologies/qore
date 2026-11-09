@@ -2719,7 +2719,39 @@ public:
 };
 
 OpaqueTargetShardsForkHandler opaque_target_shards_fork_handler;
+
+#ifdef DEBUG
+//! false once the registry's shards are about to be destroyed at process exit; constant-initialized
+std::atomic<bool> opaque_registry_live{true};
+
+//! clears opaque_registry_live: defined after opaque_shards, it is destroyed before them
+struct OpaqueRegistryLiveSentinel {
+    ~OpaqueRegistryLiveSentinel() {
+        opaque_registry_live.store(false, std::memory_order_relaxed);
+    }
+};
+OpaqueRegistryLiveSentinel opaque_registry_live_sentinel;
+#endif
 }
+
+#ifdef DEBUG
+bool qore_program_private_base::isOpaqueTarget(const AbstractQoreNode* n) {
+    OpaqueTargetShard& shard = getOpaqueTargetShard(n);
+    AutoLocker al(shard.lock);
+    return shard.targets.find(const_cast<AbstractQoreNode*>(n)) != shard.targets.end();
+}
+
+void qore_debug_check_freed_node_not_opaque_target(const AbstractQoreNode* n) {
+    if (!opaque_registry_live.load(std::memory_order_relaxed)) {
+        return;
+    }
+    if (qore_program_private_base::isOpaqueTarget(n)) {
+        fprintf(stderr, "OPAQUE TARGET FREED WHILE REGISTERED: node %p (type %d): an opaque value's reference was "
+            "released without its registration\n", n, n->getType());
+        assert(false);
+    }
+}
+#endif
 
 void qore_program_private_base::clearOpaqueTargets(ExceptionSink* xsink) {
     // take this Program's entries out of the registry under the lock, then do all the work outside

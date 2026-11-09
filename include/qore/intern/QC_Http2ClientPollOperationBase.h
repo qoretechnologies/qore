@@ -250,6 +250,19 @@ public:
             && h2_confirmed.load(std::memory_order_acquire);
     }
 
+    //! Sets the state unless the operation was closed meanwhile; returns false if it was closed
+    /** H2State::CLOSED is final.  abort() runs on any thread (the Qore-level abort() method, a connection close or
+        cancel from the caller's thread) and stores H2State::CLOSED without the locks of the I/O thread, which checks
+        the state and then sets the next one; a close between the check and the store must not be undone, or the
+        closed connection would look ready again, take requests and never be closed by the I/O controller.  So every
+        state other than H2State::CLOSED is set with a compare-exchange that never replaces it.
+
+        @param s the new state, not H2State::CLOSED
+        @param site where the state is set, for the debug hook (see PollStateCloseHook), or nullptr for a site where
+        the hook cannot close the operation (e.g. with a lock held that abort() takes)
+    */
+    DLLLOCAL bool setStateUnlessClosed(H2State s, const char* site);
+
     //! Can be called from any thread: the error is set by the I/O thread under the stream lock
     DLLLOCAL bool hasError() const {
         AutoLocker al(stream_lock);

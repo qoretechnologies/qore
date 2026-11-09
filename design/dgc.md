@@ -1344,6 +1344,19 @@ held through an opaque value is registered with the target's owning `QoreProgram
 reference, so each copy must take its own registration, or the first release would untrack a target
 other copies still hold.
 
+A value read through an opaque reference keeps its opaque representation, and with it one registration,
+until it is stored somewhere that converts it, so **every release of a value that can be opaque must end
+its registration with its reference**: through `QoreValue::discard()` or `takeNode()`, never by
+dereferencing the node it holds directly. IR storage that marks the object it holds with a real reference
+(the IR interpreter's slots of object locals and IR-only locals of no type, and their native caches)
+releases its value with `qore_release_real_reference_value()` for this reason: it released objects with
+`QoreObject::realDeref()` alone, so a target read into such a local stayed registered after its last
+reference was released, and the teardown of its Program read it after it had been freed. A library with
+debugging checks the rule where it is broken: a hash, list or object freed while it is still registered
+aborts (`qore_debug_check_freed_node_not_opaque_target()`).
+`examples/test/qore/misc/dgc-opaque-object-local-release.qtest` covers the locals of every kind in every
+execution mode.
+
 `qore_program_private::clearOpaqueTargets()` then deletes every still-registered target during
 `waitForTerminationAndClear()`, next to `clearSavedObjects()` and for the same reason: deleting a
 target releases its members and breaks the cycle the collector could not see, and it has to happen

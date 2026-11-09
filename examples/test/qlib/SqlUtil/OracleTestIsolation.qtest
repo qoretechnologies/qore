@@ -150,15 +150,17 @@ class OracleTestIsolationTest inherits QUnit::Test {
         string host = getHost();
         int now = now_us().getEpochSeconds();
         int old = now - TestRun::LeftoverAge.durationSeconds() - 60;
+        # each name has this process's host and id: the runs on the server at the same time, on this host or on
+        # another, make users of their own
         hash<string, bool> expected = {
             # runs at least TestRun::LeftoverAge old, of any host and process, this one's too: dropped
             sprintf("QTEST_LEFTOVER_%s_%d_%d_ABC123", host, getpid(), old): False,
-            sprintf("QTEST_OTHERHOST_%s_%d_%d_ABC123", host + "X", 1, old): False,
+            sprintf("QTEST_OTHERHOST_%s_%d_%d_ABC123", host + "X", getpid(), old): False,
             sprintf("QTEST_LEFTOVER_%s_%d_%d_ABC123_OTHER", host, getpid(), old): False,
             # a recent run: kept
-            sprintf("QTEST_RECENT_%s_%d_%d_ABC123", host, 1, now): True,
+            sprintf("QTEST_RECENT_%s_%d_%d_ABC123", host, getpid(), now): True,
             # not a run's name: kept
-            sprintf("QTEST_%d", old): True,
+            sprintf("QTEST_%d_%s_%d", old, host, getpid()): True,
         };
         foreach string user in (keys expected) {
             ds.exec("create user " + user + " identified by \"Qtest_pw_1\"");
