@@ -111,6 +111,19 @@ another operation, in every execution mode.  Whether a deleted Program's address
 depends on the allocator and the layout of the process's heap, so the test runs its driver several times; macOS's
 allocator gave them in most runs, glibc's in none, so the test declares macOS as a platform it must run on.
 
+A cache keyed by the metadata of a class or a hashdecl can use the method dispatch epoch instead
+(`qore_get_method_dispatch_epoch()`): the destruction of a class or a hashdecl increments it before the memory can be
+reused (`qore_bump_method_dispatch_epoch()`), so an entry of an earlier epoch is not used.  The type and hashdecl path
+caches of an AOT module (`qore_rt_resolve_full_type_path_cached()` and `qore_rt_resolve_hashdecl_path_cached()` in
+`lib/JITRuntime.cpp`: their thread-local front caches and `QoreAOTContext::type_path_cache` and
+`hashdecl_path_cache`) are keyed by the receiver's type, which is freed with its class, and give types and hashdecls
+freed with their Program, while the module's context lives as long as the module.  A subclass of the module's
+generic class declared by a later Program at the deleted subclass's address was given the type found for the deleted
+one (`hash<string, int>` for a `Box<string>`) or a type of a freed hashdecl.  Their entries now record the epoch: a
+front-cache entry of an earlier epoch is not used, a context's map is cleared when the epoch has changed, and a map
+holds at most `QORE_AOT_PATH_CACHE_MAX_ENTRIES` entries.  `examples/test/ir/AOTPathCacheProgramReuse.qtest` declares
+such subclasses in Programs created one after another.
+
 ## Where the teardown can wait for ever
 
 Steps 1 and 3 wait without a timeout for the threads in the Program; the teardown hangs if one of them never

@@ -1,0 +1,163 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class AOTPathCacheProgramReuseTest
+
+#! Regression test: an AOT module's type and hashdecl path caches are not used for a class of a deleted Program
+/** The code of a qcc-compiled module resolves the serialized paths of the types of its generic code, such as
+    \c hash<string, T> or \c HD<T>, for the receiver of the call, and caches what it finds in the module's AOT
+    context (qore_rt_resolve_full_type_path_cached() and qore_rt_resolve_hashdecl_path_cached() in
+    lib/JITRuntime.cpp), which lives as long as the module.  The caches were keyed by the address of the receiver's
+    type, which is freed with the receiver's class: a subclass of the module's generic class declared by a Program
+    created after another one was deleted could have the address of the deleted subclass's type, and was given the
+    type found for it: \c hash<string, int> for a \c Box<string>, which then refused its values, or a type of a
+    hashdecl freed with the deleted Program.  The entries now belong to the method dispatch epoch, which the
+    destruction of a class or a hashdecl increments, and a cache holds a bounded number of them.
+
+    The driver loads the module into Programs created one after another, each declaring a subclass of the module's
+    generic class with a type argument of another type than the previous one (\c int, \c string, and a hashdecl of
+    the Program), calls the inherited methods and deletes the Program.  It runs in every execution mode.
+*/
+class AOTPathCacheProgramReuseTest inherits QUnit::Test {
+    public {
+        #! the number of Programs that the driver creates
+        const Programs = 120;
+
+        #! the module, compiled by qcc
+        const Module = '%modern
+
+module AOTPathCacheReuseMod {
+    version = "1.0";
+    desc = "a generic class whose code resolves type paths for its receiver";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace AOTPathCacheReuseMod {
+public hashdecl HD<T> {
+    T a;
+}
+
+public class Box<T> {
+    # resolves the type path "hash<string, T>"
+    hash<string, T> convert(hash<auto> input) {
+        hash<string, T> result(input);
+        return result;
+    }
+
+    # resolves the type path "list<T>"
+    list<T> wrap(auto v) {
+        list<T> l = (v,);
+        return l;
+    }
+
+    # resolves the hashdecl path "HD<T>"
+    hash<HD<T>> hd(auto v) {
+        hash<HD<T>> h({"a": v});
+        return h;
+    }
+}
+}
+';
+
+        #! the driver; ARGV[0] is the path of the module, ARGV[1] the execution mode of the Programs it creates
+        const Script = '%%modern
+%%no-child-restrictions
+const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+string mod = ARGV[0];
+ExecMode mode = Modes{ARGV[1]};
+# the type arguments of the subclasses, one after another
+const Types = ("int", "string", "hash<H>");
+const Values = ("42", "\"str\"", "<H>{}");
+int right = 0;
+list<string> wrong = ();
+for (int i = 0; i < %d; ++i) {
+    string t = Types[i %% Types.size()];
+    string v = Values[i %% Values.size()];
+    Program p();
+    p.setExecMode(mode);
+    p.loadModule(mod);
+    # the hashdecl of each Program has a member of its own, so that its type differs from the previous one
+    p.parse(sprintf("%%%%modern\nhashdecl H { int m%%d = %%d; }\n"
+        "class Sub inherits AOTPathCacheReuseMod::Box<%%s> {}\n"
+        "string sub run() {\n"
+        "    Sub s();\n"
+        "    auto v = %%s;\n"
+        "    try {\n"
+        "        return s.convert({\"x\": v}).fullType() + \"|\" + s.wrap(v).fullType() + \"|\" "
+        "+ s.hd(v).fullType();\n"
+        "    } catch (hash<ExceptionInfo> ex) {\n"
+        "        return ex.err + \": \" + ex.desc;\n"
+        "    }\n"
+        "}\n", i, i, t, v), "probe-" + i);
+    string res = p.callFunction("run");
+    string exp = sprintf("hash<string, %%s>|list<%%s>|hash<HD<%%s>>", t, t, t);
+    if (res == exp) {
+        ++right;
+    } else if (wrong.size() < 3) {
+        wrong += sprintf("%%d: expected %%y, got %%y", i, exp, res);
+    }
+    delete p;
+}
+printf("%%d of %%d right%%s\n", right, %d, wrong ? ": " + wrong.join("; ") : "");
+';
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTPathCacheProgramReuseTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(sprintf("subclasses of an AOT generic class in Programs created one after another in %s mode",
+                mode), getModeTest(mode));
+        }
+        set_return_value(main());
+    }
+
+    #! returns the test case of the given mode
+    /** The mode is a parameter of its own for each closure: a closure created in the loop over the modes would see
+        the loop variable's last value
+    */
+    private code getModeTest(string mode) {
+        return sub () { runMode(mode); };
+    }
+
+    #! compiles the module and runs the driver in the given mode
+    private runMode(string mode) {
+        TmpDir tmp("qore-aot-path-cache-program-reuse-");
+        string qm_path = writeFile(tmp, "AOTPathCacheReuseMod.qm", Module);
+        string qmod_path = tmp.path + DirSep + "AOTPathCacheReuseMod.qmod";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -b "
+            "--compile-module --strip-source --output %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, qore_bin,
+            qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled the module: " + compile_out);
+        string path = writeFile(tmp, "aot-path-cache-program-reuse-driver.qr", sprintf(Script, Programs, Programs));
+        string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=%s %s %s %s", libqore_dir, libqore_dir, qore_bin, mode, path, qmod_path, mode));
+        assertEq(sprintf("%d of %d right\n", Programs, Programs), out, mode);
+    }
+
+    #! writes a file into the directory given and returns its path
+    private static string writeFile(TmpDir tmp, string name, string contents) {
+        string path = tmp.path + DirSep + name;
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit f.close();
+        f.write(contents);
+        return path;
+    }
+}

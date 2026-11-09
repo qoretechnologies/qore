@@ -291,11 +291,22 @@ struct QoreAOTContext {
     std::mutex hashdecl_path_cache_mutex;
     std::unordered_map<QoreAOTHashDeclPathCacheKey, const TypedHashDecl*, QoreAOTHashDeclPathCacheKeyHash>
         hashdecl_path_cache;
+    //! The method dispatch epoch (qore_get_method_dispatch_epoch()) of the entries of hashdecl_path_cache
+    /** The entries are keyed by the receiver's type, which is freed with its class, and the hashdecls found can be
+        freed with their Program, while the context lives as long as its module: a class or hashdecl allocated at the
+        address of a destroyed one would find the entries made for the destroyed one.  The destruction of a class or
+        hashdecl increments the epoch, and the entries of an earlier epoch are cleared before the cache is used;
+        guarded by hashdecl_path_cache_mutex.
+    */
+    uint64_t hashdecl_path_cache_epoch = 0;
 
     //! Lazily resolved full type paths used by source-stripped AOT typed-container helpers.
     std::mutex type_path_cache_mutex;
     std::unordered_map<QoreAOTHashDeclPathCacheKey, const QoreTypeInfo*, QoreAOTHashDeclPathCacheKeyHash>
         type_path_cache;
+    //! The method dispatch epoch of the entries of type_path_cache, guarded by type_path_cache_mutex; see
+    //! hashdecl_path_cache_epoch
+    uint64_t type_path_cache_epoch = 0;
 
     //! Shared serialized AOT metadata used to lazily materialize debug IR.
     std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata;

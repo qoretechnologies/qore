@@ -3915,6 +3915,23 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl_from_hash_by_path(const char
     return qore_rt_new_hash_decl_from_hash(hd, hash_bits, runtime_check, xsink);
 }
 
+//! The most entries a context's path cache holds; it is cleared when full
+static constexpr size_t QORE_AOT_PATH_CACHE_MAX_ENTRIES = 1024;
+
+//! Clears a context's path cache if its entries were made in an earlier method dispatch epoch; called under its mutex
+/** The entries are keyed by the address of the receiver's type and give types or hashdecls, which are freed with
+    their class or Program, while the context lives as long as its module, so a class or hashdecl allocated at the
+    address of a destroyed one would find the entries made for the destroyed one; the destruction of a class or a
+    hashdecl increments the epoch (qore_bump_method_dispatch_epoch()) before its memory can be reused
+*/
+template <typename M>
+static void qore_rt_aot_path_cache_set_epoch(M& cache, uint64_t& cache_epoch, uint64_t epoch) {
+    if (cache_epoch != epoch) {
+        cache.clear();
+        cache_epoch = epoch;
+    }
+}
+
 static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext* ctx, const char* hd_path,
         bool receiver_dependent, ExceptionSink* xsink) {
     if (!ctx || !hd_path || !*hd_path) {
@@ -3924,9 +3941,12 @@ static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext*
     const QoreTypeInfo* receiver_type_info = receiver_dependent
         ? qore_get_current_receiver_type_info()
         : nullptr;
+    // entries made before a class or hashdecl was destroyed are not used (see qore_rt_aot_path_cache_set_epoch())
+    const uint64_t epoch = qore_get_method_dispatch_epoch();
 
     struct HashDeclFrontCacheEntry {
         uint64_t generation = 0;
+        uint64_t epoch = 0;
         const char* path_address = nullptr;
         std::string path;
         const QoreTypeInfo* receiver_type_info = nullptr;
@@ -3942,6 +3962,7 @@ static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext*
     const bool disable_front_cache = disable_front_cache_env.get();
     if (!disable_front_cache
             && front_entry.generation == ctx->hashdecl_cache_generation
+            && front_entry.epoch == epoch
             && front_entry.path_address == hd_path
             // Concrete paths come from AOT globals whose lifetime matches the context.
             // Receiver-dependent debug/JIT paths also verify content across module reuse.
@@ -3954,10 +3975,12 @@ static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext*
 
     {
         std::lock_guard<std::mutex> lock(ctx->hashdecl_path_cache_mutex);
+        qore_rt_aot_path_cache_set_epoch(ctx->hashdecl_path_cache, ctx->hashdecl_path_cache_epoch, epoch);
         auto i = ctx->hashdecl_path_cache.find(key);
         if (i != ctx->hashdecl_path_cache.end()) {
             if (!disable_front_cache) {
                 front_entry.generation = ctx->hashdecl_cache_generation;
+                front_entry.epoch = epoch;
                 front_entry.path_address = hd_path;
                 front_entry.path = hd_path;
                 front_entry.receiver_type_info = receiver_type_info;
@@ -3994,10 +4017,15 @@ static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext*
 
     {
         std::lock_guard<std::mutex> lock(ctx->hashdecl_path_cache_mutex);
+        qore_rt_aot_path_cache_set_epoch(ctx->hashdecl_path_cache, ctx->hashdecl_path_cache_epoch, epoch);
+        if (ctx->hashdecl_path_cache.size() >= QORE_AOT_PATH_CACHE_MAX_ENTRIES) {
+            ctx->hashdecl_path_cache.clear();
+        }
         ctx->hashdecl_path_cache.emplace(std::move(key), hd);
     }
     if (!disable_front_cache) {
         front_entry.generation = ctx->hashdecl_cache_generation;
+        front_entry.epoch = epoch;
         front_entry.path_address = hd_path;
         front_entry.path = hd_path;
         front_entry.receiver_type_info = receiver_type_info;
@@ -4244,8 +4272,11 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
     }
 
     const QoreTypeInfo* receiver_type_info = qore_get_current_receiver_type_info();
+    // entries made before a class or hashdecl was destroyed are not used (see qore_rt_aot_path_cache_set_epoch())
+    const uint64_t epoch = qore_get_method_dispatch_epoch();
     struct TypePathFrontCacheEntry {
         uint64_t generation = 0;
+        uint64_t epoch = 0;
         const char* path_address = nullptr;
         const QoreTypeInfo* receiver_type_info = nullptr;
         const QoreTypeInfo* type_info = nullptr;
@@ -4258,6 +4289,7 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
     TypePathFrontCacheEntry& front_entry =
         front_cache[hash & (TYPE_PATH_FRONT_CACHE_SIZE - 1)];
     if (front_entry.generation == ctx->hashdecl_cache_generation
+            && front_entry.epoch == epoch
             && front_entry.path_address == type_path
             && front_entry.receiver_type_info == receiver_type_info) {
         return front_entry.type_info;
@@ -4266,9 +4298,10 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
     QoreAOTHashDeclPathCacheKey key{type_path, receiver_type_info};
     {
         std::lock_guard<std::mutex> lock(ctx->type_path_cache_mutex);
+        qore_rt_aot_path_cache_set_epoch(ctx->type_path_cache, ctx->type_path_cache_epoch, epoch);
         auto i = ctx->type_path_cache.find(key);
         if (i != ctx->type_path_cache.end()) {
-            front_entry = {ctx->hashdecl_cache_generation, type_path,
+            front_entry = {ctx->hashdecl_cache_generation, epoch, type_path,
                 receiver_type_info, i->second};
             return i->second;
         }
@@ -4300,9 +4333,13 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
 
     {
         std::lock_guard<std::mutex> lock(ctx->type_path_cache_mutex);
+        qore_rt_aot_path_cache_set_epoch(ctx->type_path_cache, ctx->type_path_cache_epoch, epoch);
+        if (ctx->type_path_cache.size() >= QORE_AOT_PATH_CACHE_MAX_ENTRIES) {
+            ctx->type_path_cache.clear();
+        }
         ctx->type_path_cache.emplace(std::move(key), type_info);
     }
-    front_entry = {ctx->hashdecl_cache_generation, type_path,
+    front_entry = {ctx->hashdecl_cache_generation, epoch, type_path,
         receiver_type_info, type_info};
     return type_info;
 }
