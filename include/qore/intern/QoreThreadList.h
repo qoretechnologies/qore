@@ -164,6 +164,13 @@ public:
     bool wake_queued = false;
     //! true while the condition waker is waking the entry's waiter; guarded by the wait registry lock
     bool wake_busy = false;
+    //! true if the registered condition wait can only be ended by a sandbox limit; guarded by the wait registry lock
+    /** Set when the wait is registered in the destructor of a trusted class, where a thread cancellation and a
+        program interrupt are deferred: waking it for them would deliver nothing and only end the wait spuriously
+        (restarting the timeout of a caller that waits again, or returning 0 from Condition::wait() unsignalled).
+        See "Destructors" in design/cooperative-cancellation.md.
+    */
+    bool waiting_limits_only = false;
 
     //! the thread's wakeup channel (wake_fd) while it is blocked in qore_cancellable_poll(), or -1
     /** Set by the thread itself before it blocks and cleared under thread_list.lck after it wakes;
@@ -172,6 +179,11 @@ public:
         design/cooperative-cancellation.md, "Wakeup descriptor").
     */
     std::atomic<int> waiting_fd{-1};
+    //! true if the descriptor wait registered in waiting_fd can only be ended by a sandbox limit
+    /** As waiting_limits_only; written by the thread before it stores waiting_fd (seq_cst), and read by a canceller
+        after it has loaded waiting_fd
+    */
+    std::atomic<bool> waiting_fd_limits_only{false};
 
     //! the thread's cancellation wakeup channel, or -1 if it has not been created
     /** Created on the thread's first qore_cancellable_poll() and closed when its TID is released or the thread
@@ -471,7 +483,9 @@ public:
 
         @return 0 for success, -1 if the condition waker thread could not be started (errno is set)
     */
-    DLLLOCAL int registerCondWait(int tid, QoreCondition* cond, pthread_mutex_t* m);
+    /** @param limits_only true if only a sandbox limit is to wake the wait (see ThreadEntry::waiting_limits_only)
+    */
+    DLLLOCAL int registerCondWait(int tid, QoreCondition* cond, pthread_mutex_t* m, bool limits_only = false);
 
     //! Clears the current thread's registration after its wait has ended; the caller holds \a m
     /** If a wakeup for the thread is still with the condition waker thread, \a m is released while it completes and
@@ -484,7 +498,9 @@ public:
         between its check for the request and its wait, so a broadcast cannot be lost; otherwise the condition waker
         thread acquires the mutex (which the waiter releases when it blocks) and then broadcasts.  Never blocks.
     */
-    DLLLOCAL void wakeCondWaiter(int tid);
+    /** @param limit true for a sandbox limit, which also wakes a wait registered with \a limits_only
+    */
+    DLLLOCAL void wakeCondWaiter(int tid, bool limit = false);
 
     //! Wakes every thread blocked in a cancellable wait (condition or descriptor)
     /** Used by SandboxManager::requestInterrupt().  Spurious wakeups for threads in other programs are harmless
@@ -503,15 +519,19 @@ public:
     DLLLOCAL int getCancelWakeupFd(int tid);
 
     //! Signals the wakeup channel of a thread blocked in qore_cancellable_poll(), if any; lck must be held
-    DLLLOCAL void signalWaitingFd(int tid);
+    /** @param limit true for a sandbox limit, which also wakes a wait registered with \a limits_only
+    */
+    DLLLOCAL void signalWaitingFd(int tid, bool limit = false);
 
     //! Registers the current thread's wakeup channel before it blocks in a poll
     /** seq_cst pairs with the seq_cst store of the cancellation flag on the cancel side; the waiter must check
         for cancellation after this store and before it blocks.
     */
-    DLLLOCAL void setCurrentWaitingFd(int tid, int fd) {
+    DLLLOCAL void setCurrentWaitingFd(int tid, int fd, bool limits_only = false) {
         assert(tid >= 0 && tid < MAX_QORE_THREADS);
         assert(fd == entry[tid].wake_fd);
+        // published by the seq_cst store below
+        entry[tid].waiting_fd_limits_only.store(limits_only, std::memory_order_relaxed);
         entry[tid].waiting_fd.store(fd, std::memory_order_seq_cst);
 #ifdef DEBUG
         dbgNoteWait(tid, true);

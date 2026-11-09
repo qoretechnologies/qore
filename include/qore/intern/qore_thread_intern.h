@@ -901,6 +901,95 @@ DLLLOCAL void delete_thread_local_data();
 */
 DLLLOCAL void end_thread_cancellation(bool terminating = false);
 
+//! Applies the cancellation rule for destructors to the destructor of one class in an object's class hierarchy
+/** Used around the code of each class's own destructor (not its base classes', which have their own helper); see
+    "Destructors" in design/cooperative-cancellation.md:
+
+    - a trusted class (defined by a Program without a sandbox manager, or a builtin class): cancellation and program
+      interrupts are deferred while its destructor runs, so the destructor completes on a cancelled or interrupted
+      thread; the pending request is left untouched and is raised at the first cancellation point after the
+      destructor returns.  A sandbox limit (an expired call budget, a memory limit) is never deferred, and code of a
+      Program with a sandbox manager that the destructor calls does not get the deferral
+      (ProgramThreadCountContextHelper suspends it)
+    - a sandboxed class (defined by a Program with a sandbox manager): its destructor never runs under any
+      cancellation deferral; if a request is pending that a cancellation point would deliver (a thread cancellation
+      in scope, a program interrupt or a sandbox limit), skip() is true and the destructor is not run: the object's
+      members and private data are released as when it is obliterated
+
+    Only the thread that creates the helper reads or writes the state it changes.
+*/
+class QoreDestructorCancelHelper {
+public:
+    //! Applies the rule for a class whose code is (\a sandboxed true) or is not governed by a sandbox manager
+    DLLLOCAL QoreDestructorCancelHelper(bool sandboxed);
+
+    //! Restores the deferral state of the thread
+    DLLLOCAL ~QoreDestructorCancelHelper();
+
+    //! True if the destructor of the class must not run
+    DLLLOCAL bool skip() const {
+        return skip_dtor;
+    }
+
+    DLLLOCAL QoreDestructorCancelHelper(const QoreDestructorCancelHelper&) = delete;
+    DLLLOCAL QoreDestructorCancelHelper& operator=(const QoreDestructorCancelHelper&) = delete;
+
+private:
+    //! the thread's data, or nullptr if the thread has none (then nothing is changed)
+    ThreadData* td = nullptr;
+    //! the deferral depths of the thread, saved while a sandboxed destructor runs
+    unsigned saved_defer = 0;
+    unsigned saved_dtor_defer = 0;
+    //! true if the destructor deferral of a trusted class was pushed
+    bool pushed = false;
+    //! true if the deferral of the thread was suspended for a sandboxed class
+    bool suspended = false;
+    //! true if the destructor must not run
+    bool skip_dtor = false;
+};
+
+//! The deadline of a wait with a timeout whose condition wait can end before the timeout without its predicate
+/** A condition wait can end early: a spurious wakeup, a wakeup for a cancellation request that is not delivered (out
+    of the thread's scope, or for another Program's interrupt), or another waiter that took what it waited for.  A
+    caller that waits again must wait only for the rest of its timeout, so that the timeout is not restarted.
+*/
+class QoreWaitDeadline {
+public:
+    //! A deadline \a timeout_ms from now if \a timeout_ms is positive, otherwise none
+    DLLLOCAL explicit QoreWaitDeadline(int64 timeout_ms) : deadline_us(timeout_ms > 0
+            ? q_get_monotonic_us() + timeout_ms * 1000 : 0) {
+    }
+
+    //! True if there is a deadline
+    DLLLOCAL bool active() const {
+        return deadline_us;
+    }
+
+    //! The timeout in ms of the next wait: at least 1 before the deadline, 0 once it has passed; needs a deadline
+    DLLLOCAL int64 remainingMs() const {
+        assert(deadline_us);
+        int64 remaining_us = deadline_us - q_get_monotonic_us();
+        return remaining_us <= 0 ? 0 : (remaining_us + 999) / 1000;
+    }
+
+private:
+    int64 deadline_us;
+};
+
+//! Returns true if the code of the Program is sandboxed
+/** True if the Program has or had a sandbox manager, or was created by sandboxed code (see
+    qore_program_set_creator_sandbox()), or is a user module that a sandboxed Program loaded by a path it chose;
+    false for a Program that trusted code created (the host, a module loaded by trusted code).  Never changes from true
+    to false.
+*/
+DLLLOCAL bool qore_program_is_sandboxed(const QoreProgram* pgm);
+
+//! Marks the Program's code as sandboxed (see qore_program_is_sandboxed())
+DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
+
+//! Marks a Program that Qore code creates (Program::constructor()) as sandboxed if its creator is sandboxed
+DLLLOCAL void qore_program_set_creator_sandbox(QoreProgram& pgm);
+
 
 //! Waits on a condition variable until it is signalled, the timeout expires, or the thread is cancelled or interrupted
 /** The implementation of QoreCondition::waitWithInterrupt(); a cancellation request
@@ -1609,13 +1698,29 @@ protected:
     ExceptionSink* xsink = nullptr;
     //! the thread's entry into the Program, for its thread entry and exit handlers
     ThreadEntryHandlerFrame entry_frame;
+    //! the cancellation-deferral depths of the thread, saved while code of a sandboxed Program runs
+    unsigned saved_defer = 0;
+    unsigned saved_dtor_defer = 0;
     bool restore = false;
     bool init_tlpd = false;
     bool thread_count_incremented = false;
+    //! true if the cancellation deferral of the thread was suspended when the Program was entered
+    bool defer_suspended = false;
 
 private:
     //! restores the thread's context as it was before set() switched it
     DLLLOCAL void restoreContext();
+
+    //! Suspends every cancellation deferral of the thread while the code of a sandboxed Program runs
+    /** Sandboxed code never runs with cancellation deferred: not when a trusted destructor calls it (a method a
+        sandboxed subclass overrides, a callback), and not when trusted code runs it in a cleanup critical section
+        (defer_thread_cancel(), QoreCancelDeferralHelper) or in thread teardown; see QoreDestructorCancelHelper and
+        "Sandboxed code never runs deferred" in design/cooperative-cancellation.md
+    */
+    DLLLOCAL void suspendDeferral(ThreadData* td);
+
+    //! Restores the deferral suspended by suspendDeferral()
+    DLLLOCAL void restoreDeferral();
 };
 
 class ProgramRuntimeParseContextHelper {

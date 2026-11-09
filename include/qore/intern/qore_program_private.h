@@ -949,6 +949,15 @@ public:
     */
     std::atomic<QoreSandboxManager*> sandbox_manager{nullptr};
 
+    //! true if the code of the Program is sandboxed; never cleared once set (see qore_program_is_sandboxed())
+    /** Set when a sandbox manager is set on the Program, when the Program is created by code that a sandbox governs
+        or by a sandboxed Program (Program::constructor()), and for a user module that a sandboxed Program loads by a
+        path it chose (inherit_module_sandbox_manager()).  A Program that sandboxed code creates has no manager of its
+        own (the code it runs is governed by its callers), so the manager alone cannot tell that its code is not
+        trusted; the flag also outlives the manager, which is cleared when the Program is deleted.
+    */
+    std::atomic<bool> sandboxed{false};
+
     // define map
     dmap_t dmap;
 

@@ -501,6 +501,12 @@
     ordinary character; set the \c quote_escape option to a backslash to read or write files in the earlier format;
     see @ref csvutil_rfc4180.
 
+    @par Destructors on a Cancelled or Interrupted Thread
+    The destructor of a trusted class runs with cancellation and @ref sandbox_interrupt "program interrupts" deferred,
+    so it completes, the destructor of a sandboxed class is skipped while a cancellation, an interrupt or a sandbox
+    limit is pending, and sandboxed code never runs with cancellation deferred; see @ref cancel_destructors and
+    @ref cancel_security (<a href="https://github.com/qoretechnologies/qore/issues/5634">issue 5634</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Program Thread Coordination
     @ref Qore::Program::waitForThreads() "Program::waitForThreads()" and
@@ -1477,6 +1483,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a timed wait of @ref Qore::Thread::Counter "Counter", @ref Qore::Thread::Queue "Queue",
+      @ref Qore::Thread::Mutex "Mutex", @ref Qore::Thread::RWLock "RWLock" or @ref Qore::Thread::Gate "Gate" woken
+      without what it waited for (another waiter took it first, or another %Program's interrupt woke it) waited for
+      its whole timeout again; it now waits only for the rest of it
     - a @ref cast "cast" as the lvalue of @ref remove "remove" or @ref delete "delete" (ex: <tt>remove cast<int>(x)</tt>)
       or in the lvalue of a @ref lvalue_references "reference" aborted debug builds or gave wrong results; it is now a
       parse error, as a cast is not storage that can be removed or referred to

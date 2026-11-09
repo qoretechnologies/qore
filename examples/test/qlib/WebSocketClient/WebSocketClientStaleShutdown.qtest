@@ -809,6 +809,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
                 \destructorOnDeliveryWithThreadTest(), proto);
             addTestCase(proto + ": destructor during a teardown", \destructorDuringTeardownTest(), proto);
             addTestCase(proto + ": destructor of an open connection", \destructorOpenTest(), proto);
+            addTestCase(proto + ": destructor of an open connection on a cancelled thread",
+                \destructorOnCancelledThreadTest(), proto);
             addTestCase(proto + ": disconnect in progress while the closing callback connects",
                 \actionInProgressTest(), (proto, "disconnect"));
             addTestCase(proto + ": reconnect in progress while the closing callback connects", \actionInProgressTest(),
@@ -912,6 +914,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             \discordLastRefOnHeartbeatThreadTest());
         addTestCase("Discord: dropping the last reference to a connected client destroys it",
             \discordDropConnectedClientTest());
+        addTestCase("Discord: the destructor on a cancelled thread stops the heartbeat thread",
+            \discordDestructorOnCancelledThreadTest());
         addTestCase("Discord: EVENT_WS_CLOSED is raised when a closing step fails", \discordClosedOnStepErrorTest());
         addTestCase("Discord: a failed handoff on the heartbeat thread does not wait for itself",
             \discordHandoffOnHeartbeatThreadTest());
@@ -1516,6 +1520,41 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         connectChecked(ctx, proto);
         LifecycleWsClient c = remove ctx.wsc;
         delete c;
+        assertEq(1, ctx.closed.getCount(), "the connection is reported closed once");
+    }
+
+    #! The client is released while THREAD-CANCELLED unwinds the thread holding it (issue #5634): the destructor runs
+    #! with the cancellation deferred, so it completes: the connection is closed and reported closed once
+    destructorOnCancelledThreadTest(string proto) {
+        TestThreads::cancel_expected = True;
+        on_exit TestThreads::cancel_expected = False;
+        LifecycleCtx ctx = makeCtx(proto);
+        connectChecked(ctx, proto);
+        # the thread takes the only reference
+        Queue handoff();
+        handoff.push(remove ctx.wsc);
+        Counter ready(1);
+        Counter block(1);
+        on_exit if (block.getCount()) {
+            block.dec();
+        }
+        Queue result();
+        int tid = background TestThreads::run(sub () {
+            try {
+                LifecycleWsClient c = handoff.get();
+                ready.dec();
+                block.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err);
+                # the cancellation is still pending after the destructor
+                result.push(thread_cancelled());
+            }
+        });
+        assertEq(0, ready.waitForZero(LifecycleWsClient::HandoffTimeout));
+        assertTrue(cancel_thread(tid, "test"));
+        assertEq("THREAD-CANCELLED", result.get(LifecycleWsClient::HandoffTimeout));
+        assertTrue(result.get(LifecycleWsClient::HandoffTimeout), "the cancellation stays pending");
+        thread_join(tid);
         assertEq(1, ctx.closed.getCount(), "the connection is reported closed once");
     }
 
@@ -3442,6 +3481,48 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         remove d;
         # the heartbeat thread holds no reference while it waits: the client is destroyed here, at once
         assertEq("destroyed:" + gettid(), lifecycle.get(0ms), "destroyed here when the last reference was dropped");
+    }
+
+    #! The client is released while THREAD-CANCELLED unwinds the thread holding it (issue #5634): the destructors run
+    #! with the cancellation deferred, so they complete: the heartbeat thread is stopped and waited for
+    discordDestructorOnCancelledThreadTest() {
+        TestThreads::cancel_expected = True;
+        on_exit TestThreads::cancel_expected = False;
+        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        Queue events = d.events;
+        Queue lifecycle = d.lifecycle;
+        # no HELLO, so no delivery task holds a reference: the heartbeat is started directly
+        d.connect();
+        d.startHeartbeatForTest(45000);
+        assertEq("hb-started:" + d.getCurrentConnectionId(), events.get(LifecycleWsClient::HandoffTimeout));
+        DiscordHeartbeat rec = d.hbRecordForTest();
+        # the thread takes the only reference
+        Queue handoff();
+        handoff.push(remove d);
+        Counter ready(1);
+        Counter block(1);
+        on_exit if (block.getCount()) {
+            block.dec();
+        }
+        Queue result();
+        int tid = background TestThreads::run(sub () {
+            try {
+                HbDiscord c = handoff.get();
+                ready.dec();
+                block.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err);
+            }
+        });
+        assertEq(0, ready.waitForZero(LifecycleWsClient::HandoffTimeout));
+        assertTrue(cancel_thread(tid, "test"));
+        assertEq("destroyed:" + tid, lifecycle.get(LifecycleWsClient::HandoffTimeout));
+        assertEq("waiting-threads", lifecycle.get(LifecycleWsClient::HandoffTimeout));
+        assertEq("threads-done", lifecycle.get(LifecycleWsClient::HandoffTimeout));
+        assertEq("THREAD-CANCELLED", result.get(LifecycleWsClient::HandoffTimeout));
+        thread_join(tid);
+        assertTrue(rec.ended, "the heartbeat thread ended");
+        assertEq(0, rec.running.getCount());
     }
 
     #! EVENT_WS_CLOSED is raised also when a step of the Discord closing callback fails
