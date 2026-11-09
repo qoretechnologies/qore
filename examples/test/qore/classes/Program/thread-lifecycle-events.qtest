@@ -71,6 +71,10 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
         addTestCase("TID reuse", \tidReuse());
         addTestCase("event mask", \eventMask());
         addTestCase("activity", \activity());
+        addTestCase("activity with concurrent snapshots", \activitySnapshots());
+%ifdef QoreDebug
+        addTestCase("activity publication (C++)", \activityPublication());
+%endif
         addTestCase("unsubscribe", \unsubscribe());
         addTestCase("multiple subscriptions", \multipleSubscriptions());
         addTestCase("deleted queue", \deletedQueue());
@@ -623,6 +627,54 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
         # no thread events are delivered
         assertEq((), (map $1, l, $1.event != "ACTIVITY") ?? ());
     }
+
+    activitySnapshots() {
+        # a subscription made while a transition is being published records the new state in its snapshot; the
+        # transition is still delivered to the other subscriptions, so their last state is the Program's
+        Program pgm = makeProgram("sub f() {}");
+        Queue q();
+        pgm.subscribeThreadEvents(q, <ProgramThreadEventOptions>{"events": PTE_ACTIVITY});
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            for (int i = 0; i < 5000; ++i) {
+                pgm.callFunction("f");
+            }
+        }();
+        int snapshots = 0;
+        while (done.getCount()) {
+            Queue sq();
+            hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(sq,
+                <ProgramThreadEventOptions>{"events": PTE_ACTIVITY});
+            pgm.unsubscribeThreadEvents(s.id);
+            ++snapshots;
+        }
+        assertGt(0, snapshots);
+        pgm.waitForThreads();
+        # the events received so far, then the ones still being published, until the Program's final state: a
+        # transition that a snapshot took from this subscription would never arrive
+        bool idle = False;
+        while (q.size()) {
+            idle = q.get().idle;
+        }
+        while (!idle) {
+            idle = next(q).idle;
+        }
+        assertTrue(idle);
+        # nothing follows the final state
+        assertEq(0, q.size());
+    }
+
+%ifdef QoreDebug
+    activityPublication() {
+        # a transition published after a subscription read the newer state still reaches the existing
+        # subscriptions; the race cannot be made to happen from Qore code, so the hub is tested directly
+        hash<auto> res = call_function("dbg_run_program_thread_hub_tests");
+        assertGt(0, res.test_count, "the C++ unit tests ran");
+        assertEq(0, res.fail_count, sprintf("all %d C++ unit test assertions passed: %y", res.test_count,
+            res.failures));
+    }
+%endif
 
     unsubscribe() {
         Program pgm = makeProgram();

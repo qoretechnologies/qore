@@ -194,6 +194,12 @@ embedder must still recheck before parsing.
   subscription records its interest before it reads the Program's state (`activity_gen` and `thread_count` under
   `plock`): a transition whose publisher read no interest was made under `plock` before the subscription read the
   state, so the snapshot's `idle` includes it.
+- A subscription can read a state whose transition has not been published yet. Its snapshot then has the newer
+  state, and it records that generation for itself (`Subscription::activity_gen`): when the transition is
+  published, it reaches the other subscriptions but not this one. Only publication advances the hub's generation;
+  otherwise a subscription made in that window, even a snapshot taken and removed at once, would keep the
+  transition from every existing subscription. `dbg_run_program_thread_hub_tests()` (DEBUG builds) tests this on
+  the hub directly, as the window cannot be hit reliably from Qore code.
 - A background thread leaves the Program before it publishes `FINISHED` (see "Finish"), so the `ACTIVITY` event of
   the Program becoming idle can come before the `FINISHED` of its last thread, whose `running` still counts it.
 - A call into the Program from outside (`Program::callFunction()`, for example) can make more than one transition:

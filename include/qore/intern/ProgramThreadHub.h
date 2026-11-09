@@ -223,6 +223,10 @@ private:
         int64 id;
         Queue* queue;
         int64 events;
+        //! the activity generation of the subscription's snapshot, then of the last ACTIVITY event delivered to it
+        /** A transition at or below it is not delivered: the subscription's snapshot already reflects it
+        */
+        uint64_t activity_gen;
     };
 
     typedef std::map<int64, ThreadRecord> thread_map_t;
@@ -254,7 +258,10 @@ private:
     //! the number of subscriptions that take ACTIVITY events, including ones being created
     std::atomic<int> activity_subs{0};
 
-    //! the activity generation of the last activity state recorded
+    //! the activity generation of the last transition published
+    /** Only publication advances it: a subscription that reads a newer state records it for itself
+        (Subscription::activity_gen), so that the transition is still published to the other subscriptions
+    */
     uint64_t activity_gen = 0;
 
     //! true if the Program was idle at activity_gen
@@ -270,8 +277,13 @@ private:
 
     //! assigns the next sequence number to the event and pushes a copy to each subscription that takes it
     /** Must be called with the lock held; the event's reference is not taken.
+
+        @param event_bit the event's bit
+        @param event the event
+        @param gen for ACTIVITY, the transition's generation: a subscription whose snapshot is at least as recent
+        is skipped
     */
-    DLLLOCAL void publishIntern(int64 event_bit, QoreHashNode* event);
+    DLLLOCAL void publishIntern(int64 event_bit, QoreHashNode* event, uint64_t gen = 0);
 
     //! publishes CLOSED and moves the subscriptions to the given list, whose queues must be released after the lock
     /** Must be called with the lock held.

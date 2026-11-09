@@ -183,12 +183,19 @@ QoreHashNode* ProgramThreadHub::makeThreadEvent(const char* event, const ThreadR
     return h;
 }
 
-void ProgramThreadHub::publishIntern(int64 event_bit, QoreHashNode* event) {
+void ProgramThreadHub::publishIntern(int64 event_bit, QoreHashNode* event, uint64_t gen) {
     qore_hash_private* ph = qore_hash_private::get(*event);
     ph->setKeyValueIntern("seq", ++seq);
     for (Subscription& sub : subs) {
         if (!(sub.events & event_bit)) {
             continue;
+        }
+        if (event_bit == QORE_PTE_ACTIVITY) {
+            // the subscription's snapshot already has this state
+            if (gen <= sub.activity_gen) {
+                continue;
+            }
+            sub.activity_gen = gen;
         }
         QoreHashNode* h = event->copy();
         qore_hash_private::get(*h)->setKeyValueIntern("subscription_id", sub.id);
@@ -323,7 +330,7 @@ void ProgramThreadHub::activityChanged(uint64_t gen, bool idle) {
     ReferenceHolder<QoreHashNode> event(nullptr);
     {
         AutoLocker al(lck);
-        // a later transition has already been published or recorded by a subscription
+        // a later transition has already been published: this one arrived out of order
         if (gen <= activity_gen) {
             return;
         }
@@ -338,7 +345,7 @@ void ProgramThreadHub::activityChanged(uint64_t gen, bool idle) {
         ph->setKeyValueIntern("event", new QoreStringNode("ACTIVITY"));
         ph->setKeyValueIntern("running", static_cast<int64>(threads.size()));
         ph->setKeyValueIntern("idle", idle);
-        publishIntern(QORE_PTE_ACTIVITY, *event);
+        publishIntern(QORE_PTE_ACTIVITY, *event, gen);
     }
 }
 
@@ -373,14 +380,18 @@ QoreHashNode* ProgramThreadHub::subscribe(Queue* queue, int64 events, uint64_t g
     {
         AutoLocker al(lck);
         if (!closed) {
-            // the activity state read by the caller is newer than the last one published
+            // the activity state read by the caller can be newer than the last one published, whose transition is
+            // then published later: the subscription records it, so that it is not delivered the transition that
+            // its snapshot already has, while the other subscriptions are
+            uint64_t sub_gen = activity_gen;
             if (gen > activity_gen) {
-                activity_gen = gen;
-                activity_idle = idle;
+                sub_gen = gen;
+            } else {
+                idle = activity_idle;
             }
 
             int64 id = program_thread_sub_id_counter.fetch_add(1, std::memory_order_relaxed) + 1;
-            subs.push_back(Subscription{id, queue, events});
+            subs.push_back(Subscription{id, queue, events, sub_gen});
 
             for (auto& i : threads) {
                 const ThreadRecord& rec = i.second;
@@ -400,7 +411,7 @@ QoreHashNode* ProgramThreadHub::subscribe(Queue* queue, int64 events, uint64_t g
             ph->setKeyValueIntern("id", id);
             ph->setKeyValueIntern("program_id", static_cast<int64>(pgm_id));
             ph->setKeyValueIntern("seq", seq);
-            ph->setKeyValueIntern("idle", activity_idle);
+            ph->setKeyValueIntern("idle", idle);
             ph->setKeyValueIntern("threads", l.release());
             return rv.release();
         }
