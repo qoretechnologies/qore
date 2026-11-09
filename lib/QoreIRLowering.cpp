@@ -2511,6 +2511,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             QoreValue list_expr = foreach_stmt->getList();
             std::vector<LazyPipelineStage> source_stages;
             QoreValue base_source;
+            markLazySelectorSource(list_expr);
             if (!collectLazyPipelineStages(list_expr, base_source, source_stages, error)) {
                 return false;
             }
@@ -10673,6 +10674,10 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
         std::vector<QoreIRValue> operands{lhs};
         std::vector<uint8_t> selector_kinds;
         selector_kinds.reserve(range_selectors.size());
+        // a list of selectors that a foreach statement or a functional or streaming operator iterates resolves the
+        // indices of its ranges one by one with negative offsets, as the AST interpreter iterates it
+        // (QoreFunctionalSquareBracketsComplexOperator); see qore_rt_list_index_selectors()
+        const uint8_t range_kind = op->hasNegativeOffsets() && lazy_selector_sources.count(op) ? 2 : 1;
         for (QoreValue selector : range_selectors) {
             if (auto* range = dynamic_cast<const QoreRangeOperatorNode*>(selector.getInternalNode())) {
                 QoreIRValue start = lowerExpression(range->getLeft(), error);
@@ -10683,7 +10688,7 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
                 if (!stop.isValid()) {
                     return QoreIRValue();
                 }
-                selector_kinds.push_back(1);
+                selector_kinds.push_back(range_kind);
                 operands.push_back(start);
                 operands.push_back(stop);
             } else {
@@ -10800,6 +10805,12 @@ QoreIRValue QoreIRLowering::lowerListSelectorSteps(const QoreSquareBracketsOpera
     return builder.createPhi(incoming)->result;
 }
 
+void QoreIRLowering::markLazySelectorSource(const QoreValue& source) {
+    if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(source.getInternalNode())) {
+        lazy_selector_sources.insert(op);
+    }
+}
+
 bool QoreIRLowering::getLazySelectorSource(const QoreValue& expr, LazySelectorSource& src) const {
     auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(expr.getInternalNode());
     // the AST interpreter iterates only a parse list of selectors with a range lazily (rhs_list_range)
@@ -10810,14 +10821,15 @@ bool QoreIRLowering::getLazySelectorSource(const QoreValue& expr, LazySelectorSo
     if (!collectListIndexRangeSelectors(op->getRight(), selectors)) {
         return false;
     }
-    // with inert selectors and without negative offsets, the list that the selectors select gives the values of the
-    // lazy iteration in the same order, and the list is iterated as it is
-    bool lazy = op->hasNegativeOffsets();
+    // with inert selectors, the order of the evaluation cannot be observed: the list that the selectors select is
+    // iterated as it is, and a range of it with negative offsets is resolved index by index (see
+    // markLazySelectorSource())
+    bool lazy = false;
     for (const QoreValue& selector : selectors) {
-        if (lazy) {
+        if (!qore_ir_selector_eval_is_inert(selector)) {
+            lazy = true;
             break;
         }
-        lazy = !qore_ir_selector_eval_is_inert(selector);
     }
     if (!lazy) {
         return false;
@@ -13442,9 +13454,13 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
             size_t slice_start = dynamic_operands.size() - count;
             for (size_t i = slice_start + 1; i < dynamic_operands.size(); ++i) {
                 const QoreValue& selector = dynamic_operands[i];
-                if (!dynamic_cast<const QoreRangeOperatorNode*>(selector.getInternalNode())
-                        && qore_ir_selector_eval_is_inert(selector)) {
-                    continue;
+                // an inert selector cannot raise, unless it is a range with a bound that can be NOTHING
+                if (qore_ir_selector_eval_is_inert(selector)) {
+                    auto* range = dynamic_cast<const QoreRangeOperatorNode*>(selector.getInternalNode());
+                    if (!range || (!rangeBoundMayBeNothing(range->getLeft())
+                            && !rangeBoundMayBeNothing(range->getRight()))) {
+                        continue;
+                    }
                 }
                 partial_blocks[i] = createBlock("remove.partial");
                 if (!partial_blocks[i]) {
@@ -15364,6 +15380,7 @@ QoreIRValue QoreIRLowering::lowerFoldlImpl(const QoreValue& expr, std::string& e
     {
         std::vector<LazyPipelineStage> source_stages;
         QoreValue base_source;
+        markLazySelectorSource(foldl->getIteratorExpr());
         if (!collectLazyPipelineStages(foldl->getIteratorExpr(), base_source, source_stages, error)) {
             return QoreIRValue();
         }
@@ -15735,6 +15752,7 @@ QoreIRValue QoreIRLowering::lowerMapImpl(const QoreValue& expr, std::string& err
     {
         std::vector<LazyPipelineStage> source_stages;
         QoreValue base_source;
+        markLazySelectorSource(map->getIteratorExpr());
         if (!collectLazyPipelineStages(map->getIteratorExpr(), base_source, source_stages, error)) {
             return QoreIRValue();
         }
@@ -15984,6 +16002,7 @@ QoreIRValue QoreIRLowering::lowerSelectImpl(const QoreValue& expr, std::string& 
     {
         std::vector<LazyPipelineStage> source_stages;
         QoreValue base_source;
+        markLazySelectorSource(select->getSourceExpression());
         if (!collectLazyPipelineStages(select->getSourceExpression(), base_source, source_stages, error)) {
             return QoreIRValue();
         }
@@ -16083,6 +16102,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectImpl(const QoreValue& expr, std::strin
     {
         std::vector<LazyPipelineStage> source_stages;
         QoreValue base_source;
+        markLazySelectorSource(map_select->getIteratorExpr());
         if (!collectLazyPipelineStages(map_select->getIteratorExpr(), base_source, source_stages, error)) {
             return QoreIRValue();
         }
@@ -20230,6 +20250,10 @@ bool QoreIRLowering::collectLazyPipelineStages(const QoreValue& source, QoreValu
     }
 
     std::reverse(source_stages.begin(), source_stages.end());
+    // the source of the innermost functional or streaming operator is iterated by it
+    if (!source_stages.empty()) {
+        markLazySelectorSource(base_source);
+    }
     return true;
 }
 
@@ -20793,6 +20817,7 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
     const QoreProgramLocation* loc = op->loc;
     std::vector<LazyPipelineStage> source_stages;
     QoreValue base_source;
+    markLazySelectorSource(op->getSource());
     if (!collectLazyPipelineStages(op->getSource(), base_source, source_stages, error)) {
         return QoreIRValue();
     }

@@ -267,6 +267,15 @@ public:
     //! observed: a selector with side effects, or a range with negative offsets, which the AST interpreter iterates
     //! index by index instead of as the range of the sequence that it selects
     bool getLazySelectorSource(const QoreValue& expr, LazySelectorSource& src) const;
+    //! The lists of selectors that a foreach statement or a functional or streaming operator iterates
+    /** The AST interpreter resolves the indices of a range of such a list one by one, so that with negative offsets
+        l[0, 1..-1] gives l[0], l[1] and l[-1] instead of the elements from l[1] to the end
+        (QoreFunctionalSquareBracketsComplexOperator); a list of inert selectors in this set is built with ranges of
+        kind 2 (see qore_rt_list_index_selectors())
+    */
+    std::unordered_set<const AbstractQoreNode*> lazy_selector_sources;
+    //! Records that \a source is iterated by a foreach statement or a functional or streaming operator
+    void markLazySelectorSource(const QoreValue& source);
     //! Returns true if \a expr is a list of selectors with ranges that is iterated lazily (see getLazySelectorSource())
     bool hasLazySelectorSource(const QoreValue& expr) const {
         LazySelectorSource src;

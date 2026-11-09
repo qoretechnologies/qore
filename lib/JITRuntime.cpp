@@ -2620,9 +2620,32 @@ static QoreValue qore_rt_finish_list_selectors(QoreValue rv, const QoreRtSelecto
     return rv;
 }
 
+//! Returns the indices that the iterator of the range operator gives from \a start to \a stop
+/** As QoreRangeOperatorNode::getFunctionalIteratorImpl() makes the iterator: a bound that is NOTHING raises
+    RANGE-ERROR, the start first, and the indices, from \a start to \a stop inclusive (the iterator adjusts the end
+    once whether or not PO_BROKEN_RANGE is set), are not resolved against a sequence, so a negative index stays
+    negative; the AST interpreter iterates a range of a list of selectors this way when a foreach statement or a
+    functional or streaming operator iterates the list of selectors (QoreFunctionalSquareBracketsComplexOperator)
+*/
+static QoreValue qore_rt_functional_range_indices(const QoreValue& start, const QoreValue& stop,
+        ExceptionSink* xsink) {
+    if (start.isNothing()) {
+        xsink->raiseException("RANGE-ERROR", QORE_RT_RANGE_START_NOTHING);
+        return QoreValue();
+    }
+    if (stop.isNothing()) {
+        xsink->raiseException("RANGE-ERROR", QORE_RT_RANGE_END_NOTHING);
+        return QoreValue();
+    }
+    return qore_rt_build_selector_range_values(start.getAsBigInt(), stop.getAsBigInt(), false, xsink);
+}
+
 // applies a list of selectors whose evaluation cannot be observed (see QoreIROpcode::ListSelectorStep); it applies them
 // as qore_rt_list_selector_step() applies one selector after the other, with a loop of its own for each type of
-// sequence, which keeps this common case as fast as it is
+// sequence, which keeps this common case as fast as it is.  A range of kind 2 belongs to a list of selectors that a
+// foreach statement or a functional or streaming operator iterates: for a list sequence, its indices are those of the
+// range operator, each resolved as an index of its own, as the AST interpreter iterates it
+// (QoreFunctionalSquareBracketsComplexOperator); for any other sequence it is a range of kind 1, as there
 extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8_t* kinds,
         int32_t count, const uint64_t* selector_bits, int32_t string_index_char, ExceptionSink* xsink) {
     QoreValue left = fromBits(left_bits);
@@ -2641,7 +2664,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, c
             if (is_range) {
                 QoreValue start = fromBits(selector_bits[selector_idx++]);
                 QoreValue stop = fromBits(selector_bits[selector_idx++]);
-                selector = qore_rt_build_selector_range(left, start, stop, negative_offsets, xsink);
+                selector = kinds[i] == 2
+                    ? qore_rt_functional_range_indices(start, stop, xsink)
+                    : qore_rt_build_selector_range(left, start, stop, negative_offsets, xsink);
             } else {
                 selector = fromBits(selector_bits[selector_idx++]).refSelf();
             }
@@ -14618,6 +14643,9 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         const LVPathStep& last_step, LVUnaryOp unary_op,
         ExceptionSink* xsink) {
     const bool is_delete = (unary_op == LVUnaryOp::Delete);
+    // a negative index counts from the end with negative offsets, as in the AST interpreter (do_list_value(),
+    // do_string_value() and do_binary_value() in Variable.cpp)
+    const bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
 
     // Helper: push an int operand OR iterate a list operand (range-produced)
     // pushing its entries onto the caller-provided ind-collector.  Matches
@@ -14652,6 +14680,9 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
             if (each_index(operand, [&](int64_t ind, bool is_range) -> bool {
                 QoreValue p{};
                 bool push;
+                if (negative_offsets && ind < 0) {
+                    ind += static_cast<int64_t>(l->size());
+                }
                 if (ind >= 0 && ind < (int64_t)l->size()) {
                     iset.insert(ind);
                     p = l->getReferencedEntry(ind);
@@ -14722,6 +14753,9 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
             bool had_error = false;
             if (each_index(operand, [&](int64_t ind, bool /*is_range*/) -> bool {
                 if (had_error) return true;
+                if (negative_offsets && ind < 0) {
+                    ind += static_cast<int64_t>(len);
+                }
                 if (ind >= 0 && ind < (int64_t)len) {
                     iset.insert(ind);
                     int cp = str->getUnicodePoint(ind, xsink);
@@ -14770,6 +14804,9 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         std::set<int64_t, std::greater<int64_t>> iset;
         for (const QoreValue& operand : last_step.slice_values) {
             if (each_index(operand, [&](int64_t ind, bool /*is_range*/) -> bool {
+                if (negative_offsets && ind < 0) {
+                    ind += static_cast<int64_t>(bin->size());
+                }
                 if (ind >= 0 && ind < (int64_t)bin->size()) {
                     iset.insert(ind);
                     bin->substr(**v, ind, 1);

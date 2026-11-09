@@ -343,6 +343,72 @@ auto sub foreach_map_pipeline() {
     }
 }
 
+# --- inert selectors: constants and int locals, whose evaluation cannot be observed; with %negative-offsets the
+# ranges of a list of selectors that is iterated give their indices one by one ---
+
+auto sub inert_foreach() {
+    int z = 0;
+    int e = -1;
+    list<auto> rv = ();
+    foreach int x in (l[z, 2..e]) {
+        rv += x;
+    }
+    foreach int x in (l[0, 4..-2]) {
+        rv += x;
+    }
+    return rv;
+}
+
+auto sub inert_map() {
+    int z = 0;
+    int e = -1;
+    return (map $1 * 2, l[z, 2..e]) + (map $1, l[1, -1..-3]);
+}
+
+auto sub inert_select() {
+    int z = 0;
+    int e = -1;
+    return select l[z, 2..e], $1 % 2;
+}
+
+auto sub inert_foldl() {
+    int z = 0;
+    int e = -1;
+    return foldl $1 + $2, l[z, 2..e];
+}
+
+auto sub inert_take() {
+    int z = 0;
+    int e = -1;
+    return take 5, l[z, 2..e];
+}
+
+auto sub inert_pipeline() {
+    int z = 0;
+    int e = -1;
+    list<auto> rv = ();
+    foreach auto x in (map $1 + 1, l[z, 2..e]) {
+        rv += x;
+    }
+    return rv;
+}
+
+auto sub inert_value() {
+    int z = 0;
+    int e = -1;
+    # a list of selectors that is not iterated gives the elements of its ranges
+    list<int> v = l[z, 2..e];
+    return (v, l[0, 4..-2], s[z, 2..e], b[z, 2..e]);
+}
+
+auto sub inert_remove() {
+    list<int> m = (0, 1, 2, 3, 4);
+    int z = 0;
+    int e = -1;
+    auto r = remove m[z, 2..e];
+    return (r, m);
+}
+
 # --- remove and delete with a raising later selector ---
 
 auto sub remove_partial() {
@@ -542,6 +608,14 @@ sub main() {
         t("any list", \any_list());
         t("count list", \count_list());
         t("foreach map pipeline", \foreach_map_pipeline());
+        t("inert foreach", \inert_foreach());
+        t("inert map", \inert_map());
+        t("inert select", \inert_select());
+        t("inert foldl", \inert_foldl());
+        t("inert take", \inert_take());
+        t("inert pipeline", \inert_pipeline());
+        t("inert value", \inert_value());
+        t("inert remove", \inert_remove());
         t("remove partial", \remove_partial());
         t("remove partial two", \remove_partial_two());
         t("remove partial range", \remove_partial_range());
