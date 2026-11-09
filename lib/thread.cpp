@@ -409,7 +409,9 @@ namespace {
     read the value that the deleted Program's code had stored in the thread, with its type: values crossed Programs
     and sandboxes in the threads of a shared pool (see design/program-teardown-lifetime.md).
 
-    The lock is a leaf lock: no user code runs and no other lock is taken under it.
+    The lock is a leaf lock: no user code runs and no other lock is taken under it; a value is moved out of an entry
+    as it is under the lock (QoreLValue::moveValueTo()) and released after it has been released, as the release of a
+    value can take other locks (an object's lock, to remove its real reference mark) and wait.
 */
 struct ThreadLocalVarRegistry {
     //! a thread's value of a variable
@@ -2144,25 +2146,34 @@ void release_thread_local_var(uint64_t serial, ExceptionSink* xsink) {
     if (!serial) {
         return;
     }
-    std::vector<QoreValue> values;
+    // the values as they were in the entries of the threads; released outside the registry's lock
+    std::unique_ptr<QoreLValue<qore_gvar_ref_u>[]> values;
+    size_t count = 0;
     {
         AutoLocker al(tlv_registry.lck);
         auto i = tlv_registry.holders.find(serial);
         if (i == tlv_registry.holders.end()) {
             return;
         }
-        values.reserve(i->second.size());
-        for (ThreadLocalVarRegistry::Holder& h : i->second) {
-            // no thread uses a deleted variable: its value is taken out of the thread's entry, which its thread erases
-            values.push_back(h.lvar->removeValue(true));
+        std::vector<ThreadLocalVarRegistry::Holder>& holders = i->second;
+        // the memory is allocated before any entry changes, so that the rest cannot fail
+        values.reset(new QoreLValue<qore_gvar_ref_u>[holders.size()]);
+        for (ThreadLocalVarRegistry::Holder& h : holders) {
+            h.td->tlv_deleted.reserve(h.td->tlv_deleted.size() + 1);
+        }
+        for (ThreadLocalVarRegistry::Holder& h : holders) {
+            // no thread uses a deleted variable: its value is taken out of the thread's entry, which its thread
+            // erases; the value is moved as it is, as releasing it can take other locks (the lock of an object whose
+            // real reference mark is removed) and wait
+            h.lvar->moveValueTo(values[count++]);
             h.td->tlv_deleted.push_back(serial);
             h.td->tlv_deleted_pending.store(true, std::memory_order_release);
         }
         tlv_registry.holders.erase(i);
     }
     // the values are released outside the lock: their destructors can run code
-    for (QoreValue& v : values) {
-        v.discard(xsink);
+    for (size_t j = 0; j < count; ++j) {
+        values[j].removeValue(true).discard(xsink);
     }
 }
 
