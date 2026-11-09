@@ -34,12 +34,23 @@ public class ConvertApiMergePdfRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Bookmarks Table of Contents",
                 "short_desc": "Add a bookmark for each merged file",
-                "desc": "Adds a top-level bookmark for each merged file:\n- `disabled`: no bookmarks (the "
-                    "default)\n- `filename`: the file name\n- `title`: the PDF title from the metadata",
+                "desc": "Adds a top-level bookmark for each merged file",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "disabled", "display_name": "Disabled"},
-                    <AllowedValueInfo>{"value": "filename", "display_name": "File Name"},
-                    <AllowedValueInfo>{"value": "title", "display_name": "Title"},
+                    <AllowedValueInfo>{
+                        "value": "disabled",
+                        "display_name": "Disabled",
+                        "desc": "No bookmarks (the default)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "filename",
+                        "display_name": "File Name",
+                        "desc": "Bookmarks named with the file names",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "title",
+                        "display_name": "Title",
+                        "desc": "Bookmarks named with the PDF titles from the metadata",
+                    },
                 ),
             },
             "RemoveDuplicateFonts": {
@@ -73,6 +84,9 @@ public class ConvertApiMergePdfDataProvider inherits ConvertApiConversionDataPro
 
         #! Constructor options
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! The request type
+        static ConvertApiMergePdfRequestDataType RequestType();
     }
 
     #! Creates the object with a REST client
@@ -91,7 +105,7 @@ public class ConvertApiMergePdfDataProvider inherits ConvertApiConversionDataPro
 
     #! Returns the request type
     private *AbstractDataProviderType getRequestTypeImpl() {
-        return new ConvertApiMergePdfRequestDataType();
+        return RequestType;
     }
 
     #! Returns the source and destination formats

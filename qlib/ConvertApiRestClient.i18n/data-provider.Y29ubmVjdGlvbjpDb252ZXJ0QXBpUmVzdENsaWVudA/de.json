@@ -34,6 +34,74 @@
         "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
           "source": "The ConvertAPI API token used for authentication; it is sent as a bearer token.\n\nCreate or copy an API token on the [Authentication page](https://www.convertapi.com/a/authentication) of your ConvertAPI account.",
           "message": "Das ConvertAPI API-Token zur Authentifizierung; es wird als Bearer-Token gesendet.\n\nErstellen oder kopieren Sie ein API-Token auf der [Authentication-Seite](https://www.convertapi.com/a/authentication) Ihres ConvertAPI-Kontos."
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Region"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "The ConvertAPI region that processes the requests",
+          "message": "Die ConvertAPI-Region, die die Anfragen verarbeitet"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "The ConvertAPI region whose servers process the requests; the connection URL is derived from it.",
+          "message": "Die ConvertAPI-Region, deren Server die Anfragen verarbeiten; die Verbindungs-URL wird daraus abgeleitet."
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmdsb2JhbA.display_name": {
+          "source": "Global",
+          "message": "Global"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmdsb2JhbA.desc": {
+          "source": "The global API endpoint https://v2.convertapi.com (the default)",
+          "message": "Der globale API-Endpunkt https://v2.convertapi.com (der Standardwert)"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "European Union",
+          "message": "Europäische Union"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "The API endpoint https://eu-v2.convertapi.com",
+          "message": "Der API-Endpunkt https://eu-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVr.display_name": {
+          "source": "United Kingdom",
+          "message": "Vereinigtes Königreich"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVr.desc": {
+          "source": "The API endpoint https://uk-v2.convertapi.com",
+          "message": "Der API-Endpunkt https://uk-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "United States",
+          "message": "Vereinigte Staaten"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "The API endpoint https://us-v2.convertapi.com",
+          "message": "Der API-Endpunkt https://us-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmNh.display_name": {
+          "source": "Canada",
+          "message": "Kanada"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmNh.desc": {
+          "source": "The API endpoint https://ca-v2.convertapi.com",
+          "message": "Der API-Endpunkt https://ca-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmFz.display_name": {
+          "source": "Asia",
+          "message": "Asien"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmFz.desc": {
+          "source": "The API endpoint https://as-v2.convertapi.com",
+          "message": "Der API-Endpunkt https://as-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmF1.display_name": {
+          "source": "Australia",
+          "message": "Australien"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmF1.desc": {
+          "source": "The API endpoint https://au-v2.convertapi.com",
+          "message": "Der API-Endpunkt https://au-v2.convertapi.com"
         }
       }
     }

@@ -34,6 +34,74 @@
         "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
           "source": "The ConvertAPI API token used for authentication; it is sent as a bearer token.\n\nCreate or copy an API token on the [Authentication page](https://www.convertapi.com/a/authentication) of your ConvertAPI account.",
           "message": "用於驗證的 ConvertAPI API 金鑰，會以 Bearer 權杖傳送。\n\n請在 ConvertAPI 帳戶的 [Authentication 頁面](https://www.convertapi.com/a/authentication)建立或複製 API 金鑰。"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "區域"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "The ConvertAPI region that processes the requests",
+          "message": "處理請求的 ConvertAPI 區域"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "The ConvertAPI region whose servers process the requests; the connection URL is derived from it.",
+          "message": "其伺服器處理請求的 ConvertAPI 區域；連線 URL 會由此衍生。"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmdsb2JhbA.display_name": {
+          "source": "Global",
+          "message": "全域"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmdsb2JhbA.desc": {
+          "source": "The global API endpoint https://v2.convertapi.com (the default)",
+          "message": "全球 API 端點 https://v2.convertapi.com（預設）"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "European Union",
+          "message": "歐盟"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "The API endpoint https://eu-v2.convertapi.com",
+          "message": "API 端點 https://eu-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVr.display_name": {
+          "source": "United Kingdom",
+          "message": "英國"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVr.desc": {
+          "source": "The API endpoint https://uk-v2.convertapi.com",
+          "message": "API 端點 https://uk-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "United States",
+          "message": "美國"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "The API endpoint https://us-v2.convertapi.com",
+          "message": "API 端點 https://us-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmNh.display_name": {
+          "source": "Canada",
+          "message": "加拿大"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmNh.desc": {
+          "source": "The API endpoint https://ca-v2.convertapi.com",
+          "message": "API 端點 https://ca-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmFz.display_name": {
+          "source": "Asia",
+          "message": "亞洲"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmFz.desc": {
+          "source": "The API endpoint https://as-v2.convertapi.com",
+          "message": "API 端點 https://as-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmF1.display_name": {
+          "source": "Australia",
+          "message": "澳洲"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmF1.desc": {
+          "source": "The API endpoint https://au-v2.convertapi.com",
+          "message": "API 端點 https://au-v2.convertapi.com"
         }
       }
     }

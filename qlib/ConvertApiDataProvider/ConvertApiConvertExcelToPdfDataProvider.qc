@@ -53,9 +53,13 @@ public class ConvertApiConvertExcelToPdfRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Page Orientation",
                 "short_desc": "The page orientation",
-                "desc": "The page orientation; `default` uses the page setup of each worksheet",
+                "desc": "The page orientation of the PDF",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "default", "display_name": "Default"},
+                    <AllowedValueInfo>{
+                        "value": "default",
+                        "display_name": "Default",
+                        "desc": "The page setup of each worksheet (the default)",
+                    },
                     <AllowedValueInfo>{"value": "portrait", "display_name": "Portrait"},
                     <AllowedValueInfo>{"value": "landscape", "display_name": "Landscape"},
                 ),
@@ -105,6 +109,9 @@ public class ConvertApiConvertExcelToPdfDataProvider inherits ConvertApiConversi
 
         #! Constructor options
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! The request type
+        static ConvertApiConvertExcelToPdfRequestDataType RequestType();
     }
 
     #! Creates the object with a REST client
@@ -123,7 +130,7 @@ public class ConvertApiConvertExcelToPdfDataProvider inherits ConvertApiConversi
 
     #! Returns the request type
     private *AbstractDataProviderType getRequestTypeImpl() {
-        return new ConvertApiConvertExcelToPdfRequestDataType();
+        return RequestType;
     }
 
     #! Returns the source and destination formats

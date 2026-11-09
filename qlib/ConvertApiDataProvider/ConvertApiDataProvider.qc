@@ -45,8 +45,8 @@ public class ConvertApiDataProvider inherits ConvertApiDataProviderBase {
         #! Child provider map
         const ChildMap = {
             "compress-pdf": Class::forName("ConvertApiCompressPdfDataProvider"),
-            "convert": Class::forName("ConvertApiConvertDataProvider"),
             "convert-excel-to-pdf": Class::forName("ConvertApiConvertExcelToPdfDataProvider"),
+            "convert-file": Class::forName("ConvertApiConvertDataProvider"),
             "convert-html-to-pdf": Class::forName("ConvertApiConvertHtmlToPdfDataProvider"),
             "convert-pdf-to-image": Class::forName("ConvertApiConvertPdfToImageDataProvider"),
             "convert-powerpoint-to-pdf": Class::forName("ConvertApiConvertPowerPointToPdfDataProvider"),

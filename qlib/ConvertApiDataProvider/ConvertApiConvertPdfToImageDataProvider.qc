@@ -31,14 +31,15 @@ public class ConvertApiConvertPdfToImageRequestDataType inherits HashDataType {
         #! Field definitions
         const Fields = ConvertApiSingleSourceFields + {
             "format": {
-                "type": StringOrNothingType,
+                "type": StringType,
+                "required": True,
                 "display_name": "Image Format",
                 "short_desc": "The image format",
-                "desc": "The image format of the output files; one image is created for each page",
+                "desc": "The image format of the output files",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "jpg", "display_name": "JPG"},
                     <AllowedValueInfo>{"value": "png", "display_name": "PNG"},
-                    <AllowedValueInfo>{"value": "tiff", "display_name": "TIFF"},
+                    <AllowedValueInfo>{"value": "tiff", "display_name": "TIFF", "desc": "One multi-page TIFF file for all the pages"},
                     <AllowedValueInfo>{"value": "webp", "display_name": "WebP"},
                 ),
                 "default_value": "jpg",
@@ -90,6 +91,9 @@ public class ConvertApiConvertPdfToImageDataProvider inherits ConvertApiConversi
 
         #! Constructor options
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! The request type
+        static ConvertApiConvertPdfToImageRequestDataType RequestType();
     }
 
     #! Creates the object with a REST client
@@ -108,7 +112,7 @@ public class ConvertApiConvertPdfToImageDataProvider inherits ConvertApiConversi
 
     #! Returns the request type
     private *AbstractDataProviderType getRequestTypeImpl() {
-        return new ConvertApiConvertPdfToImageRequestDataType();
+        return RequestType;
     }
 
     #! Returns the source and destination formats

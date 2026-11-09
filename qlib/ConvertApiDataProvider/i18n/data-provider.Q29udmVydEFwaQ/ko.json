@@ -12,8 +12,8 @@
           "message": "ConvertAPI 파일 변환 및 PDF 처리 플랫폼"
         },
         "app.Q29udmVydEFwaQ.desc": {
-          "source": "[ConvertAPI](https://www.convertapi.com) converts files between more than 300 format pairs and processes PDF files.\n\n- Office documents, spreadsheets and presentations to and from PDF\n- Web pages and HTML to PDF\n- PDF to images, office formats, text and PDF/A\n- Images, e-books, CAD drawings, e-mail messages and archives\n- PDF tools: merge, split, compress, protect, OCR, watermark and more\n\nThe `convert` action runs any converter by its source and destination formats; the other actions are shortcuts for common conversions.",
-          "message": "[ConvertAPI](https://www.convertapi.com)는 300개 이상의 형식 쌍 간에 파일을 변환하고 PDF 파일을 처리합니다.\n\n- Office 문서, 스프레드시트, 프레젠테이션과 PDF 간 변환\n- 웹 페이지 및 HTML을 PDF로 변환\n- PDF를 이미지, Office 형식, 텍스트, PDF/A로 변환\n- 이미지, 전자책, CAD 도면, 이메일 메시지, 압축 파일\n- PDF 도구: 병합, 분할, 압축, 보호, OCR, 워터마크 등\n\n`convert` 작업은 원본 형식과 대상 형식으로 지정한 모든 변환기를 실행하며, 나머지 작업은 자주 쓰는 변환을 위한 바로 가기입니다."
+          "source": "[ConvertAPI](https://www.convertapi.com) converts files between more than 300 format pairs and processes PDF files.\n\n**Conversions**:\n- Office documents, spreadsheets and presentations to and from PDF\n- Web pages and HTML to PDF\n- PDF to images, office formats, text and PDF/A\n- Images, e-books, CAD drawings, e-mail messages and archives\n- PDF tools: merge, split, compress, protect, OCR, watermark and more\n\n**Actions**: `convert-file` runs any converter by its source and destination formats; the other actions are shortcuts for common conversions.",
+          "message": "[ConvertAPI](https://www.convertapi.com)는 300개 이상의 형식 쌍 간에 파일을 변환하고 PDF 파일을 처리합니다.\n\n**변환**:\n- Office 문서, 스프레드시트, 프레젠테이션과 PDF 간 변환\n- 웹 페이지 및 HTML을 PDF로 변환\n- PDF를 이미지, Office 형식, 텍스트, PDF/A로 변환\n- 이미지, 전자책, CAD 도면, 이메일 메시지, 압축 파일\n- PDF 도구: 병합, 분할, 압축, 보호, OCR, 워터마크 등\n\n**작업**: `convert-file` 작업은 원본 형식과 대상 형식으로 지정한 모든 변환기를 실행하며, 나머지 작업은 자주 쓰는 변환을 위한 바로 가기입니다."
         },
         "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -339,377 +339,377 @@
           "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.display_name": {
           "source": "Convert a File",
           "message": "파일 변환"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.short_desc": {
           "source": "Convert files with any ConvertAPI converter",
           "message": "모든 ConvertAPI 변환기로 파일 변환"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.desc": {
-          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\nSelect the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n- Give the input as a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`\n- Give other converter parameters by their ConvertAPI names in `parameters`; the `get-converter-info` action lists them\n- The output files are returned as `FileData`, or as download URLs if `store_file` is `True`",
-          "message": "원본 형식과 대상 형식으로 지정한 ConvertAPI 변환기로 파일을 변환합니다.\n\n먼저 `from` 형식을 선택하세요. 그러면 `to` 목록에 해당 원본 형식의 변환기가 지원하는 대상 형식이 표시됩니다.\n\n- 입력은 `file` 또는 원본 `url`로 지정합니다. 여러 파일을 받는 변환기(예: `pdf`에서 `merge`)는 `files` 또는 `urls`를 받습니다\n- 그 밖의 변환기 매개변수는 ConvertAPI 이름으로 `parameters`에 지정합니다. `get-converter-info` 작업이 매개변수 목록을 보여 줍니다\n- 출력 파일은 `FileData`로 반환되며, `store_file`이 `True`이면 다운로드 URL로 반환됩니다"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.desc": {
+          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\n**Formats**: select the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n**Input**: a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`, and a few converters take their input in `parameters` instead, for example `data` to `qrcode` with `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parameters**: other converter parameters go in `parameters` by their ConvertAPI names; the `get-converter-info` action lists them.\n\n**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is `True`.",
+          "message": "원본 형식과 대상 형식으로 지정한 ConvertAPI 변환기로 파일을 변환합니다.\n\n**형식**: 먼저 `from` 형식을 선택하세요. 그러면 `to` 목록에 해당 원본 형식의 변환기가 지원하는 대상 형식이 표시됩니다.\n\n**입력**: `file` 또는 원본 `url`입니다. 여러 파일을 받는 변환기(예: `pdf`에서 `merge`)는 `files` 또는 `urls`를 받으며, 일부 변환기는 대신 `parameters`로 입력을 받습니다. 예를 들어 `qrcode`의 `data`는 `{\"Data\": \"https://www.convertapi.com\"}`처럼 지정합니다.\n\n**매개변수**: 그 밖의 변환기 매개변수는 ConvertAPI 이름으로 `parameters`에 지정합니다. `get-converter-info` 작업이 매개변수 목록을 보여 줍니다.\n\n**출력**: 출력 파일은 `FileData`로 반환되며, `store_file`이 `True`이면 다운로드 URL로 반환됩니다."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.display_name": {
           "source": "Source Format",
           "message": "원본 형식"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.short_desc": {
           "source": "The source format of the converter",
           "message": "변환기의 원본 형식"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.desc": {
-          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`",
-          "message": "변환기의 원본 형식입니다. 예: `docx`, `html`, `pdf`, `jpg`, `eml`"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.desc": {
+          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`.\n\nThe list of converters is in the [ConvertAPI documentation](https://www.convertapi.com/doc).",
+          "message": "변환기의 원본 형식입니다. 예: `docx`, `html`, `pdf`, `jpg`, `eml`.\n\n변환기 목록은 [ConvertAPI 문서](https://www.convertapi.com/doc)에서 확인할 수 있습니다."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dG8.display_name": {
           "source": "Destination Format",
           "message": "대상 형식"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dG8.short_desc": {
           "source": "The destination format of the converter",
           "message": "변환기의 대상 형식"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.desc": {
-          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`; PDF tools name the operation, for example `merge`, `split` or `compress`",
-          "message": "변환기의 대상 형식입니다. 예: `pdf`, `jpg`, `txt`. PDF 도구에서는 작업 이름을 지정합니다. 예: `merge`, `split`, `compress`"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dG8.desc": {
+          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`.\n\nSome converters are PDF tools, whose destination format names the operation, for example `pdf` to `merge`, `split`, `compress`, `protect`, `ocr` or `pdfa`.",
+          "message": "변환기의 대상 형식입니다. 예: `pdf`, `jpg`, `txt`.\n\n일부 변환기는 PDF 도구이며, 이 경우 대상 형식이 작업을 나타냅니다. 예: `pdf`에서 `merge`, `split`, `compress`, `protect`, `ocr`, `pdfa`로."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.display_name": {
           "source": "File",
           "message": "파일"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.short_desc": {
           "source": "The file to convert",
           "message": "변환할 파일"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.desc": {
           "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
           "message": "변환할 파일입니다. 이 파일 또는 원본 URL 중 하나를 제공하세요.\n\n파일은 요청에 담아 ConvertAPI로 전송되며, 파일 이름 확장자는 변환기의 원본 형식과 일치해야 합니다."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.Y29udGVudA.display_name": {
           "source": "File Data",
           "message": "파일 데이터"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
           "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
           "message": "Base64 인코딩된 파일 데이터 또는 Base64로 인코딩할 원시 데이터"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.Y29udGVudA.desc": {
           "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
           "message": "Base64 인코딩된 파일 데이터 또는 Base64로 인코딩할 원시 데이터"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
           "source": "MIME Type",
           "message": "MIME 유형"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
           "source": "The MIME type string for the file",
           "message": "파일에 대한 MIME 유형 문자열"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
           "source": "The MIME type string for the file",
           "message": "파일에 대한 MIME 유형 문자열"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Autodetect",
           "message": "자동 감지"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Autodetect from the file name; valid only on input",
           "message": "파일 이름에서 자동 감지; 입력 시에만 유효"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
           "source": "Autodetect from the file name; valid only on input",
           "message": "파일 이름에서 자동 감지; 입력 시에만 유효"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
           "source": "text/plain",
           "message": "text/plain"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
           "source": "Plain text",
           "message": "일반 텍스트"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
           "source": "Plain text",
           "message": "일반 텍스트"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
           "source": "text/html",
           "message": "text/html"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
           "source": "HTML text",
           "message": "HTML 텍스트"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
           "source": "HTML text",
           "message": "HTML 텍스트"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
           "source": "application/pdf",
           "message": "application/pdf"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
           "source": "PDF file",
           "message": "PDF 파일"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
           "source": "PDF file",
           "message": "PDF 파일"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
           "source": "MS Word docx document",
           "message": "MS Word docx 문서"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
           "source": "MS Word `docx` document",
           "message": "MS Word `docx` 문서"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
           "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
           "source": "MS PowerPoint pptx document",
           "message": "MS PowerPoint pptx 문서"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
           "source": "MS PowerPoint `pptx` document",
           "message": "MS PowerPoint `pptx` 문서"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
           "source": "MS Excel xlsx document",
           "message": "MS Excel xlsx 문서"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
           "source": "MS Excel `xlsx` document",
           "message": "MS Excel `xlsx` 문서"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bmFtZQ.display_name": {
           "source": "Filename",
           "message": "파일 이름"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bmFtZQ.short_desc": {
           "source": "The filename",
           "message": "파일 이름"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bmFtZQ.desc": {
           "source": "The filename",
           "message": "파일 이름"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.display_name": {
-          "source": "Converter Parameters",
-          "message": "변환기 매개변수"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.short_desc": {
-          "source": "Other converter parameters by their ConvertAPI names",
-          "message": "ConvertAPI 이름으로 지정하는 기타 변환기 매개변수"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.desc": {
-          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
-          "message": "ConvertAPI 매개변수 이름과 값으로 이루어진 해시 형태의 기타 변환기 매개변수입니다.\n\n각 변환기의 매개변수는 [ConvertAPI 문서](https://docs.convertapi.com)에 나와 있으며 `get-converter-info` 작업으로도 확인할 수 있습니다.\n\n- 스칼라 값은 그대로 전송됩니다\n- 파일 해시(`name` 및 `content`)는 파일로 전송됩니다\n- 파일 해시 목록은 파일 목록으로 전송됩니다\n\n**예**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJs.display_name": {
           "source": "Source URL",
           "message": "원본 URL"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJs.short_desc": {
           "source": "URL of the file to convert",
           "message": "변환할 파일의 URL"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJs.desc": {
           "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
           "message": "변환할 파일의 URL입니다. ConvertAPI가 이 URL에서 파일을 다운로드합니다.\n\n**예**: `https://cdn.convertapi.com/public/files/demo.docx`"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.display_name": {
           "source": "Files",
           "message": "파일"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.short_desc": {
           "source": "The files to convert for converters that take several files",
           "message": "여러 파일을 받는 변환기에 사용할 변환 대상 파일"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.desc": {
           "source": "The files to convert for converters that take several input files, such as `pdf` to `merge`, `images` to `pdf` or `any` to `zip`.\n\nThey are sent as the `Files` parameter, together with any files given in `urls`.",
           "message": "`pdf`에서 `merge`, `images`에서 `pdf`, `any`에서 `zip`처럼 여러 입력 파일을 받는 변환기에 사용할 변환 대상 파일입니다.\n\n`urls`에 지정한 파일과 함께 `Files` 매개변수로 전송됩니다."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.Y29udGVudA.display_name": {
           "source": "File Data",
           "message": "파일 데이터"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.Y29udGVudA.short_desc": {
           "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
           "message": "Base64 인코딩된 파일 데이터 또는 Base64로 인코딩할 원시 데이터"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.Y29udGVudA.desc": {
           "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
           "message": "Base64 인코딩된 파일 데이터 또는 Base64로 인코딩할 원시 데이터"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.display_name": {
           "source": "MIME Type",
           "message": "MIME 유형"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.short_desc": {
           "source": "The MIME type string for the file",
           "message": "파일에 대한 MIME 유형 문자열"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.desc": {
           "source": "The MIME type string for the file",
           "message": "파일에 대한 MIME 유형 문자열"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Autodetect",
           "message": "자동 감지"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Autodetect from the file name; valid only on input",
           "message": "파일 이름에서 자동 감지; 입력 시에만 유효"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
           "source": "Autodetect from the file name; valid only on input",
           "message": "파일 이름에서 자동 감지; 입력 시에만 유효"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
           "source": "text/plain",
           "message": "text/plain"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
           "source": "Plain text",
           "message": "일반 텍스트"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
           "source": "Plain text",
           "message": "일반 텍스트"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
           "source": "text/html",
           "message": "text/html"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
           "source": "HTML text",
           "message": "HTML 텍스트"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
           "source": "HTML text",
           "message": "HTML 텍스트"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
           "source": "application/pdf",
           "message": "application/pdf"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
           "source": "PDF file",
           "message": "PDF 파일"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
           "source": "PDF file",
           "message": "PDF 파일"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
           "source": "MS Word docx document",
           "message": "MS Word docx 문서"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
           "source": "MS Word `docx` document",
           "message": "MS Word `docx` 문서"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
           "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
           "source": "MS PowerPoint pptx document",
           "message": "MS PowerPoint pptx 문서"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
           "source": "MS PowerPoint `pptx` document",
           "message": "MS PowerPoint `pptx` 문서"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
           "source": "MS Excel xlsx document",
           "message": "MS Excel xlsx 문서"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
           "source": "MS Excel `xlsx` document",
           "message": "MS Excel `xlsx` 문서"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bmFtZQ.display_name": {
           "source": "Filename",
           "message": "파일 이름"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bmFtZQ.short_desc": {
           "source": "The filename",
           "message": "파일 이름"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bmFtZQ.desc": {
           "source": "The filename",
           "message": "파일 이름"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJscw.display_name": {
           "source": "Source URLs",
           "message": "소스 URL"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJscw.short_desc": {
           "source": "URLs of the files for converters that take several files",
           "message": "여러 파일을 받는 변환기에 사용할 파일 URL"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJscw.desc": {
           "source": "The URLs of the files to convert for converters that take several input files, such as `pdf` to `merge`.\n\nThey are sent as the `Files` parameter, together with any files given in `files`.",
           "message": "`pdf`에서 `merge`처럼 여러 입력 파일을 받는 변환기에 사용할 변환 대상 파일의 URL입니다.\n\n`files`에 지정한 파일과 함께 `Files` 매개변수로 전송됩니다."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "변환기 매개변수"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "ConvertAPI 이름으로 지정하는 기타 변환기 매개변수"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "ConvertAPI 매개변수 이름과 값으로 이루어진 해시 형태의 기타 변환기 매개변수입니다.\n\n각 변환기의 매개변수는 [ConvertAPI 문서](https://docs.convertapi.com)에 나와 있으며 `get-converter-info` 작업으로도 확인할 수 있습니다.\n\n- 스칼라 값은 그대로 전송됩니다\n- 파일 해시(`name` 및 `content`)는 파일로 전송됩니다\n- 파일 해시 목록은 파일 목록으로 전송됩니다\n\n**예**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",
           "message": "파일 저장"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.c3RvcmVfZmlsZQ.short_desc": {
           "source": "Return a download URL instead of the file data",
           "message": "파일 데이터 대신 다운로드 URL 반환"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.c3RvcmVfZmlsZQ.desc": {
           "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
           "message": "ConvertAPI가 출력 파일을 저장하고 각 파일의 다운로드 `Url`을 반환하게 하려면 `True`(으)로 설정하세요. 파일은 암호화된 임시 스토리지에 최대 **3시간** 동안 보관됩니다.\n\n`False`(기본값)이면 출력 파일은 응답에 `FileData`로 반환되며 아무것도 저장되지 않습니다."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZV9uYW1l.display_name": {
           "source": "Output File Name",
           "message": "출력 파일 이름"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZV9uYW1l.short_desc": {
           "source": "The name of the output file without the extension",
           "message": "확장자를 제외한 출력 파일의 이름"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZV9uYW1l.desc": {
           "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
           "message": "출력 파일의 이름입니다. ConvertAPI가 대상 형식의 확장자를 덧붙이며, 변환 결과 파일이 여러 개이면 인덱스도 덧붙입니다.\n\n**예**: `report`는 `report.pdf` 또는 `report_0.jpg`, `report_1.jpg`, ...가 됩니다"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dGltZW91dA.display_name": {
           "source": "Timeout",
           "message": "제한 시간"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dGltZW91dA.short_desc": {
           "source": "The conversion timeout in seconds",
           "message": "변환 제한 시간(초)"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "변환 제한 시간(초)이며, `10`에서 `1200` 사이입니다. 기본값은 `900`입니다."
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "변환 제한 시간(초)으로, `10`에서 `1200`까지입니다. 설정하지 않으면 변환기의 기본값이 적용됩니다. 예를 들어 Office 문서는 `900`, 웹 페이지는 `120`입니다."
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.display_name": {
           "source": "Get Converter Information",
@@ -720,8 +720,8 @@
           "message": "변환기의 설명과 매개변수 가져오기"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.desc": {
-          "source": "Returns the description and the parameters of a ConvertAPI converter, given by its source and destination formats.\n\nUse it to find the parameter names and allowed values for the `parameters` field of the `convert` action.",
-          "message": "원본 형식과 대상 형식으로 지정한 ConvertAPI 변환기의 설명과 매개변수를 반환합니다.\n\n`convert` 작업의 `parameters` 필드에 사용할 매개변수 이름과 허용되는 값을 확인할 때 사용하세요."
+          "source": "Returns the description and the parameters of a ConvertAPI converter, given by its source and destination formats.\n\nUse it to find the parameter names and allowed values for the `parameters` field of the `convert-file` action.",
+          "message": "원본 형식과 대상 형식으로 지정한 ConvertAPI 변환기의 설명과 매개변수를 반환합니다.\n\n`convert-file` 작업의 `parameters` 필드에 사용할 매개변수 이름과 허용되는 값을 확인할 때 사용하세요."
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.ZnJvbQ.display_name": {
           "source": "Source Format",
@@ -732,8 +732,8 @@
           "message": "변환기의 원본 형식"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.ZnJvbQ.desc": {
-          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`",
-          "message": "변환기의 원본 형식입니다. 예: `docx`, `html`, `pdf`, `jpg`, `eml`"
+          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`.\n\nThe list of converters is in the [ConvertAPI documentation](https://www.convertapi.com/doc).",
+          "message": "변환기의 원본 형식입니다. 예: `docx`, `html`, `pdf`, `jpg`, `eml`.\n\n변환기 목록은 [ConvertAPI 문서](https://www.convertapi.com/doc)에서 확인할 수 있습니다."
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.dG8.display_name": {
           "source": "Destination Format",
@@ -744,8 +744,8 @@
           "message": "변환기의 대상 형식"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.dG8.desc": {
-          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`; PDF tools name the operation, for example `merge`, `split` or `compress`",
-          "message": "변환기의 대상 형식입니다. 예: `pdf`, `jpg`, `txt`. PDF 도구에서는 작업 이름을 지정합니다. 예: `merge`, `split`, `compress`"
+          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`.\n\nSome converters are PDF tools, whose destination format names the operation, for example `pdf` to `merge`, `split`, `compress`, `protect`, `ocr` or `pdfa`.",
+          "message": "변환기의 대상 형식입니다. 예: `pdf`, `jpg`, `txt`.\n\n일부 변환기는 PDF 도구이며, 이 경우 대상 형식이 작업을 나타냅니다. 예: `pdf`에서 `merge`, `split`, `compress`, `protect`, `ocr`, `pdfa`로."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.display_name": {
           "source": "Convert Word to PDF",
@@ -936,20 +936,32 @@
           "message": "PDF에서 책갈피를 만드는 방식"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.desc": {
-          "source": "How bookmarks are created in the PDF:\n- `none`: no bookmarks\n- `headings`: bookmarks from the document headings (the default)\n- `bookmarks`: the bookmarks of the document",
-          "message": "PDF에서 책갈피를 만드는 방식입니다.\n- `none`: 책갈피 없음\n- `headings`: 문서 제목에서 책갈피 생성(기본값)\n- `bookmarks`: 문서의 책갈피 사용"
+          "source": "How the bookmarks of the PDF are created",
+          "message": "PDF에서 책갈피를 만드는 방식"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
           "source": "None",
           "message": "없음"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No bookmarks",
+          "message": "책갈피 없음"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmhlYWRpbmdz.display_name": {
           "source": "Headings",
           "message": "제목"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmhlYWRpbmdz.desc": {
+          "source": "Bookmarks from the document headings (the default)",
+          "message": "문서 제목에서 만든 책갈피(기본값)"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmJvb2ttYXJrcw.display_name": {
           "source": "Bookmarks",
           "message": "책갈피"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmJvb2ttYXJrcw.desc": {
+          "source": "The bookmarks of the document",
+          "message": "문서의 책갈피"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.VXBkYXRlVGFibGVPZkNvbnRlbnRz.display_name": {
           "source": "Update Table of Contents",
@@ -1008,8 +1020,8 @@
           "message": "변환 제한 시간(초)"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "변환 제한 시간(초)이며, `10`에서 `1200` 사이입니다. 기본값은 `900`입니다."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "변환 제한 시간(초)으로, `10`에서 `1200`까지입니다. 설정하지 않으면 변환기의 기본값이 적용됩니다. 예를 들어 Office 문서는 `900`, 웹 페이지는 `120`입니다."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -1224,12 +1236,16 @@
           "message": "페이지 방향"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.desc": {
-          "source": "The page orientation; `default` uses the page setup of each worksheet",
-          "message": "페이지 방향입니다. `default`는 각 워크시트의 페이지 설정을 사용합니다"
+          "source": "The page orientation of the PDF",
+          "message": "PDF 페이지 방향"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
           "source": "Default",
           "message": "기본값"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The page setup of each worksheet (the default)",
+          "message": "각 워크시트의 페이지 설정(기본값)"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
           "source": "Portrait",
@@ -1308,8 +1324,8 @@
           "message": "변환 제한 시간(초)"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "변환 제한 시간(초)이며, `10`에서 `1200` 사이입니다. 기본값은 `900`입니다."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "변환 제한 시간(초)으로, `10`에서 `1200`까지입니다. 설정하지 않으면 변환기의 기본값이 적용됩니다. 예를 들어 Office 문서는 `900`, 웹 페이지는 `120`입니다."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -1524,20 +1540,32 @@
           "message": "발표자 노트 변환 방식"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.desc": {
-          "source": "How speaker notes are converted:\n- `Disabled`: speaker notes are not converted (the default)\n- `SeparatePage`: each slide's notes on a separate page\n- `PageComments`: the notes as page comments",
-          "message": "발표자 노트를 변환하는 방식입니다.\n- `Disabled`: 발표자 노트를 변환하지 않습니다(기본값)\n- `SeparatePage`: 각 슬라이드의 노트를 별도 페이지에 넣습니다\n- `PageComments`: 노트를 페이지 주석으로 넣습니다"
+          "source": "How the speaker notes of the slides are converted",
+          "message": "슬라이드의 발표자 노트를 변환하는 방식"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOkRpc2FibGVk.display_name": {
           "source": "Disabled",
           "message": "비활성화됨"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOkRpc2FibGVk.desc": {
+          "source": "Speaker notes are not converted (the default)",
+          "message": "발표자 노트를 변환하지 않습니다(기본값)"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlNlcGFyYXRlUGFnZQ.display_name": {
           "source": "Convert to Separate Page",
           "message": "별도 페이지로 변환"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlNlcGFyYXRlUGFnZQ.desc": {
+          "source": "The notes of each slide on a separate page",
+          "message": "각 슬라이드의 노트를 별도 페이지에 표시합니다"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlBhZ2VDb21tZW50cw.display_name": {
           "source": "Convert to Page Comments",
           "message": "페이지 주석으로 변환"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlBhZ2VDb21tZW50cw.desc": {
+          "source": "The notes as page comments",
+          "message": "노트를 페이지 주석으로 표시합니다"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1584,8 +1612,8 @@
           "message": "변환 제한 시간(초)"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "변환 제한 시간(초)이며, `10`에서 `1200` 사이입니다. 기본값은 `900`입니다."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "변환 제한 시간(초)으로, `10`에서 `1200`까지입니다. 설정하지 않으면 변환기의 기본값이 적용됩니다. 예를 들어 Office 문서는 `900`, 웹 페이지는 `120`입니다."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -1764,8 +1792,8 @@
           "message": "PDF 페이지 크기"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.desc": {
-          "source": "The PDF page size; the default is `letter`",
-          "message": "PDF 페이지 크기입니다. 기본값은 `letter`입니다"
+          "source": "The PDF page size",
+          "message": "PDF 페이지 크기"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEw.display_name": {
           "source": "A0",
@@ -1835,6 +1863,10 @@
           "source": "Letter",
           "message": "Letter"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcg.desc": {
+          "source": "Letter (the default)",
+          "message": "Letter(기본값)"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZ2Fs.display_name": {
           "source": "Legal",
           "message": "Legal"
@@ -1852,12 +1884,16 @@
           "message": "PDF 페이지 방향"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.desc": {
-          "source": "The PDF page orientation; the default is `portrait`",
-          "message": "PDF 페이지 방향입니다. 기본값은 `portrait`입니다"
+          "source": "The PDF page orientation",
+          "message": "PDF 페이지 방향"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
           "source": "Portrait",
           "message": "세로"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.desc": {
+          "source": "Portrait (the default)",
+          "message": "세로(기본값)"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmxhbmRzY2FwZQ.display_name": {
           "source": "Landscape",
@@ -1956,8 +1992,24 @@
           "message": "렌더링에 사용되는 CSS 미디어 유형"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.desc": {
-          "source": "The CSS media type used for rendering, for example `screen` (the default) or `print`",
-          "message": "렌더링에 사용되는 CSS 미디어 유형입니다. 예: `screen`(기본값) 또는 `print`"
+          "source": "The CSS media type used for rendering the page; other media types can also be given",
+          "message": "페이지 렌더링에 사용되는 CSS 미디어 유형입니다. 다른 미디어 유형도 지정할 수 있습니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnNjcmVlbg.display_name": {
+          "source": "Screen",
+          "message": "Screen"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnNjcmVlbg.desc": {
+          "source": "The page as shown on a screen (the default)",
+          "message": "화면에 표시되는 대로의 페이지(기본값)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnByaW50.display_name": {
+          "source": "Print",
+          "message": "인쇄"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnByaW50.desc": {
+          "source": "The page with its print styles",
+          "message": "인쇄 스타일이 적용된 페이지"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TG9hZExhenlDb250ZW50.display_name": {
           "source": "Load Lazy Content",
@@ -2004,8 +2056,8 @@
           "message": "변환 제한 시간(초)"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "변환 제한 시간(초)이며, `10`에서 `1200` 사이입니다. 기본값은 `900`입니다."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "변환 제한 시간(초)으로, `10`에서 `1200`까지입니다. 설정하지 않으면 변환기의 기본값이 적용됩니다. 예를 들어 Office 문서는 `900`, 웹 페이지는 `120`입니다."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -2028,8 +2080,8 @@
           "message": "PDF의 페이지를 JPG, PNG, TIFF 또는 WebP 이미지로 변환"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.desc": {
-          "source": "Converts the pages of a PDF to images; one image file is returned for each page.\n\nChoose the image `format` and resolution, and optionally a page range.",
-          "message": "PDF의 페이지를 이미지로 변환합니다. 페이지마다 이미지 파일 하나가 반환됩니다.\n\n이미지 `format`과 해상도를 선택하고, 필요하면 페이지 범위도 지정하세요."
+          "source": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF file.\n\nChoose the image `format` and resolution, and optionally a page range.",
+          "message": "PDF의 페이지를 이미지로 변환합니다. 페이지마다 이미지 파일 하나 또는 다중 페이지 TIFF 파일 하나가 반환됩니다.\n\n이미지 `format`과 해상도를 선택하고, 필요하면 페이지 범위도 지정하세요."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.display_name": {
           "source": "File",
@@ -2163,6 +2215,18 @@
           "source": "The filename",
           "message": "파일 이름"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "원본 URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "변환할 파일의 URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "변환할 파일의 URL입니다. ConvertAPI가 이 URL에서 파일을 다운로드합니다.\n\n**예**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.display_name": {
           "source": "Image Format",
           "message": "이미지 형식"
@@ -2172,8 +2236,8 @@
           "message": "이미지 형식"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.desc": {
-          "source": "The image format of the output files; one image is created for each page",
-          "message": "출력 파일의 이미지 형식입니다. 페이지마다 이미지 하나가 생성됩니다"
+          "source": "The image format of the output files",
+          "message": "출력 파일의 이미지 형식"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpwZw.display_name": {
           "source": "JPG",
@@ -2187,21 +2251,13 @@
           "source": "TIFF",
           "message": "TIFF"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOnRpZmY.desc": {
+          "source": "One multi-page TIFF file for all the pages",
+          "message": "모든 페이지를 담은 다중 페이지 TIFF 파일 하나"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOndlYnA.display_name": {
           "source": "WebP",
           "message": "WebP"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.display_name": {
-          "source": "Source URL",
-          "message": "원본 URL"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.short_desc": {
-          "source": "URL of the file to convert",
-          "message": "변환할 파일의 URL"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.desc": {
-          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
-          "message": "변환할 파일의 URL입니다. ConvertAPI가 이 URL에서 파일을 다운로드합니다.\n\n**예**: `https://cdn.convertapi.com/public/files/demo.docx`"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.UGFnZVJhbmdl.display_name": {
           "source": "Page Range",
@@ -2272,8 +2328,8 @@
           "message": "변환 제한 시간(초)"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "변환 제한 시간(초)이며, `10`에서 `1200` 사이입니다. 기본값은 `900`입니다."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "변환 제한 시간(초)으로, `10`에서 `1200`까지입니다. 설정하지 않으면 변환기의 기본값이 적용됩니다. 예를 들어 Office 문서는 `900`, 웹 페이지는 `120`입니다."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -2452,20 +2508,32 @@
           "message": "병합한 각 파일에 책갈피 추가"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.desc": {
-          "source": "Adds a top-level bookmark for each merged file:\n- `disabled`: no bookmarks (the default)\n- `filename`: the file name\n- `title`: the PDF title from the metadata",
-          "message": "병합한 각 파일에 최상위 책갈피를 추가합니다.\n- `disabled`: 책갈피 없음(기본값)\n- `filename`: 파일 이름\n- `title`: 메타데이터의 PDF 제목"
+          "source": "Adds a top-level bookmark for each merged file",
+          "message": "병합한 각 파일에 최상위 책갈피를 추가합니다"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
           "source": "Disabled",
           "message": "비활성화됨"
         },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "No bookmarks (the default)",
+          "message": "책갈피 없음(기본값)"
+        },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmZpbGVuYW1l.display_name": {
           "source": "File Name",
           "message": "파일 이름"
         },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmZpbGVuYW1l.desc": {
+          "source": "Bookmarks named with the file names",
+          "message": "파일 이름으로 이름을 붙인 책갈피"
+        },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOnRpdGxl.display_name": {
           "source": "Title",
           "message": "제목"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOnRpdGxl.desc": {
+          "source": "Bookmarks named with the PDF titles from the metadata",
+          "message": "메타데이터의 PDF 제목으로 이름을 붙인 책갈피"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UmVtb3ZlRHVwbGljYXRlRm9udHM.display_name": {
           "source": "Remove Duplicate Fonts",
@@ -2512,8 +2580,8 @@
           "message": "변환 제한 시간(초)"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "변환 제한 시간(초)이며, `10`에서 `1200` 사이입니다. 기본값은 `900`입니다."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "변환 제한 시간(초)으로, `10`에서 `1200`까지입니다. 설정하지 않으면 변환기의 기본값이 적용됩니다. 예를 들어 Office 문서는 `900`, 웹 페이지는 `120`입니다."
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -2671,6 +2739,18 @@
           "source": "The filename",
           "message": "파일 이름"
         },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "원본 URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "변환할 파일의 URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "변환할 파일의 URL입니다. ConvertAPI가 이 URL에서 파일을 다운로드합니다.\n\n**예**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.display_name": {
           "source": "Preset",
           "message": "프리셋"
@@ -2710,18 +2790,6 @@
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOnByaW50ZXI.display_name": {
           "source": "Printer (300 DPI Images)",
           "message": "인쇄용(300 DPI 이미지)"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.display_name": {
-          "source": "Source URL",
-          "message": "원본 URL"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.short_desc": {
-          "source": "URL of the file to convert",
-          "message": "변환할 파일의 URL"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.desc": {
-          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
-          "message": "변환할 파일의 URL입니다. ConvertAPI가 이 URL에서 파일을 다운로드합니다.\n\n**예**: `https://cdn.convertapi.com/public/files/demo.docx`"
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UGFzc3dvcmQ.display_name": {
           "source": "Open Password",
@@ -2768,8 +2836,8 @@
           "message": "변환 제한 시간(초)"
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "변환 제한 시간(초)이며, `10`에서 `1200` 사이입니다. 기본값은 `900`입니다."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "변환 제한 시간(초)으로, `10`에서 `1200`까지입니다. 설정하지 않으면 변환기의 기본값이 적용됩니다. 예를 들어 Office 문서는 `900`, 웹 페이지는 `120`입니다."
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",

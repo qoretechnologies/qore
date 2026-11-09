@@ -12,8 +12,8 @@
           "message": "ConvertAPI 檔案轉換與 PDF 處理平台"
         },
         "app.Q29udmVydEFwaQ.desc": {
-          "source": "[ConvertAPI](https://www.convertapi.com) converts files between more than 300 format pairs and processes PDF files.\n\n- Office documents, spreadsheets and presentations to and from PDF\n- Web pages and HTML to PDF\n- PDF to images, office formats, text and PDF/A\n- Images, e-books, CAD drawings, e-mail messages and archives\n- PDF tools: merge, split, compress, protect, OCR, watermark and more\n\nThe `convert` action runs any converter by its source and destination formats; the other actions are shortcuts for common conversions.",
-          "message": "[ConvertAPI](https://www.convertapi.com) 可在超過 300 種格式組合之間轉換檔案，並處理 PDF 檔案。\n\n- Office 文件、試算表和簡報與 PDF 之間的互相轉換\n- 網頁和 HTML 轉換為 PDF\n- PDF 轉換為影像、Office 格式、文字和 PDF/A\n- 影像、電子書、CAD 圖面、電子郵件訊息和封存檔\n- PDF 工具：合併、分割、壓縮、保護、OCR、浮水印等\n\n`convert` 動作可依來源格式和目標格式執行任何轉換器；其他動作則是常見轉換的捷徑。"
+          "source": "[ConvertAPI](https://www.convertapi.com) converts files between more than 300 format pairs and processes PDF files.\n\n**Conversions**:\n- Office documents, spreadsheets and presentations to and from PDF\n- Web pages and HTML to PDF\n- PDF to images, office formats, text and PDF/A\n- Images, e-books, CAD drawings, e-mail messages and archives\n- PDF tools: merge, split, compress, protect, OCR, watermark and more\n\n**Actions**: `convert-file` runs any converter by its source and destination formats; the other actions are shortcuts for common conversions.",
+          "message": "[ConvertAPI](https://www.convertapi.com) 可在超過 300 種格式組合之間轉換檔案，並處理 PDF 檔案。\n\n**轉換**：\n- Office 文件、試算表和簡報與 PDF 之間的互相轉換\n- 網頁和 HTML 轉換為 PDF\n- PDF 轉換為影像、Office 格式、文字和 PDF/A\n- 影像、電子書、CAD 圖面、電子郵件訊息和封存檔\n- PDF 工具：合併、分割、壓縮、保護、OCR、浮水印等\n\n**動作**：`convert-file` 可依來源格式和目標格式執行任何轉換器；其他動作則是常見轉換的捷徑。"
         },
         "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -339,377 +339,377 @@
           "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.display_name": {
           "source": "Convert a File",
           "message": "轉換檔案"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.short_desc": {
           "source": "Convert files with any ConvertAPI converter",
           "message": "使用任何 ConvertAPI 轉換器轉換檔案"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.desc": {
-          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\nSelect the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n- Give the input as a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`\n- Give other converter parameters by their ConvertAPI names in `parameters`; the `get-converter-info` action lists them\n- The output files are returned as `FileData`, or as download URLs if `store_file` is `True`",
-          "message": "使用任何 ConvertAPI 轉換器轉換檔案，以其來源格式和目標格式指定。\n\n請先選取 `from` 格式；`to` 清單接著會顯示該來源格式的轉換器所支援的目標格式。\n\n- 以 `file` 或來源 `url` 提供輸入；接受多個檔案的轉換器（例如 `pdf` 轉 `merge`）則使用 `files` 或 `urls`\n- 以 ConvertAPI 的名稱在 `parameters` 中提供其他轉換器參數；`get-converter-info` 動作會列出這些參數\n- 輸出檔案會以 `FileData` 傳回；若 `store_file` 為 `True`，則傳回下載網址"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.desc": {
+          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\n**Formats**: select the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n**Input**: a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`, and a few converters take their input in `parameters` instead, for example `data` to `qrcode` with `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parameters**: other converter parameters go in `parameters` by their ConvertAPI names; the `get-converter-info` action lists them.\n\n**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is `True`.",
+          "message": "使用任何 ConvertAPI 轉換器轉換檔案，以其來源格式和目標格式指定。\n\n**格式**：請先選取 `from` 格式；`to` 清單接著會顯示該來源格式的轉換器所支援的目標格式。\n\n**輸入**：以 `file` 或來源 `url` 提供；接受多個檔案的轉換器（例如 `pdf` 轉 `merge`）則使用 `files` 或 `urls`，少數轉換器改以 `parameters` 接收輸入，例如 `data` 轉 `qrcode`，使用 `{\"Data\": \"https://www.convertapi.com\"}`。\n\n**參數**：其他轉換器參數以 ConvertAPI 的名稱放在 `parameters` 中；`get-converter-info` 動作會列出這些參數。\n\n**輸出**：輸出檔案會以 `FileData` 傳回；若 `store_file` 為 `True`，則傳回下載網址。"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.display_name": {
           "source": "Source Format",
           "message": "來源格式"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.short_desc": {
           "source": "The source format of the converter",
           "message": "轉換器的來源格式"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.desc": {
-          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`",
-          "message": "轉換器的來源格式，例如 `docx`、`html`、`pdf`、`jpg` 或 `eml`"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.desc": {
+          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`.\n\nThe list of converters is in the [ConvertAPI documentation](https://www.convertapi.com/doc).",
+          "message": "轉換器的來源格式，例如 `docx`、`html`、`pdf`、`jpg` 或 `eml`。\n\n轉換器清單請見 [ConvertAPI 文件](https://www.convertapi.com/doc)。"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dG8.display_name": {
           "source": "Destination Format",
           "message": "目標格式"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dG8.short_desc": {
           "source": "The destination format of the converter",
           "message": "轉換器的目標格式"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.desc": {
-          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`; PDF tools name the operation, for example `merge`, `split` or `compress`",
-          "message": "轉換器的目標格式，例如 `pdf`、`jpg` 或 `txt`；PDF 工具以操作命名，例如 `merge`、`split` 或 `compress`"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dG8.desc": {
+          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`.\n\nSome converters are PDF tools, whose destination format names the operation, for example `pdf` to `merge`, `split`, `compress`, `protect`, `ocr` or `pdfa`.",
+          "message": "轉換器的目標格式，例如 `pdf`、`jpg` 或 `txt`。\n\n部分轉換器是 PDF 工具，其目標格式代表操作，例如 `pdf` 轉 `merge`、`split`、`compress`、`protect`、`ocr` 或 `pdfa`。"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.display_name": {
           "source": "File",
           "message": "檔案"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.short_desc": {
           "source": "The file to convert",
           "message": "要轉換的檔案"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.desc": {
           "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
           "message": "要轉換的檔案；請提供此項或來源 URL。\n\n檔案會在請求中傳送至 ConvertAPI；檔案名稱的副檔名必須與轉換器的來源格式相符。"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.Y29udGVudA.display_name": {
           "source": "File Data",
           "message": "檔案資料"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
           "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
           "message": "Base64 編碼的檔案資料或原始資料"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.Y29udGVudA.desc": {
           "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
           "message": "Base64 編碼的檔案資料或原始資料"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
           "source": "MIME Type",
           "message": "MIME 類型"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
           "source": "The MIME type string for the file",
           "message": "檔案的 MIME 類型字串"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
           "source": "The MIME type string for the file",
           "message": "檔案的 MIME 類型字串"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Autodetect",
           "message": "自動偵測"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Autodetect from the file name; valid only on input",
           "message": "從檔名自動偵測；僅適用於輸入"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
           "source": "Autodetect from the file name; valid only on input",
           "message": "從檔名自動偵測；僅適用於輸入"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
           "source": "text/plain",
           "message": "text/plain"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
           "source": "Plain text",
           "message": "純文字"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
           "source": "Plain text",
           "message": "純文字"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
           "source": "text/html",
           "message": "text/html"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
           "source": "HTML text",
           "message": "HTML 文字"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
           "source": "HTML text",
           "message": "HTML 文字"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
           "source": "application/pdf",
           "message": "application/pdf"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
           "source": "PDF file",
           "message": "PDF 檔案"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
           "source": "PDF file",
           "message": "PDF 檔案"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
           "source": "MS Word docx document",
           "message": "MS Word docx 文件"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
           "source": "MS Word `docx` document",
           "message": "MS Word `docx` 文件"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
           "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
           "source": "MS PowerPoint pptx document",
           "message": "MS PowerPoint pptx 文件"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
           "source": "MS PowerPoint `pptx` document",
           "message": "MS PowerPoint `pptx` 文件"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
           "source": "MS Excel xlsx document",
           "message": "MS Excel xlsx 文件"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
           "source": "MS Excel `xlsx` document",
           "message": "MS Excel `xlsx` 文件"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bmFtZQ.display_name": {
           "source": "Filename",
           "message": "檔案名稱"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bmFtZQ.short_desc": {
           "source": "The filename",
           "message": "檔案名"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bmFtZQ.desc": {
           "source": "The filename",
           "message": "檔案名"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.display_name": {
-          "source": "Converter Parameters",
-          "message": "轉換器參數"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.short_desc": {
-          "source": "Other converter parameters by their ConvertAPI names",
-          "message": "以 ConvertAPI 名稱指定的其他轉換器參數"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.desc": {
-          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
-          "message": "轉換器的其他參數，以 ConvertAPI 參數名稱對應值的雜湊表示。\n\n每個轉換器的參數列在 [ConvertAPI 文件](https://docs.convertapi.com)中，也可由 `get-converter-info` 動作傳回。\n\n- 純量值會原樣傳送\n- 檔案雜湊（`name` 和 `content`）會作為檔案傳送\n- 檔案雜湊的清單會作為檔案清單傳送\n\n**範例**：`{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJs.display_name": {
           "source": "Source URL",
           "message": "來源 URL"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJs.short_desc": {
           "source": "URL of the file to convert",
           "message": "要轉換之檔案的 URL"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJs.desc": {
           "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
           "message": "要轉換之檔案的 URL；ConvertAPI 會從此 URL 下載檔案。\n\n**範例**：`https://cdn.convertapi.com/public/files/demo.docx`"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.display_name": {
           "source": "Files",
           "message": "檔案"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.short_desc": {
           "source": "The files to convert for converters that take several files",
           "message": "接受多個檔案之轉換器的要轉換檔案"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.desc": {
           "source": "The files to convert for converters that take several input files, such as `pdf` to `merge`, `images` to `pdf` or `any` to `zip`.\n\nThey are sent as the `Files` parameter, together with any files given in `urls`.",
           "message": "接受多個輸入檔案之轉換器（例如 `pdf` 轉 `merge`、`images` 轉 `pdf` 或 `any` 轉 `zip`）要轉換的檔案。\n\n這些檔案會連同 `urls` 中提供的任何檔案，一併作為 `Files` 參數傳送。"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.Y29udGVudA.display_name": {
           "source": "File Data",
           "message": "檔案資料"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.Y29udGVudA.short_desc": {
           "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
           "message": "Base64 編碼的檔案資料或原始資料"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.Y29udGVudA.desc": {
           "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
           "message": "Base64 編碼的檔案資料或原始資料"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.display_name": {
           "source": "MIME Type",
           "message": "MIME 類型"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.short_desc": {
           "source": "The MIME type string for the file",
           "message": "檔案的 MIME 類型字串"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.desc": {
           "source": "The MIME type string for the file",
           "message": "檔案的 MIME 類型字串"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Autodetect",
           "message": "自動偵測"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Autodetect from the file name; valid only on input",
           "message": "從檔名自動偵測；僅適用於輸入"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
           "source": "Autodetect from the file name; valid only on input",
           "message": "從檔名自動偵測；僅適用於輸入"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
           "source": "text/plain",
           "message": "text/plain"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
           "source": "Plain text",
           "message": "純文字"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
           "source": "Plain text",
           "message": "純文字"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
           "source": "text/html",
           "message": "text/html"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
           "source": "HTML text",
           "message": "HTML 文字"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
           "source": "HTML text",
           "message": "HTML 文字"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
           "source": "application/pdf",
           "message": "application/pdf"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
           "source": "PDF file",
           "message": "PDF 檔案"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
           "source": "PDF file",
           "message": "PDF 檔案"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
           "source": "MS Word docx document",
           "message": "MS Word docx 文件"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
           "source": "MS Word `docx` document",
           "message": "MS Word `docx` 文件"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
           "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
           "source": "MS PowerPoint pptx document",
           "message": "MS PowerPoint pptx 文件"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
           "source": "MS PowerPoint `pptx` document",
           "message": "MS PowerPoint `pptx` 文件"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
           "source": "MS Excel xlsx document",
           "message": "MS Excel xlsx 文件"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
           "source": "MS Excel `xlsx` document",
           "message": "MS Excel `xlsx` 文件"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bmFtZQ.display_name": {
           "source": "Filename",
           "message": "檔案名稱"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bmFtZQ.short_desc": {
           "source": "The filename",
           "message": "檔案名"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bmFtZQ.desc": {
           "source": "The filename",
           "message": "檔案名"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJscw.display_name": {
           "source": "Source URLs",
           "message": "來源 URL"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJscw.short_desc": {
           "source": "URLs of the files for converters that take several files",
           "message": "接受多個檔案之轉換器的檔案 URL"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJscw.desc": {
           "source": "The URLs of the files to convert for converters that take several input files, such as `pdf` to `merge`.\n\nThey are sent as the `Files` parameter, together with any files given in `files`.",
           "message": "接受多個輸入檔案之轉換器（例如 `pdf` 轉 `merge`）要轉換的檔案 URL。\n\n這些 URL 會連同 `files` 中提供的任何檔案，一併作為 `Files` 參數傳送。"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "轉換器參數"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "以 ConvertAPI 名稱指定的其他轉換器參數"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "轉換器的其他參數，以 ConvertAPI 參數名稱對應值的雜湊表示。\n\n每個轉換器的參數列在 [ConvertAPI 文件](https://docs.convertapi.com)中，也可由 `get-converter-info` 動作傳回。\n\n- 純量值會原樣傳送\n- 檔案雜湊（`name` 和 `content`）會作為檔案傳送\n- 檔案雜湊的清單會作為檔案清單傳送\n\n**範例**：`{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",
           "message": "儲存檔案"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.c3RvcmVfZmlsZQ.short_desc": {
           "source": "Return a download URL instead of the file data",
           "message": "傳回下載網址，而非檔案資料"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.c3RvcmVfZmlsZQ.desc": {
           "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
           "message": "設為 `True` 以讓 ConvertAPI 儲存輸出檔案，並為每個檔案傳回下載 `Url`；檔案會保存在加密的暫存空間中，最長 **3 小時**。\n\n若為 `False`（預設），輸出檔案會以 `FileData` 形式包含在回應中傳回，且不會儲存任何內容。"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZV9uYW1l.display_name": {
           "source": "Output File Name",
           "message": "輸出檔案名稱"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZV9uYW1l.short_desc": {
           "source": "The name of the output file without the extension",
           "message": "不含副檔名的輸出檔案名稱"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZV9uYW1l.desc": {
           "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
           "message": "輸出檔案的名稱；ConvertAPI 會附加目標格式的副檔名，若轉換會建立多個檔案，則還會附加索引。\n\n**範例**：`report` 會產生 `report.pdf`，或 `report_0.jpg`、`report_1.jpg`..."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dGltZW91dA.display_name": {
           "source": "Timeout",
           "message": "逾時"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dGltZW91dA.short_desc": {
           "source": "The conversion timeout in seconds",
           "message": "轉換逾時秒數"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；預設為 `900`。"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；若未設定，則套用轉換器的預設值，例如 Office 文件為 `900`，網頁為 `120`。"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.display_name": {
           "source": "Get Converter Information",
@@ -720,8 +720,8 @@
           "message": "取得轉換器的說明和參數"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.desc": {
-          "source": "Returns the description and the parameters of a ConvertAPI converter, given by its source and destination formats.\n\nUse it to find the parameter names and allowed values for the `parameters` field of the `convert` action.",
-          "message": "傳回 ConvertAPI 轉換器的說明和參數，以其來源格式和目標格式指定。\n\n可用來找出 `convert` 動作的 `parameters` 欄位所需的參數名稱和允許的值。"
+          "source": "Returns the description and the parameters of a ConvertAPI converter, given by its source and destination formats.\n\nUse it to find the parameter names and allowed values for the `parameters` field of the `convert-file` action.",
+          "message": "傳回 ConvertAPI 轉換器的說明和參數，以其來源格式和目標格式指定。\n\n可用來找出 `convert-file` 動作的 `parameters` 欄位所需的參數名稱和允許的值。"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.ZnJvbQ.display_name": {
           "source": "Source Format",
@@ -732,8 +732,8 @@
           "message": "轉換器的來源格式"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.ZnJvbQ.desc": {
-          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`",
-          "message": "轉換器的來源格式，例如 `docx`、`html`、`pdf`、`jpg` 或 `eml`"
+          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`.\n\nThe list of converters is in the [ConvertAPI documentation](https://www.convertapi.com/doc).",
+          "message": "轉換器的來源格式，例如 `docx`、`html`、`pdf`、`jpg` 或 `eml`。\n\n轉換器清單請見 [ConvertAPI 文件](https://www.convertapi.com/doc)。"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.dG8.display_name": {
           "source": "Destination Format",
@@ -744,8 +744,8 @@
           "message": "轉換器的目標格式"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.dG8.desc": {
-          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`; PDF tools name the operation, for example `merge`, `split` or `compress`",
-          "message": "轉換器的目標格式，例如 `pdf`、`jpg` 或 `txt`；PDF 工具以操作命名，例如 `merge`、`split` 或 `compress`"
+          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`.\n\nSome converters are PDF tools, whose destination format names the operation, for example `pdf` to `merge`, `split`, `compress`, `protect`, `ocr` or `pdfa`.",
+          "message": "轉換器的目標格式，例如 `pdf`、`jpg` 或 `txt`。\n\n部分轉換器是 PDF 工具，其目標格式代表操作，例如 `pdf` 轉 `merge`、`split`、`compress`、`protect`、`ocr` 或 `pdfa`。"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.display_name": {
           "source": "Convert Word to PDF",
@@ -936,20 +936,32 @@
           "message": "在 PDF 中建立書籤的方式"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.desc": {
-          "source": "How bookmarks are created in the PDF:\n- `none`: no bookmarks\n- `headings`: bookmarks from the document headings (the default)\n- `bookmarks`: the bookmarks of the document",
-          "message": "在 PDF 中建立書籤的方式：\n- `none`：不建立書籤\n- `headings`：依文件標題建立書籤（預設）\n- `bookmarks`：使用文件的書籤"
+          "source": "How the bookmarks of the PDF are created",
+          "message": "建立 PDF 書籤的方式"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
           "source": "None",
           "message": "無"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No bookmarks",
+          "message": "不建立書籤"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmhlYWRpbmdz.display_name": {
           "source": "Headings",
           "message": "標題"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmhlYWRpbmdz.desc": {
+          "source": "Bookmarks from the document headings (the default)",
+          "message": "依文件標題建立書籤（預設）"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmJvb2ttYXJrcw.display_name": {
           "source": "Bookmarks",
           "message": "書籤"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmJvb2ttYXJrcw.desc": {
+          "source": "The bookmarks of the document",
+          "message": "使用文件的書籤"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.VXBkYXRlVGFibGVPZkNvbnRlbnRz.display_name": {
           "source": "Update Table of Contents",
@@ -1008,8 +1020,8 @@
           "message": "轉換逾時秒數"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；預設為 `900`。"
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；若未設定，則套用轉換器的預設值，例如 Office 文件為 `900`，網頁為 `120`。"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -1224,12 +1236,16 @@
           "message": "頁面方向"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.desc": {
-          "source": "The page orientation; `default` uses the page setup of each worksheet",
-          "message": "頁面方向；`default` 會使用每個工作表的版面設定"
+          "source": "The page orientation of the PDF",
+          "message": "PDF 頁面方向"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
           "source": "Default",
           "message": "預設"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The page setup of each worksheet (the default)",
+          "message": "每個工作表的版面設定（預設）"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
           "source": "Portrait",
@@ -1308,8 +1324,8 @@
           "message": "轉換逾時秒數"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；預設為 `900`。"
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；若未設定，則套用轉換器的預設值，例如 Office 文件為 `900`，網頁為 `120`。"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -1524,20 +1540,32 @@
           "message": "講者備忘稿的轉換方式"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.desc": {
-          "source": "How speaker notes are converted:\n- `Disabled`: speaker notes are not converted (the default)\n- `SeparatePage`: each slide's notes on a separate page\n- `PageComments`: the notes as page comments",
-          "message": "講者備忘稿的轉換方式：\n- `Disabled`：不轉換講者備忘稿（預設）\n- `SeparatePage`：將每張投影片的備忘稿放在獨立頁面\n- `PageComments`：將備忘稿轉為頁面註解"
+          "source": "How the speaker notes of the slides are converted",
+          "message": "投影片講者備忘稿的轉換方式"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOkRpc2FibGVk.display_name": {
           "source": "Disabled",
           "message": "已停用"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOkRpc2FibGVk.desc": {
+          "source": "Speaker notes are not converted (the default)",
+          "message": "不轉換講者備忘稿（預設）"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlNlcGFyYXRlUGFnZQ.display_name": {
           "source": "Convert to Separate Page",
           "message": "轉換為獨立頁面"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlNlcGFyYXRlUGFnZQ.desc": {
+          "source": "The notes of each slide on a separate page",
+          "message": "將每張投影片的備忘稿放在獨立頁面"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlBhZ2VDb21tZW50cw.display_name": {
           "source": "Convert to Page Comments",
           "message": "轉換為頁面註解"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlBhZ2VDb21tZW50cw.desc": {
+          "source": "The notes as page comments",
+          "message": "將備忘稿轉為頁面註解"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1584,8 +1612,8 @@
           "message": "轉換逾時秒數"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；預設為 `900`。"
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；若未設定，則套用轉換器的預設值，例如 Office 文件為 `900`，網頁為 `120`。"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -1764,8 +1792,8 @@
           "message": "PDF 頁面大小"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.desc": {
-          "source": "The PDF page size; the default is `letter`",
-          "message": "PDF 頁面大小；預設為 `letter`"
+          "source": "The PDF page size",
+          "message": "PDF 頁面大小"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEw.display_name": {
           "source": "A0",
@@ -1835,6 +1863,10 @@
           "source": "Letter",
           "message": "Letter"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcg.desc": {
+          "source": "Letter (the default)",
+          "message": "Letter（預設）"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZ2Fs.display_name": {
           "source": "Legal",
           "message": "Legal"
@@ -1852,12 +1884,16 @@
           "message": "PDF 頁面方向"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.desc": {
-          "source": "The PDF page orientation; the default is `portrait`",
-          "message": "PDF 頁面方向；預設為 `portrait`"
+          "source": "The PDF page orientation",
+          "message": "PDF 頁面方向"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
           "source": "Portrait",
           "message": "直向"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.desc": {
+          "source": "Portrait (the default)",
+          "message": "直向（預設）"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmxhbmRzY2FwZQ.display_name": {
           "source": "Landscape",
@@ -1956,8 +1992,24 @@
           "message": "用於轉譯的 CSS 媒體類型"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.desc": {
-          "source": "The CSS media type used for rendering, for example `screen` (the default) or `print`",
-          "message": "用於轉譯的 CSS 媒體類型，例如 `screen`（預設）或 `print`"
+          "source": "The CSS media type used for rendering the page; other media types can also be given",
+          "message": "用於轉譯頁面的 CSS 媒體類型；也可以指定其他媒體類型"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnNjcmVlbg.display_name": {
+          "source": "Screen",
+          "message": "螢幕"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnNjcmVlbg.desc": {
+          "source": "The page as shown on a screen (the default)",
+          "message": "在螢幕上顯示的頁面（預設）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnByaW50.display_name": {
+          "source": "Print",
+          "message": "列印"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnByaW50.desc": {
+          "source": "The page with its print styles",
+          "message": "套用列印樣式的頁面"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TG9hZExhenlDb250ZW50.display_name": {
           "source": "Load Lazy Content",
@@ -2004,8 +2056,8 @@
           "message": "轉換逾時秒數"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；預設為 `900`。"
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；若未設定，則套用轉換器的預設值，例如 Office 文件為 `900`，網頁為 `120`。"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -2028,8 +2080,8 @@
           "message": "將 PDF 的頁面轉換為 JPG、PNG、TIFF 或 WebP 影像"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.desc": {
-          "source": "Converts the pages of a PDF to images; one image file is returned for each page.\n\nChoose the image `format` and resolution, and optionally a page range.",
-          "message": "將 PDF 的頁面轉換為影像；每一頁會傳回一個影像檔案。\n\n請選擇影像 `format` 和解析度，也可選擇性指定頁面範圍。"
+          "source": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF file.\n\nChoose the image `format` and resolution, and optionally a page range.",
+          "message": "將 PDF 的頁面轉換為影像：每一頁一個影像檔案，或一個多頁 TIFF 檔案。\n\n請選擇影像 `format` 和解析度，也可選擇性指定頁面範圍。"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.display_name": {
           "source": "File",
@@ -2163,6 +2215,18 @@
           "source": "The filename",
           "message": "檔案名"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "來源 URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "要轉換之檔案的 URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "要轉換之檔案的 URL；ConvertAPI 會從此 URL 下載檔案。\n\n**範例**：`https://cdn.convertapi.com/public/files/demo.docx`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.display_name": {
           "source": "Image Format",
           "message": "影像格式"
@@ -2172,8 +2236,8 @@
           "message": "影像格式"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.desc": {
-          "source": "The image format of the output files; one image is created for each page",
-          "message": "輸出檔案的影像格式；每一頁會建立一張影像"
+          "source": "The image format of the output files",
+          "message": "輸出檔案的影像格式"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpwZw.display_name": {
           "source": "JPG",
@@ -2187,21 +2251,13 @@
           "source": "TIFF",
           "message": "TIFF"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOnRpZmY.desc": {
+          "source": "One multi-page TIFF file for all the pages",
+          "message": "包含所有頁面的單一多頁 TIFF 檔案"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOndlYnA.display_name": {
           "source": "WebP",
           "message": "WebP"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.display_name": {
-          "source": "Source URL",
-          "message": "來源 URL"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.short_desc": {
-          "source": "URL of the file to convert",
-          "message": "要轉換之檔案的 URL"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.desc": {
-          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
-          "message": "要轉換之檔案的 URL；ConvertAPI 會從此 URL 下載檔案。\n\n**範例**：`https://cdn.convertapi.com/public/files/demo.docx`"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.UGFnZVJhbmdl.display_name": {
           "source": "Page Range",
@@ -2272,8 +2328,8 @@
           "message": "轉換逾時秒數"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；預設為 `900`。"
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；若未設定，則套用轉換器的預設值，例如 Office 文件為 `900`，網頁為 `120`。"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -2452,20 +2508,32 @@
           "message": "為每個合併的檔案新增書籤"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.desc": {
-          "source": "Adds a top-level bookmark for each merged file:\n- `disabled`: no bookmarks (the default)\n- `filename`: the file name\n- `title`: the PDF title from the metadata",
-          "message": "為每個合併的檔案新增頂層書籤：\n- `disabled`：不建立書籤（預設）\n- `filename`：檔案名稱\n- `title`：中繼資料中的 PDF 標題"
+          "source": "Adds a top-level bookmark for each merged file",
+          "message": "為每個合併的檔案新增頂層書籤"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
           "source": "Disabled",
           "message": "已停用"
         },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "No bookmarks (the default)",
+          "message": "不建立書籤（預設）"
+        },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmZpbGVuYW1l.display_name": {
           "source": "File Name",
           "message": "檔案名稱"
         },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmZpbGVuYW1l.desc": {
+          "source": "Bookmarks named with the file names",
+          "message": "以檔案名稱命名的書籤"
+        },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOnRpdGxl.display_name": {
           "source": "Title",
           "message": "標題"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOnRpdGxl.desc": {
+          "source": "Bookmarks named with the PDF titles from the metadata",
+          "message": "以中繼資料中的 PDF 標題命名的書籤"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UmVtb3ZlRHVwbGljYXRlRm9udHM.display_name": {
           "source": "Remove Duplicate Fonts",
@@ -2512,8 +2580,8 @@
           "message": "轉換逾時秒數"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；預設為 `900`。"
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；若未設定，則套用轉換器的預設值，例如 Office 文件為 `900`，網頁為 `120`。"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -2671,6 +2739,18 @@
           "source": "The filename",
           "message": "檔案名"
         },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "來源 URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "要轉換之檔案的 URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "要轉換之檔案的 URL；ConvertAPI 會從此 URL 下載檔案。\n\n**範例**：`https://cdn.convertapi.com/public/files/demo.docx`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.display_name": {
           "source": "Preset",
           "message": "預設集"
@@ -2710,18 +2790,6 @@
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOnByaW50ZXI.display_name": {
           "source": "Printer (300 DPI Images)",
           "message": "印表機（300 DPI 影像）"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.display_name": {
-          "source": "Source URL",
-          "message": "來源 URL"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.short_desc": {
-          "source": "URL of the file to convert",
-          "message": "要轉換之檔案的 URL"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.desc": {
-          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
-          "message": "要轉換之檔案的 URL；ConvertAPI 會從此 URL 下載檔案。\n\n**範例**：`https://cdn.convertapi.com/public/files/demo.docx`"
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UGFzc3dvcmQ.display_name": {
           "source": "Open Password",
@@ -2768,8 +2836,8 @@
           "message": "轉換逾時秒數"
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；預設為 `900`。"
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；若未設定，則套用轉換器的預設值，例如 Office 文件為 `900`，網頁為 `120`。"
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",

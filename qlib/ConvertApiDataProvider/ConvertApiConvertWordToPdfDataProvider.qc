@@ -49,12 +49,23 @@ public class ConvertApiConvertWordToPdfRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Bookmark Mode",
                 "short_desc": "How bookmarks are created in the PDF",
-                "desc": "How bookmarks are created in the PDF:\n- `none`: no bookmarks\n- `headings`: bookmarks from "
-                    "the document headings (the default)\n- `bookmarks`: the bookmarks of the document",
+                "desc": "How the bookmarks of the PDF are created",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "none", "display_name": "None"},
-                    <AllowedValueInfo>{"value": "headings", "display_name": "Headings"},
-                    <AllowedValueInfo>{"value": "bookmarks", "display_name": "Bookmarks"},
+                    <AllowedValueInfo>{
+                        "value": "none",
+                        "display_name": "None",
+                        "desc": "No bookmarks",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "headings",
+                        "display_name": "Headings",
+                        "desc": "Bookmarks from the document headings (the default)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "bookmarks",
+                        "display_name": "Bookmarks",
+                        "desc": "The bookmarks of the document",
+                    },
                 ),
             },
             "UpdateTableOfContents": {
@@ -94,6 +105,9 @@ public class ConvertApiConvertWordToPdfDataProvider inherits ConvertApiConversio
 
         #! Constructor options
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! The request type
+        static ConvertApiConvertWordToPdfRequestDataType RequestType();
     }
 
     #! Creates the object with a REST client
@@ -112,7 +126,7 @@ public class ConvertApiConvertWordToPdfDataProvider inherits ConvertApiConversio
 
     #! Returns the request type
     private *AbstractDataProviderType getRequestTypeImpl() {
-        return new ConvertApiConvertWordToPdfRequestDataType();
+        return RequestType;
     }
 
     #! Returns the source and destination formats

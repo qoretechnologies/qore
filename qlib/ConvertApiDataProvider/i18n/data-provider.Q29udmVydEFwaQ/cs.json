@@ -12,8 +12,8 @@
           "message": "Platforma ConvertAPI pro konverzi souborů a zpracování PDF"
         },
         "app.Q29udmVydEFwaQ.desc": {
-          "source": "[ConvertAPI](https://www.convertapi.com) converts files between more than 300 format pairs and processes PDF files.\n\n- Office documents, spreadsheets and presentations to and from PDF\n- Web pages and HTML to PDF\n- PDF to images, office formats, text and PDF/A\n- Images, e-books, CAD drawings, e-mail messages and archives\n- PDF tools: merge, split, compress, protect, OCR, watermark and more\n\nThe `convert` action runs any converter by its source and destination formats; the other actions are shortcuts for common conversions.",
-          "message": "[ConvertAPI](https://www.convertapi.com) převádí soubory mezi více než 300 dvojicemi formátů a zpracovává soubory PDF.\n\n- Dokumenty, tabulky a prezentace Office do PDF a z PDF\n- Webové stránky a HTML do PDF\n- PDF do obrázků, formátů Office, textu a PDF/A\n- Obrázky, e-knihy, výkresy CAD, e-mailové zprávy a archivy\n- Nástroje PDF: slučování, dělení, komprese, ochrana, OCR, vodoznaky a další\n\nAkce `convert` spustí libovolný konvertor podle jeho zdrojového a cílového formátu; ostatní akce jsou zkratky pro běžné konverze."
+          "source": "[ConvertAPI](https://www.convertapi.com) converts files between more than 300 format pairs and processes PDF files.\n\n**Conversions**:\n- Office documents, spreadsheets and presentations to and from PDF\n- Web pages and HTML to PDF\n- PDF to images, office formats, text and PDF/A\n- Images, e-books, CAD drawings, e-mail messages and archives\n- PDF tools: merge, split, compress, protect, OCR, watermark and more\n\n**Actions**: `convert-file` runs any converter by its source and destination formats; the other actions are shortcuts for common conversions.",
+          "message": "[ConvertAPI](https://www.convertapi.com) převádí soubory mezi více než 300 dvojicemi formátů a zpracovává soubory PDF.\n\n**Konverze**:\n- Dokumenty, tabulky a prezentace Office do PDF a z PDF\n- Webové stránky a HTML do PDF\n- PDF do obrázků, formátů Office, textu a PDF/A\n- Obrázky, e-knihy, výkresy CAD, e-mailové zprávy a archivy\n- Nástroje PDF: slučování, dělení, komprese, ochrana, OCR, vodoznaky a další\n\n**Akce**: `convert-file` spustí libovolný konvertor podle jeho zdrojového a cílového formátu; ostatní akce jsou zkratky pro běžné konverze."
         },
         "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -339,377 +339,377 @@
           "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.display_name": {
           "source": "Convert a File",
           "message": "Převést soubor"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.short_desc": {
           "source": "Convert files with any ConvertAPI converter",
           "message": "Převést soubory libovolným konvertorem ConvertAPI"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.desc": {
-          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\nSelect the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n- Give the input as a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`\n- Give other converter parameters by their ConvertAPI names in `parameters`; the `get-converter-info` action lists them\n- The output files are returned as `FileData`, or as download URLs if `store_file` is `True`",
-          "message": "Převádí soubory libovolným konvertorem ConvertAPI zadaným jeho zdrojovým a cílovým formátem.\n\nNejprve vyberte formát `from`; seznam `to` pak zobrazí cílové formáty konvertorů pro tento zdrojový formát.\n\n- Vstup zadejte jako `file` nebo zdrojovou `url`; konvertory, které přijímají více souborů (například `pdf` do `merge`), přijímají `files` nebo `urls`\n- Další parametry konvertoru zadejte pod jejich názvy ConvertAPI v `parameters`; akce `get-converter-info` je vypíše\n- Výstupní soubory se vracejí jako `FileData` nebo jako adresy URL ke stažení, pokud je `store_file` `True`"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.desc": {
+          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\n**Formats**: select the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n**Input**: a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`, and a few converters take their input in `parameters` instead, for example `data` to `qrcode` with `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parameters**: other converter parameters go in `parameters` by their ConvertAPI names; the `get-converter-info` action lists them.\n\n**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is `True`.",
+          "message": "Převádí soubory libovolným konvertorem ConvertAPI zadaným jeho zdrojovým a cílovým formátem.\n\n**Formáty**: nejprve vyberte formát `from`; seznam `to` pak zobrazí cílové formáty konvertorů pro tento zdrojový formát.\n\n**Vstup**: `file` nebo zdrojová `url`; konvertory, které přijímají více souborů (například `pdf` do `merge`), přijímají `files` nebo `urls` a některé konvertory přijímají vstup v `parameters`, například `data` pro `qrcode` s `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parametry**: další parametry konvertoru zadejte v `parameters` pod jejich názvy ConvertAPI; akce `get-converter-info` je vypíše.\n\n**Výstup**: výstupní soubory se vracejí jako `FileData` nebo jako adresy URL ke stažení, pokud je `store_file` `True`."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.display_name": {
           "source": "Source Format",
           "message": "Zdrojový formát"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.short_desc": {
           "source": "The source format of the converter",
           "message": "Zdrojový formát konvertoru"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.desc": {
-          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`",
-          "message": "Zdrojový formát konvertoru, například `docx`, `html`, `pdf`, `jpg` nebo `eml`"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.desc": {
+          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`.\n\nThe list of converters is in the [ConvertAPI documentation](https://www.convertapi.com/doc).",
+          "message": "Zdrojový formát konvertoru, například `docx`, `html`, `pdf`, `jpg` nebo `eml`.\n\nSeznam konvertorů je v [dokumentaci ConvertAPI](https://www.convertapi.com/doc)."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dG8.display_name": {
           "source": "Destination Format",
           "message": "Cílový formát"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dG8.short_desc": {
           "source": "The destination format of the converter",
           "message": "Cílový formát konvertoru"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.desc": {
-          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`; PDF tools name the operation, for example `merge`, `split` or `compress`",
-          "message": "Cílový formát konvertoru, například `pdf`, `jpg` nebo `txt`; nástroje PDF určují operaci, například `merge`, `split` nebo `compress`"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dG8.desc": {
+          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`.\n\nSome converters are PDF tools, whose destination format names the operation, for example `pdf` to `merge`, `split`, `compress`, `protect`, `ocr` or `pdfa`.",
+          "message": "Cílový formát konvertoru, například `pdf`, `jpg` nebo `txt`.\n\nNěkteré konvertory jsou nástroje PDF, jejichž cílový formát určuje operaci, například `pdf` do `merge`, `split`, `compress`, `protect`, `ocr` nebo `pdfa`."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.display_name": {
           "source": "File",
           "message": "Soubor"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.short_desc": {
           "source": "The file to convert",
           "message": "Soubor, který se má převést"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.desc": {
           "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
           "message": "Soubor, který se má převést; zadejte buď tento soubor, nebo zdrojovou adresu URL.\n\nSoubor se odešle do ConvertAPI v požadavku; přípona názvu souboru musí odpovídat zdrojovému formátu konvertoru."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.Y29udGVudA.display_name": {
           "source": "File Data",
           "message": "Data souboru"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
           "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
           "message": "Base64 kódovaná data souboru nebo surová data k zakódování pomocí base64"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.Y29udGVudA.desc": {
           "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
           "message": "Base64 kódovaná data souboru nebo surová data k zakódování pomocí base64"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
           "source": "MIME Type",
           "message": "MIME typ"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
           "source": "The MIME type string for the file",
           "message": "Řetězec MIME typu pro soubor"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
           "source": "The MIME type string for the file",
           "message": "Řetězec MIME typu pro soubor"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Autodetect",
           "message": "Automatické rozpoznání"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Autodetect from the file name; valid only on input",
           "message": "Automatické rozpoznání z názvu souboru; platné jen pro vstup"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
           "source": "Autodetect from the file name; valid only on input",
           "message": "Automatické rozpoznání z názvu souboru; platné jen pro vstup"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
           "source": "text/plain",
           "message": "text/plain"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
           "source": "Plain text",
           "message": "Prostý text"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
           "source": "Plain text",
           "message": "Prostý text"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
           "source": "text/html",
           "message": "text/html"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
           "source": "HTML text",
           "message": "HTML text"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
           "source": "HTML text",
           "message": "HTML text"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
           "source": "application/pdf",
           "message": "application/pdf"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
           "source": "PDF file",
           "message": "Soubor PDF"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
           "source": "PDF file",
           "message": "Soubor PDF"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
           "source": "MS Word docx document",
           "message": "Soubor MS Word docx"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
           "source": "MS Word `docx` document",
           "message": "Soubor MS Word `docx`"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
           "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
           "source": "MS PowerPoint pptx document",
           "message": "Soubor MS PowerPoint pptx"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
           "source": "MS PowerPoint `pptx` document",
           "message": "Soubor MS PowerPoint `pptx`"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
           "source": "MS Excel xlsx document",
           "message": "Soubor MS Excel xlsx"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
           "source": "MS Excel `xlsx` document",
           "message": "Soubor MS Excel `xlsx`"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bmFtZQ.display_name": {
           "source": "Filename",
           "message": "Název souboru"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bmFtZQ.short_desc": {
           "source": "The filename",
           "message": "Název souboru"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bmFtZQ.desc": {
           "source": "The filename",
           "message": "Název souboru"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.display_name": {
-          "source": "Converter Parameters",
-          "message": "Parametry konvertoru"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.short_desc": {
-          "source": "Other converter parameters by their ConvertAPI names",
-          "message": "Další parametry konvertoru podle jejich názvů v ConvertAPI"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.desc": {
-          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
-          "message": "Další parametry konvertoru jako haš názvů parametrů ConvertAPI na hodnoty.\n\nParametry každého konvertoru jsou uvedeny v [dokumentaci ConvertAPI](https://docs.convertapi.com) a vrací je akce `get-converter-info`.\n\n- Skalární hodnoty se odešlou beze změny\n- Haš souboru (`name` a `content`) se odešle jako soubor\n- Seznam hašů souborů se odešle jako seznam souborů\n\n**Příklad**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJs.display_name": {
           "source": "Source URL",
           "message": "Zdrojová URL"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJs.short_desc": {
           "source": "URL of the file to convert",
           "message": "Adresa URL souboru, který se má převést"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJs.desc": {
           "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
           "message": "Adresa URL souboru, který se má převést; ConvertAPI stáhne soubor z této adresy.\n\n**Příklad**: `https://cdn.convertapi.com/public/files/demo.docx`"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.display_name": {
           "source": "Files",
           "message": "Soubory"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.short_desc": {
           "source": "The files to convert for converters that take several files",
           "message": "Soubory, které se mají převést, pro konvertory přijímající více souborů"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.desc": {
           "source": "The files to convert for converters that take several input files, such as `pdf` to `merge`, `images` to `pdf` or `any` to `zip`.\n\nThey are sent as the `Files` parameter, together with any files given in `urls`.",
           "message": "Soubory, které se mají převést, pro konvertory přijímající více vstupních souborů, například `pdf` do `merge`, `images` do `pdf` nebo `any` do `zip`.\n\nOdesílají se jako parametr `Files` spolu se soubory zadanými v `urls`."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.Y29udGVudA.display_name": {
           "source": "File Data",
           "message": "Data souboru"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.Y29udGVudA.short_desc": {
           "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
           "message": "Base64 kódovaná data souboru nebo surová data k zakódování pomocí base64"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.Y29udGVudA.desc": {
           "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
           "message": "Base64 kódovaná data souboru nebo surová data k zakódování pomocí base64"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.display_name": {
           "source": "MIME Type",
           "message": "MIME typ"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.short_desc": {
           "source": "The MIME type string for the file",
           "message": "Řetězec MIME typu pro soubor"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.desc": {
           "source": "The MIME type string for the file",
           "message": "Řetězec MIME typu pro soubor"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Autodetect",
           "message": "Automatické rozpoznání"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Autodetect from the file name; valid only on input",
           "message": "Automatické rozpoznání z názvu souboru; platné jen pro vstup"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
           "source": "Autodetect from the file name; valid only on input",
           "message": "Automatické rozpoznání z názvu souboru; platné jen pro vstup"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
           "source": "text/plain",
           "message": "text/plain"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
           "source": "Plain text",
           "message": "Prostý text"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
           "source": "Plain text",
           "message": "Prostý text"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
           "source": "text/html",
           "message": "text/html"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
           "source": "HTML text",
           "message": "HTML text"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
           "source": "HTML text",
           "message": "HTML text"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
           "source": "application/pdf",
           "message": "application/pdf"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
           "source": "PDF file",
           "message": "Soubor PDF"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
           "source": "PDF file",
           "message": "Soubor PDF"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
           "source": "MS Word docx document",
           "message": "Soubor MS Word docx"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
           "source": "MS Word `docx` document",
           "message": "Soubor MS Word `docx`"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
           "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
           "source": "MS PowerPoint pptx document",
           "message": "Soubor MS PowerPoint pptx"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
           "source": "MS PowerPoint `pptx` document",
           "message": "Soubor MS PowerPoint `pptx`"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
           "source": "MS Excel xlsx document",
           "message": "Soubor MS Excel xlsx"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
           "source": "MS Excel `xlsx` document",
           "message": "Soubor MS Excel `xlsx`"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bmFtZQ.display_name": {
           "source": "Filename",
           "message": "Název souboru"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bmFtZQ.short_desc": {
           "source": "The filename",
           "message": "Název souboru"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bmFtZQ.desc": {
           "source": "The filename",
           "message": "Název souboru"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJscw.display_name": {
           "source": "Source URLs",
           "message": "Zdrojové URL adresy"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJscw.short_desc": {
           "source": "URLs of the files for converters that take several files",
           "message": "Adresy URL souborů pro konvertory přijímající více souborů"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJscw.desc": {
           "source": "The URLs of the files to convert for converters that take several input files, such as `pdf` to `merge`.\n\nThey are sent as the `Files` parameter, together with any files given in `files`.",
           "message": "Adresy URL souborů, které se mají převést, pro konvertory přijímající více vstupních souborů, například `pdf` do `merge`.\n\nOdesílají se jako parametr `Files` spolu se soubory zadanými v `files`."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "Parametry konvertoru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "Další parametry konvertoru podle jejich názvů v ConvertAPI"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "Další parametry konvertoru jako haš názvů parametrů ConvertAPI na hodnoty.\n\nParametry každého konvertoru jsou uvedeny v [dokumentaci ConvertAPI](https://docs.convertapi.com) a vrací je akce `get-converter-info`.\n\n- Skalární hodnoty se odešlou beze změny\n- Haš souboru (`name` a `content`) se odešle jako soubor\n- Seznam hašů souborů se odešle jako seznam souborů\n\n**Příklad**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",
           "message": "Uložit soubor"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.c3RvcmVfZmlsZQ.short_desc": {
           "source": "Return a download URL instead of the file data",
           "message": "Vrátit adresu URL ke stažení místo dat souboru"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.c3RvcmVfZmlsZQ.desc": {
           "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
           "message": "Nastavte na `True`, aby ConvertAPI uložilo výstupní soubory a pro každý vrátilo adresu `Url` ke stažení; soubory se uchovávají v šifrovaném dočasném úložišti nejdéle **3 hodiny**.\n\nPokud je `False` (výchozí), výstupní soubory se vrátí v odpovědi jako `FileData` a nic se neukládá."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZV9uYW1l.display_name": {
           "source": "Output File Name",
           "message": "Název výstupního souboru"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZV9uYW1l.short_desc": {
           "source": "The name of the output file without the extension",
           "message": "Název výstupního souboru bez přípony"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZV9uYW1l.desc": {
           "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
           "message": "Název výstupních souborů; ConvertAPI připojí příponu cílového formátu a index, pokud konverze vytvoří více souborů.\n\n**Příklad**: `report` dá `report.pdf` nebo `report_0.jpg`, `report_1.jpg`, ..."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dGltZW91dA.display_name": {
           "source": "Timeout",
           "message": "Časový limit"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dGltZW91dA.short_desc": {
           "source": "The conversion timeout in seconds",
           "message": "Časový limit konverze v sekundách"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "Časový limit konverze v sekundách, od `10` do `1200`; výchozí hodnota je `900`."
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "Časový limit konverze v sekundách, od `10` do `1200`; pokud není nastaven, použije se výchozí hodnota konvertoru, například `900` pro dokumenty Office a `120` pro webové stránky."
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.display_name": {
           "source": "Get Converter Information",
@@ -720,8 +720,8 @@
           "message": "Získat popis a parametry konvertoru"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.desc": {
-          "source": "Returns the description and the parameters of a ConvertAPI converter, given by its source and destination formats.\n\nUse it to find the parameter names and allowed values for the `parameters` field of the `convert` action.",
-          "message": "Vrací popis a parametry konvertoru ConvertAPI zadaného jeho zdrojovým a cílovým formátem.\n\nPoužijte ji ke zjištění názvů parametrů a povolených hodnot pro pole `parameters` akce `convert`."
+          "source": "Returns the description and the parameters of a ConvertAPI converter, given by its source and destination formats.\n\nUse it to find the parameter names and allowed values for the `parameters` field of the `convert-file` action.",
+          "message": "Vrací popis a parametry konvertoru ConvertAPI zadaného jeho zdrojovým a cílovým formátem.\n\nPoužijte ji ke zjištění názvů parametrů a povolených hodnot pro pole `parameters` akce `convert-file`."
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.ZnJvbQ.display_name": {
           "source": "Source Format",
@@ -732,8 +732,8 @@
           "message": "Zdrojový formát konvertoru"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.ZnJvbQ.desc": {
-          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`",
-          "message": "Zdrojový formát konvertoru, například `docx`, `html`, `pdf`, `jpg` nebo `eml`"
+          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`.\n\nThe list of converters is in the [ConvertAPI documentation](https://www.convertapi.com/doc).",
+          "message": "Zdrojový formát konvertoru, například `docx`, `html`, `pdf`, `jpg` nebo `eml`.\n\nSeznam konvertorů je v [dokumentaci ConvertAPI](https://www.convertapi.com/doc)."
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.dG8.display_name": {
           "source": "Destination Format",
@@ -744,8 +744,8 @@
           "message": "Cílový formát konvertoru"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.dG8.desc": {
-          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`; PDF tools name the operation, for example `merge`, `split` or `compress`",
-          "message": "Cílový formát konvertoru, například `pdf`, `jpg` nebo `txt`; nástroje PDF určují operaci, například `merge`, `split` nebo `compress`"
+          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`.\n\nSome converters are PDF tools, whose destination format names the operation, for example `pdf` to `merge`, `split`, `compress`, `protect`, `ocr` or `pdfa`.",
+          "message": "Cílový formát konvertoru, například `pdf`, `jpg` nebo `txt`.\n\nNěkteré konvertory jsou nástroje PDF, jejichž cílový formát určuje operaci, například `pdf` do `merge`, `split`, `compress`, `protect`, `ocr` nebo `pdfa`."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.display_name": {
           "source": "Convert Word to PDF",
@@ -936,20 +936,32 @@
           "message": "Způsob vytváření záložek v PDF"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.desc": {
-          "source": "How bookmarks are created in the PDF:\n- `none`: no bookmarks\n- `headings`: bookmarks from the document headings (the default)\n- `bookmarks`: the bookmarks of the document",
-          "message": "Způsob vytváření záložek v PDF:\n- `none`: žádné záložky\n- `headings`: záložky z nadpisů dokumentu (výchozí)\n- `bookmarks`: záložky dokumentu"
+          "source": "How the bookmarks of the PDF are created",
+          "message": "Způsob vytváření záložek v PDF"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
           "source": "None",
           "message": "Žádné"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No bookmarks",
+          "message": "Žádné záložky"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmhlYWRpbmdz.display_name": {
           "source": "Headings",
           "message": "Nadpisy"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmhlYWRpbmdz.desc": {
+          "source": "Bookmarks from the document headings (the default)",
+          "message": "Záložky z nadpisů dokumentu (výchozí)"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmJvb2ttYXJrcw.display_name": {
           "source": "Bookmarks",
           "message": "Záložky"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmJvb2ttYXJrcw.desc": {
+          "source": "The bookmarks of the document",
+          "message": "Záložky dokumentu"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.VXBkYXRlVGFibGVPZkNvbnRlbnRz.display_name": {
           "source": "Update Table of Contents",
@@ -1008,8 +1020,8 @@
           "message": "Časový limit konverze v sekundách"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "Časový limit konverze v sekundách, od `10` do `1200`; výchozí hodnota je `900`."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "Časový limit konverze v sekundách, od `10` do `1200`; pokud není nastaven, použije se výchozí hodnota konvertoru, například `900` pro dokumenty Office a `120` pro webové stránky."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -1224,12 +1236,16 @@
           "message": "Orientace stránky"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.desc": {
-          "source": "The page orientation; `default` uses the page setup of each worksheet",
-          "message": "Orientace stránky; `default` použije nastavení stránky každého listu"
+          "source": "The page orientation of the PDF",
+          "message": "Orientace stránky PDF"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
           "source": "Default",
           "message": "Výchozí"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The page setup of each worksheet (the default)",
+          "message": "Nastavení stránky každého listu (výchozí)"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
           "source": "Portrait",
@@ -1308,8 +1324,8 @@
           "message": "Časový limit konverze v sekundách"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "Časový limit konverze v sekundách, od `10` do `1200`; výchozí hodnota je `900`."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "Časový limit konverze v sekundách, od `10` do `1200`; pokud není nastaven, použije se výchozí hodnota konvertoru, například `900` pro dokumenty Office a `120` pro webové stránky."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -1524,20 +1540,32 @@
           "message": "Způsob převodu poznámek přednášejícího"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.desc": {
-          "source": "How speaker notes are converted:\n- `Disabled`: speaker notes are not converted (the default)\n- `SeparatePage`: each slide's notes on a separate page\n- `PageComments`: the notes as page comments",
-          "message": "Způsob převodu poznámek přednášejícího:\n- `Disabled`: poznámky přednášejícího se nepřevádějí (výchozí)\n- `SeparatePage`: poznámky každého snímku na samostatné stránce\n- `PageComments`: poznámky jako komentáře ke stránce"
+          "source": "How the speaker notes of the slides are converted",
+          "message": "Způsob převodu poznámek přednášejícího"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOkRpc2FibGVk.display_name": {
           "source": "Disabled",
           "message": "Zakázáno"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOkRpc2FibGVk.desc": {
+          "source": "Speaker notes are not converted (the default)",
+          "message": "Poznámky přednášejícího se nepřevádějí (výchozí)"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlNlcGFyYXRlUGFnZQ.display_name": {
           "source": "Convert to Separate Page",
           "message": "Převést na samostatnou stránku"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlNlcGFyYXRlUGFnZQ.desc": {
+          "source": "The notes of each slide on a separate page",
+          "message": "Poznámky každého snímku na samostatné stránce"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlBhZ2VDb21tZW50cw.display_name": {
           "source": "Convert to Page Comments",
           "message": "Převést na komentáře ke stránce"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlBhZ2VDb21tZW50cw.desc": {
+          "source": "The notes as page comments",
+          "message": "Poznámky jako komentáře ke stránce"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1584,8 +1612,8 @@
           "message": "Časový limit konverze v sekundách"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "Časový limit konverze v sekundách, od `10` do `1200`; výchozí hodnota je `900`."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "Časový limit konverze v sekundách, od `10` do `1200`; pokud není nastaven, použije se výchozí hodnota konvertoru, například `900` pro dokumenty Office a `120` pro webové stránky."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -1764,8 +1792,8 @@
           "message": "Velikost stránky PDF"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.desc": {
-          "source": "The PDF page size; the default is `letter`",
-          "message": "Velikost stránky PDF; výchozí hodnota je `letter`"
+          "source": "The PDF page size",
+          "message": "Velikost stránky PDF"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEw.display_name": {
           "source": "A0",
@@ -1835,6 +1863,10 @@
           "source": "Letter",
           "message": "Letter"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcg.desc": {
+          "source": "Letter (the default)",
+          "message": "Letter (výchozí)"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZ2Fs.display_name": {
           "source": "Legal",
           "message": "Legal"
@@ -1852,12 +1884,16 @@
           "message": "Orientace stránky PDF"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.desc": {
-          "source": "The PDF page orientation; the default is `portrait`",
-          "message": "Orientace stránky PDF; výchozí hodnota je `portrait`"
+          "source": "The PDF page orientation",
+          "message": "Orientace stránky PDF"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
           "source": "Portrait",
           "message": "Na výšku"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.desc": {
+          "source": "Portrait (the default)",
+          "message": "Na výšku (výchozí)"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmxhbmRzY2FwZQ.display_name": {
           "source": "Landscape",
@@ -1956,8 +1992,24 @@
           "message": "Typ média CSS použitý pro vykreslení"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.desc": {
-          "source": "The CSS media type used for rendering, for example `screen` (the default) or `print`",
-          "message": "Typ média CSS použitý pro vykreslení, například `screen` (výchozí) nebo `print`"
+          "source": "The CSS media type used for rendering the page; other media types can also be given",
+          "message": "Typ média CSS použitý pro vykreslení stránky; lze zadat i jiné typy médií"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnNjcmVlbg.display_name": {
+          "source": "Screen",
+          "message": "Screen"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnNjcmVlbg.desc": {
+          "source": "The page as shown on a screen (the default)",
+          "message": "Stránka tak, jak se zobrazuje na obrazovce (výchozí)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnByaW50.display_name": {
+          "source": "Print",
+          "message": "Tisk"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnByaW50.desc": {
+          "source": "The page with its print styles",
+          "message": "Stránka s tiskovými styly"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TG9hZExhenlDb250ZW50.display_name": {
           "source": "Load Lazy Content",
@@ -2004,8 +2056,8 @@
           "message": "Časový limit konverze v sekundách"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "Časový limit konverze v sekundách, od `10` do `1200`; výchozí hodnota je `900`."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "Časový limit konverze v sekundách, od `10` do `1200`; pokud není nastaven, použije se výchozí hodnota konvertoru, například `900` pro dokumenty Office a `120` pro webové stránky."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -2028,8 +2080,8 @@
           "message": "Převést stránky PDF do obrázků JPG, PNG, TIFF nebo WebP"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.desc": {
-          "source": "Converts the pages of a PDF to images; one image file is returned for each page.\n\nChoose the image `format` and resolution, and optionally a page range.",
-          "message": "Převede stránky PDF do obrázků; pro každou stránku se vrátí jeden soubor obrázku.\n\nVyberte `format` obrázku a rozlišení a volitelně rozsah stránek."
+          "source": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF file.\n\nChoose the image `format` and resolution, and optionally a page range.",
+          "message": "Převede stránky PDF do obrázků: jeden soubor obrázku pro každou stránku nebo jeden vícestránkový soubor TIFF.\n\nVyberte `format` obrázku a rozlišení a volitelně rozsah stránek."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.display_name": {
           "source": "File",
@@ -2163,6 +2215,18 @@
           "source": "The filename",
           "message": "Název souboru"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "Zdrojová URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "Adresa URL souboru, který se má převést"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "Adresa URL souboru, který se má převést; ConvertAPI stáhne soubor z této adresy.\n\n**Příklad**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.display_name": {
           "source": "Image Format",
           "message": "Formát obrázku"
@@ -2172,8 +2236,8 @@
           "message": "Formát obrázku"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.desc": {
-          "source": "The image format of the output files; one image is created for each page",
-          "message": "Formát obrázku výstupních souborů; pro každou stránku se vytvoří jeden obrázek"
+          "source": "The image format of the output files",
+          "message": "Formát obrázku výstupních souborů"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpwZw.display_name": {
           "source": "JPG",
@@ -2187,21 +2251,13 @@
           "source": "TIFF",
           "message": "TIFF"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOnRpZmY.desc": {
+          "source": "One multi-page TIFF file for all the pages",
+          "message": "Jeden vícestránkový soubor TIFF se všemi stránkami"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOndlYnA.display_name": {
           "source": "WebP",
           "message": "WebP"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.display_name": {
-          "source": "Source URL",
-          "message": "Zdrojová URL"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.short_desc": {
-          "source": "URL of the file to convert",
-          "message": "Adresa URL souboru, který se má převést"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.desc": {
-          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
-          "message": "Adresa URL souboru, který se má převést; ConvertAPI stáhne soubor z této adresy.\n\n**Příklad**: `https://cdn.convertapi.com/public/files/demo.docx`"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.UGFnZVJhbmdl.display_name": {
           "source": "Page Range",
@@ -2272,8 +2328,8 @@
           "message": "Časový limit konverze v sekundách"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "Časový limit konverze v sekundách, od `10` do `1200`; výchozí hodnota je `900`."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "Časový limit konverze v sekundách, od `10` do `1200`; pokud není nastaven, použije se výchozí hodnota konvertoru, například `900` pro dokumenty Office a `120` pro webové stránky."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -2452,20 +2508,32 @@
           "message": "Přidat záložku pro každý sloučený soubor"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.desc": {
-          "source": "Adds a top-level bookmark for each merged file:\n- `disabled`: no bookmarks (the default)\n- `filename`: the file name\n- `title`: the PDF title from the metadata",
-          "message": "Přidá záložku nejvyšší úrovně pro každý sloučený soubor:\n- `disabled`: žádné záložky (výchozí)\n- `filename`: název souboru\n- `title`: název PDF z metadat"
+          "source": "Adds a top-level bookmark for each merged file",
+          "message": "Přidá záložku nejvyšší úrovně pro každý sloučený soubor"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
           "source": "Disabled",
           "message": "Zakázáno"
         },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "No bookmarks (the default)",
+          "message": "Žádné záložky (výchozí)"
+        },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmZpbGVuYW1l.display_name": {
           "source": "File Name",
           "message": "Název souboru"
         },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmZpbGVuYW1l.desc": {
+          "source": "Bookmarks named with the file names",
+          "message": "Záložky pojmenované podle názvů souborů"
+        },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOnRpdGxl.display_name": {
           "source": "Title",
           "message": "Název"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOnRpdGxl.desc": {
+          "source": "Bookmarks named with the PDF titles from the metadata",
+          "message": "Záložky pojmenované podle názvů PDF z metadat"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UmVtb3ZlRHVwbGljYXRlRm9udHM.display_name": {
           "source": "Remove Duplicate Fonts",
@@ -2512,8 +2580,8 @@
           "message": "Časový limit konverze v sekundách"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "Časový limit konverze v sekundách, od `10` do `1200`; výchozí hodnota je `900`."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "Časový limit konverze v sekundách, od `10` do `1200`; pokud není nastaven, použije se výchozí hodnota konvertoru, například `900` pro dokumenty Office a `120` pro webové stránky."
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -2671,6 +2739,18 @@
           "source": "The filename",
           "message": "Název souboru"
         },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "Zdrojová URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "Adresa URL souboru, který se má převést"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "Adresa URL souboru, který se má převést; ConvertAPI stáhne soubor z této adresy.\n\n**Příklad**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.display_name": {
           "source": "Preset",
           "message": "Předvolba"
@@ -2710,18 +2790,6 @@
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOnByaW50ZXI.display_name": {
           "source": "Printer (300 DPI Images)",
           "message": "Tiskárna (obrázky 300 DPI)"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.display_name": {
-          "source": "Source URL",
-          "message": "Zdrojová URL"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.short_desc": {
-          "source": "URL of the file to convert",
-          "message": "Adresa URL souboru, který se má převést"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.desc": {
-          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
-          "message": "Adresa URL souboru, který se má převést; ConvertAPI stáhne soubor z této adresy.\n\n**Příklad**: `https://cdn.convertapi.com/public/files/demo.docx`"
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UGFzc3dvcmQ.display_name": {
           "source": "Open Password",
@@ -2768,8 +2836,8 @@
           "message": "Časový limit konverze v sekundách"
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "Časový limit konverze v sekundách, od `10` do `1200`; výchozí hodnota je `900`."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "Časový limit konverze v sekundách, od `10` do `1200`; pokud není nastaven, použije se výchozí hodnota konvertoru, například `900` pro dokumenty Office a `120` pro webové stránky."
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",

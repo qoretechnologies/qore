@@ -83,8 +83,11 @@ public namespace ConvertApiDataProvider {
             "desc": "The file to convert; provide either this or a source URL.\n\n"
                 "The file is sent to ConvertAPI in the request; the file name extension must match the source "
                 "format of the converter.",
-            "required_groups": ("source",),
-            "preselected": True,
+            "attr": {
+                "required_groups": ("source",),
+                "preselected": True,
+                "exclusive_with": ("url",),
+            },
         },
         "url": {
             "type": UriOrNothingType,
@@ -92,27 +95,55 @@ public namespace ConvertApiDataProvider {
             "short_desc": "URL of the file to convert",
             "desc": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n"
                 "**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
-            "required_groups": ("source",),
+            "example_value": "https://cdn.convertapi.com/public/files/demo.docx",
+            "attr": {
+                "required_groups": ("source",),
+                "preselected": True,
+                "exclusive_with": ("file",),
+            },
         },
+        # soft lists, so that a single file or URL is accepted as a list with one element
         "files": {
-            "type": new ListDataType("ConvertApiFileList", FileDataType, True),
+            "type": new SoftListDataType("ConvertApiFileList", FileDataType, True),
             "display_name": "Files",
             "short_desc": "The files to convert for converters that take several files",
             "desc": "The files to convert for converters that take several input files, such as `pdf` to "
                 "`merge`, `images` to `pdf` or `any` to `zip`.\n\n"
                 "They are sent as the `Files` parameter, together with any files given in `urls`.",
-            "required_groups": ("source",),
+            "attr": {
+                "required_groups": ("source",),
+            },
         },
         "urls": {
-            "type": new ListDataType("ConvertApiUrlList", SoftStringType, True),
+            "type": new SoftListDataType("ConvertApiUrlList", SoftStringType, True),
             "display_name": "Source URLs",
             "short_desc": "URLs of the files for converters that take several files",
             "desc": "The URLs of the files to convert for converters that take several input files, such as "
                 "`pdf` to `merge`.\n\n"
                 "They are sent as the `Files` parameter, together with any files given in `files`.",
-            "required_groups": ("source",),
+            "attr": {
+                "required_groups": ("source",),
+            },
         },
     };
+
+    #! The fields that each source field of the generic convert action excludes: no converter takes both a single
+    #! input (\c file or \c url) and several (\c files and \c urls)
+    const ConvertApiAnySourceExclusive = {
+        "file": ("url", "files", "urls"),
+        "url": ("file", "files", "urls"),
+        "files": ("file", "url"),
+        "urls": ("file", "url"),
+    };
+
+    #! The source fields of the generic convert action, which form no required group
+    /** A few converters, such as \c data to \c qrcode, take their input in a converter parameter instead of a source
+        file, so the generic action checks the input of a request against its converter (see
+        @ref ConvertApiDataProviderBase::takesFileInput())
+    */
+    public const ConvertApiAnySourceFields = map {$1.key: $1.value + {
+        "attr": ($1.value.attr - "required_groups") + {"exclusive_with": ConvertApiAnySourceExclusive{$1.key}},
+    }}, ConvertApiSourceFields.pairIterator();
 
     #! Request fields for the output of a conversion and the other converter parameters
     public const ConvertApiOutputFields = {
@@ -133,12 +164,14 @@ public namespace ConvertApiDataProvider {
             "desc": "The name of the output file(s); ConvertAPI appends the extension of the destination "
                 "format, and an index when the conversion creates several files.\n\n"
                 "**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+            "example_value": "report",
         },
         "timeout": {
             "type": SoftIntOrNothingType,
             "display_name": "Timeout",
             "short_desc": "The conversion timeout in seconds",
-            "desc": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+            "desc": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default "
+                "applies, for example `900` for office documents and `120` for web pages.",
             "example_value": 300,
         },
         "parameters": {
@@ -153,6 +186,7 @@ public namespace ConvertApiDataProvider {
                 "- A file hash (`name` and `content`) is sent as a file\n"
                 "- A list of file hashes is sent as a list of files\n\n"
                 "**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+            "example_value": {"PageRange": "1-3", "Pdfa": True},
         },
     };
 

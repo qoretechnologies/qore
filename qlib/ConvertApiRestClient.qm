@@ -110,6 +110,20 @@ public class ConvertApiRestClientBase {
         #! ConvertAPI API base URL
         const DefaultApiUrl = "https://v2.convertapi.com";
 
+        #! The default ConvertAPI region: the global endpoint
+        const DefaultRegion = "global";
+
+        #! The API URLs of the ConvertAPI regions, as listed in the servers of ConvertAPI's OpenAPI description
+        const RegionUrls = {
+            "global": DefaultApiUrl,
+            "eu": "https://eu-v2.convertapi.com",
+            "uk": "https://uk-v2.convertapi.com",
+            "us": "https://us-v2.convertapi.com",
+            "ca": "https://ca-v2.convertapi.com",
+            "as": "https://as-v2.convertapi.com",
+            "au": "https://au-v2.convertapi.com",
+        };
+
         #! Default "data" option value
         const DefaultData = "json";
 
@@ -134,6 +148,11 @@ public class ConvertApiRestClientBase {
     }
 
     #! returns options for @ref ConvertApiRestClient::ConvertApiRestClient::constructor()
+    /** The URL is the API URL of the \c region option (see @ref RegionUrls; @ref DefaultRegion if not given), unless
+        a \c url option is given, which takes precedence
+
+        @throw CONVERTAPI-ERROR missing \c apikey option or invalid \c region option
+    */
     static hash<auto> getOptions(hash<auto> opts) {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
@@ -142,9 +161,11 @@ public class ConvertApiRestClientBase {
         # for {"X-Count": 1}), and adding a string header would throw
         *hash<auto!> hdr = rv.headers;
 
-        # Set API URL (use default unless caller provided an override)
+        # the region is validated even if an explicit URL is given
+        string region_url = ConvertApiRestClientBase::getRegionUrl(opts.region ?? DefaultRegion);
+        # an explicit URL takes precedence over the URL of the region
         if (!rv.url) {
-            rv.url = DefaultApiUrl;
+            rv.url = region_url;
         }
 
         # Validate apikey is provided
@@ -165,6 +186,21 @@ public class ConvertApiRestClientBase {
 
         rv.headers = hdr;
         return rv;
+    }
+
+    #! Returns the API URL of a ConvertAPI region
+    /** @param region the region; see @ref RegionUrls
+
+        @return the API URL of the region
+
+        @throw CONVERTAPI-ERROR unknown region
+    */
+    static string getRegionUrl(string region) {
+        *string url = RegionUrls{region};
+        if (!url) {
+            throw "CONVERTAPI-ERROR", sprintf("invalid region %y; allowed values: %y", region, keys RegionUrls);
+        }
+        return url;
     }
 }
 
@@ -188,9 +224,10 @@ ConvertApiRestClient convertapi({"apikey": "your-api-token"});
         @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
         plus:
         - \c apikey: the ConvertAPI API token (required)
+        - \c region: the ConvertAPI region (see @ref ConvertApiRestClientBase::RegionUrls); the default is
+          \c global (\c https://v2.convertapi.com)
 
-        If the \c url option is given, it takes precedence over the default API URL
-        (\c https://v2.convertapi.com).
+        If the \c url option is given, it takes precedence over the API URL of the region.
 
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
@@ -208,6 +245,7 @@ ConvertApiRestClient convertapi({"apikey": "your-api-token"});
 /** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
     this class provides the following options:
     - \c apikey: the ConvertAPI API token
+    - \c region: the ConvertAPI region, from which the connection URL is derived
 
     @see @ref ConvertApiRestClient::ConvertApiRestClient::constructor() for more information on the above options
 */
@@ -249,6 +287,52 @@ public class ConvertApiRestConnection inherits RestClient::RestConnection {
                         "ConvertAPI account.",
                     "sensitive": True,
                     "preselected": True,
+                },
+                "region": <ConnectionOptionInfo>{
+                    "display_name": "Region",
+                    "short_desc": "The ConvertAPI region that processes the requests",
+                    "type": "string",
+                    "desc": "The ConvertAPI region whose servers process the requests; the connection URL is derived "
+                        "from it.",
+                    "default_value": ConvertApiRestClientBase::DefaultRegion,
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "global",
+                            "display_name": "Global",
+                            "desc": "The global API endpoint https://v2.convertapi.com (the default)",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "eu",
+                            "display_name": "European Union",
+                            "desc": "The API endpoint https://eu-v2.convertapi.com",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "uk",
+                            "display_name": "United Kingdom",
+                            "desc": "The API endpoint https://uk-v2.convertapi.com",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "us",
+                            "display_name": "United States",
+                            "desc": "The API endpoint https://us-v2.convertapi.com",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "ca",
+                            "display_name": "Canada",
+                            "desc": "The API endpoint https://ca-v2.convertapi.com",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "as",
+                            "display_name": "Asia",
+                            "desc": "The API endpoint https://as-v2.convertapi.com",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "au",
+                            "display_name": "Australia",
+                            "desc": "The API endpoint https://au-v2.convertapi.com",
+                        },
+                    ),
                 },
                 "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": ConvertApiRestClientBase::DefaultPingHeaders,
@@ -315,11 +399,47 @@ public class ConvertApiRestConnection inherits RestClient::RestConnection {
     }
 
     #! returns config for @ref ConvertApiRestConnection::constructor()
-    /** The default URL is used only if the config gives none, as with the other constructor, so that a connection
-        can be configured for another endpoint, such as a proxy
+    /** The connection URL is derived from the \c region option (see getConnectionUrl())
     */
     private static hash<auto> getConfig(hash<auto> config) {
-        return config.url.val() ? config : config + {"url": DefaultConnectionUrl};
+        return config + {
+            "url": ConvertApiRestConnection::getConnectionUrl(config.opts),
+        };
+    }
+
+    #! Returns the connection URL for the given connection options
+    /** The connection URL is derived from the \c region option, as the URL of an \c auto_url connection is not
+        shown to the user
+
+        @param opts the connection options
+
+        @return the API URL of the region (see @ref ConvertApiRestClientBase::RegionUrls) with the \c convertapi
+        scheme; if the \c region option is invalid, the URL of the default region is returned, and the invalid option
+        is reported when the options are validated
+    */
+    static string getConnectionUrl(*hash<auto> opts) {
+        string url = ConvertApiRestClientBase::RegionUrls{opts.region ?? ConvertApiRestClientBase::DefaultRegion}
+            ?? ConvertApiRestClientBase::DefaultApiUrl;
+        return regex_subst(url, "^https:", "convertapi:");
+    }
+
+    #! Sets the update options code for the connection
+    /** The closure or call reference must have the following signature:
+        <tt>update_options(hash<auto> options)</tt>
+    */
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        # update the URL immediately if necessary; the URL is derived from the region option
+        if (update_options) {
+            string expected_url = getConnectionUrl(opts);
+            if (url != expected_url) {
+                # NOTE: do not update the URL or real URL values here, or the external update will fail, because it
+                # will believe that no changes are necessary
+                doUpdateOptions(self, {
+                    "url": expected_url,
+                });
+            }
+        }
     }
 
     #! returns \c "convertapi"

@@ -27,6 +27,9 @@ public namespace ConvertApiDataProvider {
 
 
 #! Request fields for the source and destination formats of a converter
+/** The fields also give the reference data of their action options: the destination formats depend on the source
+    format, and are fetched again when it changes
+*/
 public const ConvertApiFormatFields = {
     "from": {
         "type": StringType,
@@ -35,6 +38,9 @@ public const ConvertApiFormatFields = {
         "desc": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`.\n\n"
             "The list of converters is in the [ConvertAPI documentation](https://www.convertapi.com/doc).",
         "example_value": "docx",
+        "ref_data": "source_formats",
+        "has_dependents": True,
+        "on_change": ("refetch",),
     },
     "to": {
         "type": StringType,
@@ -44,14 +50,17 @@ public const ConvertApiFormatFields = {
             "Some converters are PDF tools, whose destination format names the operation, for example `pdf` to "
             "`merge`, `split`, `compress`, `protect`, `ocr` or `pdfa`.",
         "example_value": "pdf",
+        "ref_data": "destination_formats",
+        "depends_on": ("from",),
     },
 };
 
 #! Request type for the generic convert action
 public class ConvertApiConvertRequestDataType inherits HashDataType {
     public {
-        #! Field definitions
-        const Fields = ConvertApiSourceFields + ConvertApiFormatFields + ConvertApiOutputFields;
+        #! Field definitions: the formats first, as they are required, then the source fields, which form no
+        #! required group for this action, then the output fields
+        const Fields = ConvertApiFormatFields + ConvertApiAnySourceFields + ConvertApiOutputFields;
     }
 
     #! Creates the type
@@ -67,7 +76,7 @@ public class ConvertApiConvertDataProvider inherits ConvertApiConversionDataProv
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "name": "convert",
+            "name": "convert-file",
             "desc": "Converts files with any ConvertAPI converter, given by its source and destination formats",
             "type": "ConvertApiConvertDataProvider",
             "supports_request": True,
@@ -76,6 +85,9 @@ public class ConvertApiConvertDataProvider inherits ConvertApiConversionDataProv
 
         #! Constructor options
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! The request type
+        static ConvertApiConvertRequestDataType RequestType();
     }
 
     #! Creates the object with a REST client
@@ -84,7 +96,7 @@ public class ConvertApiConvertDataProvider inherits ConvertApiConversionDataProv
 
     #! Returns the provider name
     string getName() {
-        return "convert";
+        return "convert-file";
     }
 
     #! Returns the provider description
@@ -94,7 +106,7 @@ public class ConvertApiConvertDataProvider inherits ConvertApiConversionDataProv
 
     #! Returns the request type
     private *AbstractDataProviderType getRequestTypeImpl() {
-        return new ConvertApiConvertRequestDataType();
+        return RequestType;
     }
 
     #! Returns the source and destination formats

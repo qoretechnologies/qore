@@ -137,9 +137,11 @@ class FakeConvertApiHandler inherits AbstractHttpRequestHandler {
             );
         } else if (hdr.path == "info") {
             rv = (
-                {"SourceFileFormats": ("docx",), "DestinationFileFormats": ("pdf",)},
-                {"SourceFileFormats": ("docx",), "DestinationFileFormats": ("txt",)},
-                {"SourceFileFormats": ("pdf",), "DestinationFileFormats": ("merge",)},
+                {"SourceFileFormats": ("docx",), "SourceExtensions": ("doc", "docx"),
+                    "DestinationFileFormats": ("pdf",)},
+                {"SourceFileFormats": ("docx",), "SourceExtensions": ("doc", "docx"),
+                    "DestinationFileFormats": ("txt",)},
+                {"SourceFileFormats": ("pdf",), "SourceExtensions": ("pdf",), "DestinationFileFormats": ("merge",)},
                 # a converter that takes its input in a parameter instead of a source file
                 {
                     "SourceFileFormats": ("data",),
@@ -181,8 +183,8 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         #! All expected child provider names
         const ExpectedChildren = (
             "compress-pdf",
-            "convert",
             "convert-excel-to-pdf",
+            "convert-file",
             "convert-html-to-pdf",
             "convert-pdf-to-image",
             "convert-powerpoint-to-pdf",
@@ -219,6 +221,8 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         addTestCase("negative tests", \negativeTests());
         addTestCase("client option tests", \clientOptionTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("semantic string type tests", \semanticStringTypeTests());
+        addTestCase("option presentation tests", \optionPresentationTests());
 
         # Integration tests (require CONVERTAPI_TOKEN)
         addTestCase("integration tests", \integrationTests());
@@ -342,9 +346,10 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
                 "timeout", "parameters")) {
             assertTrue(req_fields.hasKey(key), key);
         }
-        # the source fields are declared first
+        # the formats are declared first, as they are required, then the source fields, which form no required
+        # group for the generic action
         list<string> req_keys = keys req_fields;
-        assertEq(("file", "url", "files", "urls"), (req_keys[0], req_keys[1], req_keys[2], req_keys[3]));
+        assertEq(("from", "to", "file", "url", "files", "urls"), req_keys[0..5]);
 
         # single-file shortcuts do not take several files
         ConvertApiDataProvider::ConvertApiConvertWordToPdfRequestDataType word_req();
@@ -380,10 +385,16 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         assertEq("https://v2.convertapi.com", conn.getAsync(False).getUrl());
         assertTrue(conn.getDataProvider() instanceof ConvertApiDataProvider::ConvertApiDataProvider);
 
-        # the config constructor keeps a configured URL and uses the default URL only when none is given
-        ConvertApiRestClient::ConvertApiRestConnection proxy_conn({"name": "proxy", "desc": "proxy connection",
-            "url": "convertapi://proxy.example.com", "opts": {"apikey": "fake-key-for-test"}}, {"monitor": False});
-        assertEq("https://proxy.example.com", proxy_conn.getAsync(False).getUrl());
+        # the connection URL is derived from the region option, as the URL of an auto_url connection is not shown
+        assertEq("global", scheme.options.region.default_value);
+        assertEq(keys ConvertApiRestClient::ConvertApiRestClientBase::RegionUrls,
+            (map $1.value, scheme.options.region.allowed_values));
+        foreach hash<auto> i in (ConvertApiRestClient::ConvertApiRestClientBase::RegionUrls.pairIterator()) {
+            ConvertApiRestClient::ConvertApiRestConnection rconn({"name": i.key, "desc": "regional connection",
+                "url": "convertapi://other.example.com", "opts": {"apikey": "fake-key-for-test", "region": i.key}},
+                {"monitor": False});
+            assertEq(i.value, rconn.getAsync(False).getUrl(), i.key);
+        }
         ConvertApiRestClient::ConvertApiRestConnection default_conn({"name": "default", "desc": "default connection",
             "opts": {"apikey": "fake-key-for-test"}}, {"monitor": False});
         assertEq("https://v2.convertapi.com", default_conn.getAsync(False).getUrl());
@@ -408,7 +419,7 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         }
 
         # the formats of the generic actions are reference data dropdowns that depend on each other
-        foreach string action in (("convert", "get-converter-info")) {
+        foreach string action in (("convert-file", "get-converter-info")) {
             hash<auto> opts = actionMap{action}.options;
             assertEq("source_formats", opts.from.ref_data, action);
             assertTrue(opts.from.has_dependents, action);
@@ -417,9 +428,30 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
             assertTrue(opts.from.required, action);
             assertTrue(opts.to.required, action);
         }
-        assertTrue(actionMap."convert".options.file.preselected);
+        assertTrue(actionMap."convert-file".options.file.preselected);
         assertTrue(actionMap."convert-pdf-to-image".options.format.required);
         assertTrue(actionMap."merge-pdf".options.files.preselected);
+
+        # the source options come first and are preselected, and a single input is either a file or a URL
+        foreach string action in (("convert-word-to-pdf", "convert-excel-to-pdf", "convert-powerpoint-to-pdf",
+                "convert-pdf-to-image", "compress-pdf")) {
+            hash<auto> opts = actionMap{action}.options;
+            assertEq(("file", "url"), (keys opts)[0..1], action);
+            assertTrue(opts.file.preselected, action);
+            assertTrue(opts.url.preselected, action);
+            assertEq(("source",), opts.file.required_groups, action);
+            assertEq(("source",), opts.url.required_groups, action);
+            assertEq(("url",), opts.file.exclusive_with, action);
+            assertEq(("file",), opts.url.exclusive_with, action);
+        }
+        # the generic action: the formats, then the input, which is not required for converters that take it in a
+        # parameter, then the parameters; a single input and several exclude each other
+        hash<auto> copts = actionMap."convert-file".options;
+        assertEq(("from", "to", "file", "url", "files", "urls", "parameters"), (keys copts)[0..6]);
+        assertNothing(copts.file.required_groups);
+        assertEq(("url", "files", "urls"), copts.file.exclusive_with);
+        assertEq(("file", "url"), copts.files.exclusive_with);
+        assertTrue(copts.parameters.preselected);
     }
 
     #! Request tests - verify the ConvertAPI parameters built for requests
@@ -533,6 +565,8 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
             "docx/to");
         assertEq("docx", ConvertApiDataProvider::ConvertApiDataProviderBase::checkFormat("DOCX"));
         assertEq("delete-pages", ConvertApiDataProvider::ConvertApiDataProviderBase::checkFormat("delete-pages"));
+        # the * wildcard would select an arbitrary converter
+        assertThrows("CONVERTAPI-ERROR", \ConvertApiDataProvider::ConvertApiDataProviderBase::checkFormat(), "*");
 
         # a file and a URL cannot both be given, also when the URL is sent as a parameter (the html converters)
         assertThrows("CONVERTAPI-ERROR", \ConvertApiDataProvider::ConvertApiDataProviderBase::makeParameters(), ({
@@ -554,6 +588,12 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
             "parameters": {"Data": "12345"},
         }, NOTHING, NOTHING, True);
         assertEq("12345", dmap.Data.Value);
+
+        # no converter takes both a single input and several
+        assertThrows("CONVERTAPI-ERROR", \ConvertApiDataProvider::ConvertApiDataProviderBase::makeParameters(), ({
+            "url": "https://example.com/a.pdf",
+            "urls": ("https://example.com/b.pdf",),
+        },));
 
         # the source is given only in the source fields: a Url parameter cannot conflict with them
         assertThrows("CONVERTAPI-ERROR", \ConvertApiDataProvider::ConvertApiDataProviderBase::makeParameters(), ({
@@ -624,6 +664,15 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
             }}).headers);
         assertThrows("CONVERTAPI-ERROR", \ConvertApiRestClient::ConvertApiRestClientBase::getOptions(),
             {"url": "http://x"});
+
+        # the URL is the API URL of the region, unless a URL is given
+        assertEq("https://uk-v2.convertapi.com", ConvertApiRestClient::ConvertApiRestClientBase::getOptions(
+            {"apikey": "key1", "region": "uk"}).url);
+        assertEq("http://localhost:1", ConvertApiRestClient::ConvertApiRestClientBase::getOptions(
+            {"apikey": "key1", "region": "uk", "url": "http://localhost:1"}).url);
+        assertThrows("CONVERTAPI-ERROR", "invalid region", sub () {
+            ConvertApiRestClient::ConvertApiRestClientBase::getOptions({"apikey": "key1", "region": "mars"});
+        });
     }
 
     #! Requests against a local server
@@ -670,7 +719,7 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
 
         # the generic action uses the formats in the URL path and renders HTML URLs as web pages
         handler.requests = ();
-        provider.getChildProviderEx("convert").doRequest({
+        provider.getChildProviderEx("convert-file").doRequest({
             "from": "html",
             "to": "pdf",
             "url": "https://example.com",
@@ -714,7 +763,7 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
 
         # an error response is raised as a ConvertAPI error with the response
         try {
-            provider.getChildProviderEx("convert").doRequest({"from": "bad", "to": "pdf",
+            provider.getChildProviderEx("convert-file").doRequest({"from": "bad", "to": "pdf",
                 "url": "https://example.com/a"});
             assertTrue(False, "no exception");
         } catch (hash<ExceptionInfo> ex) {
@@ -733,8 +782,12 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         });
 
         # reference data
-        AbstractDataProvider convert = provider.getChildProviderEx("convert");
+        AbstractDataProvider convert = provider.getChildProviderEx("convert-file");
         assertEq(("data", "docx", "pdf"), (map $1.value, convert.getReferenceData("source_formats")));
+        # file formats are shown in upper case, other formats in title case, and converters by their titles
+        assertEq(("Data", "DOCX", "PDF"), (map $1.display_name, convert.getReferenceData("source_formats")));
+        assertEq(("DOCX to PDF", "DOCX to TXT"), (map $1.display_name,
+            convert.getReferenceData("destination_formats", {"from": "docx"})));
         assertEq(("pdf", "txt"), (map $1.value, convert.getReferenceData("destination_formats", {"from": "docx"})));
         assertNothing(convert.getReferenceData("destination_formats"));
 
@@ -820,6 +873,60 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         }
     }
 
+    #! The source URLs are typed as URIs
+    semanticStringTypeTests() {
+        # ConvertAPI downloads the file of a source URL, or renders the web page, so the URL must carry a scheme;
+        # the "uri" type makes that explicit and rejects a scheme-less value before a request is made
+        hash<string, AbstractDataProviderType> types = {
+            "convert-file": ConvertApiDataProvider::ConvertApiConvertDataProvider::RequestType.getFields().url
+                .getType(),
+            "convert-word-to-pdf": ConvertApiDataProvider::ConvertApiConvertWordToPdfDataProvider::RequestType
+                .getFields().url.getType(),
+            "convert-html-to-pdf": ConvertApiDataProvider::ConvertApiConvertHtmlToPdfDataProvider::RequestType
+                .getFields().url.getType(),
+        };
+        foreach hash<auto> i in (types.pairIterator()) {
+            AbstractDataProviderType url_type = i.value;
+            assertEq("uri", url_type.getTag("qore.external_name"), i.key);
+            assertEq("string", url_type.getBaseTypeName(), i.key);
+            assertEq("https://example.com/a.docx", url_type.acceptsValue("https://example.com/a.docx"), i.key);
+            # this rejection is intentional: ConvertAPI cannot download a scheme-less value
+            assertThrows("TYPE-VALUE-ERROR", "not a valid", sub () {
+                url_type.acceptsValue("www.example.com");
+            }, NOTHING, i.key);
+        }
+        # the download URL of a stored output file is a URI as well
+        assertEq("uri", ConvertApiDataProvider::ConvertApiFileResultDataType.getFields().Url.getType()
+            .getTag("qore.external_name"));
+    }
+
+    #! Every option of every action has a display name, a plain short description and a description
+    optionPresentationTests() {
+        # the options that name another object without reference data, and why
+        hash<string, bool> name_option_reasons = {
+            # it names the output file of the conversion, not an existing object
+            "file_name": True,
+            # the worksheets of a file that has not been sent yet cannot be listed
+            "WorksheetName": True,
+        };
+        *list<hash<DataProviderActionInfo>> actions = select DataProviderActionCatalog::getActions("ConvertApi"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
+        assertEq(ExpectedChildren.size(), actions.size());
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            foreach hash<auto> i in (action.options.pairIterator()) {
+                string label = sprintf("%s: %s", action.action, i.key);
+                assertTrue(i.value.display_name.val(), label);
+                assertTrue(i.value.short_desc.val(), label);
+                assertTrue(i.value.desc.val(), label);
+                assertTrue(i.value.short_desc.size() <= 80, label);
+                assertFalse(i.value.short_desc =~ /[`*\[]/, label);
+                if (i.key =~ /(_id|_name|Id|Name)$/ && !i.value.ref_data) {
+                    assertTrue(name_option_reasons{i.key} ?? False, label);
+                }
+            }
+        }
+    }
+
     #! Integration tests - require a real ConvertAPI token; each test runs one or more conversions
     integrationTests() {
         ConvertApiDataProvider::ConvertApiDataProvider prov = createRealProvider();
@@ -827,6 +934,7 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         testPing();
         testReferenceData(prov);
         testGetConverterInfo(prov);
+        testValueListsMatchConvertApi(prov);
         testWordToPdfFromUrl(prov);
         testHtmlToPdfFromFile(prov);
         testGenericConvertStoreFile(prov);
@@ -834,6 +942,44 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         testMergePdf(prov);
         testCompressPdf(prov);
         testApiError(prov);
+    }
+
+    #! Checks the converter parameters and the value lists of the shortcut actions against ConvertAPI
+    /** The parameters are read with get-converter-info, which converts nothing, so a value list that ConvertAPI
+        changes is found here instead of by the users of the action
+    */
+    private testValueListsMatchConvertApi(ConvertApiDataProvider::ConvertApiDataProvider prov) {
+        # the converter of each shortcut action; the format of convert-pdf-to-image selects its converter
+        hash<string, list<string>> converters = {
+            "convert-word-to-pdf": ("docx", "pdf"),
+            "convert-excel-to-pdf": ("xlsx", "pdf"),
+            "convert-powerpoint-to-pdf": ("pptx", "pdf"),
+            "convert-html-to-pdf": ("html", "pdf"),
+            "convert-pdf-to-image": ("pdf", "jpg"),
+            "merge-pdf": ("pdf", "merge"),
+            "compress-pdf": ("pdf", "compress"),
+        };
+        AbstractDataProvider info_prov = prov.getChildProviderEx("get-converter-info");
+        foreach hash<auto> i in (converters.pairIterator()) {
+            hash<auto> info = info_prov.doRequest({"from": i.value[0], "to": i.value[1]});
+            hash<string, hash<auto>> params = map {$1.Name: $1}, info.Parameters;
+            foreach hash<auto> f in (prov.getChildProviderEx(i.key).getRequestType().getFields().pairIterator()) {
+                # the common fields and the image format are handled by the module
+                if (inlist(f.key, ConvertApiDataProvider::ConvertApiCommonFieldNames) || f.key == "format") {
+                    continue;
+                }
+                string label = sprintf("%s: %s", i.key, f.key);
+                assertTrue(params.hasKey(f.key), label);
+                *list<hash<AllowedValueInfo>> allowed = f.value.getAllowedValues();
+                *hash<auto> values = params{f.key}.Values;
+                # a free-text parameter with suggested values, such as CssMediaType, has no Values
+                if (allowed && values) {
+                    foreach hash<AllowedValueInfo> av in (allowed) {
+                        assertTrue(values.hasKey(av.value), sprintf("%s: %y", label, av.value));
+                    }
+                }
+            }
+        }
     }
 
     #! Asserts the data starts with the expected magic prefix
@@ -855,7 +1001,7 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
 
     #! Tests the format reference data
     private testReferenceData(ConvertApiDataProvider::ConvertApiDataProvider prov) {
-        AbstractDataProvider convert = prov.getChildProviderEx("convert");
+        AbstractDataProvider convert = prov.getChildProviderEx("convert-file");
         list<auto> sources = map $1.value, convert.getReferenceData("source_formats");
         assertGt(50, sources.size(), "source formats");
         foreach string fmt in (("docx", "xlsx", "pptx", "html", "pdf", "jpg")) {
@@ -905,7 +1051,7 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
 
     #! Tests the generic convert action with stored output files
     private testGenericConvertStoreFile(ConvertApiDataProvider::ConvertApiDataProvider prov) {
-        hash<auto> result = prov.getChildProviderEx("convert").doRequest({
+        hash<auto> result = prov.getChildProviderEx("convert-file").doRequest({
             "from": "docx",
             "to": "txt",
             "url": DemoDocxUrl,

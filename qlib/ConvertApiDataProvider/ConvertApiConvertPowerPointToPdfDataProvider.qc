@@ -55,13 +55,23 @@ public class ConvertApiConvertPowerPointToPdfRequestDataType inherits HashDataTy
                 "type": StringOrNothingType,
                 "display_name": "Convert Speaker Notes",
                 "short_desc": "How speaker notes are converted",
-                "desc": "How speaker notes are converted:\n- `Disabled`: speaker notes are not converted (the "
-                    "default)\n- `SeparatePage`: each slide's notes on a separate page\n- `PageComments`: the notes "
-                    "as page comments",
+                "desc": "How the speaker notes of the slides are converted",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "Disabled", "display_name": "Disabled"},
-                    <AllowedValueInfo>{"value": "SeparatePage", "display_name": "Convert to Separate Page"},
-                    <AllowedValueInfo>{"value": "PageComments", "display_name": "Convert to Page Comments"},
+                    <AllowedValueInfo>{
+                        "value": "Disabled",
+                        "display_name": "Disabled",
+                        "desc": "Speaker notes are not converted (the default)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "SeparatePage",
+                        "display_name": "Convert to Separate Page",
+                        "desc": "The notes of each slide on a separate page",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "PageComments",
+                        "display_name": "Convert to Page Comments",
+                        "desc": "The notes as page comments",
+                    },
                 ),
             },
             "Pdfa": {
@@ -95,6 +105,9 @@ public class ConvertApiConvertPowerPointToPdfDataProvider inherits ConvertApiCon
 
         #! Constructor options
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! The request type
+        static ConvertApiConvertPowerPointToPdfRequestDataType RequestType();
     }
 
     #! Creates the object with a REST client
@@ -113,7 +126,7 @@ public class ConvertApiConvertPowerPointToPdfDataProvider inherits ConvertApiCon
 
     #! Returns the request type
     private *AbstractDataProviderType getRequestTypeImpl() {
-        return new ConvertApiConvertPowerPointToPdfRequestDataType();
+        return RequestType;
     }
 
     #! Returns the source and destination formats

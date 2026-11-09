@@ -12,8 +12,8 @@
           "message": "Piattaforma ConvertAPI per la conversione di file e l'elaborazione di PDF"
         },
         "app.Q29udmVydEFwaQ.desc": {
-          "source": "[ConvertAPI](https://www.convertapi.com) converts files between more than 300 format pairs and processes PDF files.\n\n- Office documents, spreadsheets and presentations to and from PDF\n- Web pages and HTML to PDF\n- PDF to images, office formats, text and PDF/A\n- Images, e-books, CAD drawings, e-mail messages and archives\n- PDF tools: merge, split, compress, protect, OCR, watermark and more\n\nThe `convert` action runs any converter by its source and destination formats; the other actions are shortcuts for common conversions.",
-          "message": "[ConvertAPI](https://www.convertapi.com) converte file tra più di 300 coppie di formati ed elabora file PDF.\n\n- Documenti Office, fogli di calcolo e presentazioni da e verso PDF\n- Pagine web e HTML in PDF\n- PDF in immagini, formati Office, testo e PDF/A\n- Immagini, e-book, disegni CAD, messaggi e-mail e archivi\n- Strumenti PDF: unione, divisione, compressione, protezione, OCR, filigrana e altro\n\nL'azione `convert` esegue qualsiasi convertitore in base ai suoi formati di origine e di destinazione; le altre azioni sono scorciatoie per le conversioni più comuni."
+          "source": "[ConvertAPI](https://www.convertapi.com) converts files between more than 300 format pairs and processes PDF files.\n\n**Conversions**:\n- Office documents, spreadsheets and presentations to and from PDF\n- Web pages and HTML to PDF\n- PDF to images, office formats, text and PDF/A\n- Images, e-books, CAD drawings, e-mail messages and archives\n- PDF tools: merge, split, compress, protect, OCR, watermark and more\n\n**Actions**: `convert-file` runs any converter by its source and destination formats; the other actions are shortcuts for common conversions.",
+          "message": "[ConvertAPI](https://www.convertapi.com) converte file tra più di 300 coppie di formati ed elabora file PDF.\n\n**Conversioni**:\n- Documenti Office, fogli di calcolo e presentazioni da e verso PDF\n- Pagine web e HTML in PDF\n- PDF in immagini, formati Office, testo e PDF/A\n- Immagini, e-book, disegni CAD, messaggi e-mail e archivi\n- Strumenti PDF: unione, divisione, compressione, protezione, OCR, filigrana e altro\n\n**Azioni**: `convert-file` esegue qualsiasi convertitore in base ai suoi formati di origine e di destinazione; le altre azioni sono scorciatoie per le conversioni più comuni."
         },
         "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -339,377 +339,377 @@
           "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.display_name": {
           "source": "Convert a File",
           "message": "Converti un file"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.short_desc": {
           "source": "Convert files with any ConvertAPI converter",
           "message": "Converti file con qualsiasi convertitore ConvertAPI"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.desc": {
-          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\nSelect the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n- Give the input as a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`\n- Give other converter parameters by their ConvertAPI names in `parameters`; the `get-converter-info` action lists them\n- The output files are returned as `FileData`, or as download URLs if `store_file` is `True`",
-          "message": "Converte file con qualsiasi convertitore ConvertAPI, indicato dai suoi formati di origine e di destinazione.\n\nSeleziona prima il formato `from`; l'elenco `to` mostra quindi i formati di destinazione dei convertitori per quel formato di origine.\n\n- Fornisci l'input come `file` o come `url` di origine; i convertitori che accettano più file (come `pdf` in `merge`) usano `files` o `urls`\n- Fornisci gli altri parametri del convertitore con i loro nomi ConvertAPI in `parameters`; l'azione `get-converter-info` li elenca\n- I file di output vengono restituiti come `FileData`, oppure come URL di download se `store_file` è `True`"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.desc": {
+          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\n**Formats**: select the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n**Input**: a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`, and a few converters take their input in `parameters` instead, for example `data` to `qrcode` with `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parameters**: other converter parameters go in `parameters` by their ConvertAPI names; the `get-converter-info` action lists them.\n\n**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is `True`.",
+          "message": "Converte file con qualsiasi convertitore ConvertAPI, indicato dai suoi formati di origine e di destinazione.\n\n**Formati**: seleziona prima il formato `from`; l'elenco `to` mostra quindi i formati di destinazione dei convertitori per quel formato di origine.\n\n**Input**: un `file` o un `url` di origine; i convertitori che accettano più file (come `pdf` in `merge`) usano `files` o `urls`, e alcuni convertitori ricevono il loro input in `parameters`, ad esempio `data` in `qrcode` con `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parametri**: gli altri parametri del convertitore vanno in `parameters` con i loro nomi ConvertAPI; l'azione `get-converter-info` li elenca.\n\n**Output**: i file di output vengono restituiti come `FileData`, oppure come URL di download se `store_file` è `True`."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.display_name": {
           "source": "Source Format",
           "message": "Formato di origine"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.short_desc": {
           "source": "The source format of the converter",
           "message": "Il formato di origine del convertitore"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.desc": {
-          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`",
-          "message": "Il formato di origine del convertitore, ad esempio `docx`, `html`, `pdf`, `jpg` o `eml`"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.desc": {
+          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`.\n\nThe list of converters is in the [ConvertAPI documentation](https://www.convertapi.com/doc).",
+          "message": "Il formato di origine del convertitore, ad esempio `docx`, `html`, `pdf`, `jpg` o `eml`.\n\nL'elenco dei convertitori è disponibile nella [documentazione di ConvertAPI](https://www.convertapi.com/doc)."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dG8.display_name": {
           "source": "Destination Format",
           "message": "Formato di destinazione"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dG8.short_desc": {
           "source": "The destination format of the converter",
           "message": "Il formato di destinazione del convertitore"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.desc": {
-          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`; PDF tools name the operation, for example `merge`, `split` or `compress`",
-          "message": "Il formato di destinazione del convertitore, ad esempio `pdf`, `jpg` o `txt`; gli strumenti PDF indicano l'operazione, ad esempio `merge`, `split` o `compress`"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dG8.desc": {
+          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`.\n\nSome converters are PDF tools, whose destination format names the operation, for example `pdf` to `merge`, `split`, `compress`, `protect`, `ocr` or `pdfa`.",
+          "message": "Il formato di destinazione del convertitore, ad esempio `pdf`, `jpg` o `txt`.\n\nAlcuni convertitori sono strumenti PDF, il cui formato di destinazione indica l'operazione, ad esempio `pdf` in `merge`, `split`, `compress`, `protect`, `ocr` o `pdfa`."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.display_name": {
           "source": "File",
           "message": "File"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.short_desc": {
           "source": "The file to convert",
           "message": "Il file da convertire"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.desc": {
           "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
           "message": "Il file da convertire; fornisci questo oppure un URL di origine.\n\nIl file viene inviato a ConvertAPI nella richiesta; l'estensione del nome file deve corrispondere al formato di origine del convertitore."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.Y29udGVudA.display_name": {
           "source": "File Data",
           "message": "Dati File"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
           "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
           "message": "Dati file codificati in Base64 o dati grezzi da codificare con l'encoding Base64"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.Y29udGVudA.desc": {
           "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
           "message": "Dati file codificati in Base64 o dati grezzi da codificare con l'encoding Base64"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
           "source": "MIME Type",
           "message": "Tipo MIME"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
           "source": "The MIME type string for the file",
           "message": "Stringa tipo MIME del file"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
           "source": "The MIME type string for the file",
           "message": "Stringa tipo MIME del file"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Autodetect",
           "message": "Rilevamento automatico"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Autodetect from the file name; valid only on input",
           "message": "Rilevamento automatico dal nome del file; valido solo in input"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
           "source": "Autodetect from the file name; valid only on input",
           "message": "Rilevamento automatico dal nome del file; valido solo in input"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
           "source": "text/plain",
           "message": "text/plain"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
           "source": "Plain text",
           "message": "Testo normale"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
           "source": "Plain text",
           "message": "Testo normale"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
           "source": "text/html",
           "message": "text/html"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
           "source": "HTML text",
           "message": "Testo HTML"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
           "source": "HTML text",
           "message": "Testo HTML"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
           "source": "application/pdf",
           "message": "application/pdf"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
           "source": "PDF file",
           "message": "File PDF"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
           "source": "PDF file",
           "message": "File PDF"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
           "source": "MS Word docx document",
           "message": "Documento MS Word docx"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
           "source": "MS Word `docx` document",
           "message": "Documento MS Word `docx`"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
           "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
           "source": "MS PowerPoint pptx document",
           "message": "Documento MS PowerPoint pptx"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
           "source": "MS PowerPoint `pptx` document",
           "message": "Documento MS PowerPoint `pptx`"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
           "source": "MS Excel xlsx document",
           "message": "Documento MS Excel xlsx"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
           "source": "MS Excel `xlsx` document",
           "message": "Documento MS Excel `xlsx`"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bmFtZQ.display_name": {
           "source": "Filename",
           "message": "Nome file"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bmFtZQ.short_desc": {
           "source": "The filename",
           "message": "Il nome del file"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZQ.field.bmFtZQ.desc": {
           "source": "The filename",
           "message": "Il nome del file"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.display_name": {
-          "source": "Converter Parameters",
-          "message": "Parametri del convertitore"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.short_desc": {
-          "source": "Other converter parameters by their ConvertAPI names",
-          "message": "Altri parametri del convertitore con i loro nomi ConvertAPI"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.desc": {
-          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
-          "message": "Altri parametri del convertitore, come hash di nomi di parametri ConvertAPI con i relativi valori.\n\nI parametri di ciascun convertitore sono elencati nella [documentazione di ConvertAPI](https://docs.convertapi.com) e restituiti dall'azione `get-converter-info`.\n\n- I valori scalari vengono inviati così come sono\n- Un hash di file (`name` e `content`) viene inviato come file\n- Un elenco di hash di file viene inviato come elenco di file\n\n**Esempio**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJs.display_name": {
           "source": "Source URL",
           "message": "URL di origine"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJs.short_desc": {
           "source": "URL of the file to convert",
           "message": "URL del file da convertire"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJs.desc": {
           "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
           "message": "L'URL del file da convertire; ConvertAPI scarica il file da questo URL.\n\n**Esempio**: `https://cdn.convertapi.com/public/files/demo.docx`"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.display_name": {
           "source": "Files",
           "message": "File"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.short_desc": {
           "source": "The files to convert for converters that take several files",
           "message": "I file da convertire per i convertitori che accettano più file"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.desc": {
           "source": "The files to convert for converters that take several input files, such as `pdf` to `merge`, `images` to `pdf` or `any` to `zip`.\n\nThey are sent as the `Files` parameter, together with any files given in `urls`.",
           "message": "I file da convertire per i convertitori che accettano più file di input, come `pdf` in `merge`, `images` in `pdf` o `any` in `zip`.\n\nVengono inviati come parametro `Files`, insieme agli eventuali file indicati in `urls`."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.Y29udGVudA.display_name": {
           "source": "File Data",
           "message": "Dati File"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.Y29udGVudA.short_desc": {
           "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
           "message": "Dati file codificati in Base64 o dati grezzi da codificare con l'encoding Base64"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.Y29udGVudA.desc": {
           "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
           "message": "Dati file codificati in Base64 o dati grezzi da codificare con l'encoding Base64"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.display_name": {
           "source": "MIME Type",
           "message": "Tipo MIME"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.short_desc": {
           "source": "The MIME type string for the file",
           "message": "Stringa tipo MIME del file"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.desc": {
           "source": "The MIME type string for the file",
           "message": "Stringa tipo MIME del file"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Autodetect",
           "message": "Rilevamento automatico"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Autodetect from the file name; valid only on input",
           "message": "Rilevamento automatico dal nome del file; valido solo in input"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
           "source": "Autodetect from the file name; valid only on input",
           "message": "Rilevamento automatico dal nome del file; valido solo in input"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
           "source": "text/plain",
           "message": "text/plain"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
           "source": "Plain text",
           "message": "Testo normale"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
           "source": "Plain text",
           "message": "Testo normale"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
           "source": "text/html",
           "message": "text/html"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
           "source": "HTML text",
           "message": "Testo HTML"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
           "source": "HTML text",
           "message": "Testo HTML"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
           "source": "application/pdf",
           "message": "application/pdf"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
           "source": "PDF file",
           "message": "File PDF"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
           "source": "PDF file",
           "message": "File PDF"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
           "source": "MS Word docx document",
           "message": "Documento MS Word docx"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
           "source": "MS Word `docx` document",
           "message": "Documento MS Word `docx`"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
           "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
           "source": "MS PowerPoint pptx document",
           "message": "Documento MS PowerPoint pptx"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
           "source": "MS PowerPoint `pptx` document",
           "message": "Documento MS PowerPoint `pptx`"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
           "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
           "source": "MS Excel xlsx document",
           "message": "Documento MS Excel xlsx"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
           "source": "MS Excel `xlsx` document",
           "message": "Documento MS Excel `xlsx`"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bmFtZQ.display_name": {
           "source": "Filename",
           "message": "Nome file"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bmFtZQ.short_desc": {
           "source": "The filename",
           "message": "Il nome del file"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZXM.field.bmFtZQ.desc": {
           "source": "The filename",
           "message": "Il nome del file"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJscw.display_name": {
           "source": "Source URLs",
           "message": "URL di origine"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJscw.short_desc": {
           "source": "URLs of the files for converters that take several files",
           "message": "URL dei file per i convertitori che accettano più file"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dXJscw.desc": {
           "source": "The URLs of the files to convert for converters that take several input files, such as `pdf` to `merge`.\n\nThey are sent as the `Files` parameter, together with any files given in `files`.",
           "message": "Gli URL dei file da convertire per i convertitori che accettano più file di input, come `pdf` in `merge`.\n\nVengono inviati come parametro `Files`, insieme agli eventuali file indicati in `files`."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "Parametri del convertitore"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "Altri parametri del convertitore con i loro nomi ConvertAPI"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "Altri parametri del convertitore, come hash di nomi di parametri ConvertAPI con i relativi valori.\n\nI parametri di ciascun convertitore sono elencati nella [documentazione di ConvertAPI](https://docs.convertapi.com) e restituiti dall'azione `get-converter-info`.\n\n- I valori scalari vengono inviati così come sono\n- Un hash di file (`name` e `content`) viene inviato come file\n- Un elenco di hash di file viene inviato come elenco di file\n\n**Esempio**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",
           "message": "Archivia file"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.c3RvcmVfZmlsZQ.short_desc": {
           "source": "Return a download URL instead of the file data",
           "message": "Restituisci un URL di download invece dei dati del file"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.c3RvcmVfZmlsZQ.desc": {
           "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
           "message": "Imposta su `True` per fare in modo che ConvertAPI archivi i file di output e restituisca un `Url` di download per ciascuno; i file vengono conservati in un'archiviazione temporanea cifrata per un massimo di **3 ore**.\n\nSe `False` (il valore predefinito), i file di output vengono restituiti nella risposta come `FileData` e non viene archiviato nulla."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZV9uYW1l.display_name": {
           "source": "Output File Name",
           "message": "Nome del file di output"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZV9uYW1l.short_desc": {
           "source": "The name of the output file without the extension",
           "message": "Il nome del file di output senza estensione"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZmlsZV9uYW1l.desc": {
           "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
           "message": "Il nome del file o dei file di output; ConvertAPI aggiunge l'estensione del formato di destinazione e un indice quando la conversione crea più file.\n\n**Esempio**: `report` produce `report.pdf`, oppure `report_0.jpg`, `report_1.jpg`, ..."
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.display_name": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dGltZW91dA.display_name": {
           "source": "Timeout",
           "message": "Timeout"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.short_desc": {
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dGltZW91dA.short_desc": {
           "source": "The conversion timeout in seconds",
           "message": "Il timeout della conversione in secondi"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "Il timeout della conversione in secondi, da `10` a `1200`; il valore predefinito è `900`."
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "Il timeout della conversione in secondi, da `10` a `1200`; se non è impostato, si applica il valore predefinito del convertitore, ad esempio `900` per i documenti Office e `120` per le pagine web."
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.display_name": {
           "source": "Get Converter Information",
@@ -720,8 +720,8 @@
           "message": "Ottieni la descrizione e i parametri di un convertitore"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.desc": {
-          "source": "Returns the description and the parameters of a ConvertAPI converter, given by its source and destination formats.\n\nUse it to find the parameter names and allowed values for the `parameters` field of the `convert` action.",
-          "message": "Restituisce la descrizione e i parametri di un convertitore ConvertAPI, indicato dai suoi formati di origine e di destinazione.\n\nUsala per trovare i nomi dei parametri e i valori consentiti per il campo `parameters` dell'azione `convert`."
+          "source": "Returns the description and the parameters of a ConvertAPI converter, given by its source and destination formats.\n\nUse it to find the parameter names and allowed values for the `parameters` field of the `convert-file` action.",
+          "message": "Restituisce la descrizione e i parametri di un convertitore ConvertAPI, indicato dai suoi formati di origine e di destinazione.\n\nUsala per trovare i nomi dei parametri e i valori consentiti per il campo `parameters` dell'azione `convert-file`."
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.ZnJvbQ.display_name": {
           "source": "Source Format",
@@ -732,8 +732,8 @@
           "message": "Il formato di origine del convertitore"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.ZnJvbQ.desc": {
-          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`",
-          "message": "Il formato di origine del convertitore, ad esempio `docx`, `html`, `pdf`, `jpg` o `eml`"
+          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`.\n\nThe list of converters is in the [ConvertAPI documentation](https://www.convertapi.com/doc).",
+          "message": "Il formato di origine del convertitore, ad esempio `docx`, `html`, `pdf`, `jpg` o `eml`.\n\nL'elenco dei convertitori è disponibile nella [documentazione di ConvertAPI](https://www.convertapi.com/doc)."
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.dG8.display_name": {
           "source": "Destination Format",
@@ -744,8 +744,8 @@
           "message": "Il formato di destinazione del convertitore"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.dG8.desc": {
-          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`; PDF tools name the operation, for example `merge`, `split` or `compress`",
-          "message": "Il formato di destinazione del convertitore, ad esempio `pdf`, `jpg` o `txt`; gli strumenti PDF indicano l'operazione, ad esempio `merge`, `split` o `compress`"
+          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`.\n\nSome converters are PDF tools, whose destination format names the operation, for example `pdf` to `merge`, `split`, `compress`, `protect`, `ocr` or `pdfa`.",
+          "message": "Il formato di destinazione del convertitore, ad esempio `pdf`, `jpg` o `txt`.\n\nAlcuni convertitori sono strumenti PDF, il cui formato di destinazione indica l'operazione, ad esempio `pdf` in `merge`, `split`, `compress`, `protect`, `ocr` o `pdfa`."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.display_name": {
           "source": "Convert Word to PDF",
@@ -936,20 +936,32 @@
           "message": "Come vengono creati i segnalibri nel PDF"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.desc": {
-          "source": "How bookmarks are created in the PDF:\n- `none`: no bookmarks\n- `headings`: bookmarks from the document headings (the default)\n- `bookmarks`: the bookmarks of the document",
-          "message": "Come vengono creati i segnalibri nel PDF:\n- `none`: nessun segnalibro\n- `headings`: segnalibri dai titoli del documento (il valore predefinito)\n- `bookmarks`: i segnalibri del documento"
+          "source": "How the bookmarks of the PDF are created",
+          "message": "Come vengono creati i segnalibri del PDF"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
           "source": "None",
           "message": "Nessuno"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No bookmarks",
+          "message": "Nessun segnalibro"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmhlYWRpbmdz.display_name": {
           "source": "Headings",
           "message": "Titoli"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmhlYWRpbmdz.desc": {
+          "source": "Bookmarks from the document headings (the default)",
+          "message": "Segnalibri dai titoli del documento (il valore predefinito)"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmJvb2ttYXJrcw.display_name": {
           "source": "Bookmarks",
           "message": "Segnalibri"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmJvb2ttYXJrcw.desc": {
+          "source": "The bookmarks of the document",
+          "message": "I segnalibri del documento"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.VXBkYXRlVGFibGVPZkNvbnRlbnRz.display_name": {
           "source": "Update Table of Contents",
@@ -1008,8 +1020,8 @@
           "message": "Il timeout della conversione in secondi"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "Il timeout della conversione in secondi, da `10` a `1200`; il valore predefinito è `900`."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "Il timeout della conversione in secondi, da `10` a `1200`; se non è impostato, si applica il valore predefinito del convertitore, ad esempio `900` per i documenti Office e `120` per le pagine web."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -1224,12 +1236,16 @@
           "message": "L'orientamento della pagina"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.desc": {
-          "source": "The page orientation; `default` uses the page setup of each worksheet",
-          "message": "L'orientamento della pagina; `default` utilizza l'impostazione pagina di ciascun foglio di lavoro"
+          "source": "The page orientation of the PDF",
+          "message": "L'orientamento della pagina del PDF"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
           "source": "Default",
           "message": "Predefinito"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The page setup of each worksheet (the default)",
+          "message": "L'impostazione pagina di ciascun foglio di lavoro (il valore predefinito)"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
           "source": "Portrait",
@@ -1308,8 +1324,8 @@
           "message": "Il timeout della conversione in secondi"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "Il timeout della conversione in secondi, da `10` a `1200`; il valore predefinito è `900`."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "Il timeout della conversione in secondi, da `10` a `1200`; se non è impostato, si applica il valore predefinito del convertitore, ad esempio `900` per i documenti Office e `120` per le pagine web."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -1524,20 +1540,32 @@
           "message": "Come vengono convertite le note del relatore"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.desc": {
-          "source": "How speaker notes are converted:\n- `Disabled`: speaker notes are not converted (the default)\n- `SeparatePage`: each slide's notes on a separate page\n- `PageComments`: the notes as page comments",
-          "message": "Come vengono convertite le note del relatore:\n- `Disabled`: le note del relatore non vengono convertite (il valore predefinito)\n- `SeparatePage`: le note di ogni diapositiva in una pagina separata\n- `PageComments`: le note come commenti di pagina"
+          "source": "How the speaker notes of the slides are converted",
+          "message": "Come vengono convertite le note del relatore delle diapositive"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOkRpc2FibGVk.display_name": {
           "source": "Disabled",
           "message": "Disabilitato"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOkRpc2FibGVk.desc": {
+          "source": "Speaker notes are not converted (the default)",
+          "message": "Le note del relatore non vengono convertite (il valore predefinito)"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlNlcGFyYXRlUGFnZQ.display_name": {
           "source": "Convert to Separate Page",
           "message": "Converti in pagina separata"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlNlcGFyYXRlUGFnZQ.desc": {
+          "source": "The notes of each slide on a separate page",
+          "message": "Le note di ogni diapositiva in una pagina separata"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlBhZ2VDb21tZW50cw.display_name": {
           "source": "Convert to Page Comments",
           "message": "Converti in commenti di pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlBhZ2VDb21tZW50cw.desc": {
+          "source": "The notes as page comments",
+          "message": "Le note come commenti di pagina"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1584,8 +1612,8 @@
           "message": "Il timeout della conversione in secondi"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "Il timeout della conversione in secondi, da `10` a `1200`; il valore predefinito è `900`."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "Il timeout della conversione in secondi, da `10` a `1200`; se non è impostato, si applica il valore predefinito del convertitore, ad esempio `900` per i documenti Office e `120` per le pagine web."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -1764,8 +1792,8 @@
           "message": "Il formato pagina del PDF"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.desc": {
-          "source": "The PDF page size; the default is `letter`",
-          "message": "Il formato pagina del PDF; il valore predefinito è `letter`"
+          "source": "The PDF page size",
+          "message": "Il formato pagina del PDF"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEw.display_name": {
           "source": "A0",
@@ -1835,6 +1863,10 @@
           "source": "Letter",
           "message": "Letter"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcg.desc": {
+          "source": "Letter (the default)",
+          "message": "Letter (il valore predefinito)"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZ2Fs.display_name": {
           "source": "Legal",
           "message": "Legal"
@@ -1852,12 +1884,16 @@
           "message": "L'orientamento della pagina del PDF"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.desc": {
-          "source": "The PDF page orientation; the default is `portrait`",
-          "message": "L'orientamento della pagina del PDF; il valore predefinito è `portrait`"
+          "source": "The PDF page orientation",
+          "message": "L'orientamento della pagina del PDF"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
           "source": "Portrait",
           "message": "Verticale"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.desc": {
+          "source": "Portrait (the default)",
+          "message": "Verticale (il valore predefinito)"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmxhbmRzY2FwZQ.display_name": {
           "source": "Landscape",
@@ -1956,8 +1992,24 @@
           "message": "Il tipo di media CSS utilizzato per il rendering"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.desc": {
-          "source": "The CSS media type used for rendering, for example `screen` (the default) or `print`",
-          "message": "Il tipo di media CSS utilizzato per il rendering, ad esempio `screen` (il valore predefinito) o `print`"
+          "source": "The CSS media type used for rendering the page; other media types can also be given",
+          "message": "Il tipo di media CSS utilizzato per il rendering della pagina; si possono indicare anche altri tipi di media"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnNjcmVlbg.display_name": {
+          "source": "Screen",
+          "message": "Scherma"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnNjcmVlbg.desc": {
+          "source": "The page as shown on a screen (the default)",
+          "message": "La pagina come viene mostrata su uno schermo (il valore predefinito)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnByaW50.display_name": {
+          "source": "Print",
+          "message": "Stampa"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnByaW50.desc": {
+          "source": "The page with its print styles",
+          "message": "La pagina con i suoi stili di stampa"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TG9hZExhenlDb250ZW50.display_name": {
           "source": "Load Lazy Content",
@@ -2004,8 +2056,8 @@
           "message": "Il timeout della conversione in secondi"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "Il timeout della conversione in secondi, da `10` a `1200`; il valore predefinito è `900`."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "Il timeout della conversione in secondi, da `10` a `1200`; se non è impostato, si applica il valore predefinito del convertitore, ad esempio `900` per i documenti Office e `120` per le pagine web."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -2028,8 +2080,8 @@
           "message": "Converti le pagine di un PDF in immagini JPG, PNG, TIFF o WebP"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.desc": {
-          "source": "Converts the pages of a PDF to images; one image file is returned for each page.\n\nChoose the image `format` and resolution, and optionally a page range.",
-          "message": "Converte le pagine di un PDF in immagini; viene restituito un file immagine per ogni pagina.\n\nScegli il `format` dell'immagine e la risoluzione, e facoltativamente un intervallo di pagine."
+          "source": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF file.\n\nChoose the image `format` and resolution, and optionally a page range.",
+          "message": "Converte le pagine di un PDF in immagini: un file immagine per ogni pagina, oppure un unico file TIFF multipagina.\n\nScegli il `format` dell'immagine e la risoluzione, e facoltativamente un intervallo di pagine."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.display_name": {
           "source": "File",
@@ -2163,6 +2215,18 @@
           "source": "The filename",
           "message": "Il nome del file"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "URL di origine"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "URL del file da convertire"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "L'URL del file da convertire; ConvertAPI scarica il file da questo URL.\n\n**Esempio**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.display_name": {
           "source": "Image Format",
           "message": "Formato immagine"
@@ -2172,8 +2236,8 @@
           "message": "Il formato dell'immagine"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.desc": {
-          "source": "The image format of the output files; one image is created for each page",
-          "message": "Il formato immagine dei file di output; viene creata un'immagine per ogni pagina"
+          "source": "The image format of the output files",
+          "message": "Il formato immagine dei file di output"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpwZw.display_name": {
           "source": "JPG",
@@ -2187,21 +2251,13 @@
           "source": "TIFF",
           "message": "TIFF"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOnRpZmY.desc": {
+          "source": "One multi-page TIFF file for all the pages",
+          "message": "Un unico file TIFF multipagina per tutte le pagine"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOndlYnA.display_name": {
           "source": "WebP",
           "message": "WebP"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.display_name": {
-          "source": "Source URL",
-          "message": "URL di origine"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.short_desc": {
-          "source": "URL of the file to convert",
-          "message": "URL del file da convertire"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.desc": {
-          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
-          "message": "L'URL del file da convertire; ConvertAPI scarica il file da questo URL.\n\n**Esempio**: `https://cdn.convertapi.com/public/files/demo.docx`"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.UGFnZVJhbmdl.display_name": {
           "source": "Page Range",
@@ -2272,8 +2328,8 @@
           "message": "Il timeout della conversione in secondi"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "Il timeout della conversione in secondi, da `10` a `1200`; il valore predefinito è `900`."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "Il timeout della conversione in secondi, da `10` a `1200`; se non è impostato, si applica il valore predefinito del convertitore, ad esempio `900` per i documenti Office e `120` per le pagine web."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -2452,20 +2508,32 @@
           "message": "Aggiungi un segnalibro per ogni file unito"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.desc": {
-          "source": "Adds a top-level bookmark for each merged file:\n- `disabled`: no bookmarks (the default)\n- `filename`: the file name\n- `title`: the PDF title from the metadata",
-          "message": "Aggiunge un segnalibro di primo livello per ogni file unito:\n- `disabled`: nessun segnalibro (il valore predefinito)\n- `filename`: il nome del file\n- `title`: il titolo del PDF dai metadati"
+          "source": "Adds a top-level bookmark for each merged file",
+          "message": "Aggiunge un segnalibro di primo livello per ogni file unito"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
           "source": "Disabled",
           "message": "Disabilitato"
         },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "No bookmarks (the default)",
+          "message": "Nessun segnalibro (il valore predefinito)"
+        },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmZpbGVuYW1l.display_name": {
           "source": "File Name",
           "message": "Nome File"
         },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmZpbGVuYW1l.desc": {
+          "source": "Bookmarks named with the file names",
+          "message": "Segnalibri con i nomi dei file come nome"
+        },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOnRpdGxl.display_name": {
           "source": "Title",
           "message": "Titolo"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOnRpdGxl.desc": {
+          "source": "Bookmarks named with the PDF titles from the metadata",
+          "message": "Segnalibri con i titoli del PDF dai metadati come nome"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UmVtb3ZlRHVwbGljYXRlRm9udHM.display_name": {
           "source": "Remove Duplicate Fonts",
@@ -2512,8 +2580,8 @@
           "message": "Il timeout della conversione in secondi"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "Il timeout della conversione in secondi, da `10` a `1200`; il valore predefinito è `900`."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "Il timeout della conversione in secondi, da `10` a `1200`; se non è impostato, si applica il valore predefinito del convertitore, ad esempio `900` per i documenti Office e `120` per le pagine web."
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",
@@ -2671,6 +2739,18 @@
           "source": "The filename",
           "message": "Il nome del file"
         },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "URL di origine"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "URL del file da convertire"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "L'URL del file da convertire; ConvertAPI scarica il file da questo URL.\n\n**Esempio**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.display_name": {
           "source": "Preset",
           "message": "Preset"
@@ -2710,18 +2790,6 @@
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOnByaW50ZXI.display_name": {
           "source": "Printer (300 DPI Images)",
           "message": "Stampante (immagini a 300 DPI)"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.display_name": {
-          "source": "Source URL",
-          "message": "URL di origine"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.short_desc": {
-          "source": "URL of the file to convert",
-          "message": "URL del file da convertire"
-        },
-        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.desc": {
-          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
-          "message": "L'URL del file da convertire; ConvertAPI scarica il file da questo URL.\n\n**Esempio**: `https://cdn.convertapi.com/public/files/demo.docx`"
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UGFzc3dvcmQ.display_name": {
           "source": "Open Password",
@@ -2768,8 +2836,8 @@
           "message": "Il timeout della conversione in secondi"
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dGltZW91dA.desc": {
-          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
-          "message": "Il timeout della conversione in secondi, da `10` a `1200`; il valore predefinito è `900`."
+          "source": "The conversion timeout in seconds, from `10` to `1200`; if not set, the converter's default applies, for example `900` for office documents and `120` for web pages.",
+          "message": "Il timeout della conversione in secondi, da `10` a `1200`; se non è impostato, si applica il valore predefinito del convertitore, ad esempio `900` per i documenti Office e `120` per le pagine web."
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.cGFyYW1ldGVycw.display_name": {
           "source": "Converter Parameters",

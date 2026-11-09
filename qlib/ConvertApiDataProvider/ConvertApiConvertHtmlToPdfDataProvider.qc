@@ -40,7 +40,7 @@ public class ConvertApiConvertHtmlToPdfRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Page Size",
                 "short_desc": "The PDF page size",
-                "desc": "The PDF page size; the default is `letter`",
+                "desc": "The PDF page size",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "a0", "display_name": "A0"},
                     <AllowedValueInfo>{"value": "a1", "display_name": "A1"},
@@ -58,7 +58,7 @@ public class ConvertApiConvertHtmlToPdfRequestDataType inherits HashDataType {
                     <AllowedValueInfo>{"value": "b3", "display_name": "B3"},
                     <AllowedValueInfo>{"value": "b4", "display_name": "B4"},
                     <AllowedValueInfo>{"value": "b5", "display_name": "B5"},
-                    <AllowedValueInfo>{"value": "letter", "display_name": "Letter"},
+                    <AllowedValueInfo>{"value": "letter", "display_name": "Letter", "desc": "Letter (the default)"},
                     <AllowedValueInfo>{"value": "legal", "display_name": "Legal"},
                     <AllowedValueInfo>{"value": "ledger", "display_name": "Ledger"},
                 ),
@@ -67,9 +67,9 @@ public class ConvertApiConvertHtmlToPdfRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Page Orientation",
                 "short_desc": "The PDF page orientation",
-                "desc": "The PDF page orientation; the default is `portrait`",
+                "desc": "The PDF page orientation",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "portrait", "display_name": "Portrait"},
+                    <AllowedValueInfo>{"value": "portrait", "display_name": "Portrait", "desc": "Portrait (the default)"},
                     <AllowedValueInfo>{"value": "landscape", "display_name": "Landscape"},
                 ),
             },
@@ -125,7 +125,20 @@ public class ConvertApiConvertHtmlToPdfRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "CSS Media Type",
                 "short_desc": "The CSS media type used for rendering",
-                "desc": "The CSS media type used for rendering, for example `screen` (the default) or `print`",
+                "desc": "The CSS media type used for rendering the page; other media types can also be given",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "screen",
+                        "display_name": "Screen",
+                        "desc": "The page as shown on a screen (the default)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "print",
+                        "display_name": "Print",
+                        "desc": "The page with its print styles",
+                    },
+                ),
+                "allowed_values_creatable": True,
                 "example_value": "print",
             },
             "LoadLazyContent": {
@@ -159,6 +172,9 @@ public class ConvertApiConvertHtmlToPdfDataProvider inherits ConvertApiConversio
 
         #! Constructor options
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! The request type
+        static ConvertApiConvertHtmlToPdfRequestDataType RequestType();
     }
 
     #! Creates the object with a REST client
@@ -177,7 +193,7 @@ public class ConvertApiConvertHtmlToPdfDataProvider inherits ConvertApiConversio
 
     #! Returns the request type
     private *AbstractDataProviderType getRequestTypeImpl() {
-        return new ConvertApiConvertHtmlToPdfRequestDataType();
+        return RequestType;
     }
 
     #! Returns the source and destination formats

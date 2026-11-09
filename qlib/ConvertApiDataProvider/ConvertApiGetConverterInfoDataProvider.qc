@@ -55,6 +55,12 @@ public class ConvertApiGetConverterInfoDataProvider inherits ConvertApiDataProvi
 
         #! Constructor options
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! The request type
+        static ConvertApiGetConverterInfoRequestDataType RequestType();
+
+        #! The response type
+        static ConvertApiConverterInfoResponseDataType ResponseType();
     }
 
     #! Creates the object with a REST client
@@ -73,12 +79,12 @@ public class ConvertApiGetConverterInfoDataProvider inherits ConvertApiDataProvi
 
     #! Returns the request type
     private *AbstractDataProviderType getRequestTypeImpl() {
-        return new ConvertApiGetConverterInfoRequestDataType();
+        return RequestType;
     }
 
     #! Returns the response type
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return new ConvertApiConverterInfoResponseDataType();
+        return ResponseType;
     }
 
     #! Performs the request

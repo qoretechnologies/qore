@@ -181,12 +181,44 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
         return rv[0];
     }
 
+    #! Returns a readable label for a source format
+    /** @param fmt the format
+        @param extension @ref True if the format is a file name extension
+
+        @return the format in upper case for a file name extension (ex: \c "DOCX"), otherwise in title case, with
+        hyphens as spaces (ex: \c "Images" for \c images)
+    */
+    static string getFormatLabel(string fmt, bool extension) {
+        if (extension) {
+            return fmt.upr();
+        }
+        return (foldl $1 + " " + $2, (map $1.substr(0, 1).upr() + $1.substr(1), fmt.split("-")));
+    }
+
+    #! Returns a readable label for a destination format of a converter
+    /** @param converter the converter, as returned by the \c info endpoint
+        @param to one of its destination formats
+
+        @return the converter title without its \c " API" suffix, for example \c "Delete PDF Pages" for \c pdf to
+        \c delete-pages, or, for a converter with several destination formats or without a title, the label of the
+        format (see getFormatLabel())
+    */
+    static string getDestinationLabel(hash<auto> converter, string to) {
+        if (converter.Title.val() && converter.DestinationFileFormats.size() == 1) {
+            return regex_subst(converter.Title, " API$", "");
+        }
+        return ConvertApiDataProviderBase::getFormatLabel(to,
+            inlist(to.lwr(), (map $1.lwr(), converter.DestinationExtensions ?? ())));
+    }
+
     #! Returns the source formats as reference data
     private *list<hash<AllowedValueInfo>> getReferenceSourceFormats() {
         list<hash<AllowedValueInfo>> rv = ();
         try {
             # source format -> list of destination formats
             hash<auto> formats = {};
+            # the file name extensions of the source formats
+            hash<string, bool> extensions = {};
             foreach hash<auto> converter in (getConverters()) {
                 foreach string from in (converter.SourceFileFormats) {
                     if (!formats{from}) {
@@ -194,11 +226,13 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
                     }
                     formats{from} += converter.DestinationFileFormats;
                 }
+                map extensions{$1.lwr()} = True, converter.SourceExtensions;
             }
             foreach string from in (sort(keys formats)) {
+                string label = ConvertApiDataProviderBase::getFormatLabel(from, extensions{from.lwr()} ?? False);
                 rv += <AllowedValueInfo>{
-                    "display_name": from.upr(),
-                    "short_desc": sprintf("Convert from %s", from.upr()),
+                    "display_name": label,
+                    "short_desc": sprintf("Convert from %s", label),
                     "desc": sprintf("Convert from `%s` to: %s", from, (foldl $1 + ", " + $2,
                         (map sprintf("`%s`", $1), sort(formats{from})))),
                     "value": from,
@@ -224,7 +258,7 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
             foreach hash<auto> converter in (converters) {
                 foreach string to in (converter.DestinationFileFormats) {
                     rv += <AllowedValueInfo>{
-                        "display_name": to.upr(),
+                        "display_name": ConvertApiDataProviderBase::getDestinationLabel(converter, to),
                         "short_desc": converter.Title ?? sprintf("%s to %s", from.upr(), to.upr()),
                         "desc": trim(converter.Description ?? converter.Title ?? ""),
                         "value": to,
@@ -336,14 +370,19 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
     static list<hash<auto>> makeParameters(hash<auto> req, *hash<auto> converter_params, *string url_param,
             *bool input_in_parameters) {
         # the request must give an input (the fields of the "source" group), unless the converter takes it in a
-        # converter parameter, and a single input either as a file or as a URL; this is checked here, before a
-        # request is made, as the data types do not enforce required groups
+        # converter parameter: a single input either as a file or as a URL, or several in files and urls; no converter
+        # takes both a single input and several; this is checked here, before a request is made, as the request types
+        # do not enforce the required group and the exclusive fields that their options declare
         if (!input_in_parameters && !ConvertApiDataProviderBase::hasInput(req)) {
             throw "CONVERTAPI-ERROR", "no input: give 'file' or 'url', or 'files' or 'urls' for converters that "
                 "take several files";
         }
         if (req.file && req.url.val()) {
             throw "CONVERTAPI-ERROR", "give either 'file' or 'url', not both";
+        }
+        if ((req.file || req.url.val()) && (req.files || req.urls)) {
+            throw "CONVERTAPI-ERROR", "give a single input in 'file' or 'url', or several in 'files' and 'urls', not "
+                "both";
         }
         list<hash<auto>> params = ();
         # the main input
@@ -492,10 +531,11 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
 
         @return the format in lower case
 
-        @throw CONVERTAPI-ERROR the format contains invalid characters
+        @throw CONVERTAPI-ERROR the format contains invalid characters, or is the \c * wildcard, which would select
+        an arbitrary converter
     */
     static string checkFormat(string fmt) {
-        if (fmt !~ /^[a-z0-9][a-z0-9\-_.]*$/i && fmt != "*") {
+        if (fmt !~ /^[a-z0-9][a-z0-9\-_.]*$/i) {
             throw "CONVERTAPI-ERROR", sprintf("invalid format %y; expecting a format name such as \"docx\" or "
                 "\"pdf\"", fmt);
         }

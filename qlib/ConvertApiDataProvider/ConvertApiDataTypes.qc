@@ -25,6 +25,9 @@
 #! Contains all public definitions in the ConvertApiDataProvider module
 public namespace ConvertApiDataProvider {
 
+#! A list of strings in a converter description (formats, extensions, tags)
+public const ConvertApiStringListType = new SoftListDataType("ConvertApiStringList", StringType, True);
+
 #! Data type for one output file of a conversion
 public class ConvertApiFileResultDataType inherits HashDataType {
     public {
@@ -210,25 +213,25 @@ public class ConvertApiConverterInfoResponseDataType inherits HashDataType {
                 "desc": "The converter group, for example `Microsoft Office` or `PDF Tools`",
             },
             "Tags": {
-                "type": SoftListOrNothingType,
+                "type": ConvertApiStringListType,
                 "display_name": "Tags",
                 "short_desc": "The converter tags",
                 "desc": "The converter tags, for example `document`, `office` and `pdf`",
             },
             "SourceFileFormats": {
-                "type": SoftListOrNothingType,
+                "type": ConvertApiStringListType,
                 "display_name": "Source File Formats",
                 "short_desc": "The source formats of the converter",
                 "desc": "The source formats of the converter",
             },
             "SourceExtensions": {
-                "type": SoftListOrNothingType,
+                "type": ConvertApiStringListType,
                 "display_name": "Source Extensions",
                 "short_desc": "The file extensions accepted by the converter",
                 "desc": "The file name extensions accepted by the converter, for example `doc` and `docx`",
             },
             "DestinationFileFormats": {
-                "type": SoftListOrNothingType,
+                "type": ConvertApiStringListType,
                 "display_name": "Destination File Formats",
                 "short_desc": "The destination formats of the converter",
                 "desc": "The destination formats of the converter",

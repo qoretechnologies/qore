@@ -31,13 +31,18 @@ public namespace ConvertApiDataProvider {
     parameters with their names as given.
 */
 public class ConvertApiConversionDataProviderBase inherits ConvertApiDataProviderBase {
+    public {
+        #! The response type of a conversion
+        static ConvertApiConversionResponseDataType ResponseType();
+    }
+
     #! Creates the object with a REST client
     constructor(ConvertApiRestClient::ConvertApiRestClientIo rest) : ConvertApiDataProviderBase(rest) {
     }
 
     #! Returns the response type
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return new ConvertApiConversionResponseDataType();
+        return ResponseType;
     }
 
     #! Performs the conversion

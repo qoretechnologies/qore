@@ -79,6 +79,9 @@ public class ConvertApiCompressPdfDataProvider inherits ConvertApiConversionData
 
         #! Constructor options
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! The request type
+        static ConvertApiCompressPdfRequestDataType RequestType();
     }
 
     #! Creates the object with a REST client
@@ -97,7 +100,7 @@ public class ConvertApiCompressPdfDataProvider inherits ConvertApiConversionData
 
     #! Returns the request type
     private *AbstractDataProviderType getRequestTypeImpl() {
-        return new ConvertApiCompressPdfRequestDataType();
+        return RequestType;
     }
 
     #! Returns the source and destination formats
