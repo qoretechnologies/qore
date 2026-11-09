@@ -478,7 +478,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[421] = {
     { "ListAppendElement"              , false, true , false,  3, "Append a value to a map result list as the AST interpreter pushes it and fold its type", false, true , "QoreMapOperatorNode", true , false, false, false, false }, // 417
     { "CheckCancelEvery"               , false, false, false,  3, "Check for cancellation every 100 elements of an expression, as the AST interpreter does", true , true , "QoreFoldlOperatorNode", false, false, false, false, false }, // 418
     { "CheckRangeBound"                , false, false, false,  2, "Raise RANGE-ERROR for the start of a range that evaluated to NOTHING, before the end is evaluated", true , true , "QoreRangeOperatorNode", false, false, false, false, false }, // 419
-    { "ListSelectorStep"               , true , false, false, OPCODE_MIN_OPERANDS(3), "Apply one selector of a list of selectors with ranges, as the AST interpreter does", true , true , "QoreSquareBracketsOperatorNode", true , false, false, false, false }, // 420
+    { "ListSelectorStep"               , true , false, false, OPCODE_MIN_OPERANDS(3), "Apply selectors of a list of selectors with ranges, as the AST interpreter does", true , true , "QoreSquareBracketsOperatorNode", true , true , false, false, false }, // 420
 };
 
 //! Static assertion to verify registry completeness

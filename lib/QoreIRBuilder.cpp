@@ -640,18 +640,23 @@ QoreIRInstruction* QoreIRBuilder::createCheckRangeBound(QoreIRValue bound, QoreI
 }
 
 QoreIRInstruction* QoreIRBuilder::createListSelectorStep(QoreIRValue result, QoreIRValue seq, int64_t flags,
-        const std::vector<QoreIRValue>& selector, const QoreProgramLocation* loc) {
-    assert((flags & static_cast<int64_t>(QoreIRListSelectorFlag::Begin))
-        ? selector.empty()
-        : selector.size() == ((flags & static_cast<int64_t>(QoreIRListSelectorFlag::Range)) ? 2 : 1));
+        const std::vector<QoreIRValue>& selectors, const QoreProgramLocation* loc) {
+    bool begin = flags & static_cast<int64_t>(QoreIRListSelectorFlag::Begin);
+    assert(begin == selectors.empty());
+    if (begin) {
+        // the Begin step has no result to add to
+        result = createConstNothing(loc)->result;
+    }
     QoreIRValue flags_val = createConstInt(flags, loc)->result;
     auto inst = append<QoreIRInstruction>(QoreIROpcode::ListSelectorStep);
     inst->loc = loc;
-    inst->result = func->createValue();
+    if (begin) {
+        inst->result = func->createValue();
+    }
     inst->operands.push_back(result);
     inst->operands.push_back(seq);
     inst->operands.push_back(flags_val);
-    for (const QoreIRValue& value : selector) {
+    for (const QoreIRValue& value : selectors) {
         inst->operands.push_back(value);
     }
     return inst;

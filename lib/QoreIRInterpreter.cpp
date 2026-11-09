@@ -8574,16 +8574,19 @@ next_instruction:
                 break;
             }
             case QoreIROpcode::ListSelectorStep: {
-                // operands: the result so far, the sequence, the flags, and the index or the bounds of a range
-                uint64_t first_bits = inst->operands.size() > 3
-                    ? toBits(getIRValue(values, inst->operands[3])) : toBits(QoreValue());
-                uint64_t second_bits = inst->operands.size() > 4
-                    ? toBits(getIRValue(values, inst->operands[4])) : toBits(QoreValue());
+                // operands: the result of the Begin step, the sequence, the flags, and the selector values
+                uint64_t selector_bits[QORE_IR_LIST_SELECTOR_STEP_MAX * 2];
+                size_t count = inst->operands.size() - 3;
+                assert(count <= QORE_IR_LIST_SELECTOR_STEP_MAX * 2);
+                for (size_t i = 0; i < count; ++i) {
+                    selector_bits[i] = toBits(getIRValue(values, inst->operands[i + 3]));
+                }
+                // only the Begin step has a result, which it owns
                 QoreValue res = fromBits(qore_rt_list_selector_step(toBits(getIRValue(values, inst->operands[0])),
                     toBits(getIRValue(values, inst->operands[1])), getIRValue(values, inst->operands[2]).getAsBigInt(),
-                    first_bits, second_bits, xsink));
+                    selector_bits, static_cast<int32_t>(count), xsink));
                 if (xsink && *xsink) {
-                    res.discard(xsink);
+                    assert(res.isNothing());
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
@@ -8595,9 +8598,13 @@ next_instruction:
                     cleanupLocalCaches();
                     return false;
                 }
-                setValueSlot(values, inst->result.id, res, xsink);
-                if (res.needsRef()) {
-                    cleanup.push_back(inst->result.id);
+                if (inst->result.isValid()) {
+                    setValueSlot(values, inst->result.id, res, xsink);
+                    if (res.needsRef()) {
+                        cleanup.push_back(inst->result.id);
+                    }
+                } else {
+                    assert(res.isNothing());
                 }
                 ++ip;
                 break;

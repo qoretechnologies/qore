@@ -2473,7 +2473,7 @@ extern "C" DLLEXPORT int64_t qore_rt_check_range_bound(uint64_t bound_val, int64
 namespace {
 //! Folds the types of the values that a list of selectors selects from a list into their common type
 /** As QoreSquareBracketsOperatorNode::doSquareBracketsListRange() does; the result list gets the list type of the
-    common type (see qore_rt_finish_list_selectors())
+    common type (see qore_rt_list_selector_step())
 */
 struct QoreRtSelectorTypeFold {
     const QoreTypeInfo* vtype = nullptr;
@@ -2591,27 +2591,6 @@ static int qore_rt_apply_list_selector(const QoreValue& result, const QoreValue&
             break;
     }
     return 0;
-}
-
-//! Finishes the list result \a rv of a list of selectors, which it takes: the list gets the list type of the common
-//! type of its values
-static QoreValue qore_rt_finish_list_selectors(QoreValue rv, const QoreRtSelectorTypeFold& fold,
-        ExceptionSink* xsink) {
-    assert(rv.getType() == NT_LIST);
-    const QoreTypeInfo* vtype = fold.vtype;
-    if (!vtype || vtype == anyTypeInfo) {
-        vtype = autoTypeInfo;
-    }
-    const QoreTypeInfo* ti = qore_get_complex_list_type(vtype);
-    qore_list_private::get(*rv.get<QoreListNode>())->complexTypeInfo = ti;
-    if (QoreTypeInfo::hasType(vtype)) {
-        QoreTypeInfo::acceptAssignment(ti, "<type folding>", rv, xsink);
-        if (*xsink) {
-            rv.discard(xsink);
-            return QoreValue();
-        }
-    }
-    return rv;
 }
 
 // applies a list of selectors whose evaluation cannot be observed (see QoreIROpcode::ListSelectorStep); it applies them
@@ -2765,33 +2744,53 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, c
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_selector_step(uint64_t result_val, uint64_t seq_val, int64_t flags,
-        uint64_t first_val, uint64_t second_val, ExceptionSink* xsink) {
+        const uint64_t* selector_vals, int32_t count, ExceptionSink* xsink) {
     QoreValue seq = fromBits(seq_val);
     if (flags & static_cast<int64_t>(QoreIRListSelectorFlag::Begin)) {
+        assert(!count);
         return toBits(qore_rt_new_list_selector_result(seq));
     }
 
+    // the result of the Begin step, which holds the reference to it; it is changed in place
     QoreValue result = fromBits(result_val);
-    bool is_range = flags & static_cast<int64_t>(QoreIRListSelectorFlag::Range);
-    if (qore_rt_apply_list_selector(result, seq, is_range, fromBits(first_val),
-            is_range ? fromBits(second_val) : QoreValue(),
-            flags & static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar),
-            runtime_check_parse_option(PO_NEGATIVE_OFFSETS), xsink)) {
-        return toBits(QoreValue());
+    bool string_index_char = flags & static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar);
+    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
+    int32_t vi = 0;
+    for (unsigned i = 0; vi < count; ++i) {
+        assert(i < QORE_IR_LIST_SELECTOR_STEP_MAX);
+        bool is_range = flags & (static_cast<int64_t>(1)
+            << (static_cast<int64_t>(QoreIRListSelectorFlag::RangeShift) + i));
+        QoreValue first = fromBits(selector_vals[vi++]);
+        QoreValue second;
+        if (is_range) {
+            assert(vi < count);
+            second = fromBits(selector_vals[vi++]);
+        }
+        if (qore_rt_apply_list_selector(result, seq, is_range, first, second, string_index_char, negative_offsets,
+                xsink)) {
+            return 0;
+        }
     }
     if (!(flags & static_cast<int64_t>(QoreIRListSelectorFlag::Last)) || result.getType() != NT_LIST) {
-        return toBits(result.refSelf());
+        return 0;
     }
     // the values are folded in the order in which they were added, as qore_rt_list_index_selectors() folds them while
-    // it adds them
+    // it adds them; the list gets the list type of their common type, which accepts the list as it is, so it needs
+    // no further check
+    QoreListNode* ret = result.get<QoreListNode>();
     QoreRtSelectorTypeFold fold;
-    ConstListIterator li(result.get<const QoreListNode>());
+    ConstListIterator li(ret);
     while (li.next()) {
         if (!fold.add(li.getValue().getTypeInfo())) {
             break;
         }
     }
-    return toBits(qore_rt_finish_list_selectors(result.refSelf(), fold, xsink));
+    const QoreTypeInfo* vtype = fold.vtype;
+    if (!vtype || vtype == anyTypeInfo) {
+        vtype = autoTypeInfo;
+    }
+    qore_list_private::get(*ret)->complexTypeInfo = qore_get_complex_list_type(vtype);
+    return 0;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_unary_op(int opcode, uint64_t operand, ExceptionSink* xsink) {

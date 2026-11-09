@@ -57,6 +57,62 @@ auto sub string_reassigned() {
 auto sub list_inert_start() { return l[k..3, 0]; }
 auto sub list_inert_ok() { int i = 1; return l[i..3, 0, 4..i]; }
 
+# an exception in a list of selectors in an argument list in a try block in the same function: the argument before it
+# is released first, then the sequence, then the catch block runs
+class T {
+    public {
+        string name;
+    }
+
+    constructor(string name) {
+        self.name = name;
+    }
+
+    destructor() {
+        printf("destroyed %s\n", name);
+    }
+}
+
+int sub thr() {
+    throw "SELECTOR-ERROR";
+}
+
+list<auto> sub mk(string name) {
+    return (new T(name), 1, 2, 3);
+}
+
+sub take(auto a, auto b) {
+}
+
+auto sub release_later_throw() {
+    try {
+        take(new T("arg 1"), mk("seq 1")[f("a")..2, thr()]);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s\n", ex.err);
+    }
+}
+auto sub release_later_range() {
+    try {
+        take(new T("arg 2"), mk("seq 2")[f("a")..2, k..f("b")]);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s\n", ex.err);
+    }
+}
+auto sub release_first_throw() {
+    try {
+        take(new T("arg 3"), mk("seq 3")[thr()..2, 1]);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s\n", ex.err);
+    }
+}
+auto sub release_selected() {
+    try {
+        take(new T("arg 4"), mk("seq 4")[f("a", 0)..0, thr()]);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s\n", ex.err);
+    }
+}
+
 # a sequence that no selector applies to: no selector is evaluated
 auto sub nothing_seq(auto seq) { return seq[f("start")..2, f("later")]; }
 
@@ -75,7 +131,7 @@ auto sub remove_ok() { list<auto> m = l; auto r = remove m[f("a")..f("b", 2), f(
 auto sub remove_hash_slice_start() { hash<auto> m = h; auto r = remove m{"a", k..f("end")}; return (r, m); }
 auto sub delete_hash_slice_start() { hash<auto> m = h; delete m{"a", k..f("end")}; return m; }
 
-# ranges with negative bounds, which select from the end with %negative-offsets
+# ranges with negative bounds, which select from the end with %negative-offsets (set by %modern)
 auto sub negative_later() { return l[f("start", -2)..f("end", -1), f("later", -1)]; }
 auto sub negative_descending() { return s[f("start", -1)..f("end", -3), k..f("later")]; }
 
@@ -97,6 +153,10 @@ sub main() {
         t("string reassigned", \string_reassigned());
         t("list inert start", \list_inert_start());
         t("list inert ok", \list_inert_ok());
+        t("release later throw", \release_later_throw());
+        t("release later range", \release_later_range());
+        t("release first throw", \release_first_throw());
+        t("release selected", \release_selected());
         t("nothing", auto sub () { return nothing_seq(); });
         t("hash", auto sub () { return nothing_seq(h); });
         t("int", auto sub () { return nothing_seq(1); });

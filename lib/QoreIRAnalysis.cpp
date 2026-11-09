@@ -616,6 +616,12 @@ static bool qore_ir_opcode_holds_receiver(QoreIROpcode op) {
     }
 }
 
+// returns true for a step of a list of selectors after the first, which reads the sequence (operands[1]) that the
+// first step holds (see QoreIROpcode::ListSelectorStep)
+static bool qore_ir_list_selector_step_reads_seq(const QoreIRInstruction& inst) {
+    return qore_ir_release_class_opcode(&inst) == QoreIROpcode::ListSelectorStep && !inst.result.isValid();
+}
+
 // returns true for an operation that builds a list or a hash of its operands, which the AST interpreter builds
 // element by element, so an exception releases the elements built with the container, first element first
 static bool qore_ir_opcode_builds_container(QoreIROpcode op) {
@@ -642,7 +648,17 @@ void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vec
             if (inst->opcode == QoreIROpcode::ReleaseOwnedTemp) {
                 continue;
             }
+            // the sequence of a list of selectors is held by its first step (QoreIROpcode::ListSelectorStep with
+            // QoreIRListSelectorFlag::Begin, the only step with a result) as the receiver of the operation, as
+            // ListIndexDynamic holds it; the later steps of the same operation read it from there, so they are not
+            // uses of their own (qore#5665)
+            const QoreIRValue* step_seq = qore_ir_list_selector_step_reads_seq(*inst)
+                ? &inst->operands[1] : nullptr;
             qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                if (step_seq && operand.id == step_seq->id) {
+                    step_seq = nullptr;
+                    return;
+                }
                 if (operand.isValid() && operand.id < uses.size()) {
                     ++uses[operand.id];
                 }
@@ -680,6 +696,9 @@ void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vec
                 }
             } else if (qore_ir_opcode_holds_receiver(op) && !inst->operands.empty()) {
                 set_class(inst->operands[0], QORE_IR_RELEASE_RECEIVER);
+            } else if (op == QoreIROpcode::ListSelectorStep && inst->result.isValid()) {
+                // the sequence of a list of selectors, which QoreSquareBracketsOperatorNode holds as a receiver
+                set_class(inst->operands[1], QORE_IR_RELEASE_RECEIVER);
             }
         }
     }

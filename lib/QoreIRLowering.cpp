@@ -10738,11 +10738,9 @@ QoreIRValue QoreIRLowering::lowerListSelectorSteps(const QoreSquareBracketsOpera
         ? static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar) : 0;
 
     // the empty result for the sequence, or NOTHING if no selector applies to it: then no selector is evaluated
-    QoreIRValue none = builder.createConstNothing(op->loc)->result;
-    QoreIRValue begin = withExceptionTarget(builder.createListSelectorStep(none, seq,
+    QoreIRValue result = withExceptionTarget(builder.createListSelectorStep(QoreIRValue(), seq,
         string_index_char | static_cast<int64_t>(QoreIRListSelectorFlag::Begin), {}, op->loc))->result;
-    QoreIRValue no_selectors = builder.createUnaryOp(QoreIROpcode::IsNullOrNothing, begin)->result;
-    QoreIRBasicBlock* begin_block = builder.getBlock();
+    QoreIRValue no_selectors = builder.createUnaryOp(QoreIROpcode::IsNullOrNothing, result)->result;
     QoreIRBasicBlock* selector_block = createBlock("selectors");
     QoreIRBasicBlock* merge_block = createBlock("selectors.merge");
     if (!selector_block || !merge_block) {
@@ -10750,17 +10748,35 @@ QoreIRValue QoreIRLowering::lowerListSelectorSteps(const QoreSquareBracketsOpera
         return QoreIRValue();
     }
     builder.createBranchIf(no_selectors, merge_block, selector_block);
-
     builder.setBlock(selector_block);
-    QoreIRValue result = begin;
-    for (size_t i = 0; i < selectors.size(); ++i) {
-        int64_t flags = string_index_char;
-        if (i == selectors.size() - 1) {
-            flags |= static_cast<int64_t>(QoreIRListSelectorFlag::Last);
+
+    // the selectors evaluated and not applied yet: a step applies them before the next selector that can have side
+    // effects or raise is evaluated, and the selectors after it that cannot are applied with it
+    std::vector<QoreIRValue> pending;
+    int64_t pending_flags = string_index_char;
+    size_t pending_count = 0;
+    auto apply_pending = [&](bool last) {
+        if (!pending_count) {
+            return;
         }
-        std::vector<QoreIRValue> selector_values;
+        if (last) {
+            pending_flags |= static_cast<int64_t>(QoreIRListSelectorFlag::Last);
+        }
+        withExceptionTarget(builder.createListSelectorStep(result, seq, pending_flags, pending, op->loc));
+        pending.clear();
+        pending_flags = string_index_char;
+        pending_count = 0;
+    };
+
+    for (size_t i = 0; i < selectors.size(); ++i) {
+        if (!qore_ir_selector_eval_is_inert(selectors[i])) {
+            apply_pending(false);
+        } else if (pending_count == QORE_IR_LIST_SELECTOR_STEP_MAX) {
+            apply_pending(false);
+        }
         if (auto* range = dynamic_cast<const QoreRangeOperatorNode*>(selectors[i].getInternalNode())) {
-            flags |= static_cast<int64_t>(QoreIRListSelectorFlag::Range);
+            pending_flags |= static_cast<int64_t>(1)
+                << (static_cast<int64_t>(QoreIRListSelectorFlag::RangeShift) + pending_count);
             QoreValue start_expr = range->getLeft();
             QoreValue end_expr = range->getRight();
             QoreIRValue start = lowerExpression(start_expr, error);
@@ -10769,6 +10785,7 @@ QoreIRValue QoreIRLowering::lowerListSelectorSteps(const QoreSquareBracketsOpera
             }
             // the AST interpreter checks the start for NOTHING before it evaluates the end
             // (QoreRangeOperatorNode::getFunctionalIteratorImpl()); the step checks the end before the next selector
+            // that can have side effects is evaluated
             if (!qore_ir_selector_eval_is_inert(end_expr) && rangeBoundMayBeNothing(start_expr)) {
                 withExceptionTarget(builder.createCheckRangeBound(start, QoreIRRangeBound::Start, range->loc));
             }
@@ -10776,26 +10793,23 @@ QoreIRValue QoreIRLowering::lowerListSelectorSteps(const QoreSquareBracketsOpera
             if (!end.isValid()) {
                 return QoreIRValue();
             }
-            selector_values = {start, end};
+            pending.push_back(start);
+            pending.push_back(end);
         } else {
             QoreIRValue index = lowerExpression(selectors[i], error);
             if (!index.isValid()) {
                 return QoreIRValue();
             }
-            selector_values = {index};
+            pending.push_back(index);
         }
-        result = withExceptionTarget(builder.createListSelectorStep(result, seq, flags, selector_values,
-            op->loc))->result;
+        ++pending_count;
     }
-    QoreIRBasicBlock* selector_exit_block = builder.getBlock();
+    apply_pending(true);
     builder.createBranch(merge_block);
 
+    // the result of the Begin step, to which the steps have added what the selectors selected
     builder.setBlock(merge_block);
-    std::vector<QoreIRPhiIncoming> incoming = {
-        {begin, begin_block},
-        {result, selector_exit_block},
-    };
-    return builder.createPhi(incoming)->result;
+    return result;
 }
 
 static bool qore_ir_is_explicit_hash_value_type(const QoreTypeInfo* type_info) {

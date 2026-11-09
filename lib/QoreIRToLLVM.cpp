@@ -26059,27 +26059,39 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::ListSelectorStep: {
-            // operands: the result so far, the sequence, the flags, and the index or the bounds of a range
-            llvm::Value* args[5];
-            for (size_t i = 0; i < 5; ++i) {
-                if (i >= inst->operands.size()) {
-                    args[i] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
-                    continue;
-                }
+            // operands: the result of the Begin step, the sequence, the flags, and the selector values
+            llvm::Value* args[3];
+            for (size_t i = 0; i < 3; ++i) {
                 auto* operand = getVal(inst->operands[i].id, error);
                 if (!operand) { return false; }
                 args[i] = i == 2
                     ? ensureIntTypeInline(operand, inst->operands[i].id)
                     : boxValue(operand, inst->operands[i].id);
             }
+            int num_selectors = static_cast<int>(inst->operands.size()) - 3;
+            llvm::Value* selector_array = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+            if (num_selectors) {
+                llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+                selector_array = ab.CreateAlloca(i64_type, llvm::ConstantInt::get(i32_type, num_selectors));
+                for (int i = 0; i < num_selectors; ++i) {
+                    auto* selector = getVal(inst->operands[i + 3].id, error);
+                    if (!selector) { return false; }
+                    llvm::Value* boxed = boxValue(selector, inst->operands[i + 3].id);
+                    builder->CreateStore(boxed, builder->CreateGEP(i64_type, selector_array,
+                        llvm::ConstantInt::get(i32_type, i)));
+                }
+            }
             auto helper = module.getOrInsertFunction("qore_rt_list_selector_step",
-                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, i64_type, i64_type, ptr_type},
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, ptr_type, i32_type, ptr_type},
                         false));
-            llvm::Value* result = builder->CreateCall(helper, {args[0], args[1], args[2], args[3], args[4],
-                xsink_arg});
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
-            trackResultForCleanup(result, inst->result.id, llvm_func);
+            llvm::Value* result = builder->CreateCall(helper, {args[0], args[1], args[2], selector_array,
+                llvm::ConstantInt::get(i32_type, num_selectors), xsink_arg});
+            // only the Begin step has a result, which it owns
+            if (inst->result.isValid()) {
+                values[inst->result.id] = result;
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
