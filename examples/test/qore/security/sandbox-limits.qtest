@@ -134,7 +134,8 @@ int sub catch_and_continue(reference<int> catches) {
         ++catches;
         # clearing the thread's cancellation request does not clear a sandbox limit
         clear_thread_cancel();
-        # cancellation deferral is for cleanup code: a deferred cleanup runs to its end
+        # sandboxed code is never deferred (issue #5634): defer_thread_cancel() only calls the cleanup, whose loop
+        # raises the timeout at its first check
         defer_thread_cancel(sub () {
             for (int i = 0; i < 10; ++i) {
                 ++catches;
@@ -955,8 +956,8 @@ code sub get_closure() {
             assertEq("SANDBOX-TIMEOUT", ex.err, ex.desc);
         }
         assertGe(Limit, (clock_get_monotonic_us() - start) / 1000);
-        # the first catch, then the deferred cleanup's loop, whose checks are deferred
-        assertEq(11, catches, "the timeout was caught once, and the deferred cleanup ran to its end");
+        # the first catch; the cleanup's loop is not deferred for sandboxed code, so its first check raises the timeout
+        assertEq(1, catches, "the timeout was caught once, and sandboxed code could not defer it");
     }
 
     testReentry() {

@@ -124,6 +124,8 @@ public:
     // called for generic exceptions
     DLLLOCAL QoreHashNode* makeExceptionObjectAndDelete(ExceptionSink *xsink);
     DLLLOCAL QoreHashNode* makeExceptionObject(int level = 0) const;
+    //! Returns a hash<ExceptionInfo> of this exception without the exceptions chained to it
+    DLLLOCAL QoreHashNode* makeExceptionObjectWithoutChain() const;
 
     // called for runtime exceptions
     DLLLOCAL QoreException(const char *n_err, QoreValue n_desc, QoreValue n_arg = QoreValue())

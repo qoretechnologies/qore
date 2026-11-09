@@ -739,6 +739,11 @@ Guidance for module authors:
 - A thread that serves many callers must not inherit the sandbox of the caller that happened to start it: start it
   with `QTF_NO_SANDBOX_INHERIT` and apply each submitter's capture around its work (`QoreSandboxCapture` /
   `QoreSandboxCaptureHelper`).
+- An object that checks later operations against the policy captured when a sandboxed caller created it must check
+  against `QoreSandboxCapture::getPolicyManagerRef()` and against the thread's own policy
+  (`QoreSandboxManagerHelper(Policy)`), not apply the capture and resolve the thread's policy: an applied capture
+  governs a thread only as its outermost caller, so a sandboxed Program on the thread decides instead, and inside a
+  system-policy call (`SandboxManager::createSystemPolicyCall()`) the check runs with no sandbox (qore#5644).
 - Expect `THREAD-CREATION-FAILURE` when starting a thread for a sandboxed caller and let it reach the caller, which
   can handle it; do not retry in a loop.
 

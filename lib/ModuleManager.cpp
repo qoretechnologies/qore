@@ -2201,12 +2201,8 @@ bool QoreModuleManager::mayChangeModulePath(const QoreProgram* pgm) {
     if (!!(pgm->getParseOptions() & restricting)) {
         return false;
     }
-    QoreSandboxManager* sm = qore_program_private::get(*const_cast<QoreProgram*>(pgm))->getSandboxManagerRef();
-    if (sm) {
-        sm->deref(nullptr);
-        return false;
-    }
-    return true;
+    // also a Program that sandboxed code created, which has no manager of its own
+    return !qore_program_is_sandboxed(pgm);
 }
 
 /* this internal helper function solves an issue with modules
@@ -3556,6 +3552,11 @@ static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram*
         sm = qore_module_init_lift_manager_ref();
     }
     module_pgm.setSandboxManager(sm);
+    // a module that a sandboxed Program without a manager of its own (one that sandboxed code created) chose is
+    // sandboxed as well; its code is governed by the sandbox of its callers
+    if (qore_program_is_sandboxed(parent_pgm)) {
+        qore_program_mark_sandboxed(module_pgm);
+    }
     if (sm) {
         sm->deref(nullptr);
     }

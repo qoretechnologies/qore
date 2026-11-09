@@ -20,11 +20,12 @@ if (process.argv.length < 5) {
   usage();
 }
 
+// port 0 lets the system choose the port, which the READY line reports
 const port = Number(process.argv[2]);
 const certPath = process.argv[3];
 const keyPath = process.argv[4];
 
-if (!port || !certPath || !keyPath) {
+if (!Number.isInteger(port) || port < 0 || !certPath || !keyPath) {
   usage();
 }
 
@@ -129,7 +130,7 @@ server.on('stream', (stream, headers) => {
     return;
   }
 
-  if (!authority.endsWith(':' + port)) {
+  if (!authority.endsWith(':' + server.address().port)) {
     stream.respond({ ':status': 400 });
     stream.end('missing or invalid :authority');
     return;
@@ -141,8 +142,9 @@ server.on('stream', (stream, headers) => {
     return;
   }
 
+  // WS_CONNECT_STATUS: the 2xx status that accepts the CONNECT (200 by default)
   stream.respond({
-    ':status': 200,
+    ':status': Number(process.env.WS_CONNECT_STATUS || 200),
     'sec-websocket-accept': acceptKey(String(keyHeader)),
   });
 
@@ -223,7 +225,7 @@ server.on('stream', (stream, headers) => {
 });
 
 server.listen(port, '127.0.0.1', () => {
-  console.log('READY ' + port);
+  console.log('READY ' + server.address().port);
 });
 
 process.on('SIGTERM', () => {

@@ -16312,6 +16312,140 @@ static QoreValue f_dbg_run_http1_duplex_tests(const QoreListNode* params, Runtim
 }
 #endif
 
+#ifdef DEBUG
+//! returns the idle states of the ACTIVITY events in a queue, which is emptied
+static std::vector<bool> ut_hub_take_idle_states(Queue& q, ExceptionSink* xsink) {
+    std::vector<bool> rv;
+    while (!q.empty()) {
+        ValueHolder v(q.shift(xsink), xsink);
+        const QoreHashNode* h = v->getType() == NT_HASH ? v->get<const QoreHashNode>() : nullptr;
+        rv.push_back(h && h->getKeyValue("idle").getAsBool());
+    }
+    return rv;
+}
+
+//! returns the snapshot's idle state of a subscription hash and releases it
+static bool ut_hub_snapshot_idle(QoreHashNode* sub, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> holder(sub, xsink);
+    return sub && sub->getKeyValue("idle").getAsBool();
+}
+
+//! Debug-only: runs the unit tests of ProgramThreadHub's ACTIVITY publication (design/program-thread-lifecycle-events.md)
+/** A transition is published after the Program's lock is released, so a subscription can read the Program's state
+    while the transition is still to be published: the transition must still reach the existing subscriptions, and
+    not the new one, whose snapshot has it
+*/
+static QoreValue f_dbg_run_program_thread_hub_tests(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    ProgramThreadHub* hub = new ProgramThreadHub(0);
+    ON_BLOCK_EXIT([hub]() { hub->deref(); });
+    Queue* qa = new Queue();
+    Queue* qb = new Queue();
+    Queue* qc = new Queue();
+    // the test's references; the hub takes one of each
+    ReferenceHolder<Queue> ha(qa, xsink), hb(qb, xsink), hc(qc, xsink);
+
+    // an existing subscription
+    hub->addActivityInterest();
+    qa->ref();
+    UT_ASSERT(c, ut_hub_snapshot_idle(hub->subscribe(qa, QORE_PTE_ACTIVITY, 0, true, xsink), xsink),
+        "hub: the first snapshot is idle");
+    hub->activityChanged(1, false);
+    UT_ASSERT(c, ut_hub_take_idle_states(*qa, xsink) == std::vector<bool>({false}),
+        "hub: a transition is delivered");
+
+    // a subscription that reads the Program's state (generation 2) before the transition is published
+    hub->addActivityInterest();
+    qb->ref();
+    UT_ASSERT(c, ut_hub_snapshot_idle(hub->subscribe(qb, QORE_PTE_ACTIVITY, 2, true, xsink), xsink),
+        "hub: a snapshot has the newer state that it read");
+    hub->activityChanged(2, true);
+    UT_ASSERT(c, ut_hub_take_idle_states(*qa, xsink) == std::vector<bool>({true}),
+        "hub: a transition read by a newer subscription is still delivered to the existing one");
+    UT_ASSERT(c, ut_hub_take_idle_states(*qb, xsink).empty(),
+        "hub: a transition is not delivered to the subscription whose snapshot has it");
+
+    // later transitions reach both; one that arrives out of order reaches none
+    hub->activityChanged(4, false);
+    hub->activityChanged(3, true);
+    UT_ASSERT(c, ut_hub_take_idle_states(*qa, xsink) == std::vector<bool>({false}),
+        "hub: a later transition is delivered, an older one arriving after it is not");
+    UT_ASSERT(c, ut_hub_take_idle_states(*qb, xsink) == std::vector<bool>({false}),
+        "hub: a later transition is delivered to the newer subscription");
+
+    // a subscription whose state is older than the last published one takes the published state
+    hub->addActivityInterest();
+    qc->ref();
+    UT_ASSERT(c, !ut_hub_snapshot_idle(hub->subscribe(qc, QORE_PTE_ACTIVITY, 3, true, xsink), xsink),
+        "hub: a snapshot older than the last published transition has the published state");
+    hub->activityChanged(5, true);
+    UT_ASSERT(c, ut_hub_take_idle_states(*qc, xsink) == std::vector<bool>({true}),
+        "hub: the next transition is delivered to it");
+    UT_ASSERT(c, ut_hub_take_idle_states(*qa, xsink) == std::vector<bool>({true}),
+        "hub: the next transition is delivered to the first subscription");
+
+    hub->close(xsink);
+    return make_unit_test_result(c, xsink);
+}
+#endif
+
+#ifdef DEBUG
+//! Debug-only: cancels a thread and publishes the request's lifecycle event only after the thread has ended
+/** The canceller publishes a claimed request after it releases the thread list's lock; this makes it publish after
+    the thread has ended, which can otherwise happen only by chance, so that a test can check that the thread published
+    the request before its FINISHED event (design/program-thread-lifecycle-events.md)
+
+    @return True if the request was delivered
+*/
+static QoreValue f_dbg_cancel_thread_after_end(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int tid = static_cast<int>(HARD_QORE_VALUE_INT(params, 0));
+    const QoreStringNode* reason = get_param_value(params, 1).getType() == NT_STRING
+        ? get_param_value(params, 1).get<const QoreStringNode>()
+        : nullptr;
+    std::function<void()> wait_for_end = [tid]() {
+        ExceptionSink join_xsink;
+        thread_list.joinThread(tid, 60000, &join_xsink);
+        join_xsink.clear();
+    };
+    qore_dbg_cancel_before_publish = &wait_for_end;
+    ON_BLOCK_EXIT([]() { qore_dbg_cancel_before_publish = nullptr; });
+    return !qore_cancel_thread(tid, reason ? reason->c_str() : nullptr);
+}
+#endif
+
+#ifdef DEBUG
+//! Debug-only: returns the number of cancellation requests of a thread not yet published by their canceller
+/** Each new cancellation request of a background thread is claimed for its lifecycle events; the canceller removes
+    the claim once it has published it, and the thread publishes those left before its FINISHED event
+    (design/program-thread-lifecycle-events.md)
+*/
+static QoreValue f_dbg_get_lifecycle_cancel_claim_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(thread_list.getLifecycleCancelClaimCount(
+        static_cast<int>(HARD_QORE_VALUE_INT(params, 0))));
+}
+#endif
+
+#ifdef DEBUG
+//! Debug-only: returns the number of cancellation claim generations a Program's lifecycle hub keeps for a thread
+/** @return the number of generations, or -1 if the hub has no record of the thread
+    (design/program-thread-lifecycle-events.md)
+*/
+static QoreValue f_dbg_get_program_thread_cancel_generation_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    ProgramThreadHubHolder hub(qore_program_private::refThreadHub(**pgm));
+    return hub->getCancelGenerationCount(HARD_QORE_VALUE_INT(params, 1));
+}
+#endif
+
 //! Debug-only: runs the unit tests of the poll operation states that need no connection (Http3ServerPollStateTest)
 static QoreValue f_dbg_run_poll_state_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
@@ -19661,6 +19795,18 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_global_vars", f_dbg_global_vars, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, listTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
+#ifdef DEBUG
+    qns.addBuiltinVariant("dbg_run_program_thread_hub_tests", f_dbg_run_program_thread_hub_tests, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_cancel_thread_after_end", f_dbg_cancel_thread_after_end, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", stringOrNothingTypeInfo,
+        QORE_PARAM_NO_ARG, "reason");
+    qns.addBuiltinVariant("dbg_get_lifecycle_cancel_claim_count", f_dbg_get_lifecycle_cancel_claim_count,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid");
+    qns.addBuiltinVariant("dbg_get_program_thread_cancel_generation_count",
+        f_dbg_get_program_thread_cancel_generation_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntOrNothingTypeInfo, 2,
+        QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", bigIntTypeInfo, QORE_PARAM_NO_ARG, "thread_id");
+#endif
     qns.addBuiltinVariant("dbg_run_poll_state_tests", f_dbg_run_poll_state_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
     qns.addBuiltinVariant("run_unit_tests", f_run_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);

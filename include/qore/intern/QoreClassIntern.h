@@ -2483,6 +2483,11 @@ public:
     */
     std::atomic<const QoreProgram*> released_spgm{nullptr};
 
+    //! true if the source Program had a sandbox manager when it released the class (see isSandboxedCode())
+    /** Set with released_spgm, under gate.asl_lock
+    */
+    std::atomic<bool> released_sandboxed{false};
+
     // if the souorce program should be dereference when the class is destroyed
     bool deref_source_program = true;
 
@@ -3644,6 +3649,7 @@ public:
                 // see getReferencedSourceProgram()
                 AutoLocker al(gate.asl_lock);
                 released_spgm.store(pgm);
+                released_sandboxed.store(qore_program_is_sandboxed(pgm));
                 taken = spgm.compare_exchange_strong(expected, nullptr);
             }
             if (taken) {
@@ -3659,6 +3665,7 @@ public:
                 p = spgm.load();
                 if (p) {
                     released_spgm.store(p);
+                    released_sandboxed.store(qore_program_is_sandboxed(p));
                     p = spgm.exchange(nullptr);
                 }
             }
@@ -3667,6 +3674,14 @@ public:
             }
         }
     }
+
+    //! Returns true if the code of the class is sandboxed: it was defined by a Program with a sandbox manager
+    /** A builtin class, and a class of a Program without a sandbox manager (system and module code), is trusted.  The
+        sandbox manager of the source Program is read when called, so a manager set after the class was parsed counts;
+        once the source Program has released the class, the state it had then is used.  Decides the cancellation rule
+        for the class's destructor (see QoreDestructorCancelHelper).
+    */
+    DLLLOCAL bool isSandboxedCode() const;
 
     //! Returns a reference to the source Program of the class, or nullptr if it has released the class or is deleted
     /** spgm is cleared under gate.asl_lock in deleteClassData() before the Program can be freed, so the Program read

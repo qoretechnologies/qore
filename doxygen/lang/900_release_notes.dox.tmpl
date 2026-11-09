@@ -86,6 +86,12 @@
     lookup delayed every accept, and \c source (the peer's IP address) is set as before.  Socket::getPeerInfo()
     still resolves the hostname on request.
 
+    @par Modules May Not Declare Public thread_local Variables
+    A module that declares a <tt>public thread_local</tt> variable raises \c MODULE-PUBLIC-THREAD-LOCAL when parsed or
+    compiled; keep the variable private and export functions that read and set it (see @ref thread_local).  A module
+    compiled by an earlier \c qcc that exports one is refused when loaded and must be changed and recompiled.  A
+    %Program's <tt>public thread_local</tt> variables are still passed to its child Programs.
+
     @par Final Methods Hold for the Whole Class Hierarchy
     A subclass can no longer bypass a @ref final_methods "final" method with an overload that accepts the same
     arguments or with a parent class listed before the final method's class that declares or inherits its name;
@@ -501,6 +507,12 @@
     ordinary character; set the \c quote_escape option to a backslash to read or write files in the earlier format;
     see @ref csvutil_rfc4180.
 
+    @par Destructors on a Cancelled or Interrupted Thread
+    The destructor of a trusted class runs with cancellation and @ref sandbox_interrupt "program interrupts" deferred,
+    so it completes, the destructor of a sandboxed class is skipped while a cancellation, an interrupt or a sandbox
+    limit is pending, and sandboxed code never runs with cancellation deferred; see @ref cancel_destructors and
+    @ref cancel_security (<a href="https://github.com/qoretechnologies/qore/issues/5634">issue 5634</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Program Thread Coordination
     @ref Qore::Program::waitForThreads() "Program::waitForThreads()" and
@@ -510,6 +522,12 @@
     The all-thread request includes starting threads and descendants until the Program becomes idle. These APIs
     allow an embedding UI to keep responding while waiting for the Program to become safe to parse or reset;
     they do not enable concurrent parsing or forcibly kill native threads.
+
+    @par Program Thread Lifecycle Events
+    @ref Qore::Program::subscribeThreadEvents() "Program::subscribeThreadEvents()" delivers events to a
+    @ref Qore::Thread::Queue "Queue" when the Program's background threads start, are asked to cancel and end (with
+    how they ended), and when the Program becomes idle or active
+    (<a href="https://github.com/qoretechnologies/qore/issues/5633">issue 5633</a>).
 
     @par Waiting for a Thread to Terminate
     @ref Qore::thread_join() "thread_join()" waits until a thread started with @ref background has left the thread
@@ -763,7 +781,8 @@
 
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
-    @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes; see
+    @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes, and check
+    an operation against a captured policy on any thread; see
     @ref interruptible_io_sandbox_threads "Carrying the Caller's Sandbox onto Another Thread".
 
     @par C++ API: Cancellable Waits in Binary Modules
@@ -1477,6 +1496,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a timed wait of @ref Qore::Thread::Counter "Counter", @ref Qore::Thread::Queue "Queue",
+      @ref Qore::Thread::Mutex "Mutex", @ref Qore::Thread::RWLock "RWLock" or @ref Qore::Thread::Gate "Gate" woken
+      without what it waited for (another waiter took it first, or another %Program's interrupt woke it) waited for
+      its whole timeout again; it now waits only for the rest of it
     - a @ref cast "cast" as the lvalue of @ref remove "remove" or @ref delete "delete" (ex: <tt>remove cast<int>(x)</tt>)
       or in the lvalue of a @ref lvalue_references "reference" aborted debug builds or gave wrong results; it is now a
       parse error, as a cast is not storage that can be removed or referred to

@@ -4694,6 +4694,10 @@ private:
         auto call_block_owned = std::make_unique<QoreIRBasicBlock>(
             "outline.call." + std::to_string(region_no));
         QoreIRBasicBlock* call_block = call_block_owned.get();
+        // a region that starts an iteration of a loop statement starts in the helper with no branch, so the check for
+        // cancellation that the branch into it makes is made on the single entry edge into the call block instead
+        // (see QoreIRBasicBlock::loop_cancel); the helper's own branches back into it still check
+        call_block->loop_cancel = rb.first->loop_cancel;
         QoreIRBasicBlock* return_block = nullptr;
         std::unique_ptr<QoreIRBasicBlock> return_block_owned;
         {

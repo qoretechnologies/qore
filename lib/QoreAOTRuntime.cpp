@@ -8346,11 +8346,19 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             return nullptr;
         }
         const char* block_name = reader.readStringRef(ptr);
-        bool is_loop_header = QoreAOTBinaryReader::readU8(ptr) != 0;
+        // bit 0: is_loop_header; bits 1-3: loop_cancel (see serializeIRFunction())
+        uint8_t block_flags = QoreAOTBinaryReader::readU8(ptr);
+        uint8_t loop_cancel = static_cast<uint8_t>(block_flags >> 1);
+        if (loop_cancel > QORE_IR_LOOP_CANCEL_MAX) {
+            error = "invalid loop cancellation kind " + std::to_string(loop_cancel) + " in block "
+                + std::to_string(i) + " of function " + func->name;
+            return nullptr;
+        }
         uint16_t num_insts = QoreAOTBinaryReader::readU16(ptr);
 
         func->blocks[i]->name = block_name ? block_name : "";
-        func->blocks[i]->is_loop_header = is_loop_header;
+        func->blocks[i]->is_loop_header = (block_flags & 1) != 0;
+        func->blocks[i]->loop_cancel = static_cast<QoreIRLoopCancel>(loop_cancel);
 
         for (int j = 0; j < num_insts; ++j) {
             if (checkCancel()) {
@@ -8402,7 +8410,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
 
 std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
         const QoreAOTLazyClosureIR& lazy_ir, UserVariantBase* uvb,
-        ExceptionSink* xsink, std::string& error) {
+        ExceptionSink* /* xsink: building the IR raises no exception */, std::string& error) {
     if (!lazy_ir.metadata || !lazy_ir.pgm || !uvb) {
         error = "incomplete lazy closure metadata";
         return nullptr;
@@ -8454,19 +8462,16 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
     auto ir = deserializeIRFunction(reader, ptr, end, lazy_ir.pgm,
         read_expr, &lazy_ir.enclosing_locals, error,
         parent_locals, static_cast<int>(lazy_ir.parent_locals.size()),
+        // no cancellation sink: the call of the closure is no cancellation point in the AST interpreter, and the
+        // IR is bounded by the closure's code (issue #5641)
         &closure_locals, false, &lazy_ir.body_locals, lazy_ir.local_owner_pgm,
-        false, xsink);
+        false, nullptr);
     if (!ir) {
         return nullptr;
     }
 
     UserSignature* sig = uvb->getUserSignature();
     for (unsigned p = 0; p < sig->numParams(); ++p) {
-        if (p && !(p % 100)
-                && qore_check_cancel(xsink, "AOT lazy closure IR finalization")) {
-            error = "lazy closure IR finalization was cancelled";
-            return nullptr;
-        }
         if (sig->lv[p]) {
             ir->param_local_vars[static_cast<int>(p)] = sig->lv[p];
         }

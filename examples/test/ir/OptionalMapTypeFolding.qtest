@@ -27,7 +27,7 @@ class OptionalMapTypeFoldingTest inherits QUnit::Test {
     constructor() : Test("Optional map element type folding", "1.0", \ARGV) {
         addTestCase("Optional mapped values work in AST, IR and JIT", \modes());
         addTestCase("Optional mapped values work in source-stripped AOT", \compiled());
-        addTestCase("Native map cancellation releases partial results", \cancelled());
+        addTestCase("Native map is not a cancellation point", \cancelled());
         set_return_value(main());
     }
     private static string quote(string value) {

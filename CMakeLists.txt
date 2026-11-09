@@ -1745,6 +1745,7 @@ set(LIBQORE_CPP_SRC
     lib/WeakHashReferenceNode.cpp
     lib/QoreProgram.cpp
     lib/QoreProgramHelper.cpp
+    lib/ProgramThreadHub.cpp
     lib/QoreNamespace.cpp
     lib/QoreNet.cpp
     lib/QoreURL.cpp
@@ -2105,6 +2106,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/ThreadLocalVariableData.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreProgram.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreProgramHelper.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ProgramThreadHub.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreNamespace.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreNet.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreURL.cpp\"

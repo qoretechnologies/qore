@@ -357,6 +357,16 @@ AbstractQoreNode* VarRefNode::makeNewCall(QoreValue args) {
         : nullptr;
 }
 
+void VarRefNode::setPublic() {
+    // a "public thread_local" declaration in an expression, such as a top-level statement of a Program, is a
+    // thread_local variable reference
+    assert(type == VT_GLOBAL || type == VT_THREAD_LOCAL);
+    ref.var->setPublic();
+    if (type == VT_THREAD_LOCAL) {
+        qore_ns_private::checkPublicThreadLocalDecl(*ref.var);
+    }
+}
+
 void VarRefNode::makeGlobal(qore_var_t type) {
     assert(this->type != VT_GLOBAL);
     assert(this->type == VT_UNRESOLVED || !ref.id);

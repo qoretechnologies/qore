@@ -49,7 +49,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 417,
+static_assert(QORE_IR_MAX_OPCODE == 418,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -16932,10 +16932,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 error = "branch target block not found";
                 return false;
             }
-            if (br->target && br->target->is_loop_header) {
+            // a loop statement checks for cancellation at the start of every iteration with its own label, as the
+            // AST interpreter does; the loops of expressions such as map do not (see QoreIRBasicBlock::loop_cancel)
+            if (br->target && br->target->loop_cancel != QoreIRLoopCancel::None) {
                 auto check_cancel = module.getOrInsertFunction("qore_rt_check_cancel",
                         llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-                llvm::Value* operation = builder->CreateGlobalString("IR loop", "loop_cancel_operation");
+                llvm::Value* operation = builder->CreateGlobalString(
+                    qore_ir_loop_cancel_operation(br->target->loop_cancel), "loop_cancel_operation");
                 builder->CreateCall(check_cancel, {xsink_arg, operation});
                 emitExceptionCheck(module, llvm_func, inst);
             }
@@ -25291,6 +25294,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            // the AOT helper raises AOT-TYPE-ERROR when the element type path does not resolve; the exception goes
+            // to the handler of an enclosing try block (the instruction's exception target)
+            if (aot_mode && inst->element_type) {
+                emitExceptionCheck(module, llvm_func, inst);
+            }
             return true;
         }
         case QoreIROpcode::ListAppend: {
@@ -25490,6 +25498,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     typed_list_data_ptrs[inst->result.id] =
                         builder->CreateCall(data_helper, {result}, "typed_output_data");
                 }
+            } else if (aot_mode && inst->element_type) {
+                // the AOT helper raises AOT-TYPE-ERROR when the element type path does not resolve
+                emitExceptionCheck(module, llvm_func, inst);
             }
             return true;
         }
@@ -26016,6 +26027,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_hash_set_common_type",
                     llvm::FunctionType::get(void_type, {i64_type, i64_type}, false));
             builder->CreateCall(helper, {hash_boxed, state_int});
+            return true;
+        }
+        case QoreIROpcode::CheckCancelEvery: {
+            auto* count = getVal(inst->operands[0].id, error);
+            if (!count) { return false; }
+            auto* point = getVal(inst->operands[1].id, error);
+            if (!point) { return false; }
+            auto* limit = getVal(inst->operands[2].id, error);
+            if (!limit) { return false; }
+            llvm::Value* count_int = ensureIntTypeInline(count, inst->operands[0].id);
+            llvm::Value* point_int = ensureIntTypeInline(point, inst->operands[1].id);
+            llvm::Value* limit_int = ensureIntTypeInline(limit, inst->operands[2].id);
+            auto helper = module.getOrInsertFunction("qore_rt_check_cancel_every",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, ptr_type}, false));
+            builder->CreateCall(helper, {count_int, point_int, limit_int, xsink_arg});
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::ListAppendElement: {
@@ -34662,7 +34689,6 @@ bool QoreIRToLLVM::emitFusedMapFoldLoop(const QoreIRInstruction* inst, llvm::Mod
     llvm::Value* size = builder->CreateCall(size_helper, {list_boxed});
     llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
     llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
-    llvm::Value* checkpoint_interval = llvm::ConstantInt::get(i64_type, 100);
 
     std::string empty_name = std::string(label) + "_empty";
     std::string init_name = std::string(label) + "_init";
@@ -34672,8 +34698,6 @@ bool QoreIRToLLVM::emitFusedMapFoldLoop(const QoreIRInstruction* inst, llvm::Mod
     llvm::BasicBlock* empty_bb = llvm::BasicBlock::Create(ctx, empty_name, llvm_func);
     llvm::BasicBlock* init_bb = llvm::BasicBlock::Create(ctx, init_name, llvm_func);
     llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, loop_name, llvm_func);
-    llvm::BasicBlock* checkpoint_bb = llvm::BasicBlock::Create(
-        ctx, std::string(label) + "_checkpoint", llvm_func);
     llvm::BasicBlock* load_bb = llvm::BasicBlock::Create(
         ctx, std::string(label) + "_load", llvm_func);
     llvm::BasicBlock* box_bb = llvm::BasicBlock::Create(ctx, box_name, llvm_func);
@@ -34722,24 +34746,10 @@ bool QoreIRToLLVM::emitFusedMapFoldLoop(const QoreIRInstruction* inst, llvm::Mod
     llvm::Type* elem_type = is_float ? double_type : i64_type;
     llvm::PHINode* idx_phi = builder->CreatePHI(i64_type, 2, "idx");
     llvm::PHINode* acc_phi = builder->CreatePHI(elem_type, 2, "acc");
-    llvm::PHINode* checkpoint_phi = builder->CreatePHI(i64_type, 2, "checkpoint_remaining");
-    llvm::Value* next_checkpoint = builder->CreateSub(checkpoint_phi, one);
-    builder->CreateCondBr(builder->CreateICmpEQ(next_checkpoint, zero), checkpoint_bb, load_bb);
-
-    builder->SetInsertPoint(checkpoint_bb);
-    auto check_cancel = module.getOrInsertFunction("qore_rt_check_cancel",
-            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-    llvm::Value* operation = builder->CreateGlobalString(
-        "fused map/foldl loop", "fused_fold_cancel_operation");
-    builder->CreateCall(check_cancel, {xsink_arg, operation});
-    emitExceptionCheck(module, llvm_func, inst);
-    llvm::BasicBlock* checkpoint_end = builder->GetInsertBlock();
+    // the AST interpreter's map and foldl do not check for cancellation (design/cooperative-cancellation.md)
     builder->CreateBr(load_bb);
 
     builder->SetInsertPoint(load_bb);
-    llvm::PHINode* load_checkpoint = builder->CreatePHI(i64_type, 2, "next_checkpoint");
-    load_checkpoint->addIncoming(next_checkpoint, loop_bb);
-    load_checkpoint->addIncoming(checkpoint_interval, checkpoint_end);
     llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_phi);
     llvm::Value* boxed = builder->CreateLoad(i64_type, entry);
 
@@ -34773,8 +34783,6 @@ bool QoreIRToLLVM::emitFusedMapFoldLoop(const QoreIRInstruction* inst, llvm::Mod
     idx_phi->addIncoming(next_idx, loop_end);
     acc_phi->addIncoming(first_mapped, init_end);
     acc_phi->addIncoming(next_acc, loop_end);
-    checkpoint_phi->addIncoming(checkpoint_interval, init_end);
-    checkpoint_phi->addIncoming(load_checkpoint, loop_end);
 
     builder->SetInsertPoint(box_bb);
     llvm::PHINode* final_acc = builder->CreatePHI(elem_type, 2,

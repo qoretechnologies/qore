@@ -189,6 +189,11 @@ QoreHashNode* QoreException::makeExceptionObject(int level) const {
     return h;
 }
 
+QoreHashNode* QoreException::makeExceptionObjectWithoutChain() const {
+    // the chain is added only below the maximum level
+    return makeExceptionObject(QORE_MAX_EXCEPTIONS);
+}
+
 QoreHashNode *QoreException::makeExceptionObjectAndDelete(ExceptionSink *xsink) {
     QORE_TRACE("makeExceptionObjectAndDelete()");
     QoreHashNode* rv = makeExceptionObject();

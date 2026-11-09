@@ -205,9 +205,30 @@ list<int> l1(1);
     @ref qore_namespaces "namespaces" cannot be initialized at the same time as the declaration, but instead have to be
     initialized elsewhere.
 
-    When defining a @ref user_modules "user module", the <tt><b>thread_local</b></tt> keyword can be preceded by
-    @ref mod_public "public", which means that the <tt><b>thread_local</b></tt> variable will be available (imported) in
-    @ref Qore::Program "Program" objects importing the module.  See @ref mod_public "public" for more information.
+    In a @ref Qore::Program "Program", the <tt><b>thread_local</b></tt> keyword can be preceded by
+    @ref mod_public "public", which means that the <tt><b>thread_local</b></tt> variable is passed to the directly
+    created child @ref Qore::Program "Program" objects of the Program; each thread still has its own value, which the
+    parent and child Programs share.
+
+    A @ref user_modules "user module" may not declare a <tt><b>public thread_local</b></tt> variable; doing so raises
+    a \c MODULE-PUBLIC-THREAD-LOCAL parse exception.  A module's public variable is one variable shared by every
+    @ref Qore::Program "Program" that imports the module, so any importer could set a value on a thread that any other
+    importer reads on the same thread.  Instead, keep the variable private to the module and export public functions
+    or methods that read and set it, so the module decides what its callers may see and change:
+    @code{.py}
+public namespace MyModule {
+    # private to the module: one value per thread
+    thread_local *int request_id;
+
+    public *int sub get_request_id() {
+        return request_id;
+    }
+
+    public sub set_request_id(int id) {
+        request_id = id;
+    }
+}
+    @endcode
 
     @note
     - <tt><b>thread_local</b></tt> global variables are always thread local, even if referenced in a
