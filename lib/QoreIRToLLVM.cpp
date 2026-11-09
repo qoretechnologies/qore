@@ -33594,6 +33594,17 @@ bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::M
         return false;
     }
 
+    // a boxed index can hold a list, which selects a slice of the list (QoreSquareBracketsOperatorNode::
+    // doSquareBrackets()) instead of an element: ll[0, 2] with a constant list of indexes converted the list to the
+    // index 0; only a boxed index that is known to be an integer is converted to one here
+    if (nanboxed_values.count(inst->operands[1].id)) {
+        const QoreIRValueFacts* facts = current_ir_func
+            ? current_ir_func->getValueFacts(inst->operands[1]) : nullptr;
+        if (!facts || !QoreTypeInfo::isType(facts->type_info, NT_INT)) {
+            return false;
+        }
+    }
+
     // Box the list operand and unbox the index
     llvm::Value* list_boxed = boxValue(list_val, inst->operands[0].id);
 
