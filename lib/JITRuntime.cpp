@@ -3987,29 +3987,27 @@ static bool qore_rt_aot_path_cache_receiver_serial(const QoreTypeInfo* ti, uint6
 template <typename M, typename V>
 static void qore_rt_aot_path_cache_add(M& cache, QoreAOTPathCacheOrder& order, QoreAOTHashDeclPathCacheKey&& key,
         V value) {
-    // another thread added the entry since the caller missed it
-    if (cache.find(key) != cache.end()) {
+    // the ring is allocated once, before the cache changes
+    if (order.keys.capacity() < QORE_AOT_PATH_CACHE_MAX_ENTRIES) {
+        order.keys.reserve(QORE_AOT_PATH_CACHE_MAX_ENTRIES);
+    }
+    // the entry is added first, so that a failure leaves the cache as it was; another thread may have added it since
+    // the caller missed it
+    auto r = cache.emplace(std::move(key), value);
+    if (!r.second) {
         return;
     }
-    // the memory is reserved before the cache changes
-    if (order.keys.size() < QORE_AOT_PATH_CACHE_MAX_ENTRIES) {
-        order.keys.reserve(order.keys.size() + 1);
-    }
-    if (cache.size() >= QORE_AOT_PATH_CACHE_MAX_ENTRIES) {
-        assert(order.keys.size() == QORE_AOT_PATH_CACHE_MAX_ENTRIES);
-        auto oldest = cache.find(*order.keys[order.next]);
-        assert(oldest != cache.end());
-        cache.erase(oldest);
-    }
-    auto r = cache.emplace(std::move(key), value);
-    assert(r.second);
     const QoreAOTHashDeclPathCacheKey* k = &r.first->first;
     if (order.keys.size() < QORE_AOT_PATH_CACHE_MAX_ENTRIES) {
         order.keys.push_back(k);
-    } else {
-        order.keys[order.next] = k;
-        order.next = (order.next + 1) % QORE_AOT_PATH_CACHE_MAX_ENTRIES;
+        return;
     }
+    // the cache was full: its oldest entry is evicted
+    auto oldest = cache.find(*order.keys[order.next]);
+    assert(oldest != cache.end());
+    cache.erase(oldest);
+    order.keys[order.next] = k;
+    order.next = (order.next + 1) % QORE_AOT_PATH_CACHE_MAX_ENTRIES;
 }
 
 //! Resolves a hashdecl path of an AOT context for the receiver given, without the caches

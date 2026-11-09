@@ -1119,13 +1119,13 @@ private:
     DLLLOCAL void releaseThreadLocalVarsOfProgram(const ThreadLocalVarRelease* v, size_t n, ExceptionSink* xsink) {
         // the Program is referenced while it is used; no lock is held when it is looked up and entered, as its
         // teardown releases the variable with the registry's lock
+        // the values taken, which are released below; allocated before the Program is entered and any value is taken
+        std::unique_ptr<QoreLValue<qore_gvar_ref_u>[]> values(new QoreLValue<qore_gvar_ref_u>[n]);
         ReferenceHolder<QoreProgram> pgm(v->pgm ? qore_program_private::getReferencedProgram(v->pgm, v->pgm_id)
             : nullptr, xsink);
         bool entered = *pgm && qore_program_private::get(**pgm)->enterWithoutContext();
         // values that the thread cannot release in the Program are handed over to the registry
         const bool hand_over = v->pgm && !entered;
-        // the values taken, which are released below; allocated before any is taken
-        std::unique_ptr<QoreLValue<qore_gvar_ref_u>[]> values(new QoreLValue<qore_gvar_ref_u>[n]);
         for (size_t i = 0; i < n; ++i) {
             takeThreadLocalVar(v[i].serial, hand_over, values[i]);
         }
