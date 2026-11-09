@@ -130,6 +130,11 @@ auto AbstractMember::getDefaultValue() {
                 cm->name.c_str(), xsink)) {
             return QoreValue();
         }
+        // the initializers of a class that a user module does not export cannot be evaluated by a caller its export
+        // boundary applies to
+        if (reflection_check_class_export(caller, cm->cls, m->pgm, xsink)) {
+            return QoreValue();
+        }
     }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, m->pgm);

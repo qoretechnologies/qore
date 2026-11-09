@@ -502,6 +502,11 @@
     another @ref Qore::Program "Program" reads or writes its values, calls its code, or creates objects in it; see
     @ref reflection_caller_privilege (<a href="https://github.com/qoretechnologies/qore/issues/5483">issue 5483</a>).
 
+    @par Reflection Respects the Export Boundary of User Modules
+    Sandboxed and restricted code no longer finds, calls, reads or writes through reflection what a user module does
+    not export, nor constructs or uses the static members of a class it does not export; see
+    @ref reflection_module_exports (<a href="https://github.com/qoretechnologies/qore/issues/5692">issue 5692</a>).
+
     @par CsvUtil Writes and Reads RFC 4180 CSV Data by Default
     The @ref csvutilintro "CsvUtil" writers escape quotes by doubling them and the readers read a backslash as an
     ordinary character; set the \c quote_escape option to a backslash to read or write files in the earlier format;

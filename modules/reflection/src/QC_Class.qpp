@@ -286,7 +286,8 @@ static int append_all_methods(const QoreReflectionClass* c, method_type_e type, 
     return 0;
 }
 
-static QoreValue find_all_classes(const QoreString& pattern, int re_opts, QoreProgram* pgm, ExceptionSink* xsink) {
+static QoreValue find_all_classes(const ReflectionLookupCaller& caller, const QoreString& pattern, int re_opts,
+        QoreProgram* pgm, ExceptionSink* xsink) {
     class_vec_t class_vec = pgm->findAllClassesRegex(pattern, re_opts, xsink);
     if (*xsink) {
         return QoreValue();
@@ -294,6 +295,10 @@ static QoreValue find_all_classes(const QoreString& pattern, int re_opts, QorePr
 
     ReferenceHolder<QoreListNode> l(new QoreListNode(QC_CLASS->getTypeInfo()), xsink);
     for (auto& i : class_vec) {
+        // a class that a module does not export is not found by a caller its export boundary applies to
+        if (!caller.canSeeClass(pgm, i)) {
+            continue;
+        }
         l->push(new QoreObject(QC_CLASS, pgm, new QoreReflectionClass(pgm, i)), xsink);
     }
 
@@ -355,9 +360,16 @@ Class::constructor(string path) {
     }
 
     QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    // the export boundary of a user module applies only to a lookup in another module's Program
+    ReflectionLookupCaller caller(lookup_pgm);
     ReferenceHolder<QoreReflectionClass> cls(
         new QoreReflectionClass(xsink, npath->c_str(), lookup_pgm, runtime_cfg.getLocation()), xsink);
     if (*xsink) {
+        return;
+    }
+    // a declaration that a module does not export is not found by a caller its export boundary applies to
+    if (!caller.canSeeClass(lookup_pgm, cls->cls)) {
+        xsink->raiseException("UNKNOWN-CLASS", "cannot resolve class '%s'", npath->c_str());
         return;
     }
     self->setPrivate(CID_CLASS, cls.release());
@@ -1551,6 +1563,10 @@ object Class::newObject(...) {
     if (check_constructor(caller, c->cls, c->pgm, xsink)) {
         return QoreValue();
     }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, c->cls, c->pgm, xsink)) {
+        return QoreValue();
+    }
     // the access of the constructor's variants, for code that a sandbox governs or that is restricted
     if (reflection_check_method_access(caller, c->cls->getConstructor(), xsink)) {
         return QoreValue();
@@ -1600,6 +1616,10 @@ object Class::newObjectArgs(*softlist argv) {
 
     // the class ptr must be valid
     if (check_constructor(caller, c->cls, c->pgm, xsink)) {
+        return QoreValue();
+    }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, c->cls, c->pgm, xsink)) {
         return QoreValue();
     }
     // the access of the constructor's variants, for code that a sandbox governs or that is restricted
@@ -1658,6 +1678,10 @@ object Class::callConstructor(*softlist<auto> arguments, *softlist<Type> type_ar
 
     // the class ptr must be valid
     if (check_constructor(caller, c->cls, c->pgm, xsink)) {
+        return QoreValue();
+    }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, c->cls, c->pgm, xsink)) {
         return QoreValue();
     }
     // the access of the constructor's variants, for code that a sandbox governs or that is restricted
@@ -2168,9 +2192,16 @@ static Class Class::forName(string path) [flags=RET_VALUE_ONLY] {
     }
 
     QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    // the export boundary of a user module applies only to a lookup in another module's Program
+    ReflectionLookupCaller caller(lookup_pgm);
     ReferenceHolder<QoreReflectionClass> cls(
         new QoreReflectionClass(xsink, npath->c_str(), lookup_pgm, runtime_cfg.getLocation()), xsink);
     if (*xsink) {
+        return QoreValue();
+    }
+    // a declaration that a module does not export is not found by a caller its export boundary applies to
+    if (!caller.canSeeClass(lookup_pgm, cls->cls)) {
+        xsink->raiseException("UNKNOWN-CLASS", "cannot resolve class '%s'", npath->c_str());
         return QoreValue();
     }
 
@@ -2212,6 +2243,11 @@ static Class Class::forName(Program[QoreProgram] pgm, string path) [flags=RET_VA
     if (*xsink) {
         return QoreValue();
     }
+    // a declaration that a module does not export is not found by a caller its export boundary applies to
+    if (!caller.canSeeClass(*pgm, cls->cls)) {
+        xsink->raiseException("UNKNOWN-CLASS", "cannot resolve class '%s'", npath->c_str());
+        return QoreValue();
+    }
 
     return new QoreObject(QC_CLASS, *pgm, cls.release());
 }
@@ -2245,7 +2281,9 @@ list<Class> l = Class::findAllRegex("^T");
 */
 static list<Class> Class::findAllRegex(string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
     QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
-    return find_all_classes(*pattern, re_opts, lookup_pgm, xsink);
+    // the export boundary of a user module applies only to a lookup in another module's Program
+    ReflectionLookupCaller caller(lookup_pgm);
+    return find_all_classes(caller, *pattern, re_opts, lookup_pgm, xsink);
 }
 
 //! Returns a list of classes matching the regular expression pattern argument or an empty list if no classes match
@@ -2268,5 +2306,5 @@ static list<Class> Class::findAllRegex(Program[QoreProgram] pgm, string pattern,
     if (reflection_check_structural_access(caller, *pgm, "look up symbols in", xsink)) {
         return QoreValue();
     }
-    return find_all_classes(*pattern, re_opts, *pgm, xsink);
+    return find_all_classes(caller, *pattern, re_opts, *pgm, xsink);
 }

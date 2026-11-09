@@ -407,6 +407,10 @@ const QoreClass* QoreExternalFunction::getClass() const {
     return reinterpret_cast<const QoreFunction*>(this)->getClass();
 }
 
+bool QoreExternalFunction::isModulePublic() const {
+    return reinterpret_cast<const QoreFunction*>(this)->hasPublic();
+}
+
 const QoreExternalVariant* QoreExternalFunction::findVariant(const type_vec_t& type_vec, ExceptionSink* xsink) const {
     const QoreClass* cls = getClass();
     const qore_class_private* qc = cls ? qore_class_private::get(*cls) : nullptr;
@@ -439,6 +443,11 @@ QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant,
         QoreProgram* pgm, const QoreReflectionCaller& caller, ExceptionSink* xsink) const {
     const QoreFunction* f = reinterpret_cast<const QoreFunction*>(this);
     RuntimeConfig& rc = rc_get_current_ref();
+    // a function that a user module does not export cannot be called by a caller its export boundary applies to
+    if (caller.checkModuleExport(caller.canSeeDeclaration(pgm, nullptr, isModulePublic() || isBuiltin()),
+            "function", getName(), xsink)) {
+        return QoreValue();
+    }
     // the call is deferred as a cross-Program call is (args evaluated in the caller's context, body under the
     // Program's own options); the override forces the caller's restrictions on the domain check and the body
     QoreReflectionCallCheckHelper call_check(caller, pgm);
@@ -781,6 +790,64 @@ int QoreReflectionCaller::checkClassElementAccess(const QoreClass* cls, ClassAcc
             "code that a sandbox governs or whose functional domains are restricted", kind, cls->getName(), name,
             privpub(access));
     }
+    return -1;
+}
+
+bool QoreReflectionCaller::appliesModuleExports(const QoreProgram* target) const {
+    if (!member_access || !target || target == pgm) {
+        return false;
+    }
+    // only a user module has an export boundary; user code cannot set PO_IN_MODULE
+    if (!target->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
+        return false;
+    }
+    // a Program that the caller created is under its control
+    return !(pgm_id && qore_program_private::programCreatedBy(*target, pgm_id));
+}
+
+bool QoreReflectionCaller::canSeeNamespace(const QoreProgram* target, const QoreNamespace* ns) const {
+    if (!ns || !appliesModuleExports(target)) {
+        return true;
+    }
+    // as when the module is imported (qore_ns_private::copyMergeCommittedNamespace()): a namespace that the module
+    // declares without "public" is not exported, nor is anything in it; a namespace that the module imported was
+    // exported by the module that declares it
+    for (const QoreNamespace* i = ns; i; i = i->getParent()) {
+        const qore_ns_private* p = qore_ns_private::get(*i);
+        if (!p->root && !p->builtin && !p->pub && !p->imported) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool QoreReflectionCaller::canSeeDeclaration(const QoreProgram* target, const QoreNamespace* ns,
+        bool exported) const {
+    if (!appliesModuleExports(target)) {
+        return true;
+    }
+    return exported && canSeeNamespace(target, ns);
+}
+
+bool QoreReflectionCaller::canSeeClass(const QoreProgram* target, const QoreClass* cls) const {
+    if (!cls || cls->isSystem()) {
+        return true;
+    }
+    // an imported class shares its declaration with the original: the Program and namespace that declare it, and
+    // its public flag
+    const QoreProgram* spgm = cls->getSourceProgram();
+    return canSeeDeclaration(spgm ? spgm : target, cls->getNamespace(), cls->isModulePublic());
+}
+
+int QoreReflectionCaller::checkModuleExport(bool visible, const char* kind, const char* name,
+        ExceptionSink* xsink) const {
+    assert(xsink);
+    if (visible) {
+        return 0;
+    }
+    xsink->raiseException("REFLECTION-ACCESS-ERROR", "%s '%s' is not exported by the module that declares it and "
+        "cannot be used through reflection by code that a sandbox governs or whose functional domains are "
+        "restricted", kind, name);
     return -1;
 }
 

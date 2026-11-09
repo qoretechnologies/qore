@@ -80,6 +80,11 @@ int reflection_check_class_call(const QoreReflectionCaller& caller, const QoreCl
     return -1;
 }
 
+int reflection_check_class_export(const QoreReflectionCaller& caller, const QoreClass* cls,
+        const QoreProgram* target, ExceptionSink* xsink) {
+    return caller.checkModuleExport(caller.canSeeClass(target, cls), "class", cls->getName(), xsink);
+}
+
 int reflection_check_class_value_access(const QoreReflectionCaller& caller, const QoreClass* cls,
         const QoreProgram* target, ExceptionSink* xsink) {
     bool caller_refused = false;

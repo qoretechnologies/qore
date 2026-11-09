@@ -255,6 +255,11 @@ public:
     //! returns the class for the function if the function belongs to a class method or nullptr if not
     DLLEXPORT const QoreClass* getClass() const;
 
+    //! returns true if the function has a variant with the module public flag set
+    /** @since %Qore 3.0
+    */
+    DLLEXPORT bool isModulePublic() const;
+
     //! returns a variant matching the arguments exactly or throws a Qore-language exception and returns nullptr
     DLLEXPORT const QoreExternalVariant* findVariant(const type_vec_t& type_vec, ExceptionSink* xsink) const;
 
@@ -732,6 +737,74 @@ public:
     */
     DLLEXPORT int checkClassElementAccess(const QoreClass* cls, ClassAccess access, const char* kind,
             const char* name, ExceptionSink* xsink) const;
+
+    //! Returns true if the export boundary of a user module limits the caller's reflection on a target Program
+    /** It applies to callers to which the language's member access applies (appliesMemberAccess()), for a target
+        that is a user module Program (\c PO_IN_MODULE) other than the caller's own Program: such a caller sees only
+        what the module exports to the Programs that import it.  Other callers see every declaration.
+
+        @param target the Program of the declarations; nullptr never limits the caller
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool appliesModuleExports(const QoreProgram* target) const;
+
+    //! Returns true if the caller may see a namespace of a target Program
+    /** When the export boundary applies (appliesModuleExports()), every namespace from \a ns to the root namespace
+        must be the root namespace, a builtin namespace, a \c public namespace, or a namespace that the target
+        imported from another module (which that module exported).
+
+        @param target the Program that \a ns belongs to
+        @param ns the namespace; nullptr is always visible
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool canSeeNamespace(const QoreProgram* target, const QoreNamespace* ns) const;
+
+    //! Returns true if the caller may see a declaration in a namespace of a target Program
+    /** When the export boundary applies (appliesModuleExports()), the declaration must be exported (\c public or
+        builtin; a public declaration that the target imported from another module is exported by that module), and
+        its namespace must be visible (canSeeNamespace()).
+
+        @par Example
+        A sandboxed Program that holds an object a module created looks up the module's functions through
+        \c Class::getClass(obj).getNamespace(): it sees the functions the module declares \c public, not the others.
+
+        @param target the Program that the declaration belongs to
+        @param ns the namespace that holds the declaration, or nullptr if it is not known (only the declaration
+        itself is checked then)
+        @param exported true if the declaration is \c public or builtin
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool canSeeDeclaration(const QoreProgram* target, const QoreNamespace* ns, bool exported) const;
+
+    //! Returns true if the caller may see a class
+    /** The class is checked against the Program that declares it (a class imported into another Program keeps
+        its declaring Program and namespace), or against \a target if it has none; builtin classes are always
+        visible.  See canSeeDeclaration().
+
+        @param target the Program of the reflection handle
+        @param cls the class; nullptr is always visible
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool canSeeClass(const QoreProgram* target, const QoreClass* cls) const;
+
+    //! Raises \c REFLECTION-ACCESS-ERROR for a declaration that a module does not export to the caller
+    /** @param visible the result of canSeeDeclaration() or canSeeClass(); no exception is raised if true
+        @param kind the kind of declaration for the error message, e.g. \c "function" or \c "class"
+        @param name the name of the declaration
+        @param xsink raises \c REFLECTION-ACCESS-ERROR if \a visible is false
+
+        @return 0 if \a visible, -1 if an exception was raised
+
+        @throw REFLECTION-ACCESS-ERROR the declaration belongs to a user module that does not export it, and the
+        caller is a Program that a sandbox governs or whose functional domains are restricted
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int checkModuleExport(bool visible, const char* kind, const char* name, ExceptionSink* xsink) const;
 
 private:
     int checkProgramAccess(const QoreProgram* target, const char* what, Access access, ExceptionSink* xsink,

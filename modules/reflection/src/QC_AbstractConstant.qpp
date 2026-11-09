@@ -286,6 +286,15 @@ auto AbstractConstant::getValue() [flags=RET_VALUE_ONLY] {
         if (caller.checkClassElementAccess(cls, c->ce->getAccess(), "constant", c->ce->getName(), xsink)) {
             return QoreValue();
         }
+        // the constants of a class that a user module does not export cannot be read by a caller its export
+        // boundary applies to
+        if (caller.checkModuleExport(caller.canSeeClass(c->pgm, cls), "class", cls->getName(), xsink)) {
+            return QoreValue();
+        }
+    } else if (caller.checkModuleExport(caller.canSeeDeclaration(c->pgm, c->getConstantNamespace(),
+            reflection_exported(c->ce)), "constant", c->ce->getName(), xsink)) {
+        // a constant that a user module does not export cannot be read by a caller its export boundary applies to
+        return QoreValue();
     }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, c->pgm);

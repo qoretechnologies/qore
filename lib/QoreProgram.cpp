@@ -5018,6 +5018,21 @@ const QoreExternalFunction* QoreProgram::findFunction(const char* path) const {
     return reinterpret_cast<const QoreExternalFunction*>(fe ? fe->getFunction() : nullptr);
 }
 
+const QoreExternalFunction* QoreProgram::findFunction(const char* path, const QoreNamespace*& pns) const {
+    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*priv->RootNS, path);
+    if (!fe) {
+        pns = nullptr;
+        return nullptr;
+    }
+    pns = fe->getNamespace()->ns;
+    return reinterpret_cast<const QoreExternalFunction*>(fe->getFunction());
+}
+
+func_ns_vec_t QoreProgram::findAllFunctionsRegexNs(const QoreString& pattern, int re_opts,
+        ExceptionSink* xsink) const {
+    return qore_root_ns_private::get(*priv->RootNS)->runtimeFindAllFunctionsRegexNs(pattern, re_opts, xsink);
+}
+
 const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNamespace*& pns) const {
     pns = nullptr;
 

@@ -2721,6 +2721,28 @@ func_vec_t qore_root_ns_private::runtimeFindAllFunctionsRegex(const QoreString& 
     return func_vec;
 }
 
+func_ns_vec_t qore_root_ns_private::runtimeFindAllFunctionsRegexNs(const QoreString& pattern, int re_opts,
+        ExceptionSink* xsink) const {
+    RuntimeNamespaceReadLocker rnl(*this);
+    func_ns_vec_t func_vec;
+
+    QoreRegex re(pattern, re_opts, xsink);
+    if (*xsink) {
+        return func_vec;
+    }
+
+    for (auto& i : fmap) {
+        const char* name = i.second.obj->getName();
+        size_t len = strlen(name);
+        if (re.exec(name, len)) {
+            func_vec.push_back(std::make_pair(reinterpret_cast<const QoreExternalFunction*>(
+                i.second.obj->getFunction()), i.second.obj->getNamespace()->ns));
+        }
+    }
+
+    return func_vec;
+}
+
 ns_vec_t qore_root_ns_private::runtimeFindAllNamespacesRegex(const QoreString& pattern, int re_opts, ExceptionSink* xsink) const {
     RuntimeNamespaceReadLocker rnl(*this);
     ns_vec_t ns_vec;
