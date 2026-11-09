@@ -1,0 +1,167 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - TLS ALPN negotiation of HTTP client connections, and a helper process
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires HttpClientIo
+
+%try-module process >= 2.2
+%define NoProcess
+%endtry
+
+%exec-class HttpClientIoAutoAlpnHttp11Test
+
+#! issue #5671: with an automatic protocol selection, a TLS server without HTTP/2 is reached over HTTP/1.1
+/** The TCP leg of the automatic protocol selection offered only ALPN "h2"; a TLS server that does not do HTTP/2 and
+    is strict about ALPN (nginx on an "ssl" listener without "http2 on") refused the handshake with a
+    no_application_protocol alert, which gave no HTTP/1.1 attempt.  The leg now offers "h2" and "http/1.1", and a
+    server that selects HTTP/1.1 is used over HTTP/1.1; an explicit HTTP/2 selection still offers "h2" only.
+*/
+class HttpClientIoAutoAlpnHttp11Test inherits QUnit::Test {
+    private {
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : QUnit::Test("HttpClientIoAutoAlpnHttp11Test", "1.0") {
+        addTestCase("auto: a server that only negotiates http/1.1 is reached over HTTP/1.1", \testAuto());
+        addTestCase("h2: a server that only negotiates http/1.1 refuses the connection", \testH2());
+        set_return_value(main());
+    }
+
+%ifdef NoProcess
+    testAuto() {
+        testSkip("the process module is not available");
+    }
+
+    testH2() {
+        testSkip("the process module is not available");
+    }
+%else
+    testAuto() {
+        hash<auto> h = startServer();
+        on_exit stopServer(h.process);
+        HttpClientIo::HttpClientConnectionManager mgr = getManager("auto");
+        on_exit mgr.closeAll();
+        hash<auto> resp = mgr.request("https://127.0.0.1:" + h.port, "GET", "/");
+        assertEq(200, resp.status_code);
+        assertEq("http/1.1 ok", resp.body);
+        assertEq("1.1", resp.http_version, "the connection uses HTTP/1.1");
+    }
+
+    testH2() {
+        hash<auto> h = startServer();
+        on_exit stopServer(h.process);
+        HttpClientIo::HttpClientConnectionManager mgr = getManager("h2");
+        on_exit mgr.closeAll();
+        string err;
+        try {
+            mgr.request("https://127.0.0.1:" + h.port, "GET", "/");
+            err = "connected";
+        } catch (hash<ExceptionInfo> ex) {
+            err = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        assertRegex("^HTTPCLIENT-CONNECT-ERROR: .*no application protocol", err,
+            "an explicit HTTP/2 selection offers h2 only");
+    }
+
+    private HttpClientIo::HttpClientConnectionManager getManager(string protocol) {
+        return new HttpClientIo::HttpClientConnectionManager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": protocol,
+            "accept_all_certs": True,
+            "connect_timeout": 10s,
+            "request_timeout": 10s,
+        });
+    }
+
+    #! starts the node server that only negotiates http/1.1; skips the test if node is not available
+    private hash<auto> startServer() {
+        string node_bin = ENV.NODE_BIN ?? "node";
+        if (system(node_bin + " -v > /dev/null 2>&1")) {
+            testSkip("node is not available");
+        }
+        TmpDir dir("http11-only-tls-");
+        foreach hash<auto> i in ({"cert.pem": CertPem, "key.pem": KeyPem}.pairIterator()) {
+            File f();
+            f.open2(dir.path + "/" + i.key, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(i.value);
+            f.close();
+        }
+        Process p(node_bin, (get_script_dir() + "/http11-only-tls-server.js", dir.path + "/cert.pem",
+            dir.path + "/key.pem"));
+        on_error stopServer(p);
+        string line = "";
+        while (line !~ /\n/) {
+            *string s = p.readStdout(1024, 60s);
+            if (!exists s) {
+                throw "TEST-ERROR", sprintf("the node server did not start: %s", p.readStderr(4096, 0) ?? "");
+            }
+            line += s;
+        }
+        *string port = (line =~ x/READY ([0-9]+)/)[0];
+        if (!exists port) {
+            throw "TEST-ERROR", "the node server reported no port: " + line;
+        }
+        # the certificate files are read at startup
+        return {"process": p, "port": port};
+    }
+
+    private stopServer(Process p) {
+        if (p.running()) {
+            p.terminate();
+        }
+        p.wait();
+    }
+%endif
+}
