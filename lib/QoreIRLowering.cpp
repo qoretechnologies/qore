@@ -10445,6 +10445,51 @@ QoreIRValue QoreIRLowering::lowerShiftRightEquals(const QoreValue& expr, std::st
     return result;
 }
 
+//! Returns true if evaluating \a expr can neither have side effects nor raise an exception
+/** Constants, and reads of local variables of an integer type; the IR can evaluate such an expression before or
+    after other expressions without a difference that the program could observe.  The AST interpreter evaluates each
+    selector of a list of selectors, and the end of a range, only after the code before it has run without an
+    exception (qore#5665).
+*/
+static bool qore_ir_selector_eval_is_inert(const QoreValue& expr) {
+    if (!expr.hasNode()) {
+        return true;
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (node->is_value()) {
+        return true;
+    }
+    if (auto* range = dynamic_cast<const QoreRangeOperatorNode*>(node)) {
+        return qore_ir_selector_eval_is_inert(range->getLeft())
+            && qore_ir_selector_eval_is_inert(range->getRight());
+    }
+    if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+        switch (var->getType()) {
+            case VT_LOCAL:
+            case VT_LOCAL_TS:
+            case VT_CLOSURE:
+                break;
+            default:
+                return false;
+        }
+        const QoreTypeInfo* ti = var->ref.id ? var->ref.id->getTypeInfo() : nullptr;
+        return ti == bigIntTypeInfo || ti == bigIntOrNothingTypeInfo || ti == softBigIntTypeInfo
+            || ti == softBigIntOrNothingTypeInfo;
+    }
+    return false;
+}
+
+bool QoreIRLowering::rangeBoundMayBeNothing(const QoreValue& expr) const {
+    if (!expr.hasNode()) {
+        return expr.isNothing();
+    }
+    if (expr.getInternalNode()->is_value()) {
+        return false;
+    }
+    QoreParseAnalysis analysis;
+    return !getAnalysis(expr, analysis) || !analysis.hasFlag(QoreParseAnalysis::NeverNothing);
+}
+
 QoreIRValue QoreIRLowering::lowerRange(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* op = dynamic_cast<const QoreRangeOperatorNode*>(node);
@@ -10460,6 +10505,12 @@ QoreIRValue QoreIRLowering::lowerRange(const QoreValue& expr, std::string& error
         return QoreIRValue();
     }
     QoreValue right_expr = op->getRight();
+    // the AST interpreter checks the start for NOTHING before it evaluates the end
+    // (QoreRangeOperatorNode::getFunctionalIteratorImpl()), so an end with side effects does not run when the start is
+    // NOTHING (qore#5665); the range operation raises the same error when the end cannot have side effects
+    if (!qore_ir_selector_eval_is_inert(right_expr) && rangeBoundMayBeNothing(left_expr)) {
+        withExceptionTarget(builder.createCheckRangeBound(left, QoreIRRangeBound::Start, op->loc));
+    }
     QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
         return QoreIRValue();
@@ -10609,6 +10660,14 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
         if (!lhs.isValid()) {
             return QoreIRValue();
         }
+        // the AST interpreter evaluates each selector only after it has applied the previous one, and none for a
+        // sequence that no selector applies to (QoreSquareBracketsOperatorNode::doSquareBracketsListRange()); the
+        // selectors are evaluated before one instruction applies them all only if the order cannot be observed
+        for (const QoreValue& selector : range_selectors) {
+            if (!qore_ir_selector_eval_is_inert(selector)) {
+                return lowerListSelectorSteps(op, lhs, range_selectors, error);
+            }
+        }
         std::vector<QoreIRValue> operands{lhs};
         std::vector<uint8_t> selector_kinds;
         selector_kinds.reserve(range_selectors.size());
@@ -10670,6 +10729,73 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
     }
     std::vector<QoreIRValue> operands{lhs, rhs};
     return lowerExprOpOrInvoke(QoreIROpcode::ListIndexDynamic, expr, operands, op->loc, error);
+}
+
+QoreIRValue QoreIRLowering::lowerListSelectorSteps(const QoreSquareBracketsOperatorNode* op, QoreIRValue seq,
+        const std::vector<QoreValue>& selectors, std::string& error) {
+    assert(!selectors.empty());
+    const int64_t string_index_char = op->hasStringIndexChar()
+        ? static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar) : 0;
+
+    // the empty result for the sequence, or NOTHING if no selector applies to it: then no selector is evaluated
+    QoreIRValue none = builder.createConstNothing(op->loc)->result;
+    QoreIRValue begin = withExceptionTarget(builder.createListSelectorStep(none, seq,
+        string_index_char | static_cast<int64_t>(QoreIRListSelectorFlag::Begin), {}, op->loc))->result;
+    QoreIRValue no_selectors = builder.createUnaryOp(QoreIROpcode::IsNullOrNothing, begin)->result;
+    QoreIRBasicBlock* begin_block = builder.getBlock();
+    QoreIRBasicBlock* selector_block = createBlock("selectors");
+    QoreIRBasicBlock* merge_block = createBlock("selectors.merge");
+    if (!selector_block || !merge_block) {
+        error = "IR builder failed to create blocks for a list of selectors";
+        return QoreIRValue();
+    }
+    builder.createBranchIf(no_selectors, merge_block, selector_block);
+
+    builder.setBlock(selector_block);
+    QoreIRValue result = begin;
+    for (size_t i = 0; i < selectors.size(); ++i) {
+        int64_t flags = string_index_char;
+        if (i == selectors.size() - 1) {
+            flags |= static_cast<int64_t>(QoreIRListSelectorFlag::Last);
+        }
+        std::vector<QoreIRValue> selector_values;
+        if (auto* range = dynamic_cast<const QoreRangeOperatorNode*>(selectors[i].getInternalNode())) {
+            flags |= static_cast<int64_t>(QoreIRListSelectorFlag::Range);
+            QoreValue start_expr = range->getLeft();
+            QoreValue end_expr = range->getRight();
+            QoreIRValue start = lowerExpression(start_expr, error);
+            if (!start.isValid()) {
+                return QoreIRValue();
+            }
+            // the AST interpreter checks the start for NOTHING before it evaluates the end
+            // (QoreRangeOperatorNode::getFunctionalIteratorImpl()); the step checks the end before the next selector
+            if (!qore_ir_selector_eval_is_inert(end_expr) && rangeBoundMayBeNothing(start_expr)) {
+                withExceptionTarget(builder.createCheckRangeBound(start, QoreIRRangeBound::Start, range->loc));
+            }
+            QoreIRValue end = lowerExpression(end_expr, error);
+            if (!end.isValid()) {
+                return QoreIRValue();
+            }
+            selector_values = {start, end};
+        } else {
+            QoreIRValue index = lowerExpression(selectors[i], error);
+            if (!index.isValid()) {
+                return QoreIRValue();
+            }
+            selector_values = {index};
+        }
+        result = withExceptionTarget(builder.createListSelectorStep(result, seq, flags, selector_values,
+            op->loc))->result;
+    }
+    QoreIRBasicBlock* selector_exit_block = builder.getBlock();
+    builder.createBranch(merge_block);
+
+    builder.setBlock(merge_block);
+    std::vector<QoreIRPhiIncoming> incoming = {
+        {begin, begin_block},
+        {result, selector_exit_block},
+    };
+    return builder.createPhi(incoming)->result;
 }
 
 static bool qore_ir_is_explicit_hash_value_type(const QoreTypeInfo* type_info) {

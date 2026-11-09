@@ -81,7 +81,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 418,
+static_assert(QORE_IR_MAX_OPCODE == 420,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -8552,6 +8552,52 @@ next_instruction:
                     unwindForException();
                     cleanupLocalCaches();
                     return false;
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::CheckRangeBound: {
+                if (qore_rt_check_range_bound(toBits(getIRValue(values, inst->operands[0])),
+                        getIRValue(values, inst->operands[1]).getAsBigInt(), xsink)) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ListSelectorStep: {
+                // operands: the result so far, the sequence, the flags, and the index or the bounds of a range
+                uint64_t first_bits = inst->operands.size() > 3
+                    ? toBits(getIRValue(values, inst->operands[3])) : toBits(QoreValue());
+                uint64_t second_bits = inst->operands.size() > 4
+                    ? toBits(getIRValue(values, inst->operands[4])) : toBits(QoreValue());
+                QoreValue res = fromBits(qore_rt_list_selector_step(toBits(getIRValue(values, inst->operands[0])),
+                    toBits(getIRValue(values, inst->operands[1])), getIRValue(values, inst->operands[2]).getAsBigInt(),
+                    first_bits, second_bits, xsink));
+                if (xsink && *xsink) {
+                    res.discard(xsink);
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
+                setValueSlot(values, inst->result.id, res, xsink);
+                if (res.needsRef()) {
+                    cleanup.push_back(inst->result.id);
                 }
                 ++ip;
                 break;

@@ -7000,6 +7000,8 @@ static bool qore_ir_collect_borrowed_loop_safety(const QoreIRNaturalLoop& loop,
                 case QoreIROpcode::ListSetInt:
                 case QoreIROpcode::ListSetFloat:
                 case QoreIROpcode::ListSetValue:
+                // adds the values that a selector selects to the result list in operands[0]
+                case QoreIROpcode::ListSelectorStep:
                     if (!inst->operands.empty()) {
                         safety.mutated_lists.insert(inst->operands[0].id);
                     }
@@ -7105,6 +7107,7 @@ static bool qore_ir_may_mutate_list(QoreIROpcode opcode) {
         case QoreIROpcode::ListSetValue:
         case QoreIROpcode::ListPush:
         case QoreIROpcode::ListIndexStore:
+        case QoreIROpcode::ListSelectorStep:
             return true;
         default:
             return false;

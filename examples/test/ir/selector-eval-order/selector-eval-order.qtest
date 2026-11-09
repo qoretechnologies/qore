@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of lists of selectors with ranges
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class SelectorEvalOrderTest
+
+#! issue #5665: lists of selectors with ranges and the bounds of ranges are evaluated in the order of the AST interpreter
+/** The AST interpreter evaluates each selector of a list of selectors with ranges (l[a..b, c]) only after it has
+    applied the previous one, stops at the first exception, and evaluates no selector for a sequence that is not a
+    list, a string or a binary object; it evaluates the end of a range only after it has checked that the start is
+    not NOTHING.  The IR interpreter, native code and AOT evaluated every selector, and both bounds of a range, before
+    they checked or applied any, so expressions that the AST interpreter does not evaluate ran: l[k..f(), 0] and
+    l[k..3, f()] with k = NOTHING called f() before they raised RANGE-ERROR, and so did k..f() and h{"a", k..f()}.
+
+    The scripts next to the test (without and with %negative-offsets) run in every execution mode, on the IR tier and
+    as AOT executables, and their output, which shows each evaluation with side effects, must be that of the AST
+    interpreter.
+*/
+class SelectorEvalOrderTest inherits QUnit::Test {
+    public {
+        #! the output of both scripts with the AST interpreter, which every execution mode and AOT must give
+        const Expected = (
+            "range start: RANGE-ERROR: the start expression of the range operator (..) evaluated to NOTHING",
+            "called range start",
+            "range end: RANGE-ERROR: the end expression of the range operator (..) evaluated to NOTHING",
+            "called range start",
+            "called range end",
+            "range ok: [2, 3, 4]",
+            "list start end: RANGE-ERROR: the start expression of the range operator (..) evaluated to NOTHING",
+            "list start later: RANGE-ERROR: the start expression of the range operator (..) evaluated to NOTHING",
+            "list end later: RANGE-ERROR: the end expression of the range operator (..) evaluated to NOTHING",
+            "called start",
+            "list later range: RANGE-ERROR: the end expression of the range operator (..) evaluated to NOTHING",
+            "called a",
+            "called b",
+            "called c",
+            "called d",
+            "list ok: [1, 2, 3, 0, 4, 3, 2]",
+            "called a",
+            "called b",
+            "called c",
+            "list types: \"list<int>\"",
+            "called a",
+            "called b",
+            "called c",
+            "list mixed types: [\"list<auto>\", [1, \"two\", 3.0]]",
+            "list literal: RANGE-ERROR: the start expression of the range operator (..) evaluated to NOTHING",
+            "called a",
+            "list reassigned: [[1, 2, 3], [7, 8, 9]]",
+            "called a",
+            "string reassigned: [\"abc\", \"xyz\"]",
+            "list inert start: RANGE-ERROR: the start expression of the range operator (..) evaluated to NOTHING",
+            "list inert ok: [1, 2, 3, 0, 4, 3, 2, 1]",
+            "nothing: null",
+            "hash: null",
+            "int: null",
+            "string start later: RANGE-ERROR: the start expression of the range operator (..) evaluated to NOTHING",
+            "called a",
+            "called b",
+            "called c",
+            "string ok: \"bcda\"",
+            "binary end later: RANGE-ERROR: the end expression of the range operator (..) evaluated to NOTHING",
+            "called a",
+            "called b",
+            "called c",
+            "binary ok: !!binary YWNk",
+            "hash slice start: RANGE-ERROR: the start expression of the range operator (..) evaluated to NOTHING",
+            "called a",
+            "called b",
+            "called c",
+            "hash slice ok: {a: 1}",
+            "called a",
+            "called b",
+            "called c",
+            "remove ok: [[1, 2, 4], [0, 3]]",
+            "remove hash slice start: RANGE-ERROR: the start expression of the range operator (..) evaluated to "
+                "NOTHING",
+            "delete hash slice start: RANGE-ERROR: the start expression of the range operator (..) evaluated to "
+                "NOTHING",
+            "called start",
+            "called end",
+            "called later",
+            "negative later: [3, 4, 4]",
+            "called start",
+            "called end",
+            "negative descending: RANGE-ERROR: the start expression of the range operator (..) evaluated to NOTHING",
+        );
+
+        #! the scripts print their lines this many times
+        const Iterations = 3;
+
+        #! the scripts: without and with %negative-offsets
+        const Scripts = ("order-plain", "order-negative-offsets");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("selector evaluation order", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! runs each script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = expected();
+        foreach string name in (Scripts) {
+            string path = scriptPath(name);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, path)),
+                    name + ": " + mode);
+            }
+            assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, path)),
+                name + ": " + ExecModeHarness::IRTierName);
+        }
+    }
+
+    #! compiles each script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("selector-eval-order-aot-");
+        foreach string name in (Scripts) {
+            string exe = dir.path + "/" + name;
+            string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, scriptPath(name)));
+            assertTrue(is_file(exe), name + ": qcc compiles the script: " + out);
+            assertEq(expected(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), name + ": AOT");
+        }
+    }
+
+    private string scriptPath(string name) {
+        return get_script_dir() + "/" + name + ".q";
+    }
+
+    #! the expected output: the lines, printed once per iteration
+    private string expected() {
+        return strmul((foldl $1 + "\n" + $2, Expected) + "\n", Iterations);
+    }
+}

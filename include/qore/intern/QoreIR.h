@@ -909,7 +909,35 @@ enum class QoreIROpcode : uint16_t {
     //! (QoreStreamingOperatorNode).
     CheckCancelEvery = 418,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (419, 420, ...)
+    //! Raise RANGE-ERROR for the start of a range operator (..) that evaluated to NOTHING, before the end is
+    //! evaluated
+    //!
+    //! operands[0] = the bound; operands[1] = the QoreIRRangeBound that it is (native int); no result.  The AST
+    //! interpreter checks the start of a range for NOTHING before it evaluates the end
+    //! (QoreRangeOperatorNode::getFunctionalIteratorImpl()), so an end expression with side effects does not run
+    //! when the start is NOTHING.  The lowering emits one for the start of a range whose end can have side effects
+    //! and whose start can be NOTHING; the operation that makes the range raises the same error for the end, and for
+    //! a start that is not checked here.  An exception goes to the instruction's exception target (qore#5665).
+    CheckRangeBound = 419,
+
+    //! Apply one selector of a list of selectors with ranges (l[a..b, c]) to the sequence, as the AST interpreter
+    //! does (QoreSquareBracketsOperatorNode::doSquareBracketsListRange())
+    //!
+    //! operands[0] = the result so far; operands[1] = the sequence; operands[2] = the QoreIRListSelectorFlag flags
+    //! (native int); operands[3] = the index, or the start of a range; operands[4] = the end of a range; result = the
+    //! result with the selector applied.  With QoreIRListSelectorFlag::Begin there is no selector, and the result is
+    //! an empty list, string or binary object for a sequence of that type and NOTHING for any other sequence, to
+    //! which the AST interpreter applies no selector: the lowering then branches past the selectors without
+    //! evaluating them.  Otherwise the selector is applied to the sequence and what it selects is added to
+    //! operands[0], which is changed in place and returned with a new reference; with QoreIRListSelectorFlag::Last
+    //! the result is also finished: a list gets the type of the values that it holds.  The AST interpreter evaluates
+    //! each selector only after the previous one has been applied, and stops at the first exception, so the lowering
+    //! emits a step after each selector; an exception goes to the instruction's exception target (qore#5665).  A
+    //! list of selectors whose evaluation cannot have side effects or raise is lowered as one ListIndexDynamic
+    //! instruction instead.
+    ListSelectorStep = 420,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (421, 422, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -918,9 +946,27 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::CheckCancelEvery);
-static_assert(QORE_IR_MAX_OPCODE == 418, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ListSelectorStep);
+static_assert(QORE_IR_MAX_OPCODE == 420, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
+
+//! The flags of QoreIROpcode::ListSelectorStep (operands[2])
+enum class QoreIRListSelectorFlag : int64_t {
+    //! the selector is a range: operands[3] is its start and operands[4] its end
+    Range = 1 << 0,
+    //! the last selector: the result is finished
+    Last = 1 << 1,
+    //! an index of a string selects a character (the parse option no-string-index-char is not set)
+    StringIndexChar = 1 << 2,
+    //! no selector: the result is the empty result for the sequence, or NOTHING if no selector applies to it
+    Begin = 1 << 3,
+};
+
+//! The bound of a range that QoreIROpcode::CheckRangeBound checks (operands[1])
+enum class QoreIRRangeBound : int64_t {
+    Start = 0,
+    End = 1,
+};
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
 #include "qore/intern/QoreOpcodeRegistry.h"

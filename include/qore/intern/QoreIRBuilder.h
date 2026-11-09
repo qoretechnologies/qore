@@ -106,6 +106,17 @@ public:
     */
     QoreIRInstruction* createCheckCancelEvery(QoreIRValue count, QoreIRCancelPoint point,
         const QoreProgramLocation* loc = nullptr, QoreIRValue limit = QoreIRValue());
+    //! Raises RANGE-ERROR if the bound \a which of a range is NOTHING; see QoreIROpcode::CheckRangeBound
+    QoreIRInstruction* createCheckRangeBound(QoreIRValue bound, QoreIRRangeBound which,
+        const QoreProgramLocation* loc = nullptr);
+    //! Applies one selector of a list of selectors with ranges; see QoreIROpcode::ListSelectorStep
+    /** @param result the result so far; ignored with QoreIRListSelectorFlag::Begin
+        @param seq the sequence
+        @param flags the QoreIRListSelectorFlag flags
+        @param selector the index or the start and the end of a range; empty with QoreIRListSelectorFlag::Begin
+    */
+    QoreIRInstruction* createListSelectorStep(QoreIRValue result, QoreIRValue seq, int64_t flags,
+        const std::vector<QoreIRValue>& selector, const QoreProgramLocation* loc = nullptr);
     //! Sets the type of a select result list from its values; see QoreIROpcode::ListSetScannedType
     /** @param list the result list
         @param element_type the element type of the list created by the AST interpreter; ignored when \a source is

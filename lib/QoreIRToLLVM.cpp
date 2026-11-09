@@ -49,7 +49,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 418,
+static_assert(QORE_IR_MAX_OPCODE == 420,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -26042,6 +26042,44 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_check_cancel_every",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, ptr_type}, false));
             builder->CreateCall(helper, {count_int, point_int, limit_int, xsink_arg});
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::CheckRangeBound: {
+            auto* bound = getVal(inst->operands[0].id, error);
+            if (!bound) { return false; }
+            auto* which = getVal(inst->operands[1].id, error);
+            if (!which) { return false; }
+            llvm::Value* bound_boxed = boxValue(bound, inst->operands[0].id);
+            llvm::Value* which_int = ensureIntTypeInline(which, inst->operands[1].id);
+            auto helper = module.getOrInsertFunction("qore_rt_check_range_bound",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            builder->CreateCall(helper, {bound_boxed, which_int, xsink_arg});
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::ListSelectorStep: {
+            // operands: the result so far, the sequence, the flags, and the index or the bounds of a range
+            llvm::Value* args[5];
+            for (size_t i = 0; i < 5; ++i) {
+                if (i >= inst->operands.size()) {
+                    args[i] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+                    continue;
+                }
+                auto* operand = getVal(inst->operands[i].id, error);
+                if (!operand) { return false; }
+                args[i] = i == 2
+                    ? ensureIntTypeInline(operand, inst->operands[i].id)
+                    : boxValue(operand, inst->operands[i].id);
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_list_selector_step",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, i64_type, i64_type, ptr_type},
+                        false));
+            llvm::Value* result = builder->CreateCall(helper, {args[0], args[1], args[2], args[3], args[4],
+                xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }

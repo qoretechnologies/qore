@@ -64,6 +64,7 @@ class QoreMapSelectOperatorNode;
 class QoreHashMapOperatorNode;
 class QoreHashMapSelectOperatorNode;
 class QoreStreamingOperatorNode;
+class QoreSquareBracketsOperatorNode;
 class QoreIROnBlockExitInstruction;
 class ForEachStatement;
 class QoreBackgroundOperatorNode;
@@ -244,6 +245,14 @@ public:
     QoreIRValue lowerRange(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSquareBracketsRange(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSquareBrackets(const QoreValue& expr, std::string& error);
+    //! Lowers a list of selectors with ranges that can have side effects as ListSelectorStep instructions
+    /** Each selector is evaluated only after the previous one has been applied, and none is evaluated for a
+        sequence that no selector applies to, as in the AST interpreter (qore#5665)
+    */
+    QoreIRValue lowerListSelectorSteps(const QoreSquareBracketsOperatorNode* op, QoreIRValue seq,
+        const std::vector<QoreValue>& selectors, std::string& error);
+    //! Returns true if a bound of a range operator can evaluate to NOTHING
+    bool rangeBoundMayBeNothing(const QoreValue& expr) const;
     QoreIRValue lowerHashObjectDereference(const QoreValue& expr, std::string& error);
     QoreIRValue lowerPop(const QoreValue& expr, std::string& error);
     QoreIRValue lowerShift(const QoreValue& expr, std::string& error);

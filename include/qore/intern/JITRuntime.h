@@ -1376,6 +1376,16 @@ int64_t qore_rt_list_append_element(uint64_t list_val, uint64_t value_val, int64
 //! the skipped ones otherwise; returns 1 if an exception was raised.  See QoreIROpcode::CheckCancelEvery.
 int64_t qore_rt_check_cancel_every(int64_t count, int64_t point, int64_t limit, ExceptionSink* xsink);
 
+//! Raises RANGE-ERROR if \a bound_val, the QoreIRRangeBound \a which of a range operator, is NOTHING; returns 1 if
+//! an exception was raised.  See QoreIROpcode::CheckRangeBound.
+int64_t qore_rt_check_range_bound(uint64_t bound_val, int64_t which, ExceptionSink* xsink);
+
+//! Applies one selector of a list of selectors with ranges to the sequence \a seq_val and adds what it selects to
+//! \a result_val, or with QoreIRListSelectorFlag::Begin returns the empty result for the sequence; see
+//! QoreIROpcode::ListSelectorStep.  Returns the result with a new reference, or NOTHING if an exception was raised.
+uint64_t qore_rt_list_selector_step(uint64_t result_val, uint64_t seq_val, int64_t flags, uint64_t first_val,
+        uint64_t second_val, ExceptionSink* xsink);
+
 //! Throwing form of qore_rt_list_append_element() for native code that unwinds with QoreJITException
 int64_t qore_rt_list_append_element_throwing(uint64_t list_val, uint64_t value_val, int64_t state,
         ExceptionSink* xsink);
