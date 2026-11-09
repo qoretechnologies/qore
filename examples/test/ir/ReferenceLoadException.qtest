@@ -1,0 +1,324 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ReferenceLoadExceptionTest
+
+#! Regression test (#5673): the read of a dangling reference raises an exception that its function handles
+/** A variable that holds a reference reads the referenced lvalue, which raises an exception if the lvalue no longer
+    exists, as for a member of a deleted object (OBJECT-ALREADY-DELETED), or cannot be used, as for a variable of a
+    Program with a pending parse (PROGRAM-ERROR).  In the IR, JIT and tiered modes and in compiled code, the load of a
+    global, thread_local, local or closure-bound variable had no exception edge: the IR interpreter left the function
+    with the exception (LoadLocal and LoadClosure returned without branching to a handler; LoadGlobal and
+    LoadThreadLocal had no handler to branch to), skipping the try that encloses the read and the handlers and
+    releases of the blocks between them, and the native code of a global, thread_local or closure-bound variable did
+    the same.  The load of a variable whose type allows a reference now takes the exception edge of the try or scope
+    cleanup that encloses it.  Each case runs in a function of its own, whose caller reports an exception that
+    escapes it, and at top level; the script runs in every execution mode, on the IR tier of tiered execution and as
+    a qcc executable (see ExecModeOutputTest).
+*/
+class ReferenceLoadExceptionTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+%no-child-restrictions
+# an exception raised by the read of a variable holding a reference whose lvalue is gone is handled by the enclosing
+# try or scope cleanup in the same function, as the AST interpreter handles it; a case whose exception escapes its
+# function is reported by its caller
+class C {
+    public {
+        int m;
+        string name;
+    }
+    constructor(string name, int m) {
+        self.name = name;
+        self.m = m;
+    }
+    destructor() {
+        printf("destroy %s\n", name);
+    }
+    reference<int> get() {
+        return \m;
+    }
+}
+# traces its release
+class D {
+    private {
+        string name;
+    }
+    constructor(string name) {
+        self.name = name;
+    }
+    destructor() {
+        printf("release %s\n", name);
+    }
+}
+our reference<int> gref;
+our auto gauto;
+thread_local reference<int> tlref;
+thread_local auto tlauto;
+sub report(string label, hash<ExceptionInfo> ex) {
+    printf("%s: %s: %s\n", label, ex.err, ex.desc);
+}
+sub escaped(string label, hash<ExceptionInfo> ex) {
+    printf("%s: escaped its function: %s: %s\n", label, ex.err, ex.desc);
+}
+sub side(string label, auto v) {
+    printf("%s: side effect with %y\n", label, v);
+}
+# makes the global and thread_local variables hold references to members of deleted objects
+sub dangle() {
+    C g("g", 1);
+    gref = g.get();
+    C ga("ga", 2);
+    gauto = ga.get();
+    C t("t", 3);
+    tlref = t.get();
+    C ta("ta", 4);
+    tlauto = ta.get();
+    delete g;
+    delete ga;
+    delete t;
+    delete ta;
+}
+sub global_typed() {
+    try {
+        D d("global try");
+        printf("global: %y\n", gref);
+    } catch (hash<ExceptionInfo> ex) {
+        report("global", ex);
+    }
+}
+sub global_auto() {
+    try {
+        side("global auto", gauto);
+    } catch (hash<ExceptionInfo> ex) {
+        report("global auto", ex);
+    }
+}
+sub thread_local_typed() {
+    try {
+        int v = tlref;
+        printf("thread_local: %y\n", v);
+    } catch (hash<ExceptionInfo> ex) {
+        report("thread_local", ex);
+    }
+}
+sub thread_local_auto() {
+    try {
+        auto v = tlauto + 1;
+        printf("thread_local auto: %y\n", v);
+    } catch (hash<ExceptionInfo> ex) {
+        report("thread_local auto", ex);
+    }
+}
+sub local_typed() {
+    C c("l", 5);
+    reference<int> r = c.get();
+    delete c;
+    try {
+        D d("local try");
+        int v = r;
+        printf("local: %y\n", v);
+    } catch (hash<ExceptionInfo> ex) {
+        report("local", ex);
+    }
+}
+sub local_auto() {
+    C c("la", 6);
+    auto r = c.get();
+    delete c;
+    try {
+        side("local auto", r);
+    } catch (hash<ExceptionInfo> ex) {
+        report("local auto", ex);
+    }
+}
+# the exception leaves a block with handlers and variables before the try catches it
+sub local_in_block() {
+    C c("lb", 7);
+    reference<int> r = c.get();
+    delete c;
+    try {
+        D outer("outer block");
+        {
+            on_exit printf("on_exit of the inner block\n");
+            on_error printf("on_error of the inner block\n");
+            D inner("inner block");
+            printf("inner: %y\n", r);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        report("local in a block", ex);
+    }
+}
+sub local_in_loop() {
+    C c("ll", 8);
+    auto r = c.get();
+    delete c;
+    for (int i = 0; i < 2; ++i) {
+        try {
+            printf("loop %d: %y\n", i, r);
+        } catch (hash<ExceptionInfo> ex) {
+            report(sprintf("local in a loop %d", i), ex);
+        }
+    }
+}
+sub closure_bound() {
+    C c("cl", 9);
+    reference<int> r = c.get();
+    code set = sub () { r = 10; };
+    delete c;
+    try {
+        int v = r;
+        printf("closure-bound: %y\n", v);
+    } catch (hash<ExceptionInfo> ex) {
+        report("closure-bound", ex);
+    }
+}
+sub read_in_closure() {
+    C c("rc", 11);
+    auto r = c.get();
+    code read = auto sub () {
+        try {
+            return r;
+        } catch (hash<ExceptionInfo> ex) {
+            report("read in a closure", ex);
+        }
+        return "handled";
+    };
+    delete c;
+    printf("closure: %y\n", read());
+}
+# a reference to a variable of a Program with a pending parse raises PROGRAM-ERROR when it is read
+sub pending_parse() {
+    Program p(PO_ALLOW_REPARSE);
+    # the reads are made by the code of this Program: the Program referenced only gives the reference
+    p.setExecMode(EM_AST);
+    p.parse("%modern\nour int gx = 1;\nreference<int> sub get() { return \\gx; }\n", "p");
+    reference<int> r = p.callFunction("get");
+    p.parsePending("%modern\nsub later() {}\n", "pending");
+    on_exit p.parseRollback();
+    try {
+        printf("pending parse: %y\n", r);
+    } catch (hash<ExceptionInfo> ex) {
+        report("pending parse", ex);
+    }
+}
+dangle();
+try { global_typed(); } catch (hash<ExceptionInfo> ex) { escaped("global", ex); }
+try { global_auto(); } catch (hash<ExceptionInfo> ex) { escaped("global auto", ex); }
+try { thread_local_typed(); } catch (hash<ExceptionInfo> ex) { escaped("thread_local", ex); }
+try { thread_local_auto(); } catch (hash<ExceptionInfo> ex) { escaped("thread_local auto", ex); }
+try { local_typed(); } catch (hash<ExceptionInfo> ex) { escaped("local", ex); }
+try { local_auto(); } catch (hash<ExceptionInfo> ex) { escaped("local auto", ex); }
+try { local_in_block(); } catch (hash<ExceptionInfo> ex) { escaped("local in a block", ex); }
+try { local_in_loop(); } catch (hash<ExceptionInfo> ex) { escaped("local in a loop", ex); }
+try { closure_bound(); } catch (hash<ExceptionInfo> ex) { escaped("closure-bound", ex); }
+try { read_in_closure(); } catch (hash<ExceptionInfo> ex) { escaped("read in a closure", ex); }
+try { pending_parse(); } catch (hash<ExceptionInfo> ex) { escaped("pending parse", ex); }
+# the same at top level, where the exception of a case would end the script
+try {
+    printf("top-level global: %y\n", gref);
+} catch (hash<ExceptionInfo> ex) {
+    report("top-level global", ex);
+}
+try {
+    side("top-level thread_local", tlauto);
+} catch (hash<ExceptionInfo> ex) {
+    report("top-level thread_local", ex);
+}
+{
+    C c("top", 12);
+    reference<int> r = c.get();
+    delete c;
+    try {
+        D d("top-level try");
+        int v = r;
+        printf("top-level local: %y\n", v);
+    } catch (hash<ExceptionInfo> ex) {
+        report("top-level local", ex);
+    }
+    C cc("topc", 13);
+    auto rc = cc.get();
+    code cl = sub () { rc = 14; };
+    delete cc;
+    try {
+        printf("top-level closure-bound: %y\n", rc);
+    } catch (hash<ExceptionInfo> ex) {
+        report("top-level closure-bound", ex);
+    }
+}
+{
+    Program p(PO_ALLOW_REPARSE);
+    # the reads are made by the code of this Program: the Program referenced only gives the reference
+    p.setExecMode(EM_AST);
+    p.parse("%modern\nour int gx = 1;\nreference<int> sub get() { return \\gx; }\n", "p");
+    reference<int> r = p.callFunction("get");
+    p.parsePending("%modern\nsub later() {}\n", "pending");
+    try {
+        printf("top-level pending parse: %y\n", r);
+    } catch (hash<ExceptionInfo> ex) {
+        report("top-level pending parse", ex);
+    }
+    p.parseRollback();
+}
+printf("done\n");
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "destroy g",
+            "destroy ga",
+            "destroy t",
+            "destroy ta",
+            "release global try",
+            "global: OBJECT-ALREADY-DELETED: write attempted to member \"m\" in an already-deleted object",
+            "global auto: OBJECT-ALREADY-DELETED: write attempted to member \"m\" in an already-deleted object",
+            "thread_local: OBJECT-ALREADY-DELETED: write attempted to member \"m\" in an already-deleted object",
+            "thread_local auto: OBJECT-ALREADY-DELETED: write attempted to member \"m\" in an already-deleted object",
+            "destroy l",
+            "release local try",
+            "local: OBJECT-ALREADY-DELETED: attempt to access member 'm' of an already-deleted object of class 'C'",
+            "destroy la",
+            "local auto: OBJECT-ALREADY-DELETED: attempt to access member 'm' of an already-deleted object of class 'C'",
+            "destroy lb",
+            "on_error of the inner block",
+            "on_exit of the inner block",
+            "release inner block",
+            "release outer block",
+            "local in a block: OBJECT-ALREADY-DELETED: attempt to access member 'm' of an already-deleted object of class 'C'",
+            "destroy ll",
+            "local in a loop 0: OBJECT-ALREADY-DELETED: attempt to access member 'm' of an already-deleted object of class 'C'",
+            "local in a loop 1: OBJECT-ALREADY-DELETED: attempt to access member 'm' of an already-deleted object of class 'C'",
+            "destroy cl",
+            "closure-bound: OBJECT-ALREADY-DELETED: attempt to access member 'm' of an already-deleted object of class 'C'",
+            "destroy rc",
+            "read in a closure: OBJECT-ALREADY-DELETED: attempt to access member 'm' of an already-deleted object of class 'C'",
+            "closure: \"handled\"",
+            "pending parse: PROGRAM-ERROR: the Program accessed is currently undergoing parsing and cannot be accessed at runtime",
+            "top-level global: OBJECT-ALREADY-DELETED: write attempted to member \"m\" in an already-deleted object",
+            "top-level thread_local: OBJECT-ALREADY-DELETED: write attempted to member \"m\" in an already-deleted object",
+            "destroy top",
+            "release top-level try",
+            "top-level local: OBJECT-ALREADY-DELETED: attempt to access member 'm' of an already-deleted object of class 'C'",
+            "destroy topc",
+            "top-level closure-bound: OBJECT-ALREADY-DELETED: attempt to access member 'm' of an already-deleted object of class 'C'",
+            "top-level pending parse: PROGRAM-ERROR: the Program accessed is currently undergoing parsing and cannot be accessed at runtime",
+            "done",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ReferenceLoadException", Script, (map $1 + "\n", Expected).join(""),
+            "handles the exception of the read of a dangling reference in its function as the AST interpreter does") {
+    }
+}

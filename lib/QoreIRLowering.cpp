@@ -7192,6 +7192,18 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
     return loadVarRef(var, error, "variable reference", expr);
 }
 
+// documented in QoreIRLowering.h
+void QoreIRLowering::setReferenceLoadExceptionTarget(QoreIRInstruction* load, const QoreTypeInfo* type_info) {
+    assert(load->opcode == QoreIROpcode::LoadLocal || load->opcode == QoreIROpcode::LoadClosure
+        || load->opcode == QoreIROpcode::LoadGlobal || load->opcode == QoreIROpcode::LoadThreadLocal);
+    // the same rule as the interpreter's (qore_ir_type_may_hold_reference()): a variable of any other type cannot be
+    // assigned a reference, which its type does not accept
+    if (exception_stack.empty() || (QoreTypeInfo::hasType(type_info) && !QoreTypeInfo::isReference(type_info))) {
+        return;
+    }
+    load->exception_target = exception_stack.back();
+}
+
  QoreIRValue QoreIRLowering::loadVarRef(const VarRefNode* var, std::string& error, const char* context,
          const QoreValue& expr) {
     if (!var) {
@@ -7210,10 +7222,12 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
             // sets closureUse() on the LocalVar after the VarRefNode is created,
             // so the VarRefNode may still have VT_LOCAL even though the variable
             // is captured by a closure.
-            if (var->ref.id->closureUse()) {
-                result = builder.createLoadClosure(var->ref.id, var->loc)->result;
-            } else {
-                result = builder.createLoadLocal(var->ref.id, var->loc)->result;
+            {
+                QoreIRLocalInstruction* load = var->ref.id->closureUse()
+                    ? builder.createLoadClosure(var->ref.id, var->loc)
+                    : builder.createLoadLocal(var->ref.id, var->loc);
+                setReferenceLoadExceptionTarget(load, var->ref.id->getTypeInfo());
+                result = load->result;
             }
             break;
         case VT_CLOSURE:
@@ -7222,21 +7236,33 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
                 error = std::string("unresolved closure variable reference in IR lowering (") + context + ")";
                 return QoreIRValue();
             }
-            result = builder.createLoadClosure(var->ref.id, var->loc)->result;
+            {
+                QoreIRLocalInstruction* load = builder.createLoadClosure(var->ref.id, var->loc);
+                setReferenceLoadExceptionTarget(load, var->ref.id->getTypeInfo());
+                result = load->result;
+            }
             break;
         case VT_GLOBAL:
             if (!var->ref.var) {
                 error = std::string("unresolved global variable reference in IR lowering (") + context + ")";
                 return QoreIRValue();
             }
-            result = builder.createLoadGlobal(var->ref.var, var->loc)->result;
+            {
+                QoreIRVarInstruction* load = builder.createLoadGlobal(var->ref.var, var->loc);
+                setReferenceLoadExceptionTarget(load, var->ref.var->getTypeInfo());
+                result = load->result;
+            }
             break;
         case VT_THREAD_LOCAL:
             if (!var->ref.var) {
                 error = std::string("unresolved thread-local variable reference in IR lowering (") + context + ")";
                 return QoreIRValue();
             }
-            result = builder.createLoadThreadLocal(var->ref.var, var->loc)->result;
+            {
+                QoreIRVarInstruction* load = builder.createLoadThreadLocal(var->ref.var, var->loc);
+                setReferenceLoadExceptionTarget(load, var->ref.var->getTypeInfo());
+                result = load->result;
+            }
             break;
         case VT_IMMEDIATE:
             result = builder.createLoadLValue(expr, var->loc)->result;
@@ -11761,9 +11787,11 @@ QoreIRValue QoreIRLowering::lowerBackgroundHelper(const QoreValue& expr, const Q
     operands.reserve(params.size());
     for (const auto& i : local_params) {
         LocalVar* lv = i.second;
-        operands.push_back(lv->closureUse()
-            ? builder.createLoadClosure(lv, op->loc)->result
-            : builder.createLoadLocal(lv, op->loc)->result);
+        QoreIRLocalInstruction* load = lv->closureUse()
+            ? builder.createLoadClosure(lv, op->loc)
+            : builder.createLoadLocal(lv, op->loc);
+        setReferenceLoadExceptionTarget(load, lv->getTypeInfo());
+        operands.push_back(load->result);
     }
     for (const QoreValue& leaf : state.leaves) {
         QoreIRValue v = lowerExpression(leaf, error);
@@ -12847,7 +12875,11 @@ QoreIRValue QoreIRLowering::emitHashKeyCompoundOp(
     QoreIRValue hash_val;
     if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
         LocalVar* lv = const_cast<LocalVar*>(reinterpret_cast<const LocalVar*>(container_var->ref.id));
-        hash_val = builder.createLoadLocal(lv, loc, false)->result;
+        {
+            QoreIRLocalInstruction* load = builder.createLoadLocal(lv, loc, false);
+            setReferenceLoadExceptionTarget(load, lv->getTypeInfo());
+            hash_val = load->result;
+        }
     } else {
         hash_val = loadVarRef(container_var, error, "hash-compound-op", full_expr);
     }
@@ -12895,7 +12927,11 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicCompoundOp(
     QoreIRValue hash_val;
     if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
         LocalVar* lv = const_cast<LocalVar*>(reinterpret_cast<const LocalVar*>(container_var->ref.id));
-        hash_val = builder.createLoadLocal(lv, loc, false)->result;
+        {
+            QoreIRLocalInstruction* load = builder.createLoadLocal(lv, loc, false);
+            setReferenceLoadExceptionTarget(load, lv->getTypeInfo());
+            hash_val = load->result;
+        }
     } else {
         hash_val = loadVarRef(container_var, error, "hash-dynamic-compound-op", full_expr);
     }
@@ -12948,7 +12984,11 @@ QoreIRValue QoreIRLowering::emitListKeyCompoundOp(
     QoreIRValue list_val;
     if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
         LocalVar* lv = const_cast<LocalVar*>(reinterpret_cast<const LocalVar*>(container_var->ref.id));
-        list_val = builder.createLoadLocal(lv, loc, false)->result;
+        {
+            QoreIRLocalInstruction* load = builder.createLoadLocal(lv, loc, false);
+            setReferenceLoadExceptionTarget(load, lv->getTypeInfo());
+            list_val = load->result;
+        }
     } else {
         list_val = loadVarRef(container_var, error, "list-compound-op", full_expr);
     }
@@ -12986,7 +13026,11 @@ QoreIRValue QoreIRLowering::emitHashKeyDirectStore(
     QoreIRValue hash_val;
     if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
         LocalVar* lv = const_cast<LocalVar*>(reinterpret_cast<const LocalVar*>(container_var->ref.id));
-        hash_val = builder.createLoadLocal(lv, loc, false)->result;
+        {
+            QoreIRLocalInstruction* load = builder.createLoadLocal(lv, loc, false);
+            setReferenceLoadExceptionTarget(load, lv->getTypeInfo());
+            hash_val = load->result;
+        }
     } else {
         hash_val = loadVarRef(container_var, error, "hash-direct-store", full_expr);
     }
@@ -13026,7 +13070,11 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
     QoreIRValue hash_val;
     if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
         LocalVar* lv = const_cast<LocalVar*>(reinterpret_cast<const LocalVar*>(container_var->ref.id));
-        hash_val = builder.createLoadLocal(lv, loc, false)->result;
+        {
+            QoreIRLocalInstruction* load = builder.createLoadLocal(lv, loc, false);
+            setReferenceLoadExceptionTarget(load, lv->getTypeInfo());
+            hash_val = load->result;
+        }
     } else {
         hash_val = loadVarRef(container_var, error, "hash-dynamic-store", full_expr);
     }
@@ -13158,7 +13206,11 @@ QoreIRValue QoreIRLowering::emitListIndexDirectStore(
     QoreIRValue list_val;
     if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
         LocalVar* lv = const_cast<LocalVar*>(reinterpret_cast<const LocalVar*>(container_var->ref.id));
-        list_val = builder.createLoadLocal(lv, loc, false)->result;
+        {
+            QoreIRLocalInstruction* load = builder.createLoadLocal(lv, loc, false);
+            setReferenceLoadExceptionTarget(load, lv->getTypeInfo());
+            list_val = load->result;
+        }
     } else {
         list_val = loadVarRef(container_var, error, "list-direct-store", full_expr);
     }

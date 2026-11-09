@@ -449,6 +449,17 @@ private:
     QoreIRBasicBlock* createBlock(const std::string& prefix);
     QoreIRValue loadVarRef(const VarRefNode* var, std::string& error, const char* context,
         const QoreValue& expr);
+    //! Gives the load of a variable that can hold a reference the exception target in effect, if any
+    /** A variable whose type allows a reference (no type or a reference type) can hold one, and its read reads the
+        referenced lvalue, which raises an exception if it no longer exists (OBJECT-ALREADY-DELETED for a member of a
+        deleted object, PROGRAM-ERROR for a variable of a deleted Program): the exception is handled by the enclosing
+        try or scope cleanup, as in the AST interpreter.  The read of any other variable cannot raise, and its load
+        gets no exception edge, which would constrain the optimization of the code around it.
+
+        @param load a LoadLocal, LoadClosure, LoadGlobal or LoadThreadLocal instruction
+        @param type_info the declared type of the variable
+    */
+    void setReferenceLoadExceptionTarget(QoreIRInstruction* load, const QoreTypeInfo* type_info);
     bool storeVarRef(const VarRefNode* var, QoreIRValue value, std::string& error, const char* context,
         const QoreValue* expr = nullptr, const QoreProgramLocation* guard_loc = nullptr, AssignmentMode mode = AssignmentMode::Normal,
         QoreIRValue* store_result = nullptr);
