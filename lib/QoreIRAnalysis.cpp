@@ -649,9 +649,21 @@ void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vec
             });
         }
     }
+    // the elements that iterators give belong to their loop, not to the call or the container that they are an
+    // operand of: the AST interpreter's operator holds the element (ValueOptionalRefHolder) and releases it when the
+    // exception unwinds the operator, after the temporaries of the expression that raised (qore#5670)
+    std::vector<uint8_t> loop_elements(groups.size(), 0);
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::IteratorNext && inst->result.isValid()
+                    && inst->result.id < loop_elements.size()) {
+                loop_elements[inst->result.id] = 1;
+            }
+        }
+    }
     auto set_class = [&](QoreIRValue operand, uint32_t cls) {
         // a value used more than once is released on its own: it has no one place to be released with
-        if (operand.isValid() && operand.id < groups.size() && uses[operand.id] == 1) {
+        if (operand.isValid() && operand.id < groups.size() && uses[operand.id] == 1 && !loop_elements[operand.id]) {
             groups[operand.id] = cls;
         }
     };

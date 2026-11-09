@@ -19212,10 +19212,15 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         return inst->result;
     };
 
-    auto emit_negative_limit_throw = [&](const char* name, const QoreProgramLocation* stage_loc) {
+    // the message is the AST interpreter's (QoreStreamingOperatorNode::getFunctionalIteratorImpl())
+    auto emit_negative_limit_throw = [&](const char* name, QoreIRValue limit, const QoreProgramLocation* stage_loc) {
         QoreIRValue err = builder.createConstString("STREAMING-OPERATOR-ERROR", stage_loc)->result;
-        QoreIRValue msg = builder.createConstString(
-            std::string(name) + " requires a non-negative count", stage_loc)->result;
+        QoreIRValue msg_prefix = builder.createConstString(
+            std::string(name) + " operator expression requires a non-negative count, got ", stage_loc)->result;
+        // the count as an integer, as the AST interpreter formats it (getAsBigInt())
+        QoreIRValue limit_int = builder.createUnaryOp(QoreIROpcode::ToInt, limit, stage_loc)->result;
+        QoreIRValue limit_str = builder.createUnaryOp(QoreIROpcode::ToString, limit_int, stage_loc)->result;
+        QoreIRValue msg = builder.createBinaryOp(QoreIROpcode::AddString, msg_prefix, limit_str, stage_loc)->result;
         QoreIRValue throw_list = builder.createMakeList({err, msg}, stage_loc)->result;
         QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
         builder.createThrow(throw_list, handler, stage_loc);
@@ -19250,7 +19255,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         builder.createBranchIf(is_negative, limit_err_block, limit_ok_block, stages[i].loc);
 
         builder.setBlock(limit_err_block);
-        emit_negative_limit_throw(stages[i].kind == LazyPipelineStage::StreamTake ? "take" : "drop", stages[i].loc);
+        emit_negative_limit_throw(stages[i].kind == LazyPipelineStage::StreamTake ? "take" : "drop", limits[i],
+            stages[i].loc);
 
         builder.setBlock(limit_ok_block);
     }
@@ -20243,10 +20249,15 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         return builder.createUnaryOp(QoreIROpcode::ToBool, pred_result, pred_loc)->result;
     };
 
-    auto emit_negative_limit_throw = [&](const char* name, const QoreProgramLocation* stage_loc) {
+    // the message is the AST interpreter's (QoreStreamingOperatorNode::getFunctionalIteratorImpl())
+    auto emit_negative_limit_throw = [&](const char* name, QoreIRValue limit, const QoreProgramLocation* stage_loc) {
         QoreIRValue err = builder.createConstString("STREAMING-OPERATOR-ERROR", stage_loc)->result;
-        QoreIRValue msg = builder.createConstString(
-            std::string(name) + " requires a non-negative count", stage_loc)->result;
+        QoreIRValue msg_prefix = builder.createConstString(
+            std::string(name) + " operator expression requires a non-negative count, got ", stage_loc)->result;
+        // the count as an integer, as the AST interpreter formats it (getAsBigInt())
+        QoreIRValue limit_int = builder.createUnaryOp(QoreIROpcode::ToInt, limit, stage_loc)->result;
+        QoreIRValue limit_str = builder.createUnaryOp(QoreIROpcode::ToString, limit_int, stage_loc)->result;
+        QoreIRValue msg = builder.createBinaryOp(QoreIROpcode::AddString, msg_prefix, limit_str, stage_loc)->result;
         QoreIRValue throw_list = builder.createMakeList({err, msg}, stage_loc)->result;
         QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
         builder.createThrow(throw_list, handler, stage_loc);
@@ -20281,7 +20292,8 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         builder.createBranchIf(is_negative, limit_err_block, limit_ok_block, stages[i].loc);
 
         builder.setBlock(limit_err_block);
-        emit_negative_limit_throw(stages[i].kind == LazyPipelineStage::StreamTake ? "take" : "drop", stages[i].loc);
+        emit_negative_limit_throw(stages[i].kind == LazyPipelineStage::StreamTake ? "take" : "drop", limits[i],
+            stages[i].loc);
 
         builder.setBlock(limit_ok_block);
     }
@@ -20823,10 +20835,15 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
             });
     };
 
-    auto emit_negative_limit_throw = [&](const char* name) {
+    // the message is the AST interpreter's (QoreStreamingOperatorNode::getFunctionalIteratorImpl())
+    auto emit_negative_limit_throw = [&](const char* name, QoreIRValue limit) {
         QoreIRValue err = builder.createConstString("STREAMING-OPERATOR-ERROR", loc)->result;
-        QoreIRValue msg = builder.createConstString(
-            std::string(name) + " requires a non-negative count", loc)->result;
+        QoreIRValue msg_prefix = builder.createConstString(
+            std::string(name) + " operator expression requires a non-negative count, got ", loc)->result;
+        // the count as an integer, as the AST interpreter formats it (getAsBigInt())
+        QoreIRValue limit_int = builder.createUnaryOp(QoreIROpcode::ToInt, limit, loc)->result;
+        QoreIRValue limit_str = builder.createUnaryOp(QoreIROpcode::ToString, limit_int, loc)->result;
+        QoreIRValue msg = builder.createBinaryOp(QoreIROpcode::AddString, msg_prefix, limit_str, loc)->result;
         QoreIRValue throw_list = builder.createMakeList({err, msg}, loc)->result;
         QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
         builder.createThrow(throw_list, handler, loc);
@@ -21036,7 +21053,7 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
         builder.createBranchIf(is_negative, limit_err_block, limit_ok_block, loc);
 
         builder.setBlock(limit_err_block);
-        emit_negative_limit_throw(op->getKind() == QoreStreamingOperatorNode::Take ? "take" : "drop");
+        emit_negative_limit_throw(op->getKind() == QoreStreamingOperatorNode::Take ? "take" : "drop", limit_val);
 
         builder.setBlock(limit_ok_block);
     }

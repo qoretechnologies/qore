@@ -12994,6 +12994,32 @@ load_local_done:
                     ip = 0;
                     break;
                 }
+                // the element of the previous iteration is released before the next one is taken, as the AST
+                // interpreter releases each element when its iteration ends and native code releases the element's
+                // slot before qore_rt_iterator_next(); an exception that its destructor raises leaves the loop with
+                // the iterator still alive, which the loop's exception cleanup or the frame releases (qore#5670)
+                // (the slot keeps its place among the frame's temporaries, which an exception releases in order)
+                // (only a node has a reference to release, so a loop over scalars does nothing more here)
+                {
+                    uint32_t elem_id = iter_inst->result.id;
+                    if (elem_id < values.size() && values[elem_id].hasNode() && hasCleanupEntry(cleanup, elem_id)) {
+                        QoreValue elem = values[elem_id];
+                        values[elem_id] = QoreValue();
+                        elem.discard(xsink);
+                        if (xsink && *xsink) {
+                            if (inst->exception_target) {
+                                cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                                prev_block = block;
+                                block = inst->exception_target;
+                                ip = 0;
+                                break;
+                            }
+                            unwindForException();
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                    }
+                }
                 ValueOptionalRefHolder val(xsink);
                 bool done = iter->getNext(val, xsink);
                 if (xsink && *xsink) {
@@ -13019,28 +13045,7 @@ load_local_done:
                     delete iter;
                     // Clear the iterator value so we don't double-delete
                     setValueSlot(values, iter_inst->iterator.id, QoreValue(static_cast<int64_t>(0)), xsink);
-                    // the last element is released when the loop ends, as the AST interpreter releases each element
-                    // when its iteration ends and native code releases the element's slot here (the next call of
-                    // qore_rt_iterator_next() releases the previous element and stores NOTHING when it is done)
-                    uint32_t elem_id = iter_inst->result.id;
-                    if (elem_id < values.size() && hasCleanupEntry(cleanup, elem_id)) {
-                        removeAllCleanupEntries(cleanup, elem_id);
-                        QoreValue elem = values[elem_id];
-                        values[elem_id] = QoreValue();
-                        elem.discard(xsink);
-                        if (xsink && *xsink) {
-                            if (inst->exception_target) {
-                                cleanupToTempScope(inst->temp_scope_id, true, false, true);
-                                prev_block = block;
-                                block = inst->exception_target;
-                                ip = 0;
-                                break;
-                            }
-                            unwindForException();
-                            cleanupLocalCaches();
-                            return false;
-                        }
-                    }
+                    // the last element was released above, before the iterator was asked for another one
                     prev_block = block;
                     block = iter_inst->done_target;
                     ip = 0;
