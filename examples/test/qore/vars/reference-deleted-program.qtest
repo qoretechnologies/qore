@@ -1,0 +1,274 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ReferenceDeletedProgramTest
+
+#! Regression test: a reference to a lvalue of a deleted Program raises PROGRAM-ERROR
+/** A reference keeps the address of the Program of its lvalue (lvalue_ref::pgm) and the lvalue expression, whose
+    variables are freed with the Program.  A function of a Program can return a reference to one of its variables,
+    which the caller can keep after the Program was deleted: using it entered the freed Program (a crash in
+    ProgramThreadCountContextHelper::set()) or, for a reference held by a global variable, used the freed variable.
+    A reference's Program is now identified by its ID as well (lvalue_ref::pgm_id), which is never reused, and is
+    referenced while the reference is used (QoreReferenceProgramHelper): a reference to a lvalue of a deleted Program
+    raises PROGRAM-ERROR, as a call into a deleted Program does.
+
+    The driver takes references to a thread_local variable, a global variable and a closure-bound local variable of a
+    Program, and uses them through a local variable, a closure-bound variable and a global variable holding them,
+    while the Program lives and after it was deleted, in every execution mode and on the IR tier; each use is made by
+    a function of its own, whose caller handles the exception.  Before the fix, every mode crashed.
+*/
+class ReferenceDeletedProgramTest inherits QUnit::Test {
+    public {
+        #! the driver script; ARGV[0] is the execution mode of the Programs it creates
+        const Script = '%modern
+%no-child-restrictions
+const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+ExecMode mode = Modes{ARGV[0]};
+
+# each use of a reference is made by a function of its own, and the caller handles the exception it raises
+
+#! reads the lvalue of a reference held by a local variable (a parameter)
+auto sub read_local(reference r) {
+    return r;
+}
+
+#! writes the lvalue of a reference held by a local variable
+string sub write_local(reference r) {
+    r = 11;
+    return "ok";
+}
+
+#! reads the lvalue of a reference held by a closure-bound local variable
+auto sub read_closure(reference r) {
+    code c = auto sub () { return r; };
+    return c();
+}
+
+#! writes the lvalue of a reference held by a closure-bound local variable
+string sub write_closure(reference r) {
+    code c = sub () { r = 12; };
+    c();
+    return "ok";
+}
+
+# global variables holding a reference, one for each kind of variable referenced: an assignment to a variable
+# holding a reference assigns the referenced lvalue
+our reference<*int> gref_thread_local;
+our reference<*int> gref_global;
+our reference<*int> gref_local;
+
+#! reads the lvalue of the reference held by the global variable of the given kind
+auto sub read_global(string kind) {
+    switch (kind) {
+        case "thread_local": return gref_thread_local;
+        case "global": return gref_global;
+    }
+    return gref_local;
+}
+
+#! writes the lvalue of the reference held by the global variable of the given kind
+string sub write_global(string kind) {
+    switch (kind) {
+        case "thread_local": gref_thread_local = 13; break;
+        case "global": gref_global = 13; break;
+        default: gref_local = 13; break;
+    }
+    return "ok";
+}
+
+sub report(string label, auto v) {
+    printf("%s: %y\n", label, v);
+}
+
+sub report_error(string label, hash<ExceptionInfo> ex) {
+    printf("%s: %s\n", label, ex.err);
+}
+
+#! uses the reference given and the one in the global variable of its kind
+/** a reference to the variable holding the reference is passed on, through untyped references, which do not check
+    the type of the lvalue
+*/
+sub use(string kind, string label, reference r) {
+    try {
+        report(label + ", read in a local variable", read_local(\r));
+    } catch (hash<ExceptionInfo> ex) {
+        report_error(label + ", read in a local variable", ex);
+    }
+    try {
+        report(label + ", written in a local variable", write_local(\r));
+    } catch (hash<ExceptionInfo> ex) {
+        report_error(label + ", written in a local variable", ex);
+    }
+    try {
+        report(label + ", read in a closure", read_closure(\r));
+    } catch (hash<ExceptionInfo> ex) {
+        report_error(label + ", read in a closure", ex);
+    }
+    try {
+        report(label + ", written in a closure", write_closure(\r));
+    } catch (hash<ExceptionInfo> ex) {
+        report_error(label + ", written in a closure", ex);
+    }
+    try {
+        report(label + ", read in a global variable", read_global(kind));
+    } catch (hash<ExceptionInfo> ex) {
+        report_error(label + ", read in a global variable", ex);
+    }
+    try {
+        report(label + ", written in a global variable", write_global(kind));
+    } catch (hash<ExceptionInfo> ex) {
+        report_error(label + ", written in a global variable", ex);
+    }
+}
+
+const Code = "%modern
+thread_local *int tlx;
+our *int gx;
+reference<*int> sub get_tl() { return \\tlx; }
+reference<*int> sub get_g() { return \\gx; }
+reference<*int> sub get_l() { *int x = 1; code c = sub () { x = 2; }; return \\x; }
+sub set(int v) { tlx = v; gx = v; }
+list<auto> sub peek() { return (tlx, gx); }
+";
+
+#! takes references to a variable of the kind given of a Program, and uses them while it lives and after it was deleted
+/** the variable holding the reference is a local variable of this function, so that each kind has one of its own
+*/
+sub run(string kind) {
+    Program p();
+    p.setExecMode(mode);
+    p.parse(Code, "p");
+    p.callFunction("set", 5);
+    string getter = kind == "thread_local" ? "get_tl" : (kind == "global" ? "get_g" : "get_l");
+    reference<*int> r = p.callFunction(getter);
+    switch (kind) {
+        case "thread_local": gref_thread_local = p.callFunction(getter); break;
+        case "global": gref_global = p.callFunction(getter); break;
+        default: gref_local = p.callFunction(getter); break;
+    }
+    # while the Program lives, the references read and write its variable; for a local variable, each call of the
+    # function gave a reference to a variable of its own
+    use(kind, kind + " of a live Program", \r);
+    if (kind != "local") {
+        printf("%s of a live Program: %y\n", kind, p.callFunction("peek")[kind == "thread_local" ? 0 : 1]);
+    }
+    delete p;
+    # once it is deleted, they raise PROGRAM-ERROR instead of using its freed data
+    use(kind, kind + " of a deleted Program", \r);
+}
+
+run("thread_local");
+run("global");
+run("local");
+printf("done\n");
+';
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("ReferenceDeletedProgramTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(sprintf("references to lvalues of a deleted Program in %s mode", mode), getModeTest(mode));
+        }
+        addTestCase("references to lvalues of a deleted Program on the IR tier", \runIrTier());
+        set_return_value(main());
+    }
+
+    #! returns the test case of the given mode
+    /** The mode is a parameter of its own for each closure: a closure created in the loop over the modes would see
+        the loop variable's last value
+    */
+    private code getModeTest(string mode) {
+        return sub () { runMode(mode); };
+    }
+
+    #! runs the driver in the given mode
+    private runMode(string mode) {
+        TmpDir tmp("qore-reference-deleted-program-");
+        string path = writeScript(tmp);
+        assertEq(getExpected(), ExecModeHarness::run(getCommand(mode, path, mode)), mode);
+    }
+
+    #! runs the driver with tiered execution on the IR tier
+    runIrTier() {
+        TmpDir tmp("qore-reference-deleted-program-");
+        string path = writeScript(tmp);
+        assertEq(getExpected(), ExecModeHarness::run_ir_tier(getCommand("tiered", path, "tiered")),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! returns the command running the driver
+    private string getCommand(string mode, string path, string arg) {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, path, arg);
+    }
+
+    #! returns the output of the driver
+    private static string getExpected() {
+        return
+            "thread_local of a live Program, read in a local variable: 5\n"
+            "thread_local of a live Program, written in a local variable: \"ok\"\n"
+            "thread_local of a live Program, read in a closure: 11\n"
+            "thread_local of a live Program, written in a closure: \"ok\"\n"
+            "thread_local of a live Program, read in a global variable: 12\n"
+            "thread_local of a live Program, written in a global variable: \"ok\"\n"
+            "thread_local of a live Program: 13\n"
+            "thread_local of a deleted Program, read in a local variable: PROGRAM-ERROR\n"
+            "thread_local of a deleted Program, written in a local variable: PROGRAM-ERROR\n"
+            "thread_local of a deleted Program, read in a closure: PROGRAM-ERROR\n"
+            "thread_local of a deleted Program, written in a closure: PROGRAM-ERROR\n"
+            "thread_local of a deleted Program, read in a global variable: PROGRAM-ERROR\n"
+            "thread_local of a deleted Program, written in a global variable: PROGRAM-ERROR\n"
+            "global of a live Program, read in a local variable: 5\n"
+            "global of a live Program, written in a local variable: \"ok\"\n"
+            "global of a live Program, read in a closure: 11\n"
+            "global of a live Program, written in a closure: \"ok\"\n"
+            "global of a live Program, read in a global variable: 12\n"
+            "global of a live Program, written in a global variable: \"ok\"\n"
+            "global of a live Program: 13\n"
+            "global of a deleted Program, read in a local variable: PROGRAM-ERROR\n"
+            "global of a deleted Program, written in a local variable: PROGRAM-ERROR\n"
+            "global of a deleted Program, read in a closure: PROGRAM-ERROR\n"
+            "global of a deleted Program, written in a closure: PROGRAM-ERROR\n"
+            "global of a deleted Program, read in a global variable: PROGRAM-ERROR\n"
+            "global of a deleted Program, written in a global variable: PROGRAM-ERROR\n"
+            "local of a live Program, read in a local variable: 1\n"
+            "local of a live Program, written in a local variable: \"ok\"\n"
+            "local of a live Program, read in a closure: 11\n"
+            "local of a live Program, written in a closure: \"ok\"\n"
+            "local of a live Program, read in a global variable: 1\n"
+            "local of a live Program, written in a global variable: \"ok\"\n"
+            "local of a deleted Program, read in a local variable: PROGRAM-ERROR\n"
+            "local of a deleted Program, written in a local variable: PROGRAM-ERROR\n"
+            "local of a deleted Program, read in a closure: PROGRAM-ERROR\n"
+            "local of a deleted Program, written in a closure: PROGRAM-ERROR\n"
+            "local of a deleted Program, read in a global variable: PROGRAM-ERROR\n"
+            "local of a deleted Program, written in a global variable: PROGRAM-ERROR\n"
+            "done\n";
+    }
+
+    #! writes the driver into the directory given and returns its path
+    private static string writeScript(TmpDir tmp) {
+        string path = tmp.path + DirSep + "reference-deleted-program-driver.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit f.close();
+        f.write(Script);
+        return path;
+    }
+}

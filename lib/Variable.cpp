@@ -1552,6 +1552,11 @@ int LValueHelper::doLValue(const ReferenceNode* ref, bool for_remove) {
     lvid_set->insert(r->lvalue_id);
     //printd(5, "LValueHelper::doLValue() this: %p ReferenceNode: %p r->vexp: %s ti: %s\n", this, ref,
     //    r->vexp.getFullTypeName(), QoreTypeInfo::getName(r->typeInfo));
+    // the lvalue of a reference of a deleted Program is freed with it
+    QoreReferenceProgramHelper rph(*r, vl.xsink, true);
+    if (!rph) {
+        return -1;
+    }
     return doLValue(r->vexp, for_remove);
 }
 
@@ -1570,6 +1575,11 @@ int LValueHelper::doLValue(const ReferenceNode* ref, RuntimeConfig& rc, bool for
     // a reference to a reference, however it's safe to insert it multiple times;
     // the reference count for the lvalue_id object is handled elsewhere
     lvid_set->insert(r->lvalue_id);
+    // the lvalue of a reference of a deleted Program is freed with it
+    QoreReferenceProgramHelper rph(*r, vl.xsink, true);
+    if (!rph) {
+        return -1;
+    }
     return doLValue(r->vexp, rc, for_remove);
 }
 
@@ -3973,7 +3983,11 @@ int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeI
 void LocalVarValue::remove(LValueRemoveHelper& lvrh, const QoreTypeInfo* typeInfo) {
     if (val.getType() == NT_REFERENCE) {
         ReferenceNode* ref = reinterpret_cast<ReferenceNode*>(val.v.n);
-        lvrh.doRemove(lvalue_ref::get(ref)->vexp);
+        // the lvalue of a reference of a deleted Program is freed with it
+        QoreReferenceProgramHelper rph(*lvalue_ref::get(ref), lvrh.getExceptionSink(), true);
+        if (rph) {
+            lvrh.doRemove(lvalue_ref::get(ref)->vexp);
+        }
         return;
     }
 
@@ -4055,7 +4069,11 @@ void ClosureVarValue::remove(LValueRemoveHelper& lvrh) {
     if (val.getType() == NT_REFERENCE) {
         ReferenceHolder<ReferenceNode> ref(reinterpret_cast<ReferenceNode*>(val.v.n->refSelf()), lvrh.getExceptionSink());
         sl.release();
-        lvrh.doRemove(lvalue_ref::get(*ref)->vexp);
+        // the lvalue of a reference of a deleted Program is freed with it
+        QoreReferenceProgramHelper rph(*lvalue_ref::get(*ref), lvrh.getExceptionSink(), true);
+        if (rph) {
+            lvrh.doRemove(lvalue_ref::get(*ref)->vexp);
+        }
         return;
     }
 
