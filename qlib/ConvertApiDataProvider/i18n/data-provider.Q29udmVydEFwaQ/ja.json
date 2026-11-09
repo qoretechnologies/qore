@@ -1,0 +1,2789 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.Q29udmVydEFwaQ.display_name": {
+          "source": "ConvertAPI",
+          "message": "ConvertAPI"
+        },
+        "app.Q29udmVydEFwaQ.short_desc": {
+          "source": "ConvertAPI file conversion and PDF processing platform",
+          "message": "ConvertAPIファイル変換およびPDF処理プラットフォーム"
+        },
+        "app.Q29udmVydEFwaQ.desc": {
+          "source": "[ConvertAPI](https://www.convertapi.com) converts files between more than 300 format pairs and processes PDF files.\n\n- Office documents, spreadsheets and presentations to and from PDF\n- Web pages and HTML to PDF\n- PDF to images, office formats, text and PDF/A\n- Images, e-books, CAD drawings, e-mail messages and archives\n- PDF tools: merge, split, compress, protect, OCR, watermark and more\n\nThe `convert` action runs any converter by its source and destination formats; the other actions are shortcuts for common conversions.",
+          "message": "[ConvertAPI](https://www.convertapi.com)は、300を超える形式の組み合わせでファイルを変換し、PDFファイルを処理します。\n\n- Officeドキュメント、スプレッドシート、プレゼンテーションとPDFの相互変換\n- WebページやHTMLからPDFへの変換\n- PDFから画像、Office形式、テキスト、PDF/Aへの変換\n- 画像、電子書籍、CAD図面、メールメッセージ、アーカイブ\n- PDFツール: 結合、分割、圧縮、保護、OCR、透かしなど\n\n`convert` アクションは、変換元と変換先の形式を指定して任意のコンバーターを実行します。その他のアクションは、よく使う変換へのショートカットです。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to ConvertAPI",
+          "message": "ConvertAPI へのカスタム API 呼び出しの作成"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **ConvertAPI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**ConvertAPI** へのカスタム HTTP / REST API 呼び出しを行います。\n\nHTTP メソッド、URI パス (接続の API ベース URL からの相対パス)、任意のクエリパラメーター、ヘッダー、およびリクエスト本文を指定します。レスポンスは、ステータスコード、レスポンスヘッダー、およびレスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "接続のAPIベースURLに対する相対URIパス"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.display_name": {
+          "source": "Convert a File",
+          "message": "ファイルを変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.short_desc": {
+          "source": "Convert files with any ConvertAPI converter",
+          "message": "任意のConvertAPIコンバーターでファイルを変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.desc": {
+          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\nSelect the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n- Give the input as a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`\n- Give other converter parameters by their ConvertAPI names in `parameters`; the `get-converter-info` action lists them\n- The output files are returned as `FileData`, or as download URLs if `store_file` is `True`",
+          "message": "変換元と変換先の形式で指定した任意のConvertAPIコンバーターでファイルを変換します。\n\nまず `from` 形式を選択します。すると `to` の一覧に、その変換元形式のコンバーターの変換先形式が表示されます。\n\n- 入力は `file` または変換元の `url` で指定します。複数のファイルを受け取るコンバーター（`pdf` から `merge` など）では `files` または `urls` を使用します\n- その他のコンバーターパラメータは、ConvertAPIでの名前を使って `parameters` に指定します。`get-converter-info` アクションでパラメータを一覧表示できます\n- 出力ファイルは `FileData` として返されます。`store_file` が `True` の場合はダウンロードURLが返されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.display_name": {
+          "source": "Source Format",
+          "message": "変換元の形式"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.short_desc": {
+          "source": "The source format of the converter",
+          "message": "コンバーターの変換元の形式"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.desc": {
+          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`",
+          "message": "コンバーターの変換元の形式。例: `docx`、`html`、`pdf`、`jpg`、`eml`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.display_name": {
+          "source": "Destination Format",
+          "message": "変換先の形式"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.short_desc": {
+          "source": "The destination format of the converter",
+          "message": "コンバーターの変換先の形式"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.desc": {
+          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`; PDF tools name the operation, for example `merge`, `split` or `compress`",
+          "message": "コンバーターの変換先の形式。例: `pdf`、`jpg`、`txt`。PDFツールでは操作名を指定します。たとえば `merge`、`split`、`compress` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.short_desc": {
+          "source": "The file to convert",
+          "message": "変換するファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.desc": {
+          "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
+          "message": "変換するファイル。これまたは変換元のURLのいずれかを指定してください。\n\nファイルはリクエストでConvertAPIに送信されます。ファイル名の拡張子は、コンバーターの変換元の形式と一致している必要があります。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "ファイルデータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "MIME タイプ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "自動検出"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "MS Word docx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "MS Word `docx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "MS PowerPoint pptx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "MS PowerPoint `pptx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "MS Excel xlsx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "MS Excel `xlsx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "コンバーターのパラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "ConvertAPIでの名前で指定するその他のコンバーターパラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "コンバーターのその他のパラメータ。ConvertAPIのパラメータ名から値へのハッシュで指定します。\n\n各コンバーターのパラメータは[ConvertAPIドキュメント](https://docs.convertapi.com)に記載されており、`get-converter-info` アクションでも取得できます。\n\n- スカラー値はそのまま送信されます\n- ファイルハッシュ（`name` と `content`）はファイルとして送信されます\n- ファイルハッシュのリストはファイルのリストとして送信されます\n\n**例**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "ソース URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "変換するファイルのURL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "変換するファイルのURL。ConvertAPIはこのURLからファイルをダウンロードします。\n\n**例**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.display_name": {
+          "source": "Files",
+          "message": "ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.short_desc": {
+          "source": "The files to convert for converters that take several files",
+          "message": "複数のファイルを受け取るコンバーター用の変換対象ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.desc": {
+          "source": "The files to convert for converters that take several input files, such as `pdf` to `merge`, `images` to `pdf` or `any` to `zip`.\n\nThey are sent as the `Files` parameter, together with any files given in `urls`.",
+          "message": "複数の入力ファイルを受け取るコンバーター（`pdf` から `merge`、`images` から `pdf`、`any` から `zip` など）で変換するファイル。\n\nこれらは、`urls` に指定されたファイルとともに `Files` パラメータとして送信されます。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "ファイルデータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "MIME タイプ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "自動検出"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "MS Word docx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "MS Word `docx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "MS PowerPoint pptx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "MS PowerPoint `pptx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "MS Excel xlsx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "MS Excel `xlsx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.display_name": {
+          "source": "Source URLs",
+          "message": "ソースURL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.short_desc": {
+          "source": "URLs of the files for converters that take several files",
+          "message": "複数のファイルを受け取るコンバーター用のファイルのURL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.desc": {
+          "source": "The URLs of the files to convert for converters that take several input files, such as `pdf` to `merge`.\n\nThey are sent as the `Files` parameter, together with any files given in `files`.",
+          "message": "複数の入力ファイルを受け取るコンバーター（`pdf` から `merge` など）で変換するファイルのURL。\n\nこれらは、`files` に指定されたファイルとともに `Files` パラメータとして送信されます。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.display_name": {
+          "source": "Store File",
+          "message": "ファイルを保存"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.short_desc": {
+          "source": "Return a download URL instead of the file data",
+          "message": "ファイルデータの代わりにダウンロードURLを返す"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.desc": {
+          "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
+          "message": "ConvertAPIに出力ファイルを保存させ、それぞれのダウンロード `Url` を返すには `True` に設定します。ファイルは暗号化された一時ストレージに最大 **3時間** 保管されます。\n\n`False`（デフォルト）の場合、出力ファイルは `FileData` としてレスポンスに含まれて返され、何も保存されません。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.display_name": {
+          "source": "Output File Name",
+          "message": "出力ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "The name of the output file without the extension",
+          "message": "拡張子を除いた出力ファイルの名前"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.desc": {
+          "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+          "message": "出力ファイルの名前。ConvertAPIは変換先の形式の拡張子を付加し、変換で複数のファイルが作成される場合はインデックスも付加します。\n\n**例**: `report` を指定すると `report.pdf`、または `report_0.jpg`、`report_1.jpg`、... になります"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.short_desc": {
+          "source": "The conversion timeout in seconds",
+          "message": "変換のタイムアウト（秒）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+          "message": "変換のタイムアウト（秒）。`10` から `1200` の範囲で指定します。デフォルトは `900` です。"
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.display_name": {
+          "source": "Get Converter Information",
+          "message": "コンバーター情報を取得"
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.short_desc": {
+          "source": "Get the description and parameters of a converter",
+          "message": "コンバーターの説明とパラメータを取得"
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.desc": {
+          "source": "Returns the description and the parameters of a ConvertAPI converter, given by its source and destination formats.\n\nUse it to find the parameter names and allowed values for the `parameters` field of the `convert` action.",
+          "message": "変換元と変換先の形式で指定したConvertAPIコンバーターの説明とパラメータを返します。\n\n`convert` アクションの `parameters` フィールドに指定するパラメータ名と使用可能な値を調べるために使用します。"
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.ZnJvbQ.display_name": {
+          "source": "Source Format",
+          "message": "変換元の形式"
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.ZnJvbQ.short_desc": {
+          "source": "The source format of the converter",
+          "message": "コンバーターの変換元の形式"
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.ZnJvbQ.desc": {
+          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`",
+          "message": "コンバーターの変換元の形式。例: `docx`、`html`、`pdf`、`jpg`、`eml`"
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.dG8.display_name": {
+          "source": "Destination Format",
+          "message": "変換先の形式"
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.dG8.short_desc": {
+          "source": "The destination format of the converter",
+          "message": "コンバーターの変換先の形式"
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.dG8.desc": {
+          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`; PDF tools name the operation, for example `merge`, `split` or `compress`",
+          "message": "コンバーターの変換先の形式。例: `pdf`、`jpg`、`txt`。PDFツールでは操作名を指定します。たとえば `merge`、`split`、`compress` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.display_name": {
+          "source": "Convert Word to PDF",
+          "message": "WordをPDFに変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.short_desc": {
+          "source": "Convert a Word document (DOC or DOCX) to PDF",
+          "message": "Wordドキュメント（DOCまたはDOCX）をPDFに変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.desc": {
+          "source": "Converts a Word document (`doc` or `docx`) to PDF with the layout of the original document.\n\nSupports page ranges, protected documents, bookmarks from headings and PDF/A output.",
+          "message": "Wordドキュメント（`doc` または `docx`）を、元のドキュメントのレイアウトを保ったままPDFに変換します。\n\nページ範囲、保護されたドキュメント、見出しからのしおり、PDF/A出力に対応しています。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.short_desc": {
+          "source": "The file to convert",
+          "message": "変換するファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.desc": {
+          "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
+          "message": "変換するファイル。これまたは変換元のURLのいずれかを指定してください。\n\nファイルはリクエストでConvertAPIに送信されます。ファイル名の拡張子は、コンバーターの変換元の形式と一致している必要があります。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "ファイルデータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "MIME タイプ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "自動検出"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "MS Word docx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "MS Word `docx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "MS PowerPoint pptx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "MS PowerPoint `pptx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "MS Excel xlsx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "MS Excel `xlsx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "ソース URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "変換するファイルのURL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "変換するファイルのURL。ConvertAPIはこのURLからファイルをダウンロードします。\n\n**例**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGFnZVJhbmdl.display_name": {
+          "source": "Page Range",
+          "message": "ページ範囲"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGFnZVJhbmdl.short_desc": {
+          "source": "The pages to convert",
+          "message": "変換するページ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGFnZVJhbmdl.desc": {
+          "source": "The pages to convert, as a range or a comma-separated list.\n\n**Example**: `1-10` or `1,2,5`; all pages are converted by default",
+          "message": "変換するページ。範囲またはカンマ区切りのリストで指定します。\n\n**例**: `1-10` または `1,2,5`。デフォルトではすべてのページが変換されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGFzc3dvcmQ.display_name": {
+          "source": "Open Password",
+          "message": "開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGFzc3dvcmQ.short_desc": {
+          "source": "The password to open a protected document",
+          "message": "保護されたドキュメントを開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGFzc3dvcmQ.desc": {
+          "source": "The password to open a protected document",
+          "message": "保護されたドキュメントを開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.display_name": {
+          "source": "Bookmark Mode",
+          "message": "しおりモード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.short_desc": {
+          "source": "How bookmarks are created in the PDF",
+          "message": "PDFでのしおりの作成方法"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.desc": {
+          "source": "How bookmarks are created in the PDF:\n- `none`: no bookmarks\n- `headings`: bookmarks from the document headings (the default)\n- `bookmarks`: the bookmarks of the document",
+          "message": "PDFでのしおりの作成方法:\n- `none`: しおりを作成しません\n- `headings`: ドキュメントの見出しからしおりを作成します（デフォルト）\n- `bookmarks`: ドキュメントのしおりを使用します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmhlYWRpbmdz.display_name": {
+          "source": "Headings",
+          "message": "見出し"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmJvb2ttYXJrcw.display_name": {
+          "source": "Bookmarks",
+          "message": "しおり"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.VXBkYXRlVGFibGVPZkNvbnRlbnRz.display_name": {
+          "source": "Update Table of Contents",
+          "message": "目次を更新"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.VXBkYXRlVGFibGVPZkNvbnRlbnRz.short_desc": {
+          "source": "Update the tables of contents before converting",
+          "message": "変換前に目次を更新"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.VXBkYXRlVGFibGVPZkNvbnRlbnRz.desc": {
+          "source": "Set to `True` to update all tables of contents in the document before the conversion",
+          "message": "変換前にドキュメント内のすべての目次を更新するには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGRmYQ.display_name": {
+          "source": "Create PDF/A",
+          "message": "PDF/Aを作成"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGRmYQ.short_desc": {
+          "source": "Create a PDF/A-3a compliant document",
+          "message": "PDF/A-3a準拠のドキュメントを作成"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGRmYQ.desc": {
+          "source": "Set to `True` to create a PDF/A-3a compliant document for long-term archiving",
+          "message": "長期保存用にPDF/A-3a準拠のドキュメントを作成するには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.c3RvcmVfZmlsZQ.display_name": {
+          "source": "Store File",
+          "message": "ファイルを保存"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.c3RvcmVfZmlsZQ.short_desc": {
+          "source": "Return a download URL instead of the file data",
+          "message": "ファイルデータの代わりにダウンロードURLを返す"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.c3RvcmVfZmlsZQ.desc": {
+          "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
+          "message": "ConvertAPIに出力ファイルを保存させ、それぞれのダウンロード `Url` を返すには `True` に設定します。ファイルは暗号化された一時ストレージに最大 **3時間** 保管されます。\n\n`False`（デフォルト）の場合、出力ファイルは `FileData` としてレスポンスに含まれて返され、何も保存されません。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZV9uYW1l.display_name": {
+          "source": "Output File Name",
+          "message": "出力ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "The name of the output file without the extension",
+          "message": "拡張子を除いた出力ファイルの名前"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZV9uYW1l.desc": {
+          "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+          "message": "出力ファイルの名前。ConvertAPIは変換先の形式の拡張子を付加し、変換で複数のファイルが作成される場合はインデックスも付加します。\n\n**例**: `report` を指定すると `report.pdf`、または `report_0.jpg`、`report_1.jpg`、... になります"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.dGltZW91dA.short_desc": {
+          "source": "The conversion timeout in seconds",
+          "message": "変換のタイムアウト（秒）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+          "message": "変換のタイムアウト（秒）。`10` から `1200` の範囲で指定します。デフォルトは `900` です。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "コンバーターのパラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "ConvertAPIでの名前で指定するその他のコンバーターパラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "コンバーターのその他のパラメータ。ConvertAPIのパラメータ名から値へのハッシュで指定します。\n\n各コンバーターのパラメータは[ConvertAPIドキュメント](https://docs.convertapi.com)に記載されており、`get-converter-info` アクションでも取得できます。\n\n- スカラー値はそのまま送信されます\n- ファイルハッシュ（`name` と `content`）はファイルとして送信されます\n- ファイルハッシュのリストはファイルのリストとして送信されます\n\n**例**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.display_name": {
+          "source": "Convert Excel to PDF",
+          "message": "ExcelをPDFに変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.short_desc": {
+          "source": "Convert an Excel workbook (XLS or XLSX) to PDF",
+          "message": "Excelブック（XLSまたはXLSX）をPDFに変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.desc": {
+          "source": "Converts an Excel workbook (`xls` or `xlsx`) to PDF.\n\nConvert all worksheets, the active worksheet or a worksheet by name; fit sheets to the page width and create PDF/A output.",
+          "message": "Excelブック（`xls` または `xlsx`）をPDFに変換します。\n\nすべてのワークシート、アクティブなワークシート、または名前で指定したワークシートを変換できます。シートをページ幅に合わせたり、PDF/A出力を作成したりすることもできます。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.short_desc": {
+          "source": "The file to convert",
+          "message": "変換するファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.desc": {
+          "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
+          "message": "変換するファイル。これまたは変換元のURLのいずれかを指定してください。\n\nファイルはリクエストでConvertAPIに送信されます。ファイル名の拡張子は、コンバーターの変換元の形式と一致している必要があります。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "ファイルデータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "MIME タイプ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "自動検出"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "MS Word docx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "MS Word `docx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "MS PowerPoint pptx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "MS PowerPoint `pptx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "MS Excel xlsx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "MS Excel `xlsx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "ソース URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "変換するファイルのURL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "変換するファイルのURL。ConvertAPIはこのURLからファイルをダウンロードします。\n\n**例**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFzc3dvcmQ.display_name": {
+          "source": "Open Password",
+          "message": "開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFzc3dvcmQ.short_desc": {
+          "source": "The password to open a protected workbook",
+          "message": "保護されたブックを開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFzc3dvcmQ.desc": {
+          "source": "The password to open a protected workbook",
+          "message": "保護されたブックを開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0TmFtZQ.display_name": {
+          "source": "Worksheet Name",
+          "message": "ワークシート名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0TmFtZQ.short_desc": {
+          "source": "The name of the worksheet to convert",
+          "message": "変換するワークシートの名前"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0TmFtZQ.desc": {
+          "source": "The name of the worksheet to convert; all worksheets are converted by default",
+          "message": "変換するワークシートの名前。デフォルトではすべてのワークシートが変換されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.display_name": {
+          "source": "Active Worksheet Only",
+          "message": "アクティブなワークシートのみ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.short_desc": {
+          "source": "Convert only the active worksheet",
+          "message": "アクティブなワークシートのみを変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.desc": {
+          "source": "Set to `True` to convert only the active worksheet",
+          "message": "アクティブなワークシートのみを変換するには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.display_name": {
+          "source": "Page Orientation",
+          "message": "ページの向き"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.short_desc": {
+          "source": "The page orientation",
+          "message": "ページの向き"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.desc": {
+          "source": "The page orientation; `default` uses the page setup of each worksheet",
+          "message": "ページの向き。`default` では各ワークシートのページ設定が使用されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "デフォルト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
+          "source": "Portrait",
+          "message": "縦向き"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmxhbmRzY2FwZQ.display_name": {
+          "source": "Landscape",
+          "message": "横向き"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Rml0VG9QYWdl.display_name": {
+          "source": "Fit to Page",
+          "message": "ページに合わせる"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Rml0VG9QYWdl.short_desc": {
+          "source": "Scale each sheet to the page width",
+          "message": "各シートをページ幅に合わせて拡大縮小"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Rml0VG9QYWdl.desc": {
+          "source": "Set to `True` to enlarge the page size, switch to landscape when needed, trim the margins and scale each sheet to one page width",
+          "message": "ページサイズを拡大し、必要に応じて横向きに切り替え、余白を詰めて、各シートを1ページの幅に収めるには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QXV0b0ZpdENvbHVtbnM.display_name": {
+          "source": "Auto Fit Columns",
+          "message": "列幅の自動調整"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QXV0b0ZpdENvbHVtbnM.short_desc": {
+          "source": "Fit the column widths to their content",
+          "message": "列幅を内容に合わせて調整"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QXV0b0ZpdENvbHVtbnM.desc": {
+          "source": "Set to `True` to fit the column widths to their content, which removes unnecessary empty space",
+          "message": "列幅を内容に合わせて調整し、不要な空白を取り除くには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGRmYQ.display_name": {
+          "source": "Create PDF/A",
+          "message": "PDF/Aを作成"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGRmYQ.short_desc": {
+          "source": "Create a PDF/A-1b compliant document",
+          "message": "PDF/A-1b準拠のドキュメントを作成"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGRmYQ.desc": {
+          "source": "Set to `True` to create a PDF/A-1b compliant document for long-term archiving",
+          "message": "長期保存用にPDF/A-1b準拠のドキュメントを作成するには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.c3RvcmVfZmlsZQ.display_name": {
+          "source": "Store File",
+          "message": "ファイルを保存"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.c3RvcmVfZmlsZQ.short_desc": {
+          "source": "Return a download URL instead of the file data",
+          "message": "ファイルデータの代わりにダウンロードURLを返す"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.c3RvcmVfZmlsZQ.desc": {
+          "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
+          "message": "ConvertAPIに出力ファイルを保存させ、それぞれのダウンロード `Url` を返すには `True` に設定します。ファイルは暗号化された一時ストレージに最大 **3時間** 保管されます。\n\n`False`（デフォルト）の場合、出力ファイルは `FileData` としてレスポンスに含まれて返され、何も保存されません。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZV9uYW1l.display_name": {
+          "source": "Output File Name",
+          "message": "出力ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "The name of the output file without the extension",
+          "message": "拡張子を除いた出力ファイルの名前"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZV9uYW1l.desc": {
+          "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+          "message": "出力ファイルの名前。ConvertAPIは変換先の形式の拡張子を付加し、変換で複数のファイルが作成される場合はインデックスも付加します。\n\n**例**: `report` を指定すると `report.pdf`、または `report_0.jpg`、`report_1.jpg`、... になります"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.dGltZW91dA.short_desc": {
+          "source": "The conversion timeout in seconds",
+          "message": "変換のタイムアウト（秒）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+          "message": "変換のタイムアウト（秒）。`10` から `1200` の範囲で指定します。デフォルトは `900` です。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "コンバーターのパラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "ConvertAPIでの名前で指定するその他のコンバーターパラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "コンバーターのその他のパラメータ。ConvertAPIのパラメータ名から値へのハッシュで指定します。\n\n各コンバーターのパラメータは[ConvertAPIドキュメント](https://docs.convertapi.com)に記載されており、`get-converter-info` アクションでも取得できます。\n\n- スカラー値はそのまま送信されます\n- ファイルハッシュ（`name` と `content`）はファイルとして送信されます\n- ファイルハッシュのリストはファイルのリストとして送信されます\n\n**例**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.display_name": {
+          "source": "Convert PowerPoint to PDF",
+          "message": "PowerPointをPDFに変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.short_desc": {
+          "source": "Convert a PowerPoint presentation (PPT or PPTX) to PDF",
+          "message": "PowerPointプレゼンテーション（PPTまたはPPTX）をPDFに変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.desc": {
+          "source": "Converts a PowerPoint presentation (`ppt` or `pptx`) to PDF.\n\nSupports slide ranges, hidden slides, speaker notes and PDF/A output.",
+          "message": "PowerPointプレゼンテーション（`ppt` または `pptx`）をPDFに変換します。\n\nスライド範囲、非表示スライド、スピーカーノート、PDF/A出力に対応しています。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.short_desc": {
+          "source": "The file to convert",
+          "message": "変換するファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.desc": {
+          "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
+          "message": "変換するファイル。これまたは変換元のURLのいずれかを指定してください。\n\nファイルはリクエストでConvertAPIに送信されます。ファイル名の拡張子は、コンバーターの変換元の形式と一致している必要があります。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "ファイルデータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "MIME タイプ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "自動検出"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "MS Word docx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "MS Word `docx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "MS PowerPoint pptx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "MS PowerPoint `pptx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "MS Excel xlsx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "MS Excel `xlsx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "ソース URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "変換するファイルのURL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "変換するファイルのURL。ConvertAPIはこのURLからファイルをダウンロードします。\n\n**例**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGFnZVJhbmdl.display_name": {
+          "source": "Page Range",
+          "message": "ページ範囲"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGFnZVJhbmdl.short_desc": {
+          "source": "The pages to convert",
+          "message": "変換するページ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGFnZVJhbmdl.desc": {
+          "source": "The pages to convert, as a range or a comma-separated list.\n\n**Example**: `1-10` or `1,2,5`; all pages are converted by default",
+          "message": "変換するページ。範囲またはカンマ区切りのリストで指定します。\n\n**例**: `1-10` または `1,2,5`。デフォルトではすべてのページが変換されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGFzc3dvcmQ.display_name": {
+          "source": "Open Password",
+          "message": "開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGFzc3dvcmQ.short_desc": {
+          "source": "The password to open a protected presentation",
+          "message": "保護されたプレゼンテーションを開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGFzc3dvcmQ.desc": {
+          "source": "The password to open a protected presentation",
+          "message": "保護されたプレゼンテーションを開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydEhpZGRlblNsaWRlcw.display_name": {
+          "source": "Convert Hidden Slides",
+          "message": "非表示スライドを変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydEhpZGRlblNsaWRlcw.short_desc": {
+          "source": "Include the hidden slides",
+          "message": "非表示スライドを含める"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydEhpZGRlblNsaWRlcw.desc": {
+          "source": "Set to `True` to include the hidden slides in the PDF",
+          "message": "PDFに非表示スライドを含めるには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.display_name": {
+          "source": "Convert Speaker Notes",
+          "message": "スピーカーノートを変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.short_desc": {
+          "source": "How speaker notes are converted",
+          "message": "スピーカーノートの変換方法"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.desc": {
+          "source": "How speaker notes are converted:\n- `Disabled`: speaker notes are not converted (the default)\n- `SeparatePage`: each slide's notes on a separate page\n- `PageComments`: the notes as page comments",
+          "message": "スピーカーノートの変換方法:\n- `Disabled`: スピーカーノートを変換しません（デフォルト）\n- `SeparatePage`: 各スライドのノートを別のページに出力します\n- `PageComments`: ノートをページコメントとして出力します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOkRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "無効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlNlcGFyYXRlUGFnZQ.display_name": {
+          "source": "Convert to Separate Page",
+          "message": "別のページに変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlBhZ2VDb21tZW50cw.display_name": {
+          "source": "Convert to Page Comments",
+          "message": "ページコメントに変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGRmYQ.display_name": {
+          "source": "Create PDF/A",
+          "message": "PDF/Aを作成"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGRmYQ.short_desc": {
+          "source": "Create a PDF/A-3a compliant document",
+          "message": "PDF/A-3a準拠のドキュメントを作成"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGRmYQ.desc": {
+          "source": "Set to `True` to create a PDF/A-3a compliant document for long-term archiving",
+          "message": "長期保存用にPDF/A-3a準拠のドキュメントを作成するには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.c3RvcmVfZmlsZQ.display_name": {
+          "source": "Store File",
+          "message": "ファイルを保存"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.c3RvcmVfZmlsZQ.short_desc": {
+          "source": "Return a download URL instead of the file data",
+          "message": "ファイルデータの代わりにダウンロードURLを返す"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.c3RvcmVfZmlsZQ.desc": {
+          "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
+          "message": "ConvertAPIに出力ファイルを保存させ、それぞれのダウンロード `Url` を返すには `True` に設定します。ファイルは暗号化された一時ストレージに最大 **3時間** 保管されます。\n\n`False`（デフォルト）の場合、出力ファイルは `FileData` としてレスポンスに含まれて返され、何も保存されません。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZV9uYW1l.display_name": {
+          "source": "Output File Name",
+          "message": "出力ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "The name of the output file without the extension",
+          "message": "拡張子を除いた出力ファイルの名前"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZV9uYW1l.desc": {
+          "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+          "message": "出力ファイルの名前。ConvertAPIは変換先の形式の拡張子を付加し、変換で複数のファイルが作成される場合はインデックスも付加します。\n\n**例**: `report` を指定すると `report.pdf`、または `report_0.jpg`、`report_1.jpg`、... になります"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.dGltZW91dA.short_desc": {
+          "source": "The conversion timeout in seconds",
+          "message": "変換のタイムアウト（秒）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+          "message": "変換のタイムアウト（秒）。`10` から `1200` の範囲で指定します。デフォルトは `900` です。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "コンバーターのパラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "ConvertAPIでの名前で指定するその他のコンバーターパラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "コンバーターのその他のパラメータ。ConvertAPIのパラメータ名から値へのハッシュで指定します。\n\n各コンバーターのパラメータは[ConvertAPIドキュメント](https://docs.convertapi.com)に記載されており、`get-converter-info` アクションでも取得できます。\n\n- スカラー値はそのまま送信されます\n- ファイルハッシュ（`name` と `content`）はファイルとして送信されます\n- ファイルハッシュのリストはファイルのリストとして送信されます\n\n**例**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.display_name": {
+          "source": "Convert HTML to PDF",
+          "message": "HTMLをPDFに変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.short_desc": {
+          "source": "Convert a web page or an HTML file to PDF",
+          "message": "WebページまたはHTMLファイルをPDFに変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.desc": {
+          "source": "Converts a web page or an HTML file to PDF.\n\n- A source `url` is rendered as a web page in a browser, with its scripts, styles and images\n- A `file` is converted as an HTML document\n\nSupports page size, orientation, margins, the CSS media type and a delay for pages that load content late.",
+          "message": "WebページまたはHTMLファイルをPDFに変換します。\n\n- 変換元の `url` は、スクリプト、スタイル、画像とともにブラウザーでWebページとしてレンダリングされます\n- `file` はHTMLドキュメントとして変換されます\n\nページサイズ、向き、余白、CSSメディアタイプ、コンテンツを遅れて読み込むページ向けの遅延に対応しています。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "ソース URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "変換するファイルのURL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.dXJs.desc": {
+          "source": "The URL of the web page to convert; the page is rendered in a browser with its scripts, styles and images.\n\n**Example**: `https://www.example.com`",
+          "message": "変換するWebページのURL。ページは、スクリプト、スタイル、画像とともにブラウザーでレンダリングされます。\n\n**例**: `https://www.example.com`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.short_desc": {
+          "source": "The file to convert",
+          "message": "変換するファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.desc": {
+          "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
+          "message": "変換するファイル。これまたは変換元のURLのいずれかを指定してください。\n\nファイルはリクエストでConvertAPIに送信されます。ファイル名の拡張子は、コンバーターの変換元の形式と一致している必要があります。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "ファイルデータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "MIME タイプ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "自動検出"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "MS Word docx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "MS Word `docx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "MS PowerPoint pptx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "MS PowerPoint `pptx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "MS Excel xlsx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "MS Excel `xlsx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.short_desc": {
+          "source": "The PDF page size",
+          "message": "PDFのページサイズ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.desc": {
+          "source": "The PDF page size; the default is `letter`",
+          "message": "PDFのページサイズ。デフォルトは `letter` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEw.display_name": {
+          "source": "A0",
+          "message": "A0"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEx.display_name": {
+          "source": "A1",
+          "message": "A1"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEy.display_name": {
+          "source": "A2",
+          "message": "A2"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEz.display_name": {
+          "source": "A3",
+          "message": "A3"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0.display_name": {
+          "source": "A4",
+          "message": "A4"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE1.display_name": {
+          "source": "A5",
+          "message": "A5"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE2.display_name": {
+          "source": "A6",
+          "message": "A6"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE3.display_name": {
+          "source": "A7",
+          "message": "A7"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE4.display_name": {
+          "source": "A8",
+          "message": "A8"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE5.display_name": {
+          "source": "A9",
+          "message": "A9"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmIw.display_name": {
+          "source": "B0",
+          "message": "B0"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmIx.display_name": {
+          "source": "B1",
+          "message": "B1"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmIy.display_name": {
+          "source": "B2",
+          "message": "B2"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmIz.display_name": {
+          "source": "B3",
+          "message": "B3"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmI0.display_name": {
+          "source": "B4",
+          "message": "B4"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmI1.display_name": {
+          "source": "B5",
+          "message": "B5"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcg.display_name": {
+          "source": "Letter",
+          "message": "レター"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZ2Fs.display_name": {
+          "source": "Legal",
+          "message": "リーガル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZGdlcg.display_name": {
+          "source": "Ledger",
+          "message": "レジャー"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.display_name": {
+          "source": "Page Orientation",
+          "message": "ページの向き"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.short_desc": {
+          "source": "The PDF page orientation",
+          "message": "PDFのページの向き"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.desc": {
+          "source": "The PDF page orientation; the default is `portrait`",
+          "message": "PDFのページの向き。デフォルトは `portrait` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
+          "source": "Portrait",
+          "message": "縦向き"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmxhbmRzY2FwZQ.display_name": {
+          "source": "Landscape",
+          "message": "横向き"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luVG9w.display_name": {
+          "source": "Top Margin",
+          "message": "上余白"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luVG9w.short_desc": {
+          "source": "The top page margin in millimeters",
+          "message": "上のページ余白（ミリメートル）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luVG9w.desc": {
+          "source": "The top page margin in millimeters; the default is `10`",
+          "message": "上のページ余白（ミリメートル）。デフォルトは `10` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luUmlnaHQ.display_name": {
+          "source": "Right Margin",
+          "message": "右余白"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luUmlnaHQ.short_desc": {
+          "source": "The right page margin in millimeters",
+          "message": "右のページ余白（ミリメートル）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luUmlnaHQ.desc": {
+          "source": "The right page margin in millimeters; the default is `10`",
+          "message": "右のページ余白（ミリメートル）。デフォルトは `10` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luQm90dG9t.display_name": {
+          "source": "Bottom Margin",
+          "message": "下余白"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luQm90dG9t.short_desc": {
+          "source": "The bottom page margin in millimeters",
+          "message": "下のページ余白（ミリメートル）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luQm90dG9t.desc": {
+          "source": "The bottom page margin in millimeters; the default is `10`",
+          "message": "下のページ余白（ミリメートル）。デフォルトは `10` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luTGVmdA.display_name": {
+          "source": "Left Margin",
+          "message": "左余白"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luTGVmdA.short_desc": {
+          "source": "The left page margin in millimeters",
+          "message": "左のページ余白（ミリメートル）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luTGVmdA.desc": {
+          "source": "The left page margin in millimeters; the default is `10`",
+          "message": "左のページ余白（ミリメートル）。デフォルトは `10` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QmFja2dyb3VuZA.display_name": {
+          "source": "Background",
+          "message": "背景"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QmFja2dyb3VuZA.short_desc": {
+          "source": "Print the page background",
+          "message": "ページの背景を印刷"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QmFja2dyb3VuZA.desc": {
+          "source": "Set to `False` to leave out the page background; the default is `True`",
+          "message": "ページの背景を含めない場合は `False` に設定します。デフォルトは `True` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SmF2YVNjcmlwdA.display_name": {
+          "source": "JavaScript",
+          "message": "JavaScript"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SmF2YVNjcmlwdA.short_desc": {
+          "source": "Allow the page to run JavaScript",
+          "message": "ページでJavaScriptの実行を許可"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SmF2YVNjcmlwdA.desc": {
+          "source": "Set to `False` to disable JavaScript in the page; the default is `True`",
+          "message": "ページのJavaScriptを無効にするには `False` に設定します。デフォルトは `True` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29udmVyc2lvbkRlbGF5.display_name": {
+          "source": "Conversion Delay",
+          "message": "変換の遅延"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29udmVyc2lvbkRlbGF5.short_desc": {
+          "source": "Seconds to wait before creating the PDF",
+          "message": "PDFを作成するまでの待機秒数"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29udmVyc2lvbkRlbGF5.desc": {
+          "source": "The delay in seconds after the page is loaded and before the PDF is created, to let the page finish loading; the default is `0`",
+          "message": "ページの読み込み後、PDFを作成するまでの遅延時間（秒）。ページの読み込みが完了するのを待つために使用します。デフォルトは `0` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.display_name": {
+          "source": "CSS Media Type",
+          "message": "CSSメディアタイプ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.short_desc": {
+          "source": "The CSS media type used for rendering",
+          "message": "レンダリングに使用するCSSメディアタイプ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.desc": {
+          "source": "The CSS media type used for rendering, for example `screen` (the default) or `print`",
+          "message": "レンダリングに使用するCSSメディアタイプ。例: `screen`（デフォルト）または `print`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TG9hZExhenlDb250ZW50.display_name": {
+          "source": "Load Lazy Content",
+          "message": "遅延読み込みコンテンツを読み込む"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TG9hZExhenlDb250ZW50.short_desc": {
+          "source": "Load images that load only when visible",
+          "message": "表示されたときにだけ読み込まれる画像を読み込む"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TG9hZExhenlDb250ZW50.desc": {
+          "source": "Set to `True` to load the images of the page that load only when they become visible",
+          "message": "表示されたときにだけ読み込まれるページ内の画像を読み込むには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.c3RvcmVfZmlsZQ.display_name": {
+          "source": "Store File",
+          "message": "ファイルを保存"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.c3RvcmVfZmlsZQ.short_desc": {
+          "source": "Return a download URL instead of the file data",
+          "message": "ファイルデータの代わりにダウンロードURLを返す"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.c3RvcmVfZmlsZQ.desc": {
+          "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
+          "message": "ConvertAPIに出力ファイルを保存させ、それぞれのダウンロード `Url` を返すには `True` に設定します。ファイルは暗号化された一時ストレージに最大 **3時間** 保管されます。\n\n`False`（デフォルト）の場合、出力ファイルは `FileData` としてレスポンスに含まれて返され、何も保存されません。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZV9uYW1l.display_name": {
+          "source": "Output File Name",
+          "message": "出力ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "The name of the output file without the extension",
+          "message": "拡張子を除いた出力ファイルの名前"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZV9uYW1l.desc": {
+          "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+          "message": "出力ファイルの名前。ConvertAPIは変換先の形式の拡張子を付加し、変換で複数のファイルが作成される場合はインデックスも付加します。\n\n**例**: `report` を指定すると `report.pdf`、または `report_0.jpg`、`report_1.jpg`、... になります"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.dGltZW91dA.short_desc": {
+          "source": "The conversion timeout in seconds",
+          "message": "変換のタイムアウト（秒）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+          "message": "変換のタイムアウト（秒）。`10` から `1200` の範囲で指定します。デフォルトは `900` です。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "コンバーターのパラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "ConvertAPIでの名前で指定するその他のコンバーターパラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "コンバーターのその他のパラメータ。ConvertAPIのパラメータ名から値へのハッシュで指定します。\n\n各コンバーターのパラメータは[ConvertAPIドキュメント](https://docs.convertapi.com)に記載されており、`get-converter-info` アクションでも取得できます。\n\n- スカラー値はそのまま送信されます\n- ファイルハッシュ（`name` と `content`）はファイルとして送信されます\n- ファイルハッシュのリストはファイルのリストとして送信されます\n\n**例**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.display_name": {
+          "source": "Convert PDF to Images",
+          "message": "PDFを画像に変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.short_desc": {
+          "source": "Convert the pages of a PDF to JPG, PNG, TIFF or WebP images",
+          "message": "PDFのページをJPG、PNG、TIFF、WebPの画像に変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.desc": {
+          "source": "Converts the pages of a PDF to images; one image file is returned for each page.\n\nChoose the image `format` and resolution, and optionally a page range.",
+          "message": "PDFのページを画像に変換します。ページごとに1つの画像ファイルが返されます。\n\n画像の `format` と解像度を選択し、必要に応じてページ範囲も指定します。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.short_desc": {
+          "source": "The file to convert",
+          "message": "変換するファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.desc": {
+          "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
+          "message": "変換するファイル。これまたは変換元のURLのいずれかを指定してください。\n\nファイルはリクエストでConvertAPIに送信されます。ファイル名の拡張子は、コンバーターの変換元の形式と一致している必要があります。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "ファイルデータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "MIME タイプ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "自動検出"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "MS Word docx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "MS Word `docx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "MS PowerPoint pptx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "MS PowerPoint `pptx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "MS Excel xlsx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "MS Excel `xlsx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.display_name": {
+          "source": "Image Format",
+          "message": "画像形式"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.short_desc": {
+          "source": "The image format",
+          "message": "画像形式"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.desc": {
+          "source": "The image format of the output files; one image is created for each page",
+          "message": "出力ファイルの画像形式。ページごとに1つの画像が作成されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpwZw.display_name": {
+          "source": "JPG",
+          "message": "JPG"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBuZw.display_name": {
+          "source": "PNG",
+          "message": "PNG"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOnRpZmY.display_name": {
+          "source": "TIFF",
+          "message": "TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOndlYnA.display_name": {
+          "source": "WebP",
+          "message": "WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "ソース URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "変換するファイルのURL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "変換するファイルのURL。ConvertAPIはこのURLからファイルをダウンロードします。\n\n**例**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.UGFnZVJhbmdl.display_name": {
+          "source": "Page Range",
+          "message": "ページ範囲"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.UGFnZVJhbmdl.short_desc": {
+          "source": "The pages to convert",
+          "message": "変換するページ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.UGFnZVJhbmdl.desc": {
+          "source": "The pages to convert, as a range or a comma-separated list.\n\n**Example**: `1-10` or `1,2,5`; all pages are converted by default",
+          "message": "変換するページ。範囲またはカンマ区切りのリストで指定します。\n\n**例**: `1-10` または `1,2,5`。デフォルトではすべてのページが変換されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.UGFzc3dvcmQ.display_name": {
+          "source": "Open Password",
+          "message": "開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.UGFzc3dvcmQ.short_desc": {
+          "source": "The password to open a protected PDF",
+          "message": "保護されたPDFを開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.UGFzc3dvcmQ.desc": {
+          "source": "The password to open a protected PDF",
+          "message": "保護されたPDFを開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VSZXNvbHV0aW9u.display_name": {
+          "source": "Image Resolution",
+          "message": "画像の解像度"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VSZXNvbHV0aW9u.short_desc": {
+          "source": "The image resolution in DPI",
+          "message": "画像の解像度（DPI）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VSZXNvbHV0aW9u.desc": {
+          "source": "The image resolution in DPI; the default is `200`",
+          "message": "画像の解像度（DPI）。デフォルトは `200` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.c3RvcmVfZmlsZQ.display_name": {
+          "source": "Store File",
+          "message": "ファイルを保存"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.c3RvcmVfZmlsZQ.short_desc": {
+          "source": "Return a download URL instead of the file data",
+          "message": "ファイルデータの代わりにダウンロードURLを返す"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.c3RvcmVfZmlsZQ.desc": {
+          "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
+          "message": "ConvertAPIに出力ファイルを保存させ、それぞれのダウンロード `Url` を返すには `True` に設定します。ファイルは暗号化された一時ストレージに最大 **3時間** 保管されます。\n\n`False`（デフォルト）の場合、出力ファイルは `FileData` としてレスポンスに含まれて返され、何も保存されません。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZV9uYW1l.display_name": {
+          "source": "Output File Name",
+          "message": "出力ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "The name of the output file without the extension",
+          "message": "拡張子を除いた出力ファイルの名前"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZV9uYW1l.desc": {
+          "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+          "message": "出力ファイルの名前。ConvertAPIは変換先の形式の拡張子を付加し、変換で複数のファイルが作成される場合はインデックスも付加します。\n\n**例**: `report` を指定すると `report.pdf`、または `report_0.jpg`、`report_1.jpg`、... になります"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dGltZW91dA.short_desc": {
+          "source": "The conversion timeout in seconds",
+          "message": "変換のタイムアウト（秒）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+          "message": "変換のタイムアウト（秒）。`10` から `1200` の範囲で指定します。デフォルトは `900` です。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "コンバーターのパラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "ConvertAPIでの名前で指定するその他のコンバーターパラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "コンバーターのその他のパラメータ。ConvertAPIのパラメータ名から値へのハッシュで指定します。\n\n各コンバーターのパラメータは[ConvertAPIドキュメント](https://docs.convertapi.com)に記載されており、`get-converter-info` アクションでも取得できます。\n\n- スカラー値はそのまま送信されます\n- ファイルハッシュ（`name` と `content`）はファイルとして送信されます\n- ファイルハッシュのリストはファイルのリストとして送信されます\n\n**例**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.display_name": {
+          "source": "Merge PDF Files",
+          "message": "PDFファイルを結合"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.short_desc": {
+          "source": "Merge several PDF files into one PDF",
+          "message": "複数のPDFファイルを1つのPDFに結合"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.desc": {
+          "source": "Merges several PDF files into one PDF, in the order given.\n\nGive the PDF files in `files` or their URLs in `urls`; optionally add a bookmark for each merged file.",
+          "message": "複数のPDFファイルを、指定した順序で1つのPDFに結合します。\n\nPDFファイルは `files` に、またはそのURLを `urls` に指定します。必要に応じて、結合した各ファイルにしおりを追加できます。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.display_name": {
+          "source": "Files",
+          "message": "ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.short_desc": {
+          "source": "The files to convert for converters that take several files",
+          "message": "複数のファイルを受け取るコンバーター用の変換対象ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.desc": {
+          "source": "The files to convert for converters that take several input files, such as `pdf` to `merge`, `images` to `pdf` or `any` to `zip`.\n\nThey are sent as the `Files` parameter, together with any files given in `urls`.",
+          "message": "複数の入力ファイルを受け取るコンバーター（`pdf` から `merge`、`images` から `pdf`、`any` から `zip` など）で変換するファイル。\n\nこれらは、`urls` に指定されたファイルとともに `Files` パラメータとして送信されます。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "ファイルデータ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "MIME タイプ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "自動検出"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "MS Word docx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "MS Word `docx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "MS PowerPoint pptx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "MS PowerPoint `pptx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "MS Excel xlsx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "MS Excel `xlsx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.dXJscw.display_name": {
+          "source": "Source URLs",
+          "message": "ソースURL"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.dXJscw.short_desc": {
+          "source": "URLs of the files for converters that take several files",
+          "message": "複数のファイルを受け取るコンバーター用のファイルのURL"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.dXJscw.desc": {
+          "source": "The URLs of the files to convert for converters that take several input files, such as `pdf` to `merge`.\n\nThey are sent as the `Files` parameter, together with any files given in `files`.",
+          "message": "複数の入力ファイルを受け取るコンバーター（`pdf` から `merge` など）で変換するファイルのURL。\n\nこれらは、`files` に指定されたファイルとともに `Files` パラメータとして送信されます。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.display_name": {
+          "source": "Bookmarks Table of Contents",
+          "message": "しおりの目次"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.short_desc": {
+          "source": "Add a bookmark for each merged file",
+          "message": "結合した各ファイルにしおりを追加"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.desc": {
+          "source": "Adds a top-level bookmark for each merged file:\n- `disabled`: no bookmarks (the default)\n- `filename`: the file name\n- `title`: the PDF title from the metadata",
+          "message": "結合した各ファイルに最上位のしおりを追加します:\n- `disabled`: しおりを追加しません（デフォルト）\n- `filename`: ファイル名\n- `title`: メタデータのPDFタイトル"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "無効"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmZpbGVuYW1l.display_name": {
+          "source": "File Name",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOnRpdGxl.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UmVtb3ZlRHVwbGljYXRlRm9udHM.display_name": {
+          "source": "Remove Duplicate Fonts",
+          "message": "重複するフォントを削除"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UmVtb3ZlRHVwbGljYXRlRm9udHM.short_desc": {
+          "source": "Include fonts used by several files only once",
+          "message": "複数のファイルで使用されているフォントを1回だけ含める"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UmVtb3ZlRHVwbGljYXRlRm9udHM.desc": {
+          "source": "Set to `True` to include the fonts used by several of the merged files only once",
+          "message": "結合した複数のファイルで使用されているフォントを1回だけ含めるには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.c3RvcmVfZmlsZQ.display_name": {
+          "source": "Store File",
+          "message": "ファイルを保存"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.c3RvcmVfZmlsZQ.short_desc": {
+          "source": "Return a download URL instead of the file data",
+          "message": "ファイルデータの代わりにダウンロードURLを返す"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.c3RvcmVfZmlsZQ.desc": {
+          "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
+          "message": "ConvertAPIに出力ファイルを保存させ、それぞれのダウンロード `Url` を返すには `True` に設定します。ファイルは暗号化された一時ストレージに最大 **3時間** 保管されます。\n\n`False`（デフォルト）の場合、出力ファイルは `FileData` としてレスポンスに含まれて返され、何も保存されません。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZV9uYW1l.display_name": {
+          "source": "Output File Name",
+          "message": "出力ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "The name of the output file without the extension",
+          "message": "拡張子を除いた出力ファイルの名前"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZV9uYW1l.desc": {
+          "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+          "message": "出力ファイルの名前。ConvertAPIは変換先の形式の拡張子を付加し、変換で複数のファイルが作成される場合はインデックスも付加します。\n\n**例**: `report` を指定すると `report.pdf`、または `report_0.jpg`、`report_1.jpg`、... になります"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.dGltZW91dA.short_desc": {
+          "source": "The conversion timeout in seconds",
+          "message": "変換のタイムアウト（秒）"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+          "message": "変換のタイムアウト（秒）。`10` から `1200` の範囲で指定します。デフォルトは `900` です。"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "コンバーターのパラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "ConvertAPIでの名前で指定するその他のコンバーターパラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "コンバーターのその他のパラメータ。ConvertAPIのパラメータ名から値へのハッシュで指定します。\n\n各コンバーターのパラメータは[ConvertAPIドキュメント](https://docs.convertapi.com)に記載されており、`get-converter-info` アクションでも取得できます。\n\n- スカラー値はそのまま送信されます\n- ファイルハッシュ（`name` と `content`）はファイルとして送信されます\n- ファイルハッシュのリストはファイルのリストとして送信されます\n\n**例**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.display_name": {
+          "source": "Compress PDF",
+          "message": "PDFを圧縮"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.short_desc": {
+          "source": "Compress a PDF to reduce its size",
+          "message": "PDFを圧縮してサイズを縮小"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.desc": {
+          "source": "Compresses a PDF to reduce its size, for example for e-mail or web publishing.\n\nChoose a `Preset` from lossless compression to low-resolution images for the smallest files.",
+          "message": "PDFを圧縮してサイズを縮小します。たとえばメール送信やWeb公開に使用できます。\n\nロスレス圧縮から、最小のファイルサイズになる低解像度画像まで、`Preset` を選択します。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.short_desc": {
+          "source": "The file to convert",
+          "message": "変換するファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.desc": {
+          "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
+          "message": "変換するファイル。これまたは変換元のURLのいずれかを指定してください。\n\nファイルはリクエストでConvertAPIに送信されます。ファイル名の拡張子は、コンバーターの変換元の形式と一致している必要があります。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "ファイルデータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64でエンコードされたファイルデータまたは、Base64エンコードでエンコードされるべき生データ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "MIME タイプ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "ファイルのMIMEタイプ文字列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "自動検出"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "ファイル名から自動検出；入力時のみ有効"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF ファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "MS Word docx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "MS Word `docx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "MS PowerPoint pptx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "MS PowerPoint `pptx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "MS Excel xlsx ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "MS Excel `xlsx` ドキュメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.display_name": {
+          "source": "Preset",
+          "message": "プリセット"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.short_desc": {
+          "source": "The compression preset",
+          "message": "圧縮プリセット"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.desc": {
+          "source": "The compression preset; when a preset other than `none` is given, the other compression parameters are ignored",
+          "message": "圧縮プリセット。`none`以外のプリセットを指定すると、その他の圧縮パラメータは無視されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "Not Set (Advanced Parameters)",
+          "message": "未設定（詳細パラメータ）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOmxvc3NsZXNz.display_name": {
+          "source": "Lossless",
+          "message": "ロスレス"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Text (20 DPI Images)",
+          "message": "テキスト（画像20 DPI）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOmFyY2hpdmU.display_name": {
+          "source": "Archive (40 DPI Images)",
+          "message": "アーカイブ（画像40 DPI）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web (96 DPI Images)",
+          "message": "Web（画像96 DPI）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOmVib29r.display_name": {
+          "source": "Ebook (150 DPI Images)",
+          "message": "電子書籍（画像150 DPI）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOnByaW50ZXI.display_name": {
+          "source": "Printer (300 DPI Images)",
+          "message": "プリンター（画像300 DPI）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "ソース URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "変換するファイルのURL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "変換するファイルのURL。ConvertAPIはこのURLからファイルをダウンロードします。\n\n**例**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UGFzc3dvcmQ.display_name": {
+          "source": "Open Password",
+          "message": "開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UGFzc3dvcmQ.short_desc": {
+          "source": "The password to open a protected PDF",
+          "message": "保護されたPDFを開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UGFzc3dvcmQ.desc": {
+          "source": "The password to open a protected PDF",
+          "message": "保護されたPDFを開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.c3RvcmVfZmlsZQ.display_name": {
+          "source": "Store File",
+          "message": "ファイルを保存"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.c3RvcmVfZmlsZQ.short_desc": {
+          "source": "Return a download URL instead of the file data",
+          "message": "ファイルデータの代わりにダウンロードURLを返す"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.c3RvcmVfZmlsZQ.desc": {
+          "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
+          "message": "ConvertAPIに出力ファイルを保存させ、それぞれのダウンロード `Url` を返すには `True` に設定します。ファイルは暗号化された一時ストレージに最大 **3時間** 保管されます。\n\n`False`（デフォルト）の場合、出力ファイルは `FileData` としてレスポンスに含まれて返され、何も保存されません。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZV9uYW1l.display_name": {
+          "source": "Output File Name",
+          "message": "出力ファイル名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "The name of the output file without the extension",
+          "message": "拡張子を除いた出力ファイルの名前"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZV9uYW1l.desc": {
+          "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+          "message": "出力ファイルの名前。ConvertAPIは変換先の形式の拡張子を付加し、変換で複数のファイルが作成される場合はインデックスも付加します。\n\n**例**: `report` を指定すると `report.pdf`、または `report_0.jpg`、`report_1.jpg`、... になります"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dGltZW91dA.short_desc": {
+          "source": "The conversion timeout in seconds",
+          "message": "変換のタイムアウト（秒）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+          "message": "変換のタイムアウト（秒）。`10` から `1200` の範囲で指定します。デフォルトは `900` です。"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "コンバーターのパラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "ConvertAPIでの名前で指定するその他のコンバーターパラメータ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "コンバーターのその他のパラメータ。ConvertAPIのパラメータ名から値へのハッシュで指定します。\n\n各コンバーターのパラメータは[ConvertAPIドキュメント](https://docs.convertapi.com)に記載されており、`get-converter-info` アクションでも取得できます。\n\n- スカラー値はそのまま送信されます\n- ファイルハッシュ（`name` と `content`）はファイルとして送信されます\n- ファイルハッシュのリストはファイルのリストとして送信されます\n\n**例**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        }
+      }
+    }
+  }
+}

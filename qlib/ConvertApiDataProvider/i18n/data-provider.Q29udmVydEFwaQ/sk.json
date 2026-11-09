@@ -1,0 +1,2789 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.Q29udmVydEFwaQ.display_name": {
+          "source": "ConvertAPI",
+          "message": "ConvertAPI"
+        },
+        "app.Q29udmVydEFwaQ.short_desc": {
+          "source": "ConvertAPI file conversion and PDF processing platform",
+          "message": "Platforma ConvertAPI na konverziu súborov a spracovanie PDF"
+        },
+        "app.Q29udmVydEFwaQ.desc": {
+          "source": "[ConvertAPI](https://www.convertapi.com) converts files between more than 300 format pairs and processes PDF files.\n\n- Office documents, spreadsheets and presentations to and from PDF\n- Web pages and HTML to PDF\n- PDF to images, office formats, text and PDF/A\n- Images, e-books, CAD drawings, e-mail messages and archives\n- PDF tools: merge, split, compress, protect, OCR, watermark and more\n\nThe `convert` action runs any converter by its source and destination formats; the other actions are shortcuts for common conversions.",
+          "message": "[ConvertAPI](https://www.convertapi.com) konvertuje súbory medzi viac ako 300 dvojicami formátov a spracúva súbory PDF.\n\n- Dokumenty, tabuľky a prezentácie Office do formátu PDF a z neho\n- Webové stránky a HTML do PDF\n- PDF do obrázkov, formátov Office, textu a PDF/A\n- Obrázky, e-knihy, výkresy CAD, e-mailové správy a archívy\n- Nástroje PDF: zlúčenie, rozdelenie, kompresia, ochrana, OCR, vodoznak a ďalšie\n\nAkcia `convert` spustí ľubovoľný konvertor podľa jeho zdrojového a cieľového formátu; ostatné akcie sú skratky pre bežné konverzie."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to ConvertAPI",
+          "message": "Vykonať vlastné volanie API do ConvertAPI"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **ConvertAPI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonajte vlastné volanie HTTP / REST API do **ConvertAPI** s použitím autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej URL adrese API pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Cesta URI relatívna k základnej adrese API URL pripojenia"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.Q29udmVydEFwaQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.display_name": {
+          "source": "Convert a File",
+          "message": "Konvertovať súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.short_desc": {
+          "source": "Convert files with any ConvertAPI converter",
+          "message": "Konvertovať súbory ľubovoľným konvertorom ConvertAPI"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.desc": {
+          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\nSelect the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n- Give the input as a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`\n- Give other converter parameters by their ConvertAPI names in `parameters`; the `get-converter-info` action lists them\n- The output files are returned as `FileData`, or as download URLs if `store_file` is `True`",
+          "message": "Konvertuje súbory ľubovoľným konvertorom ConvertAPI určeným jeho zdrojovým a cieľovým formátom.\n\nNajprv vyberte formát `from`; zoznam `to` potom zobrazí cieľové formáty konvertorov pre daný zdrojový formát.\n\n- Vstup zadajte ako `file` alebo zdrojovú `url`; konvertory, ktoré prijímajú viac súborov (napríklad `pdf` na `merge`), prijímajú `files` alebo `urls`\n- Ďalšie parametre konvertora zadajte pod ich názvami v ConvertAPI v `parameters`; akcia `get-converter-info` ich vypíše\n- Výstupné súbory sa vrátia ako `FileData` alebo ako adresy URL na stiahnutie, ak je `store_file` nastavené na `True`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.display_name": {
+          "source": "Source Format",
+          "message": "Zdrojový formát"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.short_desc": {
+          "source": "The source format of the converter",
+          "message": "Zdrojový formát konvertora"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZnJvbQ.desc": {
+          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`",
+          "message": "Zdrojový formát konvertora, napríklad `docx`, `html`, `pdf`, `jpg` alebo `eml`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.display_name": {
+          "source": "Destination Format",
+          "message": "Cieľový formát"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.short_desc": {
+          "source": "The destination format of the converter",
+          "message": "Cieľový formát konvertora"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dG8.desc": {
+          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`; PDF tools name the operation, for example `merge`, `split` or `compress`",
+          "message": "Cieľový formát konvertora, napríklad `pdf`, `jpg` alebo `txt`; nástroje PDF určujú operáciu, napríklad `merge`, `split` alebo `compress`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.short_desc": {
+          "source": "The file to convert",
+          "message": "Súbor na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.desc": {
+          "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
+          "message": "Súbor na konverziu; zadajte buď tento súbor, alebo zdrojovú adresu URL.\n\nSúbor sa odošle do ConvertAPI v požiadavke; prípona názvu súboru musí zodpovedať zdrojovému formátu konvertora."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "Dáta súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "Typ MIME"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "Automatické detekovanie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "Dokument MS Word docx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "Dokument MS Word `docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "Dokument MS PowerPoint pptx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "Dokument MS PowerPoint `pptx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "Dokument MS Excel xlsx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "Dokument MS Excel `xlsx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZQ.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "Parametre konvertora"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "Ďalšie parametre konvertora podľa ich názvov v ConvertAPI"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "Ďalšie parametre konvertora ako hash názvov parametrov ConvertAPI a ich hodnôt.\n\nParametre každého konvertora sú uvedené v [dokumentácii ConvertAPI](https://docs.convertapi.com) a vracia ich akcia `get-converter-info`.\n\n- Skalárne hodnoty sa odosielajú tak, ako sú\n- Hash súboru (`name` a `content`) sa odošle ako súbor\n- Zoznam hashov súborov sa odošle ako zoznam súborov\n\n**Príklad**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "Zdrojová URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "Adresa URL súboru na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "Adresa URL súboru na konverziu; ConvertAPI stiahne súbor z tejto adresy URL.\n\n**Príklad**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.display_name": {
+          "source": "Files",
+          "message": "Súbory"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.short_desc": {
+          "source": "The files to convert for converters that take several files",
+          "message": "Súbory na konverziu pre konvertory, ktoré prijímajú viac súborov"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.desc": {
+          "source": "The files to convert for converters that take several input files, such as `pdf` to `merge`, `images` to `pdf` or `any` to `zip`.\n\nThey are sent as the `Files` parameter, together with any files given in `urls`.",
+          "message": "Súbory na konverziu pre konvertory, ktoré prijímajú viac vstupných súborov, napríklad `pdf` na `merge`, `images` na `pdf` alebo `any` na `zip`.\n\nOdosielajú sa ako parameter `Files` spolu so súbormi zadanými v `urls`."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "Dáta súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "Typ MIME"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "Automatické detekovanie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "Dokument MS Word docx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "Dokument MS Word `docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "Dokument MS PowerPoint pptx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "Dokument MS PowerPoint `pptx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "Dokument MS Excel xlsx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "Dokument MS Excel `xlsx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZXM.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.display_name": {
+          "source": "Source URLs",
+          "message": "Zdrojové URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.short_desc": {
+          "source": "URLs of the files for converters that take several files",
+          "message": "Adresy URL súborov pre konvertory, ktoré prijímajú viac súborov"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dXJscw.desc": {
+          "source": "The URLs of the files to convert for converters that take several input files, such as `pdf` to `merge`.\n\nThey are sent as the `Files` parameter, together with any files given in `files`.",
+          "message": "Adresy URL súborov na konverziu pre konvertory, ktoré prijímajú viac vstupných súborov, napríklad `pdf` na `merge`.\n\nOdosielajú sa ako parameter `Files` spolu so súbormi zadanými v `files`."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.display_name": {
+          "source": "Store File",
+          "message": "Uložiť súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.short_desc": {
+          "source": "Return a download URL instead of the file data",
+          "message": "Vrátiť adresu URL na stiahnutie namiesto údajov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.c3RvcmVfZmlsZQ.desc": {
+          "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
+          "message": "Nastavte na `True`, ak má ConvertAPI uložiť výstupné súbory a vrátiť pre každý z nich adresu `Url` na stiahnutie; súbory sa uchovávajú v šifrovanom dočasnom úložisku až **3 hodiny**.\n\nAk je `False` (predvolené), výstupné súbory sa vrátia v odpovedi ako `FileData` a nič sa neukladá."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.display_name": {
+          "source": "Output File Name",
+          "message": "Názov výstupného súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "The name of the output file without the extension",
+          "message": "Názov výstupného súboru bez prípony"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.ZmlsZV9uYW1l.desc": {
+          "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+          "message": "Názov výstupného súboru alebo súborov; ConvertAPI pripojí príponu cieľového formátu a index, ak konverzia vytvorí viac súborov.\n\n**Príklad**: `report` vytvorí `report.pdf` alebo `report_0.jpg`, `report_1.jpg`, ..."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Časový limit"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.short_desc": {
+          "source": "The conversion timeout in seconds",
+          "message": "Časový limit konverzie v sekundách"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydA.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+          "message": "Časový limit konverzie v sekundách, od `10` do `1200`; predvolená hodnota je `900`."
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.display_name": {
+          "source": "Get Converter Information",
+          "message": "Získať informácie o konvertore"
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.short_desc": {
+          "source": "Get the description and parameters of a converter",
+          "message": "Získať popis a parametre konvertora"
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.desc": {
+          "source": "Returns the description and the parameters of a ConvertAPI converter, given by its source and destination formats.\n\nUse it to find the parameter names and allowed values for the `parameters` field of the `convert` action.",
+          "message": "Vráti popis a parametre konvertora ConvertAPI určeného jeho zdrojovým a cieľovým formátom.\n\nPoužite ju na zistenie názvov parametrov a povolených hodnôt pre pole `parameters` akcie `convert`."
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.ZnJvbQ.display_name": {
+          "source": "Source Format",
+          "message": "Zdrojový formát"
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.ZnJvbQ.short_desc": {
+          "source": "The source format of the converter",
+          "message": "Zdrojový formát konvertora"
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.ZnJvbQ.desc": {
+          "source": "The source format of the converter, for example `docx`, `html`, `pdf`, `jpg` or `eml`",
+          "message": "Zdrojový formát konvertora, napríklad `docx`, `html`, `pdf`, `jpg` alebo `eml`"
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.dG8.display_name": {
+          "source": "Destination Format",
+          "message": "Cieľový formát"
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.dG8.short_desc": {
+          "source": "The destination format of the converter",
+          "message": "Cieľový formát konvertora"
+        },
+        "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.option.dG8.desc": {
+          "source": "The destination format of the converter, for example `pdf`, `jpg` or `txt`; PDF tools name the operation, for example `merge`, `split` or `compress`",
+          "message": "Cieľový formát konvertora, napríklad `pdf`, `jpg` alebo `txt`; nástroje PDF určujú operáciu, napríklad `merge`, `split` alebo `compress`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.display_name": {
+          "source": "Convert Word to PDF",
+          "message": "Konvertovať Word do PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.short_desc": {
+          "source": "Convert a Word document (DOC or DOCX) to PDF",
+          "message": "Konvertovať dokument Word (DOC alebo DOCX) do formátu PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.desc": {
+          "source": "Converts a Word document (`doc` or `docx`) to PDF with the layout of the original document.\n\nSupports page ranges, protected documents, bookmarks from headings and PDF/A output.",
+          "message": "Konvertuje dokument Word (`doc` alebo `docx`) do formátu PDF so zachovaním rozloženia pôvodného dokumentu.\n\nPodporuje rozsahy strán, chránené dokumenty, záložky z nadpisov a výstup PDF/A."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.short_desc": {
+          "source": "The file to convert",
+          "message": "Súbor na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.desc": {
+          "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
+          "message": "Súbor na konverziu; zadajte buď tento súbor, alebo zdrojovú adresu URL.\n\nSúbor sa odošle do ConvertAPI v požiadavke; prípona názvu súboru musí zodpovedať zdrojovému formátu konvertora."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "Dáta súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "Typ MIME"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "Automatické detekovanie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "Dokument MS Word docx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "Dokument MS Word `docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "Dokument MS PowerPoint pptx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "Dokument MS PowerPoint `pptx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "Dokument MS Excel xlsx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "Dokument MS Excel `xlsx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "Zdrojová URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "Adresa URL súboru na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "Adresa URL súboru na konverziu; ConvertAPI stiahne súbor z tejto adresy URL.\n\n**Príklad**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGFnZVJhbmdl.display_name": {
+          "source": "Page Range",
+          "message": "Rozsah strán"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGFnZVJhbmdl.short_desc": {
+          "source": "The pages to convert",
+          "message": "Stránky na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGFnZVJhbmdl.desc": {
+          "source": "The pages to convert, as a range or a comma-separated list.\n\n**Example**: `1-10` or `1,2,5`; all pages are converted by default",
+          "message": "Stránky na konverziu, ako rozsah alebo zoznam oddelený čiarkami.\n\n**Príklad**: `1-10` alebo `1,2,5`; predvolene sa konvertujú všetky stránky"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGFzc3dvcmQ.display_name": {
+          "source": "Open Password",
+          "message": "Heslo na otvorenie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGFzc3dvcmQ.short_desc": {
+          "source": "The password to open a protected document",
+          "message": "Heslo na otvorenie chráneného dokumentu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGFzc3dvcmQ.desc": {
+          "source": "The password to open a protected document",
+          "message": "Heslo na otvorenie chráneného dokumentu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.display_name": {
+          "source": "Bookmark Mode",
+          "message": "Režim záložiek"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.short_desc": {
+          "source": "How bookmarks are created in the PDF",
+          "message": "Spôsob vytvárania záložiek v PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.desc": {
+          "source": "How bookmarks are created in the PDF:\n- `none`: no bookmarks\n- `headings`: bookmarks from the document headings (the default)\n- `bookmarks`: the bookmarks of the document",
+          "message": "Spôsob vytvárania záložiek v PDF:\n- `none`: bez záložiek\n- `headings`: záložky z nadpisov dokumentu (predvolené)\n- `bookmarks`: záložky dokumentu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Žiadne"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmhlYWRpbmdz.display_name": {
+          "source": "Headings",
+          "message": "Nadpisy"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.allowed-value.c3RyaW5nOmJvb2ttYXJrcw.display_name": {
+          "source": "Bookmarks",
+          "message": "Záložky"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.VXBkYXRlVGFibGVPZkNvbnRlbnRz.display_name": {
+          "source": "Update Table of Contents",
+          "message": "Aktualizovať obsah"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.VXBkYXRlVGFibGVPZkNvbnRlbnRz.short_desc": {
+          "source": "Update the tables of contents before converting",
+          "message": "Pred konverziou aktualizovať obsahy"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.VXBkYXRlVGFibGVPZkNvbnRlbnRz.desc": {
+          "source": "Set to `True` to update all tables of contents in the document before the conversion",
+          "message": "Nastavte na `True`, ak sa majú pred konverziou aktualizovať všetky obsahy v dokumente"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGRmYQ.display_name": {
+          "source": "Create PDF/A",
+          "message": "Vytvoriť PDF/A"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGRmYQ.short_desc": {
+          "source": "Create a PDF/A-3a compliant document",
+          "message": "Vytvoriť dokument vyhovujúci PDF/A-3a"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGRmYQ.desc": {
+          "source": "Set to `True` to create a PDF/A-3a compliant document for long-term archiving",
+          "message": "Nastavte na `True`, ak sa má vytvoriť dokument vyhovujúci PDF/A-3a na dlhodobú archiváciu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.c3RvcmVfZmlsZQ.display_name": {
+          "source": "Store File",
+          "message": "Uložiť súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.c3RvcmVfZmlsZQ.short_desc": {
+          "source": "Return a download URL instead of the file data",
+          "message": "Vrátiť adresu URL na stiahnutie namiesto údajov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.c3RvcmVfZmlsZQ.desc": {
+          "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
+          "message": "Nastavte na `True`, ak má ConvertAPI uložiť výstupné súbory a vrátiť pre každý z nich adresu `Url` na stiahnutie; súbory sa uchovávajú v šifrovanom dočasnom úložisku až **3 hodiny**.\n\nAk je `False` (predvolené), výstupné súbory sa vrátia v odpovedi ako `FileData` a nič sa neukladá."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZV9uYW1l.display_name": {
+          "source": "Output File Name",
+          "message": "Názov výstupného súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "The name of the output file without the extension",
+          "message": "Názov výstupného súboru bez prípony"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.ZmlsZV9uYW1l.desc": {
+          "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+          "message": "Názov výstupného súboru alebo súborov; ConvertAPI pripojí príponu cieľového formátu a index, ak konverzia vytvorí viac súborov.\n\n**Príklad**: `report` vytvorí `report.pdf` alebo `report_0.jpg`, `report_1.jpg`, ..."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Časový limit"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.dGltZW91dA.short_desc": {
+          "source": "The conversion timeout in seconds",
+          "message": "Časový limit konverzie v sekundách"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+          "message": "Časový limit konverzie v sekundách, od `10` do `1200`; predvolená hodnota je `900`."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "Parametre konvertora"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "Ďalšie parametre konvertora podľa ich názvov v ConvertAPI"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "Ďalšie parametre konvertora ako hash názvov parametrov ConvertAPI a ich hodnôt.\n\nParametre každého konvertora sú uvedené v [dokumentácii ConvertAPI](https://docs.convertapi.com) a vracia ich akcia `get-converter-info`.\n\n- Skalárne hodnoty sa odosielajú tak, ako sú\n- Hash súboru (`name` a `content`) sa odošle ako súbor\n- Zoznam hashov súborov sa odošle ako zoznam súborov\n\n**Príklad**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.display_name": {
+          "source": "Convert Excel to PDF",
+          "message": "Konvertovať Excel do PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.short_desc": {
+          "source": "Convert an Excel workbook (XLS or XLSX) to PDF",
+          "message": "Konvertovať zošit Excel (XLS alebo XLSX) do formátu PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.desc": {
+          "source": "Converts an Excel workbook (`xls` or `xlsx`) to PDF.\n\nConvert all worksheets, the active worksheet or a worksheet by name; fit sheets to the page width and create PDF/A output.",
+          "message": "Konvertuje zošit Excel (`xls` alebo `xlsx`) do formátu PDF.\n\nKonvertujte všetky pracovné listy, aktívny pracovný list alebo pracovný list podľa názvu; prispôsobte listy šírke stránky a vytvorte výstup PDF/A."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.short_desc": {
+          "source": "The file to convert",
+          "message": "Súbor na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.desc": {
+          "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
+          "message": "Súbor na konverziu; zadajte buď tento súbor, alebo zdrojovú adresu URL.\n\nSúbor sa odošle do ConvertAPI v požiadavke; prípona názvu súboru musí zodpovedať zdrojovému formátu konvertora."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "Dáta súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "Typ MIME"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "Automatické detekovanie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "Dokument MS Word docx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "Dokument MS Word `docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "Dokument MS PowerPoint pptx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "Dokument MS PowerPoint `pptx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "Dokument MS Excel xlsx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "Dokument MS Excel `xlsx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZQ.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "Zdrojová URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "Adresa URL súboru na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "Adresa URL súboru na konverziu; ConvertAPI stiahne súbor z tejto adresy URL.\n\n**Príklad**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFzc3dvcmQ.display_name": {
+          "source": "Open Password",
+          "message": "Heslo na otvorenie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFzc3dvcmQ.short_desc": {
+          "source": "The password to open a protected workbook",
+          "message": "Heslo na otvorenie chráneného zošita"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFzc3dvcmQ.desc": {
+          "source": "The password to open a protected workbook",
+          "message": "Heslo na otvorenie chráneného zošita"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0TmFtZQ.display_name": {
+          "source": "Worksheet Name",
+          "message": "Názov pracovného listu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0TmFtZQ.short_desc": {
+          "source": "The name of the worksheet to convert",
+          "message": "Názov pracovného listu, ktorý sa má konvertovať"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0TmFtZQ.desc": {
+          "source": "The name of the worksheet to convert; all worksheets are converted by default",
+          "message": "Názov pracovného listu, ktorý sa má konvertovať; predvolene sa konvertujú všetky pracovné listy"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.display_name": {
+          "source": "Active Worksheet Only",
+          "message": "Iba aktívny pracovný list"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.short_desc": {
+          "source": "Convert only the active worksheet",
+          "message": "Konvertovať iba aktívny pracovný list"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.desc": {
+          "source": "Set to `True` to convert only the active worksheet",
+          "message": "Nastavte na `True`, ak sa má konvertovať iba aktívny pracovný list"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.display_name": {
+          "source": "Page Orientation",
+          "message": "Orientácia stránky"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.short_desc": {
+          "source": "The page orientation",
+          "message": "Orientácia stránky"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.desc": {
+          "source": "The page orientation; `default` uses the page setup of each worksheet",
+          "message": "Orientácia stránky; `default` použije nastavenie stránky každého pracovného listu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "Predvolené"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
+          "source": "Portrait",
+          "message": "Na výšku"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmxhbmRzY2FwZQ.display_name": {
+          "source": "Landscape",
+          "message": "Na šírku"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Rml0VG9QYWdl.display_name": {
+          "source": "Fit to Page",
+          "message": "Prispôsobiť stránke"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Rml0VG9QYWdl.short_desc": {
+          "source": "Scale each sheet to the page width",
+          "message": "Prispôsobiť mierku každého listu šírke stránky"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Rml0VG9QYWdl.desc": {
+          "source": "Set to `True` to enlarge the page size, switch to landscape when needed, trim the margins and scale each sheet to one page width",
+          "message": "Nastavte na `True`, ak sa má zväčšiť veľkosť stránky, v prípade potreby prepnúť na orientáciu na šírku, zmenšiť okraje a prispôsobiť mierku každého listu šírke jednej stránky"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QXV0b0ZpdENvbHVtbnM.display_name": {
+          "source": "Auto Fit Columns",
+          "message": "Automatické prispôsobenie stĺpcov"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QXV0b0ZpdENvbHVtbnM.short_desc": {
+          "source": "Fit the column widths to their content",
+          "message": "Prispôsobiť šírku stĺpcov ich obsahu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QXV0b0ZpdENvbHVtbnM.desc": {
+          "source": "Set to `True` to fit the column widths to their content, which removes unnecessary empty space",
+          "message": "Nastavte na `True`, ak sa má šírka stĺpcov prispôsobiť ich obsahu, čím sa odstráni zbytočné prázdne miesto"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGRmYQ.display_name": {
+          "source": "Create PDF/A",
+          "message": "Vytvoriť PDF/A"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGRmYQ.short_desc": {
+          "source": "Create a PDF/A-1b compliant document",
+          "message": "Vytvoriť dokument vyhovujúci PDF/A-1b"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGRmYQ.desc": {
+          "source": "Set to `True` to create a PDF/A-1b compliant document for long-term archiving",
+          "message": "Nastavte na `True`, ak sa má vytvoriť dokument vyhovujúci PDF/A-1b na dlhodobú archiváciu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.c3RvcmVfZmlsZQ.display_name": {
+          "source": "Store File",
+          "message": "Uložiť súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.c3RvcmVfZmlsZQ.short_desc": {
+          "source": "Return a download URL instead of the file data",
+          "message": "Vrátiť adresu URL na stiahnutie namiesto údajov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.c3RvcmVfZmlsZQ.desc": {
+          "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
+          "message": "Nastavte na `True`, ak má ConvertAPI uložiť výstupné súbory a vrátiť pre každý z nich adresu `Url` na stiahnutie; súbory sa uchovávajú v šifrovanom dočasnom úložisku až **3 hodiny**.\n\nAk je `False` (predvolené), výstupné súbory sa vrátia v odpovedi ako `FileData` a nič sa neukladá."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZV9uYW1l.display_name": {
+          "source": "Output File Name",
+          "message": "Názov výstupného súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "The name of the output file without the extension",
+          "message": "Názov výstupného súboru bez prípony"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.ZmlsZV9uYW1l.desc": {
+          "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+          "message": "Názov výstupného súboru alebo súborov; ConvertAPI pripojí príponu cieľového formátu a index, ak konverzia vytvorí viac súborov.\n\n**Príklad**: `report` vytvorí `report.pdf` alebo `report_0.jpg`, `report_1.jpg`, ..."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Časový limit"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.dGltZW91dA.short_desc": {
+          "source": "The conversion timeout in seconds",
+          "message": "Časový limit konverzie v sekundách"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+          "message": "Časový limit konverzie v sekundách, od `10` do `1200`; predvolená hodnota je `900`."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "Parametre konvertora"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "Ďalšie parametre konvertora podľa ich názvov v ConvertAPI"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "Ďalšie parametre konvertora ako hash názvov parametrov ConvertAPI a ich hodnôt.\n\nParametre každého konvertora sú uvedené v [dokumentácii ConvertAPI](https://docs.convertapi.com) a vracia ich akcia `get-converter-info`.\n\n- Skalárne hodnoty sa odosielajú tak, ako sú\n- Hash súboru (`name` a `content`) sa odošle ako súbor\n- Zoznam hashov súborov sa odošle ako zoznam súborov\n\n**Príklad**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.display_name": {
+          "source": "Convert PowerPoint to PDF",
+          "message": "Konvertovať PowerPoint do PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.short_desc": {
+          "source": "Convert a PowerPoint presentation (PPT or PPTX) to PDF",
+          "message": "Konvertovať prezentáciu PowerPoint (PPT alebo PPTX) do formátu PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.desc": {
+          "source": "Converts a PowerPoint presentation (`ppt` or `pptx`) to PDF.\n\nSupports slide ranges, hidden slides, speaker notes and PDF/A output.",
+          "message": "Konvertuje prezentáciu PowerPoint (`ppt` alebo `pptx`) do formátu PDF.\n\nPodporuje rozsahy snímok, skryté snímky, poznámky prednášajúceho a výstup PDF/A."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.short_desc": {
+          "source": "The file to convert",
+          "message": "Súbor na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.desc": {
+          "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
+          "message": "Súbor na konverziu; zadajte buď tento súbor, alebo zdrojovú adresu URL.\n\nSúbor sa odošle do ConvertAPI v požiadavke; prípona názvu súboru musí zodpovedať zdrojovému formátu konvertora."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "Dáta súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "Typ MIME"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "Automatické detekovanie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "Dokument MS Word docx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "Dokument MS Word `docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "Dokument MS PowerPoint pptx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "Dokument MS PowerPoint `pptx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "Dokument MS Excel xlsx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "Dokument MS Excel `xlsx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "Zdrojová URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "Adresa URL súboru na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "Adresa URL súboru na konverziu; ConvertAPI stiahne súbor z tejto adresy URL.\n\n**Príklad**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGFnZVJhbmdl.display_name": {
+          "source": "Page Range",
+          "message": "Rozsah strán"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGFnZVJhbmdl.short_desc": {
+          "source": "The pages to convert",
+          "message": "Stránky na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGFnZVJhbmdl.desc": {
+          "source": "The pages to convert, as a range or a comma-separated list.\n\n**Example**: `1-10` or `1,2,5`; all pages are converted by default",
+          "message": "Stránky na konverziu, ako rozsah alebo zoznam oddelený čiarkami.\n\n**Príklad**: `1-10` alebo `1,2,5`; predvolene sa konvertujú všetky stránky"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGFzc3dvcmQ.display_name": {
+          "source": "Open Password",
+          "message": "Heslo na otvorenie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGFzc3dvcmQ.short_desc": {
+          "source": "The password to open a protected presentation",
+          "message": "Heslo na otvorenie chránenej prezentácie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGFzc3dvcmQ.desc": {
+          "source": "The password to open a protected presentation",
+          "message": "Heslo na otvorenie chránenej prezentácie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydEhpZGRlblNsaWRlcw.display_name": {
+          "source": "Convert Hidden Slides",
+          "message": "Konvertovať skryté snímky"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydEhpZGRlblNsaWRlcw.short_desc": {
+          "source": "Include the hidden slides",
+          "message": "Zahrnúť skryté snímky"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydEhpZGRlblNsaWRlcw.desc": {
+          "source": "Set to `True` to include the hidden slides in the PDF",
+          "message": "Nastavte na `True`, ak sa majú skryté snímky zahrnúť do PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.display_name": {
+          "source": "Convert Speaker Notes",
+          "message": "Konvertovať poznámky prednášajúceho"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.short_desc": {
+          "source": "How speaker notes are converted",
+          "message": "Spôsob konverzie poznámok prednášajúceho"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.desc": {
+          "source": "How speaker notes are converted:\n- `Disabled`: speaker notes are not converted (the default)\n- `SeparatePage`: each slide's notes on a separate page\n- `PageComments`: the notes as page comments",
+          "message": "Spôsob konverzie poznámok prednášajúceho:\n- `Disabled`: poznámky prednášajúceho sa nekonvertujú (predvolené)\n- `SeparatePage`: poznámky každého snímku na samostatnej stránke\n- `PageComments`: poznámky ako komentáre na stránke"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOkRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "Zakázané"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlNlcGFyYXRlUGFnZQ.display_name": {
+          "source": "Convert to Separate Page",
+          "message": "Konvertovať na samostatnú stránku"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlBhZ2VDb21tZW50cw.display_name": {
+          "source": "Convert to Page Comments",
+          "message": "Konvertovať na komentáre na stránke"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGRmYQ.display_name": {
+          "source": "Create PDF/A",
+          "message": "Vytvoriť PDF/A"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGRmYQ.short_desc": {
+          "source": "Create a PDF/A-3a compliant document",
+          "message": "Vytvoriť dokument vyhovujúci PDF/A-3a"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGRmYQ.desc": {
+          "source": "Set to `True` to create a PDF/A-3a compliant document for long-term archiving",
+          "message": "Nastavte na `True`, ak sa má vytvoriť dokument vyhovujúci PDF/A-3a na dlhodobú archiváciu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.c3RvcmVfZmlsZQ.display_name": {
+          "source": "Store File",
+          "message": "Uložiť súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.c3RvcmVfZmlsZQ.short_desc": {
+          "source": "Return a download URL instead of the file data",
+          "message": "Vrátiť adresu URL na stiahnutie namiesto údajov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.c3RvcmVfZmlsZQ.desc": {
+          "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
+          "message": "Nastavte na `True`, ak má ConvertAPI uložiť výstupné súbory a vrátiť pre každý z nich adresu `Url` na stiahnutie; súbory sa uchovávajú v šifrovanom dočasnom úložisku až **3 hodiny**.\n\nAk je `False` (predvolené), výstupné súbory sa vrátia v odpovedi ako `FileData` a nič sa neukladá."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZV9uYW1l.display_name": {
+          "source": "Output File Name",
+          "message": "Názov výstupného súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "The name of the output file without the extension",
+          "message": "Názov výstupného súboru bez prípony"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.ZmlsZV9uYW1l.desc": {
+          "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+          "message": "Názov výstupného súboru alebo súborov; ConvertAPI pripojí príponu cieľového formátu a index, ak konverzia vytvorí viac súborov.\n\n**Príklad**: `report` vytvorí `report.pdf` alebo `report_0.jpg`, `report_1.jpg`, ..."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Časový limit"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.dGltZW91dA.short_desc": {
+          "source": "The conversion timeout in seconds",
+          "message": "Časový limit konverzie v sekundách"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+          "message": "Časový limit konverzie v sekundách, od `10` do `1200`; predvolená hodnota je `900`."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "Parametre konvertora"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "Ďalšie parametre konvertora podľa ich názvov v ConvertAPI"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "Ďalšie parametre konvertora ako hash názvov parametrov ConvertAPI a ich hodnôt.\n\nParametre každého konvertora sú uvedené v [dokumentácii ConvertAPI](https://docs.convertapi.com) a vracia ich akcia `get-converter-info`.\n\n- Skalárne hodnoty sa odosielajú tak, ako sú\n- Hash súboru (`name` a `content`) sa odošle ako súbor\n- Zoznam hashov súborov sa odošle ako zoznam súborov\n\n**Príklad**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.display_name": {
+          "source": "Convert HTML to PDF",
+          "message": "Konvertovať HTML na PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.short_desc": {
+          "source": "Convert a web page or an HTML file to PDF",
+          "message": "Konvertovať webovú stránku alebo súbor HTML do PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.desc": {
+          "source": "Converts a web page or an HTML file to PDF.\n\n- A source `url` is rendered as a web page in a browser, with its scripts, styles and images\n- A `file` is converted as an HTML document\n\nSupports page size, orientation, margins, the CSS media type and a delay for pages that load content late.",
+          "message": "Konvertuje webovú stránku alebo súbor HTML do formátu PDF.\n\n- Zdrojová `url` sa vykreslí ako webová stránka v prehliadači vrátane skriptov, štýlov a obrázkov\n- `file` sa konvertuje ako dokument HTML\n\nPodporuje veľkosť stránky, orientáciu, okraje, typ média CSS a oneskorenie pre stránky, ktoré načítavajú obsah neskôr."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "Zdrojová URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "Adresa URL súboru na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.dXJs.desc": {
+          "source": "The URL of the web page to convert; the page is rendered in a browser with its scripts, styles and images.\n\n**Example**: `https://www.example.com`",
+          "message": "Adresa URL webovej stránky, ktorá sa má konvertovať; stránka sa vykreslí v prehliadači vrátane skriptov, štýlov a obrázkov.\n\n**Príklad**: `https://www.example.com`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.short_desc": {
+          "source": "The file to convert",
+          "message": "Súbor na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.desc": {
+          "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
+          "message": "Súbor na konverziu; zadajte buď tento súbor, alebo zdrojovú adresu URL.\n\nSúbor sa odošle do ConvertAPI v požiadavke; prípona názvu súboru musí zodpovedať zdrojovému formátu konvertora."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "Dáta súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "Typ MIME"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "Automatické detekovanie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "Dokument MS Word docx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "Dokument MS Word `docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "Dokument MS PowerPoint pptx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "Dokument MS PowerPoint `pptx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "Dokument MS Excel xlsx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "Dokument MS Excel `xlsx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZQ.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.short_desc": {
+          "source": "The PDF page size",
+          "message": "Veľkosť stránky PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.desc": {
+          "source": "The PDF page size; the default is `letter`",
+          "message": "Veľkosť stránky PDF; predvolená hodnota je `letter`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEw.display_name": {
+          "source": "A0",
+          "message": "A0"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEx.display_name": {
+          "source": "A1",
+          "message": "A1"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEy.display_name": {
+          "source": "A2",
+          "message": "A2"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEz.display_name": {
+          "source": "A3",
+          "message": "A3"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0.display_name": {
+          "source": "A4",
+          "message": "A4"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE1.display_name": {
+          "source": "A5",
+          "message": "A5"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE2.display_name": {
+          "source": "A6",
+          "message": "A6"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE3.display_name": {
+          "source": "A7",
+          "message": "A7"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE4.display_name": {
+          "source": "A8",
+          "message": "A8"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE5.display_name": {
+          "source": "A9",
+          "message": "A9"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmIw.display_name": {
+          "source": "B0",
+          "message": "B0"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmIx.display_name": {
+          "source": "B1",
+          "message": "B1"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmIy.display_name": {
+          "source": "B2",
+          "message": "B2"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmIz.display_name": {
+          "source": "B3",
+          "message": "B3"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmI0.display_name": {
+          "source": "B4",
+          "message": "B4"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmI1.display_name": {
+          "source": "B5",
+          "message": "B5"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcg.display_name": {
+          "source": "Letter",
+          "message": "List"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZ2Fs.display_name": {
+          "source": "Legal",
+          "message": "Legal"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZGdlcg.display_name": {
+          "source": "Ledger",
+          "message": "Ledger"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.display_name": {
+          "source": "Page Orientation",
+          "message": "Orientácia stránky"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.short_desc": {
+          "source": "The PDF page orientation",
+          "message": "Orientácia stránky PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.desc": {
+          "source": "The PDF page orientation; the default is `portrait`",
+          "message": "Orientácia stránky PDF; predvolená hodnota je `portrait`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
+          "source": "Portrait",
+          "message": "Na výšku"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmxhbmRzY2FwZQ.display_name": {
+          "source": "Landscape",
+          "message": "Na šírku"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luVG9w.display_name": {
+          "source": "Top Margin",
+          "message": "Horný okraj"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luVG9w.short_desc": {
+          "source": "The top page margin in millimeters",
+          "message": "Horný okraj stránky v milimetroch"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luVG9w.desc": {
+          "source": "The top page margin in millimeters; the default is `10`",
+          "message": "Horný okraj stránky v milimetroch; predvolená hodnota je `10`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luUmlnaHQ.display_name": {
+          "source": "Right Margin",
+          "message": "Pravý okraj"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luUmlnaHQ.short_desc": {
+          "source": "The right page margin in millimeters",
+          "message": "Pravý okraj stránky v milimetroch"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luUmlnaHQ.desc": {
+          "source": "The right page margin in millimeters; the default is `10`",
+          "message": "Pravý okraj stránky v milimetroch; predvolená hodnota je `10`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luQm90dG9t.display_name": {
+          "source": "Bottom Margin",
+          "message": "Dolný okraj"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luQm90dG9t.short_desc": {
+          "source": "The bottom page margin in millimeters",
+          "message": "Dolný okraj stránky v milimetroch"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luQm90dG9t.desc": {
+          "source": "The bottom page margin in millimeters; the default is `10`",
+          "message": "Dolný okraj stránky v milimetroch; predvolená hodnota je `10`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luTGVmdA.display_name": {
+          "source": "Left Margin",
+          "message": "Ľavý okraj"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luTGVmdA.short_desc": {
+          "source": "The left page margin in millimeters",
+          "message": "Ľavý okraj stránky v milimetroch"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luTGVmdA.desc": {
+          "source": "The left page margin in millimeters; the default is `10`",
+          "message": "Ľavý okraj stránky v milimetroch; predvolená hodnota je `10`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QmFja2dyb3VuZA.display_name": {
+          "source": "Background",
+          "message": "Pozadie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QmFja2dyb3VuZA.short_desc": {
+          "source": "Print the page background",
+          "message": "Tlačiť pozadie stránky"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QmFja2dyb3VuZA.desc": {
+          "source": "Set to `False` to leave out the page background; the default is `True`",
+          "message": "Nastavte na `False`, ak sa má pozadie stránky vynechať; predvolená hodnota je `True`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SmF2YVNjcmlwdA.display_name": {
+          "source": "JavaScript",
+          "message": "JavaScript"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SmF2YVNjcmlwdA.short_desc": {
+          "source": "Allow the page to run JavaScript",
+          "message": "Povoliť spúšťanie JavaScriptu na stránke"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SmF2YVNjcmlwdA.desc": {
+          "source": "Set to `False` to disable JavaScript in the page; the default is `True`",
+          "message": "Nastavte na `False`, ak sa má JavaScript na stránke zakázať; predvolená hodnota je `True`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29udmVyc2lvbkRlbGF5.display_name": {
+          "source": "Conversion Delay",
+          "message": "Oneskorenie konverzie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29udmVyc2lvbkRlbGF5.short_desc": {
+          "source": "Seconds to wait before creating the PDF",
+          "message": "Počet sekúnd čakania pred vytvorením PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29udmVyc2lvbkRlbGF5.desc": {
+          "source": "The delay in seconds after the page is loaded and before the PDF is created, to let the page finish loading; the default is `0`",
+          "message": "Oneskorenie v sekundách po načítaní stránky a pred vytvorením PDF, aby sa stránka stihla úplne načítať; predvolená hodnota je `0`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.display_name": {
+          "source": "CSS Media Type",
+          "message": "Typ média CSS"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.short_desc": {
+          "source": "The CSS media type used for rendering",
+          "message": "Typ média CSS použitý na vykresľovanie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.desc": {
+          "source": "The CSS media type used for rendering, for example `screen` (the default) or `print`",
+          "message": "Typ média CSS použitý na vykresľovanie, napríklad `screen` (predvolené) alebo `print`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TG9hZExhenlDb250ZW50.display_name": {
+          "source": "Load Lazy Content",
+          "message": "Načítať obsah s odloženým načítaním"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TG9hZExhenlDb250ZW50.short_desc": {
+          "source": "Load images that load only when visible",
+          "message": "Načítať obrázky, ktoré sa načítajú až po zobrazení"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TG9hZExhenlDb250ZW50.desc": {
+          "source": "Set to `True` to load the images of the page that load only when they become visible",
+          "message": "Nastavte na `True`, ak sa majú načítať obrázky stránky, ktoré sa načítajú až vtedy, keď sa zobrazia"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.c3RvcmVfZmlsZQ.display_name": {
+          "source": "Store File",
+          "message": "Uložiť súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.c3RvcmVfZmlsZQ.short_desc": {
+          "source": "Return a download URL instead of the file data",
+          "message": "Vrátiť adresu URL na stiahnutie namiesto údajov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.c3RvcmVfZmlsZQ.desc": {
+          "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
+          "message": "Nastavte na `True`, ak má ConvertAPI uložiť výstupné súbory a vrátiť pre každý z nich adresu `Url` na stiahnutie; súbory sa uchovávajú v šifrovanom dočasnom úložisku až **3 hodiny**.\n\nAk je `False` (predvolené), výstupné súbory sa vrátia v odpovedi ako `FileData` a nič sa neukladá."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZV9uYW1l.display_name": {
+          "source": "Output File Name",
+          "message": "Názov výstupného súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "The name of the output file without the extension",
+          "message": "Názov výstupného súboru bez prípony"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.ZmlsZV9uYW1l.desc": {
+          "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+          "message": "Názov výstupného súboru alebo súborov; ConvertAPI pripojí príponu cieľového formátu a index, ak konverzia vytvorí viac súborov.\n\n**Príklad**: `report` vytvorí `report.pdf` alebo `report_0.jpg`, `report_1.jpg`, ..."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Časový limit"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.dGltZW91dA.short_desc": {
+          "source": "The conversion timeout in seconds",
+          "message": "Časový limit konverzie v sekundách"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+          "message": "Časový limit konverzie v sekundách, od `10` do `1200`; predvolená hodnota je `900`."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "Parametre konvertora"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "Ďalšie parametre konvertora podľa ich názvov v ConvertAPI"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "Ďalšie parametre konvertora ako hash názvov parametrov ConvertAPI a ich hodnôt.\n\nParametre každého konvertora sú uvedené v [dokumentácii ConvertAPI](https://docs.convertapi.com) a vracia ich akcia `get-converter-info`.\n\n- Skalárne hodnoty sa odosielajú tak, ako sú\n- Hash súboru (`name` a `content`) sa odošle ako súbor\n- Zoznam hashov súborov sa odošle ako zoznam súborov\n\n**Príklad**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.display_name": {
+          "source": "Convert PDF to Images",
+          "message": "Konvertovať PDF na obrázky"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.short_desc": {
+          "source": "Convert the pages of a PDF to JPG, PNG, TIFF or WebP images",
+          "message": "Konvertovať stránky súboru PDF na obrázky JPG, PNG, TIFF alebo WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.desc": {
+          "source": "Converts the pages of a PDF to images; one image file is returned for each page.\n\nChoose the image `format` and resolution, and optionally a page range.",
+          "message": "Konvertuje stránky súboru PDF na obrázky; pre každú stránku sa vráti jeden súbor s obrázkom.\n\nVyberte `format` obrázka a rozlíšenie a prípadne rozsah strán."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.short_desc": {
+          "source": "The file to convert",
+          "message": "Súbor na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.desc": {
+          "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
+          "message": "Súbor na konverziu; zadajte buď tento súbor, alebo zdrojovú adresu URL.\n\nSúbor sa odošle do ConvertAPI v požiadavke; prípona názvu súboru musí zodpovedať zdrojovému formátu konvertora."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "Dáta súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "Typ MIME"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "Automatické detekovanie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "Dokument MS Word docx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "Dokument MS Word `docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "Dokument MS PowerPoint pptx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "Dokument MS PowerPoint `pptx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "Dokument MS Excel xlsx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "Dokument MS Excel `xlsx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.display_name": {
+          "source": "Image Format",
+          "message": "Formát obrázka"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.short_desc": {
+          "source": "The image format",
+          "message": "Formát obrázka"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.desc": {
+          "source": "The image format of the output files; one image is created for each page",
+          "message": "Formát obrázka výstupných súborov; pre každú stránku sa vytvorí jeden obrázok"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpwZw.display_name": {
+          "source": "JPG",
+          "message": "JPG"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBuZw.display_name": {
+          "source": "PNG",
+          "message": "PNG"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOnRpZmY.display_name": {
+          "source": "TIFF",
+          "message": "TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Zm9ybWF0.allowed-value.c3RyaW5nOndlYnA.display_name": {
+          "source": "WebP",
+          "message": "WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "Zdrojová URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "Adresa URL súboru na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "Adresa URL súboru na konverziu; ConvertAPI stiahne súbor z tejto adresy URL.\n\n**Príklad**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.UGFnZVJhbmdl.display_name": {
+          "source": "Page Range",
+          "message": "Rozsah strán"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.UGFnZVJhbmdl.short_desc": {
+          "source": "The pages to convert",
+          "message": "Stránky na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.UGFnZVJhbmdl.desc": {
+          "source": "The pages to convert, as a range or a comma-separated list.\n\n**Example**: `1-10` or `1,2,5`; all pages are converted by default",
+          "message": "Stránky na konverziu, ako rozsah alebo zoznam oddelený čiarkami.\n\n**Príklad**: `1-10` alebo `1,2,5`; predvolene sa konvertujú všetky stránky"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.UGFzc3dvcmQ.display_name": {
+          "source": "Open Password",
+          "message": "Heslo na otvorenie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.UGFzc3dvcmQ.short_desc": {
+          "source": "The password to open a protected PDF",
+          "message": "Heslo na otvorenie chráneného súboru PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.UGFzc3dvcmQ.desc": {
+          "source": "The password to open a protected PDF",
+          "message": "Heslo na otvorenie chráneného súboru PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VSZXNvbHV0aW9u.display_name": {
+          "source": "Image Resolution",
+          "message": "Rozlíšenie obrázka"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VSZXNvbHV0aW9u.short_desc": {
+          "source": "The image resolution in DPI",
+          "message": "Rozlíšenie obrázka v DPI"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VSZXNvbHV0aW9u.desc": {
+          "source": "The image resolution in DPI; the default is `200`",
+          "message": "Rozlíšenie obrázka v DPI; predvolená hodnota je `200`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.c3RvcmVfZmlsZQ.display_name": {
+          "source": "Store File",
+          "message": "Uložiť súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.c3RvcmVfZmlsZQ.short_desc": {
+          "source": "Return a download URL instead of the file data",
+          "message": "Vrátiť adresu URL na stiahnutie namiesto údajov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.c3RvcmVfZmlsZQ.desc": {
+          "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
+          "message": "Nastavte na `True`, ak má ConvertAPI uložiť výstupné súbory a vrátiť pre každý z nich adresu `Url` na stiahnutie; súbory sa uchovávajú v šifrovanom dočasnom úložisku až **3 hodiny**.\n\nAk je `False` (predvolené), výstupné súbory sa vrátia v odpovedi ako `FileData` a nič sa neukladá."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZV9uYW1l.display_name": {
+          "source": "Output File Name",
+          "message": "Názov výstupného súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "The name of the output file without the extension",
+          "message": "Názov výstupného súboru bez prípony"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZV9uYW1l.desc": {
+          "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+          "message": "Názov výstupného súboru alebo súborov; ConvertAPI pripojí príponu cieľového formátu a index, ak konverzia vytvorí viac súborov.\n\n**Príklad**: `report` vytvorí `report.pdf` alebo `report_0.jpg`, `report_1.jpg`, ..."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Časový limit"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dGltZW91dA.short_desc": {
+          "source": "The conversion timeout in seconds",
+          "message": "Časový limit konverzie v sekundách"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+          "message": "Časový limit konverzie v sekundách, od `10` do `1200`; predvolená hodnota je `900`."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "Parametre konvertora"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "Ďalšie parametre konvertora podľa ich názvov v ConvertAPI"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "Ďalšie parametre konvertora ako hash názvov parametrov ConvertAPI a ich hodnôt.\n\nParametre každého konvertora sú uvedené v [dokumentácii ConvertAPI](https://docs.convertapi.com) a vracia ich akcia `get-converter-info`.\n\n- Skalárne hodnoty sa odosielajú tak, ako sú\n- Hash súboru (`name` a `content`) sa odošle ako súbor\n- Zoznam hashov súborov sa odošle ako zoznam súborov\n\n**Príklad**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.display_name": {
+          "source": "Merge PDF Files",
+          "message": "Zlúčiť súbory PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.short_desc": {
+          "source": "Merge several PDF files into one PDF",
+          "message": "Zlúčiť viacero súborov PDF do jedného PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.desc": {
+          "source": "Merges several PDF files into one PDF, in the order given.\n\nGive the PDF files in `files` or their URLs in `urls`; optionally add a bookmark for each merged file.",
+          "message": "Zlúči viacero súborov PDF do jedného PDF v zadanom poradí.\n\nSúbory PDF zadajte v `files` alebo ich adresy URL v `urls`; voliteľne pridajte záložku pre každý zlúčený súbor."
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.display_name": {
+          "source": "Files",
+          "message": "Súbory"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.short_desc": {
+          "source": "The files to convert for converters that take several files",
+          "message": "Súbory na konverziu pre konvertory, ktoré prijímajú viac súborov"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.desc": {
+          "source": "The files to convert for converters that take several input files, such as `pdf` to `merge`, `images` to `pdf` or `any` to `zip`.\n\nThey are sent as the `Files` parameter, together with any files given in `urls`.",
+          "message": "Súbory na konverziu pre konvertory, ktoré prijímajú viac vstupných súborov, napríklad `pdf` na `merge`, `images` na `pdf` alebo `any` na `zip`.\n\nOdosielajú sa ako parameter `Files` spolu so súbormi zadanými v `urls`."
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "Dáta súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "Typ MIME"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "Automatické detekovanie"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "Dokument MS Word docx"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "Dokument MS Word `docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "Dokument MS PowerPoint pptx"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "Dokument MS PowerPoint `pptx`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "Dokument MS Excel xlsx"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "Dokument MS Excel `xlsx`"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZXM.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.dXJscw.display_name": {
+          "source": "Source URLs",
+          "message": "Zdrojové URL"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.dXJscw.short_desc": {
+          "source": "URLs of the files for converters that take several files",
+          "message": "Adresy URL súborov pre konvertory, ktoré prijímajú viac súborov"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.dXJscw.desc": {
+          "source": "The URLs of the files to convert for converters that take several input files, such as `pdf` to `merge`.\n\nThey are sent as the `Files` parameter, together with any files given in `files`.",
+          "message": "Adresy URL súborov na konverziu pre konvertory, ktoré prijímajú viac vstupných súborov, napríklad `pdf` na `merge`.\n\nOdosielajú sa ako parameter `Files` spolu so súbormi zadanými v `files`."
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.display_name": {
+          "source": "Bookmarks Table of Contents",
+          "message": "Obsah so záložkami"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.short_desc": {
+          "source": "Add a bookmark for each merged file",
+          "message": "Pridať záložku pre každý zlúčený súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.desc": {
+          "source": "Adds a top-level bookmark for each merged file:\n- `disabled`: no bookmarks (the default)\n- `filename`: the file name\n- `title`: the PDF title from the metadata",
+          "message": "Pridá záložku najvyššej úrovne pre každý zlúčený súbor:\n- `disabled`: bez záložiek (predvolené)\n- `filename`: názov súboru\n- `title`: názov PDF z metadát"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "Zakázané"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOmZpbGVuYW1l.display_name": {
+          "source": "File Name",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.allowed-value.c3RyaW5nOnRpdGxl.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UmVtb3ZlRHVwbGljYXRlRm9udHM.display_name": {
+          "source": "Remove Duplicate Fonts",
+          "message": "Odstrániť duplicitné písma"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UmVtb3ZlRHVwbGljYXRlRm9udHM.short_desc": {
+          "source": "Include fonts used by several files only once",
+          "message": "Zahrnúť písma použité vo viacerých súboroch iba raz"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UmVtb3ZlRHVwbGljYXRlRm9udHM.desc": {
+          "source": "Set to `True` to include the fonts used by several of the merged files only once",
+          "message": "Nastavte na `True`, ak sa majú písma použité vo viacerých zlúčených súboroch zahrnúť iba raz"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.c3RvcmVfZmlsZQ.display_name": {
+          "source": "Store File",
+          "message": "Uložiť súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.c3RvcmVfZmlsZQ.short_desc": {
+          "source": "Return a download URL instead of the file data",
+          "message": "Vrátiť adresu URL na stiahnutie namiesto údajov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.c3RvcmVfZmlsZQ.desc": {
+          "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
+          "message": "Nastavte na `True`, ak má ConvertAPI uložiť výstupné súbory a vrátiť pre každý z nich adresu `Url` na stiahnutie; súbory sa uchovávajú v šifrovanom dočasnom úložisku až **3 hodiny**.\n\nAk je `False` (predvolené), výstupné súbory sa vrátia v odpovedi ako `FileData` a nič sa neukladá."
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZV9uYW1l.display_name": {
+          "source": "Output File Name",
+          "message": "Názov výstupného súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "The name of the output file without the extension",
+          "message": "Názov výstupného súboru bez prípony"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.ZmlsZV9uYW1l.desc": {
+          "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+          "message": "Názov výstupného súboru alebo súborov; ConvertAPI pripojí príponu cieľového formátu a index, ak konverzia vytvorí viac súborov.\n\n**Príklad**: `report` vytvorí `report.pdf` alebo `report_0.jpg`, `report_1.jpg`, ..."
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Časový limit"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.dGltZW91dA.short_desc": {
+          "source": "The conversion timeout in seconds",
+          "message": "Časový limit konverzie v sekundách"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+          "message": "Časový limit konverzie v sekundách, od `10` do `1200`; predvolená hodnota je `900`."
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "Parametre konvertora"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "Ďalšie parametre konvertora podľa ich názvov v ConvertAPI"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "Ďalšie parametre konvertora ako hash názvov parametrov ConvertAPI a ich hodnôt.\n\nParametre každého konvertora sú uvedené v [dokumentácii ConvertAPI](https://docs.convertapi.com) a vracia ich akcia `get-converter-info`.\n\n- Skalárne hodnoty sa odosielajú tak, ako sú\n- Hash súboru (`name` a `content`) sa odošle ako súbor\n- Zoznam hashov súborov sa odošle ako zoznam súborov\n\n**Príklad**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.display_name": {
+          "source": "Compress PDF",
+          "message": "Komprimovať PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.short_desc": {
+          "source": "Compress a PDF to reduce its size",
+          "message": "Skomprimovať PDF, aby sa zmenšila jeho veľkosť"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.desc": {
+          "source": "Compresses a PDF to reduce its size, for example for e-mail or web publishing.\n\nChoose a `Preset` from lossless compression to low-resolution images for the smallest files.",
+          "message": "Skomprimuje PDF, aby sa zmenšila jeho veľkosť, napríklad na odoslanie e-mailom alebo zverejnenie na webe.\n\nVyberte `Preset` od bezstratovej kompresie až po obrázky s nízkym rozlíšením pre najmenšie súbory."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.short_desc": {
+          "source": "The file to convert",
+          "message": "Súbor na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.desc": {
+          "source": "The file to convert; provide either this or a source URL.\n\nThe file is sent to ConvertAPI in the request; the file name extension must match the source format of the converter.",
+          "message": "Súbor na konverziu; zadajte buď tento súbor, alebo zdrojovú adresu URL.\n\nSúbor sa odošle do ConvertAPI v požiadavke; prípona názvu súboru musí zodpovedať zdrojovému formátu konvertora."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "Dáta súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Dáta súboru zakódované v Base64 alebo nezakódované dáta, ktoré sa majú zakódovať pomocou Base64"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "Typ MIME"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "Reťazec MIME typu súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "Automatické detekovanie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Automatické detekovanie z názvu súboru; platné iba pri vstupe"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "Dokument MS Word docx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "Dokument MS Word `docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "Dokument MS PowerPoint pptx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "Dokument MS PowerPoint `pptx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "Dokument MS Excel xlsx"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "Dokument MS Excel `xlsx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZQ.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "Názov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.display_name": {
+          "source": "Preset",
+          "message": "Predvoľba"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.short_desc": {
+          "source": "The compression preset",
+          "message": "Predvoľba kompresie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.desc": {
+          "source": "The compression preset; when a preset other than `none` is given, the other compression parameters are ignored",
+          "message": "Predvoľba kompresie; ak je zadaná iná predvoľba ako `none`, ostatné parametre kompresie sa ignorujú"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "Not Set (Advanced Parameters)",
+          "message": "Nenastavené (rozšírené parametre)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOmxvc3NsZXNz.display_name": {
+          "source": "Lossless",
+          "message": "Bezstratová"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Text (20 DPI Images)",
+          "message": "Text (obrázky 20 DPI)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOmFyY2hpdmU.display_name": {
+          "source": "Archive (40 DPI Images)",
+          "message": "Archív (obrázky 40 DPI)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web (96 DPI Images)",
+          "message": "Web (obrázky 96 DPI)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOmVib29r.display_name": {
+          "source": "Ebook (150 DPI Images)",
+          "message": "E-kniha (obrázky 150 DPI)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2V0.allowed-value.c3RyaW5nOnByaW50ZXI.display_name": {
+          "source": "Printer (300 DPI Images)",
+          "message": "Tlač (obrázky 300 DPI)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.display_name": {
+          "source": "Source URL",
+          "message": "Zdrojová URL"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.short_desc": {
+          "source": "URL of the file to convert",
+          "message": "Adresa URL súboru na konverziu"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dXJs.desc": {
+          "source": "The URL of the file to convert; ConvertAPI downloads the file from this URL.\n\n**Example**: `https://cdn.convertapi.com/public/files/demo.docx`",
+          "message": "Adresa URL súboru na konverziu; ConvertAPI stiahne súbor z tejto adresy URL.\n\n**Príklad**: `https://cdn.convertapi.com/public/files/demo.docx`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UGFzc3dvcmQ.display_name": {
+          "source": "Open Password",
+          "message": "Heslo na otvorenie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UGFzc3dvcmQ.short_desc": {
+          "source": "The password to open a protected PDF",
+          "message": "Heslo na otvorenie chráneného súboru PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UGFzc3dvcmQ.desc": {
+          "source": "The password to open a protected PDF",
+          "message": "Heslo na otvorenie chráneného súboru PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.c3RvcmVfZmlsZQ.display_name": {
+          "source": "Store File",
+          "message": "Uložiť súbor"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.c3RvcmVfZmlsZQ.short_desc": {
+          "source": "Return a download URL instead of the file data",
+          "message": "Vrátiť adresu URL na stiahnutie namiesto údajov súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.c3RvcmVfZmlsZQ.desc": {
+          "source": "Set to `True` to have ConvertAPI store the output files and return a download `Url` for each one; the files are kept in encrypted temporary storage for up to **3 hours**.\n\nIf `False` (the default), the output files are returned in the response as `FileData` and nothing is stored.",
+          "message": "Nastavte na `True`, ak má ConvertAPI uložiť výstupné súbory a vrátiť pre každý z nich adresu `Url` na stiahnutie; súbory sa uchovávajú v šifrovanom dočasnom úložisku až **3 hodiny**.\n\nAk je `False` (predvolené), výstupné súbory sa vrátia v odpovedi ako `FileData` a nič sa neukladá."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZV9uYW1l.display_name": {
+          "source": "Output File Name",
+          "message": "Názov výstupného súboru"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "The name of the output file without the extension",
+          "message": "Názov výstupného súboru bez prípony"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.ZmlsZV9uYW1l.desc": {
+          "source": "The name of the output file(s); ConvertAPI appends the extension of the destination format, and an index when the conversion creates several files.\n\n**Example**: `report` gives `report.pdf`, or `report_0.jpg`, `report_1.jpg`, ...",
+          "message": "Názov výstupného súboru alebo súborov; ConvertAPI pripojí príponu cieľového formátu a index, ak konverzia vytvorí viac súborov.\n\n**Príklad**: `report` vytvorí `report.pdf` alebo `report_0.jpg`, `report_1.jpg`, ..."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Časový limit"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dGltZW91dA.short_desc": {
+          "source": "The conversion timeout in seconds",
+          "message": "Časový limit konverzie v sekundách"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.dGltZW91dA.desc": {
+          "source": "The conversion timeout in seconds, from `10` to `1200`; the default is `900`.",
+          "message": "Časový limit konverzie v sekundách, od `10` do `1200`; predvolená hodnota je `900`."
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Converter Parameters",
+          "message": "Parametre konvertora"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Other converter parameters by their ConvertAPI names",
+          "message": "Ďalšie parametre konvertora podľa ich názvov v ConvertAPI"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.cGFyYW1ldGVycw.desc": {
+          "source": "Other parameters of the converter, as a hash of ConvertAPI parameter names to values.\n\nThe parameters of each converter are listed in the [ConvertAPI documentation](https://docs.convertapi.com) and returned by the `get-converter-info` action.\n\n- Scalar values are sent as they are\n- A file hash (`name` and `content`) is sent as a file\n- A list of file hashes is sent as a list of files\n\n**Example**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`",
+          "message": "Ďalšie parametre konvertora ako hash názvov parametrov ConvertAPI a ich hodnôt.\n\nParametre každého konvertora sú uvedené v [dokumentácii ConvertAPI](https://docs.convertapi.com) a vracia ich akcia `get-converter-info`.\n\n- Skalárne hodnoty sa odosielajú tak, ako sú\n- Hash súboru (`name` a `content`) sa odošle ako súbor\n- Zoznam hashov súborov sa odošle ako zoznam súborov\n\n**Príklad**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
+        }
+      }
+    }
+  }
+}

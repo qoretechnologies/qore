@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "ConvertAPI REST Connection",
+          "message": "З'єднання ConvertAPI REST"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the ConvertAPI file conversion REST API",
+          "message": "З'єднання з REST API ConvertAPI для конвертації файлів"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [ConvertAPI](https://www.convertapi.com) file conversion REST API.\n\nConvertAPI converts files between more than 300 format pairs, including:\n- Office documents, spreadsheets and presentations to and from PDF\n- Web pages and HTML to PDF and images\n- PDF to images, office formats, text and PDF/A\n- PDF tools: merge, split, compress, protect, OCR, watermark and more",
+          "message": "З'єднання з REST API [ConvertAPI](https://www.convertapi.com) для конвертації файлів.\n\nConvertAPI конвертує файли між понад 300 парами форматів, зокрема:\n- документи, таблиці та презентації Office у PDF і з PDF\n- вебсторінки та HTML у PDF і зображення\n- PDF в зображення, формати Office, текст і PDF/A\n- інструменти PDF: об'єднання, розділення, стиснення, захист, OCR, водяні знаки та інше"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Token",
+          "message": "Як отримати свій токен API"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Sign up or log in at https://www.convertapi.com/a\n2. Open the **Authentication** page of your account\n3. Copy an API token (or create a new one) and paste it into the **API Token** field\n\n**Note:** each conversion consumes conversion credits; check your remaining balance in your ConvertAPI account.",
+          "message": "1. Зареєструйтеся або увійдіть на https://www.convertapi.com/a\n2. Відкрийте сторінку **Authentication** вашого облікового запису\n3. Скопіюйте API-токен (або створіть новий) і вставте його в поле **API-токен**\n\n**Примітка:** кожна конвертація витрачає кредити конвертацій; перевіряйте свій залишок в обліковому записі ConvertAPI."
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API-токен"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "ConvertAPI API token",
+          "message": "API-токен ConvertAPI"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The ConvertAPI API token used for authentication; it is sent as a bearer token.\n\nCreate or copy an API token on the [Authentication page](https://www.convertapi.com/a/authentication) of your ConvertAPI account.",
+          "message": "API-токен ConvertAPI, що використовується для автентифікації; він надсилається як bearer-токен.\n\nСтворіть або скопіюйте API-токен на [сторінці Authentication](https://www.convertapi.com/a/authentication) вашого облікового запису ConvertAPI."
+        }
+      }
+    }
+  }
+}

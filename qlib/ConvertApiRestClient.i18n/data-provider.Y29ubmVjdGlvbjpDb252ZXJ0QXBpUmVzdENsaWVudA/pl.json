@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "ConvertAPI REST Connection",
+          "message": "Połączenie REST ConvertAPI"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the ConvertAPI file conversion REST API",
+          "message": "Połączenie z interfejsem REST API ConvertAPI do konwersji plików"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [ConvertAPI](https://www.convertapi.com) file conversion REST API.\n\nConvertAPI converts files between more than 300 format pairs, including:\n- Office documents, spreadsheets and presentations to and from PDF\n- Web pages and HTML to PDF and images\n- PDF to images, office formats, text and PDF/A\n- PDF tools: merge, split, compress, protect, OCR, watermark and more",
+          "message": "Połączenie z interfejsem REST API do konwersji plików [ConvertAPI](https://www.convertapi.com).\n\nConvertAPI konwertuje pliki między ponad 300 parami formatów, w tym:\n- Dokumenty, arkusze kalkulacyjne i prezentacje Office do PDF i z PDF\n- Strony internetowe i HTML do PDF i obrazów\n- PDF do obrazów, formatów Office, tekstu i PDF/A\n- Narzędzia PDF: łączenie, dzielenie, kompresja, zabezpieczanie, OCR, znaki wodne i więcej"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Token",
+          "message": "Jak uzyskać swój token API"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Sign up or log in at https://www.convertapi.com/a\n2. Open the **Authentication** page of your account\n3. Copy an API token (or create a new one) and paste it into the **API Token** field\n\n**Note:** each conversion consumes conversion credits; check your remaining balance in your ConvertAPI account.",
+          "message": "1. Zarejestruj się lub zaloguj się na https://www.convertapi.com/a\n2. Otwórz stronę **Authentication** swojego konta\n3. Skopiuj token API (lub utwórz nowy) i wklej go do pola **Token API**\n\n**Uwaga:** każda konwersja zużywa kredyty konwersji; sprawdź swoje pozostałe saldo na koncie ConvertAPI."
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "Token API"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "ConvertAPI API token",
+          "message": "Token API ConvertAPI"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The ConvertAPI API token used for authentication; it is sent as a bearer token.\n\nCreate or copy an API token on the [Authentication page](https://www.convertapi.com/a/authentication) of your ConvertAPI account.",
+          "message": "Token API ConvertAPI używany do uwierzytelniania; jest wysyłany jako token okaziciela (bearer).\n\nUtwórz lub skopiuj token API na [stronie Authentication](https://www.convertapi.com/a/authentication) swojego konta ConvertAPI."
+        }
+      }
+    }
+  }
+}

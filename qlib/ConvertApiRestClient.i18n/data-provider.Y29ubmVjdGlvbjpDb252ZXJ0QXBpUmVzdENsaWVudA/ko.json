@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "ConvertAPI REST Connection",
+          "message": "ConvertAPI REST 연결"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the ConvertAPI file conversion REST API",
+          "message": "ConvertAPI 파일 변환 REST API에 대한 연결"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [ConvertAPI](https://www.convertapi.com) file conversion REST API.\n\nConvertAPI converts files between more than 300 format pairs, including:\n- Office documents, spreadsheets and presentations to and from PDF\n- Web pages and HTML to PDF and images\n- PDF to images, office formats, text and PDF/A\n- PDF tools: merge, split, compress, protect, OCR, watermark and more",
+          "message": "[ConvertAPI](https://www.convertapi.com) 파일 변환 REST API에 대한 연결입니다.\n\nConvertAPI는 300개 이상의 형식 쌍 간에 파일을 변환하며, 다음을 포함합니다.\n- Office 문서, 스프레드시트, 프레젠테이션과 PDF 간 변환\n- 웹 페이지 및 HTML을 PDF와 이미지로 변환\n- PDF를 이미지, Office 형식, 텍스트, PDF/A로 변환\n- PDF 도구: 병합, 분할, 압축, 보호, OCR, 워터마크 등"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Token",
+          "message": "API 토큰 받는 방법"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Sign up or log in at https://www.convertapi.com/a\n2. Open the **Authentication** page of your account\n3. Copy an API token (or create a new one) and paste it into the **API Token** field\n\n**Note:** each conversion consumes conversion credits; check your remaining balance in your ConvertAPI account.",
+          "message": "1. https://www.convertapi.com/a 에서 회원 가입 또는 로그인\n2. 계정의 **Authentication** 페이지 열기\n3. API 토큰을 복사(또는 새로 생성)하여 **API 토큰** 필드에 붙여넣기\n\n**참고:** 변환할 때마다 변환 크레딧이 소모됩니다. 남은 잔액은 ConvertAPI 계정에서 확인하세요."
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API 토큰"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "ConvertAPI API token",
+          "message": "ConvertAPI API 토큰"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The ConvertAPI API token used for authentication; it is sent as a bearer token.\n\nCreate or copy an API token on the [Authentication page](https://www.convertapi.com/a/authentication) of your ConvertAPI account.",
+          "message": "인증에 사용되는 ConvertAPI API 토큰이며, 베어러 토큰으로 전송됩니다.\n\nConvertAPI 계정의 [Authentication 페이지](https://www.convertapi.com/a/authentication)에서 API 토큰을 생성하거나 복사하세요."
+        }
+      }
+    }
+  }
+}
