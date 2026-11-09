@@ -159,15 +159,20 @@ l50Xb2GWQesIt9k5jF5IOw==
         Socket probe();
         probe.setAlpnProtocols(("h2",));
         probe.acceptAllCertificates(True);
-        bool refused;
+        # only a completed handshake means that the node is too old; any other error than the alert is a failure
+        bool handshake_completed;
         try {
             probe.connectSSL("127.0.0.1:" + port, 10s);
+            handshake_completed = True;
             probe.close();
         } catch (hash<ExceptionInfo> ex) {
-            refused = ex.desc =~ /no application protocol/;
+            # the server is stopped by the on_error handler above, also when the test is skipped
+            if (ex.desc !~ /no application protocol/) {
+                throw ex.err, sprintf("probing the http/1.1-only server at port %d with a TLS client offering only "
+                    "\"h2\" failed with another error than no_application_protocol: %s", port, ex.desc), ex.arg;
+            }
         }
-        if (!refused) {
-            stopServer(p);
+        if (handshake_completed) {
             testSkip(sprintf("node %s does not refuse a client without http/1.1 with no_application_protocol (node "
                 ">= 18.18 is needed)", trim(`node -v`)));
         }
