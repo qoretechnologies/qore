@@ -9,6 +9,11 @@ targeted cancel/close of `AsyncIoControllerPriv` (`getSocketThreadIndexes()`) in
 - `socket-loop.qr`: a single-threaded `Socket` accept/recv/send/close loop (1500 requests after a warm-up); prints
   microseconds per request.
   `LD_LIBRARY_PATH=build QORE_IO_THREADS=8 build/qore design/benchmarks/5587/socket-loop.qr`
+- `socket-close-loop.qr [<connections>]`: makes the connections of `socket-loop.qr` first and closes them all
+  afterwards, and prints the cost of a connect and accept and of the two closes per connection separately
+  (`CLOSE_ONLY=1` leaves the closes out of the measurement).  An accept cost about 47,000 user-space instructions,
+  of which about 18,000 per pollable object (each `Socket` object and accepted socket) were the SHA-1 digest of its
+  I/O identity, which a sequence number replaces now.
 - `run-http.sh <keepalive 0|1> <requests>`: an `HttpServer` with a trivial handler in its own process and a client
   loop in another; prints the client's microseconds per request and the server process' CPU time (clock ticks of
   10 ms) read when the client asks it to quit.  Server CPU per request is `(user + sys) * 10000 / (requests + 51)`
