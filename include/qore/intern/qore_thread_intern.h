@@ -901,6 +901,56 @@ DLLLOCAL void delete_thread_local_data();
 */
 DLLLOCAL void end_thread_cancellation(bool terminating = false);
 
+//! Applies the cancellation rule for destructors to the destructor of one class in an object's class hierarchy
+/** Used around the code of each class's own destructor (not its base classes', which have their own helper); see
+    "Destructors" in design/cooperative-cancellation.md:
+
+    - a trusted class (defined by a Program without a sandbox manager, or a builtin class): cancellation and program
+      interrupts are deferred while its destructor runs, so the destructor completes on a cancelled or interrupted
+      thread; the pending request is left untouched and is raised at the first cancellation point after the
+      destructor returns.  A sandbox limit (an expired call budget, a memory limit) is never deferred, and code of a
+      Program with a sandbox manager that the destructor calls does not get the deferral
+      (ProgramThreadCountContextHelper suspends it)
+    - a sandboxed class (defined by a Program with a sandbox manager): its destructor never runs under any
+      cancellation deferral; if a request is pending that a cancellation point would deliver (a thread cancellation
+      in scope, a program interrupt or a sandbox limit), skip() is true and the destructor is not run: the object's
+      members and private data are released as when it is obliterated
+
+    Only the thread that creates the helper reads or writes the state it changes.
+*/
+class QoreDestructorCancelHelper {
+public:
+    //! Applies the rule for a class whose code is (\a sandboxed true) or is not governed by a sandbox manager
+    DLLLOCAL QoreDestructorCancelHelper(bool sandboxed);
+
+    //! Restores the deferral state of the thread
+    DLLLOCAL ~QoreDestructorCancelHelper();
+
+    //! True if the destructor of the class must not run
+    DLLLOCAL bool skip() const {
+        return skip_dtor;
+    }
+
+    DLLLOCAL QoreDestructorCancelHelper(const QoreDestructorCancelHelper&) = delete;
+    DLLLOCAL QoreDestructorCancelHelper& operator=(const QoreDestructorCancelHelper&) = delete;
+
+private:
+    //! the thread's data, or nullptr if the thread has none (then nothing is changed)
+    ThreadData* td = nullptr;
+    //! the deferral depths of the thread, saved while a sandboxed destructor runs
+    unsigned saved_defer = 0;
+    unsigned saved_dtor_defer = 0;
+    //! true if the destructor deferral of a trusted class was pushed
+    bool pushed = false;
+    //! true if the deferral of the thread was suspended for a sandboxed class
+    bool suspended = false;
+    //! true if the destructor must not run
+    bool skip_dtor = false;
+};
+
+//! Returns true if the Program has a sandbox manager: code that it defines is sandboxed
+DLLLOCAL bool qore_program_has_sandbox_manager(const QoreProgram* pgm);
+
 
 //! Waits on a condition variable until it is signalled, the timeout expires, or the thread is cancelled or interrupted
 /** The implementation of QoreCondition::waitWithInterrupt(); a cancellation request
@@ -1609,13 +1659,26 @@ protected:
     ExceptionSink* xsink = nullptr;
     //! the thread's entry into the Program, for its thread entry and exit handlers
     ThreadEntryHandlerFrame entry_frame;
+    //! the destructor-deferral depth of the thread, saved while code of a Program with a sandbox manager runs
+    unsigned saved_dtor_defer = 0;
     bool restore = false;
     bool init_tlpd = false;
     bool thread_count_incremented = false;
+    //! true if the destructor deferral of the thread was suspended when the Program was entered
+    bool dtor_defer_suspended = false;
 
 private:
     //! restores the thread's context as it was before set() switched it
     DLLLOCAL void restoreContext();
+
+    //! Suspends the deferral of a trusted destructor while the code of a Program with a sandbox manager runs
+    /** Sandboxed code that a trusted destructor calls (a method a sandboxed subclass overrides, a callback) must not
+        run with cancellation deferred; see QoreDestructorCancelHelper
+    */
+    DLLLOCAL void suspendDestructorDeferral(ThreadData* td);
+
+    //! Restores the deferral suspended by suspendDestructorDeferral()
+    DLLLOCAL void restoreDestructorDeferral();
 };
 
 class ProgramRuntimeParseContextHelper {

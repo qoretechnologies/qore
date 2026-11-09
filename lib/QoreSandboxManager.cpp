@@ -1529,6 +1529,12 @@ QoreSandboxManager* qore_program_private::getSandboxManagerRef() {
     return nullptr;
 }
 
+bool qore_program_has_sandbox_manager(const QoreProgram* pgm) {
+    // only whether there is one is read: the manager itself is not used, so it needs no reference
+    return pgm && qore_program_private::get(*const_cast<QoreProgram*>(pgm))->sandbox_manager.load(
+        std::memory_order_acquire);
+}
+
 //------------------------------------------------------------------------------
 // QoreSandboxManagerHelper implementation
 //------------------------------------------------------------------------------

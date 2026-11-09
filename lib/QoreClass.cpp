@@ -4765,6 +4765,25 @@ QoreObject* QoreClass::execSystemConstructor(int code, ...) const {
     return o;
 }
 
+bool qore_class_private::isSandboxedCode() const {
+    // builtin classes are trusted, also when a module created them while a sandboxed Program was current
+    if (sys) {
+        return false;
+    }
+    QoreProgram* p = spgm.load();
+    if (!p) {
+        return released_sandboxed.load();
+    }
+    // the current Program cannot be deleted while the thread runs in it
+    if (p == getProgram()) {
+        return qore_program_has_sandbox_manager(p);
+    }
+    // spgm is cleared under the lock before the Program can be freed (see getReferencedSourceProgram())
+    AutoLocker al(gate.asl_lock);
+    p = spgm.load();
+    return p ? qore_program_has_sandbox_manager(p) : released_sandboxed.load();
+}
+
 void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(self);
     //printd(5, "qore_class_private::execDestructor() %s::destructor() o: %p scl: %p sml: %p, self: %p, "
@@ -4776,20 +4795,33 @@ void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, Exc
     ExceptionSink de;
 
     if (self->isSystemObject()) {
-        if (destructor) {
-            destructor->priv->evalSystemDestructor(self, rc, &de);
-        } else {
-            self->defaultSystemDestructor(classID, &de);
+        {
+            // the cancellation rule for destructors applies to each class in the hierarchy on its own; see
+            // QoreDestructorCancelHelper
+            QoreDestructorCancelHelper dch(isSandboxedCode());
+            if (!dch.skip()) {
+                if (destructor) {
+                    destructor->priv->evalSystemDestructor(self, rc, &de);
+                } else {
+                    self->defaultSystemDestructor(classID, &de);
+                }
+            }
         }
         // execute superclass destructors
         if (scl) {
             scl->sml.execSystemDestructors(self, rc, &de);
         }
     } else {
-        if (destructor) {
-            destructor->priv->evalDestructor(self, rc, &de);
-        } else if (sys) {
-            self->defaultSystemDestructor(classID, &de);
+        if (destructor || sys) {
+            // see above
+            QoreDestructorCancelHelper dch(isSandboxedCode());
+            if (!dch.skip()) {
+                if (destructor) {
+                    destructor->priv->evalDestructor(self, rc, &de);
+                } else {
+                    self->defaultSystemDestructor(classID, &de);
+                }
+            }
         }
         // execute superclass destructors
         if (scl) {
@@ -4809,10 +4841,17 @@ void qore_class_private::execBaseClassDestructor(QoreObject* self, RuntimeConfig
     ExceptionSink de;
     //printd(5, "qore_class_private::execBaseClassDestructor() %s::destructor(), destructor: %p, sys: %d\n",
     //  name.c_str(), destructor, sys);
-    if (destructor)
-        destructor->priv->evalDestructor(self, rc, &de);
-    else if (sys)
-        self->defaultSystemDestructor(classID, &de);
+    if (destructor || sys) {
+        // the cancellation rule for destructors is decided for this class; see QoreDestructorCancelHelper
+        QoreDestructorCancelHelper dch(isSandboxedCode());
+        if (!dch.skip()) {
+            if (destructor) {
+                destructor->priv->evalDestructor(self, rc, &de);
+            } else {
+                self->defaultSystemDestructor(classID, &de);
+            }
+        }
+    }
 
     assert(xsink || !de);
     if (xsink) {
@@ -4825,10 +4864,17 @@ void qore_class_private::execBaseClassSystemDestructor(QoreObject* self, Runtime
     // we use a new, blank exception sink to ensure all destructor code gets executed
     // in case there were already exceptions in the current exceptionsink
     ExceptionSink de;
-    if (destructor)
-        destructor->priv->evalSystemDestructor(self, rc, &de);
-    else if (sys)
-        self->defaultSystemDestructor(classID, &de);
+    if (destructor || sys) {
+        // the cancellation rule for destructors is decided for this class; see QoreDestructorCancelHelper
+        QoreDestructorCancelHelper dch(isSandboxedCode());
+        if (!dch.skip()) {
+            if (destructor) {
+                destructor->priv->evalSystemDestructor(self, rc, &de);
+            } else {
+                self->defaultSystemDestructor(classID, &de);
+            }
+        }
+    }
 
     assert(xsink || !de);
     if (xsink) {

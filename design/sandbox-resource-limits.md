@@ -133,6 +133,10 @@ timed call:
 - Cancellation deferral (`defer_thread_cancel()`, cleanup critical sections) defers `SANDBOX-TIMEOUT` like the other
   reasons, so cleanup code can finish. `defer_thread_cancel()` is in the `THREAD_CONTROL` domain: a sandbox that must
   not be able to postpone its timeout must not grant it (`PO_NO_THREAD_CONTROL`), as for interrupts today.
+- The deferral of a trusted class's destructor (qore#5634) never defers a limit: `qore_check_cancel()` checks the
+  limit bit before that deferral, so a destructor in a sandbox call cannot run unbounded, and the destructor of a
+  sandboxed class runs under no deferral at all (see "Destructors" in
+  [cooperative-cancellation.md](cooperative-cancellation.md#destructors)).
 
 ### Exception
 

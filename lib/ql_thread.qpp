@@ -1332,7 +1332,9 @@ release() {
     function from clear_thread_cancel(), which discards the request irrecoverably: a thread cannot
     re-cancel itself.
 
-    The deferral is released when \a cleanup returns, including when it throws, and calls nest.
+    The deferral is released when \a cleanup returns, including when it throws, and calls nest.  The destructor of
+    an object of a sandboxed class released in \a cleanup does not run with cancellation deferred; see
+    @ref cancel_destructors.
 
     @param cleanup the @ref call_reference "call reference" or @ref closure "closure" to call with
     cancellation deferred

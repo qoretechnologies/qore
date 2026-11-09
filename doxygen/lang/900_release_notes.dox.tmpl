@@ -501,6 +501,12 @@
     ordinary character; set the \c quote_escape option to a backslash to read or write files in the earlier format;
     see @ref csvutil_rfc4180.
 
+    @par Destructors on a Cancelled or Interrupted Thread
+    The destructor of a trusted class runs with cancellation and @ref sandbox_interrupt "program interrupts" deferred,
+    so it completes, and the destructor of a sandboxed class is skipped while a cancellation, an interrupt or a sandbox
+    limit is pending; see @ref cancel_destructors (<a href="https://github.com/qoretechnologies/qore/issues/5634">issue
+    5634</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Program Thread Coordination
     @ref Qore::Program::waitForThreads() "Program::waitForThreads()" and

@@ -766,6 +766,8 @@ try {
     - @ref Qore::defer_thread_cancel() "defer_thread_cancel()" defers a timeout like any other cancellation, so that
       cleanup code can finish; do not give sandboxed code the \c THREAD_CONTROL functional domain
       (@ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") if it must not be able to postpone its timeout.
+      The destructor of a trusted class, which completes on a cancelled thread, does not defer a timeout or a memory
+      limit; see @ref cancel_destructors.
     - If the resources to track a call's limits cannot be allocated, the call fails with \c SANDBOX-ERROR
       instead of running without them: at its next cancellation point, and, if it has a stack limit, at its next
       call.  The exception names the limits that cannot be enforced, and its \c arg hash has a key for each of them
@@ -911,7 +913,9 @@ sm.clearInterrupt();
     - <b>Standard I/O</b>: StdoutOutputStream::write(), StderrOutputStream::write()
     - <b>Database operations</b>: Datasource transaction lock acquisition
 
-    When interrupted, a \c PROGRAM-INTERRUPTED exception is raised.
+    When interrupted, a \c PROGRAM-INTERRUPTED exception is raised.  The destructors of the sandboxed program's
+    classes do not run while the interrupt is pending, and the destructors of trusted classes (builtin classes and
+    the classes of programs without a sandbox manager) complete before it is raised; see @ref cancel_destructors.
     For external process functions (system(), backquote(), and the backquote operator), a SandboxManager also
     starts the child in a new process group so that requestInterrupt() can terminate the entire process group.
     Every process in the group is killed with \c SIGKILL when the call is interrupted, including a process that the

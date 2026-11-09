@@ -557,6 +557,14 @@ public:
     // See design/cooperative-cancellation.md
     unsigned cancel_defer_count = 0;
 
+    // destructor-deferral depth: non-zero while the destructor of a trusted class runs (QoreDestructorCancelHelper);
+    // qore_check_cancel() then defers a thread cancellation and a program interrupt like cancel_defer_count, but never
+    // a sandbox limit (an expired call budget or a memory limit), so a destructor cannot run unbounded.  Set to zero
+    // while code of a Program with a sandbox manager runs (ProgramThreadCountContextHelper) and while the destructor
+    // of a sandboxed class runs, so sandboxed code never gets it.  Only the owning thread reads or writes it.
+    // See "Destructors" in design/cooperative-cancellation.md
+    unsigned dtor_cancel_defer_count = 0;
+
     // the sandbox context of the thread that started the operation that this thread is continuing; when set, it
     // governs the code that the operation runs, together with the sandboxes of the Programs entered after it was
     // applied (see QoreSandboxContextHelper and find_thread_sandbox_stack_ref_intern())
@@ -3565,11 +3573,30 @@ ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
         if (entry_frame.isActive()) {
             entry_frame.exit(xsink);
         }
+        restoreDestructorDeferral();
         return;
     }
     // the exit handler runs while the thread is still in the Program, before anything is restored
     entry_frame.exit(xsink);
     restoreContext();
+}
+
+void ProgramThreadCountContextHelper::suspendDestructorDeferral(ThreadData* td) {
+    assert(!dtor_defer_suspended);
+    saved_dtor_defer = td->dtor_cancel_defer_count;
+    td->dtor_cancel_defer_count = 0;
+    dtor_defer_suspended = true;
+}
+
+void ProgramThreadCountContextHelper::restoreDestructorDeferral() {
+    if (!dtor_defer_suspended) {
+        return;
+    }
+    ThreadData* td = thread_data.get();
+    // the destructors that ran in between restored the depths they changed
+    assert(!td->dtor_cancel_defer_count);
+    td->dtor_cancel_defer_count = saved_dtor_defer;
+    dtor_defer_suspended = false;
 }
 
 void ProgramThreadCountContextHelper::restoreContext() {
@@ -3590,6 +3617,7 @@ void ProgramThreadCountContextHelper::restoreContext() {
     }
     // the call budgets started when the Program was entered end with the call
     td->sandbox_budgets.leave(td->tid, this);
+    restoreDestructorDeferral();
     td->current_pgm = old_pgm;
     td->tlpd = old_tlpd;
     td->current_pgm_ctx = old_ctx;
@@ -3613,6 +3641,11 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     // variable access, so only skip setup when the current program already has
     // a live thread-local program data frame.
     if (pgm == td->current_pgm && td->tlpd) {
+        // sandboxed code called from the destructor of a trusted class (a builtin class's destructor runs in its
+        // caller's Program) does not get the destructor's deferral
+        if (td->dtor_cancel_defer_count && qore_program_has_sandbox_manager(pgm)) {
+            suspendDestructorDeferral(td);
+        }
         // the current Program is not always the entered one: it is also set to parse or commit a Program, or to
         // look up its metadata, and code that runs then enters the Program here, which runs its entry handler; a
         // call within the entered Program, the usual case, costs only this comparison
@@ -3666,6 +3699,10 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         ReferenceHolder<QoreSandboxManager> sm(pp->getSandboxManagerRef(), nullptr);
         if (sm) {
             td->sandbox_budgets.enter(td->tid, *sm, this);
+            // sandboxed code called from the destructor of a trusted class does not get the destructor's deferral
+            if (td->dtor_cancel_defer_count) {
+                suspendDestructorDeferral(td);
+            }
         }
     }
 
@@ -7430,6 +7467,13 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
         // the thread has left the call since the bit was set (or the TID was reused): the bit is stale
         thread_list.clearSandboxLimit(tid, td->sandbox_budgets);
     }
+    // the destructor of a trusted class completes on a cancelled or interrupted thread; the request is left untouched
+    // and raised after the destructor returns.  A sandbox limit was checked above: it is never deferred here, so a
+    // destructor running in a sandbox call cannot run unbounded (see "Destructors" in
+    // design/cooperative-cancellation.md)
+    if (td && td->dtor_cancel_defer_count) {
+        return false;
+    }
     if ((bits & QCR_THREAD_CANCEL) && check_cancel_in_scope(tid)) {
         if (xsink) {
             // hold a reference while formatting; a concurrent cancelThread() call would otherwise
@@ -7496,7 +7540,45 @@ void qore_pop_cancel_deferral() {
 
 bool qore_is_cancel_deferred() {
     ThreadData* td = thread_data.get();
+    // only a full deferral: while the destructor of a trusted class runs, a sandbox limit can still be delivered, so
+    // waits must stay registered for a wakeup then
     return td && td->cancel_defer_count;
+}
+
+QoreDestructorCancelHelper::QoreDestructorCancelHelper(bool sandboxed) : td(thread_data.get()) {
+    if (!td) {
+        return;
+    }
+    if (!sandboxed) {
+        ++td->dtor_cancel_defer_count;
+        pushed = true;
+        return;
+    }
+    // sandboxed code never runs under a deferral, neither one of a trusted destructor that releases the object nor
+    // one in effect where the object is released (thread teardown, a cleanup critical section)
+    saved_defer = td->cancel_defer_count;
+    saved_dtor_defer = td->dtor_cancel_defer_count;
+    td->cancel_defer_count = 0;
+    td->dtor_cancel_defer_count = 0;
+    suspended = true;
+    // a request that a cancellation point would deliver now: the destructor is skipped; the request stays pending
+    skip_dtor = qore_check_cancel(nullptr, "destructor");
+}
+
+QoreDestructorCancelHelper::~QoreDestructorCancelHelper() {
+    if (pushed) {
+        // an underflow would leave the thread permanently uncancellable, so it is refused in release builds as well
+        assert(td->dtor_cancel_defer_count);
+        if (td->dtor_cancel_defer_count) {
+            --td->dtor_cancel_defer_count;
+        }
+    } else if (suspended) {
+        // destructors of the class's members ran in between and restored the depths they changed
+        assert(!td->cancel_defer_count);
+        assert(!td->dtor_cancel_defer_count);
+        td->cancel_defer_count = saved_defer;
+        td->dtor_cancel_defer_count = saved_dtor_defer;
+    }
 }
 
 #ifdef HAVE_POLL
