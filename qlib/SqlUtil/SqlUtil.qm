@@ -154,6 +154,11 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - fixed @ref SqlUtil::AbstractTable::setupTable() "AbstractTable::setupTable()" and the
+      @ref SqlUtil::Table "Table" constructor to accept a description from
+      @ref SqlUtil::AbstractTable::getDescriptionHash() "AbstractTable::getDescriptionHash()" with an added column that
+      has driver-specific options, such as one from the \c Schema module's \c c_date(); applying the column's
+      driver options raised \c RUNTIME-TYPE-ERROR
     - a column with a qore type and a native type that the database's type map does not have raises
       \c COLUMN-ERROR, which names the column and the type; it raised \c RUNTIME-TYPE-ERROR
     - the driver-specific options of a description under the key of a database's native driver (ex: \c "oracle",

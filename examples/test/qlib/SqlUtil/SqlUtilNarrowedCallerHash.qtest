@@ -9,6 +9,7 @@
 %requires QUnit
 %requires SqlUtil
 %requires Sqlite3SqlUtil
+%requires Schema
 
 %try-module sqlite3
 %define NO_SQLITE3
@@ -37,6 +38,10 @@ class SqlUtilNarrowedCallerHashTest inherits QUnit::Test {
         addTestCase("createTempTable() adds a primary key", \tempTablePrimaryKey());
         addTestCase("iterator inserts and upserts count changes in a narrowed option hash", \iteratorOptions());
         addTestCase("creation SQL converts a narrowed omission option", \creationOptions());
+        addTestCase("setupTable() applies driver options of hashdecl column descriptions",
+            \hashdeclColumnDriverOptions());
+        addTestCase("a table description from getDescriptionHash() takes a column with driver options",
+            \descriptionHashColumnDriverOptions());
         set_return_value(main());
     }
 
@@ -129,5 +134,72 @@ class SqlUtilNarrowedCallerHashTest inherits QUnit::Test {
         assertEq(1, t.getCreateSql({"omit": "indexes"}).size());
         assertEq(2, t.getCreateSql().size());
         assertEq(t.getCreateTableSql(), t.getCreateTableSql({"omit": "indexes"}));
+    }
+
+    #! column descriptions that are all GenericColumnInfo hashes narrow the column hash to that type
+    hashdeclColumnDriverOptions() {
+        Datasource ds = getDatasource();
+        hash<string, hash<GenericColumnInfo>> columns = {
+            "id": <GenericColumnInfo>{"qore_type": Type::Int, "notnull": True},
+            "dt": <GenericColumnInfo>{
+                "qore_type": Type::Date,
+                "driver": {"sqlite3": {"native_type": "text", "notnull": True}},
+            },
+            # driver options for another driver only
+            "other": <GenericColumnInfo>{
+                "qore_type": Type::String,
+                "size": 20,
+                "driver": {"oracle": {"native_type": "varchar2"}},
+            },
+        };
+        hash<auto> desc = {"columns": columns};
+        assertEq("hash<string, hash<GenericColumnInfo>>", desc.columns.fullType());
+
+        Table t(ds, desc, "nh_hashdecl_columns");
+        Columns cols = t.describe();
+        assertEq(("id", "dt", "other"), cols.keys());
+        assertEq("text", cols.dt.native_type);
+        assertFalse(cols.dt.nullable);
+        assertTrue(cols.other.nullable);
+        # the Oracle options are not applied
+        assertEq(Type::String, cols.other.qore_type);
+        assertNeq("varchar2", cols.other.native_type);
+
+        # the caller's description is not changed
+        assertEq("hash<string, hash<GenericColumnInfo>>", desc.columns.fullType());
+        assertEq({"sqlite3": {"native_type": "text", "notnull": True}}, desc.columns.dt.driver);
+        assertEq({"oracle": {"native_type": "varchar2"}}, desc.columns.other.driver);
+    }
+
+    #! a description of an existing table plus a column with driver options, as made by Schema::c_date()
+    descriptionHashColumnDriverOptions() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        Table src(ds, {"columns": {
+            "id": {"qore_type": Type::Int, "notnull": True},
+            "name": {"qore_type": Type::String, "size": 20},
+        }}, "nh_desc_src");
+        src.create();
+
+        AbstractTable live = AbstractTable::getTable(ds, "nh_desc_src");
+        hash<auto> desc = live.getDescriptionHash();
+        # every column description is a GenericColumnInfo hash, so the column hash is narrowed to it
+        assertEq("hash<string, hash<GenericColumnInfo>>", desc.columns.fullType());
+
+        # Schema::c_date() has driver options for Oracle and PostgreSQL only
+        desc.columns.started = c_date(True, "partition key");
+        assertEq({"oracle": {"native_type": "date"}, "pgsql": {"native_type": "date"}}, desc.columns.started.driver);
+        desc.columns.archived = <GenericColumnInfo>{
+            "qore_type": Type::Date,
+            "driver": {"sqlite3": {"native_type": "text"}},
+        };
+
+        Table copy(ds, desc, "nh_desc_copy");
+        copy.create();
+        Columns cols = AbstractTable::getTable(ds, "nh_desc_copy").describe();
+        assertEq(("id", "name", "started", "archived"), cols.keys());
+        assertFalse(cols.started.nullable);
+        assertEq("text", cols.archived.native_type);
+        assertEq("hash<string, hash<GenericColumnInfo>>", desc.columns.fullType());
     }
 }
