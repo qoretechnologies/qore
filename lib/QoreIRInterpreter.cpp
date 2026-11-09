@@ -2683,11 +2683,24 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
         func.interpreter_borrowed_bases = std::move(borrowed_bases);
     }
     // the locals owned by the function, which ensureLocalInstantiated() tells from the variables of an enclosing
-    // scope: the pre-instantiated locals and every body local
+    // scope: the pre-instantiated locals, every body local, and every local that the function instantiates itself
+    // at its block (as the native code tells them; see the classification of locals in QoreIRToLLVM): a closure-bound
+    // local that an on_block_exit handler declares is not pre-instantiated in the handler, and the handler has no
+    // body locals (qore#5653)
     {
         std::unordered_set<const void*> own_locals(func.pre_instantiated_locals);
         for (LocalVar* lv : func.all_body_locals) {
             own_locals.insert(reinterpret_cast<const void*>(lv));
+        }
+        for (const auto& block : func.blocks) {
+            for (const auto& inst : block->instructions) {
+                if (inst->opcode == QoreIROpcode::InstantiateLocal) {
+                    const LocalVar* lv = static_cast<const QoreIRLocalInstruction*>(inst.get())->local;
+                    if (lv) {
+                        own_locals.insert(reinterpret_cast<const void*>(lv));
+                    }
+                }
+            }
         }
         func.interpreter_function_own_locals = std::move(own_locals);
     }

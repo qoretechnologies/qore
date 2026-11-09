@@ -164,6 +164,27 @@
 // Forward declaration from Function.cpp - collects all locals from a statement tree
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
+//! Removes the closure-bound locals that an on_block_exit handler declares from its pre-instantiated locals
+/** A handler starts with the slots of the function it belongs to, all of them marked pre-instantiated, as its code
+    reads the variables of the enclosing scope.  The function also has slots for the variables that the handler body
+    declares, as it lowers the handler inline on its normal exit paths; a closure-bound one is instantiated at its
+    block by the InstantiateLocal of the handler body, which the IR interpreter skips for a pre-instantiated local.
+    The handler body run out of line, on an exception, then found no value container for the variable, and the
+    handler stopped at its first access with an LVALUE-ERROR (qore#5653).  As in the function itself (see
+    UserVariantBase's IR compilation), a closure-bound body local is instantiated at its lexical scope, so it is not
+    pre-instantiated; the InstantiateLocal makes it a local of the handler (see QoreIRInterpreter's own locals).
+*/
+static void qore_ir_scope_handler_closure_locals(QoreIRFunction& handler_func, const StatementBlock* handler_code) {
+    std::vector<LocalVar*> handler_locals;
+    collectAllStatementLocals(handler_code, handler_locals);
+    for (LocalVar* lv : handler_locals) {
+        if (lv && lv->closureUse()) {
+            handler_func.pre_instantiated_locals.erase(reinterpret_cast<const void*>(lv));
+            handler_func.pre_instantiated_cache.erase(lv);
+        }
+    }
+}
+
 static bool blockHasTerminator(const QoreIRBasicBlock* block) {
     if (!block || block->instructions.empty()) {
         return false;
@@ -4886,6 +4907,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
                 handler_func->pre_instantiated_cache.insert(lvar);
             }
         }
+        qore_ir_scope_handler_closure_locals(*handler_func, handler.code);
 
         // Create entry block for handler
         QoreIRBasicBlock* entry = handler_func->createBlock("entry");
@@ -5010,6 +5032,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
                 handler_func->pre_instantiated_cache.insert(lvar);
             }
         }
+        qore_ir_scope_handler_closure_locals(*handler_func, handler.code);
 
         // Create entry block for handler
         QoreIRBasicBlock* entry = handler_func->createBlock("entry");
