@@ -84,16 +84,30 @@ module ConvertApiDataProvider {
                 "**Input**: a `file` or a source `url`; converters that take several files (such as `pdf` to "
                 "`merge`) take `files` or `urls`, and a few converters take their input in `parameters` instead, "
                 "for example `data` to `qrcode` with `{\"Data\": \"https://www.convertapi.com\"}`.\n\n"
-                "**Parameters**: other converter parameters go in `parameters` by their ConvertAPI names; the "
-                "`get-converter-info` action lists them.\n\n"
+                "**Parameters**: when both formats are selected, the parameters of the converter are added as "
+                "typed options, as ConvertAPI describes them; parameters can also be given in `parameters` by "
+                "their ConvertAPI names, which the `get-converter-info` action lists.\n\n"
                 "**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is "
                 "`True`.",
             "action_code": DPAT_API,
 
+            # the formats select the converter, whose parameters are added as typed options when both are given
+            "data_dependent_options": True,
+
             # the formats first, as the destination formats depend on the source format, then the input, then the
             # converter parameters and the output options
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                ConvertApiConvertRequestDataType::Fields{"from", "to", "file", "url", "files", "urls"},
+                ConvertApiConvertRequestDataType::Fields{"from",}, {
+                    "structural_determinate": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertRequestDataType::Fields{"to",}, {
+                    "structural_determinate": True,
+                    "has_dependents": True,
+                    "on_change": ("refetch",),
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertRequestDataType::Fields{"file", "url", "files", "urls"},
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 ConvertApiConvertRequestDataType::Fields{"parameters",}, {
                     "preselected": True,
@@ -238,15 +252,23 @@ module ConvertApiDataProvider {
             "short_desc": "Convert the pages of a PDF to JPG, PNG, TIFF or WebP images",
             "desc": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF "
                 "file.\n\n"
-                "Choose the image `format` and resolution, and optionally a page range.",
+                "Choose the image `format` and resolution, and optionally a page range; the other options "
+                "depend on the format.",
             "action_code": DPAT_API,
+
+            # the image formats take different parameters, so the options depend on the format
+            "data_dependent_options": True,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ConvertApiConvertPdfToImageRequestDataType::Fields{"file", "url"}, {
                     "preselected": True,
                 },
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                ConvertApiConvertPdfToImageRequestDataType::Fields{"format",},
+                ConvertApiConvertPdfToImageRequestDataType::Fields{"format",}, {
+                    "structural_determinate": True,
+                    "has_dependents": True,
+                    "on_change": ("refetch",),
+                },
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 ConvertApiConvertPdfToImageRequestDataType::Fields - ("file", "url", "format"),
             ),
@@ -337,6 +359,14 @@ module ConvertApiDataProvider {
     converters of the ConvertAPI \c info endpoint as reference data (\c source_formats and
     \c destination_formats); the converter list is cached for one hour.
 
+    The options of the \c convert-file action depend on the formats: when both are given, the parameters of the
+    converter are added as typed options, built from ConvertAPI's description of the converter in the \c info
+    endpoint (see @ref ConvertApiDataProvider::ConvertApiConverterParameters "ConvertApiConverterParameters"), which
+    is cached for one hour.  A request is checked with the same types, and its converter parameters can be given in
+    their own fields or in \c parameters.  The shortcut actions type all the parameters of their converters, except
+    those that the module sets itself (the input, the output and the authentication); the options of
+    \c convert-pdf-to-image depend on the image format, as the image converters take different parameters.
+
     The actions are written by hand rather than generated from ConvertAPI's OpenAPI description
     (<tt>https://v2.convertapi.com/info/openapi</tt>, one operation for each of more than 300 converters): the module
     offers a generic action for every converter and a curated set of shortcut actions with typed options, and the
@@ -360,7 +390,7 @@ hash<auto> result = convertapi.getChildProviderEx("convert-file").doRequest({
     "from": "docx",
     "to": "pdf",
     "url": "https://cdn.convertapi.com/public/files/demo.docx",
-    "parameters": {"PageRange": "1-2"},
+    "PageRange": "1-2",
 });
 File::writeBinaryFile("demo.pdf", result.Files[0].FileData);
     @endcode

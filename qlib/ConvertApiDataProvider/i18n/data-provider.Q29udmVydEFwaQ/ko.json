@@ -348,8 +348,8 @@
           "message": "모든 ConvertAPI 변환기로 파일 변환"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.desc": {
-          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\n**Formats**: select the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n**Input**: a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`, and a few converters take their input in `parameters` instead, for example `data` to `qrcode` with `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parameters**: other converter parameters go in `parameters` by their ConvertAPI names; the `get-converter-info` action lists them.\n\n**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is `True`.",
-          "message": "원본 형식과 대상 형식으로 지정한 ConvertAPI 변환기로 파일을 변환합니다.\n\n**형식**: 먼저 `from` 형식을 선택하세요. 그러면 `to` 목록에 해당 원본 형식의 변환기가 지원하는 대상 형식이 표시됩니다.\n\n**입력**: `file` 또는 원본 `url`입니다. 여러 파일을 받는 변환기(예: `pdf`에서 `merge`)는 `files` 또는 `urls`를 받으며, 일부 변환기는 대신 `parameters`로 입력을 받습니다. 예를 들어 `qrcode`의 `data`는 `{\"Data\": \"https://www.convertapi.com\"}`처럼 지정합니다.\n\n**매개변수**: 그 밖의 변환기 매개변수는 ConvertAPI 이름으로 `parameters`에 지정합니다. `get-converter-info` 작업이 매개변수 목록을 보여 줍니다.\n\n**출력**: 출력 파일은 `FileData`로 반환되며, `store_file`이 `True`이면 다운로드 URL로 반환됩니다."
+          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\n**Formats**: select the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n**Input**: a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`, and a few converters take their input in `parameters` instead, for example `data` to `qrcode` with `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parameters**: when both formats are selected, the parameters of the converter are added as typed options, as ConvertAPI describes them; parameters can also be given in `parameters` by their ConvertAPI names, which the `get-converter-info` action lists.\n\n**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is `True`.",
+          "message": "원본 형식과 대상 형식으로 지정한 ConvertAPI 변환기로 파일을 변환합니다.\n\n**형식**: 먼저 `from` 형식을 선택하세요. 그러면 `to` 목록에 해당 원본 형식의 변환기가 지원하는 대상 형식이 표시됩니다.\n\n**입력**: `file` 또는 원본 `url`입니다. 여러 파일을 받는 변환기(예: `pdf`에서 `merge`)는 `files` 또는 `urls`를 받으며, 일부 변환기는 대신 `parameters`로 입력을 받습니다. 예를 들어 `data`에서 `qrcode`로 변환할 때는 `{\"Data\": \"https://www.convertapi.com\"}`처럼 지정합니다.\n\n**매개변수**: 두 형식을 모두 선택하면 변환기의 매개변수가 ConvertAPI의 설명대로 유형이 지정된 옵션으로 추가됩니다. 매개변수는 ConvertAPI 이름으로 `parameters`에 지정할 수도 있으며, `get-converter-info` 작업이 매개변수 목록을 보여 줍니다.\n\n**출력**: 출력 파일은 `FileData`로 반환되며, `store_file`이 `True`이면 다운로드 URL로 반환됩니다."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.display_name": {
           "source": "Source Format",
@@ -927,6 +927,42 @@
           "source": "The password to open a protected document",
           "message": "보호된 문서를 열기 위한 비밀번호"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1hcmt1cA.display_name": {
+          "source": "Include Markup",
+          "message": "마크업 포함"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1hcmt1cA.short_desc": {
+          "source": "Include tracked changes and comments",
+          "message": "추적된 변경 내용 및 메모 포함"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1hcmt1cA.desc": {
+          "source": "Set to `True` to include the document markup, such as tracked changes and comments, in the PDF",
+          "message": "추적된 변경 내용 및 메모 같은 문서 마크업을 PDF에 포함하려면 `True`(으)로 설정하세요"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZVN0cnVjdHVyZVRhZ3M.display_name": {
+          "source": "Include Structure Tags",
+          "message": "구조 태그 포함"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZVN0cnVjdHVyZVRhZ3M.short_desc": {
+          "source": "Create a tagged PDF for accessibility",
+          "message": "접근성을 위해 태그가 지정된 PDF 생성"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZVN0cnVjdHVyZVRhZ3M.desc": {
+          "source": "Set to `True` to include the structure tags of the document, which make a tagged PDF for accessibility",
+          "message": "문서의 구조 태그를 포함하여 접근성을 위해 태그가 지정된 PDF를 생성하려면 `True`(으)로 설정하세요"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.display_name": {
+          "source": "Include Metadata",
+          "message": "메타데이터 포함"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.short_desc": {
+          "source": "Include the document metadata",
+          "message": "문서 메타데이터 포함"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.desc": {
+          "source": "Set to `False` to leave out the document metadata, such as the title, author and keywords; it is included by default",
+          "message": "제목, 작성자, 키워드 같은 문서 메타데이터를 제외하려면 `False`(으)로 설정하세요. 기본적으로 포함됩니다"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.display_name": {
           "source": "Bookmark Mode",
           "message": "책갈피 모드"
@@ -974,6 +1010,18 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.VXBkYXRlVGFibGVPZkNvbnRlbnRz.desc": {
           "source": "Set to `True` to update all tables of contents in the document before the conversion",
           "message": "변환하기 전에 문서의 모든 목차를 업데이트하려면 `True`(으)로 설정하세요"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.U3Vic2V0Rm9udHM.display_name": {
+          "source": "Subset Fonts",
+          "message": "글꼴 하위 집합 만들기"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.U3Vic2V0Rm9udHM.short_desc": {
+          "source": "Embed only the characters of the fonts that are used",
+          "message": "글꼴에서 사용된 문자만 포함"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.U3Vic2V0Rm9udHM.desc": {
+          "source": "Set to `True` to make the PDF smaller by embedding only the characters of the fonts that the document uses",
+          "message": "문서에서 사용하는 글꼴의 문자만 포함하여 PDF 크기를 줄이려면 `True`(으)로 설정하세요"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1203,6 +1251,30 @@
           "source": "The password to open a protected workbook",
           "message": "보호된 통합 문서를 열기 위한 비밀번호"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.display_name": {
+          "source": "Active Worksheet Only",
+          "message": "활성 워크시트만"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.short_desc": {
+          "source": "Convert only the active worksheet",
+          "message": "활성 워크시트만 변환"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.desc": {
+          "source": "Set to `True` to convert only the active worksheet",
+          "message": "활성 워크시트만 변환하려면 `True`(으)로 설정하세요"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0SW5kZXg.display_name": {
+          "source": "Worksheet Number",
+          "message": "워크시트 번호"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0SW5kZXg.short_desc": {
+          "source": "The number of the worksheet to convert",
+          "message": "변환할 워크시트의 번호"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0SW5kZXg.desc": {
+          "source": "The number of the worksheet to convert, from `1` to `2000`; all worksheets are converted by default",
+          "message": "변환할 워크시트의 번호로, `1`에서 `2000`까지입니다. 기본적으로 모든 워크시트가 변환됩니다"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0TmFtZQ.display_name": {
           "source": "Worksheet Name",
           "message": "워크시트 이름"
@@ -1215,17 +1287,17 @@
           "source": "The name of the worksheet to convert; all worksheets are converted by default",
           "message": "변환할 워크시트의 이름입니다. 기본적으로 모든 워크시트가 변환됩니다"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.display_name": {
-          "source": "Active Worksheet Only",
-          "message": "활성 워크시트만"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SW5jbHVkZU1ldGFkYXRh.display_name": {
+          "source": "Include Metadata",
+          "message": "메타데이터 포함"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.short_desc": {
-          "source": "Convert only the active worksheet",
-          "message": "활성 워크시트만 변환"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SW5jbHVkZU1ldGFkYXRh.short_desc": {
+          "source": "Include the document metadata",
+          "message": "문서 메타데이터 포함"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.desc": {
-          "source": "Set to `True` to convert only the active worksheet",
-          "message": "활성 워크시트만 변환하려면 `True`(으)로 설정하세요"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SW5jbHVkZU1ldGFkYXRh.desc": {
+          "source": "Set to `False` to leave out the document metadata, such as the title, author and keywords; it is included by default",
+          "message": "제목, 작성자, 키워드 같은 문서 메타데이터를 제외하려면 `False`(으)로 설정하세요. 기본적으로 포함됩니다"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.display_name": {
           "source": "Page Orientation",
@@ -1255,6 +1327,78 @@
           "source": "Landscape",
           "message": "가로"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "페이지 크기"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.short_desc": {
+          "source": "The page size",
+          "message": "페이지 크기"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.desc": {
+          "source": "The page size of the PDF",
+          "message": "PDF 페이지 크기"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "기본값"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The page setup of each worksheet (the default)",
+          "message": "각 워크시트의 페이지 설정(기본값)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcg.display_name": {
+          "source": "Letter",
+          "message": "Letter"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcnNtYWxs.display_name": {
+          "source": "Letter Small",
+          "message": "Letter Small"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOnRhYmxvaWQ.display_name": {
+          "source": "Tabloid",
+          "message": "Tabloid"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZGdlcg.display_name": {
+          "source": "Ledger",
+          "message": "Ledger"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZ2Fs.display_name": {
+          "source": "Legal",
+          "message": "Legal"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOnN0YXRlbWVudA.display_name": {
+          "source": "Statement",
+          "message": "Statement"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmV4ZWN1dGl2ZQ.display_name": {
+          "source": "Executive",
+          "message": "Executive"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEz.display_name": {
+          "source": "A3",
+          "message": "A3"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0.display_name": {
+          "source": "A4",
+          "message": "A4"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0c21hbGw.display_name": {
+          "source": "A4 Small",
+          "message": "A4 Small"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE1.display_name": {
+          "source": "A5",
+          "message": "A5"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmI0.display_name": {
+          "source": "B4",
+          "message": "B4"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmI1.display_name": {
+          "source": "B5",
+          "message": "B5"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Rml0VG9QYWdl.display_name": {
           "source": "Fit to Page",
           "message": "페이지에 맞춤"
@@ -1278,6 +1422,102 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QXV0b0ZpdENvbHVtbnM.desc": {
           "source": "Set to `True` to fit the column widths to their content, which removes unnecessary empty space",
           "message": "불필요한 빈 공간을 없애도록 열 너비를 내용에 맞추려면 `True`(으)로 설정하세요"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Q2xlYXJQcmludEFyZWE.display_name": {
+          "source": "Clear Print Area",
+          "message": "인쇄 영역 해제"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Q2xlYXJQcmludEFyZWE.short_desc": {
+          "source": "Ignore the print areas and convert whole worksheets",
+          "message": "인쇄 영역을 무시하고 전체 워크시트 변환"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Q2xlYXJQcmludEFyZWE.desc": {
+          "source": "Set to `True` to clear the print areas of the workbook, so that the whole content of each worksheet is converted",
+          "message": "통합 문서의 인쇄 영역을 해제하여 각 워크시트의 전체 내용을 변환하려면 `True`(으)로 설정하세요"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.U2NhbGU.display_name": {
+          "source": "Scale",
+          "message": "스케일"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.U2NhbGU.short_desc": {
+          "source": "The content scale in percent",
+          "message": "콘텐츠 스케일(%)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.U2NhbGU.desc": {
+          "source": "The scale of the content in percent, from `10` to `300`",
+          "message": "콘텐츠의 스케일(%)로, `10`에서 `300`까지입니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SGVhZGVyT25FYWNoUGFnZQ.display_name": {
+          "source": "Header on Each Page",
+          "message": "각 페이지에 헤더 행 표시"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SGVhZGVyT25FYWNoUGFnZQ.short_desc": {
+          "source": "Repeat the header row on every page",
+          "message": "모든 페이지에 헤더 행 반복"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SGVhZGVyT25FYWNoUGFnZQ.desc": {
+          "source": "Set to `True` to repeat the header row on each page of a worksheet that spans several pages: the header row of a table in the worksheet, or else its first row with data",
+          "message": "여러 페이지에 걸친 워크시트에서 각 페이지에 헤더 행을 반복하려면 `True`(으)로 설정하세요. 헤더 행으로는 워크시트에 있는 표의 헤더 행이 사용되며, 표가 없으면 데이터가 있는 첫 번째 행이 사용됩니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.VGhvdXNhbmRzU2VwYXJhdG9y.display_name": {
+          "source": "Thousands Separator",
+          "message": "천 단위 구분 기호"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.VGhvdXNhbmRzU2VwYXJhdG9y.short_desc": {
+          "source": "The thousands separator of numbers",
+          "message": "숫자의 천 단위 구분 기호"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.VGhvdXNhbmRzU2VwYXJhdG9y.desc": {
+          "source": "The thousands separator of the numbers in the PDF; the default is `,`",
+          "message": "PDF에 표시되는 숫자의 천 단위 구분 기호입니다. 기본값은 `,`입니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGVjaW1hbFNlcGFyYXRvcg.display_name": {
+          "source": "Decimal Separator",
+          "message": "소수점 구분 기호"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGVjaW1hbFNlcGFyYXRvcg.short_desc": {
+          "source": "The decimal separator of numbers",
+          "message": "숫자의 소수점 구분 기호"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGVjaW1hbFNlcGFyYXRvcg.desc": {
+          "source": "The decimal separator of the numbers in the PDF; the default is `.`",
+          "message": "PDF에 표시되는 숫자의 소수점 구분 기호입니다. 기본값은 `.`입니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.display_name": {
+          "source": "Date Format",
+          "message": "날짜 형식"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.short_desc": {
+          "source": "The format of dates",
+          "message": "날짜 형식"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.desc": {
+          "source": "The format of the dates in the PDF, whatever the regional settings of the workbook",
+          "message": "PDF의 날짜 형식입니다. 통합 문서의 지역 설정과 관계없이 적용됩니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOnVz.display_name": {
+          "source": "US (M/d/yyyy)",
+          "message": "미국식(M/d/yyyy)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOnVz.desc": {
+          "source": "The default",
+          "message": "기본값"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmlzbw.display_name": {
+          "source": "ISO (yyyy-MM-dd)",
+          "message": "ISO 형식(yyyy-MM-dd)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmV1.display_name": {
+          "source": "EU (dd/MM/yyyy)",
+          "message": "유럽식(dd/MM/yyyy)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmdlcm1hbg.display_name": {
+          "source": "German (dd.MM.yyyy)",
+          "message": "독일식(dd.MM.yyyy)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmphcGFuZXNl.display_name": {
+          "source": "Japanese (yyyy/MM/dd)",
+          "message": "일본식(yyyy/MM/dd)"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1531,6 +1771,18 @@
           "source": "Set to `True` to include the hidden slides in the PDF",
           "message": "숨겨진 슬라이드를 PDF에 포함하려면 `True`(으)로 설정하세요"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.display_name": {
+          "source": "Include Metadata",
+          "message": "메타데이터 포함"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.short_desc": {
+          "source": "Include the document metadata",
+          "message": "문서 메타데이터 포함"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.desc": {
+          "source": "Set to `False` to leave out the document metadata, such as the title, author and keywords; it is included by default",
+          "message": "제목, 작성자, 키워드 같은 문서 메타데이터를 제외하려면 `False`(으)로 설정하세요. 기본적으로 포함됩니다"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.display_name": {
           "source": "Convert Speaker Notes",
           "message": "발표자 노트 변환"
@@ -1566,6 +1818,18 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlBhZ2VDb21tZW50cw.desc": {
           "source": "The notes as page comments",
           "message": "노트를 페이지 주석으로 표시합니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.RW1iZWRGb250cw.display_name": {
+          "source": "Embed Fonts",
+          "message": "글꼴 포함"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.RW1iZWRGb250cw.short_desc": {
+          "source": "Embed the fonts in the PDF",
+          "message": "PDF에 글꼴 포함"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.RW1iZWRGb250cw.desc": {
+          "source": "Set to `False` to leave the fonts out of the PDF; they are embedded by default",
+          "message": "PDF에 글꼴을 포함하지 않으려면 `False`(으)로 설정하세요. 기본적으로 포함됩니다"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1783,6 +2047,278 @@
           "source": "The filename",
           "message": "파일 이름"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVJhbmdl.display_name": {
+          "source": "Page Range",
+          "message": "페이지 범위"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVJhbmdl.short_desc": {
+          "source": "The pages to convert",
+          "message": "변환할 페이지"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVJhbmdl.desc": {
+          "source": "The pages to convert, as a range or a comma-separated list.\n\n**Example**: `1-10` or `1,2,5`; all pages are converted by default",
+          "message": "변환할 페이지를 범위 또는 쉼표로 구분한 목록으로 지정합니다.\n\n**예**: `1-10` 또는 `1,2,5`. 기본적으로 모든 페이지가 변환됩니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFVzZXJuYW1l.display_name": {
+          "source": "Authentication User Name",
+          "message": "인증 사용자 이름"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFVzZXJuYW1l.short_desc": {
+          "source": "The user name for HTTP authentication of the page",
+          "message": "페이지의 HTTP 인증에 사용할 사용자 이름"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFVzZXJuYW1l.desc": {
+          "source": "The user name for a web page that is protected with HTTP authentication",
+          "message": "HTTP 인증으로 보호되는 웹 페이지의 사용자 이름"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFBhc3N3b3Jk.display_name": {
+          "source": "Authentication Password",
+          "message": "인증 비밀번호"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFBhc3N3b3Jk.short_desc": {
+          "source": "The password for HTTP authentication of the page",
+          "message": "페이지의 HTTP 인증에 사용할 비밀번호"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFBhc3N3b3Jk.desc": {
+          "source": "The password for a web page that is protected with HTTP authentication",
+          "message": "HTTP 인증으로 보호되는 웹 페이지의 비밀번호"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llcw.display_name": {
+          "source": "Cookies",
+          "message": "쿠키"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llcw.short_desc": {
+          "source": "Cookies to send with the page request",
+          "message": "페이지 요청과 함께 전송할 쿠키"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llcw.desc": {
+          "source": "Cookies to send with the request for the web page, separated by semicolons.\n\n**Example**: `name1=value1; name2=value2`",
+          "message": "웹 페이지 요청과 함께 전송할 쿠키로, 세미콜론으로 구분합니다.\n\n**예**: `name1=value1; name2=value2`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVycw.display_name": {
+          "source": "HTTP Headers",
+          "message": "HTTP 헤더"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVycw.short_desc": {
+          "source": "Custom HTTP headers to send with the page request",
+          "message": "페이지 요청과 함께 전송할 사용자 지정 HTTP 헤더"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVycw.desc": {
+          "source": "Custom HTTP headers to send with the request for the web page, as `name:value` pairs separated by `|`.\n\n**Example**: `Accept-Language:de|Cache-Control:no-cache`",
+          "message": "웹 페이지 요청과 함께 전송할 사용자 지정 HTTP 헤더로, `|`(으)로 구분한 `name:value` 쌍으로 지정합니다.\n\n**예**: `Accept-Language:de|Cache-Control:no-cache`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QWRCbG9jaw.display_name": {
+          "source": "Block Ads",
+          "message": "광고 차단"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QWRCbG9jaw.short_desc": {
+          "source": "Block the ads of the page",
+          "message": "페이지의 광고 차단"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QWRCbG9jaw.desc": {
+          "source": "Set to `True` to block the ads of the web page",
+          "message": "웹 페이지의 광고를 차단하려면 `True`(으)로 설정하세요"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llQ29uc2VudEJsb2Nr.display_name": {
+          "source": "Remove Cookie Warnings",
+          "message": "쿠키 경고 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llQ29uc2VudEJsb2Nr.short_desc": {
+          "source": "Remove cookie consent banners",
+          "message": "쿠키 동의 배너 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llQ29uc2VudEJsb2Nr.desc": {
+          "source": "Set to `True` to try to remove the cookie consent warnings of the web page",
+          "message": "웹 페이지의 쿠키 동의 경고 제거를 시도하려면 `True`(으)로 설정하세요"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.V2FpdEVsZW1lbnQ.display_name": {
+          "source": "Wait for Element",
+          "message": "요소 대기"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.V2FpdEVsZW1lbnQ.short_desc": {
+          "source": "CSS selector of an element to wait for",
+          "message": "대기할 요소의 CSS 선택자"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.V2FpdEVsZW1lbnQ.desc": {
+          "source": "The CSS selector of an element that the converter waits for: the conversion begins when the element appears in the page.\n\n**Example**: `#content`",
+          "message": "변환기가 기다리는 요소의 CSS 선택자입니다. 이 요소가 페이지에 나타나면 변환이 시작됩니다.\n\n**예**: `#content`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckpz.display_name": {
+          "source": "Run JavaScript",
+          "message": "JavaScript 실행"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckpz.short_desc": {
+          "source": "JavaScript to run before the conversion",
+          "message": "변환 전에 실행할 JavaScript"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckpz.desc": {
+          "source": "JavaScript code to run in the web page before the conversion begins",
+          "message": "변환이 시작되기 전에 웹 페이지에서 실행할 JavaScript 코드"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckNzcw.display_name": {
+          "source": "Additional CSS",
+          "message": "추가 CSS"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckNzcw.short_desc": {
+          "source": "CSS to apply before the conversion",
+          "message": "변환 전에 적용할 CSS"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckNzcw.desc": {
+          "source": "CSS to apply to the web page before the conversion begins",
+          "message": "변환이 시작되기 전에 웹 페이지에 적용할 CSS"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGlkZUVsZW1lbnRz.display_name": {
+          "source": "Hide Elements",
+          "message": "요소 숨기기"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGlkZUVsZW1lbnRz.short_desc": {
+          "source": "CSS selector of the elements to hide",
+          "message": "숨길 요소의 CSS 선택자"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGlkZUVsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements to hide during the conversion.\n\n**Example**: `.banner, #chat`",
+          "message": "변환하는 동안 숨길 요소의 CSS 선택자입니다.\n\n**예**: `.banner, #chat`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2hvd0VsZW1lbnRz.display_name": {
+          "source": "Show Only Elements",
+          "message": "지정 요소만 표시"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2hvd0VsZW1lbnRz.short_desc": {
+          "source": "CSS selector of the only elements to show",
+          "message": "표시할 요소만 지정하는 CSS 선택자"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2hvd0VsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements to show during the conversion; all other elements are hidden",
+          "message": "변환하는 동안 표시할 요소의 CSS 선택자입니다. 나머지 요소는 모두 숨겨집니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRXaWR0aA.display_name": {
+          "source": "Viewport Width",
+          "message": "뷰포트 너비"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRXaWR0aA.short_desc": {
+          "source": "The browser viewport width in pixels",
+          "message": "브라우저 뷰포트 너비(픽셀)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRXaWR0aA.desc": {
+          "source": "The width of the browser viewport in pixels, from `200` to `4000`; the default is `1366`",
+          "message": "브라우저 뷰포트의 너비(픽셀)로, `200`에서 `4000`까지입니다. 기본값은 `1366`입니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRIZWlnaHQ.display_name": {
+          "source": "Viewport Height",
+          "message": "뷰포트 높이"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRIZWlnaHQ.short_desc": {
+          "source": "The browser viewport height in pixels",
+          "message": "브라우저 뷰포트 높이(픽셀)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRIZWlnaHQ.desc": {
+          "source": "The height of the browser viewport in pixels, from `200` to `4000`; the default is `1024`",
+          "message": "브라우저 뷰포트의 높이(픽셀)로, `200`에서 `4000`까지입니다. 기본값은 `1024`입니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.display_name": {
+          "source": "Fixed Elements",
+          "message": "고정 요소"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.short_desc": {
+          "source": "How elements with a fixed position are handled",
+          "message": "고정 위치 요소의 처리 방식"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.desc": {
+          "source": "How the elements with a fixed CSS position are changed to adapt the page for the PDF",
+          "message": "페이지를 PDF에 맞게 조정하기 위해 CSS 고정 위치가 지정된 요소를 변경하는 방식"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmZpeGVk.display_name": {
+          "source": "Leave Unchanged",
+          "message": "변경 안 함"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmZpeGVk.desc": {
+          "source": "The elements keep their fixed position (the default)",
+          "message": "요소가 고정 위치를 유지합니다(기본값)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmFic29sdXRl.display_name": {
+          "source": "Absolute",
+          "message": "절대 위치"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmFic29sdXRl.desc": {
+          "source": "The elements get an absolute position",
+          "message": "요소를 절대 위치로 지정합니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOnJlbGF0aXZl.display_name": {
+          "source": "Relative",
+          "message": "상대 위치"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOnJlbGF0aXZl.desc": {
+          "source": "The elements get a relative position",
+          "message": "요소를 상대 위치로 지정합니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmhpZGU.display_name": {
+          "source": "Hide",
+          "message": "숨기기"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmhpZGU.desc": {
+          "source": "The elements are hidden",
+          "message": "요소를 숨깁니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXZvaWRCcmVha0VsZW1lbnRz.display_name": {
+          "source": "Avoid Page Breaks in Elements",
+          "message": "요소 내 페이지 나누기 방지"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXZvaWRCcmVha0VsZW1lbnRz.short_desc": {
+          "source": "CSS selector of elements not to split across pages",
+          "message": "여러 페이지로 나누지 않을 요소의 CSS 선택자"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXZvaWRCcmVha0VsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements that must not be split by a page break",
+          "message": "페이지 나누기로 분할되면 안 되는 요소의 CSS 선택자"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtCZWZvcmVFbGVtZW50cw.display_name": {
+          "source": "Page Break Before Elements",
+          "message": "요소 앞에서 페이지 나누기"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtCZWZvcmVFbGVtZW50cw.short_desc": {
+          "source": "CSS selector of elements that start a new page",
+          "message": "새 페이지를 시작하는 요소의 CSS 선택자"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtCZWZvcmVFbGVtZW50cw.desc": {
+          "source": "The CSS selector of the elements to insert a page break before",
+          "message": "앞에 페이지 나누기를 삽입할 요소의 CSS 선택자"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtBZnRlckVsZW1lbnRz.display_name": {
+          "source": "Page Break After Elements",
+          "message": "요소 뒤에서 페이지 나누기"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtBZnRlckVsZW1lbnRz.short_desc": {
+          "source": "CSS selector of elements that end a page",
+          "message": "페이지를 끝내는 요소의 CSS 선택자"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtBZnRlckVsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements to insert a page break after",
+          "message": "뒤에 페이지 나누기를 삽입할 요소의 CSS 선택자"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UmVzcGVjdFZpZXdwb3J0.display_name": {
+          "source": "Respect Viewport",
+          "message": "뷰포트 준수"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UmVzcGVjdFZpZXdwb3J0.short_desc": {
+          "source": "Show the page as it looks in the browser",
+          "message": "브라우저에 보이는 대로 페이지 표시"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UmVzcGVjdFZpZXdwb3J0.desc": {
+          "source": "Set to `False` to create the PDF like the print to PDF function of Chrome; by default, the PDF shows the page as it looks in the browser",
+          "message": "Chrome의 PDF로 인쇄 기능처럼 PDF를 생성하려면 `False`(으)로 설정하세요. 기본적으로 PDF에는 브라우저에 보이는 대로 페이지가 표시됩니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2NhbGU.display_name": {
+          "source": "Scale",
+          "message": "스케일"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2NhbGU.short_desc": {
+          "source": "The page scale in percent",
+          "message": "페이지 스케일(%)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2NhbGU.desc": {
+          "source": "The scale of the web page in percent, from `10` to `200`; the default is `100`",
+          "message": "웹 페이지의 스케일(%)로, `10`에서 `200`까지입니다. 기본값은 `100`입니다"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.display_name": {
           "source": "Page Size",
           "message": "페이지 크기"
@@ -1899,6 +2435,30 @@
           "source": "Landscape",
           "message": "가로"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVdpZHRo.display_name": {
+          "source": "Page Width",
+          "message": "페이지 너비"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVdpZHRo.short_desc": {
+          "source": "A custom page width in millimeters",
+          "message": "사용자 지정 페이지 너비(밀리미터)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVdpZHRo.desc": {
+          "source": "A custom page width in millimeters, from `10` to `30000`, which overrides `PageSize`",
+          "message": "사용자 지정 페이지 너비(밀리미터)로, `10`에서 `30000`까지입니다. `PageSize`보다 우선합니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZUhlaWdodA.display_name": {
+          "source": "Page Height",
+          "message": "페이지 높이"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZUhlaWdodA.short_desc": {
+          "source": "A custom page height in millimeters",
+          "message": "사용자 지정 페이지 높이(밀리미터)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZUhlaWdodA.desc": {
+          "source": "A custom page height in millimeters, from `10` to `30000`, which overrides `PageSize`",
+          "message": "사용자 지정 페이지 높이(밀리미터)로, `10`에서 `30000`까지입니다. `PageSize`보다 우선합니다"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luVG9w.display_name": {
           "source": "Top Margin",
           "message": "위쪽 여백"
@@ -1947,9 +2507,33 @@
           "source": "The left page margin in millimeters; the default is `10`",
           "message": "페이지 왼쪽 여백(밀리미터)입니다. 기본값은 `10`입니다"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVy.display_name": {
+          "source": "Header HTML",
+          "message": "머리글 HTML"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVy.short_desc": {
+          "source": "HTML for the header of each page",
+          "message": "각 페이지의 머리글 HTML"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVy.desc": {
+          "source": "HTML for the header of each page; elements with the classes `pageNumber`, `totalPages`, `title` and `date` are filled with the values for each page, and inline CSS can style the header.\n\n**Example**: `<span class='pageNumber'></span> / <span class='totalPages'></span>`",
+          "message": "각 페이지의 머리글 HTML입니다. `pageNumber`, `totalPages`, `title`, `date` 클래스가 있는 요소에는 각 페이지의 값이 채워지며, 인라인 CSS로 머리글 스타일을 지정할 수 있습니다.\n\n**예**: `<span class='pageNumber'></span> / <span class='totalPages'></span>`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rm9vdGVy.display_name": {
+          "source": "Footer HTML",
+          "message": "바닥글 HTML"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rm9vdGVy.short_desc": {
+          "source": "HTML for the footer of each page",
+          "message": "각 페이지의 바닥글 HTML"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rm9vdGVy.desc": {
+          "source": "HTML for the footer of each page; elements with the classes `pageNumber`, `totalPages`, `title` and `date` are filled with the values for each page, and inline CSS can style the footer.\n\n**Example**: `<span class='date'></span>`",
+          "message": "각 페이지의 바닥글 HTML입니다. `pageNumber`, `totalPages`, `title`, `date` 클래스가 있는 요소에는 각 페이지의 값이 채워지며, 인라인 CSS로 바닥글 스타일을 지정할 수 있습니다.\n\n**예**: `<span class='date'></span>`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QmFja2dyb3VuZA.display_name": {
           "source": "Background",
-          "message": "배경 정보"
+          "message": "배경"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QmFja2dyb3VuZA.short_desc": {
           "source": "Print the page background",
@@ -1997,7 +2581,7 @@
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnNjcmVlbg.display_name": {
           "source": "Screen",
-          "message": "Screen"
+          "message": "화면"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnNjcmVlbg.desc": {
           "source": "The page as shown on a screen (the default)",
@@ -2080,8 +2664,8 @@
           "message": "PDF의 페이지를 JPG, PNG, TIFF 또는 WebP 이미지로 변환"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.desc": {
-          "source": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF file.\n\nChoose the image `format` and resolution, and optionally a page range.",
-          "message": "PDF의 페이지를 이미지로 변환합니다. 페이지마다 이미지 파일 하나 또는 다중 페이지 TIFF 파일 하나가 반환됩니다.\n\n이미지 `format`과 해상도를 선택하고, 필요하면 페이지 범위도 지정하세요."
+          "source": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF file.\n\nChoose the image `format` and resolution, and optionally a page range; the other options depend on the format.",
+          "message": "PDF의 페이지를 이미지로 변환합니다. 페이지마다 이미지 파일 하나 또는 다중 페이지 TIFF 파일 하나가 반환됩니다.\n\n이미지 `format`과 해상도를 선택하고, 필요하면 페이지 범위도 지정하세요. 그 밖의 옵션은 형식에 따라 다릅니다."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.display_name": {
           "source": "File",
@@ -2295,6 +2879,318 @@
           "source": "The image resolution in DPI; the default is `200`",
           "message": "이미지 해상도(DPI)입니다. 기본값은 `200`입니다"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VXaWR0aA.display_name": {
+          "source": "Image Width",
+          "message": "이미지 너비"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VXaWR0aA.short_desc": {
+          "source": "The image width in pixels",
+          "message": "이미지 너비(픽셀)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VXaWR0aA.desc": {
+          "source": "The width of the images in pixels, from `10` to `10000`",
+          "message": "이미지의 너비(픽셀)로, `10`에서 `10000`까지입니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VIZWlnaHQ.display_name": {
+          "source": "Image Height",
+          "message": "이미지 높이"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VIZWlnaHQ.short_desc": {
+          "source": "The image height in pixels",
+          "message": "이미지 높이(픽셀)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VIZWlnaHQ.desc": {
+          "source": "The height of the images in pixels, from `10` to `10000`",
+          "message": "이미지의 높이(픽셀)로, `10`에서 `10000`까지입니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGU.display_name": {
+          "source": "Scale",
+          "message": "스케일"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGU.short_desc": {
+          "source": "The image size in percent of the page size",
+          "message": "페이지 크기 대비 이미지 크기(%)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGU.desc": {
+          "source": "The size of the images in percent of the size of the pages at the image resolution, from `10` to `300`; it overrides `ImageWidth` and `ImageHeight`.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "이미지 해상도에서의 페이지 크기 대비 이미지 크기(%)로, `10`에서 `300`까지입니다. `ImageWidth` 및 `ImageHeight`보다 우선합니다.\n\n**지원 형식**: JPG, PNG, TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Rml0VG9TaXpl.display_name": {
+          "source": "Fit to Size",
+          "message": "크기에 맞춤"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Rml0VG9TaXpl.short_desc": {
+          "source": "Fit the images within the width and height",
+          "message": "이미지를 너비와 높이 안에 맞춤"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Rml0VG9TaXpl.desc": {
+          "source": "Set to `True` to scale the images to fit within both `ImageWidth` and `ImageHeight`, which must both be given, keeping the aspect ratio.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "가로세로 비율을 유지하면서 `ImageWidth`와 `ImageHeight` 안에 모두 들어가도록 이미지 크기를 조정하려면 `True`(으)로 설정하세요. 두 값을 모두 지정해야 합니다.\n\n**지원 형식**: JPG, PNG, TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGVQcm9wb3J0aW9ucw.display_name": {
+          "source": "Scale Proportions",
+          "message": "비례 크기 조정"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGVQcm9wb3J0aW9ucw.short_desc": {
+          "source": "Keep the aspect ratio of the pages",
+          "message": "페이지의 가로세로 비율 유지"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGVQcm9wb3J0aW9ucw.desc": {
+          "source": "Set to `False` to scale the images to `ImageWidth` and `ImageHeight` without keeping the aspect ratio of the pages; it is kept by default.\n\n**Formats**: WebP",
+          "message": "페이지의 가로세로 비율을 유지하지 않고 이미지 크기를 `ImageWidth` 및 `ImageHeight`에 맞추려면 `False`(으)로 설정하세요. 기본적으로 비율이 유지됩니다.\n\n**지원 형식**: WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.display_name": {
+          "source": "Rotate Pages",
+          "message": "페이지 회전"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.short_desc": {
+          "source": "Rotate the pages before converting them",
+          "message": "변환하기 전에 페이지 회전"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.desc": {
+          "source": "The rotation of the pages before they are converted.\n\n**Formats**: JPG, PNG and TIFF; for WebP, give the angle in degrees, from `-360` to `360`, as `Rotate` in `parameters`",
+          "message": "변환하기 전의 페이지 회전입니다.\n\n**지원 형식**: JPG, PNG, TIFF. WebP의 경우 `parameters`의 `Rotate`에 각도(도)를 `-360`에서 `360`까지의 값으로 지정하세요"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "기본값"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The rotation of each page in the PDF (the default)",
+          "message": "PDF에 있는 각 페이지의 회전(기본값)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "없음"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No rotation",
+          "message": "회전 없음"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOnJvdGF0ZTkw.display_name": {
+          "source": "Rotate 90°",
+          "message": "90° 회전"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOnJvdGF0ZTE4MA.display_name": {
+          "source": "Rotate 180°",
+          "message": "180° 회전"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOnJvdGF0ZTI3MA.display_name": {
+          "source": "Rotate 270°",
+          "message": "270° 회전"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.display_name": {
+          "source": "Crop to Box",
+          "message": "상자에 맞게 자르기"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.short_desc": {
+          "source": "The page box that the images show",
+          "message": "이미지에 표시할 페이지 상자"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.desc": {
+          "source": "The page box that the images are cropped to.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "이미지를 자르는 기준이 되는 페이지 상자입니다.\n\n**지원 형식**: JPG, PNG, TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkJvdW5kaW5nQm94.display_name": {
+          "source": "Bounding Box",
+          "message": "경계 상자"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkJvdW5kaW5nQm94.desc": {
+          "source": "The content of the page (the default)",
+          "message": "페이지의 콘텐츠(기본값)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOlRyaW1Cb3g.display_name": {
+          "source": "Trim Box",
+          "message": "재단 상자"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOk1lZGlhQm94.display_name": {
+          "source": "Media Box",
+          "message": "미디어 상자"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkFydEJveA.display_name": {
+          "source": "Art Box",
+          "message": "아트 상자"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkJsZWVkQm94.display_name": {
+          "source": "Bleed Box",
+          "message": "도련 상자"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.QmFja2dyb3VuZENvbG9y.display_name": {
+          "source": "Background Color",
+          "message": "배경 색상"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.QmFja2dyb3VuZENvbG9y.short_desc": {
+          "source": "The background color of transparent pages",
+          "message": "투명한 페이지의 배경 색상"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.QmFja2dyb3VuZENvbG9y.desc": {
+          "source": "The background color of the images where the pages are transparent: a color name, RGB values or a hexadecimal color code, or `transparent` to keep the transparency; the default is `white`.\n\n**Examples**: `black`, `255,0,0` or `#FF0000`\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "페이지가 투명한 부분의 이미지 배경 색상입니다. 색 이름, RGB 값 또는 16진수 색 코드를 지정하며, 투명도를 유지하려면 `transparent`를 지정하세요. 기본값은 `white`입니다.\n\n**예**: `black`, `255,0,0` 또는 `#FF0000`\n\n**지원 형식**: JPG, PNG, TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.VHJhbnNwYXJlbnRDb2xvcg.display_name": {
+          "source": "Transparent Color",
+          "message": "투명 색상"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.VHJhbnNwYXJlbnRDb2xvcg.short_desc": {
+          "source": "The color to make transparent",
+          "message": "투명하게 만들 색상"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.VHJhbnNwYXJlbnRDb2xvcg.desc": {
+          "source": "The color that is made transparent in the images: a color name, RGB values with an optional alpha value, or a hexadecimal color code.\n\n**Examples**: `white`, `255,255,255` or `255,255,255,150`\n\n**Formats**: WebP",
+          "message": "이미지에서 투명하게 만들 색상입니다. 색 이름, RGB 값(알파 값은 선택 사항) 또는 16진수 색 코드로 지정합니다.\n\n**예**: `white`, `255,255,255` 또는 `255,255,255,150`\n\n**지원 형식**: WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VRdWFsaXR5.display_name": {
+          "source": "Image Quality",
+          "message": "이미지 품질"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VRdWFsaXR5.short_desc": {
+          "source": "The image quality in percent",
+          "message": "이미지 품질(%)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VRdWFsaXR5.desc": {
+          "source": "The quality of the images in percent, from `10` to `100`; the default is `75`.\n\n**Formats**: JPG and WebP",
+          "message": "이미지 품질(%)로, `10`에서 `100`까지입니다. 기본값은 `75`입니다.\n\n**지원 형식**: JPG, WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.display_name": {
+          "source": "Color Space",
+          "message": "색 공간"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.short_desc": {
+          "source": "The color space of the images",
+          "message": "이미지의 색 공간"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.desc": {
+          "source": "The color space of the images.\n\n**Formats**: JPG and PNG",
+          "message": "이미지의 색 공간입니다.\n\n**지원 형식**: JPG, PNG"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOnJnYg.display_name": {
+          "source": "RGB",
+          "message": "RGB"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOnJnYg.desc": {
+          "source": "The default",
+          "message": "기본값"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOmNteWs.display_name": {
+          "source": "CMYK",
+          "message": "CMYK"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOmdyYXk.display_name": {
+          "source": "Gray",
+          "message": "회색"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOm1vbm9jaHJvbWU.display_name": {
+          "source": "Monochrome",
+          "message": "흑백"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.display_name": {
+          "source": "Color Mode",
+          "message": "색상 모드"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.short_desc": {
+          "source": "The color mode of the TIFF file",
+          "message": "TIFF 파일의 색상 모드"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.desc": {
+          "source": "The color mode of the TIFF file.\n\n**Formats**: TIFF",
+          "message": "TIFF 파일의 색상 모드입니다.\n\n**지원 형식**: TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "기본값"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The default",
+          "message": "기본값"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmNteWs.display_name": {
+          "source": "CMYK",
+          "message": "CMYK"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmdyYXlzY2FsZQ.display_name": {
+          "source": "Grayscale",
+          "message": "회색조"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmJpdG9uYWw.display_name": {
+          "source": "Bitonal",
+          "message": "이진(흑백)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.display_name": {
+          "source": "Bit Depth",
+          "message": "비트 심도"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.short_desc": {
+          "source": "The number of bits per color channel",
+          "message": "색상 채널당 비트 수"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.desc": {
+          "source": "The number of bits per color channel; more bits give more precise colors and smoother gradients but larger files.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "색상 채널당 비트 수입니다. 비트 수가 많을수록 색상이 더 정확하고 그라데이션이 더 부드러워지지만 파일 크기가 커집니다.\n\n**지원 형식**: JPG, PNG, TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "기본값"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The default",
+          "message": "기본값"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjE.display_name": {
+          "source": "1 Bit",
+          "message": "1비트"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjI.display_name": {
+          "source": "2 Bits",
+          "message": "2비트"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjQ.display_name": {
+          "source": "4 Bits",
+          "message": "4비트"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjg.display_name": {
+          "source": "8 Bits",
+          "message": "8비트"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjE2.display_name": {
+          "source": "16 Bits",
+          "message": "16비트"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29tcHJlc3Npb25MZXZlbA.display_name": {
+          "source": "Compression Level",
+          "message": "압축 수준"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29tcHJlc3Npb25MZXZlbA.short_desc": {
+          "source": "The compression level, from 0 to 9",
+          "message": "압축 수준(0~9)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29tcHJlc3Npb25MZXZlbA.desc": {
+          "source": "The compression level, from `0` to `9`; a higher level gives smaller files, and for JPG also a lower image quality.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "압축 수준으로, `0`에서 `9`까지입니다. 수준이 높을수록 파일이 작아지며, JPG는 이미지 품질도 낮아집니다.\n\n**지원 형식**: JPG, PNG, TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VBbnRpYWxpYXNpbmc.display_name": {
+          "source": "Antialiasing",
+          "message": "안티앨리어싱"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VBbnRpYWxpYXNpbmc.short_desc": {
+          "source": "The subsampling box size for antialiasing",
+          "message": "안티앨리어싱용 서브샘플링 상자 크기"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VBbnRpYWxpYXNpbmc.desc": {
+          "source": "The subsampling box size for the antialiasing of text and graphics, from `0` to `8`; the default, `8`, gives the best text, and smaller values render faster.\n\n**Formats**: WebP",
+          "message": "텍스트와 그래픽의 안티앨리어싱에 사용하는 서브샘플링 상자 크기로, `0`에서 `8`까지입니다. 기본값인 `8`은 텍스트 품질이 가장 좋으며, 값이 작을수록 렌더링이 빨라집니다.\n\n**지원 형식**: WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.TXVsdGlQYWdl.display_name": {
+          "source": "Multi-Page File",
+          "message": "다중 페이지 파일"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.TXVsdGlQYWdl.short_desc": {
+          "source": "Create one multi-page TIFF file",
+          "message": "다중 페이지 TIFF 파일 하나 생성"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.TXVsdGlQYWdl.desc": {
+          "source": "Set to `False` to create a TIFF file for each page; by default, all pages are in one multi-page TIFF file.\n\n**Formats**: TIFF",
+          "message": "페이지마다 TIFF 파일을 생성하려면 `False`(으)로 설정하세요. 기본적으로 모든 페이지가 다중 페이지 TIFF 파일 하나에 담깁니다.\n\n**지원 형식**: TIFF"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",
           "message": "파일 저장"
@@ -2499,6 +3395,18 @@
           "source": "The URLs of the files to convert for converters that take several input files, such as `pdf` to `merge`.\n\nThey are sent as the `Files` parameter, together with any files given in `files`.",
           "message": "`pdf`에서 `merge`처럼 여러 입력 파일을 받는 변환기에 사용할 변환 대상 파일의 URL입니다.\n\n`files`에 지정한 파일과 함께 `Files` 매개변수로 전송됩니다."
         },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFzc3dvcmQ.display_name": {
+          "source": "Open Password",
+          "message": "열기 비밀번호"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFzc3dvcmQ.short_desc": {
+          "source": "The password to open protected PDF files",
+          "message": "보호된 PDF 파일을 열기 위한 비밀번호"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFzc3dvcmQ.desc": {
+          "source": "The password to open the protected PDF files",
+          "message": "보호된 PDF 파일을 열기 위한 비밀번호"
+        },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.display_name": {
           "source": "Bookmarks Table of Contents",
           "message": "책갈피 목차"
@@ -2546,6 +3454,94 @@
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UmVtb3ZlRHVwbGljYXRlRm9udHM.desc": {
           "source": "Set to `True` to include the fonts used by several of the merged files only once",
           "message": "병합한 여러 파일에서 사용하는 글꼴을 한 번만 포함하려면 `True`(으)로 설정하세요"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "페이지 크기"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.short_desc": {
+          "source": "The page size that every page is scaled to",
+          "message": "모든 페이지의 크기를 맞출 페이지 크기"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.desc": {
+          "source": "The page size that every page of the merged PDF is scaled to",
+          "message": "병합한 PDF의 모든 페이지 크기를 맞출 페이지 크기"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "기본값"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Every page keeps its size (the default)",
+          "message": "각 페이지가 원래 크기를 유지합니다(기본값)"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEy.display_name": {
+          "source": "A2",
+          "message": "A2"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEz.display_name": {
+          "source": "A3",
+          "message": "A3"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0.display_name": {
+          "source": "A4",
+          "message": "A4"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE1.display_name": {
+          "source": "A5",
+          "message": "A5"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE2.display_name": {
+          "source": "A6",
+          "message": "A6"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcg.display_name": {
+          "source": "Letter",
+          "message": "Letter"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZ2Fs.display_name": {
+          "source": "Legal",
+          "message": "Legal"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.display_name": {
+          "source": "Page Orientation",
+          "message": "페이지 방향"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.short_desc": {
+          "source": "The orientation of every page",
+          "message": "모든 페이지의 방향"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.desc": {
+          "source": "The orientation of every page of the merged PDF",
+          "message": "병합한 PDF의 모든 페이지 방향"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "기본값"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Every page keeps its orientation (the default)",
+          "message": "각 페이지가 원래 방향을 유지합니다(기본값)"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
+          "source": "Portrait",
+          "message": "세로"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmxhbmRzY2FwZQ.display_name": {
+          "source": "Landscape",
+          "message": "가로"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.T3BlblBhZ2U.display_name": {
+          "source": "Open to Page",
+          "message": "처음 표시할 페이지"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.T3BlblBhZ2U.short_desc": {
+          "source": "The page that the PDF opens at",
+          "message": "PDF를 열 때 표시되는 페이지"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.T3BlblBhZ2U.desc": {
+          "source": "The number of the page that the merged PDF opens at, from `1` to `3000`; the default is `1`",
+          "message": "병합한 PDF를 열 때 표시되는 페이지의 번호로, `1`에서 `3000`까지입니다. 기본값은 `1`입니다"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",
@@ -2802,6 +3798,174 @@
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UGFzc3dvcmQ.desc": {
           "source": "The password to open a protected PDF",
           "message": "보호된 PDF를 열기 위한 비밀번호"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VSZXNvbHV0aW9u.display_name": {
+          "source": "Image Resolution",
+          "message": "이미지 해상도"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VSZXNvbHV0aW9u.short_desc": {
+          "source": "The maximum image resolution in DPI",
+          "message": "최대 이미지 해상도(DPI)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VSZXNvbHV0aW9u.desc": {
+          "source": "The maximum resolution of the images in DPI, from `10` to `800`; the default is `150`",
+          "message": "이미지의 최대 해상도(DPI)로, `10`에서 `800`까지입니다. 기본값은 `150`입니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VRdWFsaXR5.display_name": {
+          "source": "Image Quality",
+          "message": "이미지 품질"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VRdWFsaXR5.short_desc": {
+          "source": "The image quality in percent",
+          "message": "이미지 품질(%)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VRdWFsaXR5.desc": {
+          "source": "The quality of the images in percent, from `10` to `100`; the default is `80`",
+          "message": "이미지 품질(%)로, `10`에서 `100`까지입니다. 기본값은 `80`입니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRm9ybXM.display_name": {
+          "source": "Remove Forms",
+          "message": "양식 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRm9ybXM.short_desc": {
+          "source": "Remove the forms of the PDF",
+          "message": "PDF의 양식 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRm9ybXM.desc": {
+          "source": "Set to `True` to remove the forms of the PDF",
+          "message": "PDF의 양식을 제거하려면 `True`(으)로 설정하세요"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRHVwbGljYXRlcw.display_name": {
+          "source": "Remove Duplicates",
+          "message": "중복 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRHVwbGljYXRlcw.short_desc": {
+          "source": "Remove duplicate fonts and color profiles",
+          "message": "중복 글꼴 및 색상 프로필 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRHVwbGljYXRlcw.desc": {
+          "source": "Set to `False` to keep duplicate fonts and color profiles; they are removed by default",
+          "message": "중복 글꼴 및 색상 프로필을 유지하려면 `False`(으)로 설정하세요. 기본적으로 제거됩니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlUGllY2VJbmZvcm1hdGlvbg.display_name": {
+          "source": "Remove Piece Information",
+          "message": "피스 정보 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlUGllY2VJbmZvcm1hdGlvbg.short_desc": {
+          "source": "Remove the private data of editing applications",
+          "message": "편집 애플리케이션의 전용 데이터 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlUGllY2VJbmZvcm1hdGlvbg.desc": {
+          "source": "Set to `False` to keep the piece information dictionaries, the private data of applications such as Adobe Illustrator or Photoshop; they are removed by default",
+          "message": "Adobe Illustrator나 Photoshop 같은 애플리케이션의 전용 데이터인 피스 정보 사전을 유지하려면 `False`(으)로 설정하세요. 기본적으로 제거됩니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRW1iZWRkZWRGaWxlcw.display_name": {
+          "source": "Remove Embedded Files",
+          "message": "포함된 파일 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRW1iZWRkZWRGaWxlcw.short_desc": {
+          "source": "Remove embedded files and attachments",
+          "message": "포함된 파일 및 첨부 파일 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRW1iZWRkZWRGaWxlcw.desc": {
+          "source": "Set to `False` to keep the embedded files and attachments; they are removed by default",
+          "message": "포함된 파일 및 첨부 파일을 유지하려면 `False`(으)로 설정하세요. 기본적으로 제거됩니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlU3RydWN0dXJlSW5mb3JtYXRpb24.display_name": {
+          "source": "Remove Structure Information",
+          "message": "구조 정보 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlU3RydWN0dXJlSW5mb3JtYXRpb24.short_desc": {
+          "source": "Remove the structure information of the document",
+          "message": "문서의 구조 정보 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlU3RydWN0dXJlSW5mb3JtYXRpb24.desc": {
+          "source": "Set to `False` to keep the structure information of the document; it is removed by default",
+          "message": "문서의 구조 정보를 유지하려면 `False`(으)로 설정하세요. 기본적으로 제거됩니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlTWV0YWRhdGE.display_name": {
+          "source": "Remove Metadata",
+          "message": "메타데이터 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlTWV0YWRhdGE.short_desc": {
+          "source": "Remove the XMP metadata",
+          "message": "XMP 메타데이터 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlTWV0YWRhdGE.desc": {
+          "source": "Set to `False` to keep the XMP metadata of the document; it is removed by default",
+          "message": "문서의 XMP 메타데이터를 유지하려면 `False`(으)로 설정하세요. 기본적으로 제거됩니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlVW51c2VkUmVzb3VyY2Vz.display_name": {
+          "source": "Remove Unused Resources",
+          "message": "사용하지 않는 리소스 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlVW51c2VkUmVzb3VyY2Vz.short_desc": {
+          "source": "Remove unused fonts, images and patterns",
+          "message": "사용하지 않는 글꼴, 이미지, 패턴 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlVW51c2VkUmVzb3VyY2Vz.desc": {
+          "source": "Set to `False` to keep unused resources such as fonts, images and patterns; they are removed by default",
+          "message": "글꼴, 이미지, 패턴 같은 사용하지 않는 리소스를 유지하려면 `False`(으)로 설정하세요. 기본적으로 제거됩니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.VW5lbWJlZEJhc2VGb250cw.display_name": {
+          "source": "Unembed Base Fonts",
+          "message": "기본 글꼴 포함 해제"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.VW5lbWJlZEJhc2VGb250cw.short_desc": {
+          "source": "Remove the embedded base fonts",
+          "message": "포함된 기본 글꼴 제거"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.VW5lbWJlZEJhc2VGb250cw.desc": {
+          "source": "Set to `True` to remove the embedded base fonts from the PDF",
+          "message": "PDF에 포함된 기본 글꼴을 제거하려면 `True`(으)로 설정하세요"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.U3Vic2V0RW1iZWRkZWRGb250cw.display_name": {
+          "source": "Subset Embedded Fonts",
+          "message": "포함된 글꼴 하위 집합 만들기"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.U3Vic2V0RW1iZWRkZWRGb250cw.short_desc": {
+          "source": "Keep only the characters of the fonts that are used",
+          "message": "글꼴에서 사용된 문자만 유지"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.U3Vic2V0RW1iZWRkZWRGb250cw.desc": {
+          "source": "Set to `True` to keep only the characters of the embedded fonts that the document uses",
+          "message": "포함된 글꼴에서 문서가 사용하는 문자만 유지하려면 `True`(으)로 설정하세요"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.T3B0aW1pemU.display_name": {
+          "source": "Optimize Content",
+          "message": "콘텐츠 최적화"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.T3B0aW1pemU.short_desc": {
+          "source": "Optimize the page content streams",
+          "message": "페이지 콘텐츠 스트림 최적화"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.T3B0aW1pemU.desc": {
+          "source": "Set to `False` to leave the page content streams as they are; they are optimized by default",
+          "message": "페이지 콘텐츠 스트림을 그대로 두려면 `False`(으)로 설정하세요. 기본적으로 최적화됩니다"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.TGluZWFyaXpl.display_name": {
+          "source": "Linearize",
+          "message": "선형화"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.TGluZWFyaXpl.short_desc": {
+          "source": "Optimize the PDF for fast web view",
+          "message": "빠른 웹 보기를 위해 PDF 최적화"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.TGluZWFyaXpl.desc": {
+          "source": "Set to `True` to linearize the PDF, which optimizes it for fast web view",
+          "message": "PDF를 선형화하여 빠른 웹 보기에 최적화하려면 `True`(으)로 설정하세요"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2VydmVQZGZh.display_name": {
+          "source": "Preserve PDF/A",
+          "message": "PDF/A 유지"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2VydmVQZGZh.short_desc": {
+          "source": "Keep the PDF/A conformance of the file",
+          "message": "파일의 PDF/A 규격 준수 유지"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2VydmVQZGZh.desc": {
+          "source": "Set to `True` to keep the PDF/A conformance of the PDF",
+          "message": "PDF의 PDF/A 규격 준수를 유지하려면 `True`(으)로 설정하세요"
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",

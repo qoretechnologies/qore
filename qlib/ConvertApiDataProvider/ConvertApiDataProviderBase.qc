@@ -63,7 +63,10 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
         #! Converter list cache: API URL -> {"timestamp": date, "converters": list}
         static hash<string, hash<auto>> converter_cache = {};
 
-        #! Converter list cache lock
+        #! Converter information cache: API URL, source and destination format -> {"timestamp": date, "converter": hash}
+        static hash<string, hash<auto>> converter_info_cache = {};
+
+        #! Converter list and information cache lock
         static Mutex converter_lock();
     }
 
@@ -179,6 +182,36 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
             throw "CONVERTAPI-UNKNOWN-CONVERTER", sprintf("no converter from %y to %y", from, to);
         }
         return rv[0];
+    }
+
+    #! Returns the information about a converter, which is cached
+    /** The information is read with getConverterInfo() and cached for @ref ConverterCacheTtl, as the options and the
+        request type of the \c convert-file action are built from it whenever the formats are given; an unknown
+        converter is not cached
+
+        @param from the source format
+        @param to the destination format
+
+        @return the converter hash as returned by the \c info endpoint
+
+        @throw CONVERTAPI-UNKNOWN-CONVERTER no converter exists for the given formats
+    */
+    hash<auto> getCachedConverterInfo(string from, string to) {
+        string key = sprintf("%s %s %s", rest.getUrl(), from.lwr(), to.lwr());
+        {
+            AutoLock al(converter_lock);
+            *hash<auto> entry = converter_info_cache{key};
+            if (entry && (entry.timestamp + ConverterCacheTtl) > now_us()) {
+                return entry.converter;
+            }
+        }
+        hash<auto> converter = getConverterInfo(from, to);
+        AutoLock al(converter_lock);
+        converter_info_cache{key} = {
+            "timestamp": now_us(),
+            "converter": converter,
+        };
+        return converter;
     }
 
     #! Returns a readable label for a source format

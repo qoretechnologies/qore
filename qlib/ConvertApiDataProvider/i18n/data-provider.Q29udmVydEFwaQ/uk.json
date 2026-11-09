@@ -348,8 +348,8 @@
           "message": "Конвертувати файли будь-яким конвертером ConvertAPI"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.desc": {
-          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\n**Formats**: select the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n**Input**: a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`, and a few converters take their input in `parameters` instead, for example `data` to `qrcode` with `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parameters**: other converter parameters go in `parameters` by their ConvertAPI names; the `get-converter-info` action lists them.\n\n**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is `True`.",
-          "message": "Конвертує файли будь-яким конвертером ConvertAPI, заданим його вихідним і цільовим форматами.\n\n**Формати**: спочатку виберіть формат `from`; після цього список `to` покаже цільові формати конвертерів для цього вихідного формату.\n\n**Вхідні дані**: `file` або вихідний `url`; конвертери, що приймають кілька файлів (наприклад, `pdf` у `merge`), приймають `files` або `urls`, а деякі конвертери натомість приймають вхідні дані в `parameters`, наприклад `data` для `qrcode` зі значенням `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Параметри**: інші параметри конвертера вказуйте за їхніми назвами в ConvertAPI у `parameters`; дія `get-converter-info` виводить їх список.\n\n**Результат**: вихідні файли повертаються як `FileData` або як URL для завантаження, якщо `store_file` має значення `True`."
+          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\n**Formats**: select the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n**Input**: a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`, and a few converters take their input in `parameters` instead, for example `data` to `qrcode` with `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parameters**: when both formats are selected, the parameters of the converter are added as typed options, as ConvertAPI describes them; parameters can also be given in `parameters` by their ConvertAPI names, which the `get-converter-info` action lists.\n\n**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is `True`.",
+          "message": "Конвертує файли будь-яким конвертером ConvertAPI, заданим його вихідним і цільовим форматами.\n\n**Формати**: спочатку виберіть формат `from`; після цього список `to` покаже цільові формати конвертерів для цього вихідного формату.\n\n**Вхідні дані**: `file` або вихідний `url`; конвертери, що приймають кілька файлів (наприклад, `pdf` у `merge`), приймають `files` або `urls`, а деякі конвертери натомість приймають вхідні дані в `parameters`, наприклад `data` у `qrcode` зі значенням `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Параметри**: коли вибрано обидва формати, параметри конвертера додаються як типізовані опції так, як їх описує ConvertAPI; параметри також можна вказати в `parameters` за їхніми назвами в ConvertAPI, які перелічує дія `get-converter-info`.\n\n**Результат**: вихідні файли повертаються як `FileData` або як URL для завантаження, якщо `store_file` має значення `True`."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.display_name": {
           "source": "Source Format",
@@ -927,6 +927,42 @@
           "source": "The password to open a protected document",
           "message": "Пароль для відкриття захищеного документа"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1hcmt1cA.display_name": {
+          "source": "Include Markup",
+          "message": "Включити розмітку"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1hcmt1cA.short_desc": {
+          "source": "Include tracked changes and comments",
+          "message": "Включити відстежені зміни та коментарі"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1hcmt1cA.desc": {
+          "source": "Set to `True` to include the document markup, such as tracked changes and comments, in the PDF",
+          "message": "Установіть значення `True`, щоб включити в PDF розмітку документа, як-от відстежені зміни та коментарі"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZVN0cnVjdHVyZVRhZ3M.display_name": {
+          "source": "Include Structure Tags",
+          "message": "Включити теги структури"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZVN0cnVjdHVyZVRhZ3M.short_desc": {
+          "source": "Create a tagged PDF for accessibility",
+          "message": "Створити PDF з тегами для доступності"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZVN0cnVjdHVyZVRhZ3M.desc": {
+          "source": "Set to `True` to include the structure tags of the document, which make a tagged PDF for accessibility",
+          "message": "Установіть значення `True`, щоб включити теги структури документа, які створюють PDF з тегами для доступності"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.display_name": {
+          "source": "Include Metadata",
+          "message": "Включити метадані"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.short_desc": {
+          "source": "Include the document metadata",
+          "message": "Включити метадані документа"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.desc": {
+          "source": "Set to `False` to leave out the document metadata, such as the title, author and keywords; it is included by default",
+          "message": "Установіть значення `False`, щоб не включати метадані документа, як-от назву, автора та ключові слова; за замовчуванням вони включаються"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.display_name": {
           "source": "Bookmark Mode",
           "message": "Режим закладок"
@@ -974,6 +1010,18 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.VXBkYXRlVGFibGVPZkNvbnRlbnRz.desc": {
           "source": "Set to `True` to update all tables of contents in the document before the conversion",
           "message": "Установіть значення `True`, щоб оновити всі змісти в документі перед конвертацією"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.U3Vic2V0Rm9udHM.display_name": {
+          "source": "Subset Fonts",
+          "message": "Вбудувати підмножини шрифтів"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.U3Vic2V0Rm9udHM.short_desc": {
+          "source": "Embed only the characters of the fonts that are used",
+          "message": "Вбудувати лише використані символи шрифтів"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.U3Vic2V0Rm9udHM.desc": {
+          "source": "Set to `True` to make the PDF smaller by embedding only the characters of the fonts that the document uses",
+          "message": "Установіть значення `True`, щоб зменшити PDF, вбудувавши лише ті символи шрифтів, які використовує документ"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1203,6 +1251,30 @@
           "source": "The password to open a protected workbook",
           "message": "Пароль для відкриття захищеної книги"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.display_name": {
+          "source": "Active Worksheet Only",
+          "message": "Лише активний аркуш"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.short_desc": {
+          "source": "Convert only the active worksheet",
+          "message": "Конвертувати лише активний аркуш"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.desc": {
+          "source": "Set to `True` to convert only the active worksheet",
+          "message": "Установіть значення `True`, щоб конвертувати лише активний аркуш"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0SW5kZXg.display_name": {
+          "source": "Worksheet Number",
+          "message": "Номер аркуша"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0SW5kZXg.short_desc": {
+          "source": "The number of the worksheet to convert",
+          "message": "Номер аркуша, який потрібно конвертувати"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0SW5kZXg.desc": {
+          "source": "The number of the worksheet to convert, from `1` to `2000`; all worksheets are converted by default",
+          "message": "Номер аркуша, який потрібно конвертувати, від `1` до `2000`; за замовчуванням конвертуються всі аркуші"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0TmFtZQ.display_name": {
           "source": "Worksheet Name",
           "message": "Назва аркуша"
@@ -1215,17 +1287,17 @@
           "source": "The name of the worksheet to convert; all worksheets are converted by default",
           "message": "Назва аркуша, який потрібно конвертувати; за замовчуванням конвертуються всі аркуші"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.display_name": {
-          "source": "Active Worksheet Only",
-          "message": "Лише активний аркуш"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SW5jbHVkZU1ldGFkYXRh.display_name": {
+          "source": "Include Metadata",
+          "message": "Включити метадані"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.short_desc": {
-          "source": "Convert only the active worksheet",
-          "message": "Конвертувати лише активний аркуш"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SW5jbHVkZU1ldGFkYXRh.short_desc": {
+          "source": "Include the document metadata",
+          "message": "Включити метадані документа"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.desc": {
-          "source": "Set to `True` to convert only the active worksheet",
-          "message": "Установіть значення `True`, щоб конвертувати лише активний аркуш"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SW5jbHVkZU1ldGFkYXRh.desc": {
+          "source": "Set to `False` to leave out the document metadata, such as the title, author and keywords; it is included by default",
+          "message": "Установіть значення `False`, щоб не включати метадані документа, як-от назву, автора та ключові слова; за замовчуванням вони включаються"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.display_name": {
           "source": "Page Orientation",
@@ -1255,6 +1327,78 @@
           "source": "Landscape",
           "message": "Альбомна"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Розмір сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.short_desc": {
+          "source": "The page size",
+          "message": "Розмір сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.desc": {
+          "source": "The page size of the PDF",
+          "message": "Розмір сторінки PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "За замовчуванням"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The page setup of each worksheet (the default)",
+          "message": "Параметри сторінки кожного аркуша (за замовчуванням)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcg.display_name": {
+          "source": "Letter",
+          "message": "Letter"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcnNtYWxs.display_name": {
+          "source": "Letter Small",
+          "message": "Letter Small"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOnRhYmxvaWQ.display_name": {
+          "source": "Tabloid",
+          "message": "Tabloid"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZGdlcg.display_name": {
+          "source": "Ledger",
+          "message": "Ledger"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZ2Fs.display_name": {
+          "source": "Legal",
+          "message": "Legal"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOnN0YXRlbWVudA.display_name": {
+          "source": "Statement",
+          "message": "Statement"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmV4ZWN1dGl2ZQ.display_name": {
+          "source": "Executive",
+          "message": "Executive"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEz.display_name": {
+          "source": "A3",
+          "message": "A3"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0.display_name": {
+          "source": "A4",
+          "message": "A4"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0c21hbGw.display_name": {
+          "source": "A4 Small",
+          "message": "A4 Small"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE1.display_name": {
+          "source": "A5",
+          "message": "A5"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmI0.display_name": {
+          "source": "B4",
+          "message": "B4"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmI1.display_name": {
+          "source": "B5",
+          "message": "B5"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Rml0VG9QYWdl.display_name": {
           "source": "Fit to Page",
           "message": "Вмістити на сторінку"
@@ -1278,6 +1422,102 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QXV0b0ZpdENvbHVtbnM.desc": {
           "source": "Set to `True` to fit the column widths to their content, which removes unnecessary empty space",
           "message": "Установіть значення `True`, щоб підібрати ширину стовпців за їхнім вмістом, що прибирає зайвий порожній простір"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Q2xlYXJQcmludEFyZWE.display_name": {
+          "source": "Clear Print Area",
+          "message": "Очистити область друку"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Q2xlYXJQcmludEFyZWE.short_desc": {
+          "source": "Ignore the print areas and convert whole worksheets",
+          "message": "Ігнорувати області друку та конвертувати аркуші повністю"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Q2xlYXJQcmludEFyZWE.desc": {
+          "source": "Set to `True` to clear the print areas of the workbook, so that the whole content of each worksheet is converted",
+          "message": "Установіть значення `True`, щоб очистити області друку книги й конвертувати весь вміст кожного аркуша"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.U2NhbGU.display_name": {
+          "source": "Scale",
+          "message": "Масштаб"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.U2NhbGU.short_desc": {
+          "source": "The content scale in percent",
+          "message": "Масштаб вмісту у відсотках"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.U2NhbGU.desc": {
+          "source": "The scale of the content in percent, from `10` to `300`",
+          "message": "Масштаб вмісту у відсотках, від `10` до `300`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SGVhZGVyT25FYWNoUGFnZQ.display_name": {
+          "source": "Header on Each Page",
+          "message": "Заголовок на кожній сторінці"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SGVhZGVyT25FYWNoUGFnZQ.short_desc": {
+          "source": "Repeat the header row on every page",
+          "message": "Повторювати рядок заголовка на кожній сторінці"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SGVhZGVyT25FYWNoUGFnZQ.desc": {
+          "source": "Set to `True` to repeat the header row on each page of a worksheet that spans several pages: the header row of a table in the worksheet, or else its first row with data",
+          "message": "Установіть значення `True`, щоб повторювати рядок заголовка на кожній сторінці аркуша, який займає кілька сторінок: рядок заголовка таблиці на аркуші або, якщо таблиці немає, перший рядок аркуша з даними"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.VGhvdXNhbmRzU2VwYXJhdG9y.display_name": {
+          "source": "Thousands Separator",
+          "message": "Розділювач тисяч"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.VGhvdXNhbmRzU2VwYXJhdG9y.short_desc": {
+          "source": "The thousands separator of numbers",
+          "message": "Розділювач тисяч у числах"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.VGhvdXNhbmRzU2VwYXJhdG9y.desc": {
+          "source": "The thousands separator of the numbers in the PDF; the default is `,`",
+          "message": "Розділювач тисяч у числах у PDF; за замовчуванням `,`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGVjaW1hbFNlcGFyYXRvcg.display_name": {
+          "source": "Decimal Separator",
+          "message": "Десятковий розділювач"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGVjaW1hbFNlcGFyYXRvcg.short_desc": {
+          "source": "The decimal separator of numbers",
+          "message": "Десятковий розділювач у числах"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGVjaW1hbFNlcGFyYXRvcg.desc": {
+          "source": "The decimal separator of the numbers in the PDF; the default is `.`",
+          "message": "Десятковий розділювач у числах у PDF; за замовчуванням `.`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.display_name": {
+          "source": "Date Format",
+          "message": "Формат дати"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.short_desc": {
+          "source": "The format of dates",
+          "message": "Формат дат"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.desc": {
+          "source": "The format of the dates in the PDF, whatever the regional settings of the workbook",
+          "message": "Формат дат у PDF незалежно від регіональних параметрів книги"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOnVz.display_name": {
+          "source": "US (M/d/yyyy)",
+          "message": "США (M/d/yyyy)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOnVz.desc": {
+          "source": "The default",
+          "message": "Значення за замовчуванням"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmlzbw.display_name": {
+          "source": "ISO (yyyy-MM-dd)",
+          "message": "ISO (yyyy-MM-dd)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmV1.display_name": {
+          "source": "EU (dd/MM/yyyy)",
+          "message": "ЄС (dd/MM/yyyy)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmdlcm1hbg.display_name": {
+          "source": "German (dd.MM.yyyy)",
+          "message": "Німецький (dd.MM.yyyy)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmphcGFuZXNl.display_name": {
+          "source": "Japanese (yyyy/MM/dd)",
+          "message": "Японський (yyyy/MM/dd)"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1531,6 +1771,18 @@
           "source": "Set to `True` to include the hidden slides in the PDF",
           "message": "Установіть значення `True`, щоб включити приховані слайди в PDF"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.display_name": {
+          "source": "Include Metadata",
+          "message": "Включити метадані"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.short_desc": {
+          "source": "Include the document metadata",
+          "message": "Включити метадані документа"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.desc": {
+          "source": "Set to `False` to leave out the document metadata, such as the title, author and keywords; it is included by default",
+          "message": "Установіть значення `False`, щоб не включати метадані документа, як-от назву, автора та ключові слова; за замовчуванням вони включаються"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.display_name": {
           "source": "Convert Speaker Notes",
           "message": "Конвертувати нотатки доповідача"
@@ -1566,6 +1818,18 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlBhZ2VDb21tZW50cw.desc": {
           "source": "The notes as page comments",
           "message": "Нотатки як коментарі до сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.RW1iZWRGb250cw.display_name": {
+          "source": "Embed Fonts",
+          "message": "Вбудувати шрифти"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.RW1iZWRGb250cw.short_desc": {
+          "source": "Embed the fonts in the PDF",
+          "message": "Вбудувати шрифти в PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.RW1iZWRGb250cw.desc": {
+          "source": "Set to `False` to leave the fonts out of the PDF; they are embedded by default",
+          "message": "Установіть значення `False`, щоб не вбудовувати шрифти в PDF; за замовчуванням вони вбудовуються"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1783,6 +2047,278 @@
           "source": "The filename",
           "message": "Ім’я файлу"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVJhbmdl.display_name": {
+          "source": "Page Range",
+          "message": "Діапазон сторінок"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVJhbmdl.short_desc": {
+          "source": "The pages to convert",
+          "message": "Сторінки для конвертації"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVJhbmdl.desc": {
+          "source": "The pages to convert, as a range or a comma-separated list.\n\n**Example**: `1-10` or `1,2,5`; all pages are converted by default",
+          "message": "Сторінки для конвертації у вигляді діапазону або списку через кому.\n\n**Приклад**: `1-10` або `1,2,5`; за замовчуванням конвертуються всі сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFVzZXJuYW1l.display_name": {
+          "source": "Authentication User Name",
+          "message": "Ім'я користувача для автентифікації"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFVzZXJuYW1l.short_desc": {
+          "source": "The user name for HTTP authentication of the page",
+          "message": "Ім'я користувача для HTTP-автентифікації сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFVzZXJuYW1l.desc": {
+          "source": "The user name for a web page that is protected with HTTP authentication",
+          "message": "Ім'я користувача для вебсторінки, захищеної HTTP-автентифікацією"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFBhc3N3b3Jk.display_name": {
+          "source": "Authentication Password",
+          "message": "Пароль для автентифікації"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFBhc3N3b3Jk.short_desc": {
+          "source": "The password for HTTP authentication of the page",
+          "message": "Пароль для HTTP-автентифікації сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFBhc3N3b3Jk.desc": {
+          "source": "The password for a web page that is protected with HTTP authentication",
+          "message": "Пароль для вебсторінки, захищеної HTTP-автентифікацією"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llcw.display_name": {
+          "source": "Cookies",
+          "message": "Файли cookie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llcw.short_desc": {
+          "source": "Cookies to send with the page request",
+          "message": "Файли cookie, що надсилаються із запитом сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llcw.desc": {
+          "source": "Cookies to send with the request for the web page, separated by semicolons.\n\n**Example**: `name1=value1; name2=value2`",
+          "message": "Файли cookie, що надсилаються із запитом вебсторінки, розділені крапкою з комою.\n\n**Приклад**: `name1=value1; name2=value2`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVycw.display_name": {
+          "source": "HTTP Headers",
+          "message": "Заголовки HTTP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVycw.short_desc": {
+          "source": "Custom HTTP headers to send with the page request",
+          "message": "Користувацькі заголовки HTTP, що надсилаються із запитом сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVycw.desc": {
+          "source": "Custom HTTP headers to send with the request for the web page, as `name:value` pairs separated by `|`.\n\n**Example**: `Accept-Language:de|Cache-Control:no-cache`",
+          "message": "Користувацькі заголовки HTTP, що надсилаються із запитом вебсторінки, у вигляді пар `name:value`, розділених символом `|`.\n\n**Приклад**: `Accept-Language:de|Cache-Control:no-cache`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QWRCbG9jaw.display_name": {
+          "source": "Block Ads",
+          "message": "Блокувати рекламу"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QWRCbG9jaw.short_desc": {
+          "source": "Block the ads of the page",
+          "message": "Блокувати рекламу на сторінці"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QWRCbG9jaw.desc": {
+          "source": "Set to `True` to block the ads of the web page",
+          "message": "Установіть значення `True`, щоб блокувати рекламу на вебсторінці"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llQ29uc2VudEJsb2Nr.display_name": {
+          "source": "Remove Cookie Warnings",
+          "message": "Видалити попередження про файли cookie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llQ29uc2VudEJsb2Nr.short_desc": {
+          "source": "Remove cookie consent banners",
+          "message": "Видалити банери згоди на використання файлів cookie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llQ29uc2VudEJsb2Nr.desc": {
+          "source": "Set to `True` to try to remove the cookie consent warnings of the web page",
+          "message": "Установіть значення `True`, щоб спробувати видалити з вебсторінки попередження про згоду на використання файлів cookie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.V2FpdEVsZW1lbnQ.display_name": {
+          "source": "Wait for Element",
+          "message": "Чекати на елемент"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.V2FpdEVsZW1lbnQ.short_desc": {
+          "source": "CSS selector of an element to wait for",
+          "message": "Селектор CSS елемента, на який потрібно чекати"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.V2FpdEVsZW1lbnQ.desc": {
+          "source": "The CSS selector of an element that the converter waits for: the conversion begins when the element appears in the page.\n\n**Example**: `#content`",
+          "message": "Селектор CSS елемента, на який чекає конвертер: конвертація починається, коли елемент з'являється на сторінці.\n\n**Приклад**: `#content`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckpz.display_name": {
+          "source": "Run JavaScript",
+          "message": "Виконати JavaScript"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckpz.short_desc": {
+          "source": "JavaScript to run before the conversion",
+          "message": "JavaScript, який потрібно виконати перед конвертацією"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckpz.desc": {
+          "source": "JavaScript code to run in the web page before the conversion begins",
+          "message": "Код JavaScript, який потрібно виконати на вебсторінці перед початком конвертації"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckNzcw.display_name": {
+          "source": "Additional CSS",
+          "message": "Додатковий CSS"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckNzcw.short_desc": {
+          "source": "CSS to apply before the conversion",
+          "message": "CSS, який потрібно застосувати перед конвертацією"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckNzcw.desc": {
+          "source": "CSS to apply to the web page before the conversion begins",
+          "message": "CSS, який потрібно застосувати до вебсторінки перед початком конвертації"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGlkZUVsZW1lbnRz.display_name": {
+          "source": "Hide Elements",
+          "message": "Приховати елементи"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGlkZUVsZW1lbnRz.short_desc": {
+          "source": "CSS selector of the elements to hide",
+          "message": "Селектор CSS елементів, які потрібно приховати"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGlkZUVsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements to hide during the conversion.\n\n**Example**: `.banner, #chat`",
+          "message": "Селектор CSS елементів, які потрібно приховати під час конвертації.\n\n**Приклад**: `.banner, #chat`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2hvd0VsZW1lbnRz.display_name": {
+          "source": "Show Only Elements",
+          "message": "Показати лише елементи"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2hvd0VsZW1lbnRz.short_desc": {
+          "source": "CSS selector of the only elements to show",
+          "message": "Селектор CSS лише тих елементів, які потрібно показати"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2hvd0VsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements to show during the conversion; all other elements are hidden",
+          "message": "Селектор CSS елементів, які потрібно показати під час конвертації; усі інші елементи приховуються"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRXaWR0aA.display_name": {
+          "source": "Viewport Width",
+          "message": "Ширина області перегляду"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRXaWR0aA.short_desc": {
+          "source": "The browser viewport width in pixels",
+          "message": "Ширина області перегляду браузера в пікселях"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRXaWR0aA.desc": {
+          "source": "The width of the browser viewport in pixels, from `200` to `4000`; the default is `1366`",
+          "message": "Ширина області перегляду браузера в пікселях, від `200` до `4000`; за замовчуванням `1366`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRIZWlnaHQ.display_name": {
+          "source": "Viewport Height",
+          "message": "Висота області перегляду"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRIZWlnaHQ.short_desc": {
+          "source": "The browser viewport height in pixels",
+          "message": "Висота області перегляду браузера в пікселях"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRIZWlnaHQ.desc": {
+          "source": "The height of the browser viewport in pixels, from `200` to `4000`; the default is `1024`",
+          "message": "Висота області перегляду браузера в пікселях, від `200` до `4000`; за замовчуванням `1024`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.display_name": {
+          "source": "Fixed Elements",
+          "message": "Фіксовані елементи"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.short_desc": {
+          "source": "How elements with a fixed position are handled",
+          "message": "Як обробляються елементи з фіксованим положенням"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.desc": {
+          "source": "How the elements with a fixed CSS position are changed to adapt the page for the PDF",
+          "message": "Як змінюються елементи з фіксованим положенням CSS, щоб пристосувати сторінку для PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmZpeGVk.display_name": {
+          "source": "Leave Unchanged",
+          "message": "Залишити без змін"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmZpeGVk.desc": {
+          "source": "The elements keep their fixed position (the default)",
+          "message": "Елементи зберігають фіксоване положення (за замовчуванням)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmFic29sdXRl.display_name": {
+          "source": "Absolute",
+          "message": "Абсолютне положення"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmFic29sdXRl.desc": {
+          "source": "The elements get an absolute position",
+          "message": "Елементи отримують абсолютне положення"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOnJlbGF0aXZl.display_name": {
+          "source": "Relative",
+          "message": "Відносне положення"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOnJlbGF0aXZl.desc": {
+          "source": "The elements get a relative position",
+          "message": "Елементи отримують відносне положення"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmhpZGU.display_name": {
+          "source": "Hide",
+          "message": "Приховати"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmhpZGU.desc": {
+          "source": "The elements are hidden",
+          "message": "Елементи приховуються"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXZvaWRCcmVha0VsZW1lbnRz.display_name": {
+          "source": "Avoid Page Breaks in Elements",
+          "message": "Уникати розривів сторінок в елементах"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXZvaWRCcmVha0VsZW1lbnRz.short_desc": {
+          "source": "CSS selector of elements not to split across pages",
+          "message": "Селектор CSS елементів, які не можна розбивати на кілька сторінок"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXZvaWRCcmVha0VsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements that must not be split by a page break",
+          "message": "Селектор CSS елементів, які не можна розділяти розривом сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtCZWZvcmVFbGVtZW50cw.display_name": {
+          "source": "Page Break Before Elements",
+          "message": "Розрив сторінки перед елементами"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtCZWZvcmVFbGVtZW50cw.short_desc": {
+          "source": "CSS selector of elements that start a new page",
+          "message": "Селектор CSS елементів, з яких починається нова сторінка"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtCZWZvcmVFbGVtZW50cw.desc": {
+          "source": "The CSS selector of the elements to insert a page break before",
+          "message": "Селектор CSS елементів, перед якими потрібно вставити розрив сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtBZnRlckVsZW1lbnRz.display_name": {
+          "source": "Page Break After Elements",
+          "message": "Розрив сторінки після елементів"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtBZnRlckVsZW1lbnRz.short_desc": {
+          "source": "CSS selector of elements that end a page",
+          "message": "Селектор CSS елементів, якими закінчується сторінка"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtBZnRlckVsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements to insert a page break after",
+          "message": "Селектор CSS елементів, після яких потрібно вставити розрив сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UmVzcGVjdFZpZXdwb3J0.display_name": {
+          "source": "Respect Viewport",
+          "message": "Враховувати область перегляду"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UmVzcGVjdFZpZXdwb3J0.short_desc": {
+          "source": "Show the page as it looks in the browser",
+          "message": "Показувати сторінку так, як вона виглядає в браузері"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UmVzcGVjdFZpZXdwb3J0.desc": {
+          "source": "Set to `False` to create the PDF like the print to PDF function of Chrome; by default, the PDF shows the page as it looks in the browser",
+          "message": "Установіть значення `False`, щоб створити PDF так, як це робить функція друку в PDF у Chrome; за замовчуванням PDF показує сторінку так, як вона виглядає в браузері"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2NhbGU.display_name": {
+          "source": "Scale",
+          "message": "Масштаб"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2NhbGU.short_desc": {
+          "source": "The page scale in percent",
+          "message": "Масштаб сторінки у відсотках"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2NhbGU.desc": {
+          "source": "The scale of the web page in percent, from `10` to `200`; the default is `100`",
+          "message": "Масштаб вебсторінки у відсотках, від `10` до `200`; за замовчуванням `100`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.display_name": {
           "source": "Page Size",
           "message": "Розмір сторінки"
@@ -1899,6 +2435,30 @@
           "source": "Landscape",
           "message": "Альбомна"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVdpZHRo.display_name": {
+          "source": "Page Width",
+          "message": "Ширина сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVdpZHRo.short_desc": {
+          "source": "A custom page width in millimeters",
+          "message": "Власна ширина сторінки в міліметрах"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVdpZHRo.desc": {
+          "source": "A custom page width in millimeters, from `10` to `30000`, which overrides `PageSize`",
+          "message": "Власна ширина сторінки в міліметрах, від `10` до `30000`, яка має пріоритет над `PageSize`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZUhlaWdodA.display_name": {
+          "source": "Page Height",
+          "message": "Висота сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZUhlaWdodA.short_desc": {
+          "source": "A custom page height in millimeters",
+          "message": "Власна висота сторінки в міліметрах"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZUhlaWdodA.desc": {
+          "source": "A custom page height in millimeters, from `10` to `30000`, which overrides `PageSize`",
+          "message": "Власна висота сторінки в міліметрах, від `10` до `30000`, яка має пріоритет над `PageSize`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luVG9w.display_name": {
           "source": "Top Margin",
           "message": "Верхнє поле"
@@ -1947,9 +2507,33 @@
           "source": "The left page margin in millimeters; the default is `10`",
           "message": "Ліве поле сторінки в міліметрах; за замовчуванням `10`"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVy.display_name": {
+          "source": "Header HTML",
+          "message": "HTML верхнього колонтитула"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVy.short_desc": {
+          "source": "HTML for the header of each page",
+          "message": "HTML для верхнього колонтитула кожної сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVy.desc": {
+          "source": "HTML for the header of each page; elements with the classes `pageNumber`, `totalPages`, `title` and `date` are filled with the values for each page, and inline CSS can style the header.\n\n**Example**: `<span class='pageNumber'></span> / <span class='totalPages'></span>`",
+          "message": "HTML для верхнього колонтитула кожної сторінки; елементи з класами `pageNumber`, `totalPages`, `title` і `date` заповнюються значеннями для кожної сторінки, а стиль колонтитула можна задати за допомогою вбудованого CSS.\n\n**Приклад**: `<span class='pageNumber'></span> / <span class='totalPages'></span>`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rm9vdGVy.display_name": {
+          "source": "Footer HTML",
+          "message": "HTML нижнього колонтитула"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rm9vdGVy.short_desc": {
+          "source": "HTML for the footer of each page",
+          "message": "HTML для нижнього колонтитула кожної сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rm9vdGVy.desc": {
+          "source": "HTML for the footer of each page; elements with the classes `pageNumber`, `totalPages`, `title` and `date` are filled with the values for each page, and inline CSS can style the footer.\n\n**Example**: `<span class='date'></span>`",
+          "message": "HTML для нижнього колонтитула кожної сторінки; елементи з класами `pageNumber`, `totalPages`, `title` і `date` заповнюються значеннями для кожної сторінки, а стиль колонтитула можна задати за допомогою вбудованого CSS.\n\n**Приклад**: `<span class='date'></span>`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QmFja2dyb3VuZA.display_name": {
           "source": "Background",
-          "message": "Довідкова інформація"
+          "message": "Фон"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QmFja2dyb3VuZA.short_desc": {
           "source": "Print the page background",
@@ -2080,8 +2664,8 @@
           "message": "Конвертувати сторінки PDF в зображення JPG, PNG, TIFF або WebP"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.desc": {
-          "source": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF file.\n\nChoose the image `format` and resolution, and optionally a page range.",
-          "message": "Конвертує сторінки PDF в зображення: один файл зображення для кожної сторінки або один багатосторінковий файл TIFF.\n\nВиберіть `format` зображення та роздільну здатність, а також за потреби діапазон сторінок."
+          "source": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF file.\n\nChoose the image `format` and resolution, and optionally a page range; the other options depend on the format.",
+          "message": "Конвертує сторінки PDF в зображення: один файл зображення для кожної сторінки або один багатосторінковий файл TIFF.\n\nВиберіть `format` зображення та роздільну здатність, а також за потреби діапазон сторінок; інші параметри залежать від формату."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.display_name": {
           "source": "File",
@@ -2295,6 +2879,318 @@
           "source": "The image resolution in DPI; the default is `200`",
           "message": "Роздільна здатність зображення в DPI; за замовчуванням `200`"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VXaWR0aA.display_name": {
+          "source": "Image Width",
+          "message": "Ширина зображення"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VXaWR0aA.short_desc": {
+          "source": "The image width in pixels",
+          "message": "Ширина зображення в пікселях"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VXaWR0aA.desc": {
+          "source": "The width of the images in pixels, from `10` to `10000`",
+          "message": "Ширина зображень у пікселях, від `10` до `10000`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VIZWlnaHQ.display_name": {
+          "source": "Image Height",
+          "message": "Висота зображення"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VIZWlnaHQ.short_desc": {
+          "source": "The image height in pixels",
+          "message": "Висота зображення в пікселях"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VIZWlnaHQ.desc": {
+          "source": "The height of the images in pixels, from `10` to `10000`",
+          "message": "Висота зображень у пікселях, від `10` до `10000`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGU.display_name": {
+          "source": "Scale",
+          "message": "Масштаб"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGU.short_desc": {
+          "source": "The image size in percent of the page size",
+          "message": "Розмір зображення у відсотках від розміру сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGU.desc": {
+          "source": "The size of the images in percent of the size of the pages at the image resolution, from `10` to `300`; it overrides `ImageWidth` and `ImageHeight`.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "Розмір зображень у відсотках від розміру сторінок за роздільної здатності зображення, від `10` до `300`; має пріоритет над `ImageWidth` і `ImageHeight`.\n\n**Формати**: JPG, PNG і TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Rml0VG9TaXpl.display_name": {
+          "source": "Fit to Size",
+          "message": "Вмістити в розмір"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Rml0VG9TaXpl.short_desc": {
+          "source": "Fit the images within the width and height",
+          "message": "Вмістити зображення в задані ширину та висоту"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Rml0VG9TaXpl.desc": {
+          "source": "Set to `True` to scale the images to fit within both `ImageWidth` and `ImageHeight`, which must both be given, keeping the aspect ratio.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "Установіть значення `True`, щоб масштабувати зображення зі збереженням співвідношення сторін до розміру, що вміщається і в `ImageWidth`, і в `ImageHeight` (обидва параметри мають бути задані).\n\n**Формати**: JPG, PNG і TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGVQcm9wb3J0aW9ucw.display_name": {
+          "source": "Scale Proportions",
+          "message": "Зберігати пропорції"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGVQcm9wb3J0aW9ucw.short_desc": {
+          "source": "Keep the aspect ratio of the pages",
+          "message": "Зберігати співвідношення сторін сторінок"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGVQcm9wb3J0aW9ucw.desc": {
+          "source": "Set to `False` to scale the images to `ImageWidth` and `ImageHeight` without keeping the aspect ratio of the pages; it is kept by default.\n\n**Formats**: WebP",
+          "message": "Установіть значення `False`, щоб масштабувати зображення до `ImageWidth` і `ImageHeight` без збереження співвідношення сторін сторінок; за замовчуванням воно зберігається.\n\n**Формати**: WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.display_name": {
+          "source": "Rotate Pages",
+          "message": "Поворот сторінок"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.short_desc": {
+          "source": "Rotate the pages before converting them",
+          "message": "Обертати сторінки перед конвертацією"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.desc": {
+          "source": "The rotation of the pages before they are converted.\n\n**Formats**: JPG, PNG and TIFF; for WebP, give the angle in degrees, from `-360` to `360`, as `Rotate` in `parameters`",
+          "message": "Обертання сторінок перед їх конвертацією.\n\n**Формати**: JPG, PNG і TIFF; для WebP укажіть кут у градусах, від `-360` до `360`, як `Rotate` у `parameters`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "За замовчуванням"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The rotation of each page in the PDF (the default)",
+          "message": "Обертання кожної сторінки в PDF (за замовчуванням)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Немає"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No rotation",
+          "message": "Без обертання"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOnJvdGF0ZTkw.display_name": {
+          "source": "Rotate 90°",
+          "message": "Поворот на 90°"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOnJvdGF0ZTE4MA.display_name": {
+          "source": "Rotate 180°",
+          "message": "Поворот на 180°"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOnJvdGF0ZTI3MA.display_name": {
+          "source": "Rotate 270°",
+          "message": "Поворот на 270°"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.display_name": {
+          "source": "Crop to Box",
+          "message": "Обрізати за рамкою"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.short_desc": {
+          "source": "The page box that the images show",
+          "message": "Рамка сторінки, яку показують зображення"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.desc": {
+          "source": "The page box that the images are cropped to.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "Рамка сторінки, за якою обрізаються зображення.\n\n**Формати**: JPG, PNG і TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkJvdW5kaW5nQm94.display_name": {
+          "source": "Bounding Box",
+          "message": "Обмежувальна рамка"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkJvdW5kaW5nQm94.desc": {
+          "source": "The content of the page (the default)",
+          "message": "Вміст сторінки (за замовчуванням)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOlRyaW1Cb3g.display_name": {
+          "source": "Trim Box",
+          "message": "Рамка обрізу"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOk1lZGlhQm94.display_name": {
+          "source": "Media Box",
+          "message": "Рамка носія"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkFydEJveA.display_name": {
+          "source": "Art Box",
+          "message": "Рамка ілюстрації"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkJsZWVkQm94.display_name": {
+          "source": "Bleed Box",
+          "message": "Рамка випуску за обріз"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.QmFja2dyb3VuZENvbG9y.display_name": {
+          "source": "Background Color",
+          "message": "Колір фону"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.QmFja2dyb3VuZENvbG9y.short_desc": {
+          "source": "The background color of transparent pages",
+          "message": "Колір фону прозорих сторінок"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.QmFja2dyb3VuZENvbG9y.desc": {
+          "source": "The background color of the images where the pages are transparent: a color name, RGB values or a hexadecimal color code, or `transparent` to keep the transparency; the default is `white`.\n\n**Examples**: `black`, `255,0,0` or `#FF0000`\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "Колір фону зображень там, де сторінки прозорі: назва кольору, значення RGB або шістнадцятковий код кольору, чи `transparent`, щоб зберегти прозорість; за замовчуванням `white`.\n\n**Приклади**: `black`, `255,0,0` або `#FF0000`\n\n**Формати**: JPG, PNG і TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.VHJhbnNwYXJlbnRDb2xvcg.display_name": {
+          "source": "Transparent Color",
+          "message": "Прозорий колір"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.VHJhbnNwYXJlbnRDb2xvcg.short_desc": {
+          "source": "The color to make transparent",
+          "message": "Колір, який потрібно зробити прозорим"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.VHJhbnNwYXJlbnRDb2xvcg.desc": {
+          "source": "The color that is made transparent in the images: a color name, RGB values with an optional alpha value, or a hexadecimal color code.\n\n**Examples**: `white`, `255,255,255` or `255,255,255,150`\n\n**Formats**: WebP",
+          "message": "Колір, який стає прозорим на зображеннях: назва кольору, значення RGB з необов'язковим значенням альфа-каналу або шістнадцятковий код кольору.\n\n**Приклади**: `white`, `255,255,255` або `255,255,255,150`\n\n**Формати**: WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VRdWFsaXR5.display_name": {
+          "source": "Image Quality",
+          "message": "Якість зображення"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VRdWFsaXR5.short_desc": {
+          "source": "The image quality in percent",
+          "message": "Якість зображення у відсотках"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VRdWFsaXR5.desc": {
+          "source": "The quality of the images in percent, from `10` to `100`; the default is `75`.\n\n**Formats**: JPG and WebP",
+          "message": "Якість зображень у відсотках, від `10` до `100`; за замовчуванням `75`.\n\n**Формати**: JPG і WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.display_name": {
+          "source": "Color Space",
+          "message": "Колірний простір"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.short_desc": {
+          "source": "The color space of the images",
+          "message": "Колірний простір зображень"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.desc": {
+          "source": "The color space of the images.\n\n**Formats**: JPG and PNG",
+          "message": "Колірний простір зображень.\n\n**Формати**: JPG і PNG"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOnJnYg.display_name": {
+          "source": "RGB",
+          "message": "RGB"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOnJnYg.desc": {
+          "source": "The default",
+          "message": "Значення за замовчуванням"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOmNteWs.display_name": {
+          "source": "CMYK",
+          "message": "CMYK"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOmdyYXk.display_name": {
+          "source": "Gray",
+          "message": "Відтінки сірого"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOm1vbm9jaHJvbWU.display_name": {
+          "source": "Monochrome",
+          "message": "Монохромний"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.display_name": {
+          "source": "Color Mode",
+          "message": "Колірний режим"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.short_desc": {
+          "source": "The color mode of the TIFF file",
+          "message": "Колірний режим файлу TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.desc": {
+          "source": "The color mode of the TIFF file.\n\n**Formats**: TIFF",
+          "message": "Колірний режим файлу TIFF.\n\n**Формати**: TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "За замовчуванням"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The default",
+          "message": "Значення за замовчуванням"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmNteWs.display_name": {
+          "source": "CMYK",
+          "message": "CMYK"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmdyYXlzY2FsZQ.display_name": {
+          "source": "Grayscale",
+          "message": "Відтінки сірого"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmJpdG9uYWw.display_name": {
+          "source": "Bitonal",
+          "message": "Чорно-білий"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.display_name": {
+          "source": "Bit Depth",
+          "message": "Бітова глибина"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.short_desc": {
+          "source": "The number of bits per color channel",
+          "message": "Кількість бітів на колірний канал"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.desc": {
+          "source": "The number of bits per color channel; more bits give more precise colors and smoother gradients but larger files.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "Кількість бітів на колірний канал; більше бітів дає точніші кольори та плавніші градієнти, але більші файли.\n\n**Формати**: JPG, PNG і TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "За замовчуванням"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The default",
+          "message": "Значення за замовчуванням"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjE.display_name": {
+          "source": "1 Bit",
+          "message": "1 біт"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjI.display_name": {
+          "source": "2 Bits",
+          "message": "2 біти"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjQ.display_name": {
+          "source": "4 Bits",
+          "message": "4 біти"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjg.display_name": {
+          "source": "8 Bits",
+          "message": "8 бітів"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjE2.display_name": {
+          "source": "16 Bits",
+          "message": "16 бітів"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29tcHJlc3Npb25MZXZlbA.display_name": {
+          "source": "Compression Level",
+          "message": "Рівень стиснення"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29tcHJlc3Npb25MZXZlbA.short_desc": {
+          "source": "The compression level, from 0 to 9",
+          "message": "Рівень стиснення від 0 до 9"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29tcHJlc3Npb25MZXZlbA.desc": {
+          "source": "The compression level, from `0` to `9`; a higher level gives smaller files, and for JPG also a lower image quality.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "Рівень стиснення, від `0` до `9`; вищий рівень дає менші файли, а для JPG — ще й нижчу якість зображення.\n\n**Формати**: JPG, PNG і TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VBbnRpYWxpYXNpbmc.display_name": {
+          "source": "Antialiasing",
+          "message": "Згладжування"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VBbnRpYWxpYXNpbmc.short_desc": {
+          "source": "The subsampling box size for antialiasing",
+          "message": "Розмір області субдискретизації для згладжування"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VBbnRpYWxpYXNpbmc.desc": {
+          "source": "The subsampling box size for the antialiasing of text and graphics, from `0` to `8`; the default, `8`, gives the best text, and smaller values render faster.\n\n**Formats**: WebP",
+          "message": "Розмір області субдискретизації для згладжування тексту та графіки, від `0` до `8`; значення за замовчуванням, `8`, дає найкращий текст, а з меншими значеннями відтворення швидше.\n\n**Формати**: WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.TXVsdGlQYWdl.display_name": {
+          "source": "Multi-Page File",
+          "message": "Багатосторінковий файл"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.TXVsdGlQYWdl.short_desc": {
+          "source": "Create one multi-page TIFF file",
+          "message": "Створити один багатосторінковий файл TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.TXVsdGlQYWdl.desc": {
+          "source": "Set to `False` to create a TIFF file for each page; by default, all pages are in one multi-page TIFF file.\n\n**Formats**: TIFF",
+          "message": "Установіть значення `False`, щоб створити окремий файл TIFF для кожної сторінки; за замовчуванням усі сторінки містяться в одному багатосторінковому файлі TIFF.\n\n**Формати**: TIFF"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",
           "message": "Зберегти файл"
@@ -2499,6 +3395,18 @@
           "source": "The URLs of the files to convert for converters that take several input files, such as `pdf` to `merge`.\n\nThey are sent as the `Files` parameter, together with any files given in `files`.",
           "message": "URL файлів для конвертації для конвертерів, що приймають кілька вхідних файлів, наприклад `pdf` у `merge`.\n\nВони надсилаються як параметр `Files` разом із файлами, указаними в `files`."
         },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFzc3dvcmQ.display_name": {
+          "source": "Open Password",
+          "message": "Пароль для відкриття"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFzc3dvcmQ.short_desc": {
+          "source": "The password to open protected PDF files",
+          "message": "Пароль для відкриття захищених файлів PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFzc3dvcmQ.desc": {
+          "source": "The password to open the protected PDF files",
+          "message": "Пароль для відкриття захищених файлів PDF"
+        },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.display_name": {
           "source": "Bookmarks Table of Contents",
           "message": "Зміст із закладок"
@@ -2546,6 +3454,94 @@
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UmVtb3ZlRHVwbGljYXRlRm9udHM.desc": {
           "source": "Set to `True` to include the fonts used by several of the merged files only once",
           "message": "Установіть значення `True`, щоб включати шрифти, використані в кількох об'єднаних файлах, лише один раз"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Розмір сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.short_desc": {
+          "source": "The page size that every page is scaled to",
+          "message": "Розмір сторінки, до якого масштабується кожна сторінка"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.desc": {
+          "source": "The page size that every page of the merged PDF is scaled to",
+          "message": "Розмір сторінки, до якого масштабується кожна сторінка об'єднаного PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "За замовчуванням"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Every page keeps its size (the default)",
+          "message": "Кожна сторінка зберігає свій розмір (за замовчуванням)"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEy.display_name": {
+          "source": "A2",
+          "message": "A2"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEz.display_name": {
+          "source": "A3",
+          "message": "A3"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0.display_name": {
+          "source": "A4",
+          "message": "A4"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE1.display_name": {
+          "source": "A5",
+          "message": "A5"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE2.display_name": {
+          "source": "A6",
+          "message": "A6"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcg.display_name": {
+          "source": "Letter",
+          "message": "Letter"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZ2Fs.display_name": {
+          "source": "Legal",
+          "message": "Legal"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.display_name": {
+          "source": "Page Orientation",
+          "message": "Орієнтація сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.short_desc": {
+          "source": "The orientation of every page",
+          "message": "Орієнтація кожної сторінки"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.desc": {
+          "source": "The orientation of every page of the merged PDF",
+          "message": "Орієнтація кожної сторінки об'єднаного PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "За замовчуванням"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Every page keeps its orientation (the default)",
+          "message": "Кожна сторінка зберігає свою орієнтацію (за замовчуванням)"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
+          "source": "Portrait",
+          "message": "Книжкова"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmxhbmRzY2FwZQ.display_name": {
+          "source": "Landscape",
+          "message": "Альбомна"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.T3BlblBhZ2U.display_name": {
+          "source": "Open to Page",
+          "message": "Відкрити на сторінці"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.T3BlblBhZ2U.short_desc": {
+          "source": "The page that the PDF opens at",
+          "message": "Сторінка, на якій відкривається PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.T3BlblBhZ2U.desc": {
+          "source": "The number of the page that the merged PDF opens at, from `1` to `3000`; the default is `1`",
+          "message": "Номер сторінки, на якій відкривається об'єднаний PDF, від `1` до `3000`; за замовчуванням `1`"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",
@@ -2802,6 +3798,174 @@
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UGFzc3dvcmQ.desc": {
           "source": "The password to open a protected PDF",
           "message": "Пароль для відкриття захищеного файлу PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VSZXNvbHV0aW9u.display_name": {
+          "source": "Image Resolution",
+          "message": "Роздільна здатність зображення"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VSZXNvbHV0aW9u.short_desc": {
+          "source": "The maximum image resolution in DPI",
+          "message": "Максимальна роздільна здатність зображень у DPI"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VSZXNvbHV0aW9u.desc": {
+          "source": "The maximum resolution of the images in DPI, from `10` to `800`; the default is `150`",
+          "message": "Максимальна роздільна здатність зображень у DPI, від `10` до `800`; за замовчуванням `150`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VRdWFsaXR5.display_name": {
+          "source": "Image Quality",
+          "message": "Якість зображення"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VRdWFsaXR5.short_desc": {
+          "source": "The image quality in percent",
+          "message": "Якість зображення у відсотках"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VRdWFsaXR5.desc": {
+          "source": "The quality of the images in percent, from `10` to `100`; the default is `80`",
+          "message": "Якість зображень у відсотках, від `10` до `100`; за замовчуванням `80`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRm9ybXM.display_name": {
+          "source": "Remove Forms",
+          "message": "Видалити форми"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRm9ybXM.short_desc": {
+          "source": "Remove the forms of the PDF",
+          "message": "Видалити форми з PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRm9ybXM.desc": {
+          "source": "Set to `True` to remove the forms of the PDF",
+          "message": "Установіть значення `True`, щоб видалити форми з PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRHVwbGljYXRlcw.display_name": {
+          "source": "Remove Duplicates",
+          "message": "Видалити дублікати"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRHVwbGljYXRlcw.short_desc": {
+          "source": "Remove duplicate fonts and color profiles",
+          "message": "Видалити дубльовані шрифти та колірні профілі"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRHVwbGljYXRlcw.desc": {
+          "source": "Set to `False` to keep duplicate fonts and color profiles; they are removed by default",
+          "message": "Установіть значення `False`, щоб зберегти дубльовані шрифти та колірні профілі; за замовчуванням вони видаляються"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlUGllY2VJbmZvcm1hdGlvbg.display_name": {
+          "source": "Remove Piece Information",
+          "message": "Видалити інформацію про частини"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlUGllY2VJbmZvcm1hdGlvbg.short_desc": {
+          "source": "Remove the private data of editing applications",
+          "message": "Видалити приватні дані програм для редагування"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlUGllY2VJbmZvcm1hdGlvbg.desc": {
+          "source": "Set to `False` to keep the piece information dictionaries, the private data of applications such as Adobe Illustrator or Photoshop; they are removed by default",
+          "message": "Установіть значення `False`, щоб зберегти словники інформації про частини (piece information), тобто приватні дані програм, як-от Adobe Illustrator або Photoshop; за замовчуванням вони видаляються"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRW1iZWRkZWRGaWxlcw.display_name": {
+          "source": "Remove Embedded Files",
+          "message": "Видалити вбудовані файли"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRW1iZWRkZWRGaWxlcw.short_desc": {
+          "source": "Remove embedded files and attachments",
+          "message": "Видалити вбудовані файли та вкладення"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRW1iZWRkZWRGaWxlcw.desc": {
+          "source": "Set to `False` to keep the embedded files and attachments; they are removed by default",
+          "message": "Установіть значення `False`, щоб зберегти вбудовані файли та вкладення; за замовчуванням вони видаляються"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlU3RydWN0dXJlSW5mb3JtYXRpb24.display_name": {
+          "source": "Remove Structure Information",
+          "message": "Видалити інформацію про структуру"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlU3RydWN0dXJlSW5mb3JtYXRpb24.short_desc": {
+          "source": "Remove the structure information of the document",
+          "message": "Видалити інформацію про структуру документа"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlU3RydWN0dXJlSW5mb3JtYXRpb24.desc": {
+          "source": "Set to `False` to keep the structure information of the document; it is removed by default",
+          "message": "Установіть значення `False`, щоб зберегти інформацію про структуру документа; за замовчуванням вона видаляється"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlTWV0YWRhdGE.display_name": {
+          "source": "Remove Metadata",
+          "message": "Видалити метадані"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlTWV0YWRhdGE.short_desc": {
+          "source": "Remove the XMP metadata",
+          "message": "Видалити метадані XMP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlTWV0YWRhdGE.desc": {
+          "source": "Set to `False` to keep the XMP metadata of the document; it is removed by default",
+          "message": "Установіть значення `False`, щоб зберегти метадані XMP документа; за замовчуванням вони видаляються"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlVW51c2VkUmVzb3VyY2Vz.display_name": {
+          "source": "Remove Unused Resources",
+          "message": "Видалити невикористані ресурси"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlVW51c2VkUmVzb3VyY2Vz.short_desc": {
+          "source": "Remove unused fonts, images and patterns",
+          "message": "Видалити невикористані шрифти, зображення та візерунки"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlVW51c2VkUmVzb3VyY2Vz.desc": {
+          "source": "Set to `False` to keep unused resources such as fonts, images and patterns; they are removed by default",
+          "message": "Установіть значення `False`, щоб зберегти невикористані ресурси, як-от шрифти, зображення та візерунки; за замовчуванням вони видаляються"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.VW5lbWJlZEJhc2VGb250cw.display_name": {
+          "source": "Unembed Base Fonts",
+          "message": "Скасувати вбудовування базових шрифтів"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.VW5lbWJlZEJhc2VGb250cw.short_desc": {
+          "source": "Remove the embedded base fonts",
+          "message": "Видалити вбудовані базові шрифти"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.VW5lbWJlZEJhc2VGb250cw.desc": {
+          "source": "Set to `True` to remove the embedded base fonts from the PDF",
+          "message": "Установіть значення `True`, щоб видалити вбудовані базові шрифти з PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.U3Vic2V0RW1iZWRkZWRGb250cw.display_name": {
+          "source": "Subset Embedded Fonts",
+          "message": "Створити підмножини вбудованих шрифтів"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.U3Vic2V0RW1iZWRkZWRGb250cw.short_desc": {
+          "source": "Keep only the characters of the fonts that are used",
+          "message": "Залишити лише використані символи шрифтів"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.U3Vic2V0RW1iZWRkZWRGb250cw.desc": {
+          "source": "Set to `True` to keep only the characters of the embedded fonts that the document uses",
+          "message": "Установіть значення `True`, щоб залишити у вбудованих шрифтах лише символи, які використовує документ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.T3B0aW1pemU.display_name": {
+          "source": "Optimize Content",
+          "message": "Оптимізувати вміст"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.T3B0aW1pemU.short_desc": {
+          "source": "Optimize the page content streams",
+          "message": "Оптимізувати потоки вмісту сторінок"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.T3B0aW1pemU.desc": {
+          "source": "Set to `False` to leave the page content streams as they are; they are optimized by default",
+          "message": "Установіть значення `False`, щоб залишити потоки вмісту сторінок без змін; за замовчуванням вони оптимізуються"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.TGluZWFyaXpl.display_name": {
+          "source": "Linearize",
+          "message": "Лінеаризувати"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.TGluZWFyaXpl.short_desc": {
+          "source": "Optimize the PDF for fast web view",
+          "message": "Оптимізувати PDF для швидкого перегляду в Інтернеті"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.TGluZWFyaXpl.desc": {
+          "source": "Set to `True` to linearize the PDF, which optimizes it for fast web view",
+          "message": "Установіть значення `True`, щоб лінеаризувати PDF, що оптимізує його для швидкого перегляду в Інтернеті"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2VydmVQZGZh.display_name": {
+          "source": "Preserve PDF/A",
+          "message": "Зберегти PDF/A"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2VydmVQZGZh.short_desc": {
+          "source": "Keep the PDF/A conformance of the file",
+          "message": "Зберегти відповідність файлу стандарту PDF/A"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2VydmVQZGZh.desc": {
+          "source": "Set to `True` to keep the PDF/A conformance of the PDF",
+          "message": "Установіть значення `True`, щоб зберегти відповідність PDF стандарту PDF/A"
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",

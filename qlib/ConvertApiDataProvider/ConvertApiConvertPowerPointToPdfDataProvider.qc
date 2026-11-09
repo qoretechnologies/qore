@@ -51,6 +51,7 @@ public class ConvertApiConvertPowerPointToPdfRequestDataType inherits HashDataTy
                 "short_desc": "Include the hidden slides",
                 "desc": "Set to `True` to include the hidden slides in the PDF",
             },
+            "IncludeMetadata": ConvertApiIncludeMetadataField,
             "ConvertSpeakerNotes": {
                 "type": StringOrNothingType,
                 "display_name": "Convert Speaker Notes",
@@ -73,6 +74,12 @@ public class ConvertApiConvertPowerPointToPdfRequestDataType inherits HashDataTy
                         "desc": "The notes as page comments",
                     },
                 ),
+            },
+            "EmbedFonts": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Embed Fonts",
+                "short_desc": "Embed the fonts in the PDF",
+                "desc": "Set to `False` to leave the fonts out of the PDF; they are embedded by default",
             },
             "Pdfa": {
                 "type": SoftBoolOrNothingType,

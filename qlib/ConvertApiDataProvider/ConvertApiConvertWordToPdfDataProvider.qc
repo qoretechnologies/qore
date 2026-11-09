@@ -45,6 +45,21 @@ public class ConvertApiConvertWordToPdfRequestDataType inherits HashDataType {
                 "desc": "The password to open a protected document",
                 "sensitive": True,
             },
+            "IncludeMarkup": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Include Markup",
+                "short_desc": "Include tracked changes and comments",
+                "desc": "Set to `True` to include the document markup, such as tracked changes and comments, in the "
+                    "PDF",
+            },
+            "IncludeStructureTags": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Include Structure Tags",
+                "short_desc": "Create a tagged PDF for accessibility",
+                "desc": "Set to `True` to include the structure tags of the document, which make a tagged PDF for "
+                    "accessibility",
+            },
+            "IncludeMetadata": ConvertApiIncludeMetadataField,
             "BookmarkMode": {
                 "type": StringOrNothingType,
                 "display_name": "Bookmark Mode",
@@ -73,6 +88,13 @@ public class ConvertApiConvertWordToPdfRequestDataType inherits HashDataType {
                 "display_name": "Update Table of Contents",
                 "short_desc": "Update the tables of contents before converting",
                 "desc": "Set to `True` to update all tables of contents in the document before the conversion",
+            },
+            "SubsetFonts": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Subset Fonts",
+                "short_desc": "Embed only the characters of the fonts that are used",
+                "desc": "Set to `True` to make the PDF smaller by embedding only the characters of the fonts that "
+                    "the document uses",
             },
             "Pdfa": {
                 "type": SoftBoolOrNothingType,

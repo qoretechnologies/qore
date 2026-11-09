@@ -348,8 +348,8 @@
           "message": "使用任何 ConvertAPI 轉換器轉換檔案"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.desc": {
-          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\n**Formats**: select the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n**Input**: a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`, and a few converters take their input in `parameters` instead, for example `data` to `qrcode` with `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parameters**: other converter parameters go in `parameters` by their ConvertAPI names; the `get-converter-info` action lists them.\n\n**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is `True`.",
-          "message": "使用任何 ConvertAPI 轉換器轉換檔案，以其來源格式和目標格式指定。\n\n**格式**：請先選取 `from` 格式；`to` 清單接著會顯示該來源格式的轉換器所支援的目標格式。\n\n**輸入**：以 `file` 或來源 `url` 提供；接受多個檔案的轉換器（例如 `pdf` 轉 `merge`）則使用 `files` 或 `urls`，少數轉換器改以 `parameters` 接收輸入，例如 `data` 轉 `qrcode`，使用 `{\"Data\": \"https://www.convertapi.com\"}`。\n\n**參數**：其他轉換器參數以 ConvertAPI 的名稱放在 `parameters` 中；`get-converter-info` 動作會列出這些參數。\n\n**輸出**：輸出檔案會以 `FileData` 傳回；若 `store_file` 為 `True`，則傳回下載網址。"
+          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\n**Formats**: select the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n**Input**: a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`, and a few converters take their input in `parameters` instead, for example `data` to `qrcode` with `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parameters**: when both formats are selected, the parameters of the converter are added as typed options, as ConvertAPI describes them; parameters can also be given in `parameters` by their ConvertAPI names, which the `get-converter-info` action lists.\n\n**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is `True`.",
+          "message": "使用任何 ConvertAPI 轉換器轉換檔案，以其來源格式和目標格式指定。\n\n**格式**：請先選取 `from` 格式；`to` 清單接著會顯示該來源格式的轉換器所支援的目標格式。\n\n**輸入**：以 `file` 或來源 `url` 提供；接受多個檔案的轉換器（例如 `pdf` 轉 `merge`）則使用 `files` 或 `urls`，少數轉換器改以 `parameters` 接收輸入，例如 `data` 轉 `qrcode`，使用 `{\"Data\": \"https://www.convertapi.com\"}`。\n\n**參數**：選取兩種格式後，轉換器的參數會依 ConvertAPI 的說明，以具類型的選項形式加入；也可以在 `parameters` 中以 ConvertAPI 名稱提供參數，`get-converter-info` 動作會列出這些名稱。\n\n**輸出**：輸出檔案會以 `FileData` 傳回；若 `store_file` 為 `True`，則傳回下載網址。"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.display_name": {
           "source": "Source Format",
@@ -927,6 +927,42 @@
           "source": "The password to open a protected document",
           "message": "開啟受保護文件的密碼"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1hcmt1cA.display_name": {
+          "source": "Include Markup",
+          "message": "包含標記"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1hcmt1cA.short_desc": {
+          "source": "Include tracked changes and comments",
+          "message": "包含追蹤修訂和註解"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1hcmt1cA.desc": {
+          "source": "Set to `True` to include the document markup, such as tracked changes and comments, in the PDF",
+          "message": "設為 `True` 以在 PDF 中包含文件標記，例如追蹤修訂和註解"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZVN0cnVjdHVyZVRhZ3M.display_name": {
+          "source": "Include Structure Tags",
+          "message": "包含結構標籤"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZVN0cnVjdHVyZVRhZ3M.short_desc": {
+          "source": "Create a tagged PDF for accessibility",
+          "message": "建立加上標籤的 PDF 以支援無障礙功能"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZVN0cnVjdHVyZVRhZ3M.desc": {
+          "source": "Set to `True` to include the structure tags of the document, which make a tagged PDF for accessibility",
+          "message": "設為 `True` 以包含文件的結構標籤，產生加上標籤的 PDF 以支援無障礙功能"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.display_name": {
+          "source": "Include Metadata",
+          "message": "包含中繼資料"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.short_desc": {
+          "source": "Include the document metadata",
+          "message": "包含文件中繼資料"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.desc": {
+          "source": "Set to `False` to leave out the document metadata, such as the title, author and keywords; it is included by default",
+          "message": "設為 `False` 以不包含文件中繼資料，例如標題、作者和關鍵字；預設會包含"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.display_name": {
           "source": "Bookmark Mode",
           "message": "書籤模式"
@@ -974,6 +1010,18 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.VXBkYXRlVGFibGVPZkNvbnRlbnRz.desc": {
           "source": "Set to `True` to update all tables of contents in the document before the conversion",
           "message": "設為 `True` 以在轉換前更新文件中的所有目錄"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.U3Vic2V0Rm9udHM.display_name": {
+          "source": "Subset Fonts",
+          "message": "字型子集"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.U3Vic2V0Rm9udHM.short_desc": {
+          "source": "Embed only the characters of the fonts that are used",
+          "message": "僅內嵌字型中用到的字元"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.U3Vic2V0Rm9udHM.desc": {
+          "source": "Set to `True` to make the PDF smaller by embedding only the characters of the fonts that the document uses",
+          "message": "設為 `True` 以僅內嵌文件實際使用的字型字元，縮小 PDF 的大小"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1203,6 +1251,30 @@
           "source": "The password to open a protected workbook",
           "message": "開啟受保護活頁簿的密碼"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.display_name": {
+          "source": "Active Worksheet Only",
+          "message": "僅使用中的工作表"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.short_desc": {
+          "source": "Convert only the active worksheet",
+          "message": "僅轉換使用中的工作表"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.desc": {
+          "source": "Set to `True` to convert only the active worksheet",
+          "message": "設為 `True` 以僅轉換使用中的工作表"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0SW5kZXg.display_name": {
+          "source": "Worksheet Number",
+          "message": "工作表編號"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0SW5kZXg.short_desc": {
+          "source": "The number of the worksheet to convert",
+          "message": "要轉換的工作表編號"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0SW5kZXg.desc": {
+          "source": "The number of the worksheet to convert, from `1` to `2000`; all worksheets are converted by default",
+          "message": "要轉換的工作表編號，範圍為 `1` 到 `2000`；預設會轉換所有工作表"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0TmFtZQ.display_name": {
           "source": "Worksheet Name",
           "message": "工作表名稱"
@@ -1215,17 +1287,17 @@
           "source": "The name of the worksheet to convert; all worksheets are converted by default",
           "message": "要轉換的工作表名稱；預設會轉換所有工作表"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.display_name": {
-          "source": "Active Worksheet Only",
-          "message": "僅使用中的工作表"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SW5jbHVkZU1ldGFkYXRh.display_name": {
+          "source": "Include Metadata",
+          "message": "包含中繼資料"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.short_desc": {
-          "source": "Convert only the active worksheet",
-          "message": "僅轉換使用中的工作表"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SW5jbHVkZU1ldGFkYXRh.short_desc": {
+          "source": "Include the document metadata",
+          "message": "包含文件中繼資料"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.desc": {
-          "source": "Set to `True` to convert only the active worksheet",
-          "message": "設為 `True` 以僅轉換使用中的工作表"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SW5jbHVkZU1ldGFkYXRh.desc": {
+          "source": "Set to `False` to leave out the document metadata, such as the title, author and keywords; it is included by default",
+          "message": "設為 `False` 以不包含文件中繼資料，例如標題、作者和關鍵字；預設會包含"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.display_name": {
           "source": "Page Orientation",
@@ -1255,6 +1327,78 @@
           "source": "Landscape",
           "message": "橫向"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.short_desc": {
+          "source": "The page size",
+          "message": "頁面大小"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.desc": {
+          "source": "The page size of the PDF",
+          "message": "PDF 頁面大小"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "預設"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The page setup of each worksheet (the default)",
+          "message": "每個工作表的版面設定（預設）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcg.display_name": {
+          "source": "Letter",
+          "message": "Letter"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcnNtYWxs.display_name": {
+          "source": "Letter Small",
+          "message": "Letter Small"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOnRhYmxvaWQ.display_name": {
+          "source": "Tabloid",
+          "message": "Tabloid"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZGdlcg.display_name": {
+          "source": "Ledger",
+          "message": "Ledger"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZ2Fs.display_name": {
+          "source": "Legal",
+          "message": "Legal"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOnN0YXRlbWVudA.display_name": {
+          "source": "Statement",
+          "message": "Statement"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmV4ZWN1dGl2ZQ.display_name": {
+          "source": "Executive",
+          "message": "Executive"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEz.display_name": {
+          "source": "A3",
+          "message": "A3"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0.display_name": {
+          "source": "A4",
+          "message": "A4"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0c21hbGw.display_name": {
+          "source": "A4 Small",
+          "message": "A4 Small"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE1.display_name": {
+          "source": "A5",
+          "message": "A5"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmI0.display_name": {
+          "source": "B4",
+          "message": "B4"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmI1.display_name": {
+          "source": "B5",
+          "message": "B5"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Rml0VG9QYWdl.display_name": {
           "source": "Fit to Page",
           "message": "縮放至頁面"
@@ -1278,6 +1422,102 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QXV0b0ZpdENvbHVtbnM.desc": {
           "source": "Set to `True` to fit the column widths to their content, which removes unnecessary empty space",
           "message": "設為 `True` 以依內容調整欄寬，移除不必要的空白"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Q2xlYXJQcmludEFyZWE.display_name": {
+          "source": "Clear Print Area",
+          "message": "清除列印範圍"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Q2xlYXJQcmludEFyZWE.short_desc": {
+          "source": "Ignore the print areas and convert whole worksheets",
+          "message": "忽略列印範圍並轉換整個工作表"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Q2xlYXJQcmludEFyZWE.desc": {
+          "source": "Set to `True` to clear the print areas of the workbook, so that the whole content of each worksheet is converted",
+          "message": "設為 `True` 以清除活頁簿的列印範圍，使每個工作表的完整內容都會轉換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.U2NhbGU.display_name": {
+          "source": "Scale",
+          "message": "縮放比例"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.U2NhbGU.short_desc": {
+          "source": "The content scale in percent",
+          "message": "內容縮放比例（百分比）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.U2NhbGU.desc": {
+          "source": "The scale of the content in percent, from `10` to `300`",
+          "message": "內容的縮放比例（百分比），範圍為 `10` 到 `300`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SGVhZGVyT25FYWNoUGFnZQ.display_name": {
+          "source": "Header on Each Page",
+          "message": "每頁重複標題列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SGVhZGVyT25FYWNoUGFnZQ.short_desc": {
+          "source": "Repeat the header row on every page",
+          "message": "在每一頁重複標題列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SGVhZGVyT25FYWNoUGFnZQ.desc": {
+          "source": "Set to `True` to repeat the header row on each page of a worksheet that spans several pages: the header row of a table in the worksheet, or else its first row with data",
+          "message": "設為 `True` 以在跨越多頁之工作表的每一頁重複標題列：即工作表中表格的標題列，否則為工作表中第一個含有資料的列"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.VGhvdXNhbmRzU2VwYXJhdG9y.display_name": {
+          "source": "Thousands Separator",
+          "message": "千分位分隔符號"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.VGhvdXNhbmRzU2VwYXJhdG9y.short_desc": {
+          "source": "The thousands separator of numbers",
+          "message": "數字的千分位分隔符號"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.VGhvdXNhbmRzU2VwYXJhdG9y.desc": {
+          "source": "The thousands separator of the numbers in the PDF; the default is `,`",
+          "message": "PDF 中數字的千分位分隔符號；預設為 `,`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGVjaW1hbFNlcGFyYXRvcg.display_name": {
+          "source": "Decimal Separator",
+          "message": "小數點分隔符號"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGVjaW1hbFNlcGFyYXRvcg.short_desc": {
+          "source": "The decimal separator of numbers",
+          "message": "數字的小數點分隔符號"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGVjaW1hbFNlcGFyYXRvcg.desc": {
+          "source": "The decimal separator of the numbers in the PDF; the default is `.`",
+          "message": "PDF 中數字的小數點分隔符號；預設為 `.`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.display_name": {
+          "source": "Date Format",
+          "message": "日期格式"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.short_desc": {
+          "source": "The format of dates",
+          "message": "日期的格式"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.desc": {
+          "source": "The format of the dates in the PDF, whatever the regional settings of the workbook",
+          "message": "PDF 中日期的格式，不論活頁簿的地區設定為何"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOnVz.display_name": {
+          "source": "US (M/d/yyyy)",
+          "message": "美國（M/d/yyyy）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOnVz.desc": {
+          "source": "The default",
+          "message": "預設值"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmlzbw.display_name": {
+          "source": "ISO (yyyy-MM-dd)",
+          "message": "ISO（yyyy-MM-dd）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmV1.display_name": {
+          "source": "EU (dd/MM/yyyy)",
+          "message": "歐洲（dd/MM/yyyy）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmdlcm1hbg.display_name": {
+          "source": "German (dd.MM.yyyy)",
+          "message": "德國（dd.MM.yyyy）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmphcGFuZXNl.display_name": {
+          "source": "Japanese (yyyy/MM/dd)",
+          "message": "日本（yyyy/MM/dd）"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1531,6 +1771,18 @@
           "source": "Set to `True` to include the hidden slides in the PDF",
           "message": "設為 `True` 以在 PDF 中包含隱藏的投影片"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.display_name": {
+          "source": "Include Metadata",
+          "message": "包含中繼資料"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.short_desc": {
+          "source": "Include the document metadata",
+          "message": "包含文件中繼資料"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.desc": {
+          "source": "Set to `False` to leave out the document metadata, such as the title, author and keywords; it is included by default",
+          "message": "設為 `False` 以不包含文件中繼資料，例如標題、作者和關鍵字；預設會包含"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.display_name": {
           "source": "Convert Speaker Notes",
           "message": "轉換講者備忘稿"
@@ -1566,6 +1818,18 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlBhZ2VDb21tZW50cw.desc": {
           "source": "The notes as page comments",
           "message": "將備忘稿轉為頁面註解"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.RW1iZWRGb250cw.display_name": {
+          "source": "Embed Fonts",
+          "message": "內嵌字型"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.RW1iZWRGb250cw.short_desc": {
+          "source": "Embed the fonts in the PDF",
+          "message": "在 PDF 中內嵌字型"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.RW1iZWRGb250cw.desc": {
+          "source": "Set to `False` to leave the fonts out of the PDF; they are embedded by default",
+          "message": "設為 `False` 以不在 PDF 中內嵌字型；預設會內嵌"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1783,6 +2047,278 @@
           "source": "The filename",
           "message": "檔案名"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVJhbmdl.display_name": {
+          "source": "Page Range",
+          "message": "頁面範圍"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVJhbmdl.short_desc": {
+          "source": "The pages to convert",
+          "message": "要轉換的頁面"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVJhbmdl.desc": {
+          "source": "The pages to convert, as a range or a comma-separated list.\n\n**Example**: `1-10` or `1,2,5`; all pages are converted by default",
+          "message": "要轉換的頁面，以範圍或以逗號分隔的清單表示。\n\n**範例**：`1-10` 或 `1,2,5`；預設會轉換所有頁面"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFVzZXJuYW1l.display_name": {
+          "source": "Authentication User Name",
+          "message": "驗證使用者名稱"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFVzZXJuYW1l.short_desc": {
+          "source": "The user name for HTTP authentication of the page",
+          "message": "頁面 HTTP 驗證的使用者名稱"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFVzZXJuYW1l.desc": {
+          "source": "The user name for a web page that is protected with HTTP authentication",
+          "message": "受 HTTP 驗證保護之網頁的使用者名稱"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFBhc3N3b3Jk.display_name": {
+          "source": "Authentication Password",
+          "message": "驗證密碼"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFBhc3N3b3Jk.short_desc": {
+          "source": "The password for HTTP authentication of the page",
+          "message": "頁面 HTTP 驗證的密碼"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFBhc3N3b3Jk.desc": {
+          "source": "The password for a web page that is protected with HTTP authentication",
+          "message": "受 HTTP 驗證保護之網頁的密碼"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llcw.display_name": {
+          "source": "Cookies",
+          "message": "Cookie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llcw.short_desc": {
+          "source": "Cookies to send with the page request",
+          "message": "隨頁面請求傳送的 Cookie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llcw.desc": {
+          "source": "Cookies to send with the request for the web page, separated by semicolons.\n\n**Example**: `name1=value1; name2=value2`",
+          "message": "隨網頁請求傳送的 Cookie，以分號分隔。\n\n**範例**：`name1=value1; name2=value2`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVycw.display_name": {
+          "source": "HTTP Headers",
+          "message": "HTTP 標頭"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVycw.short_desc": {
+          "source": "Custom HTTP headers to send with the page request",
+          "message": "隨頁面請求傳送的自訂 HTTP 標頭"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVycw.desc": {
+          "source": "Custom HTTP headers to send with the request for the web page, as `name:value` pairs separated by `|`.\n\n**Example**: `Accept-Language:de|Cache-Control:no-cache`",
+          "message": "隨網頁請求傳送的自訂 HTTP 標頭，以 `|` 分隔的 `name:value` 配對表示。\n\n**範例**：`Accept-Language:de|Cache-Control:no-cache`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QWRCbG9jaw.display_name": {
+          "source": "Block Ads",
+          "message": "封鎖廣告"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QWRCbG9jaw.short_desc": {
+          "source": "Block the ads of the page",
+          "message": "封鎖頁面上的廣告"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QWRCbG9jaw.desc": {
+          "source": "Set to `True` to block the ads of the web page",
+          "message": "設為 `True` 以封鎖網頁上的廣告"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llQ29uc2VudEJsb2Nr.display_name": {
+          "source": "Remove Cookie Warnings",
+          "message": "移除 Cookie 警告"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llQ29uc2VudEJsb2Nr.short_desc": {
+          "source": "Remove cookie consent banners",
+          "message": "移除 Cookie 同意橫幅"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llQ29uc2VudEJsb2Nr.desc": {
+          "source": "Set to `True` to try to remove the cookie consent warnings of the web page",
+          "message": "設為 `True` 以嘗試移除網頁上的 Cookie 同意警告"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.V2FpdEVsZW1lbnQ.display_name": {
+          "source": "Wait for Element",
+          "message": "等待元素"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.V2FpdEVsZW1lbnQ.short_desc": {
+          "source": "CSS selector of an element to wait for",
+          "message": "要等待之元素的 CSS 選擇器"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.V2FpdEVsZW1lbnQ.desc": {
+          "source": "The CSS selector of an element that the converter waits for: the conversion begins when the element appears in the page.\n\n**Example**: `#content`",
+          "message": "轉換器要等待之元素的 CSS 選擇器：元素出現在頁面中時即開始轉換。\n\n**範例**：`#content`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckpz.display_name": {
+          "source": "Run JavaScript",
+          "message": "執行 JavaScript"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckpz.short_desc": {
+          "source": "JavaScript to run before the conversion",
+          "message": "轉換前要執行的 JavaScript"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckpz.desc": {
+          "source": "JavaScript code to run in the web page before the conversion begins",
+          "message": "開始轉換前要在網頁中執行的 JavaScript 程式碼"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckNzcw.display_name": {
+          "source": "Additional CSS",
+          "message": "額外的 CSS"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckNzcw.short_desc": {
+          "source": "CSS to apply before the conversion",
+          "message": "轉換前要套用的 CSS"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckNzcw.desc": {
+          "source": "CSS to apply to the web page before the conversion begins",
+          "message": "開始轉換前要套用至網頁的 CSS"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGlkZUVsZW1lbnRz.display_name": {
+          "source": "Hide Elements",
+          "message": "隱藏元素"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGlkZUVsZW1lbnRz.short_desc": {
+          "source": "CSS selector of the elements to hide",
+          "message": "要隱藏之元素的 CSS 選擇器"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGlkZUVsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements to hide during the conversion.\n\n**Example**: `.banner, #chat`",
+          "message": "轉換期間要隱藏之元素的 CSS 選擇器。\n\n**範例**：`.banner, #chat`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2hvd0VsZW1lbnRz.display_name": {
+          "source": "Show Only Elements",
+          "message": "僅顯示元素"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2hvd0VsZW1lbnRz.short_desc": {
+          "source": "CSS selector of the only elements to show",
+          "message": "僅顯示之元素的 CSS 選擇器"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2hvd0VsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements to show during the conversion; all other elements are hidden",
+          "message": "轉換期間要顯示之元素的 CSS 選擇器；其他所有元素都會隱藏"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRXaWR0aA.display_name": {
+          "source": "Viewport Width",
+          "message": "檢視區寬度"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRXaWR0aA.short_desc": {
+          "source": "The browser viewport width in pixels",
+          "message": "瀏覽器檢視區寬度（像素）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRXaWR0aA.desc": {
+          "source": "The width of the browser viewport in pixels, from `200` to `4000`; the default is `1366`",
+          "message": "瀏覽器檢視區的寬度（像素），範圍為 `200` 到 `4000`；預設為 `1366`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRIZWlnaHQ.display_name": {
+          "source": "Viewport Height",
+          "message": "檢視區高度"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRIZWlnaHQ.short_desc": {
+          "source": "The browser viewport height in pixels",
+          "message": "瀏覽器檢視區高度（像素）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRIZWlnaHQ.desc": {
+          "source": "The height of the browser viewport in pixels, from `200` to `4000`; the default is `1024`",
+          "message": "瀏覽器檢視區的高度（像素），範圍為 `200` 到 `4000`；預設為 `1024`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.display_name": {
+          "source": "Fixed Elements",
+          "message": "固定元素"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.short_desc": {
+          "source": "How elements with a fixed position are handled",
+          "message": "固定定位元素的處理方式"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.desc": {
+          "source": "How the elements with a fixed CSS position are changed to adapt the page for the PDF",
+          "message": "如何變更採用 CSS 固定定位的元素，使頁面適用於 PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmZpeGVk.display_name": {
+          "source": "Leave Unchanged",
+          "message": "保持不變"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmZpeGVk.desc": {
+          "source": "The elements keep their fixed position (the default)",
+          "message": "元素保持固定定位（預設）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmFic29sdXRl.display_name": {
+          "source": "Absolute",
+          "message": "絕對定位"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmFic29sdXRl.desc": {
+          "source": "The elements get an absolute position",
+          "message": "元素改為絕對定位"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOnJlbGF0aXZl.display_name": {
+          "source": "Relative",
+          "message": "相對定位"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOnJlbGF0aXZl.desc": {
+          "source": "The elements get a relative position",
+          "message": "元素改為相對定位"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmhpZGU.display_name": {
+          "source": "Hide",
+          "message": "隱藏"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmhpZGU.desc": {
+          "source": "The elements are hidden",
+          "message": "元素會被隱藏"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXZvaWRCcmVha0VsZW1lbnRz.display_name": {
+          "source": "Avoid Page Breaks in Elements",
+          "message": "避免在元素內分頁"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXZvaWRCcmVha0VsZW1lbnRz.short_desc": {
+          "source": "CSS selector of elements not to split across pages",
+          "message": "不可跨頁分割之元素的 CSS 選擇器"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXZvaWRCcmVha0VsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements that must not be split by a page break",
+          "message": "不得被分頁符號分割之元素的 CSS 選擇器"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtCZWZvcmVFbGVtZW50cw.display_name": {
+          "source": "Page Break Before Elements",
+          "message": "在元素前分頁"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtCZWZvcmVFbGVtZW50cw.short_desc": {
+          "source": "CSS selector of elements that start a new page",
+          "message": "從新頁面開始之元素的 CSS 選擇器"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtCZWZvcmVFbGVtZW50cw.desc": {
+          "source": "The CSS selector of the elements to insert a page break before",
+          "message": "要在其前方插入分頁符號之元素的 CSS 選擇器"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtBZnRlckVsZW1lbnRz.display_name": {
+          "source": "Page Break After Elements",
+          "message": "在元素後分頁"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtBZnRlckVsZW1lbnRz.short_desc": {
+          "source": "CSS selector of elements that end a page",
+          "message": "作為頁面結尾之元素的 CSS 選擇器"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtBZnRlckVsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements to insert a page break after",
+          "message": "要在其後方插入分頁符號之元素的 CSS 選擇器"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UmVzcGVjdFZpZXdwb3J0.display_name": {
+          "source": "Respect Viewport",
+          "message": "遵循檢視區"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UmVzcGVjdFZpZXdwb3J0.short_desc": {
+          "source": "Show the page as it looks in the browser",
+          "message": "呈現頁面在瀏覽器中的樣子"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UmVzcGVjdFZpZXdwb3J0.desc": {
+          "source": "Set to `False` to create the PDF like the print to PDF function of Chrome; by default, the PDF shows the page as it looks in the browser",
+          "message": "設為 `False` 以如同 Chrome 的「列印成 PDF」功能建立 PDF；預設情況下，PDF 會呈現頁面在瀏覽器中的樣子"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2NhbGU.display_name": {
+          "source": "Scale",
+          "message": "縮放比例"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2NhbGU.short_desc": {
+          "source": "The page scale in percent",
+          "message": "頁面縮放比例（百分比）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2NhbGU.desc": {
+          "source": "The scale of the web page in percent, from `10` to `200`; the default is `100`",
+          "message": "網頁的縮放比例（百分比），範圍為 `10` 到 `200`；預設為 `100`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.display_name": {
           "source": "Page Size",
           "message": "頁面大小"
@@ -1899,6 +2435,30 @@
           "source": "Landscape",
           "message": "橫向"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVdpZHRo.display_name": {
+          "source": "Page Width",
+          "message": "頁面寬度"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVdpZHRo.short_desc": {
+          "source": "A custom page width in millimeters",
+          "message": "自訂頁面寬度（公釐）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVdpZHRo.desc": {
+          "source": "A custom page width in millimeters, from `10` to `30000`, which overrides `PageSize`",
+          "message": "自訂頁面寬度（公釐），範圍為 `10` 到 `30000`，會覆寫 `PageSize`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZUhlaWdodA.display_name": {
+          "source": "Page Height",
+          "message": "頁面高度"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZUhlaWdodA.short_desc": {
+          "source": "A custom page height in millimeters",
+          "message": "自訂頁面高度（公釐）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZUhlaWdodA.desc": {
+          "source": "A custom page height in millimeters, from `10` to `30000`, which overrides `PageSize`",
+          "message": "自訂頁面高度（公釐），範圍為 `10` 到 `30000`，會覆寫 `PageSize`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luVG9w.display_name": {
           "source": "Top Margin",
           "message": "上邊距"
@@ -1946,6 +2506,30 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luTGVmdA.desc": {
           "source": "The left page margin in millimeters; the default is `10`",
           "message": "頁面左邊距（公釐）；預設為 `10`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVy.display_name": {
+          "source": "Header HTML",
+          "message": "頁首 HTML"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVy.short_desc": {
+          "source": "HTML for the header of each page",
+          "message": "每頁頁首的 HTML"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVy.desc": {
+          "source": "HTML for the header of each page; elements with the classes `pageNumber`, `totalPages`, `title` and `date` are filled with the values for each page, and inline CSS can style the header.\n\n**Example**: `<span class='pageNumber'></span> / <span class='totalPages'></span>`",
+          "message": "每頁頁首的 HTML；具有 `pageNumber`、`totalPages`、`title` 和 `date` 類別的元素會填入各頁的值，並可使用行內 CSS 設定頁首樣式。\n\n**範例**：`<span class='pageNumber'></span> / <span class='totalPages'></span>`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rm9vdGVy.display_name": {
+          "source": "Footer HTML",
+          "message": "頁尾 HTML"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rm9vdGVy.short_desc": {
+          "source": "HTML for the footer of each page",
+          "message": "每頁頁尾的 HTML"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rm9vdGVy.desc": {
+          "source": "HTML for the footer of each page; elements with the classes `pageNumber`, `totalPages`, `title` and `date` are filled with the values for each page, and inline CSS can style the footer.\n\n**Example**: `<span class='date'></span>`",
+          "message": "每頁頁尾的 HTML；具有 `pageNumber`、`totalPages`、`title` 和 `date` 類別的元素會填入各頁的值，並可使用行內 CSS 設定頁尾樣式。\n\n**範例**：`<span class='date'></span>`"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QmFja2dyb3VuZA.display_name": {
           "source": "Background",
@@ -2080,8 +2664,8 @@
           "message": "將 PDF 的頁面轉換為 JPG、PNG、TIFF 或 WebP 影像"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.desc": {
-          "source": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF file.\n\nChoose the image `format` and resolution, and optionally a page range.",
-          "message": "將 PDF 的頁面轉換為影像：每一頁一個影像檔案，或一個多頁 TIFF 檔案。\n\n請選擇影像 `format` 和解析度，也可選擇性指定頁面範圍。"
+          "source": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF file.\n\nChoose the image `format` and resolution, and optionally a page range; the other options depend on the format.",
+          "message": "將 PDF 的頁面轉換為影像：每一頁一個影像檔案，或一個多頁 TIFF 檔案。\n\n請選擇影像 `format` 和解析度，也可選擇性指定頁面範圍；其他選項則依格式而定。"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.display_name": {
           "source": "File",
@@ -2295,6 +2879,318 @@
           "source": "The image resolution in DPI; the default is `200`",
           "message": "影像解析度（DPI）；預設為 `200`"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VXaWR0aA.display_name": {
+          "source": "Image Width",
+          "message": "影像寬度"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VXaWR0aA.short_desc": {
+          "source": "The image width in pixels",
+          "message": "影像寬度（像素）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VXaWR0aA.desc": {
+          "source": "The width of the images in pixels, from `10` to `10000`",
+          "message": "影像的寬度（像素），範圍為 `10` 到 `10000`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VIZWlnaHQ.display_name": {
+          "source": "Image Height",
+          "message": "影像高度"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VIZWlnaHQ.short_desc": {
+          "source": "The image height in pixels",
+          "message": "影像高度（像素）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VIZWlnaHQ.desc": {
+          "source": "The height of the images in pixels, from `10` to `10000`",
+          "message": "影像的高度（像素），範圍為 `10` 到 `10000`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGU.display_name": {
+          "source": "Scale",
+          "message": "縮放比例"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGU.short_desc": {
+          "source": "The image size in percent of the page size",
+          "message": "影像大小（頁面大小的百分比）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGU.desc": {
+          "source": "The size of the images in percent of the size of the pages at the image resolution, from `10` to `300`; it overrides `ImageWidth` and `ImageHeight`.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "影像的大小，以頁面在影像解析度下之大小的百分比表示，範圍為 `10` 到 `300`；會覆寫 `ImageWidth` 和 `ImageHeight`。\n\n**格式**：JPG、PNG 和 TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Rml0VG9TaXpl.display_name": {
+          "source": "Fit to Size",
+          "message": "縮放至指定大小"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Rml0VG9TaXpl.short_desc": {
+          "source": "Fit the images within the width and height",
+          "message": "將影像縮放至寬度和高度範圍內"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Rml0VG9TaXpl.desc": {
+          "source": "Set to `True` to scale the images to fit within both `ImageWidth` and `ImageHeight`, which must both be given, keeping the aspect ratio.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "設為 `True` 以將影像縮放至 `ImageWidth` 和 `ImageHeight` 的範圍內並保持長寬比；這兩者都必須指定。\n\n**格式**：JPG、PNG 和 TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGVQcm9wb3J0aW9ucw.display_name": {
+          "source": "Scale Proportions",
+          "message": "等比例縮放"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGVQcm9wb3J0aW9ucw.short_desc": {
+          "source": "Keep the aspect ratio of the pages",
+          "message": "保持頁面的長寬比"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGVQcm9wb3J0aW9ucw.desc": {
+          "source": "Set to `False` to scale the images to `ImageWidth` and `ImageHeight` without keeping the aspect ratio of the pages; it is kept by default.\n\n**Formats**: WebP",
+          "message": "設為 `False` 以將影像縮放至 `ImageWidth` 和 `ImageHeight`，而不保持頁面的長寬比；預設會保持長寬比。\n\n**格式**：WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.display_name": {
+          "source": "Rotate Pages",
+          "message": "旋轉頁面"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.short_desc": {
+          "source": "Rotate the pages before converting them",
+          "message": "轉換前旋轉頁面"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.desc": {
+          "source": "The rotation of the pages before they are converted.\n\n**Formats**: JPG, PNG and TIFF; for WebP, give the angle in degrees, from `-360` to `360`, as `Rotate` in `parameters`",
+          "message": "轉換前頁面的旋轉方式。\n\n**格式**：JPG、PNG 和 TIFF；若為 WebP，請在 `parameters` 中以 `Rotate` 提供角度（單位為度），範圍為 `-360` 到 `360`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "預設"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The rotation of each page in the PDF (the default)",
+          "message": "PDF 中各頁面的旋轉設定（預設）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "無"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No rotation",
+          "message": "不旋轉"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOnJvdGF0ZTkw.display_name": {
+          "source": "Rotate 90°",
+          "message": "旋轉 90°"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOnJvdGF0ZTE4MA.display_name": {
+          "source": "Rotate 180°",
+          "message": "旋轉 180°"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOnJvdGF0ZTI3MA.display_name": {
+          "source": "Rotate 270°",
+          "message": "旋轉 270°"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.display_name": {
+          "source": "Crop to Box",
+          "message": "裁切至頁面框"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.short_desc": {
+          "source": "The page box that the images show",
+          "message": "影像所顯示的頁面框"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.desc": {
+          "source": "The page box that the images are cropped to.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "影像要裁切至的頁面框。\n\n**格式**：JPG、PNG 和 TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkJvdW5kaW5nQm94.display_name": {
+          "source": "Bounding Box",
+          "message": "邊界框"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkJvdW5kaW5nQm94.desc": {
+          "source": "The content of the page (the default)",
+          "message": "頁面的內容（預設）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOlRyaW1Cb3g.display_name": {
+          "source": "Trim Box",
+          "message": "剪裁框"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOk1lZGlhQm94.display_name": {
+          "source": "Media Box",
+          "message": "媒體框"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkFydEJveA.display_name": {
+          "source": "Art Box",
+          "message": "作品框"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkJsZWVkQm94.display_name": {
+          "source": "Bleed Box",
+          "message": "出血框"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.QmFja2dyb3VuZENvbG9y.display_name": {
+          "source": "Background Color",
+          "message": "背景顏色"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.QmFja2dyb3VuZENvbG9y.short_desc": {
+          "source": "The background color of transparent pages",
+          "message": "透明頁面的背景顏色"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.QmFja2dyb3VuZENvbG9y.desc": {
+          "source": "The background color of the images where the pages are transparent: a color name, RGB values or a hexadecimal color code, or `transparent` to keep the transparency; the default is `white`.\n\n**Examples**: `black`, `255,0,0` or `#FF0000`\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "頁面透明處的影像背景顏色：可為顏色名稱、RGB 值或十六進位色碼，或使用 `transparent` 保留透明度；預設為 `white`。\n\n**範例**：`black`、`255,0,0` 或 `#FF0000`\n\n**格式**：JPG、PNG 和 TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.VHJhbnNwYXJlbnRDb2xvcg.display_name": {
+          "source": "Transparent Color",
+          "message": "透明色"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.VHJhbnNwYXJlbnRDb2xvcg.short_desc": {
+          "source": "The color to make transparent",
+          "message": "要設為透明的顏色"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.VHJhbnNwYXJlbnRDb2xvcg.desc": {
+          "source": "The color that is made transparent in the images: a color name, RGB values with an optional alpha value, or a hexadecimal color code.\n\n**Examples**: `white`, `255,255,255` or `255,255,255,150`\n\n**Formats**: WebP",
+          "message": "影像中要設為透明的顏色：可為顏色名稱、RGB 值（可加上 Alpha 值）或十六進位色碼。\n\n**範例**：`white`、`255,255,255` 或 `255,255,255,150`\n\n**格式**：WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VRdWFsaXR5.display_name": {
+          "source": "Image Quality",
+          "message": "影像品質"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VRdWFsaXR5.short_desc": {
+          "source": "The image quality in percent",
+          "message": "影像品質（百分比）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VRdWFsaXR5.desc": {
+          "source": "The quality of the images in percent, from `10` to `100`; the default is `75`.\n\n**Formats**: JPG and WebP",
+          "message": "影像的品質（百分比），範圍為 `10` 到 `100`；預設為 `75`。\n\n**格式**：JPG 和 WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.display_name": {
+          "source": "Color Space",
+          "message": "色彩空間"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.short_desc": {
+          "source": "The color space of the images",
+          "message": "影像的色彩空間"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.desc": {
+          "source": "The color space of the images.\n\n**Formats**: JPG and PNG",
+          "message": "影像的色彩空間。\n\n**格式**：JPG 和 PNG"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOnJnYg.display_name": {
+          "source": "RGB",
+          "message": "RGB"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOnJnYg.desc": {
+          "source": "The default",
+          "message": "預設值"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOmNteWs.display_name": {
+          "source": "CMYK",
+          "message": "CMYK"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOmdyYXk.display_name": {
+          "source": "Gray",
+          "message": "灰階"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOm1vbm9jaHJvbWU.display_name": {
+          "source": "Monochrome",
+          "message": "單色"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.display_name": {
+          "source": "Color Mode",
+          "message": "色彩模式"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.short_desc": {
+          "source": "The color mode of the TIFF file",
+          "message": "TIFF 檔案的色彩模式"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.desc": {
+          "source": "The color mode of the TIFF file.\n\n**Formats**: TIFF",
+          "message": "TIFF 檔案的色彩模式。\n\n**格式**：TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "預設"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The default",
+          "message": "預設值"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmNteWs.display_name": {
+          "source": "CMYK",
+          "message": "CMYK"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmdyYXlzY2FsZQ.display_name": {
+          "source": "Grayscale",
+          "message": "灰階"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmJpdG9uYWw.display_name": {
+          "source": "Bitonal",
+          "message": "黑白"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.display_name": {
+          "source": "Bit Depth",
+          "message": "位元深度"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.short_desc": {
+          "source": "The number of bits per color channel",
+          "message": "每個色彩通道的位元數"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.desc": {
+          "source": "The number of bits per color channel; more bits give more precise colors and smoother gradients but larger files.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "每個色彩通道的位元數；位元數越多，色彩越精確、漸層越平滑，但檔案也越大。\n\n**格式**：JPG、PNG 和 TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "預設"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The default",
+          "message": "預設值"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjE.display_name": {
+          "source": "1 Bit",
+          "message": "1 位元"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjI.display_name": {
+          "source": "2 Bits",
+          "message": "2 位元"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjQ.display_name": {
+          "source": "4 Bits",
+          "message": "4 位元"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjg.display_name": {
+          "source": "8 Bits",
+          "message": "8 位元"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjE2.display_name": {
+          "source": "16 Bits",
+          "message": "16 位元"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29tcHJlc3Npb25MZXZlbA.display_name": {
+          "source": "Compression Level",
+          "message": "壓縮等級"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29tcHJlc3Npb25MZXZlbA.short_desc": {
+          "source": "The compression level, from 0 to 9",
+          "message": "壓縮等級，範圍為 0 到 9"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29tcHJlc3Npb25MZXZlbA.desc": {
+          "source": "The compression level, from `0` to `9`; a higher level gives smaller files, and for JPG also a lower image quality.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "壓縮等級，範圍為 `0` 到 `9`；等級越高，檔案越小，若為 JPG，影像品質也會越低。\n\n**格式**：JPG、PNG 和 TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VBbnRpYWxpYXNpbmc.display_name": {
+          "source": "Antialiasing",
+          "message": "消除鋸齒"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VBbnRpYWxpYXNpbmc.short_desc": {
+          "source": "The subsampling box size for antialiasing",
+          "message": "消除鋸齒的子取樣框大小"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VBbnRpYWxpYXNpbmc.desc": {
+          "source": "The subsampling box size for the antialiasing of text and graphics, from `0` to `8`; the default, `8`, gives the best text, and smaller values render faster.\n\n**Formats**: WebP",
+          "message": "文字和圖形消除鋸齒時的子取樣框大小，範圍為 `0` 到 `8`；預設值 `8` 可呈現最佳的文字效果，較小的值則轉譯速度較快。\n\n**格式**：WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.TXVsdGlQYWdl.display_name": {
+          "source": "Multi-Page File",
+          "message": "多頁檔案"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.TXVsdGlQYWdl.short_desc": {
+          "source": "Create one multi-page TIFF file",
+          "message": "建立單一多頁 TIFF 檔案"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.TXVsdGlQYWdl.desc": {
+          "source": "Set to `False` to create a TIFF file for each page; by default, all pages are in one multi-page TIFF file.\n\n**Formats**: TIFF",
+          "message": "設為 `False` 以為每一頁建立一個 TIFF 檔案；預設會將所有頁面放在單一多頁 TIFF 檔案中。\n\n**格式**：TIFF"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",
           "message": "儲存檔案"
@@ -2499,6 +3395,18 @@
           "source": "The URLs of the files to convert for converters that take several input files, such as `pdf` to `merge`.\n\nThey are sent as the `Files` parameter, together with any files given in `files`.",
           "message": "接受多個輸入檔案之轉換器（例如 `pdf` 轉 `merge`）要轉換的檔案 URL。\n\n這些 URL 會連同 `files` 中提供的任何檔案，一併作為 `Files` 參數傳送。"
         },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFzc3dvcmQ.display_name": {
+          "source": "Open Password",
+          "message": "開啟密碼"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFzc3dvcmQ.short_desc": {
+          "source": "The password to open protected PDF files",
+          "message": "開啟受保護 PDF 檔案的密碼"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFzc3dvcmQ.desc": {
+          "source": "The password to open the protected PDF files",
+          "message": "用於開啟受保護 PDF 檔案的密碼"
+        },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.display_name": {
           "source": "Bookmarks Table of Contents",
           "message": "書籤目錄"
@@ -2546,6 +3454,94 @@
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UmVtb3ZlRHVwbGljYXRlRm9udHM.desc": {
           "source": "Set to `True` to include the fonts used by several of the merged files only once",
           "message": "設為 `True` 以讓多個合併檔案使用的字型僅包含一次"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.short_desc": {
+          "source": "The page size that every page is scaled to",
+          "message": "每一頁要縮放至的頁面大小"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.desc": {
+          "source": "The page size that every page of the merged PDF is scaled to",
+          "message": "合併後 PDF 的每一頁要縮放至的頁面大小"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "預設"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Every page keeps its size (the default)",
+          "message": "每一頁保持原本的大小（預設）"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEy.display_name": {
+          "source": "A2",
+          "message": "A2"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEz.display_name": {
+          "source": "A3",
+          "message": "A3"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0.display_name": {
+          "source": "A4",
+          "message": "A4"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE1.display_name": {
+          "source": "A5",
+          "message": "A5"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE2.display_name": {
+          "source": "A6",
+          "message": "A6"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcg.display_name": {
+          "source": "Letter",
+          "message": "Letter"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZ2Fs.display_name": {
+          "source": "Legal",
+          "message": "Legal"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.display_name": {
+          "source": "Page Orientation",
+          "message": "頁面方向"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.short_desc": {
+          "source": "The orientation of every page",
+          "message": "每一頁的方向"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.desc": {
+          "source": "The orientation of every page of the merged PDF",
+          "message": "合併後 PDF 每一頁的方向"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "預設"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Every page keeps its orientation (the default)",
+          "message": "每一頁保持原本的方向（預設）"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
+          "source": "Portrait",
+          "message": "直向"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmxhbmRzY2FwZQ.display_name": {
+          "source": "Landscape",
+          "message": "橫向"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.T3BlblBhZ2U.display_name": {
+          "source": "Open to Page",
+          "message": "開啟至頁面"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.T3BlblBhZ2U.short_desc": {
+          "source": "The page that the PDF opens at",
+          "message": "PDF 開啟時顯示的頁面"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.T3BlblBhZ2U.desc": {
+          "source": "The number of the page that the merged PDF opens at, from `1` to `3000`; the default is `1`",
+          "message": "合併後 PDF 開啟時顯示的頁碼，範圍為 `1` 到 `3000`；預設為 `1`"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",
@@ -2802,6 +3798,174 @@
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UGFzc3dvcmQ.desc": {
           "source": "The password to open a protected PDF",
           "message": "開啟受保護 PDF 的密碼"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VSZXNvbHV0aW9u.display_name": {
+          "source": "Image Resolution",
+          "message": "影像解析度"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VSZXNvbHV0aW9u.short_desc": {
+          "source": "The maximum image resolution in DPI",
+          "message": "影像最大解析度（DPI）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VSZXNvbHV0aW9u.desc": {
+          "source": "The maximum resolution of the images in DPI, from `10` to `800`; the default is `150`",
+          "message": "影像的最大解析度（DPI），範圍為 `10` 到 `800`；預設為 `150`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VRdWFsaXR5.display_name": {
+          "source": "Image Quality",
+          "message": "影像品質"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VRdWFsaXR5.short_desc": {
+          "source": "The image quality in percent",
+          "message": "影像品質（百分比）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VRdWFsaXR5.desc": {
+          "source": "The quality of the images in percent, from `10` to `100`; the default is `80`",
+          "message": "影像的品質（百分比），範圍為 `10` 到 `100`；預設為 `80`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRm9ybXM.display_name": {
+          "source": "Remove Forms",
+          "message": "移除表單"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRm9ybXM.short_desc": {
+          "source": "Remove the forms of the PDF",
+          "message": "移除 PDF 中的表單"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRm9ybXM.desc": {
+          "source": "Set to `True` to remove the forms of the PDF",
+          "message": "設為 `True` 以移除 PDF 中的表單"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRHVwbGljYXRlcw.display_name": {
+          "source": "Remove Duplicates",
+          "message": "移除重複項目"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRHVwbGljYXRlcw.short_desc": {
+          "source": "Remove duplicate fonts and color profiles",
+          "message": "移除重複的字型和色彩描述檔"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRHVwbGljYXRlcw.desc": {
+          "source": "Set to `False` to keep duplicate fonts and color profiles; they are removed by default",
+          "message": "設為 `False` 以保留重複的字型和色彩描述檔；預設會移除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlUGllY2VJbmZvcm1hdGlvbg.display_name": {
+          "source": "Remove Piece Information",
+          "message": "移除片段資訊"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlUGllY2VJbmZvcm1hdGlvbg.short_desc": {
+          "source": "Remove the private data of editing applications",
+          "message": "移除編輯應用程式的私人資料"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlUGllY2VJbmZvcm1hdGlvbg.desc": {
+          "source": "Set to `False` to keep the piece information dictionaries, the private data of applications such as Adobe Illustrator or Photoshop; they are removed by default",
+          "message": "設為 `False` 以保留片段資訊字典，即 Adobe Illustrator 或 Photoshop 等應用程式的私人資料；預設會移除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRW1iZWRkZWRGaWxlcw.display_name": {
+          "source": "Remove Embedded Files",
+          "message": "移除內嵌檔案"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRW1iZWRkZWRGaWxlcw.short_desc": {
+          "source": "Remove embedded files and attachments",
+          "message": "移除內嵌檔案和附件"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRW1iZWRkZWRGaWxlcw.desc": {
+          "source": "Set to `False` to keep the embedded files and attachments; they are removed by default",
+          "message": "設為 `False` 以保留內嵌檔案和附件；預設會移除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlU3RydWN0dXJlSW5mb3JtYXRpb24.display_name": {
+          "source": "Remove Structure Information",
+          "message": "移除結構資訊"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlU3RydWN0dXJlSW5mb3JtYXRpb24.short_desc": {
+          "source": "Remove the structure information of the document",
+          "message": "移除文件的結構資訊"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlU3RydWN0dXJlSW5mb3JtYXRpb24.desc": {
+          "source": "Set to `False` to keep the structure information of the document; it is removed by default",
+          "message": "設為 `False` 以保留文件的結構資訊；預設會移除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlTWV0YWRhdGE.display_name": {
+          "source": "Remove Metadata",
+          "message": "移除中繼資料"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlTWV0YWRhdGE.short_desc": {
+          "source": "Remove the XMP metadata",
+          "message": "移除 XMP 中繼資料"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlTWV0YWRhdGE.desc": {
+          "source": "Set to `False` to keep the XMP metadata of the document; it is removed by default",
+          "message": "設為 `False` 以保留文件的 XMP 中繼資料；預設會移除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlVW51c2VkUmVzb3VyY2Vz.display_name": {
+          "source": "Remove Unused Resources",
+          "message": "移除未使用的資源"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlVW51c2VkUmVzb3VyY2Vz.short_desc": {
+          "source": "Remove unused fonts, images and patterns",
+          "message": "移除未使用的字型、影像和圖樣"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlVW51c2VkUmVzb3VyY2Vz.desc": {
+          "source": "Set to `False` to keep unused resources such as fonts, images and patterns; they are removed by default",
+          "message": "設為 `False` 以保留字型、影像和圖樣等未使用的資源；預設會移除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.VW5lbWJlZEJhc2VGb250cw.display_name": {
+          "source": "Unembed Base Fonts",
+          "message": "取消內嵌基本字型"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.VW5lbWJlZEJhc2VGb250cw.short_desc": {
+          "source": "Remove the embedded base fonts",
+          "message": "移除內嵌的基本字型"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.VW5lbWJlZEJhc2VGb250cw.desc": {
+          "source": "Set to `True` to remove the embedded base fonts from the PDF",
+          "message": "設為 `True` 以從 PDF 中移除內嵌的基本字型"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.U3Vic2V0RW1iZWRkZWRGb250cw.display_name": {
+          "source": "Subset Embedded Fonts",
+          "message": "內嵌字型子集"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.U3Vic2V0RW1iZWRkZWRGb250cw.short_desc": {
+          "source": "Keep only the characters of the fonts that are used",
+          "message": "僅保留字型中用到的字元"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.U3Vic2V0RW1iZWRkZWRGb250cw.desc": {
+          "source": "Set to `True` to keep only the characters of the embedded fonts that the document uses",
+          "message": "設為 `True` 以僅保留內嵌字型中文件實際使用的字元"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.T3B0aW1pemU.display_name": {
+          "source": "Optimize Content",
+          "message": "最佳化內容"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.T3B0aW1pemU.short_desc": {
+          "source": "Optimize the page content streams",
+          "message": "最佳化頁面內容串流"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.T3B0aW1pemU.desc": {
+          "source": "Set to `False` to leave the page content streams as they are; they are optimized by default",
+          "message": "設為 `False` 以讓頁面內容串流保持原樣；預設會進行最佳化"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.TGluZWFyaXpl.display_name": {
+          "source": "Linearize",
+          "message": "線性化"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.TGluZWFyaXpl.short_desc": {
+          "source": "Optimize the PDF for fast web view",
+          "message": "最佳化 PDF 以供快速網頁檢視"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.TGluZWFyaXpl.desc": {
+          "source": "Set to `True` to linearize the PDF, which optimizes it for fast web view",
+          "message": "設為 `True` 以將 PDF 線性化，針對快速網頁檢視進行最佳化"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2VydmVQZGZh.display_name": {
+          "source": "Preserve PDF/A",
+          "message": "保留 PDF/A"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2VydmVQZGZh.short_desc": {
+          "source": "Keep the PDF/A conformance of the file",
+          "message": "保留檔案的 PDF/A 符合性"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2VydmVQZGZh.desc": {
+          "source": "Set to `True` to keep the PDF/A conformance of the PDF",
+          "message": "設為 `True` 以保留 PDF 的 PDF/A 符合性"
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",

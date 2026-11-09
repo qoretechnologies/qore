@@ -348,8 +348,8 @@
           "message": "Converti file con qualsiasi convertitore ConvertAPI"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.desc": {
-          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\n**Formats**: select the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n**Input**: a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`, and a few converters take their input in `parameters` instead, for example `data` to `qrcode` with `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parameters**: other converter parameters go in `parameters` by their ConvertAPI names; the `get-converter-info` action lists them.\n\n**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is `True`.",
-          "message": "Converte file con qualsiasi convertitore ConvertAPI, indicato dai suoi formati di origine e di destinazione.\n\n**Formati**: seleziona prima il formato `from`; l'elenco `to` mostra quindi i formati di destinazione dei convertitori per quel formato di origine.\n\n**Input**: un `file` o un `url` di origine; i convertitori che accettano più file (come `pdf` in `merge`) usano `files` o `urls`, e alcuni convertitori ricevono il loro input in `parameters`, ad esempio `data` in `qrcode` con `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parametri**: gli altri parametri del convertitore vanno in `parameters` con i loro nomi ConvertAPI; l'azione `get-converter-info` li elenca.\n\n**Output**: i file di output vengono restituiti come `FileData`, oppure come URL di download se `store_file` è `True`."
+          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\n**Formats**: select the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n**Input**: a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`, and a few converters take their input in `parameters` instead, for example `data` to `qrcode` with `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parameters**: when both formats are selected, the parameters of the converter are added as typed options, as ConvertAPI describes them; parameters can also be given in `parameters` by their ConvertAPI names, which the `get-converter-info` action lists.\n\n**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is `True`.",
+          "message": "Converte file con qualsiasi convertitore ConvertAPI, indicato dai suoi formati di origine e di destinazione.\n\n**Formati**: seleziona prima il formato `from`; l'elenco `to` mostra quindi i formati di destinazione dei convertitori per quel formato di origine.\n\n**Input**: un `file` o un `url` di origine; i convertitori che accettano più file (come `pdf` in `merge`) usano `files` o `urls`, e alcuni convertitori ricevono invece il loro input in `parameters`, ad esempio `data` in `qrcode` con `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parametri**: quando sono selezionati entrambi i formati, i parametri del convertitore vengono aggiunti come opzioni tipizzate, così come li descrive ConvertAPI; i parametri si possono indicare anche in `parameters` con i loro nomi ConvertAPI, che l'azione `get-converter-info` elenca.\n\n**Output**: i file di output vengono restituiti come `FileData`, oppure come URL di download se `store_file` è `True`."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.display_name": {
           "source": "Source Format",
@@ -927,6 +927,42 @@
           "source": "The password to open a protected document",
           "message": "La password per aprire un documento protetto"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1hcmt1cA.display_name": {
+          "source": "Include Markup",
+          "message": "Includi il markup"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1hcmt1cA.short_desc": {
+          "source": "Include tracked changes and comments",
+          "message": "Includi le revisioni e i commenti"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1hcmt1cA.desc": {
+          "source": "Set to `True` to include the document markup, such as tracked changes and comments, in the PDF",
+          "message": "Imposta su `True` per includere nel PDF il markup del documento, come le revisioni e i commenti"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZVN0cnVjdHVyZVRhZ3M.display_name": {
+          "source": "Include Structure Tags",
+          "message": "Includi i tag di struttura"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZVN0cnVjdHVyZVRhZ3M.short_desc": {
+          "source": "Create a tagged PDF for accessibility",
+          "message": "Crea un PDF con tag per l'accessibilità"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZVN0cnVjdHVyZVRhZ3M.desc": {
+          "source": "Set to `True` to include the structure tags of the document, which make a tagged PDF for accessibility",
+          "message": "Imposta su `True` per includere i tag di struttura del documento, che producono un PDF con tag per l'accessibilità"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.display_name": {
+          "source": "Include Metadata",
+          "message": "Includi i metadati"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.short_desc": {
+          "source": "Include the document metadata",
+          "message": "Includi i metadati del documento"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.desc": {
+          "source": "Set to `False` to leave out the document metadata, such as the title, author and keywords; it is included by default",
+          "message": "Imposta su `False` per omettere i metadati del documento, come il titolo, l'autore e le parole chiave; per impostazione predefinita vengono inclusi"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.display_name": {
           "source": "Bookmark Mode",
           "message": "Modalità segnalibri"
@@ -974,6 +1010,18 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.VXBkYXRlVGFibGVPZkNvbnRlbnRz.desc": {
           "source": "Set to `True` to update all tables of contents in the document before the conversion",
           "message": "Imposta su `True` per aggiornare tutti gli indici del documento prima della conversione"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.U3Vic2V0Rm9udHM.display_name": {
+          "source": "Subset Fonts",
+          "message": "Crea sottoinsiemi dei caratteri"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.U3Vic2V0Rm9udHM.short_desc": {
+          "source": "Embed only the characters of the fonts that are used",
+          "message": "Incorpora solo i glifi usati dei caratteri"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.U3Vic2V0Rm9udHM.desc": {
+          "source": "Set to `True` to make the PDF smaller by embedding only the characters of the fonts that the document uses",
+          "message": "Imposta su `True` per ridurre le dimensioni del PDF incorporando solo i glifi dei caratteri che il documento usa"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1203,6 +1251,30 @@
           "source": "The password to open a protected workbook",
           "message": "La password per aprire una cartella di lavoro protetta"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.display_name": {
+          "source": "Active Worksheet Only",
+          "message": "Solo foglio di lavoro attivo"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.short_desc": {
+          "source": "Convert only the active worksheet",
+          "message": "Converti solo il foglio di lavoro attivo"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.desc": {
+          "source": "Set to `True` to convert only the active worksheet",
+          "message": "Imposta su `True` per convertire solo il foglio di lavoro attivo"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0SW5kZXg.display_name": {
+          "source": "Worksheet Number",
+          "message": "Numero del foglio di lavoro"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0SW5kZXg.short_desc": {
+          "source": "The number of the worksheet to convert",
+          "message": "Il numero del foglio di lavoro da convertire"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0SW5kZXg.desc": {
+          "source": "The number of the worksheet to convert, from `1` to `2000`; all worksheets are converted by default",
+          "message": "Il numero del foglio di lavoro da convertire, da `1` a `2000`; per impostazione predefinita vengono convertiti tutti i fogli di lavoro"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0TmFtZQ.display_name": {
           "source": "Worksheet Name",
           "message": "Nome del foglio di lavoro"
@@ -1215,17 +1287,17 @@
           "source": "The name of the worksheet to convert; all worksheets are converted by default",
           "message": "Il nome del foglio di lavoro da convertire; per impostazione predefinita vengono convertiti tutti i fogli di lavoro"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.display_name": {
-          "source": "Active Worksheet Only",
-          "message": "Solo foglio di lavoro attivo"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SW5jbHVkZU1ldGFkYXRh.display_name": {
+          "source": "Include Metadata",
+          "message": "Includi i metadati"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.short_desc": {
-          "source": "Convert only the active worksheet",
-          "message": "Converti solo il foglio di lavoro attivo"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SW5jbHVkZU1ldGFkYXRh.short_desc": {
+          "source": "Include the document metadata",
+          "message": "Includi i metadati del documento"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.desc": {
-          "source": "Set to `True` to convert only the active worksheet",
-          "message": "Imposta su `True` per convertire solo il foglio di lavoro attivo"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SW5jbHVkZU1ldGFkYXRh.desc": {
+          "source": "Set to `False` to leave out the document metadata, such as the title, author and keywords; it is included by default",
+          "message": "Imposta su `False` per omettere i metadati del documento, come il titolo, l'autore e le parole chiave; per impostazione predefinita vengono inclusi"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.display_name": {
           "source": "Page Orientation",
@@ -1255,6 +1327,78 @@
           "source": "Landscape",
           "message": "Orizzontale"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Dimensione pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.short_desc": {
+          "source": "The page size",
+          "message": "Il formato pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.desc": {
+          "source": "The page size of the PDF",
+          "message": "Il formato pagina del PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "Predefinito"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The page setup of each worksheet (the default)",
+          "message": "L'impostazione pagina di ciascun foglio di lavoro (il valore predefinito)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcg.display_name": {
+          "source": "Letter",
+          "message": "Letter"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcnNtYWxs.display_name": {
+          "source": "Letter Small",
+          "message": "Letter Small"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOnRhYmxvaWQ.display_name": {
+          "source": "Tabloid",
+          "message": "Tabloid"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZGdlcg.display_name": {
+          "source": "Ledger",
+          "message": "Ledger"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZ2Fs.display_name": {
+          "source": "Legal",
+          "message": "Legal"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOnN0YXRlbWVudA.display_name": {
+          "source": "Statement",
+          "message": "Statement"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmV4ZWN1dGl2ZQ.display_name": {
+          "source": "Executive",
+          "message": "Executive"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEz.display_name": {
+          "source": "A3",
+          "message": "A3"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0.display_name": {
+          "source": "A4",
+          "message": "A4"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0c21hbGw.display_name": {
+          "source": "A4 Small",
+          "message": "A4 Small"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE1.display_name": {
+          "source": "A5",
+          "message": "A5"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmI0.display_name": {
+          "source": "B4",
+          "message": "B4"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmI1.display_name": {
+          "source": "B5",
+          "message": "B5"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Rml0VG9QYWdl.display_name": {
           "source": "Fit to Page",
           "message": "Adatta alla pagina"
@@ -1278,6 +1422,102 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QXV0b0ZpdENvbHVtbnM.desc": {
           "source": "Set to `True` to fit the column widths to their content, which removes unnecessary empty space",
           "message": "Imposta su `True` per adattare la larghezza delle colonne al loro contenuto, eliminando lo spazio vuoto non necessario"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Q2xlYXJQcmludEFyZWE.display_name": {
+          "source": "Clear Print Area",
+          "message": "Cancella area di stampa"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Q2xlYXJQcmludEFyZWE.short_desc": {
+          "source": "Ignore the print areas and convert whole worksheets",
+          "message": "Ignora le aree di stampa e converti i fogli di lavoro interi"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Q2xlYXJQcmludEFyZWE.desc": {
+          "source": "Set to `True` to clear the print areas of the workbook, so that the whole content of each worksheet is converted",
+          "message": "Imposta su `True` per cancellare le aree di stampa della cartella di lavoro, in modo che venga convertito l'intero contenuto di ogni foglio di lavoro"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.U2NhbGU.display_name": {
+          "source": "Scale",
+          "message": "Scala"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.U2NhbGU.short_desc": {
+          "source": "The content scale in percent",
+          "message": "La scala del contenuto in percentuale"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.U2NhbGU.desc": {
+          "source": "The scale of the content in percent, from `10` to `300`",
+          "message": "La scala del contenuto in percentuale, da `10` a `300`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SGVhZGVyT25FYWNoUGFnZQ.display_name": {
+          "source": "Header on Each Page",
+          "message": "Intestazione su ogni pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SGVhZGVyT25FYWNoUGFnZQ.short_desc": {
+          "source": "Repeat the header row on every page",
+          "message": "Ripeti la riga di intestazione su ogni pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SGVhZGVyT25FYWNoUGFnZQ.desc": {
+          "source": "Set to `True` to repeat the header row on each page of a worksheet that spans several pages: the header row of a table in the worksheet, or else its first row with data",
+          "message": "Imposta su `True` per ripetere la riga di intestazione su ogni pagina di un foglio di lavoro che occupa più pagine: la riga di intestazione di una tabella del foglio di lavoro, oppure, in mancanza di questa, la sua prima riga con dati"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.VGhvdXNhbmRzU2VwYXJhdG9y.display_name": {
+          "source": "Thousands Separator",
+          "message": "Separatore delle migliaia"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.VGhvdXNhbmRzU2VwYXJhdG9y.short_desc": {
+          "source": "The thousands separator of numbers",
+          "message": "Il separatore delle migliaia dei numeri"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.VGhvdXNhbmRzU2VwYXJhdG9y.desc": {
+          "source": "The thousands separator of the numbers in the PDF; the default is `,`",
+          "message": "Il separatore delle migliaia dei numeri nel PDF; il valore predefinito è `,`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGVjaW1hbFNlcGFyYXRvcg.display_name": {
+          "source": "Decimal Separator",
+          "message": "Separatore decimale"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGVjaW1hbFNlcGFyYXRvcg.short_desc": {
+          "source": "The decimal separator of numbers",
+          "message": "Il separatore decimale dei numeri"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGVjaW1hbFNlcGFyYXRvcg.desc": {
+          "source": "The decimal separator of the numbers in the PDF; the default is `.`",
+          "message": "Il separatore decimale dei numeri nel PDF; il valore predefinito è `.`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.display_name": {
+          "source": "Date Format",
+          "message": "Formato data"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.short_desc": {
+          "source": "The format of dates",
+          "message": "Il formato delle date"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.desc": {
+          "source": "The format of the dates in the PDF, whatever the regional settings of the workbook",
+          "message": "Il formato delle date nel PDF, indipendentemente dalle impostazioni regionali della cartella di lavoro"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOnVz.display_name": {
+          "source": "US (M/d/yyyy)",
+          "message": "USA (M/d/yyyy)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOnVz.desc": {
+          "source": "The default",
+          "message": "Il valore predefinito"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmlzbw.display_name": {
+          "source": "ISO (yyyy-MM-dd)",
+          "message": "ISO (yyyy-MM-dd)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmV1.display_name": {
+          "source": "EU (dd/MM/yyyy)",
+          "message": "UE (dd/MM/yyyy)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmdlcm1hbg.display_name": {
+          "source": "German (dd.MM.yyyy)",
+          "message": "Tedesco (dd.MM.yyyy)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmphcGFuZXNl.display_name": {
+          "source": "Japanese (yyyy/MM/dd)",
+          "message": "Giapponese (yyyy/MM/dd)"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1531,6 +1771,18 @@
           "source": "Set to `True` to include the hidden slides in the PDF",
           "message": "Imposta su `True` per includere le diapositive nascoste nel PDF"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.display_name": {
+          "source": "Include Metadata",
+          "message": "Includi i metadati"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.short_desc": {
+          "source": "Include the document metadata",
+          "message": "Includi i metadati del documento"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.desc": {
+          "source": "Set to `False` to leave out the document metadata, such as the title, author and keywords; it is included by default",
+          "message": "Imposta su `False` per omettere i metadati del documento, come il titolo, l'autore e le parole chiave; per impostazione predefinita vengono inclusi"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.display_name": {
           "source": "Convert Speaker Notes",
           "message": "Converti le note del relatore"
@@ -1566,6 +1818,18 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlBhZ2VDb21tZW50cw.desc": {
           "source": "The notes as page comments",
           "message": "Le note come commenti di pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.RW1iZWRGb250cw.display_name": {
+          "source": "Embed Fonts",
+          "message": "Incorpora i caratteri"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.RW1iZWRGb250cw.short_desc": {
+          "source": "Embed the fonts in the PDF",
+          "message": "Incorpora i caratteri nel PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.RW1iZWRGb250cw.desc": {
+          "source": "Set to `False` to leave the fonts out of the PDF; they are embedded by default",
+          "message": "Imposta su `False` per escludere i caratteri dal PDF; per impostazione predefinita vengono incorporati"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1783,6 +2047,278 @@
           "source": "The filename",
           "message": "Il nome del file"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVJhbmdl.display_name": {
+          "source": "Page Range",
+          "message": "Intervallo di pagine"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVJhbmdl.short_desc": {
+          "source": "The pages to convert",
+          "message": "Le pagine da convertire"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVJhbmdl.desc": {
+          "source": "The pages to convert, as a range or a comma-separated list.\n\n**Example**: `1-10` or `1,2,5`; all pages are converted by default",
+          "message": "Le pagine da convertire, come intervallo o come elenco separato da virgole.\n\n**Esempio**: `1-10` o `1,2,5`; per impostazione predefinita vengono convertite tutte le pagine"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFVzZXJuYW1l.display_name": {
+          "source": "Authentication User Name",
+          "message": "Nome utente per l'autenticazione"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFVzZXJuYW1l.short_desc": {
+          "source": "The user name for HTTP authentication of the page",
+          "message": "Il nome utente per l'autenticazione HTTP della pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFVzZXJuYW1l.desc": {
+          "source": "The user name for a web page that is protected with HTTP authentication",
+          "message": "Il nome utente per una pagina web protetta con autenticazione HTTP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFBhc3N3b3Jk.display_name": {
+          "source": "Authentication Password",
+          "message": "Password di autenticazione"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFBhc3N3b3Jk.short_desc": {
+          "source": "The password for HTTP authentication of the page",
+          "message": "La password per l'autenticazione HTTP della pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFBhc3N3b3Jk.desc": {
+          "source": "The password for a web page that is protected with HTTP authentication",
+          "message": "La password per una pagina web protetta con autenticazione HTTP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llcw.display_name": {
+          "source": "Cookies",
+          "message": "Cookie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llcw.short_desc": {
+          "source": "Cookies to send with the page request",
+          "message": "Cookie da inviare con la richiesta della pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llcw.desc": {
+          "source": "Cookies to send with the request for the web page, separated by semicolons.\n\n**Example**: `name1=value1; name2=value2`",
+          "message": "Cookie da inviare con la richiesta della pagina web, separati da punto e virgola.\n\n**Esempio**: `name1=value1; name2=value2`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVycw.display_name": {
+          "source": "HTTP Headers",
+          "message": "Intestazioni HTTP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVycw.short_desc": {
+          "source": "Custom HTTP headers to send with the page request",
+          "message": "Intestazioni HTTP personalizzate da inviare con la richiesta della pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVycw.desc": {
+          "source": "Custom HTTP headers to send with the request for the web page, as `name:value` pairs separated by `|`.\n\n**Example**: `Accept-Language:de|Cache-Control:no-cache`",
+          "message": "Intestazioni HTTP personalizzate da inviare con la richiesta della pagina web, come coppie `name:value` separate da `|`.\n\n**Esempio**: `Accept-Language:de|Cache-Control:no-cache`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QWRCbG9jaw.display_name": {
+          "source": "Block Ads",
+          "message": "Blocca annunci"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QWRCbG9jaw.short_desc": {
+          "source": "Block the ads of the page",
+          "message": "Blocca gli annunci della pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QWRCbG9jaw.desc": {
+          "source": "Set to `True` to block the ads of the web page",
+          "message": "Imposta su `True` per bloccare gli annunci della pagina web"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llQ29uc2VudEJsb2Nr.display_name": {
+          "source": "Remove Cookie Warnings",
+          "message": "Rimuovi gli avvisi sui cookie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llQ29uc2VudEJsb2Nr.short_desc": {
+          "source": "Remove cookie consent banners",
+          "message": "Rimuovi i banner di consenso ai cookie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llQ29uc2VudEJsb2Nr.desc": {
+          "source": "Set to `True` to try to remove the cookie consent warnings of the web page",
+          "message": "Imposta su `True` per tentare di rimuovere gli avvisi di consenso ai cookie della pagina web"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.V2FpdEVsZW1lbnQ.display_name": {
+          "source": "Wait for Element",
+          "message": "Attendi elemento"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.V2FpdEVsZW1lbnQ.short_desc": {
+          "source": "CSS selector of an element to wait for",
+          "message": "Selettore CSS di un elemento da attendere"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.V2FpdEVsZW1lbnQ.desc": {
+          "source": "The CSS selector of an element that the converter waits for: the conversion begins when the element appears in the page.\n\n**Example**: `#content`",
+          "message": "Il selettore CSS di un elemento che il convertitore attende: la conversione inizia quando l'elemento compare nella pagina.\n\n**Esempio**: `#content`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckpz.display_name": {
+          "source": "Run JavaScript",
+          "message": "Esegui JavaScript"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckpz.short_desc": {
+          "source": "JavaScript to run before the conversion",
+          "message": "JavaScript da eseguire prima della conversione"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckpz.desc": {
+          "source": "JavaScript code to run in the web page before the conversion begins",
+          "message": "Codice JavaScript da eseguire nella pagina web prima che inizi la conversione"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckNzcw.display_name": {
+          "source": "Additional CSS",
+          "message": "CSS aggiuntivo"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckNzcw.short_desc": {
+          "source": "CSS to apply before the conversion",
+          "message": "CSS da applicare prima della conversione"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckNzcw.desc": {
+          "source": "CSS to apply to the web page before the conversion begins",
+          "message": "CSS da applicare alla pagina web prima che inizi la conversione"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGlkZUVsZW1lbnRz.display_name": {
+          "source": "Hide Elements",
+          "message": "Nascondi elementi"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGlkZUVsZW1lbnRz.short_desc": {
+          "source": "CSS selector of the elements to hide",
+          "message": "Selettore CSS degli elementi da nascondere"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGlkZUVsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements to hide during the conversion.\n\n**Example**: `.banner, #chat`",
+          "message": "Il selettore CSS degli elementi da nascondere durante la conversione.\n\n**Esempio**: `.banner, #chat`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2hvd0VsZW1lbnRz.display_name": {
+          "source": "Show Only Elements",
+          "message": "Mostra solo elementi"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2hvd0VsZW1lbnRz.short_desc": {
+          "source": "CSS selector of the only elements to show",
+          "message": "Selettore CSS dei soli elementi da mostrare"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2hvd0VsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements to show during the conversion; all other elements are hidden",
+          "message": "Il selettore CSS degli elementi da mostrare durante la conversione; tutti gli altri elementi vengono nascosti"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRXaWR0aA.display_name": {
+          "source": "Viewport Width",
+          "message": "Larghezza del viewport"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRXaWR0aA.short_desc": {
+          "source": "The browser viewport width in pixels",
+          "message": "La larghezza del viewport del browser in pixel"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRXaWR0aA.desc": {
+          "source": "The width of the browser viewport in pixels, from `200` to `4000`; the default is `1366`",
+          "message": "La larghezza del viewport del browser in pixel, da `200` a `4000`; il valore predefinito è `1366`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRIZWlnaHQ.display_name": {
+          "source": "Viewport Height",
+          "message": "Altezza del viewport"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRIZWlnaHQ.short_desc": {
+          "source": "The browser viewport height in pixels",
+          "message": "L'altezza del viewport del browser in pixel"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRIZWlnaHQ.desc": {
+          "source": "The height of the browser viewport in pixels, from `200` to `4000`; the default is `1024`",
+          "message": "L'altezza del viewport del browser in pixel, da `200` a `4000`; il valore predefinito è `1024`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.display_name": {
+          "source": "Fixed Elements",
+          "message": "Elementi fissi"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.short_desc": {
+          "source": "How elements with a fixed position are handled",
+          "message": "Come vengono gestiti gli elementi con posizione fissa"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.desc": {
+          "source": "How the elements with a fixed CSS position are changed to adapt the page for the PDF",
+          "message": "Come vengono modificati gli elementi con posizione CSS fissa per adattare la pagina al PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmZpeGVk.display_name": {
+          "source": "Leave Unchanged",
+          "message": "Non modificare"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmZpeGVk.desc": {
+          "source": "The elements keep their fixed position (the default)",
+          "message": "Gli elementi mantengono la loro posizione fissa (il valore predefinito)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmFic29sdXRl.display_name": {
+          "source": "Absolute",
+          "message": "Posizione assoluta"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmFic29sdXRl.desc": {
+          "source": "The elements get an absolute position",
+          "message": "Agli elementi viene assegnata una posizione assoluta"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOnJlbGF0aXZl.display_name": {
+          "source": "Relative",
+          "message": "Posizione relativa"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOnJlbGF0aXZl.desc": {
+          "source": "The elements get a relative position",
+          "message": "Agli elementi viene assegnata una posizione relativa"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmhpZGU.display_name": {
+          "source": "Hide",
+          "message": "Nascondi"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmhpZGU.desc": {
+          "source": "The elements are hidden",
+          "message": "Gli elementi vengono nascosti"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXZvaWRCcmVha0VsZW1lbnRz.display_name": {
+          "source": "Avoid Page Breaks in Elements",
+          "message": "Evita interruzioni di pagina negli elementi"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXZvaWRCcmVha0VsZW1lbnRz.short_desc": {
+          "source": "CSS selector of elements not to split across pages",
+          "message": "Selettore CSS degli elementi da non dividere tra le pagine"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXZvaWRCcmVha0VsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements that must not be split by a page break",
+          "message": "Il selettore CSS degli elementi che non devono essere divisi da un'interruzione di pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtCZWZvcmVFbGVtZW50cw.display_name": {
+          "source": "Page Break Before Elements",
+          "message": "Interruzione di pagina prima degli elementi"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtCZWZvcmVFbGVtZW50cw.short_desc": {
+          "source": "CSS selector of elements that start a new page",
+          "message": "Selettore CSS degli elementi che iniziano una nuova pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtCZWZvcmVFbGVtZW50cw.desc": {
+          "source": "The CSS selector of the elements to insert a page break before",
+          "message": "Il selettore CSS degli elementi prima dei quali inserire un'interruzione di pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtBZnRlckVsZW1lbnRz.display_name": {
+          "source": "Page Break After Elements",
+          "message": "Interruzione di pagina dopo gli elementi"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtBZnRlckVsZW1lbnRz.short_desc": {
+          "source": "CSS selector of elements that end a page",
+          "message": "Selettore CSS degli elementi che terminano una pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtBZnRlckVsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements to insert a page break after",
+          "message": "Il selettore CSS degli elementi dopo i quali inserire un'interruzione di pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UmVzcGVjdFZpZXdwb3J0.display_name": {
+          "source": "Respect Viewport",
+          "message": "Rispetta il viewport"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UmVzcGVjdFZpZXdwb3J0.short_desc": {
+          "source": "Show the page as it looks in the browser",
+          "message": "Mostra la pagina come appare nel browser"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UmVzcGVjdFZpZXdwb3J0.desc": {
+          "source": "Set to `False` to create the PDF like the print to PDF function of Chrome; by default, the PDF shows the page as it looks in the browser",
+          "message": "Imposta su `False` per creare il PDF come la funzione di stampa in PDF di Chrome; per impostazione predefinita, il PDF mostra la pagina come appare nel browser"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2NhbGU.display_name": {
+          "source": "Scale",
+          "message": "Scala"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2NhbGU.short_desc": {
+          "source": "The page scale in percent",
+          "message": "La scala della pagina in percentuale"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2NhbGU.desc": {
+          "source": "The scale of the web page in percent, from `10` to `200`; the default is `100`",
+          "message": "La scala della pagina web in percentuale, da `10` a `200`; il valore predefinito è `100`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.display_name": {
           "source": "Page Size",
           "message": "Dimensione pagina"
@@ -1899,6 +2435,30 @@
           "source": "Landscape",
           "message": "Orizzontale"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVdpZHRo.display_name": {
+          "source": "Page Width",
+          "message": "Larghezza della pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVdpZHRo.short_desc": {
+          "source": "A custom page width in millimeters",
+          "message": "Una larghezza personalizzata della pagina in millimetri"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVdpZHRo.desc": {
+          "source": "A custom page width in millimeters, from `10` to `30000`, which overrides `PageSize`",
+          "message": "Una larghezza personalizzata della pagina in millimetri, da `10` a `30000`, che ha la precedenza su `PageSize`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZUhlaWdodA.display_name": {
+          "source": "Page Height",
+          "message": "Altezza della pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZUhlaWdodA.short_desc": {
+          "source": "A custom page height in millimeters",
+          "message": "Un'altezza personalizzata della pagina in millimetri"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZUhlaWdodA.desc": {
+          "source": "A custom page height in millimeters, from `10` to `30000`, which overrides `PageSize`",
+          "message": "Un'altezza personalizzata della pagina in millimetri, da `10` a `30000`, che ha la precedenza su `PageSize`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luVG9w.display_name": {
           "source": "Top Margin",
           "message": "Margine superiore"
@@ -1947,9 +2507,33 @@
           "source": "The left page margin in millimeters; the default is `10`",
           "message": "Il margine sinistro della pagina in millimetri; il valore predefinito è `10`"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVy.display_name": {
+          "source": "Header HTML",
+          "message": "HTML dell'intestazione"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVy.short_desc": {
+          "source": "HTML for the header of each page",
+          "message": "HTML per l'intestazione di ciascuna pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVy.desc": {
+          "source": "HTML for the header of each page; elements with the classes `pageNumber`, `totalPages`, `title` and `date` are filled with the values for each page, and inline CSS can style the header.\n\n**Example**: `<span class='pageNumber'></span> / <span class='totalPages'></span>`",
+          "message": "HTML per l'intestazione di ciascuna pagina; gli elementi con le classi `pageNumber`, `totalPages`, `title` e `date` vengono riempiti con i valori di ogni pagina, e il CSS inline può definire lo stile dell'intestazione.\n\n**Esempio**: `<span class='pageNumber'></span> / <span class='totalPages'></span>`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rm9vdGVy.display_name": {
+          "source": "Footer HTML",
+          "message": "HTML del piè di pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rm9vdGVy.short_desc": {
+          "source": "HTML for the footer of each page",
+          "message": "HTML per il piè di pagina di ciascuna pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rm9vdGVy.desc": {
+          "source": "HTML for the footer of each page; elements with the classes `pageNumber`, `totalPages`, `title` and `date` are filled with the values for each page, and inline CSS can style the footer.\n\n**Example**: `<span class='date'></span>`",
+          "message": "HTML per il piè di pagina di ciascuna pagina; gli elementi con le classi `pageNumber`, `totalPages`, `title` e `date` vengono riempiti con i valori di ogni pagina, e il CSS inline può definire lo stile del piè di pagina.\n\n**Esempio**: `<span class='date'></span>`"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QmFja2dyb3VuZA.display_name": {
           "source": "Background",
-          "message": "Informazioni generali"
+          "message": "Sfondo"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QmFja2dyb3VuZA.short_desc": {
           "source": "Print the page background",
@@ -1997,7 +2581,7 @@
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnNjcmVlbg.display_name": {
           "source": "Screen",
-          "message": "Scherma"
+          "message": "Schermo"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnNjcmVlbg.desc": {
           "source": "The page as shown on a screen (the default)",
@@ -2080,8 +2664,8 @@
           "message": "Converti le pagine di un PDF in immagini JPG, PNG, TIFF o WebP"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.desc": {
-          "source": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF file.\n\nChoose the image `format` and resolution, and optionally a page range.",
-          "message": "Converte le pagine di un PDF in immagini: un file immagine per ogni pagina, oppure un unico file TIFF multipagina.\n\nScegli il `format` dell'immagine e la risoluzione, e facoltativamente un intervallo di pagine."
+          "source": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF file.\n\nChoose the image `format` and resolution, and optionally a page range; the other options depend on the format.",
+          "message": "Converte le pagine di un PDF in immagini: un file immagine per ogni pagina, oppure un unico file TIFF multipagina.\n\nScegli il `format` dell'immagine e la risoluzione, e facoltativamente un intervallo di pagine; le altre opzioni dipendono dal formato."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.display_name": {
           "source": "File",
@@ -2295,6 +2879,318 @@
           "source": "The image resolution in DPI; the default is `200`",
           "message": "La risoluzione dell'immagine in DPI; il valore predefinito è `200`"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VXaWR0aA.display_name": {
+          "source": "Image Width",
+          "message": "Larghezza immagine"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VXaWR0aA.short_desc": {
+          "source": "The image width in pixels",
+          "message": "La larghezza dell'immagine in pixel"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VXaWR0aA.desc": {
+          "source": "The width of the images in pixels, from `10` to `10000`",
+          "message": "La larghezza delle immagini in pixel, da `10` a `10000`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VIZWlnaHQ.display_name": {
+          "source": "Image Height",
+          "message": "Altezza immagine"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VIZWlnaHQ.short_desc": {
+          "source": "The image height in pixels",
+          "message": "L'altezza dell'immagine in pixel"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VIZWlnaHQ.desc": {
+          "source": "The height of the images in pixels, from `10` to `10000`",
+          "message": "L'altezza delle immagini in pixel, da `10` a `10000`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGU.display_name": {
+          "source": "Scale",
+          "message": "Scala"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGU.short_desc": {
+          "source": "The image size in percent of the page size",
+          "message": "La dimensione dell'immagine in percentuale rispetto alla dimensione della pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGU.desc": {
+          "source": "The size of the images in percent of the size of the pages at the image resolution, from `10` to `300`; it overrides `ImageWidth` and `ImageHeight`.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "La dimensione delle immagini in percentuale rispetto alla dimensione delle pagine alla risoluzione dell'immagine, da `10` a `300`; ha la precedenza su `ImageWidth` e `ImageHeight`.\n\n**Formati**: JPG, PNG e TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Rml0VG9TaXpl.display_name": {
+          "source": "Fit to Size",
+          "message": "Adatta alle dimensioni"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Rml0VG9TaXpl.short_desc": {
+          "source": "Fit the images within the width and height",
+          "message": "Adatta le immagini entro larghezza e altezza"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Rml0VG9TaXpl.desc": {
+          "source": "Set to `True` to scale the images to fit within both `ImageWidth` and `ImageHeight`, which must both be given, keeping the aspect ratio.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "Imposta su `True` per ridimensionare le immagini in modo che rientrino sia in `ImageWidth` sia in `ImageHeight`, che devono essere indicati entrambi, mantenendo le proporzioni.\n\n**Formati**: JPG, PNG e TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGVQcm9wb3J0aW9ucw.display_name": {
+          "source": "Scale Proportions",
+          "message": "Scala proporzionale"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGVQcm9wb3J0aW9ucw.short_desc": {
+          "source": "Keep the aspect ratio of the pages",
+          "message": "Mantieni le proporzioni delle pagine"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGVQcm9wb3J0aW9ucw.desc": {
+          "source": "Set to `False` to scale the images to `ImageWidth` and `ImageHeight` without keeping the aspect ratio of the pages; it is kept by default.\n\n**Formats**: WebP",
+          "message": "Imposta su `False` per ridimensionare le immagini a `ImageWidth` e `ImageHeight` senza mantenere le proporzioni delle pagine; per impostazione predefinita vengono mantenute.\n\n**Formati**: WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.display_name": {
+          "source": "Rotate Pages",
+          "message": "Ruota le pagine"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.short_desc": {
+          "source": "Rotate the pages before converting them",
+          "message": "Ruota le pagine prima di convertirle"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.desc": {
+          "source": "The rotation of the pages before they are converted.\n\n**Formats**: JPG, PNG and TIFF; for WebP, give the angle in degrees, from `-360` to `360`, as `Rotate` in `parameters`",
+          "message": "La rotazione delle pagine prima della conversione.\n\n**Formati**: JPG, PNG e TIFF; per WebP, indica l'angolo in gradi, da `-360` a `360`, come `Rotate` in `parameters`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "Predefinito"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The rotation of each page in the PDF (the default)",
+          "message": "La rotazione di ogni pagina nel PDF (il valore predefinito)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Nessuno"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No rotation",
+          "message": "Nessuna rotazione"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOnJvdGF0ZTkw.display_name": {
+          "source": "Rotate 90°",
+          "message": "Ruota di 90°"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOnJvdGF0ZTE4MA.display_name": {
+          "source": "Rotate 180°",
+          "message": "Ruota di 180°"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOnJvdGF0ZTI3MA.display_name": {
+          "source": "Rotate 270°",
+          "message": "Ruota di 270°"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.display_name": {
+          "source": "Crop to Box",
+          "message": "Ritaglia alla casella"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.short_desc": {
+          "source": "The page box that the images show",
+          "message": "La casella della pagina mostrata dalle immagini"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.desc": {
+          "source": "The page box that the images are cropped to.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "La casella della pagina a cui vengono ritagliate le immagini.\n\n**Formati**: JPG, PNG e TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkJvdW5kaW5nQm94.display_name": {
+          "source": "Bounding Box",
+          "message": "Casella di delimitazione"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkJvdW5kaW5nQm94.desc": {
+          "source": "The content of the page (the default)",
+          "message": "Il contenuto della pagina (il valore predefinito)"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOlRyaW1Cb3g.display_name": {
+          "source": "Trim Box",
+          "message": "Casella di rifilo"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOk1lZGlhQm94.display_name": {
+          "source": "Media Box",
+          "message": "Casella supporto"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkFydEJveA.display_name": {
+          "source": "Art Box",
+          "message": "Casella grafica"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkJsZWVkQm94.display_name": {
+          "source": "Bleed Box",
+          "message": "Casella al vivo"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.QmFja2dyb3VuZENvbG9y.display_name": {
+          "source": "Background Color",
+          "message": "Colore di sfondo"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.QmFja2dyb3VuZENvbG9y.short_desc": {
+          "source": "The background color of transparent pages",
+          "message": "Il colore di sfondo delle pagine trasparenti"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.QmFja2dyb3VuZENvbG9y.desc": {
+          "source": "The background color of the images where the pages are transparent: a color name, RGB values or a hexadecimal color code, or `transparent` to keep the transparency; the default is `white`.\n\n**Examples**: `black`, `255,0,0` or `#FF0000`\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "Il colore di sfondo delle immagini dove le pagine sono trasparenti: un nome di colore, valori RGB o un codice colore esadecimale, oppure `transparent` per mantenere la trasparenza; il valore predefinito è `white`.\n\n**Esempi**: `black`, `255,0,0` o `#FF0000`\n\n**Formati**: JPG, PNG e TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.VHJhbnNwYXJlbnRDb2xvcg.display_name": {
+          "source": "Transparent Color",
+          "message": "Colore trasparente"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.VHJhbnNwYXJlbnRDb2xvcg.short_desc": {
+          "source": "The color to make transparent",
+          "message": "Il colore da rendere trasparente"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.VHJhbnNwYXJlbnRDb2xvcg.desc": {
+          "source": "The color that is made transparent in the images: a color name, RGB values with an optional alpha value, or a hexadecimal color code.\n\n**Examples**: `white`, `255,255,255` or `255,255,255,150`\n\n**Formats**: WebP",
+          "message": "Il colore che viene reso trasparente nelle immagini: un nome di colore, valori RGB con un valore alfa facoltativo, oppure un codice colore esadecimale.\n\n**Esempi**: `white`, `255,255,255` o `255,255,255,150`\n\n**Formati**: WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VRdWFsaXR5.display_name": {
+          "source": "Image Quality",
+          "message": "Qualità immagine"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VRdWFsaXR5.short_desc": {
+          "source": "The image quality in percent",
+          "message": "La qualità dell'immagine in percentuale"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VRdWFsaXR5.desc": {
+          "source": "The quality of the images in percent, from `10` to `100`; the default is `75`.\n\n**Formats**: JPG and WebP",
+          "message": "La qualità delle immagini in percentuale, da `10` a `100`; il valore predefinito è `75`.\n\n**Formati**: JPG e WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.display_name": {
+          "source": "Color Space",
+          "message": "Spazio colore"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.short_desc": {
+          "source": "The color space of the images",
+          "message": "Lo spazio colore delle immagini"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.desc": {
+          "source": "The color space of the images.\n\n**Formats**: JPG and PNG",
+          "message": "Lo spazio colore delle immagini.\n\n**Formati**: JPG e PNG"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOnJnYg.display_name": {
+          "source": "RGB",
+          "message": "RGB"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOnJnYg.desc": {
+          "source": "The default",
+          "message": "Il valore predefinito"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOmNteWs.display_name": {
+          "source": "CMYK",
+          "message": "CMYK"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOmdyYXk.display_name": {
+          "source": "Gray",
+          "message": "Grigio"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOm1vbm9jaHJvbWU.display_name": {
+          "source": "Monochrome",
+          "message": "Monocromatico"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.display_name": {
+          "source": "Color Mode",
+          "message": "Modalità colore"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.short_desc": {
+          "source": "The color mode of the TIFF file",
+          "message": "La modalità colore del file TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.desc": {
+          "source": "The color mode of the TIFF file.\n\n**Formats**: TIFF",
+          "message": "La modalità colore del file TIFF.\n\n**Formati**: TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "Predefinito"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The default",
+          "message": "Il valore predefinito"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmNteWs.display_name": {
+          "source": "CMYK",
+          "message": "CMYK"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmdyYXlzY2FsZQ.display_name": {
+          "source": "Grayscale",
+          "message": "Scala di grigi"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmJpdG9uYWw.display_name": {
+          "source": "Bitonal",
+          "message": "Bitonale"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.display_name": {
+          "source": "Bit Depth",
+          "message": "Profondità di bit"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.short_desc": {
+          "source": "The number of bits per color channel",
+          "message": "Il numero di bit per canale di colore"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.desc": {
+          "source": "The number of bits per color channel; more bits give more precise colors and smoother gradients but larger files.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "Il numero di bit per canale di colore; più bit danno colori più precisi e sfumature più uniformi, ma file più grandi.\n\n**Formati**: JPG, PNG e TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "Predefinito"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The default",
+          "message": "Il valore predefinito"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjE.display_name": {
+          "source": "1 Bit",
+          "message": "1 bit"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjI.display_name": {
+          "source": "2 Bits",
+          "message": "2 bit"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjQ.display_name": {
+          "source": "4 Bits",
+          "message": "4 bit"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjg.display_name": {
+          "source": "8 Bits",
+          "message": "8 bit"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjE2.display_name": {
+          "source": "16 Bits",
+          "message": "16 bit"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29tcHJlc3Npb25MZXZlbA.display_name": {
+          "source": "Compression Level",
+          "message": "Livello di compressione"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29tcHJlc3Npb25MZXZlbA.short_desc": {
+          "source": "The compression level, from 0 to 9",
+          "message": "Il livello di compressione, da 0 a 9"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29tcHJlc3Npb25MZXZlbA.desc": {
+          "source": "The compression level, from `0` to `9`; a higher level gives smaller files, and for JPG also a lower image quality.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "Il livello di compressione, da `0` a `9`; un livello più alto produce file più piccoli e, per JPG, anche una qualità dell'immagine inferiore.\n\n**Formati**: JPG, PNG e TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VBbnRpYWxpYXNpbmc.display_name": {
+          "source": "Antialiasing",
+          "message": "Antialiasing"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VBbnRpYWxpYXNpbmc.short_desc": {
+          "source": "The subsampling box size for antialiasing",
+          "message": "La dimensione del riquadro di sottocampionamento per l'antialiasing"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VBbnRpYWxpYXNpbmc.desc": {
+          "source": "The subsampling box size for the antialiasing of text and graphics, from `0` to `8`; the default, `8`, gives the best text, and smaller values render faster.\n\n**Formats**: WebP",
+          "message": "La dimensione del riquadro di sottocampionamento per l'antialiasing di testo e grafica, da `0` a `8`; il valore predefinito, `8`, offre il testo migliore, mentre con valori più piccoli il rendering è più veloce.\n\n**Formati**: WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.TXVsdGlQYWdl.display_name": {
+          "source": "Multi-Page File",
+          "message": "File multipagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.TXVsdGlQYWdl.short_desc": {
+          "source": "Create one multi-page TIFF file",
+          "message": "Crea un unico file TIFF multipagina"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.TXVsdGlQYWdl.desc": {
+          "source": "Set to `False` to create a TIFF file for each page; by default, all pages are in one multi-page TIFF file.\n\n**Formats**: TIFF",
+          "message": "Imposta su `False` per creare un file TIFF per ogni pagina; per impostazione predefinita, tutte le pagine sono in un unico file TIFF multipagina.\n\n**Formati**: TIFF"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",
           "message": "Archivia file"
@@ -2499,6 +3395,18 @@
           "source": "The URLs of the files to convert for converters that take several input files, such as `pdf` to `merge`.\n\nThey are sent as the `Files` parameter, together with any files given in `files`.",
           "message": "Gli URL dei file da convertire per i convertitori che accettano più file di input, come `pdf` in `merge`.\n\nVengono inviati come parametro `Files`, insieme agli eventuali file indicati in `files`."
         },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFzc3dvcmQ.display_name": {
+          "source": "Open Password",
+          "message": "Password di apertura"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFzc3dvcmQ.short_desc": {
+          "source": "The password to open protected PDF files",
+          "message": "La password per aprire file PDF protetti"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFzc3dvcmQ.desc": {
+          "source": "The password to open the protected PDF files",
+          "message": "La password per aprire i file PDF protetti"
+        },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.display_name": {
           "source": "Bookmarks Table of Contents",
           "message": "Indice dei segnalibri"
@@ -2546,6 +3454,94 @@
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UmVtb3ZlRHVwbGljYXRlRm9udHM.desc": {
           "source": "Set to `True` to include the fonts used by several of the merged files only once",
           "message": "Imposta su `True` per includere una sola volta i caratteri usati da più file uniti"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Dimensione pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.short_desc": {
+          "source": "The page size that every page is scaled to",
+          "message": "Il formato pagina a cui viene ridimensionata ogni pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.desc": {
+          "source": "The page size that every page of the merged PDF is scaled to",
+          "message": "Il formato pagina a cui viene ridimensionata ogni pagina del PDF unito"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "Predefinito"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Every page keeps its size (the default)",
+          "message": "Ogni pagina mantiene il proprio formato (il valore predefinito)"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEy.display_name": {
+          "source": "A2",
+          "message": "A2"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEz.display_name": {
+          "source": "A3",
+          "message": "A3"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0.display_name": {
+          "source": "A4",
+          "message": "A4"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE1.display_name": {
+          "source": "A5",
+          "message": "A5"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE2.display_name": {
+          "source": "A6",
+          "message": "A6"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcg.display_name": {
+          "source": "Letter",
+          "message": "Letter"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZ2Fs.display_name": {
+          "source": "Legal",
+          "message": "Legal"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.display_name": {
+          "source": "Page Orientation",
+          "message": "Orientamento della pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.short_desc": {
+          "source": "The orientation of every page",
+          "message": "L'orientamento di ogni pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.desc": {
+          "source": "The orientation of every page of the merged PDF",
+          "message": "L'orientamento di ogni pagina del PDF unito"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "Predefinito"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Every page keeps its orientation (the default)",
+          "message": "Ogni pagina mantiene il proprio orientamento (il valore predefinito)"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
+          "source": "Portrait",
+          "message": "Verticale"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmxhbmRzY2FwZQ.display_name": {
+          "source": "Landscape",
+          "message": "Orizzontale"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.T3BlblBhZ2U.display_name": {
+          "source": "Open to Page",
+          "message": "Apri alla pagina"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.T3BlblBhZ2U.short_desc": {
+          "source": "The page that the PDF opens at",
+          "message": "La pagina a cui si apre il PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.T3BlblBhZ2U.desc": {
+          "source": "The number of the page that the merged PDF opens at, from `1` to `3000`; the default is `1`",
+          "message": "Il numero della pagina a cui si apre il PDF unito, da `1` a `3000`; il valore predefinito è `1`"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",
@@ -2802,6 +3798,174 @@
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UGFzc3dvcmQ.desc": {
           "source": "The password to open a protected PDF",
           "message": "La password per aprire un PDF protetto"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VSZXNvbHV0aW9u.display_name": {
+          "source": "Image Resolution",
+          "message": "Risoluzione dell'immagine"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VSZXNvbHV0aW9u.short_desc": {
+          "source": "The maximum image resolution in DPI",
+          "message": "La risoluzione massima delle immagini in DPI"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VSZXNvbHV0aW9u.desc": {
+          "source": "The maximum resolution of the images in DPI, from `10` to `800`; the default is `150`",
+          "message": "La risoluzione massima delle immagini in DPI, da `10` a `800`; il valore predefinito è `150`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VRdWFsaXR5.display_name": {
+          "source": "Image Quality",
+          "message": "Qualità immagine"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VRdWFsaXR5.short_desc": {
+          "source": "The image quality in percent",
+          "message": "La qualità dell'immagine in percentuale"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VRdWFsaXR5.desc": {
+          "source": "The quality of the images in percent, from `10` to `100`; the default is `80`",
+          "message": "La qualità delle immagini in percentuale, da `10` a `100`; il valore predefinito è `80`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRm9ybXM.display_name": {
+          "source": "Remove Forms",
+          "message": "Rimuovi i moduli"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRm9ybXM.short_desc": {
+          "source": "Remove the forms of the PDF",
+          "message": "Rimuovi i moduli del PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRm9ybXM.desc": {
+          "source": "Set to `True` to remove the forms of the PDF",
+          "message": "Imposta su `True` per rimuovere i moduli del PDF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRHVwbGljYXRlcw.display_name": {
+          "source": "Remove Duplicates",
+          "message": "Rimuovi i duplicati"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRHVwbGljYXRlcw.short_desc": {
+          "source": "Remove duplicate fonts and color profiles",
+          "message": "Rimuovi i caratteri e i profili colore duplicati"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRHVwbGljYXRlcw.desc": {
+          "source": "Set to `False` to keep duplicate fonts and color profiles; they are removed by default",
+          "message": "Imposta su `False` per mantenere i caratteri e i profili colore duplicati; per impostazione predefinita vengono rimossi"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlUGllY2VJbmZvcm1hdGlvbg.display_name": {
+          "source": "Remove Piece Information",
+          "message": "Rimuovi i dati privati delle applicazioni"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlUGllY2VJbmZvcm1hdGlvbg.short_desc": {
+          "source": "Remove the private data of editing applications",
+          "message": "Rimuovi i dati privati delle applicazioni di modifica"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlUGllY2VJbmZvcm1hdGlvbg.desc": {
+          "source": "Set to `False` to keep the piece information dictionaries, the private data of applications such as Adobe Illustrator or Photoshop; they are removed by default",
+          "message": "Imposta su `False` per mantenere i dizionari delle informazioni sui componenti (piece information), ovvero i dati privati di applicazioni come Adobe Illustrator o Photoshop; per impostazione predefinita vengono rimossi"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRW1iZWRkZWRGaWxlcw.display_name": {
+          "source": "Remove Embedded Files",
+          "message": "Rimuovi i file incorporati"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRW1iZWRkZWRGaWxlcw.short_desc": {
+          "source": "Remove embedded files and attachments",
+          "message": "Rimuovi i file incorporati e gli allegati"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRW1iZWRkZWRGaWxlcw.desc": {
+          "source": "Set to `False` to keep the embedded files and attachments; they are removed by default",
+          "message": "Imposta su `False` per mantenere i file incorporati e gli allegati; per impostazione predefinita vengono rimossi"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlU3RydWN0dXJlSW5mb3JtYXRpb24.display_name": {
+          "source": "Remove Structure Information",
+          "message": "Rimuovi le informazioni sulla struttura"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlU3RydWN0dXJlSW5mb3JtYXRpb24.short_desc": {
+          "source": "Remove the structure information of the document",
+          "message": "Rimuovi le informazioni sulla struttura del documento"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlU3RydWN0dXJlSW5mb3JtYXRpb24.desc": {
+          "source": "Set to `False` to keep the structure information of the document; it is removed by default",
+          "message": "Imposta su `False` per mantenere le informazioni sulla struttura del documento; per impostazione predefinita vengono rimosse"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlTWV0YWRhdGE.display_name": {
+          "source": "Remove Metadata",
+          "message": "Rimuovi i metadati"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlTWV0YWRhdGE.short_desc": {
+          "source": "Remove the XMP metadata",
+          "message": "Rimuovi i metadati XMP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlTWV0YWRhdGE.desc": {
+          "source": "Set to `False` to keep the XMP metadata of the document; it is removed by default",
+          "message": "Imposta su `False` per mantenere i metadati XMP del documento; per impostazione predefinita vengono rimossi"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlVW51c2VkUmVzb3VyY2Vz.display_name": {
+          "source": "Remove Unused Resources",
+          "message": "Rimuovi le risorse inutilizzate"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlVW51c2VkUmVzb3VyY2Vz.short_desc": {
+          "source": "Remove unused fonts, images and patterns",
+          "message": "Rimuovi caratteri, immagini e pattern inutilizzati"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlVW51c2VkUmVzb3VyY2Vz.desc": {
+          "source": "Set to `False` to keep unused resources such as fonts, images and patterns; they are removed by default",
+          "message": "Imposta su `False` per mantenere le risorse inutilizzate, come caratteri, immagini e pattern; per impostazione predefinita vengono rimosse"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.VW5lbWJlZEJhc2VGb250cw.display_name": {
+          "source": "Unembed Base Fonts",
+          "message": "Non incorporare i caratteri di base"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.VW5lbWJlZEJhc2VGb250cw.short_desc": {
+          "source": "Remove the embedded base fonts",
+          "message": "Rimuovi i caratteri di base incorporati"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.VW5lbWJlZEJhc2VGb250cw.desc": {
+          "source": "Set to `True` to remove the embedded base fonts from the PDF",
+          "message": "Imposta su `True` per rimuovere dal PDF i caratteri di base incorporati"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.U3Vic2V0RW1iZWRkZWRGb250cw.display_name": {
+          "source": "Subset Embedded Fonts",
+          "message": "Crea sottoinsiemi dei caratteri incorporati"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.U3Vic2V0RW1iZWRkZWRGb250cw.short_desc": {
+          "source": "Keep only the characters of the fonts that are used",
+          "message": "Mantieni solo i glifi usati dei caratteri"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.U3Vic2V0RW1iZWRkZWRGb250cw.desc": {
+          "source": "Set to `True` to keep only the characters of the embedded fonts that the document uses",
+          "message": "Imposta su `True` per mantenere solo i glifi dei caratteri incorporati che il documento usa"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.T3B0aW1pemU.display_name": {
+          "source": "Optimize Content",
+          "message": "Ottimizza il contenuto"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.T3B0aW1pemU.short_desc": {
+          "source": "Optimize the page content streams",
+          "message": "Ottimizza i flussi di contenuto delle pagine"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.T3B0aW1pemU.desc": {
+          "source": "Set to `False` to leave the page content streams as they are; they are optimized by default",
+          "message": "Imposta su `False` per lasciare invariati i flussi di contenuto delle pagine; per impostazione predefinita vengono ottimizzati"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.TGluZWFyaXpl.display_name": {
+          "source": "Linearize",
+          "message": "Linearizza"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.TGluZWFyaXpl.short_desc": {
+          "source": "Optimize the PDF for fast web view",
+          "message": "Ottimizza il PDF per la visualizzazione web veloce"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.TGluZWFyaXpl.desc": {
+          "source": "Set to `True` to linearize the PDF, which optimizes it for fast web view",
+          "message": "Imposta su `True` per linearizzare il PDF, ottimizzandolo per la visualizzazione web veloce"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2VydmVQZGZh.display_name": {
+          "source": "Preserve PDF/A",
+          "message": "Mantieni PDF/A"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2VydmVQZGZh.short_desc": {
+          "source": "Keep the PDF/A conformance of the file",
+          "message": "Mantieni la conformità PDF/A del file"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2VydmVQZGZh.desc": {
+          "source": "Set to `True` to keep the PDF/A conformance of the PDF",
+          "message": "Imposta su `True` per mantenere la conformità PDF/A del PDF"
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",

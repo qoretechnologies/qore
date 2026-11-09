@@ -348,8 +348,8 @@
           "message": "任意のConvertAPIコンバーターでファイルを変換"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.desc": {
-          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\n**Formats**: select the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n**Input**: a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`, and a few converters take their input in `parameters` instead, for example `data` to `qrcode` with `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parameters**: other converter parameters go in `parameters` by their ConvertAPI names; the `get-converter-info` action lists them.\n\n**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is `True`.",
-          "message": "変換元と変換先の形式で指定した任意のConvertAPIコンバーターでファイルを変換します。\n\n**形式**: まず `from` 形式を選択します。すると `to` の一覧に、その変換元形式のコンバーターの変換先形式が表示されます。\n\n**入力**: `file` または変換元の `url` で指定します。複数のファイルを受け取るコンバーター（`pdf` から `merge` など）では `files` または `urls` を使用します。一部のコンバーターは入力を代わりに `parameters` で受け取ります。たとえば `data` から `qrcode` への変換では `{\"Data\": \"https://www.convertapi.com\"}` を指定します。\n\n**パラメータ**: その他のコンバーターパラメータは、ConvertAPIでの名前を使って `parameters` に指定します。`get-converter-info` アクションでパラメータを一覧表示できます。\n\n**出力**: 出力ファイルは `FileData` として返されます。`store_file` が `True` の場合はダウンロードURLが返されます。"
+          "source": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\n**Formats**: select the `from` format first; the `to` list then shows the destination formats of the converters for that source format.\n\n**Input**: a `file` or a source `url`; converters that take several files (such as `pdf` to `merge`) take `files` or `urls`, and a few converters take their input in `parameters` instead, for example `data` to `qrcode` with `{\"Data\": \"https://www.convertapi.com\"}`.\n\n**Parameters**: when both formats are selected, the parameters of the converter are added as typed options, as ConvertAPI describes them; parameters can also be given in `parameters` by their ConvertAPI names, which the `get-converter-info` action lists.\n\n**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is `True`.",
+          "message": "変換元と変換先の形式で指定した任意のConvertAPIコンバーターでファイルを変換します。\n\n**形式**: まず `from` 形式を選択します。すると `to` の一覧に、その変換元形式のコンバーターの変換先形式が表示されます。\n\n**入力**: `file` または変換元の `url` で指定します。複数のファイルを受け取るコンバーター（`pdf` から `merge` など）では `files` または `urls` を使用します。一部のコンバーターは入力を代わりに `parameters` で受け取ります。たとえば `data` から `qrcode` への変換では `{\"Data\": \"https://www.convertapi.com\"}` を指定します。\n\n**パラメータ**: 両方の形式を選択すると、コンバーターのパラメータがConvertAPIの説明どおりに型付きのオプションとして追加されます。パラメータは、ConvertAPIでの名前を使って `parameters` に指定することもできます。パラメータ名は `get-converter-info` アクションで一覧表示できます。\n\n**出力**: 出力ファイルは `FileData` として返されます。`store_file` が `True` の場合はダウンロードURLが返されます。"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.option.ZnJvbQ.display_name": {
           "source": "Source Format",
@@ -927,6 +927,42 @@
           "source": "The password to open a protected document",
           "message": "保護されたドキュメントを開くためのパスワード"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1hcmt1cA.display_name": {
+          "source": "Include Markup",
+          "message": "マークアップを含める"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1hcmt1cA.short_desc": {
+          "source": "Include tracked changes and comments",
+          "message": "変更履歴とコメントを含める"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1hcmt1cA.desc": {
+          "source": "Set to `True` to include the document markup, such as tracked changes and comments, in the PDF",
+          "message": "変更履歴やコメントなどのドキュメントのマークアップをPDFに含めるには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZVN0cnVjdHVyZVRhZ3M.display_name": {
+          "source": "Include Structure Tags",
+          "message": "構造タグを含める"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZVN0cnVjdHVyZVRhZ3M.short_desc": {
+          "source": "Create a tagged PDF for accessibility",
+          "message": "アクセシビリティ対応のタグ付きPDFを作成"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZVN0cnVjdHVyZVRhZ3M.desc": {
+          "source": "Set to `True` to include the structure tags of the document, which make a tagged PDF for accessibility",
+          "message": "ドキュメントの構造タグを含めて、アクセシビリティ対応のタグ付きPDFを作成するには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.display_name": {
+          "source": "Include Metadata",
+          "message": "メタデータを含める"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.short_desc": {
+          "source": "Include the document metadata",
+          "message": "ドキュメントのメタデータを含める"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.desc": {
+          "source": "Set to `False` to leave out the document metadata, such as the title, author and keywords; it is included by default",
+          "message": "タイトル、作成者、キーワードなどのドキュメントのメタデータを含めない場合は `False` に設定します。デフォルトでは含まれます"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.Qm9va21hcmtNb2Rl.display_name": {
           "source": "Bookmark Mode",
           "message": "しおりモード"
@@ -974,6 +1010,18 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.VXBkYXRlVGFibGVPZkNvbnRlbnRz.desc": {
           "source": "Set to `True` to update all tables of contents in the document before the conversion",
           "message": "変換前にドキュメント内のすべての目次を更新するには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.U3Vic2V0Rm9udHM.display_name": {
+          "source": "Subset Fonts",
+          "message": "フォントをサブセット化"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.U3Vic2V0Rm9udHM.short_desc": {
+          "source": "Embed only the characters of the fonts that are used",
+          "message": "フォントのうち使用されている文字だけを埋め込む"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.U3Vic2V0Rm9udHM.desc": {
+          "source": "Set to `True` to make the PDF smaller by embedding only the characters of the fonts that the document uses",
+          "message": "ドキュメントで使用されているフォントの文字だけを埋め込んでPDFを小さくするには `True` に設定します"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC13b3JkLXRvLXBkZg.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1203,6 +1251,30 @@
           "source": "The password to open a protected workbook",
           "message": "保護されたブックを開くためのパスワード"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.display_name": {
+          "source": "Active Worksheet Only",
+          "message": "アクティブなワークシートのみ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.short_desc": {
+          "source": "Convert only the active worksheet",
+          "message": "アクティブなワークシートのみを変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.desc": {
+          "source": "Set to `True` to convert only the active worksheet",
+          "message": "アクティブなワークシートのみを変換するには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0SW5kZXg.display_name": {
+          "source": "Worksheet Number",
+          "message": "ワークシート番号"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0SW5kZXg.short_desc": {
+          "source": "The number of the worksheet to convert",
+          "message": "変換するワークシートの番号"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0SW5kZXg.desc": {
+          "source": "The number of the worksheet to convert, from `1` to `2000`; all worksheets are converted by default",
+          "message": "変換するワークシートの番号。`1` から `2000` の範囲で指定します。デフォルトではすべてのワークシートが変換されます"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.V29ya3NoZWV0TmFtZQ.display_name": {
           "source": "Worksheet Name",
           "message": "ワークシート名"
@@ -1215,17 +1287,17 @@
           "source": "The name of the worksheet to convert; all worksheets are converted by default",
           "message": "変換するワークシートの名前。デフォルトではすべてのワークシートが変換されます"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.display_name": {
-          "source": "Active Worksheet Only",
-          "message": "アクティブなワークシートのみ"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SW5jbHVkZU1ldGFkYXRh.display_name": {
+          "source": "Include Metadata",
+          "message": "メタデータを含める"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.short_desc": {
-          "source": "Convert only the active worksheet",
-          "message": "アクティブなワークシートのみを変換"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SW5jbHVkZU1ldGFkYXRh.short_desc": {
+          "source": "Include the document metadata",
+          "message": "ドキュメントのメタデータを含める"
         },
-        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QWN0aXZlV29ya3NoZWV0T25seQ.desc": {
-          "source": "Set to `True` to convert only the active worksheet",
-          "message": "アクティブなワークシートのみを変換するには `True` に設定します"
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SW5jbHVkZU1ldGFkYXRh.desc": {
+          "source": "Set to `False` to leave out the document metadata, such as the title, author and keywords; it is included by default",
+          "message": "タイトル、作成者、キーワードなどのドキュメントのメタデータを含めない場合は `False` に設定します。デフォルトでは含まれます"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZU9yaWVudGF0aW9u.display_name": {
           "source": "Page Orientation",
@@ -1255,6 +1327,78 @@
           "source": "Landscape",
           "message": "横向き"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.short_desc": {
+          "source": "The page size",
+          "message": "ページサイズ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.desc": {
+          "source": "The page size of the PDF",
+          "message": "PDFのページサイズ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "デフォルト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The page setup of each worksheet (the default)",
+          "message": "各ワークシートのページ設定を使用します（デフォルト）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcg.display_name": {
+          "source": "Letter",
+          "message": "レター"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcnNtYWxs.display_name": {
+          "source": "Letter Small",
+          "message": "レター スモール"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOnRhYmxvaWQ.display_name": {
+          "source": "Tabloid",
+          "message": "タブロイド"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZGdlcg.display_name": {
+          "source": "Ledger",
+          "message": "レジャー"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZ2Fs.display_name": {
+          "source": "Legal",
+          "message": "リーガル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOnN0YXRlbWVudA.display_name": {
+          "source": "Statement",
+          "message": "ステートメント"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmV4ZWN1dGl2ZQ.display_name": {
+          "source": "Executive",
+          "message": "エグゼクティブ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEz.display_name": {
+          "source": "A3",
+          "message": "A3"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0.display_name": {
+          "source": "A4",
+          "message": "A4"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0c21hbGw.display_name": {
+          "source": "A4 Small",
+          "message": "A4 スモール"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE1.display_name": {
+          "source": "A5",
+          "message": "A5"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmI0.display_name": {
+          "source": "B4",
+          "message": "B4"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmI1.display_name": {
+          "source": "B5",
+          "message": "B5"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Rml0VG9QYWdl.display_name": {
           "source": "Fit to Page",
           "message": "ページに合わせる"
@@ -1278,6 +1422,102 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.QXV0b0ZpdENvbHVtbnM.desc": {
           "source": "Set to `True` to fit the column widths to their content, which removes unnecessary empty space",
           "message": "列幅を内容に合わせて調整し、不要な空白を取り除くには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Q2xlYXJQcmludEFyZWE.display_name": {
+          "source": "Clear Print Area",
+          "message": "印刷範囲をクリア"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Q2xlYXJQcmludEFyZWE.short_desc": {
+          "source": "Ignore the print areas and convert whole worksheets",
+          "message": "印刷範囲を無視してワークシート全体を変換"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.Q2xlYXJQcmludEFyZWE.desc": {
+          "source": "Set to `True` to clear the print areas of the workbook, so that the whole content of each worksheet is converted",
+          "message": "ブックの印刷範囲をクリアして、各ワークシートの内容全体を変換するには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.U2NhbGU.display_name": {
+          "source": "Scale",
+          "message": "スケール"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.U2NhbGU.short_desc": {
+          "source": "The content scale in percent",
+          "message": "コンテンツのスケール（%）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.U2NhbGU.desc": {
+          "source": "The scale of the content in percent, from `10` to `300`",
+          "message": "コンテンツのスケール（%）。`10` から `300` の範囲で指定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SGVhZGVyT25FYWNoUGFnZQ.display_name": {
+          "source": "Header on Each Page",
+          "message": "各ページにヘッダー行を表示"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SGVhZGVyT25FYWNoUGFnZQ.short_desc": {
+          "source": "Repeat the header row on every page",
+          "message": "ヘッダー行をすべてのページに繰り返し表示"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.SGVhZGVyT25FYWNoUGFnZQ.desc": {
+          "source": "Set to `True` to repeat the header row on each page of a worksheet that spans several pages: the header row of a table in the worksheet, or else its first row with data",
+          "message": "複数ページにわたるワークシートで、各ページにヘッダー行を繰り返し表示するには `True` に設定します。ヘッダー行にはワークシート内のテーブルのヘッダー行が使われ、テーブルがない場合はデータのある最初の行が使われます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.VGhvdXNhbmRzU2VwYXJhdG9y.display_name": {
+          "source": "Thousands Separator",
+          "message": "桁区切り記号"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.VGhvdXNhbmRzU2VwYXJhdG9y.short_desc": {
+          "source": "The thousands separator of numbers",
+          "message": "数値の桁区切り記号"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.VGhvdXNhbmRzU2VwYXJhdG9y.desc": {
+          "source": "The thousands separator of the numbers in the PDF; the default is `,`",
+          "message": "PDF内の数値の桁区切り記号。デフォルトは `,` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGVjaW1hbFNlcGFyYXRvcg.display_name": {
+          "source": "Decimal Separator",
+          "message": "小数点記号"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGVjaW1hbFNlcGFyYXRvcg.short_desc": {
+          "source": "The decimal separator of numbers",
+          "message": "数値の小数点記号"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGVjaW1hbFNlcGFyYXRvcg.desc": {
+          "source": "The decimal separator of the numbers in the PDF; the default is `.`",
+          "message": "PDF内の数値の小数点記号。デフォルトは `.` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.display_name": {
+          "source": "Date Format",
+          "message": "日付形式"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.short_desc": {
+          "source": "The format of dates",
+          "message": "日付の形式"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.desc": {
+          "source": "The format of the dates in the PDF, whatever the regional settings of the workbook",
+          "message": "PDF内の日付の形式。ブックの地域設定に関係なく適用されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOnVz.display_name": {
+          "source": "US (M/d/yyyy)",
+          "message": "米国式（M/d/yyyy）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOnVz.desc": {
+          "source": "The default",
+          "message": "デフォルト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmlzbw.display_name": {
+          "source": "ISO (yyyy-MM-dd)",
+          "message": "ISO形式（yyyy-MM-dd）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmV1.display_name": {
+          "source": "EU (dd/MM/yyyy)",
+          "message": "欧州式（dd/MM/yyyy）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmdlcm1hbg.display_name": {
+          "source": "German (dd.MM.yyyy)",
+          "message": "ドイツ式（dd.MM.yyyy）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.RGF0ZUZvcm1hdA.allowed-value.c3RyaW5nOmphcGFuZXNl.display_name": {
+          "source": "Japanese (yyyy/MM/dd)",
+          "message": "日本式（yyyy/MM/dd）"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1leGNlbC10by1wZGY.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1531,6 +1771,18 @@
           "source": "Set to `True` to include the hidden slides in the PDF",
           "message": "PDFに非表示スライドを含めるには `True` に設定します"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.display_name": {
+          "source": "Include Metadata",
+          "message": "メタデータを含める"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.short_desc": {
+          "source": "Include the document metadata",
+          "message": "ドキュメントのメタデータを含める"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.SW5jbHVkZU1ldGFkYXRh.desc": {
+          "source": "Set to `False` to leave out the document metadata, such as the title, author and keywords; it is included by default",
+          "message": "タイトル、作成者、キーワードなどのドキュメントのメタデータを含めない場合は `False` に設定します。デフォルトでは含まれます"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.display_name": {
           "source": "Convert Speaker Notes",
           "message": "スピーカーノートを変換"
@@ -1566,6 +1818,18 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.Q29udmVydFNwZWFrZXJOb3Rlcw.allowed-value.c3RyaW5nOlBhZ2VDb21tZW50cw.desc": {
           "source": "The notes as page comments",
           "message": "ノートをページコメントとして出力します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.RW1iZWRGb250cw.display_name": {
+          "source": "Embed Fonts",
+          "message": "フォントを埋め込む"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.RW1iZWRGb250cw.short_desc": {
+          "source": "Embed the fonts in the PDF",
+          "message": "PDFにフォントを埋め込む"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.RW1iZWRGb250cw.desc": {
+          "source": "Set to `False` to leave the fonts out of the PDF; they are embedded by default",
+          "message": "PDFにフォントを埋め込まない場合は `False` に設定します。デフォルトでは埋め込まれます"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wb3dlcnBvaW50LXRvLXBkZg.option.UGRmYQ.display_name": {
           "source": "Create PDF/A",
@@ -1783,6 +2047,278 @@
           "source": "The filename",
           "message": "ファイル名"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVJhbmdl.display_name": {
+          "source": "Page Range",
+          "message": "ページ範囲"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVJhbmdl.short_desc": {
+          "source": "The pages to convert",
+          "message": "変換するページ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVJhbmdl.desc": {
+          "source": "The pages to convert, as a range or a comma-separated list.\n\n**Example**: `1-10` or `1,2,5`; all pages are converted by default",
+          "message": "変換するページ。範囲またはカンマ区切りのリストで指定します。\n\n**例**: `1-10` または `1,2,5`。デフォルトではすべてのページが変換されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFVzZXJuYW1l.display_name": {
+          "source": "Authentication User Name",
+          "message": "認証ユーザー名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFVzZXJuYW1l.short_desc": {
+          "source": "The user name for HTTP authentication of the page",
+          "message": "ページのHTTP認証に使用するユーザー名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFVzZXJuYW1l.desc": {
+          "source": "The user name for a web page that is protected with HTTP authentication",
+          "message": "HTTP認証で保護されたWebページのユーザー名"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFBhc3N3b3Jk.display_name": {
+          "source": "Authentication Password",
+          "message": "認証パスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFBhc3N3b3Jk.short_desc": {
+          "source": "The password for HTTP authentication of the page",
+          "message": "ページのHTTP認証に使用するパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXV0aFBhc3N3b3Jk.desc": {
+          "source": "The password for a web page that is protected with HTTP authentication",
+          "message": "HTTP認証で保護されたWebページのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llcw.display_name": {
+          "source": "Cookies",
+          "message": "Cookie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llcw.short_desc": {
+          "source": "Cookies to send with the page request",
+          "message": "ページのリクエストとともに送信するCookie"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llcw.desc": {
+          "source": "Cookies to send with the request for the web page, separated by semicolons.\n\n**Example**: `name1=value1; name2=value2`",
+          "message": "Webページのリクエストとともに送信するCookie。セミコロンで区切って指定します。\n\n**例**: `name1=value1; name2=value2`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVycw.display_name": {
+          "source": "HTTP Headers",
+          "message": "HTTP ヘッダー"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVycw.short_desc": {
+          "source": "Custom HTTP headers to send with the page request",
+          "message": "ページのリクエストとともに送信するカスタムHTTPヘッダー"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVycw.desc": {
+          "source": "Custom HTTP headers to send with the request for the web page, as `name:value` pairs separated by `|`.\n\n**Example**: `Accept-Language:de|Cache-Control:no-cache`",
+          "message": "Webページのリクエストとともに送信するカスタムHTTPヘッダー。`|` で区切った `name:value` のペアで指定します。\n\n**例**: `Accept-Language:de|Cache-Control:no-cache`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QWRCbG9jaw.display_name": {
+          "source": "Block Ads",
+          "message": "広告をブロック"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QWRCbG9jaw.short_desc": {
+          "source": "Block the ads of the page",
+          "message": "ページの広告をブロック"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QWRCbG9jaw.desc": {
+          "source": "Set to `True` to block the ads of the web page",
+          "message": "Webページの広告をブロックするには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llQ29uc2VudEJsb2Nr.display_name": {
+          "source": "Remove Cookie Warnings",
+          "message": "Cookieの警告を削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llQ29uc2VudEJsb2Nr.short_desc": {
+          "source": "Remove cookie consent banners",
+          "message": "Cookie同意バナーを削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q29va2llQ29uc2VudEJsb2Nr.desc": {
+          "source": "Set to `True` to try to remove the cookie consent warnings of the web page",
+          "message": "WebページのCookie同意の警告を削除するよう試みるには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.V2FpdEVsZW1lbnQ.display_name": {
+          "source": "Wait for Element",
+          "message": "要素を待機"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.V2FpdEVsZW1lbnQ.short_desc": {
+          "source": "CSS selector of an element to wait for",
+          "message": "待機する要素のCSSセレクター"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.V2FpdEVsZW1lbnQ.desc": {
+          "source": "The CSS selector of an element that the converter waits for: the conversion begins when the element appears in the page.\n\n**Example**: `#content`",
+          "message": "コンバーターが待機する要素のCSSセレクター。その要素がページに表示されると変換が開始されます。\n\n**例**: `#content`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckpz.display_name": {
+          "source": "Run JavaScript",
+          "message": "JavaScriptを実行"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckpz.short_desc": {
+          "source": "JavaScript to run before the conversion",
+          "message": "変換前に実行するJavaScript"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckpz.desc": {
+          "source": "JavaScript code to run in the web page before the conversion begins",
+          "message": "変換の開始前にWebページで実行するJavaScriptコード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckNzcw.display_name": {
+          "source": "Additional CSS",
+          "message": "追加のCSS"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckNzcw.short_desc": {
+          "source": "CSS to apply before the conversion",
+          "message": "変換前に適用するCSS"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.VXNlckNzcw.desc": {
+          "source": "CSS to apply to the web page before the conversion begins",
+          "message": "変換の開始前にWebページに適用するCSS"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGlkZUVsZW1lbnRz.display_name": {
+          "source": "Hide Elements",
+          "message": "要素を非表示"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGlkZUVsZW1lbnRz.short_desc": {
+          "source": "CSS selector of the elements to hide",
+          "message": "非表示にする要素のCSSセレクター"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGlkZUVsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements to hide during the conversion.\n\n**Example**: `.banner, #chat`",
+          "message": "変換時に非表示にする要素のCSSセレクター。\n\n**例**: `.banner, #chat`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2hvd0VsZW1lbnRz.display_name": {
+          "source": "Show Only Elements",
+          "message": "指定要素のみ表示"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2hvd0VsZW1lbnRz.short_desc": {
+          "source": "CSS selector of the only elements to show",
+          "message": "表示する要素だけを指定するCSSセレクター"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2hvd0VsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements to show during the conversion; all other elements are hidden",
+          "message": "変換時に表示する要素のCSSセレクター。その他の要素はすべて非表示になります"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRXaWR0aA.display_name": {
+          "source": "Viewport Width",
+          "message": "ビューポートの幅"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRXaWR0aA.short_desc": {
+          "source": "The browser viewport width in pixels",
+          "message": "ブラウザーのビューポートの幅（ピクセル）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRXaWR0aA.desc": {
+          "source": "The width of the browser viewport in pixels, from `200` to `4000`; the default is `1366`",
+          "message": "ブラウザーのビューポートの幅（ピクセル）。`200` から `4000` の範囲で指定します。デフォルトは `1366` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRIZWlnaHQ.display_name": {
+          "source": "Viewport Height",
+          "message": "ビューポートの高さ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRIZWlnaHQ.short_desc": {
+          "source": "The browser viewport height in pixels",
+          "message": "ブラウザーのビューポートの高さ（ピクセル）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Vmlld3BvcnRIZWlnaHQ.desc": {
+          "source": "The height of the browser viewport in pixels, from `200` to `4000`; the default is `1024`",
+          "message": "ブラウザーのビューポートの高さ（ピクセル）。`200` から `4000` の範囲で指定します。デフォルトは `1024` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.display_name": {
+          "source": "Fixed Elements",
+          "message": "固定要素"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.short_desc": {
+          "source": "How elements with a fixed position are handled",
+          "message": "固定位置の要素の処理方法"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.desc": {
+          "source": "How the elements with a fixed CSS position are changed to adapt the page for the PDF",
+          "message": "ページをPDF用に調整するための、CSSで固定位置が指定された要素の変更方法"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmZpeGVk.display_name": {
+          "source": "Leave Unchanged",
+          "message": "変更しない"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmZpeGVk.desc": {
+          "source": "The elements keep their fixed position (the default)",
+          "message": "要素の固定位置を維持します（デフォルト）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmFic29sdXRl.display_name": {
+          "source": "Absolute",
+          "message": "絶対位置"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmFic29sdXRl.desc": {
+          "source": "The elements get an absolute position",
+          "message": "要素を絶対位置にします"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOnJlbGF0aXZl.display_name": {
+          "source": "Relative",
+          "message": "相対位置"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOnJlbGF0aXZl.desc": {
+          "source": "The elements get a relative position",
+          "message": "要素を相対位置にします"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmhpZGU.display_name": {
+          "source": "Hide",
+          "message": "非表示"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rml4ZWRFbGVtZW50cw.allowed-value.c3RyaW5nOmhpZGU.desc": {
+          "source": "The elements are hidden",
+          "message": "要素を非表示にします"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXZvaWRCcmVha0VsZW1lbnRz.display_name": {
+          "source": "Avoid Page Breaks in Elements",
+          "message": "要素内での改ページを避ける"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXZvaWRCcmVha0VsZW1lbnRz.short_desc": {
+          "source": "CSS selector of elements not to split across pages",
+          "message": "複数ページに分割しない要素のCSSセレクター"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QXZvaWRCcmVha0VsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements that must not be split by a page break",
+          "message": "改ページで分割してはならない要素のCSSセレクター"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtCZWZvcmVFbGVtZW50cw.display_name": {
+          "source": "Page Break Before Elements",
+          "message": "要素の前で改ページ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtCZWZvcmVFbGVtZW50cw.short_desc": {
+          "source": "CSS selector of elements that start a new page",
+          "message": "新しいページを開始する要素のCSSセレクター"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtCZWZvcmVFbGVtZW50cw.desc": {
+          "source": "The CSS selector of the elements to insert a page break before",
+          "message": "直前に改ページを挿入する要素のCSSセレクター"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtBZnRlckVsZW1lbnRz.display_name": {
+          "source": "Page Break After Elements",
+          "message": "要素の後で改ページ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtBZnRlckVsZW1lbnRz.short_desc": {
+          "source": "CSS selector of elements that end a page",
+          "message": "ページを終了する要素のCSSセレクター"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QnJlYWtBZnRlckVsZW1lbnRz.desc": {
+          "source": "The CSS selector of the elements to insert a page break after",
+          "message": "直後に改ページを挿入する要素のCSSセレクター"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UmVzcGVjdFZpZXdwb3J0.display_name": {
+          "source": "Respect Viewport",
+          "message": "ビューポートに従う"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UmVzcGVjdFZpZXdwb3J0.short_desc": {
+          "source": "Show the page as it looks in the browser",
+          "message": "ブラウザーでの表示どおりにページを表示"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UmVzcGVjdFZpZXdwb3J0.desc": {
+          "source": "Set to `False` to create the PDF like the print to PDF function of Chrome; by default, the PDF shows the page as it looks in the browser",
+          "message": "ChromeのPDFへの印刷機能と同じようにPDFを作成するには `False` に設定します。デフォルトでは、PDFにはブラウザーでの表示どおりにページが表示されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2NhbGU.display_name": {
+          "source": "Scale",
+          "message": "スケール"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2NhbGU.short_desc": {
+          "source": "The page scale in percent",
+          "message": "ページのスケール（%）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.U2NhbGU.desc": {
+          "source": "The scale of the web page in percent, from `10` to `200`; the default is `100`",
+          "message": "Webページのスケール（%）。`10` から `200` の範囲で指定します。デフォルトは `100` です"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVNpemU.display_name": {
           "source": "Page Size",
           "message": "ページサイズ"
@@ -1899,6 +2435,30 @@
           "source": "Landscape",
           "message": "横向き"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVdpZHRo.display_name": {
+          "source": "Page Width",
+          "message": "ページ幅"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVdpZHRo.short_desc": {
+          "source": "A custom page width in millimeters",
+          "message": "カスタムのページ幅（ミリメートル）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZVdpZHRo.desc": {
+          "source": "A custom page width in millimeters, from `10` to `30000`, which overrides `PageSize`",
+          "message": "カスタムのページ幅（ミリメートル）。`10` から `30000` の範囲で指定します。`PageSize` より優先されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZUhlaWdodA.display_name": {
+          "source": "Page Height",
+          "message": "ページの高さ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZUhlaWdodA.short_desc": {
+          "source": "A custom page height in millimeters",
+          "message": "カスタムのページの高さ（ミリメートル）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.UGFnZUhlaWdodA.desc": {
+          "source": "A custom page height in millimeters, from `10` to `30000`, which overrides `PageSize`",
+          "message": "カスタムのページの高さ（ミリメートル）。`10` から `30000` の範囲で指定します。`PageSize` より優先されます"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luVG9w.display_name": {
           "source": "Top Margin",
           "message": "上余白"
@@ -1946,6 +2506,30 @@
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.TWFyZ2luTGVmdA.desc": {
           "source": "The left page margin in millimeters; the default is `10`",
           "message": "左のページ余白（ミリメートル）。デフォルトは `10` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVy.display_name": {
+          "source": "Header HTML",
+          "message": "ヘッダーHTML"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVy.short_desc": {
+          "source": "HTML for the header of each page",
+          "message": "各ページのヘッダーのHTML"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.SGVhZGVy.desc": {
+          "source": "HTML for the header of each page; elements with the classes `pageNumber`, `totalPages`, `title` and `date` are filled with the values for each page, and inline CSS can style the header.\n\n**Example**: `<span class='pageNumber'></span> / <span class='totalPages'></span>`",
+          "message": "各ページのヘッダーのHTML。クラス `pageNumber`、`totalPages`、`title`、`date` を持つ要素には各ページの値が入ります。ヘッダーのスタイルはインラインCSSで設定できます。\n\n**例**: `<span class='pageNumber'></span> / <span class='totalPages'></span>`"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rm9vdGVy.display_name": {
+          "source": "Footer HTML",
+          "message": "フッターHTML"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rm9vdGVy.short_desc": {
+          "source": "HTML for the footer of each page",
+          "message": "各ページのフッターのHTML"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Rm9vdGVy.desc": {
+          "source": "HTML for the footer of each page; elements with the classes `pageNumber`, `totalPages`, `title` and `date` are filled with the values for each page, and inline CSS can style the footer.\n\n**Example**: `<span class='date'></span>`",
+          "message": "各ページのフッターのHTML。クラス `pageNumber`、`totalPages`、`title`、`date` を持つ要素には各ページの値が入ります。フッターのスタイルはインラインCSSで設定できます。\n\n**例**: `<span class='date'></span>`"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.QmFja2dyb3VuZA.display_name": {
           "source": "Background",
@@ -1997,7 +2581,7 @@
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnNjcmVlbg.display_name": {
           "source": "Screen",
-          "message": "スクリーン"
+          "message": "画面"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1odG1sLXRvLXBkZg.option.Q3NzTWVkaWFUeXBl.allowed-value.c3RyaW5nOnNjcmVlbg.desc": {
           "source": "The page as shown on a screen (the default)",
@@ -2080,8 +2664,8 @@
           "message": "PDFのページをJPG、PNG、TIFF、WebPの画像に変換"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.desc": {
-          "source": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF file.\n\nChoose the image `format` and resolution, and optionally a page range.",
-          "message": "PDFのページを画像に変換します。ページごとに1つの画像ファイル、または1つのマルチページTIFFファイルが返されます。\n\n画像の `format` と解像度を選択し、必要に応じてページ範囲も指定します。"
+          "source": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF file.\n\nChoose the image `format` and resolution, and optionally a page range; the other options depend on the format.",
+          "message": "PDFのページを画像に変換します。ページごとに1つの画像ファイル、または1つのマルチページTIFFファイルが返されます。\n\n画像の `format` と解像度を選択し、必要に応じてページ範囲も指定します。その他のオプションは形式によって異なります。"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.ZmlsZQ.display_name": {
           "source": "File",
@@ -2295,6 +2879,318 @@
           "source": "The image resolution in DPI; the default is `200`",
           "message": "画像の解像度（DPI）。デフォルトは `200` です"
         },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VXaWR0aA.display_name": {
+          "source": "Image Width",
+          "message": "画像の幅"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VXaWR0aA.short_desc": {
+          "source": "The image width in pixels",
+          "message": "画像の幅（ピクセル）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VXaWR0aA.desc": {
+          "source": "The width of the images in pixels, from `10` to `10000`",
+          "message": "画像の幅（ピクセル）。`10` から `10000` の範囲で指定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VIZWlnaHQ.display_name": {
+          "source": "Image Height",
+          "message": "画像の高さ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VIZWlnaHQ.short_desc": {
+          "source": "The image height in pixels",
+          "message": "画像の高さ（ピクセル）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VIZWlnaHQ.desc": {
+          "source": "The height of the images in pixels, from `10` to `10000`",
+          "message": "画像の高さ（ピクセル）。`10` から `10000` の範囲で指定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGU.display_name": {
+          "source": "Scale",
+          "message": "スケール"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGU.short_desc": {
+          "source": "The image size in percent of the page size",
+          "message": "ページサイズに対する画像サイズの比率（%）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGU.desc": {
+          "source": "The size of the images in percent of the size of the pages at the image resolution, from `10` to `300`; it overrides `ImageWidth` and `ImageHeight`.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "画像の解像度でのページサイズに対する、画像サイズの比率（%）。`10` から `300` の範囲で指定します。`ImageWidth` と `ImageHeight` より優先されます。\n\n**対応形式**: JPG、PNG、TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Rml0VG9TaXpl.display_name": {
+          "source": "Fit to Size",
+          "message": "サイズに合わせる"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Rml0VG9TaXpl.short_desc": {
+          "source": "Fit the images within the width and height",
+          "message": "画像を幅と高さの範囲内に収める"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Rml0VG9TaXpl.desc": {
+          "source": "Set to `True` to scale the images to fit within both `ImageWidth` and `ImageHeight`, which must both be given, keeping the aspect ratio.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "縦横比を維持したまま、`ImageWidth` と `ImageHeight` の両方に収まるように画像を拡大縮小するには `True` に設定します。この2つは両方とも指定する必要があります。\n\n**対応形式**: JPG、PNG、TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGVQcm9wb3J0aW9ucw.display_name": {
+          "source": "Scale Proportions",
+          "message": "比例して拡大縮小"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGVQcm9wb3J0aW9ucw.short_desc": {
+          "source": "Keep the aspect ratio of the pages",
+          "message": "ページの縦横比を維持"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.U2NhbGVQcm9wb3J0aW9ucw.desc": {
+          "source": "Set to `False` to scale the images to `ImageWidth` and `ImageHeight` without keeping the aspect ratio of the pages; it is kept by default.\n\n**Formats**: WebP",
+          "message": "ページの縦横比を維持せずに、画像を `ImageWidth` と `ImageHeight` に合わせて拡大縮小するには `False` に設定します。デフォルトでは縦横比が維持されます。\n\n**対応形式**: WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.display_name": {
+          "source": "Rotate Pages",
+          "message": "ページを回転"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.short_desc": {
+          "source": "Rotate the pages before converting them",
+          "message": "変換前にページを回転"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.desc": {
+          "source": "The rotation of the pages before they are converted.\n\n**Formats**: JPG, PNG and TIFF; for WebP, give the angle in degrees, from `-360` to `360`, as `Rotate` in `parameters`",
+          "message": "変換前のページの回転。\n\n**対応形式**: JPG、PNG、TIFF。WebPの場合は、`parameters` の `Rotate` に角度（度）を `-360` から `360` の範囲で指定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "デフォルト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The rotation of each page in the PDF (the default)",
+          "message": "PDF内の各ページの回転を使用します（デフォルト）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No rotation",
+          "message": "回転しません"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOnJvdGF0ZTkw.display_name": {
+          "source": "Rotate 90°",
+          "message": "90°回転"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOnJvdGF0ZTE4MA.display_name": {
+          "source": "Rotate 180°",
+          "message": "180°回転"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Um90YXRl.allowed-value.c3RyaW5nOnJvdGF0ZTI3MA.display_name": {
+          "source": "Rotate 270°",
+          "message": "270°回転"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.display_name": {
+          "source": "Crop to Box",
+          "message": "ボックスで切り抜き"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.short_desc": {
+          "source": "The page box that the images show",
+          "message": "画像に表示するページボックス"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.desc": {
+          "source": "The page box that the images are cropped to.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "画像の切り抜きに使用するページボックス。\n\n**対応形式**: JPG、PNG、TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkJvdW5kaW5nQm94.display_name": {
+          "source": "Bounding Box",
+          "message": "境界ボックス"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkJvdW5kaW5nQm94.desc": {
+          "source": "The content of the page (the default)",
+          "message": "ページのコンテンツ（デフォルト）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOlRyaW1Cb3g.display_name": {
+          "source": "Trim Box",
+          "message": "トリムボックス"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOk1lZGlhQm94.display_name": {
+          "source": "Media Box",
+          "message": "メディアボックス"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkFydEJveA.display_name": {
+          "source": "Art Box",
+          "message": "アートボックス"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q3JvcFRv.allowed-value.c3RyaW5nOkJsZWVkQm94.display_name": {
+          "source": "Bleed Box",
+          "message": "ブリードボックス"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.QmFja2dyb3VuZENvbG9y.display_name": {
+          "source": "Background Color",
+          "message": "背景色"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.QmFja2dyb3VuZENvbG9y.short_desc": {
+          "source": "The background color of transparent pages",
+          "message": "透明なページの背景色"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.QmFja2dyb3VuZENvbG9y.desc": {
+          "source": "The background color of the images where the pages are transparent: a color name, RGB values or a hexadecimal color code, or `transparent` to keep the transparency; the default is `white`.\n\n**Examples**: `black`, `255,0,0` or `#FF0000`\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "ページが透明な部分の画像の背景色。色名、RGB値、16進数のカラーコードのいずれかを指定します。透明度を維持するには `transparent` を指定します。デフォルトは `white` です。\n\n**例**: `black`、`255,0,0`、`#FF0000`\n\n**対応形式**: JPG、PNG、TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.VHJhbnNwYXJlbnRDb2xvcg.display_name": {
+          "source": "Transparent Color",
+          "message": "透明色"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.VHJhbnNwYXJlbnRDb2xvcg.short_desc": {
+          "source": "The color to make transparent",
+          "message": "透明にする色"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.VHJhbnNwYXJlbnRDb2xvcg.desc": {
+          "source": "The color that is made transparent in the images: a color name, RGB values with an optional alpha value, or a hexadecimal color code.\n\n**Examples**: `white`, `255,255,255` or `255,255,255,150`\n\n**Formats**: WebP",
+          "message": "画像内で透明にする色。色名、RGB値（アルファ値は省略可能）、16進数のカラーコードのいずれかで指定します。\n\n**例**: `white`、`255,255,255`、`255,255,255,150`\n\n**対応形式**: WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VRdWFsaXR5.display_name": {
+          "source": "Image Quality",
+          "message": "画質"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VRdWFsaXR5.short_desc": {
+          "source": "The image quality in percent",
+          "message": "画質（%）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VRdWFsaXR5.desc": {
+          "source": "The quality of the images in percent, from `10` to `100`; the default is `75`.\n\n**Formats**: JPG and WebP",
+          "message": "画質（%）。`10` から `100` の範囲で指定します。デフォルトは `75` です。\n\n**対応形式**: JPG、WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.display_name": {
+          "source": "Color Space",
+          "message": "色空間"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.short_desc": {
+          "source": "The color space of the images",
+          "message": "画像の色空間"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.desc": {
+          "source": "The color space of the images.\n\n**Formats**: JPG and PNG",
+          "message": "画像の色空間。\n\n**対応形式**: JPG、PNG"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOnJnYg.display_name": {
+          "source": "RGB",
+          "message": "RGB"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOnJnYg.desc": {
+          "source": "The default",
+          "message": "デフォルト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOmNteWs.display_name": {
+          "source": "CMYK",
+          "message": "CMYK"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOmdyYXk.display_name": {
+          "source": "Gray",
+          "message": "グレー"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JTcGFjZQ.allowed-value.c3RyaW5nOm1vbm9jaHJvbWU.display_name": {
+          "source": "Monochrome",
+          "message": "モノクロ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.display_name": {
+          "source": "Color Mode",
+          "message": "カラーモード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.short_desc": {
+          "source": "The color mode of the TIFF file",
+          "message": "TIFFファイルのカラーモード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.desc": {
+          "source": "The color mode of the TIFF file.\n\n**Formats**: TIFF",
+          "message": "TIFFファイルのカラーモード。\n\n**対応形式**: TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "デフォルト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The default",
+          "message": "デフォルト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmNteWs.display_name": {
+          "source": "CMYK",
+          "message": "CMYK"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmdyYXlzY2FsZQ.display_name": {
+          "source": "Grayscale",
+          "message": "グレースケール"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29sb3JNb2Rl.allowed-value.c3RyaW5nOmJpdG9uYWw.display_name": {
+          "source": "Bitonal",
+          "message": "白黒2値"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.display_name": {
+          "source": "Bit Depth",
+          "message": "ビット深度"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.short_desc": {
+          "source": "The number of bits per color channel",
+          "message": "カラーチャネルあたりのビット数"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.desc": {
+          "source": "The number of bits per color channel; more bits give more precise colors and smoother gradients but larger files.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "カラーチャネルあたりのビット数。ビット数が多いほど色がより正確になり、グラデーションも滑らかになりますが、ファイルサイズは大きくなります。\n\n**対応形式**: JPG、PNG、TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "デフォルト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The default",
+          "message": "デフォルト"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjE.display_name": {
+          "source": "1 Bit",
+          "message": "1ビット"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjI.display_name": {
+          "source": "2 Bits",
+          "message": "2ビット"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjQ.display_name": {
+          "source": "4 Bits",
+          "message": "4ビット"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjg.display_name": {
+          "source": "8 Bits",
+          "message": "8ビット"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Qml0RGVwdGg.allowed-value.c3RyaW5nOjE2.display_name": {
+          "source": "16 Bits",
+          "message": "16ビット"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29tcHJlc3Npb25MZXZlbA.display_name": {
+          "source": "Compression Level",
+          "message": "圧縮レベル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29tcHJlc3Npb25MZXZlbA.short_desc": {
+          "source": "The compression level, from 0 to 9",
+          "message": "圧縮レベル（0～9）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.Q29tcHJlc3Npb25MZXZlbA.desc": {
+          "source": "The compression level, from `0` to `9`; a higher level gives smaller files, and for JPG also a lower image quality.\n\n**Formats**: JPG, PNG and TIFF",
+          "message": "圧縮レベル。`0` から `9` の範囲で指定します。レベルが高いほどファイルは小さくなりますが、JPGの場合は画質も低下します。\n\n**対応形式**: JPG、PNG、TIFF"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VBbnRpYWxpYXNpbmc.display_name": {
+          "source": "Antialiasing",
+          "message": "アンチエイリアス"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VBbnRpYWxpYXNpbmc.short_desc": {
+          "source": "The subsampling box size for antialiasing",
+          "message": "アンチエイリアスのサブサンプリングボックスのサイズ"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.SW1hZ2VBbnRpYWxpYXNpbmc.desc": {
+          "source": "The subsampling box size for the antialiasing of text and graphics, from `0` to `8`; the default, `8`, gives the best text, and smaller values render faster.\n\n**Formats**: WebP",
+          "message": "テキストとグラフィックのアンチエイリアスに使用するサブサンプリングボックスのサイズ。`0` から `8` の範囲で指定します。デフォルトの `8` ではテキストが最もきれいに表示され、値を小さくするとレンダリングが速くなります。\n\n**対応形式**: WebP"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.TXVsdGlQYWdl.display_name": {
+          "source": "Multi-Page File",
+          "message": "マルチページファイル"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.TXVsdGlQYWdl.short_desc": {
+          "source": "Create one multi-page TIFF file",
+          "message": "1つのマルチページTIFFファイルを作成"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.TXVsdGlQYWdl.desc": {
+          "source": "Set to `False` to create a TIFF file for each page; by default, all pages are in one multi-page TIFF file.\n\n**Formats**: TIFF",
+          "message": "ページごとにTIFFファイルを作成するには `False` に設定します。デフォルトでは、すべてのページが1つのマルチページTIFFファイルにまとめられます。\n\n**対応形式**: TIFF"
+        },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",
           "message": "ファイルを保存"
@@ -2499,6 +3395,18 @@
           "source": "The URLs of the files to convert for converters that take several input files, such as `pdf` to `merge`.\n\nThey are sent as the `Files` parameter, together with any files given in `files`.",
           "message": "複数の入力ファイルを受け取るコンバーター（`pdf` から `merge` など）で変換するファイルのURL。\n\nこれらは、`files` に指定されたファイルとともに `Files` パラメータとして送信されます。"
         },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFzc3dvcmQ.display_name": {
+          "source": "Open Password",
+          "message": "開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFzc3dvcmQ.short_desc": {
+          "source": "The password to open protected PDF files",
+          "message": "保護されたPDFファイルを開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFzc3dvcmQ.desc": {
+          "source": "The password to open the protected PDF files",
+          "message": "保護されたPDFファイルを開くためのパスワード"
+        },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.Qm9va21hcmtzVGFibGVPZkNvbnRlbnRz.display_name": {
           "source": "Bookmarks Table of Contents",
           "message": "しおりの目次"
@@ -2546,6 +3454,94 @@
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UmVtb3ZlRHVwbGljYXRlRm9udHM.desc": {
           "source": "Set to `True` to include the fonts used by several of the merged files only once",
           "message": "結合した複数のファイルで使用されているフォントを1回だけ含めるには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.short_desc": {
+          "source": "The page size that every page is scaled to",
+          "message": "全ページを拡大縮小して合わせるページサイズ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.desc": {
+          "source": "The page size that every page of the merged PDF is scaled to",
+          "message": "結合したPDFの全ページを拡大縮小して合わせるページサイズ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "デフォルト"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Every page keeps its size (the default)",
+          "message": "各ページのサイズを維持します（デフォルト）"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEy.display_name": {
+          "source": "A2",
+          "message": "A2"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmEz.display_name": {
+          "source": "A3",
+          "message": "A3"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE0.display_name": {
+          "source": "A4",
+          "message": "A4"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE1.display_name": {
+          "source": "A5",
+          "message": "A5"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmE2.display_name": {
+          "source": "A6",
+          "message": "A6"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxldHRlcg.display_name": {
+          "source": "Letter",
+          "message": "レター"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZVNpemU.allowed-value.c3RyaW5nOmxlZ2Fs.display_name": {
+          "source": "Legal",
+          "message": "リーガル"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.display_name": {
+          "source": "Page Orientation",
+          "message": "ページの向き"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.short_desc": {
+          "source": "The orientation of every page",
+          "message": "すべてのページの向き"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.desc": {
+          "source": "The orientation of every page of the merged PDF",
+          "message": "結合したPDFのすべてのページの向き"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "デフォルト"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Every page keeps its orientation (the default)",
+          "message": "各ページの向きを維持します（デフォルト）"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOnBvcnRyYWl0.display_name": {
+          "source": "Portrait",
+          "message": "縦向き"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.UGFnZU9yaWVudGF0aW9u.allowed-value.c3RyaW5nOmxhbmRzY2FwZQ.display_name": {
+          "source": "Landscape",
+          "message": "横向き"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.T3BlblBhZ2U.display_name": {
+          "source": "Open to Page",
+          "message": "最初に表示するページ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.T3BlblBhZ2U.short_desc": {
+          "source": "The page that the PDF opens at",
+          "message": "PDFを開いたときに表示されるページ"
+        },
+        "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.T3BlblBhZ2U.desc": {
+          "source": "The number of the page that the merged PDF opens at, from `1` to `3000`; the default is `1`",
+          "message": "結合したPDFを開いたときに表示されるページの番号。`1` から `3000` の範囲で指定します。デフォルトは `1` です"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",
@@ -2802,6 +3798,174 @@
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UGFzc3dvcmQ.desc": {
           "source": "The password to open a protected PDF",
           "message": "保護されたPDFを開くためのパスワード"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VSZXNvbHV0aW9u.display_name": {
+          "source": "Image Resolution",
+          "message": "画像の解像度"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VSZXNvbHV0aW9u.short_desc": {
+          "source": "The maximum image resolution in DPI",
+          "message": "画像の最大解像度（DPI）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VSZXNvbHV0aW9u.desc": {
+          "source": "The maximum resolution of the images in DPI, from `10` to `800`; the default is `150`",
+          "message": "画像の最大解像度（DPI）。`10` から `800` の範囲で指定します。デフォルトは `150` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VRdWFsaXR5.display_name": {
+          "source": "Image Quality",
+          "message": "画質"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VRdWFsaXR5.short_desc": {
+          "source": "The image quality in percent",
+          "message": "画質（%）"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.SW1hZ2VRdWFsaXR5.desc": {
+          "source": "The quality of the images in percent, from `10` to `100`; the default is `80`",
+          "message": "画質（%）。`10` から `100` の範囲で指定します。デフォルトは `80` です"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRm9ybXM.display_name": {
+          "source": "Remove Forms",
+          "message": "フォームを削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRm9ybXM.short_desc": {
+          "source": "Remove the forms of the PDF",
+          "message": "PDFのフォームを削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRm9ybXM.desc": {
+          "source": "Set to `True` to remove the forms of the PDF",
+          "message": "PDFのフォームを削除するには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRHVwbGljYXRlcw.display_name": {
+          "source": "Remove Duplicates",
+          "message": "重複を削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRHVwbGljYXRlcw.short_desc": {
+          "source": "Remove duplicate fonts and color profiles",
+          "message": "重複するフォントとカラープロファイルを削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRHVwbGljYXRlcw.desc": {
+          "source": "Set to `False` to keep duplicate fonts and color profiles; they are removed by default",
+          "message": "重複するフォントとカラープロファイルを残すには `False` に設定します。デフォルトでは削除されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlUGllY2VJbmZvcm1hdGlvbg.display_name": {
+          "source": "Remove Piece Information",
+          "message": "ピース情報を削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlUGllY2VJbmZvcm1hdGlvbg.short_desc": {
+          "source": "Remove the private data of editing applications",
+          "message": "編集アプリケーションのプライベートデータを削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlUGllY2VJbmZvcm1hdGlvbg.desc": {
+          "source": "Set to `False` to keep the piece information dictionaries, the private data of applications such as Adobe Illustrator or Photoshop; they are removed by default",
+          "message": "Adobe IllustratorやPhotoshopなどのアプリケーションのプライベートデータであるピース情報辞書を残すには `False` に設定します。デフォルトでは削除されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRW1iZWRkZWRGaWxlcw.display_name": {
+          "source": "Remove Embedded Files",
+          "message": "埋め込みファイルを削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRW1iZWRkZWRGaWxlcw.short_desc": {
+          "source": "Remove embedded files and attachments",
+          "message": "埋め込みファイルと添付ファイルを削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlRW1iZWRkZWRGaWxlcw.desc": {
+          "source": "Set to `False` to keep the embedded files and attachments; they are removed by default",
+          "message": "埋め込みファイルと添付ファイルを残すには `False` に設定します。デフォルトでは削除されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlU3RydWN0dXJlSW5mb3JtYXRpb24.display_name": {
+          "source": "Remove Structure Information",
+          "message": "構造情報を削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlU3RydWN0dXJlSW5mb3JtYXRpb24.short_desc": {
+          "source": "Remove the structure information of the document",
+          "message": "ドキュメントの構造情報を削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlU3RydWN0dXJlSW5mb3JtYXRpb24.desc": {
+          "source": "Set to `False` to keep the structure information of the document; it is removed by default",
+          "message": "ドキュメントの構造情報を残すには `False` に設定します。デフォルトでは削除されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlTWV0YWRhdGE.display_name": {
+          "source": "Remove Metadata",
+          "message": "メタデータを削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlTWV0YWRhdGE.short_desc": {
+          "source": "Remove the XMP metadata",
+          "message": "XMPメタデータを削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlTWV0YWRhdGE.desc": {
+          "source": "Set to `False` to keep the XMP metadata of the document; it is removed by default",
+          "message": "ドキュメントのXMPメタデータを残すには `False` に設定します。デフォルトでは削除されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlVW51c2VkUmVzb3VyY2Vz.display_name": {
+          "source": "Remove Unused Resources",
+          "message": "未使用のリソースを削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlVW51c2VkUmVzb3VyY2Vz.short_desc": {
+          "source": "Remove unused fonts, images and patterns",
+          "message": "未使用のフォント、画像、パターンを削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UmVtb3ZlVW51c2VkUmVzb3VyY2Vz.desc": {
+          "source": "Set to `False` to keep unused resources such as fonts, images and patterns; they are removed by default",
+          "message": "フォント、画像、パターンなどの未使用のリソースを残すには `False` に設定します。デフォルトでは削除されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.VW5lbWJlZEJhc2VGb250cw.display_name": {
+          "source": "Unembed Base Fonts",
+          "message": "基本フォントの埋め込みを解除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.VW5lbWJlZEJhc2VGb250cw.short_desc": {
+          "source": "Remove the embedded base fonts",
+          "message": "埋め込まれた基本フォントを削除"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.VW5lbWJlZEJhc2VGb250cw.desc": {
+          "source": "Set to `True` to remove the embedded base fonts from the PDF",
+          "message": "埋め込まれた基本フォントをPDFから削除するには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.U3Vic2V0RW1iZWRkZWRGb250cw.display_name": {
+          "source": "Subset Embedded Fonts",
+          "message": "埋め込みフォントをサブセット化"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.U3Vic2V0RW1iZWRkZWRGb250cw.short_desc": {
+          "source": "Keep only the characters of the fonts that are used",
+          "message": "フォントのうち使用されている文字だけを残す"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.U3Vic2V0RW1iZWRkZWRGb250cw.desc": {
+          "source": "Set to `True` to keep only the characters of the embedded fonts that the document uses",
+          "message": "埋め込みフォントのうち、ドキュメントで使用されている文字だけを残すには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.T3B0aW1pemU.display_name": {
+          "source": "Optimize Content",
+          "message": "コンテンツを最適化"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.T3B0aW1pemU.short_desc": {
+          "source": "Optimize the page content streams",
+          "message": "ページのコンテンツストリームを最適化"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.T3B0aW1pemU.desc": {
+          "source": "Set to `False` to leave the page content streams as they are; they are optimized by default",
+          "message": "ページのコンテンツストリームをそのままにするには `False` に設定します。デフォルトでは最適化されます"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.TGluZWFyaXpl.display_name": {
+          "source": "Linearize",
+          "message": "線形化"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.TGluZWFyaXpl.short_desc": {
+          "source": "Optimize the PDF for fast web view",
+          "message": "高速Web表示用にPDFを最適化"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.TGluZWFyaXpl.desc": {
+          "source": "Set to `True` to linearize the PDF, which optimizes it for fast web view",
+          "message": "PDFを線形化して高速Web表示用に最適化するには `True` に設定します"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2VydmVQZGZh.display_name": {
+          "source": "Preserve PDF/A",
+          "message": "PDF/Aを維持"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2VydmVQZGZh.short_desc": {
+          "source": "Keep the PDF/A conformance of the file",
+          "message": "ファイルのPDF/A準拠を維持"
+        },
+        "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.UHJlc2VydmVQZGZh.desc": {
+          "source": "Set to `True` to keep the PDF/A conformance of the PDF",
+          "message": "PDFのPDF/A準拠を維持するには `True` に設定します"
         },
         "app.Q29udmVydEFwaQ.action.Y29tcHJlc3MtcGRm.option.c3RvcmVfZmlsZQ.display_name": {
           "source": "Store File",

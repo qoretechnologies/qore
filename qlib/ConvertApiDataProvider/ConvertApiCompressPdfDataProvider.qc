@@ -54,6 +54,94 @@ public class ConvertApiCompressPdfRequestDataType inherits HashDataType {
                 "desc": "The password to open a protected PDF",
                 "sensitive": True,
             },
+            "ImageResolution": {
+                "type": SoftIntOrNothingType,
+                "display_name": "Image Resolution",
+                "short_desc": "The maximum image resolution in DPI",
+                "desc": "The maximum resolution of the images in DPI, from `10` to `800`; the default is `150`",
+                "example_value": 96,
+            },
+            "ImageQuality": {
+                "type": SoftIntOrNothingType,
+                "display_name": "Image Quality",
+                "short_desc": "The image quality in percent",
+                "desc": "The quality of the images in percent, from `10` to `100`; the default is `80`",
+                "example_value": 60,
+            },
+            "RemoveForms": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Remove Forms",
+                "short_desc": "Remove the forms of the PDF",
+                "desc": "Set to `True` to remove the forms of the PDF",
+            },
+            "RemoveDuplicates": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Remove Duplicates",
+                "short_desc": "Remove duplicate fonts and color profiles",
+                "desc": "Set to `False` to keep duplicate fonts and color profiles; they are removed by default",
+            },
+            "RemovePieceInformation": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Remove Piece Information",
+                "short_desc": "Remove the private data of editing applications",
+                "desc": "Set to `False` to keep the piece information dictionaries, the private data of applications "
+                    "such as Adobe Illustrator or Photoshop; they are removed by default",
+            },
+            "RemoveEmbeddedFiles": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Remove Embedded Files",
+                "short_desc": "Remove embedded files and attachments",
+                "desc": "Set to `False` to keep the embedded files and attachments; they are removed by default",
+            },
+            "RemoveStructureInformation": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Remove Structure Information",
+                "short_desc": "Remove the structure information of the document",
+                "desc": "Set to `False` to keep the structure information of the document; it is removed by default",
+            },
+            "RemoveMetadata": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Remove Metadata",
+                "short_desc": "Remove the XMP metadata",
+                "desc": "Set to `False` to keep the XMP metadata of the document; it is removed by default",
+            },
+            "RemoveUnusedResources": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Remove Unused Resources",
+                "short_desc": "Remove unused fonts, images and patterns",
+                "desc": "Set to `False` to keep unused resources such as fonts, images and patterns; they are "
+                    "removed by default",
+            },
+            "UnembedBaseFonts": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Unembed Base Fonts",
+                "short_desc": "Remove the embedded base fonts",
+                "desc": "Set to `True` to remove the embedded base fonts from the PDF",
+            },
+            "SubsetEmbeddedFonts": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Subset Embedded Fonts",
+                "short_desc": "Keep only the characters of the fonts that are used",
+                "desc": "Set to `True` to keep only the characters of the embedded fonts that the document uses",
+            },
+            "Optimize": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Optimize Content",
+                "short_desc": "Optimize the page content streams",
+                "desc": "Set to `False` to leave the page content streams as they are; they are optimized by default",
+            },
+            "Linearize": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Linearize",
+                "short_desc": "Optimize the PDF for fast web view",
+                "desc": "Set to `True` to linearize the PDF, which optimizes it for fast web view",
+            },
+            "PreservePdfa": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Preserve PDF/A",
+                "short_desc": "Keep the PDF/A conformance of the file",
+                "desc": "Set to `True` to keep the PDF/A conformance of the PDF",
+            },
         } + ConvertApiOutputFields;
     }
 

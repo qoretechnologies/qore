@@ -132,6 +132,51 @@ class FakeConvertApiHandler inherits AbstractHttpRequestHandler {
                                     "Description": "Set page range to convert. Example 1-10.", "GroupName": "Input"},
                             ),
                         },
+                        {
+                            "Name": "Output",
+                            "ConverterParameters": (
+                                {"Name": "StoreFile", "Label": "Store file", "Type": "Bool", "Default": False},
+                                {"Name": "FileName", "Label": "Output file name", "Type": "String"},
+                            ),
+                        },
+                        {
+                            "Name": "Word",
+                            "ConverterParameters": (
+                                {"Name": "Password", "Label": "Open Password", "Type": "String",
+                                    "Description": "Sets the password to open protected documents."},
+                                {"Name": "IncludeMarkup", "Label": "Include markup", "Type": "Bool",
+                                    "Default": False, "Description": "Include document markup.", "Featured": True},
+                                {"Name": "BookmarkMode", "Label": "Bookmark Mode", "Type": "Collection",
+                                    "Representation": "Dropdown", "Default": "headings",
+                                    "Values": {"none": "None", "headings": "Headings", "bookmarks": "Bookmarks"},
+                                    "Description": "Bookmarks.",
+                                    "DescriptionMarkdown": "Specifies how bookmarks are created:\r\n`None`."},
+                                {"Name": "Scale", "Label": "Scale content", "Type": "Integer",
+                                    "Range": {"From": 10, "To": 300}, "Description": "Set content scale."},
+                                {"Name": "Margin", "Label": "Margin", "Type": "Double", "Default": 1.5,
+                                    "Description": "The margin."},
+                                {"Name": "CompareFile", "Label": "Compare file", "Type": "File",
+                                    "AllowedExtensions": ("docx",), "Description": "The document to compare."},
+                            ),
+                        },
+                    ),
+                },
+            );
+        } else if (hdr.path =~ /^info\/data\/to\/qrcode$/) {
+            rv = (
+                {
+                    "Name": "Barcode",
+                    "Title": "Data to QR Code API",
+                    "SourceFileFormats": ("data",),
+                    "DestinationFileFormats": ("qrcode",),
+                    "ConverterParameterGroups": (
+                        {
+                            "Name": "Input",
+                            "ConverterParameters": (
+                                {"Name": "Data", "Label": "Data", "Type": "String", "Required": True,
+                                    "Description": "The data to encode."},
+                            ),
+                        },
                     ),
                 },
             );
@@ -223,6 +268,8 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         addTestCase("local server tests", \localServerTests());
         addTestCase("semantic string type tests", \semanticStringTypeTests());
         addTestCase("option presentation tests", \optionPresentationTests());
+        addTestCase("converter parameter tests", \converterParameterTests());
+        addTestCase("dependent option tests", \dependentOptionTests());
 
         # Integration tests (require CONVERTAPI_TOKEN)
         addTestCase("integration tests", \integrationTests());
@@ -452,6 +499,16 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         assertEq(("url", "files", "urls"), copts.file.exclusive_with);
         assertEq(("file", "url"), copts.files.exclusive_with);
         assertTrue(copts.parameters.preselected);
+        # the formats select the converter, whose parameters are added to the options when both are given
+        assertTrue(actionMap."convert-file".data_dependent_options);
+        assertTrue(copts.from.structural_determinate);
+        assertTrue(copts.to.structural_determinate);
+        assertTrue(copts.to.has_dependents);
+        assertEq(("refetch",), copts.to.on_change);
+        assertFalse(actionMap."get-converter-info".data_dependent_options);
+        # the options of the image converters depend on the image format
+        assertTrue(actionMap."convert-pdf-to-image".data_dependent_options);
+        assertEq(("refetch",), actionMap."convert-pdf-to-image".options.format.on_change);
     }
 
     #! Request tests - verify the ConvertAPI parameters built for requests
@@ -717,7 +774,8 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         assertEq("1-2", pmap.PageRange.Value);
         assertEq(False, pmap.StoreFile.Value);
 
-        # the generic action uses the formats in the URL path and renders HTML URLs as web pages
+        # the generic action uses the formats in the URL path and renders HTML URLs as web pages; it reads the
+        # converter's parameters first, which this server does not know for html to pdf
         handler.requests = ();
         provider.getChildProviderEx("convert-file").doRequest({
             "from": "html",
@@ -725,9 +783,9 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
             "url": "https://example.com",
             "parameters": {"PageSize": "a4"},
         });
-        assertEq("convert/html/to/pdf", handler.requests[0].path);
+        assertEq(("info/html/to/pdf", "convert/html/to/pdf"), (map $1.path, handler.requests));
         pmap = {};
-        map pmap{$1.Name} = $1, handler.requests[0].body.Parameters;
+        map pmap{$1.Name} = $1, handler.requests[1].body.Parameters;
         assertEq("https://example.com", pmap.Url.Value);
         assertFalse(pmap.hasKey("File"));
         assertEq("a4", pmap.PageSize.Value);
@@ -776,7 +834,8 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         # converter information
         hash<auto> info = provider.getChildProviderEx("get-converter-info").doRequest({"from": "docx", "to": "pdf"});
         assertEq("Word", info.Name);
-        assertEq(("File", "PageRange"), (map $1.Name, info.Parameters));
+        assertEq(("File", "PageRange", "StoreFile", "FileName", "Password", "IncludeMarkup", "BookmarkMode", "Scale",
+            "Margin", "CompareFile"), (map $1.Name, info.Parameters));
         assertThrows("CONVERTAPI-UNKNOWN-CONVERTER", sub () {
             provider.getChildProviderEx("get-converter-info").doRequest({"from": "nope", "to": "pdf"});
         });
@@ -927,6 +986,240 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         }
     }
 
+    #! The parameters of a converter as ConvertAPI describes them become typed request fields
+    converterParameterTests() {
+        hash<auto> converter = {
+            "ConverterParameterGroups": (
+                {"Name": "Authentication", "ConverterParameters": ({"Name": "Token", "Type": "String"},)},
+                {
+                    "Name": "Input",
+                    "ConverterParameters": (
+                        {"Name": "File", "Type": "File", "Required": True},
+                        {"Name": "Url", "Type": "Uri"},
+                        {"Name": "Data", "Label": "Data to encode", "Type": "String", "Required": True,
+                            "Description": "The data.", "Featured": True},
+                        {"Name": "OverlayFile", "Label": "Overlay PDF file", "Type": "File", "Required": True,
+                            "AllowedExtensions": ("pdf",), "Description": "The overlay."},
+                        {"Name": "Images", "Label": "Images", "Type": "File", "Array": True},
+                    ),
+                },
+                {
+                    "Name": "Options",
+                    "ConverterParameters": (
+                        {"Name": "Pdfa", "Label": "Create PDF/A", "Type": "Bool", "Default": False,
+                            "Description": "Create PDF/A."},
+                        {"Name": "Quality", "Label": "image quality", "Type": "Integer", "Default": 75,
+                            "Range": {"From": 10, "To": 100}, "Description": "Set image quality."},
+                        {"Name": "Padding", "Label": "Auto padding", "Type": "Double",
+                            "Range": {"From": 0, "To": 30000}, "Description": "Padding."},
+                        {"Name": "Color", "Label": "Background Color", "Type": "Color", "Default": "White",
+                            "Description": "The color."},
+                        {"Name": "Mode", "Label": "Mode", "Type": "Collection", "Default": "b",
+                            "Values": {"a": "Mode A", "b": "Mode B"}, "Description": "The mode.",
+                            "DescriptionMarkdown": "The `mode`.\r\nMore."},
+                        {"Name": "AuthPassword", "Label": "Password", "Type": "String"},
+                        {"Name": "Shape", "Label": "Shape", "Type": "Polygon"},
+                        {"Name": "StoreFile", "Type": "Bool"},
+                        {"Name": "FileName", "Type": "String"},
+                        {"Name": "Timeout", "Type": "Integer"},
+                        {"Name": "From", "Type": "String"},
+                    ),
+                },
+            ),
+        };
+        hash<string, hash<auto>> fields = ConvertApiDataProvider::ConvertApiConverterParameters::getFields(converter,
+            NOTHING, ("from", "to"));
+        # the input, output and authentication parameters are set by the module, and the names of the action's own
+        # fields are not taken
+        assertEq(("Data", "OverlayFile", "Images", "Pdfa", "Quality", "Padding", "Color", "Mode", "AuthPassword",
+            "Shape"), keys fields);
+        HashDataType type("test");
+        type.addQoreFields(fields);
+        hash<string, AbstractDataField> tf = type.getFields();
+        # the types, with the parameters that the converter requires as mandatory fields
+        assertTrue(tf.Data.isMandatory());
+        assertEq("string", tf.Data.getType().getBaseTypeName());
+        assertTrue(tf.OverlayFile.isMandatory());
+        assertFalse(tf.Pdfa.isMandatory());
+        assertEq(True, tf.Pdfa.getType().acceptsValue(1));
+        assertEq(80, tf.Quality.getType().acceptsValue("80"));
+        assertEq(1.5, tf.Padding.getType().acceptsValue("1.5"));
+        assertEq("#FFFFFF", tf.Color.getType().acceptsValue("#FFFFFF"));
+        # a single file is accepted as a list of files
+        assertEq(("a.png",), (map $1.name, tf.Images.getType().acceptsValue({"name": "a.png",
+            "content": binary("A")})));
+        # a type that the module does not know accepts any value
+        assertEq((1, 2), tf.Shape.getType().acceptsValue((1, 2)));
+        # value lists, with the default described
+        assertEq(("a", "b"), (map $1.value, tf.Mode.getAllowedValues()));
+        assertEq(("Mode A", "Mode B"), (map $1.display_name, tf.Mode.getAllowedValues()));
+        assertEq("The default", tf.Mode.getAllowedValues()[1].desc);
+        assertThrows("FIELD-VALUE-ERROR", \tf.Mode.acceptsValue(), ("c",));
+        # labels in title case; descriptions with the range, default and file types; markdown descriptions preferred
+        assertEq("Data to Encode", fields.Data.display_name);
+        assertEq("Image Quality", fields.Quality.display_name);
+        assertEq("Set image quality.\n\nFrom `10` to `100`. The default is `75`.", fields.Quality.desc);
+        assertEq("Create PDF/A.\n\nThe default is `False`.", fields.Pdfa.desc);
+        assertEq("The overlay.\n\nFile types: `pdf`.", fields.OverlayFile.desc);
+        assertEq("The `mode`.\nMore.", fields.Mode.desc);
+        assertEq("Shape", fields.Shape.desc);
+        # the parameters that ConvertAPI features are preselected, and passwords are sensitive
+        assertTrue(fields.Data.attr.preselected);
+        assertNothing(fields.Pdfa.attr);
+        assertTrue(fields.AuthPassword.attr.sensitive);
+        # the action options built from the fields
+        hash<string, hash<ActionOptionInfo>> opts = DataProviderActionCatalog::getActionOptionFromFields(fields);
+        assertTrue(opts.Data.required);
+        assertTrue(opts.Data.preselected);
+        assertTrue(opts.AuthPassword.sensitive);
+        assertTrue(opts.Quality.short_desc.val());
+        # a required parameter that a request gives in its "parameters" field is optional
+        fields = ConvertApiDataProvider::ConvertApiConverterParameters::getFields(converter, {"DATA": True});
+        type = new HashDataType("test");
+        type.addQoreFields(fields);
+        assertFalse(type.getFields().Data.isMandatory());
+        assertTrue(type.getFields().OverlayFile.isMandatory());
+    }
+
+    #! The options of the generic action and of convert-pdf-to-image depend on the converter and the image format
+    dependentOptionTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        FakeConvertApiHandler handler();
+        server.setHandler("convertapi", "", NOTHING, handler);
+        server.setDefaultHandler("convertapi", handler);
+        ConvertApiDataProvider::ConvertApiDataProvider provider({
+            "convertapirestclient_options": {
+                "url": "http://localhost:" + port,
+                "apikey": "test-key",
+            },
+        });
+        AbstractDataProvider convert = provider.getChildProviderEx("convert-file");
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("ConvertApi", "convert-file");
+        list<string> action_options = keys action.options;
+
+        # without both formats, the options are the registered options, and no request is made
+        assertEq(action_options, keys convert.tryGetActionOptionsWithOptions(action, {"from": "docx"}));
+        assertEq(keys ConvertApiDataProvider::ConvertApiConvertDataProvider::RequestType.getFields(),
+            keys convert.getRequestTypeWithOptions({"from": "docx"}).getFields());
+        assertEq(0, handler.requests.size());
+
+        # with both formats, the converter's parameters follow the registered options, which keep their presentation
+        hash<string, hash<ActionOptionInfo>> opts = convert.tryGetActionOptionsWithOptions(action,
+            {"from": "docx", "to": "pdf"});
+        assertEq(action_options + ("PageRange", "Password", "IncludeMarkup", "BookmarkMode", "Scale", "Margin",
+            "CompareFile"), keys opts);
+        assertTrue(opts.from.structural_determinate);
+        assertTrue(opts.to.structural_determinate);
+        assertEq(("refetch",), opts.to.on_change);
+        assertTrue(opts.parameters.preselected);
+        assertTrue(opts.IncludeMarkup.preselected);
+        assertTrue(opts.Password.sensitive);
+        assertEq(("none", "headings", "bookmarks"), (map $1.value, opts.BookmarkMode.allowed_values));
+        assertEq("Page Range", opts.PageRange.display_name);
+        assertEq("Set page range to convert. Example 1-10.\n\nThe default is `1-6000`.", opts.PageRange.desc);
+        # the converter's description is cached
+        assertEq(("info/docx/to/pdf",), (map $1.path, handler.requests));
+        hash<string, AbstractDataField> fields = convert.getRequestTypeWithOptions({"from": "DOCX", "to": "pdf"})
+            .getFields();
+        assertEq(("from", "to", "file", "url", "files", "urls", "PageRange", "Password", "IncludeMarkup",
+            "BookmarkMode", "Scale", "Margin", "CompareFile", "store_file", "file_name", "timeout", "parameters"),
+            keys fields);
+        assertEq(1, handler.requests.size());
+
+        # typed parameters are checked, converted and sent as converter parameters
+        handler.requests = ();
+        convert.doRequest({
+            "from": "docx",
+            "to": "pdf",
+            "url": "https://example.com/a.docx",
+            "IncludeMarkup": 1,
+            "Scale": "120",
+            "BookmarkMode": "none",
+            "CompareFile": {"name": "b.docx", "content": binary("B")},
+        });
+        assertEq(("convert/docx/to/pdf",), (map $1.path, handler.requests));
+        hash<string, hash<auto>> pmap;
+        map pmap{$1.Name} = $1, handler.requests[0].body.Parameters;
+        assertEq(True, pmap.IncludeMarkup.Value);
+        assertEq(120, pmap.Scale.Value);
+        assertEq("none", pmap.BookmarkMode.Value);
+        assertEq({"Name": "b.docx", "Data": make_base64_string("B")}, pmap.CompareFile.FileValue);
+        assertThrows("TYPE-VALUE-ERROR", "BookmarkMode", \convert.doRequest(), ({
+            "from": "docx",
+            "to": "pdf",
+            "url": "https://example.com/a.docx",
+            "BookmarkMode": "chapters",
+        },));
+
+        # a parameter that the converter requires must be given, in its own field or in "parameters"
+        assertThrows("INVALID-REQUEST", "Data", \convert.doRequest(), ({"from": "data", "to": "qrcode"},));
+        handler.requests = ();
+        convert.doRequest({"from": "data", "to": "qrcode", "Data": "https://www.convertapi.com"});
+        convert.doRequest({"from": "data", "to": "qrcode", "parameters": {"Data": "https://www.convertapi.com"}});
+        list<hash<auto>> posts = select handler.requests, $1.method == "POST";
+        assertEq(2, posts.size());
+        foreach hash<auto> post in (posts) {
+            assertEq("https://www.convertapi.com", (select post.body.Parameters, $1.Name == "Data")[0].Value);
+        }
+
+        # if the converter's description cannot be read, the registered options and request type are used, and a
+        # parameter is sent as it is
+        assertEq(action_options, keys convert.tryGetActionOptionsWithOptions(action, {"from": "nope", "to": "pdf"}));
+        assertEq(keys ConvertApiDataProvider::ConvertApiConvertDataProvider::RequestType.getFields(),
+            keys convert.getRequestTypeWithOptions({"from": "nope", "to": "pdf"}).getFields());
+        handler.requests = ();
+        convert.doRequest({"from": "html", "to": "pdf", "url": "https://example.com", "PageSize": "a4"});
+        posts = select handler.requests, $1.method == "POST";
+        assertEq("a4", (select posts[0].body.Parameters, $1.Name == "PageSize")[0].Value);
+
+        # the options of convert-pdf-to-image are those of the image format
+        AbstractDataProvider images = provider.getChildProviderEx("convert-pdf-to-image");
+        hash<DataProviderActionInfo> image_action = DataProviderActionCatalog::getAppActionEx("ConvertApi",
+            "convert-pdf-to-image");
+        assertTrue(image_action.data_dependent_options);
+        assertTrue(image_action.options.format.structural_determinate);
+        assertEq(keys image_action.options, keys images.tryGetActionOptionsWithOptions(image_action, {}));
+        hash<string, list<string>> format_only = {
+            "jpg": ("Rotate", "ImageQuality", "ColorSpace"),
+            "png": ("Rotate", "ColorSpace", "CompressionLevel"),
+            "tiff": ("Rotate", "MultiPage", "ColorMode"),
+            "webp": ("ScaleProportions", "TransparentColor", "ImageQuality"),
+        };
+        hash<string, list<string>> format_none = {
+            "jpg": ("MultiPage", "ScaleProportions", "TransparentColor", "ColorMode"),
+            "png": ("ImageQuality", "MultiPage", "TransparentColor"),
+            "tiff": ("ImageQuality", "ColorSpace", "TransparentColor"),
+            "webp": ("Rotate", "CropTo", "BackgroundColor", "MultiPage", "CompressionLevel"),
+        };
+        foreach string fmt in (keys format_only) {
+            hash<string, hash<ActionOptionInfo>> iopts = images.tryGetActionOptionsWithOptions(image_action,
+                {"format": fmt});
+            hash<string, AbstractDataField> ifields = images.getRequestTypeWithOptions({"format": fmt}).getFields();
+            # the registered options keep their presentation
+            assertTrue(iopts.file.preselected, fmt);
+            foreach string opt in (format_only{fmt} + ("file", "url", "format", "PageRange", "ImageResolution")) {
+                assertTrue(iopts.hasKey(opt), fmt + ": " + opt);
+                assertTrue(ifields.hasKey(opt), fmt + ": " + opt);
+            }
+            foreach string opt in (format_none{fmt}) {
+                assertFalse(iopts.hasKey(opt), fmt + ": " + opt);
+                assertFalse(ifields.hasKey(opt), fmt + ": " + opt);
+            }
+        }
+        # a parameter of another format is refused; the WebP converter takes Rotate as an angle, in "parameters"
+        assertThrows("TYPE-VALUE-ERROR", "ColorSpace", \images.doRequest(), ({"url": "https://example.com/a.pdf",
+            "format": "webp", "ColorSpace": "gray"},));
+        assertThrows("TYPE-VALUE-ERROR", "Rotate", \images.doRequest(), ({"url": "https://example.com/a.pdf",
+            "format": "png", "Rotate": 45},));
+        handler.requests = ();
+        images.doRequest({"url": "https://example.com/a.pdf", "format": "webp", "parameters": {"Rotate": 45}});
+        assertEq(45, (select handler.requests[0].body.Parameters, $1.Name == "Rotate")[0].Value);
+    }
+
     #! Integration tests - require a real ConvertAPI token; each test runs one or more conversions
     integrationTests() {
         ConvertApiDataProvider::ConvertApiDataProvider prov = createRealProvider();
@@ -935,6 +1228,7 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         testReferenceData(prov);
         testGetConverterInfo(prov);
         testValueListsMatchConvertApi(prov);
+        testConvertFileTypedOptions(prov);
         testWordToPdfFromUrl(prov);
         testHtmlToPdfFromFile(prov);
         testGenericConvertStoreFile(prov);
@@ -944,42 +1238,107 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         testApiError(prov);
     }
 
-    #! Checks the converter parameters and the value lists of the shortcut actions against ConvertAPI
-    /** The parameters are read with get-converter-info, which converts nothing, so a value list that ConvertAPI
-        changes is found here instead of by the users of the action
+    #! Checks the typed parameters of the shortcut actions against the converters' parameters in ConvertAPI
+    /** The parameters are read with get-converter-info, which converts nothing: every parameter that the module
+        does not set itself has a field of a matching type, with the same value list, and every field is a parameter,
+        so a parameter that ConvertAPI adds or changes is found here instead of by the users of the action
     */
     private testValueListsMatchConvertApi(ConvertApiDataProvider::ConvertApiDataProvider prov) {
         # the converter of each shortcut action; the format of convert-pdf-to-image selects its converter
-        hash<string, list<string>> converters = {
-            "convert-word-to-pdf": ("docx", "pdf"),
-            "convert-excel-to-pdf": ("xlsx", "pdf"),
-            "convert-powerpoint-to-pdf": ("pptx", "pdf"),
-            "convert-html-to-pdf": ("html", "pdf"),
-            "convert-pdf-to-image": ("pdf", "jpg"),
-            "merge-pdf": ("pdf", "merge"),
-            "compress-pdf": ("pdf", "compress"),
+        list<list<string>> converters = (
+            ("convert-word-to-pdf", "docx", "pdf"),
+            ("convert-excel-to-pdf", "xlsx", "pdf"),
+            ("convert-powerpoint-to-pdf", "pptx", "pdf"),
+            ("convert-html-to-pdf", "html", "pdf"),
+            ("convert-pdf-to-image", "pdf", "jpg"),
+            ("convert-pdf-to-image", "pdf", "png"),
+            ("convert-pdf-to-image", "pdf", "tiff"),
+            ("convert-pdf-to-image", "pdf", "webp"),
+            ("merge-pdf", "pdf", "merge"),
+            ("compress-pdf", "pdf", "compress"),
+        );
+        # the parameters without a field on purpose: the WebP converter takes Rotate as an angle, which is given in
+        # "parameters", while the Rotate field of the other image formats lists rotations
+        hash<string, bool> untyped = {
+            "convert-pdf-to-image webp Rotate": True,
         };
         AbstractDataProvider info_prov = prov.getChildProviderEx("get-converter-info");
-        foreach hash<auto> i in (converters.pairIterator()) {
-            hash<auto> info = info_prov.doRequest({"from": i.value[0], "to": i.value[1]});
+        foreach list<string> c in (converters) {
+            string action = c[0];
+            string converter = sprintf("%s (%s to %s)", action, c[1], c[2]);
+            hash<auto> info = info_prov.doRequest({"from": c[1], "to": c[2]});
             hash<string, hash<auto>> params = map {$1.Name: $1}, info.Parameters;
-            foreach hash<auto> f in (prov.getChildProviderEx(i.key).getRequestType().getFields().pairIterator()) {
-                # the common fields and the image format are handled by the module
-                if (inlist(f.key, ConvertApiDataProvider::ConvertApiCommonFieldNames) || f.key == "format") {
+            hash<string, AbstractDataField> fields = action == "convert-pdf-to-image"
+                ? ConvertApiDataProvider::ConvertApiConvertPdfToImageRequestDataType::getFormatRequestType(c[2])
+                    .getFields()
+                : prov.getChildProviderEx(action).getRequestType().getFields();
+            foreach hash<auto> p in (params.pairIterator()) {
+                if (ConvertApiDataProvider::ConvertApiConverterParameters::ReservedParameters{p.key.lwr()}
+                    || untyped{sprintf("%s %s %s", action, c[2], p.key)}) {
                     continue;
                 }
-                string label = sprintf("%s: %s", i.key, f.key);
-                assertTrue(params.hasKey(f.key), label);
-                *list<hash<AllowedValueInfo>> allowed = f.value.getAllowedValues();
-                *hash<auto> values = params{f.key}.Values;
+                string label = sprintf("%s: %s", converter, p.key);
+                if (!fields{p.key}) {
+                    assertTrue(False, label + " has no field");
+                    continue;
+                }
+                AbstractDataProviderType type = fields{p.key}.getType();
+                switch (p.value.Type) {
+                    case "Bool":
+                        assertEq(True, type.acceptsValue(1), label);
+                        break;
+                    case "Integer":
+                        assertEq(5, type.acceptsValue("5"), label);
+                        break;
+                    case "String":
+                    case "Color":
+                    case "Collection":
+                        assertEq("string", type.getBaseTypeName(), label);
+                        break;
+                    default:
+                        assertTrue(False, sprintf("%s has type %y", label, p.value.Type));
+                }
                 # a free-text parameter with suggested values, such as CssMediaType, has no Values
-                if (allowed && values) {
-                    foreach hash<AllowedValueInfo> av in (allowed) {
-                        assertTrue(values.hasKey(av.value), sprintf("%s: %y", label, av.value));
-                    }
+                if (p.value.Values) {
+                    assertEq(sort(keys p.value.Values), sort(map $1.value, fields{p.key}.getAllowedValues()), label);
+                }
+            }
+            foreach string f in (keys fields) {
+                # the common fields and the image format are handled by the module
+                if (!inlist(f, ConvertApiDataProvider::ConvertApiCommonFieldNames) && f != "format") {
+                    assertTrue(params.hasKey(f), sprintf("%s: %s is not a parameter", converter, f));
                 }
             }
         }
+    }
+
+    #! Tests the typed options of the generic action, which are read from ConvertAPI, and a conversion with them
+    private testConvertFileTypedOptions(ConvertApiDataProvider::ConvertApiDataProvider prov) {
+        AbstractDataProvider convert = prov.getChildProviderEx("convert-file");
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("ConvertApi", "convert-file");
+        hash<string, hash<ActionOptionInfo>> opts = convert.tryGetActionOptionsWithOptions(action,
+            {"from": "docx", "to": "pdf"});
+        foreach string opt in (("PageRange", "Password", "IncludeMarkup", "BookmarkMode", "Pdfa")) {
+            assertTrue(opts.hasKey(opt), opt);
+        }
+        assertTrue(opts.Password.sensitive);
+        assertEq(("none", "headings", "bookmarks"), (map $1.value, opts.BookmarkMode.allowed_values));
+        # the input, output and authentication parameters are the action's own options
+        foreach string opt in (("File", "StoreFile", "FileName", "Timeout", "Secret", "Token")) {
+            assertFalse(opts.hasKey(opt), opt);
+        }
+        # a converter that takes no file: its input is a required option
+        opts = convert.tryGetActionOptionsWithOptions(action, {"from": "data", "to": "qrcode"});
+        assertTrue(opts.Data.required);
+
+        hash<auto> result = convert.doRequest({
+            "from": "docx",
+            "to": "pdf",
+            "url": DemoDocxUrl,
+            "PageRange": "1-1",
+            "BookmarkMode": "none",
+        });
+        assertMagicBytes(result.Files[0].FileData, PdfMagic, "convert-file with typed parameters");
     }
 
     #! Asserts the data starts with the expected magic prefix

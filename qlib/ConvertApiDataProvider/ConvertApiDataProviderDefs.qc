@@ -190,6 +190,15 @@ public namespace ConvertApiDataProvider {
         },
     };
 
+    #! Request field for the \c IncludeMetadata parameter of the Word, Excel and PowerPoint converters
+    public const ConvertApiIncludeMetadataField = {
+        "type": SoftBoolOrNothingType,
+        "display_name": "Include Metadata",
+        "short_desc": "Include the document metadata",
+        "desc": "Set to `False` to leave out the document metadata, such as the title, author and keywords; it is "
+            "included by default",
+    };
+
     #! All common request fields of a conversion: @ref ConvertApiSourceFields and @ref ConvertApiOutputFields
     public const ConvertApiCommonFields = ConvertApiSourceFields + ConvertApiOutputFields;
 
