@@ -1114,7 +1114,7 @@ private:
         // teardown releases the variable with the registry's lock
         ReferenceHolder<QoreProgram> pgm(v->pgm ? qore_program_private::getReferencedProgram(v->pgm, v->pgm_id)
             : nullptr, xsink);
-        const bool entered = *pgm && qore_program_private::get(**pgm)->enterForThreadLocalRelease();
+        const bool entered = *pgm && qore_program_private::get(**pgm)->enterWithoutContext();
         // values that the thread cannot release in the Program are handed over to the registry
         const bool hand_over = v->pgm && !entered;
         for (size_t i = 0; i < n; ++i) {

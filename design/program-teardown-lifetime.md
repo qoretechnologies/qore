@@ -160,7 +160,7 @@ thread kept them until it ended, with objects of the deleted Program's classes.
 A thread that ends, or whose values are cleared between tasks, releases its values itself, and enters the Program
 owning each variable first, once for all of its values (`Var::tl_pgm`, the Program that parses or loads it,
 identified by its ID; `ThreadData::releaseThreadLocalVarsOfProgram()` and
-`qore_program_private::enterForThreadLocalRelease()`): the Program can be deleted in another thread at the same time,
+`qore_program_private::enterWithoutContext()`): the Program can be deleted in another thread at the same time,
 and its teardown waits for the thread (step 1 or 3), so the Program can still run the destructors of the values,
 which enter the Programs of their classes as nested calls.  A Program that it
 cannot enter (its teardown has marked it, or it has been deleted) releases the variable itself, or has released it,
@@ -192,19 +192,25 @@ released while the Program can run its destructor).
 
 ## References to a Program's lvalues
 
-A reference (`lvalue_ref` in `include/qore/intern/lvalue_ref.h`) keeps the Program of its lvalue by address
-(`lvalue_ref::pgm`), and its lvalue expression names variables of that Program, which are freed with it; a function of
-the Program can return a reference to one of its variables, which outlives the Program.  Using the reference entered the
-freed Program (`ProgramThreadCountContextHelper::set()` crashed) or, for a reference held by a variable, resolved the
-freed variable.  The reference now records the ID of its Program as well (`lvalue_ref::pgm_id`), and every use of its
-lvalue takes the Program by ID with a reference, unless it is the current Program or one that the thread deletes
-(`QoreReferenceProgramHelper`): `RuntimeReferenceHelperBase`, which then enters it with its context,
-`LValueHelper::doLValue()` for a reference held by a lvalue, and the removal through a reference held by a local or
-closure-bound variable, which enter it without switching to it.  A reference to a lvalue of a deleted Program raises
-`PROGRAM-ERROR`, as does one used while its Program's teardown has marked it.
-`examples/test/qore/vars/reference-deleted-program.qtest` uses references to a thread_local, a global and a
-closure-bound local variable of a deleted Program through local, closure-bound and global variables, in every execution
-mode.
+A reference (`lvalue_ref` in `include/qore/intern/lvalue_ref.h`) names the Program of its lvalue (`lvalue_ref::pgm`),
+and its lvalue expression names variables of that Program, which are freed with it; a function of the Program can return
+a reference to one of its variables, which outlives the Program.  Using the reference entered the freed Program
+(`ProgramThreadCountContextHelper::set()` crashed) or, for a reference held by a variable, resolved the freed variable.
+The reference now holds a dependency reference to its Program (`QoreProgram::depRef()`), which keeps the Program
+allocated, and its address from being given to another Program, while the reference exists, without a global lock on its
+use; a Program refuses an entry once its teardown has marked it (`qore_program_private::canEnterIntern()`).
+`RuntimeReferenceHelperBase` enters the Program with its context while the reference is resolved; `LValueHelper` enters
+it without switching to it (`QoreReferenceProgramHelper`, `qore_program_private::enterWithoutContext()`, which a parse
+in progress does not refuse, as no code of the Program runs) and keeps the entry until the lvalue has been used
+(`LValueHelper::keepReferenceProgram()`, left in the destructor once the lvalue's locks are released and before the
+values that the write replaced are released): the teardown released a variable while another thread assigned it through
+a reference held by a variable (a data race that TSan reported).  The removal through a reference held by a local or
+closure-bound variable enters it while it removes the value.  A reference to a lvalue of a Program whose teardown has
+marked it, or has ended, raises `PROGRAM-ERROR`.  It recorded the Program's ID and took a reference to it by ID for each
+use, which took the global lock of the Program registry and made a loop using references across Programs 10 to 24%
+slower.  `examples/test/qore/vars/reference-deleted-program.qtest` uses references to a thread_local, a global and a
+closure-bound local variable of a deleted Program through local, closure-bound and global variables, and writes through
+a global variable holding a reference into a Program with a parse pending, in every execution mode.
 
 ## Where the teardown can wait for ever
 

@@ -119,6 +119,7 @@ DLLLOCAL void release_thread_local_var(uint64_t serial, ExceptionSink* xsink);
 DLLLOCAL uint64_t qore_get_next_thread_local_var_serial();
 
 class LValueHelper;
+class lvalue_ref;
 class QoreVarInfo;
 class qore_hash_private;
 struct qore_list_private;
@@ -607,6 +608,11 @@ private:
     typedef std::vector<AbstractQoreNode*> nvec_t;
     nvec_t tvec;
     lvid_set_t* lvid_set = nullptr;
+    //! the Programs of the references that the lvalue was reached through, entered until the lvalue has been used
+    /** see keepReferenceProgram(); the first one is kept here, the others in \a ref_pgms
+    */
+    QoreProgram* ref_pgm = nullptr;
+    std::vector<QoreProgram*>* ref_pgms = nullptr;
     // to track object count changes
     ocvec_t ocvec;
 
@@ -819,6 +825,16 @@ public:
     /** the removed values are saved and dereferenced when the lvalue locks are released
     */
     DLLLOCAL void rollbackVivification();
+
+    //! Enters the Program of a reference that the lvalue is reached through until the lvalue has been used
+    /** The Program's teardown waits until the helper is destroyed, so that it cannot release the variable while the
+        lvalue is used: the Program was only kept while the reference was resolved, and its teardown released a
+        variable that another thread was assigning through a reference.  The Programs are left in the destructor once
+        the lvalue's locks are released, before the values that the write replaced are released.
+
+        @return 0 for OK, -1 if the reference's Program is being deleted or has been (PROGRAM-ERROR raised)
+    */
+    DLLLOCAL int keepReferenceProgram(const lvalue_ref& r);
 
     DLLLOCAL void saveTemp(QoreValue n);
 

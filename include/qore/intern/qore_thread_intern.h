@@ -1660,59 +1660,59 @@ protected:
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread is exhausted; see thread.cpp
 DLLLOCAL int check_stack(ExceptionSink* xsink);
 
-//! Keeps the Program of a reference while the reference's lvalue is used
+//! Keeps the Program of a reference from being deleted while the reference's lvalue is used
 /** A reference can outlive the Program whose lvalue it refers to: a function of the Program can return one, and the
-    Program's variables and code are freed with the Program, while the reference keeps their addresses
-    (lvalue_ref::pgm and its lvalue expression).  Its Program is identified by its ID as well (lvalue_ref::pgm_id), as
-    a Program created after it was deleted can have its address, and a reference to a lvalue of a deleted Program
-    raises PROGRAM-ERROR: its use entered the freed Program and crashed.
+    Program's variables and code are freed with the Program, while the reference keeps their addresses (its lvalue
+    expression).  The reference keeps the Program allocated with a dependency reference (lvalue_ref::pgm), and its
+    use enters the Program: a reference to a lvalue of a Program that is being deleted, or has been, raises
+    PROGRAM-ERROR; its use entered the freed Program and crashed.
 
-    The Program is referenced while the helper exists, unless it is the current Program, which the thread is in, or
-    one that the current thread deletes.  A helper that enters another Program (\a enter) keeps its teardown from
-    deleting its data while the helper exists, which raises PROGRAM-ERROR as well once the teardown has marked it;
-    RuntimeReferenceHelperBase enters it with its context.
+    The helper enters the Program without switching to it (qore_program_private::enterWithoutContext()) unless it is
+    the current Program, which the thread is in, or one that the thread deletes, so that its teardown waits while the
+    helper exists; RuntimeReferenceHelperBase enters it with its context.  An LValueHelper keeps the entry until the
+    lvalue has been used (LValueHelper::keepReferenceProgram()): the teardown released the variable while another
+    thread assigned it through a reference.
 */
 class QoreReferenceProgramHelper {
 public:
-    //! Takes the Program of the reference; raises PROGRAM-ERROR in \a xsink if it has been deleted
+    //! Enters the Program of the reference; raises PROGRAM-ERROR in \a xsink if it is being deleted or has been
     /** @param r the reference
-        @param xsink for exceptions; also used to release the Program
-        @param enter true to enter the Program without switching to it (its thread count)
+        @param xsink for exceptions; also used to leave the Program
     */
-    DLLLOCAL QoreReferenceProgramHelper(const lvalue_ref& r, ExceptionSink* xsink, bool enter);
+    DLLLOCAL QoreReferenceProgramHelper(const lvalue_ref& r, ExceptionSink* xsink);
 
+    //! Leaves the Program if it was entered and not taken with release()
     DLLLOCAL ~QoreReferenceProgramHelper();
 
     DLLLOCAL QoreReferenceProgramHelper(const QoreReferenceProgramHelper&) = delete;
     DLLLOCAL QoreReferenceProgramHelper& operator=(const QoreReferenceProgramHelper&) = delete;
 
-    //! Returns false if the reference's Program has been deleted, or could not be entered
+    //! Returns false if the reference's Program is being deleted or has been
     DLLLOCAL operator bool() const {
         return valid;
     }
 
-    //! Returns the reference's Program, or nullptr if it has none or has been deleted
-    DLLLOCAL QoreProgram* getProgram() const {
-        return valid ? pgm : nullptr;
+    //! Returns the Program entered, which the caller leaves with qore_program_private::decThreadCount(), or nullptr
+    DLLLOCAL QoreProgram* release() {
+        QoreProgram* rv = pgm;
+        pgm = nullptr;
+        return rv;
     }
 
 private:
-    //! the Program of the reference, if it is valid
+    //! the Program entered, if any
     QoreProgram* pgm = nullptr;
-    //! the reference taken to the Program, if any
-    QoreProgram* ref = nullptr;
     ExceptionSink* xsink;
     bool valid = true;
-    bool entered = false;
 };
 
 class RuntimeReferenceHelperBase {
 public:
     DLLLOCAL RuntimeReferenceHelperBase(const lvalue_ref& r, ExceptionSink* n_xsink)
-            : ref(&r), pgm_holder(r, n_xsink, false), pch(n_xsink, pgm_holder.getProgram(), true),
-              osh(r.self, r.cls) {
-        // the Program of the reference has been deleted
-        if (!pgm_holder) {
+            : ref(&r), pch(n_xsink, r.pgm, true), osh(r.self, r.cls) {
+        // the reference's Program is allocated while the reference exists (see lvalue_ref::pgm); a Program that is
+        // being deleted refuses the entry with PROGRAM-ERROR
+        if (*n_xsink) {
             ref = nullptr;
             valid = false;
             return;
@@ -1746,8 +1746,6 @@ public:
 
 protected:
     const lvalue_ref* ref;
-    //! keeps the reference's Program; declared before pch, which enters it and leaves it before it is released
-    QoreReferenceProgramHelper pgm_holder;
     ProgramThreadCountContextHelper pch;
     ObjectSubstitutionHelper osh;
     bool valid = true;

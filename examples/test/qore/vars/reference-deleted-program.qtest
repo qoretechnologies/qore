@@ -170,6 +170,30 @@ sub run(string kind) {
 run("thread_local");
 run("global");
 run("local");
+
+# a global variable holding a reference into a Program with a parse pending: the write through it does not refuse the
+# Program as being parsed, as before, and gives the value that the Program reads after the commit
+our reference<int> gref_pending;
+string sub write_pending() {
+    gref_pending = 3;
+    return "ok";
+}
+sub parse_pending() {
+    Program p(PO_ALLOW_REPARSE);
+    p.setExecMode(mode);
+    p.parse("%modern\nour int gx = 1;\nreference<int> sub get() { return \\gx; }\nint sub peek() { return gx; }\n",
+        "pending");
+    gref_pending = p.callFunction("get");
+    p.parsePending("%modern\nsub later() {}\n", "later");
+    try {
+        report("written in a global variable while a parse is pending", write_pending());
+    } catch (hash<ExceptionInfo> ex) {
+        report_error("written in a global variable while a parse is pending", ex);
+    }
+    p.parseCommit();
+    printf("read by the Program after the commit: %y\n", p.callFunction("peek"));
+}
+parse_pending();
 printf("done\n");
 ';
     }
@@ -259,6 +283,8 @@ printf("done\n");
             "local of a deleted Program, written in a closure: PROGRAM-ERROR\n"
             "local of a deleted Program, read in a global variable: PROGRAM-ERROR\n"
             "local of a deleted Program, written in a global variable: PROGRAM-ERROR\n"
+            "written in a global variable while a parse is pending: \"ok\"\n"
+            "read by the Program after the commit: 3\n"
             "done\n";
     }
 

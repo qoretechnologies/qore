@@ -618,6 +618,10 @@ int ObjCountRec::getDifference() {
 LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
+    // the reference's Program is kept until the lvalue has been used, not only while it is resolved
+    if (keepReferenceProgram(*lvalue_ref::get(&ref))) {
+        return;
+    }
     RuntimeReferenceHelper rh(ref, xsink);
     if (!*xsink) {
         doLValue(lvalue_ref::get(&ref)->vexp, for_remove);
@@ -627,6 +631,10 @@ LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool 
 LValueHelper::LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
+    // see LValueHelper(const ReferenceNode&, ExceptionSink*, bool, bool)
+    if (keepReferenceProgram(*lvalue_ref::get(&ref))) {
+        return;
+    }
     RuntimeReferenceHelper rh(ref, xsink);
     if (!*xsink) {
         doLValue(lvalue_ref::get(&ref)->vexp, rc, for_remove);
@@ -838,6 +846,19 @@ LValueHelper::~LValueHelper() {
         }
     }
 
+    // the Programs of the references that the lvalue was reached through are left now that it has been used, and
+    // before the values that the write replaced are released, whose destructors run code of their own Programs
+    if (ref_pgm) {
+        int tid = q_gettid();
+        qore_program_private::decThreadCount(*ref_pgm, tid, vl.xsink);
+        if (ref_pgms) {
+            for (QoreProgram* p : *ref_pgms) {
+                qore_program_private::decThreadCount(*p, tid, vl.xsink);
+            }
+            delete ref_pgms;
+        }
+    }
+
     // Release the values the write replaced or removed only now, after the scan: the recursive sets they were in
     // still count the edges that pointed at them until that scan has repaired them, so releasing one before it
     // would compare what is left of its references - from outside the set - with those counts, find them equal,
@@ -927,11 +948,35 @@ int LValueHelper::set(const ReferenceNode& ref, bool for_remove) {
     assert(!val);
     assert(!qv);
     assert(!typeInfo);
+    // see LValueHelper(const ReferenceNode&, ExceptionSink*, bool, bool)
+    if (keepReferenceProgram(*lvalue_ref::get(&ref))) {
+        return -1;
+    }
     RuntimeReferenceHelper rh(ref, vl.xsink);
     if (!*vl.xsink) {
         doLValue(lvalue_ref::get(&ref)->vexp, for_remove);
     }
     return *vl.xsink ? -1 : 0;
+}
+
+int LValueHelper::keepReferenceProgram(const lvalue_ref& r) {
+    QoreReferenceProgramHelper rph(r, vl.xsink);
+    if (!rph) {
+        return -1;
+    }
+    QoreProgram* p = rph.release();
+    if (!p) {
+        return 0;
+    }
+    if (!ref_pgm) {
+        ref_pgm = p;
+        return 0;
+    }
+    if (!ref_pgms) {
+        ref_pgms = new std::vector<QoreProgram*>;
+    }
+    ref_pgms->push_back(p);
+    return 0;
 }
 
 void LValueHelper::saveTemp(QoreValue val) {
@@ -1552,9 +1597,9 @@ int LValueHelper::doLValue(const ReferenceNode* ref, bool for_remove) {
     lvid_set->insert(r->lvalue_id);
     //printd(5, "LValueHelper::doLValue() this: %p ReferenceNode: %p r->vexp: %s ti: %s\n", this, ref,
     //    r->vexp.getFullTypeName(), QoreTypeInfo::getName(r->typeInfo));
-    // the lvalue of a reference of a deleted Program is freed with it
-    QoreReferenceProgramHelper rph(*r, vl.xsink, true);
-    if (!rph) {
+    // the lvalue of a reference of a deleted Program is freed with it: the Program is kept until the lvalue has been
+    // used
+    if (keepReferenceProgram(*r)) {
         return -1;
     }
     return doLValue(r->vexp, for_remove);
@@ -1575,9 +1620,8 @@ int LValueHelper::doLValue(const ReferenceNode* ref, RuntimeConfig& rc, bool for
     // a reference to a reference, however it's safe to insert it multiple times;
     // the reference count for the lvalue_id object is handled elsewhere
     lvid_set->insert(r->lvalue_id);
-    // the lvalue of a reference of a deleted Program is freed with it
-    QoreReferenceProgramHelper rph(*r, vl.xsink, true);
-    if (!rph) {
+    // see doLValue(const ReferenceNode*, bool)
+    if (keepReferenceProgram(*r)) {
         return -1;
     }
     return doLValue(r->vexp, rc, for_remove);
@@ -3984,7 +4028,7 @@ void LocalVarValue::remove(LValueRemoveHelper& lvrh, const QoreTypeInfo* typeInf
     if (val.getType() == NT_REFERENCE) {
         ReferenceNode* ref = reinterpret_cast<ReferenceNode*>(val.v.n);
         // the lvalue of a reference of a deleted Program is freed with it
-        QoreReferenceProgramHelper rph(*lvalue_ref::get(ref), lvrh.getExceptionSink(), true);
+        QoreReferenceProgramHelper rph(*lvalue_ref::get(ref), lvrh.getExceptionSink());
         if (rph) {
             lvrh.doRemove(lvalue_ref::get(ref)->vexp);
         }
@@ -4070,7 +4114,7 @@ void ClosureVarValue::remove(LValueRemoveHelper& lvrh) {
         ReferenceHolder<ReferenceNode> ref(reinterpret_cast<ReferenceNode*>(val.v.n->refSelf()), lvrh.getExceptionSink());
         sl.release();
         // the lvalue of a reference of a deleted Program is freed with it
-        QoreReferenceProgramHelper rph(*lvalue_ref::get(*ref), lvrh.getExceptionSink(), true);
+        QoreReferenceProgramHelper rph(*lvalue_ref::get(*ref), lvrh.getExceptionSink());
         if (rph) {
             lvrh.doRemove(lvalue_ref::get(*ref)->vexp);
         }
