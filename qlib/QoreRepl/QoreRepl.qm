@@ -147,11 +147,11 @@ restored.eval("/load session.q");
     parsing is blocked. Cancellation can be caught or deferred; it never forcibly kills a native thread.
 
     Embedders use @ref QoreRepl::QoreRepl::inspectRequest() "inspectRequest()" to offer Wait, Cancel request, and
-    Terminate threads before submission. Capture @ref QoreRepl::QoreRepl::getProgram() "getProgram()" and call
-    @ref Qore::Program::waitForThreads() "waitForThreads()" from a worker, then post its completion to the UI's
-    event loop. This condition-driven wait includes starting threads and descendants. Cancel the monitor worker
-    when the UI closes; cancelling a pending request leaves the Program and input intact. Recheck before retrying:
-    an idle notification does not reserve the Program against new externally-started work.
+    Terminate threads before submission, and resume a waiting request when the session reports that the Program
+    became idle (the @c program-idle event, see @ref qorerepl_thread_events), so no thread has to wait for it.
+    Cancelling a pending request leaves the Program and input intact. Recheck before retrying: an idle
+    notification does not reserve the Program against new externally-started work, and
+    @ref QoreRepl::QoreRepl::eval() "eval()" checks again in any case.
 
     @code{.py}
 QoreRepl repl();
@@ -163,10 +163,67 @@ repl.eval("/join all");
 repl.eval("/reset");
     @endcode
 
+    @c /threads lists the threads running the Program's code; background threads started by the session's code
+    are listed with how long they have run, the thread that started them and whether cancellation was requested.
     @c /join waits for threads to leave this Program, including its exit handlers, not for final process-level
     thread-local cleanup. @ref Qore::thread_join() "thread_join()" provides that stronger guarantee to an embedder
     that owns the process-level thread. @ref QoreRepl::QoreRepl::getHelpText() "getHelpText(False)" omits linenoise
     shortcuts so other frontends can supply their own keyboard help.
+
+    @subsection qorerepl_thread_events Session Events and Thread Notices
+
+    A session reports the background threads that its code starts, so that a frontend can tell the user that work
+    is running, how much, and how it ended, without monitoring threads itself:
+    @ref QoreRepl::QoreRepl::addEventListener() "addEventListener()" adds a listener that receives a
+    @ref QoreRepl::ReplEvent "ReplEvent" for each event:
+    - @c thread-started, @c thread-cancel-requested and @c thread-finished: a background thread started in the
+      session's Program, cancellation was requested for it, or it ended, with how it ended (normally, by an
+      exception, cancelled, interrupted, by @c thread_exit, or it failed to start) and the exception
+    - @c program-busy and @c program-idle: the Program became active or idle; parsing, @c /type, @c /load and
+      @c /reset need an idle Program
+    - @c eval-started and @c eval-finished: the session ran code in the Program (foreground evaluation)
+    - @c program-replaced: @c /reset replaced the Program; the events that follow are about the new one
+
+    Only threads started by the session's code are reported: not the threads of the embedding application, such as
+    a worker that calls @ref QoreRepl::QoreRepl::eval() "eval()" or one that reads captured output.  The events are
+    built on @ref Qore::Program::subscribeThreadEvents() "Program::subscribeThreadEvents()": one thread of the
+    session delivers them in order, and a thread that starts and ends between two updates of a UI is reported as
+    well.  @ref QoreRepl::QoreRepl::getBackgroundThreads() "getBackgroundThreads()" returns the running background
+    threads and @ref QoreRepl::QoreRepl::isProgramIdle() "isProgramIdle()" the Program's state, as of the last event
+    delivered (or from a snapshot when the session has no listeners).  The thread that delivers the events runs
+    while the session has listeners: removing the last one, @ref QoreRepl::QoreRepl::close() "close()" and the
+    destructor end it.  A process waits for its threads before it ends, so a script removes its listeners or closes
+    the session when it no longer needs the events; a listener that refers to the session keeps it alive until
+    then.
+
+    @ref QoreRepl::QoreRepl::formatThreadNotices() "formatThreadNotices()" turns a batch of events (the events a
+    frontend received since it last displayed notices) into notices, at a level set with the
+    @c thread_notifications option, @ref QoreRepl::QoreRepl::setThreadNoticeLevel() "setThreadNoticeLevel()" or
+    the @c /notify command:
+
+    |!Level|!Notices
+    |@c all|a notice for each thread event
+    |@c summary|starts, ends and cancellation requests grouped by kind; a thread that started and ended in the batch is reported once; failures one by one (the default)
+    |@c failures|only threads that ended with an exception, were interrupted or failed to start, and errors in a thread's cleanup
+    |@c off|nothing
+
+    @code{.py}
+QoreRepl repl();
+Queue events();
+repl.addEventListener(sub (hash<ReplEvent> ev) { events.push(ev); });
+repl.eval("background sub () { sleep(40); }();");
+# in the frontend's event loop: display the notices of the events received so far
+list<hash<ReplEvent>> batch;
+while (events.size()) {
+    batch += events.get();
+}
+foreach string notice in (repl.getThreadNotices(batch)) {
+    printf("%s\n", notice);   # ex: "Thread 17 started", later "Thread 17 finished (40.0s)"
+}
+repl.close();
+    @endcode
+
+    The interactive loop of @ref QoreRepl::QoreRepl::run() "run()" prints the notices before each prompt.
 
     @subsection qorerepl_websocket WebSocket Server Example
 

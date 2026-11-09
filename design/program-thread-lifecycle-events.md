@@ -268,38 +268,70 @@ the consumer releases the object, as for a `Socket` event queue.
 
 ### Session events
 
-`QoreRepl` subscribes its Program with `PTE_ALL` and runs one dispatcher thread for the session (started with
-the first listener, ended by `close()`). The dispatcher belongs to the REPL's own Program, so it, the evaluation
-worker of a frontend and any capture threads are never reported as user threads: only `background` threads of the
-evaluated Program are.
+`QoreRepl` (`qlib/QoreRepl/QoreRepl.qc`) delegates to a `ReplEventDispatcher` (`qlib/QoreRepl/QoreReplEvents.qc`),
+created with the session. While the session has listeners, a `ReplEventDelivery` subscribes the session's Program
+with `PTE_ALL` and runs one thread that reads the subscription's queue, keeps the state of the background threads
+and calls the listeners in order, without a lock held. When the last listener is removed, the delivery
+unsubscribes and its thread ends: a process waits for its threads before it ends (the `qore` binary's interactive
+mode removes its listener when `run()` returns), so a session without listeners runs no thread, and reports its
+state from a snapshot (a subscription made and removed at once). The thread belongs to the module's
+Program, so it, a frontend's evaluation worker and any capture threads are never reported as user threads: only
+`background` threads started in the evaluated Program are.
 
 ```
 int QoreRepl::addEventListener(code<nothing(hash<ReplEvent>)> listener)
 bool QoreRepl::removeEventListener(int id)
-list<hash<ReplThreadInfo>> QoreRepl::getBackgroundThreads()
+list<hash<ProgramThreadInfo>> QoreRepl::getBackgroundThreads()
+bool QoreRepl::isProgramIdle()
+QoreRepl::close()
 ```
 
-`ReplEvent` types: `thread-started`, `thread-cancel-requested`, `thread-finished`, `eval-started`, `eval-finished`,
-`program-idle`, `program-busy`, `program-replaced`. Listener exceptions are caught and do not stop delivery.
+`hash<ReplEvent>`: `event`, `program_id`, `running` (background threads running after the event), `idle`,
+`thread` (the Program's `ProgramThreadEvent`, for thread events), `threads` (`program-replaced`) and `input`
+(evaluation events). Events: `thread-started`, `thread-cancel-requested`, `thread-finished`, `program-busy`,
+`program-idle` (from `ACTIVITY`), `eval-started` and `eval-finished` (around requests that run code in the
+Program: code, and the commands that need an idle Program; pushed to the same queue, so they are ordered with the
+thread events), and `program-replaced`. A listener's exception is ignored, so that it stops neither the other
+listeners nor the delivery.
 
-`/reset` unsubscribes the old Program, subscribes the new one, and publishes `program-replaced` with the new
-snapshot; events of an old subscription still in the queue are discarded by `subscription_id`. `/threads` uses
-`getBackgroundThreads()` (age, parent, cancel requested). `/cancel` and `/join` keep their semantics; the
-`REPL-THREADS-ACTIVE` guard keeps using `getThreadCount()`, as any entry blocks parsing.
+- **Lifetime.** The delivering thread holds the delivery and the dispatcher, not the `QoreRepl` object, so a
+  session that is released is destroyed, and its destructor stops the dispatcher (`stop()`: unsubscribes, pushes a
+  stop message and waits for the thread to end, unless it is called by the thread itself, from a listener). Each
+  delivery has a queue of its own, so a delivery started after another ended never reads its messages. A listener that refers to
+  the session keeps it alive until it is removed or `close()` is called; frontends call `close()` when they end.
+  After `close()`, the methods that deliver events or report threads raise `REPL-ERROR`; evaluation goes on.
+- **Reset.** `/reset` calls `setProgram()`: under the dispatcher's lock it unsubscribes the old Program, subscribes
+  the new one (taking its snapshot) and queues `program-replaced`; events of the old subscription still in the
+  queue are discarded by `subscription_id`. The new Program has run no code, so no event of it can come before
+  `program-replaced`.
+- **State.** While events are delivered, `getBackgroundThreads()` and `isProgramIdle()` report the state as of the
+  last event processed (the subscription's snapshot at first): a thread that has just been started can be missing.
+  Without listeners they report a snapshot taken when called. Lock order: the dispatcher's lock, then the
+  delivery's; the delivering thread takes them one at a time.
+- **Commands.** `/threads` lists the threads that block parsing (`Program::getThreadList()`, as the
+  `REPL-THREADS-ACTIVE` guard counts entries); background threads are listed with how long they have run, the
+  thread that started them and whether cancellation was requested, other threads as calling the Program's code.
+  `/cancel` and `/join` keep their semantics.
 
 ### Notices
 
-`QoreRepl::formatThreadNotices(list<hash<ReplEvent>> events)` turns a batch of events into notice lines, grouping by
-type within the batch (ex: `3 threads started (17, 18, 19)`); a thread that starts and finishes within one batch is
-reported once, as finished. Grouping uses the batch the consumer drained; there is no timer.
+`QoreRepl::formatThreadNotices(list<hash<ReplEvent>> events, string level = "summary")` (static) and
+`getThreadNotices(events)` (at the session's level) turn a batch of events into notice lines
+(`ReplThreadNoticeFormatter`). Only thread events produce notices. In `summary`, starts, ends (`COMPLETED`,
+`EXITED`), cancellations and cancellation requests are grouped by kind within the batch (ex:
+`3 threads started (17, 18, 19)`); a thread that starts and finishes within one batch is reported once, as
+finished; a request whose thread was cancelled in the batch is reported by the cancellation; failures
+(`EXCEPTION`, `INTERRUPTED`, `START_FAILED`) and errors in a thread's cleanup are reported one by one, after the
+grouped notices. Grouping uses the batch the consumer drained; there is no timer.
 
-Verbosity is the `thread_notifications` option and the `/notify` command:
+Verbosity is the `thread_notifications` option, `setThreadNoticeLevel()` and the `/notify [level]` command
+(`/notify` alone shows it); an invalid level raises `REPL-ERROR`:
 
 | Level | Notices |
 |---|---|
-| `all` | every event, one line each |
-| `summary` | grouped starts, finishes, cancellation requests and failures (default) |
-| `failures` | `EXCEPTION`, `INTERRUPTED` and `START_FAILED` only |
+| `all` | every thread event, one line each |
+| `summary` | grouped starts, ends, cancellations and requests; failures one by one (default) |
+| `failures` | `EXCEPTION`, `INTERRUPTED` and `START_FAILED`, and errors in a thread's cleanup |
 | `off` | none |
 
 Examples:
@@ -312,11 +344,13 @@ Thread 18 cancelled
 Thread 19 failed: ERR: description (<repl:3>:1)
 ```
 
+The linenoise `run()` loop adds a listener (unless the level is `off`) and prints the notices of the events
+received before each prompt.
+
 ### Other frontends
 
 - `QoreReplActionSession::setEmitter()` (`design/action-session-services.md`) emits the session events.
 - The WebSocket connection sends `thread` and `activity` messages; `QoreReplApi.asyncapi.yaml` documents them.
-- The linenoise `run()` loop prints queued notices before each prompt.
 
 ## module-ncurses (`bin/qrepl`)
 
@@ -344,9 +378,11 @@ Thread 19 failed: ERR: description (<repl:3>:1)
   `qore -b --exec-mode=ir`.
 - `examples/test/ir/ThreadLifecycleEventModes.qtest`: the events of threads started by code in each execution mode
   (`ExecModeHarness.qm`), as compiled code starts threads through `do_op_background_helper()`.
-- `examples/test/qlib/QoreRepl/QoreReplThreadEvents.qtest`: listener delivery, reset and stale events, grouping per
-  verbosity level, exclusion of infrastructure threads, close with threads active; WebSocket and action session
-  event tests.
+- `examples/test/qlib/QoreRepl/QoreReplThreadEvents.qtest`: listener delivery and order, evaluation and activity
+  events, cancellation, the threads' state and `/threads`, nested threads, reset and stale events, exclusion of
+  the embedding application's threads, listener exceptions and removal, a listener calling the session, `close()`
+  (also from a listener) and the destructor, and the notices at each level and `/notify`.
+- WebSocket and action session event tests (phase 3).
 - `module-ncurses/test/ncurses-qrepl-live.qtest`: notices preserve the draft and cursor, live status count, dialogs
   close on idle and resume or cancel the right request, `/notify`, quit with threads active.
 
