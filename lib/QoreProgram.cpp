@@ -2760,6 +2760,31 @@ void qore_debug_check_freed_node_not_opaque_target(const AbstractQoreNode* n) {
 }
 #endif
 
+QoreProgram* qore_program_private_base::getOpaqueTargetProgram(const AbstractQoreNode* n) {
+    assert(n);
+    OpaqueTargetShard& shard = getOpaqueTargetShard(n);
+    AutoLocker al(shard.lock);
+    auto i = shard.targets.find(const_cast<AbstractQoreNode*>(n));
+    return i == shard.targets.end() ? nullptr : i->second.pgm;
+}
+
+void qore_program_private_base::setOpaqueTargetProgram(AbstractQoreNode* n, QoreProgram* pgm) {
+    assert(n);
+    assert(pgm);
+    OpaqueTargetShard& shard = getOpaqueTargetShard(n);
+    AutoLocker al(shard.lock);
+    auto i = shard.targets.find(n);
+    if (i == shard.targets.end()) {
+        shard.targets.insert(opaque_target_map_t::value_type(n, OpaqueTargetInfo{pgm, 1}));
+#ifdef DEBUG
+        opaque_target_count.fetch_add(1);
+#endif
+        return;
+    }
+    assert(i->second.count == 1);
+    i->second.pgm = pgm;
+}
+
 void qore_program_private_base::clearOpaqueTargets(ExceptionSink* xsink) {
     // take this Program's entries out of the registry under the lock, then do all the work outside
     // it: deleting an object runs its destructor, which is user code

@@ -1100,7 +1100,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
         // create an untyped list
         if (!l) {
             // save the old value for dereferencing outside any locks that may have been acquired
-            saveTemp(getValue().getInternalNode());
+            saveCurrentValue();
             const QoreTypeInfo* valueTypeInfo;
             if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
                 valueTypeInfo = nullptr;
@@ -1241,7 +1241,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         // create an untyped list
         if (!l) {
             // save the old value for dereferencing outside any locks that may have been acquired
-            saveTemp(getValue().getInternalNode());
+            saveCurrentValue();
             const QoreTypeInfo* valueTypeInfo;
             if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
                 valueTypeInfo = nullptr;
@@ -1378,7 +1378,7 @@ int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) 
         if (!h) {
             //printd(5, "LValueHelper::doHashLValue() this: %p saving value to dereference before making hash: %p "
             //    "'%s'\n", this, vp, get_type_name(vp));
-            saveTemp(getValue().getInternalNode());
+            saveCurrentValue();
             assignNodeIntern((h = new QoreHashNode(QoreTypeInfo::getElementType(
                 QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo)
             ))));
@@ -2095,7 +2095,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                     }
                     if (!l) {
                         // save the old value for dereferencing outside locks
-                        saveTemp(getValue().getInternalNode());
+                        saveCurrentValue();
                         const QoreTypeInfo* valueTypeInfo;
                         if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo
                             || typeInfo == listOrNothingTypeInfo) {

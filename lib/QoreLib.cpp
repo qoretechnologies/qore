@@ -3627,9 +3627,18 @@ QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* copy) {
     if (v.isOpaque()) {
         // an object is never copied
         assert(!v.isOpaqueObject());
+        // the Program responsible for the registration that the copy replaces, if any
+        QoreProgram* owner = qore_program_private::getOpaqueTargetProgram(v.getInternalNode());
+        // registers the copy with the current Program, if any
         QoreValue rv = v.isOpaqueHash()
             ? QoreValue::makeOpaqueHash(static_cast<QoreHashNode*>(copy))
             : QoreValue::makeOpaqueList(static_cast<QoreListNode*>(copy));
+        // the copy keeps the registration's Program: the teardown that breaks a cycle through the reference must not
+        // depend on whether the change copied the container, and a change made by another Program's code would
+        // otherwise give the copy to a Program whose teardown never reaches the cycle
+        if (owner) {
+            qore_program_private::setOpaqueTargetProgram(copy, owner);
+        }
         // the opaque value took a reference of its own; the copy is not shared, so this does not release it
         copy->deref(nullptr);
         return rv;

@@ -877,8 +877,8 @@ void ensure_unique(QoreValue& v, ExceptionSink* xsink);
 
 //! Returns a value holding \a copy, a copy of the hash or list that \a v holds, in the representation of \a v
 /** A copy of a container held through an opaque reference (the \c \@= operator) is held through an opaque
-    reference, with a registration of its own with the opaque target registry; any other copy is held as an
-    ordinary value.  A write through an opaque reference changes the container that the reference holds: when the
+    reference, with a registration of its own with the opaque target registry, with the Program of the registration
+    of \a v (the current Program if \a v has none); any other copy is held as an ordinary value.  A write through an opaque reference changes the container that the reference holds: when the
     container is shared, the reference is given a copy to change (copy-on-write), and the reference stays opaque,
     as it does when the container is changed in place, so that whether the collector follows the edge never
     depends on whether the container was shared.

@@ -26,7 +26,8 @@
       crashed at exit in tiered execution so (QoreModuleManager::delUser()), and a library with debugging aborts when
       such a target is freed.
 
-    The releases that the cases check (Cases):
+    Cases are the cases that failed before the fixes of the releases they check; each fix is made in its own commit,
+    so a case fails before the fix of its own release only:
     - the locals of an object type (a class, \c object, also optional) keep their value in IR storage in the IR, JIT
       and tiered execution modes, which marks the object with a real reference; their release (the IR interpreter's
       slot cache and qore_rt_object_slot_release() for native code) released the object with QoreObject::realDeref()
@@ -35,13 +36,20 @@
       node (LValueHelper::assign());
     - a change through an opaque reference to a container that is shared copies the container (copy-on-write); the
       copy replaced the opaque value as an ordinary value and the value replaced was released as a plain node
-      (LValueHelper::ensureUnique(), also for a push in native code), in every execution mode;
+      (LValueHelper::ensureUnique()), in every execution mode;
     - the \c hash<auto!> and \c list<auto!> coercion of a typed container read through an opaque reference copies it
-      and released the value it replaced as a plain node (QoreTypeInfo::applyNoNarrowCoercion()).
+      and released the value it replaced as a plain node (QoreTypeInfo::applyNoNarrowCoercion());
+    - an lvalue path that makes a list or a hash of a value held through an opaque reference (\c h.a[0] \c = \c 1 for
+      an object, \c h.il.x \c = \c 1 for a list) released the value it replaced as a plain node (LValueHelper's
+      list and hash lvalues), in every execution mode.
+
+    The push of native code (qore_rt_list_push_*()), which also copies a list held through an opaque reference, is not
+    reached by these cases: a push through an lvalue path (\c push \c h.il, \c 3) is made through LValueHelper.
 
     GuardCases hold values read through an opaque reference on paths that release them with their registration
     already (foreach variables, locals of no type, container values assigned with \c \@= or \c :=, a value read
-    through a reference); they fail neither before nor after the fix and keep these paths checked.
+    through a reference, other operators on values held with \c \@=); they fail neither before nor after the fixes
+    and keep these paths checked.
 
     The driver script parses each case in a child Program in the execution mode given, calls a function that stores
     two objects with \c \@= and gives a value read through an opaque reference to the code of the case, and checks
@@ -50,7 +58,10 @@
     JIT and tiered execution run it as native code (ExecModeHarness::TraceEnv); the tiered run on the IR tier
     (ExecModeHarness::run_ir_tier()) runs it with the IR interpreter in every call.  The driver also checks that a
     container held through an opaque reference stays held through one when a change copies it: a cycle through the
-    copy is not collected while the Program lives, and is broken by its teardown.
+    copy is not collected while the Program lives, and is broken by its teardown, for every change in CycleCases
+    made while the container is shared and while it is not.  A copy keeps the registration's Program: the
+    teardown of the Program owning a cycle breaks it when the driver's code or another Program's code changes the
+    container, shared or not.
 
     The cases also run in the driver's own Program, compiled into an executable by qcc as well (AotScript): there, a
     target freed while registered aborts a library with debugging, and the teardown of the Program at exit reads it
@@ -58,7 +69,7 @@
 */
 class DgcOpaqueObjectLocalReleaseTest inherits QUnit::Test {
     public {
-        #! the cases whose release of a value read through an opaque reference left its registration before the fix
+        #! the cases whose release of a value read through an opaque reference left its registration before its fix
         const Cases = {
             "class local": "N x = h.a;",
             "object local": "object x = h.a;",
@@ -78,6 +89,10 @@ class DgcOpaqueObjectLocalReleaseTest inherits QUnit::Test {
                 "h.il[1] = 3;",
             "list held with @= pushed to": "list<auto> inner = (); inner[0] = a; h.il @= inner; push h.il, 3;",
             "list held with @= appended to": "list<auto> inner = (); inner[0] = a; h.il @= inner; h.il += 3;",
+            "list held with @= given a number": "list<auto> inner = (); inner[0] = a; a.other = inner; "
+                "h.il @= inner; h.il += 1n;",
+            "hash held with @= changed through a list index": "hash<auto> inner = {}; inner.o = a; a.other = inner; "
+                "h.ih @= inner; h.ih[0][0] = 1;",
             "typed hash held with @= given to a hash<auto!> local": "hash<string, N> inner = {\"o\": a}; "
                 "h.ih @= inner; hash<auto!> c = h.ih; c.x = \"str\";",
             "typed hash held with @= given to a hash<auto!> parameter": "hash<string, N> inner = {\"o\": a}; "
@@ -86,6 +101,10 @@ class DgcOpaqueObjectLocalReleaseTest inherits QUnit::Test {
                 "list<auto!> c = h.il; c += \"str\";",
             "typed list held with @= given to a list<auto!> parameter": "list<N> inner = (a,); h.il @= inner; "
                 "change_list(h.il);",
+            # an lvalue path that makes a container of a value held with @= (LValueHelper::saveCurrentValue())
+            "object held with @= replaced by a list": "h.a[0] = 1;",
+            "list held with @= replaced by a hash": "list<auto> inner = (); inner[0] = a; a.other = inner; "
+                "h.il @= inner; h.il.x = 1;",
         };
 
         #! cases on paths that release a value read through an opaque reference with its registration already
@@ -97,6 +116,44 @@ class DgcOpaqueObjectLocalReleaseTest inherits QUnit::Test {
             "object member assigned with @=": "Holder hold(); hold.slot @= h.a;",
             "hash value assigned with :=": "hash<auto> h2 = {}; h2.c := h.a;",
             "object read through a reference": "reference<auto> r = \\h.a; auto v = r; v = r; v = r;",
+            "list held with @= assigned an int": "list<auto> inner = (); inner[0] = a; a.other = inner; "
+                "h.il @= inner; h.il = 1;",
+            "list held with @= decremented": "list<auto> inner = (); inner[0] = a; a.other = inner; "
+                "h.il @= inner; h.il -= 1;",
+            "object held with @= given a string": "h.a += \"x\";",
+        };
+
+        #! changes through an opaque reference to a container in a cycle, which the teardown must break
+        /** Each one is made while the container is shared, so that the change copies it, and while it is not
+        */
+        const CycleCases = {
+            "hash set": "d.h.ih.x = 2;",
+            "hash nested set": "d.h.ih.s.t = 2;",
+            "hash string +=": "d.h.ih.q += \"x\";",
+            "hash +=": "d.h.ih += {\"z\": 1};",
+            "hash -=": "d.h.ih -= \"q\";",
+            "hash remove": "remove d.h.ih.q;",
+            "hash delete": "delete d.h.ih.q;",
+            "hash trim": "trim d.h.ih;",
+            "hash chomp": "chomp d.h.ih;",
+            "hash reference": "reference<auto> r = \\d.h.ih; r.x = 1; r.y = 2;",
+            "hash reference argument": "sub (reference<hash<auto>> r) { r.x = 1; }(\\d.h.ih);",
+            "hash twice": "d.h.ih.x = 1; d.h.ih.y = 2;",
+            "hash two opaque": "d.h.ih2 @= d.h.ih; d.h.ih.x = 1; d.h.ih2.x = 1;",
+            "hash auto! local": "hash<auto!> c = d.h.ih; c.x = 1;",
+            "list set": "d.h.il[1] = 3;",
+            "list push": "push d.h.il, 3;",
+            "list +=": "d.h.il += 3;",
+            "list unshift": "unshift d.h.il, 3;",
+            "list splice": "splice d.h.il, 1, 1;",
+            "list extract": "extract d.h.il, 1, 1;",
+            "list pop": "pop d.h.il;",
+            "list shift": "push d.h.il, 1; d.h.il = (shift d.h.il,) + d.h.il;",
+            "list trim": "trim d.h.il;",
+            "list chomp": "chomp d.h.il;",
+            "list element ++": "d.h.il[1]++;",
+            "list reference": "reference<auto> r = \\d.h.il; push r, 1;",
+            "list auto! local": "list<auto!> c = d.h.il; c += 1;",
         };
 
         #! the declarations that the code of the cases uses
@@ -110,6 +167,7 @@ class DgcOpaqueObjectLocalReleaseTest inherits QUnit::Test {
         const Script = '%%modern
 %%no-child-restrictions
 const Cases = %s;
+const CycleCases = %s;
 const Code = "%%modern\n"
     %s
     # returns an object stored with @= that the code of the case was given
@@ -145,6 +203,38 @@ const CowCode = "%%modern\n"
     "    h.ih.x = 2;\n"
     "    d.other = h;\n"
     "}\n";
+# a cycle d -> d.h -> (@=) container -> d, changed through the opaque reference while the container is shared or not
+const CycleCode = "%%modern
+our code report;
+our auto keep;
+# the strings that trim and chomp change
+our hash<auto> init;
+class D { public { hash<auto> h = {}; } destructor() { report(); } }
+sub build(bool shared) {
+    D d();
+    hash<auto> inner = {}; inner.d = d; inner.q = init.q; inner.s = init.s;
+    list<auto> il = (); il[0] = d; il[1] = init.b; il[2] = 7;
+    if (shared) { keep = (inner, il); }
+    d.h.ih @= inner;
+    d.h.il @= il;
+    remove inner; remove il;
+    %%s
+}
+";
+# a cycle through a hash held with @= in the Program that owns it, changed by the code of another Program
+const OwnerCode = "%%modern
+our code report;
+our auto keep;
+class D { public { hash<auto> h = {}; } destructor() { report(); } }
+D sub build(bool shared) {
+    D d();
+    hash<auto> inner = {}; inner.d = d;
+    if (shared) { keep = inner; }
+    d.h.ih @= inner;
+    return d;
+}
+";
+const WriterCode = "%%modern\nsub change(object d) { d.h.ih.x = 2; }\n";
 const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
 ExecMode mode = Modes{ARGV[0]};
 foreach hash<auto> i in (Cases.pairIterator()) {
@@ -176,6 +266,53 @@ foreach hash<auto> i in (Cases.pairIterator()) {
     printf("copy-on-write: %%d cycles collected while the Program lives\n", destroyed);
     delete p;
     printf("copy-on-write: %%d cycles broken by its teardown\n", destroyed);
+}
+foreach hash<auto> i in (CycleCases.pairIterator()) {
+    foreach bool shared in ((False, True)) {
+        int destroyed = 0;
+        code report = sub () { ++destroyed; };
+        Program p(new ParseOptions("allow-opaque-references"));
+        p.setExecMode(mode);
+        p.parse(sprintf(CycleCode, i.value), i.key);
+        p.setGlobalVarValue("report", report);
+        p.setGlobalVarValue("init", {"q": " a\n", "b": " b\n", "s": {"t": 1}});
+        for (int n = 0; n < 3; ++n) {
+            p.callFunction("build", shared);
+            p.setGlobalVarValue("keep", NOTHING);
+        }
+        int live = destroyed;
+        delete p;
+        printf("%%s (%%s): %%d collected while the Program lives, %%d broken by its teardown\n", i.key,
+            shared ? "shared" : "unique", live, destroyed - live);
+    }
+}
+# the Program owning a cycle breaks it at its teardown, whichever Program changes the container held with @=
+foreach string writer in (("another Program", "the driver")) {
+    foreach bool shared in ((False, True)) {
+        int destroyed = 0;
+        code report = sub () { ++destroyed; };
+        Program owner(new ParseOptions("allow-opaque-references"));
+        owner.setExecMode(mode);
+        owner.parse(OwnerCode, "owner");
+        owner.setGlobalVarValue("report", report);
+        {
+            object d = owner.callFunction("build", shared);
+            if (writer == "the driver") {
+                d.h.ih.x = 2;
+            } else {
+                Program w();
+                w.setExecMode(mode);
+                w.parse(WriterCode, "writer");
+                w.callFunction("change", d);
+                delete w;
+            }
+        }
+        owner.setGlobalVarValue("keep", NOTHING);
+        int live = destroyed;
+        delete owner;
+        printf("changed by %%s (%%s): %%d collected while the owner lives, %%d broken by its teardown\n", writer,
+            shared ? "shared" : "unique", live, destroyed - live);
+    }
 }
 printf("done\n");
 ';
@@ -284,15 +421,26 @@ printf("done\n");
     #! returns the output of the driver: every target is kept, a cycle through a copy-on-write copy is not collected
     #! while its Program lives, and the driver ends
     private static string getExpected() {
-        return (foldl $1 + $2, (map sprintf("%s: 3 of 3 kept\n", $1), keys getAllCases()))
+        string rv = (foldl $1 + $2, (map sprintf("%s: 3 of 3 kept\n", $1), keys getAllCases()))
             + "copy-on-write: 0 cycles collected while the Program lives\n"
-            + "copy-on-write: 3 cycles broken by its teardown\n"
-            + "done\n";
+            + "copy-on-write: 3 cycles broken by its teardown\n";
+        foreach string name in (keys CycleCases) {
+            foreach string kind in (("unique", "shared")) {
+                rv += sprintf("%s (%s): 0 collected while the Program lives, 3 broken by its teardown\n", name, kind);
+            }
+        }
+        foreach string writer in (("another Program", "the driver")) {
+            foreach string kind in (("unique", "shared")) {
+                rv += sprintf("changed by %s (%s): 0 collected while the owner lives, 1 broken by its teardown\n",
+                    writer, kind);
+            }
+        }
+        return rv + "done\n";
     }
 
     #! returns the driver script
     private static string getScript() {
-        return sprintf(Script, getHashLiteral(getAllCases()),
+        return sprintf(Script, getHashLiteral(getAllCases()), getHashLiteral(CycleCases),
             foldl $1 + "\n    " + $2, (map quote($1 + "\n"), Declarations.split("\n")));
     }
 
