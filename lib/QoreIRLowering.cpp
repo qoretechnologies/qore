@@ -19993,6 +19993,48 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, loc));
     QoreIRValue element_val = next_inst->result;
 
+    // an exception that leaves the stages or the body for a handler of this function releases the element, the
+    // iterator, the source and the loop variables first, as the AST interpreter unwinds the foreach statement before
+    // the handler runs; the stage expressions are covered too: routed to the handler directly, an exception that a
+    // stage raised released them only after the handler (qore#5655).  Only a loop whose source can hold an object
+    // has this block (see the cleanup entries below)
+    const bool foreach_source_may_hold_object = qore_ir_type_may_hold_object(getExprTypeInfo(base_source));
+    QoreIRBasicBlock* foreach_exception_cleanup_block = nullptr;
+    QoreIRBasicBlock* foreach_saved_exception_target = foreach_source_may_hold_object
+        ? getCurrentExceptionTarget() : nullptr;
+    if (foreach_saved_exception_target) {
+        foreach_exception_cleanup_block = createBlock("foreach.fused.exception.cleanup");
+        if (!foreach_exception_cleanup_block) {
+            error = "IR builder failed to create the fused foreach exception cleanup block";
+            return false;
+        }
+    }
+    // keeps the cleanup block on the exception stack while the stages and the body are lowered, on every path
+    class FusedForeachExceptionTargetScope {
+    public:
+        FusedForeachExceptionTargetScope(std::vector<QoreIRBasicBlock*>& stack, QoreIRBasicBlock* target)
+                : stack(stack), active(target != nullptr) {
+            if (active) {
+                stack.push_back(target);
+            }
+        }
+        ~FusedForeachExceptionTargetScope() {
+            end();
+        }
+        void end() {
+            if (active) {
+                stack.pop_back();
+                active = false;
+            }
+        }
+        FusedForeachExceptionTargetScope(const FusedForeachExceptionTargetScope&) = delete;
+        FusedForeachExceptionTargetScope& operator=(const FusedForeachExceptionTargetScope&) = delete;
+
+    private:
+        std::vector<QoreIRBasicBlock*>& stack;
+        bool active;
+    } foreach_exception_target_scope(exception_stack, foreach_exception_cleanup_block);
+
     builder.setBlock(body_block);
     FusedForeachState state{stage_indices, foreach_index};
     QoreIRValue one = builder.createConstInt(1, loc)->result;
@@ -20162,7 +20204,7 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     // variables, before the cleanups of the enclosing blocks run, as for the other value foreach loops (see
     // lowerStatement()); only a loop whose source can hold an object has these entries
     size_t foreach_source_entries = 0;
-    if (qore_ir_type_may_hold_object(getExprTypeInfo(base_source))) {
+    if (foreach_source_may_hold_object) {
         if (const LVList* loop_lvars = foreach_stmt->getLVList()) {
             BlockCleanupEntry lvars_entry;
             lvars_entry.type = BlockCleanupEntry::Lvars;
@@ -20182,20 +20224,6 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         ++foreach_source_entries;
     }
 
-    // an exception that leaves the body for a handler of this function releases the iterator, the source and the
-    // loop variables first, as for the other value foreach loops
-    QoreIRBasicBlock* foreach_exception_cleanup_block = nullptr;
-    QoreIRBasicBlock* foreach_saved_exception_target = foreach_source_entries ? getCurrentExceptionTarget() : nullptr;
-    if (foreach_saved_exception_target) {
-        foreach_exception_cleanup_block = createBlock("foreach.fused.exception.cleanup");
-        if (!foreach_exception_cleanup_block) {
-            error = "IR builder failed to create the fused foreach exception cleanup block";
-            cleanup_stack.resize(cleanup_stack.size() - foreach_source_entries);
-            return false;
-        }
-        exception_stack.push_back(foreach_exception_cleanup_block);
-    }
-
     FlowTarget ft;
     ft.break_target = exit_block;
     ft.continue_target = latch_block;
@@ -20211,18 +20239,13 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
             --loop_depth;
             flow_stack.pop_back();
             cleanup_stack.resize(cleanup_stack.size() - foreach_source_entries);
-            if (foreach_exception_cleanup_block) {
-                exception_stack.pop_back();
-            }
             return false;
         }
         --loop_depth;
     }
     flow_stack.pop_back();
     cleanup_stack.resize(cleanup_stack.size() - foreach_source_entries);
-    if (foreach_exception_cleanup_block) {
-        exception_stack.pop_back();
-    }
+    foreach_exception_target_scope.end();
 
     if (!blockHasTerminator(builder.getBlock())) {
         builder.createBranch(latch_block, loc);
