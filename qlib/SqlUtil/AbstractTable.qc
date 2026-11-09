@@ -1653,18 +1653,22 @@ list<auto> changes = source_table.getAlignSql(target);
             configurations so that a column with the name "driver" can be
             supported
         */
-        if (desc.columns.driver) {
-            *hash<auto> h = remove desc.columns.driver{SqlUtilDrivers + drv};
+        # a caller's column hash may be narrowed (e.g. to hash<string, hash<GenericColumnInfo>> when every column is
+        # a GenericColumnInfo hash, as in a description from getDescriptionHash()), and storing a column description
+        # with its driver options applied would throw, so the columns are processed in a copy that takes any value
+        *hash<auto!> columns = desc.columns;
+        if (columns.driver) {
+            *hash<auto> h = remove columns.driver{SqlUtilDrivers + drv};
             if (h) {
                 # if we have driver-specific info, add it to the columns hash
                 foreach string key in (drv) {
                     if (h{key}) {
-                        desc.columns += h{key};
+                        columns += h{key};
                     }
                 }
                 # if there is no column information, then delete the "driver" key
-                if (!desc.columns.driver)
-                    delete desc.columns.driver;
+                if (!columns.driver)
+                    delete columns.driver;
             }
         }
 
@@ -1700,12 +1704,13 @@ list<auto> changes = source_table.getAlignSql(target);
         }
 
         # process column definitions
-        foreach string cn in (desc.columns.keyIterator()) {
-            if (desc.columns{cn}.typeCode() != NT_HASH)
+        foreach string cn in (columns.keyIterator()) {
+            if (columns{cn}.typeCode() != NT_HASH)
                 throw "DESCRIPTION-ERROR", sprintf("%s: value assigned to column key %y is not a hash, got type %y "
-                    "instead (%y)", getDesc(), cn, desc.columns{cn}.type(), desc.columns{cn});
-            AbstractDatabase::checkDriverOptions(\desc.columns{cn}, drv);
+                    "instead (%y)", getDesc(), cn, columns{cn}.type(), columns{cn});
+            AbstractDatabase::checkDriverOptions(\columns{cn}, drv);
         }
+        desc.columns = columns;
 
         # a caller's literal partition hash may be narrowed (e.g. when every partition has only a "driver" key),
         # and storing a partition with its driver options applied would throw
