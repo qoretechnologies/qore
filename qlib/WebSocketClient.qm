@@ -145,6 +145,15 @@ module WebSocketClient {
     capabilities; use @ref WebSocketClient::WebSocketClient::isHttp2() "isHttp2()" and
     @ref WebSocketClient::WebSocketClient::isHttp3() "isHttp3()" to check which transport is in use.
 
+    Over HTTP/2 and HTTP/3, the server accepts the connection with any 2xx response to the extended \c CONNECT
+    request (RFC 8441, RFC 9220), which establishes a tunnel that stays open.  The handshake fails when the stream is
+    already ended with the response, as when a server that has no WebSocket endpoint for the path answers with a
+    page (in the default \c "auto" HTTP-version mode an HTTP/1.1 \c 101 Upgrade is tried then).  When the end of
+    the stream arrives in a later frame than the response, as with a body sent after the response headers, it cannot
+    be told apart from a tunnel that the server accepted and closed at once (RFC 9113 section 8.5, RFC 8441
+    section 5): the connection is then either refused in the handshake or reported as connected and closed right
+    after with the close code 1006 ("stream ended"), depending on whether the frames arrive together.
+
     All the public symbols in the module are defined in the WebSocketClient namespace.
 
     Currently the module provides the following classes:
@@ -332,6 +341,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
 
     @section wsc_v2_5 v2.5
+    - an HTTP/2 or HTTP/3 extended \c CONNECT that the server answers with a response that ends the stream (a
+      server without a WebSocket endpoint for the path) fails the handshake, so the connection is not reported as
+      connected and the \c "auto" mode tries the HTTP/1.1 Upgrade; any 2xx status accepts the connection, and the
+      status of a refusal is reported when the response's headers arrive with its body (issue #5668)
     - a thread of the client that is cancelled (e.g. with \c cancel_thread() or
       @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()") is no longer waited for by
       the destructor, and a cancelled @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" worker
@@ -5230,6 +5243,7 @@ ws.setEventQueue();
                     # drop the dead stream; the next acquireStream() evicts the closed
                     # connection at checkout and creates a fresh one
                     remove hcio_stream;
+                    remove hcio_frame_queue;
                     continue;
                 }
                 # The HTTP connection itself negotiated fine, but the RFC 8441/9220
@@ -5251,6 +5265,7 @@ ws.setEventQueue();
                 # discard the failed H2/H3 stream and manager so the H1 path opens a
                 # fresh H1-only connection (ensureHcioMgr() only creates one if unset)
                 remove hcio_stream;
+                remove hcio_frame_queue;
                 remove hcio_mgr;
                 return connectHttp1WebSocketViaHcio(hdr, \info, reconnect);
             }
@@ -5388,9 +5403,10 @@ ws.setEventQueue();
         # Validate status code BEFORE setting protocol flags — if validation
         # fails, the flags must remain False so fallback to H1 works correctly
         int status_code = rh.status_code ?? rh.headers.":status".toInt();
-        if (status_code != 200) {
+        # any 2xx response to CONNECT establishes the tunnel (RFC 9110 section 9.3.6)
+        if (status_code < 200 || status_code >= 300) {
             raiseError("%s server at URL %y returned status code '%d' to our WebSocket "
-                "CONNECT request; expecting '200 OK'",
+                "CONNECT request; expecting a 2xx status",
                 is_h3 ? "HTTP/3" : "HTTP/2", http_opts.url, status_code);
         }
 
@@ -5415,11 +5431,21 @@ ws.setEventQueue();
         # instead of the connection being reported as connected (in "auto" mode the HTTP/1.1 Upgrade is tried then);
         # the Content-Length of the response is not checked, as a client must ignore it in a successful response to
         # CONNECT (RFC 9110 section 9.3.6) (issue #5668)
+        # a stream that the destructor canceled is done as well
+        checkHandshakeCanceled();
         if (stream.isDone()) {
             raiseError("%s server at URL %y accepted the WebSocket CONNECT request but ended the stream with its "
                 "response; the resource is not a WebSocket endpoint", is_h3 ? "HTTP/3" : "HTTP/2", http_opts.url);
         }
         Queue frame_queue();
+        # an HTTP/2 stream's queue is registered before the frame state is installed, as the poll operation did:
+        # installFrameState() marks the registration for the queue as owned by the frame state, so that the
+        # connection does not read the stream's data itself; see WebSocketClientHcioPollOp::constructor()
+        HttpClientIo::HttpClientConnection frame_conn = stream.getConnection();
+        if (frame_conn instanceof HttpClientIo::Http2ClientConnection) {
+            cast<HttpClientIo::Http2ClientConnection>(frame_conn).registerStreamQueue(stream.getStreamId(),
+                frame_queue);
+        }
         try {
             stream.installFrameState(frame_queue);
         } catch (hash<ExceptionInfo> ex) {
@@ -5428,6 +5454,9 @@ ws.setEventQueue();
                 ex.desc);
         }
         hcio_frame_queue = frame_queue;
+        # the queue belongs to this handshake's stream: a failure after this point leaves no queue for a later
+        # connection
+        on_error remove hcio_frame_queue;
 
         # Set protocol flags AFTER successful validation
         if (is_h3) {
@@ -7703,7 +7732,10 @@ public class WebSocketClientHcioPollOp {
         #     socket, not WebSocketClientHcioPollOp.
         if (conn instanceof HttpClientIo::Http2ClientConnection) {
             auto h2conn = cast<HttpClientIo::Http2ClientConnection>(conn);
-            h2conn.registerStreamQueue(stream_id, msg_queue);
+            # the handshake registered the queue before it installed the frame state
+            if (!frame_queue) {
+                h2conn.registerStreamQueue(stream_id, msg_queue);
+            }
             h2conn.registerStreamListener(stream_id, self);
         } else if (conn instanceof HttpClientIo::Http3ClientConnection) {
             auto h3conn = cast<HttpClientIo::Http3ClientConnection>(conn);

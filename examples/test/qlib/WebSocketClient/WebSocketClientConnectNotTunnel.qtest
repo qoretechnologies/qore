@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) WebSocket handshakes over TLS connections, and a helper process
+# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) WebSocket handshakes over TLS connections, and helper processes
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -37,16 +37,54 @@ class PlainPageHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! a server that sends a handler's ordinary 2xx response to an extended CONNECT as it is (headers, body and the end of
+#! the stream together), as a server without the check of issue #5667 does
+class NoRefusalHttpServer inherits HttpServer {
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+    }
+
+    private bool refuseNonTunnelExtendedConnectResponse(hash<auto> cx, hash<auto> hdr, hash<auto> rv) {
+        return False;
+    }
+}
+
+#! keeps the messages that the client logs
+class LogCapture inherits LoggerAppenderWithLayout {
+    private {
+        list<string> messages = ();
+        Mutex lck();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            AutoLock al(lck);
+            messages += params;
+        }
+    }
+
+    #! returns the messages logged since the last call and clears them
+    list<string> takeMessages() {
+        AutoLock al(lck);
+        on_exit messages = ();
+        return messages;
+    }
+}
+
 #! issue #5668: a WebSocket client does not report an HTTP/2 or HTTP/3 CONNECT that the server did not tunnel as connected
 /** The client accepted an extended CONNECT on a 200 status alone, reported the connection as connected and failed
-    later (\c HTTPCLIENT-STREAM-CLOSED: cannot install frame state), when the server had answered with a page and the
+    later (\c HTTPCLIENT-STREAM-CLOSED: cannot install frame state) when the server had answered with a page and the
     end of the stream; in "auto" mode the documented HTTP/1.1 fallback was not tried, as the failure came after the
     handshake.  An HTTP/3 refusal whose headers, body and end of stream arrived together was reported as "no response
-    received".  The handshake now installs the frame state and fails when the stream is closed.
+    received", and only the status 200 accepted a connection, where any 2xx status establishes the tunnel.
 */
 class WebSocketClientConnectNotTunnelTest inherits Test {
     private {
-        *Logger logger;
+        Logger logger;
+        LogCapture log_capture();
 
         const CertPem = "-----BEGIN CERTIFICATE-----
 MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
@@ -99,22 +137,27 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     constructor() : Test("WebSocketClientConnectNotTunnelTest", "1.0") {
-        addTestCase("HTTP/2: a CONNECT answered with a 200 that ends the stream fails the handshake",
-            sub () { testH2("2.0"); });
-        addTestCase("HTTP/2 auto mode: the HTTP/1.1 Upgrade fallback is tried", sub () { testH2("auto"); });
-        addTestCase("HTTP/3: a refused CONNECT reports the server's status", sub () { testH3("3.0"); });
-        addTestCase("HTTP/3 auto mode: the HTTP/1.1 Upgrade fallback is tried", sub () { testH3("auto"); });
+        logger = new Logger("ws-connect-not-tunnel-test", LoggerLevel::getLevelInfo());
+        logger.addAppender(log_capture);
+        addTestCase("HTTP/2: a 200 with a body and the end of the stream fails the handshake",
+            sub () { testNoRefusal("2.0"); });
+        addTestCase("HTTP/3: a 200 with a body and the end of the stream fails the handshake",
+            sub () { testNoRefusal("3.0"); });
+        addTestCase("HTTP/2 or HTTP/3 auto mode: the HTTP/1.1 Upgrade fallback is tried",
+            sub () { testNoRefusal("auto"); });
+        addTestCase("HTTP/3: a refused CONNECT reports the server's status", \testH3Refused());
+        addTestCase("HTTP/2: a 200 that ends the stream in its HEADERS frame fails the handshake", \testH2HeadersOnly());
+        addTestCase("HTTP/2: a 202 response accepts the connection", \testH2Status202());
         set_return_value(main());
     }
 
     globalSetUp() {
-        logger = new Logger("ws-connect-not-tunnel-test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
             logger.addAppender(new StdoutAppender());
         }
     }
 
-    #! returns the error that connecting raises; a client that connected is a failure
+    #! connects and returns the error raised; asserts that no connection was reported
     private string connectError(WebSocketClient wsc, string label) {
         on_exit {
             try {
@@ -122,17 +165,22 @@ l50Xb2GWQesIt9k5jF5IOw==
             } catch () {
             }
         }
+        log_capture.takeMessages();
+        string err;
         try {
             wsc.connect();
+            err = "connected";
         } catch (hash<ExceptionInfo> ex) {
-            assertFalse(wsc.isOpen(), label + ": the client is not connected");
-            return sprintf("%s: %s", ex.err, ex.desc);
+            err = sprintf("%s: %s", ex.err, ex.desc);
         }
-        fail(label + ": the client reported the connection as connected");
+        assertFalse(wsc.isOpen(), label + ": the client is not connected");
+        list<string> connected = select log_capture.takeMessages(), $1 =~ /^Connected to /;
+        assertEq((), connected, label + ": no connection is reported");
+        return err;
     }
 
-    private WebSocketClient getClient(string url, string http_version) {
-        return new WebSocketClient(sub (*data msg) {}, {
+    private WebSocketClient getClient(string url, string http_version, *code cb) {
+        return new WebSocketClient(cb ?? sub (*data msg) {}, {
             "url": url,
             "logger": logger,
             "http_version": http_version,
@@ -142,30 +190,93 @@ l50Xb2GWQesIt9k5jF5IOw==
         });
     }
 
-    #! a server (node) that answers an HTTP/2 extended CONNECT with a 200 response that ends the stream
-    private testH2(string http_version) {
-%ifdef NoProcess
-        testSkip("the process module is not available");
-%else
-        string node_bin = ENV.NODE_BIN ?? "node";
-        if (system(node_bin + " -v > /dev/null 2>&1")) {
-            testSkip("node is not available");
-        }
-        TmpDir dir("ws-connect-not-tunnel-");
-        string cert = dir.path + "/cert.pem";
-        string key = dir.path + "/key.pem";
-        File f();
-        f.open2(cert, O_CREAT | O_TRUNC | O_WRONLY);
-        f.write(CertPem);
-        f.close();
-        f.open2(key, O_CREAT | O_TRUNC | O_WRONLY);
-        f.write(KeyPem);
-        f.close();
-        # the server ends the stream in the HEADERS frame of its 200 response, so that the end of the stream arrives with
-        # the status: a 200 whose end of stream arrives in a later frame cannot be told apart from a tunnel that the
-        # server accepted and closed at once, which the client reports as connected and then closed
-        Process p(node_bin, (get_script_dir() + "/http2-plain-200-server.js", cert, key, "headers-only"));
+    #! returns an HttpServer serving a page for every path, with a TLS listener with HTTP/3 enabled
+    private hash<auto> startServer(bool no_refusal) {
+        hash<HttpServerOptionInfo> opts({"logger": logger, "debug": True});
+        HttpServer server = no_refusal ? new NoRefusalHttpServer(opts) : new HttpServer(opts);
+        server.setHandler("plain", "", NOTHING, new PlainPageHandler());
+        server.setDefaultHandler("plain", new PlainPageHandler());
+        server.waitForAsyncIo();
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        });
+        server.waitForAsyncIo();
+        return {"server": server, "port": info.port};
+    }
+
+    #! a server that answers the extended CONNECT with its page (200, the body and the end of the stream together)
+    private testNoRefusal(string http_version) {
+        hash<auto> setup = startServer(True);
+        HttpServer server = setup.server;
         on_exit {
+            server.stop();
+        }
+        string err = connectError(getClient("wss://127.0.0.1:" + setup.port + "/ws", http_version), http_version);
+        if (http_version == "auto") {
+            # the HTTP/1.1 Upgrade gets the page: its status is the server's real answer
+            assertRegex("^WEBSOCKET-ERROR: HTTP server at URL .* returned status code '200' to our WebSocket request; "
+                "expecting '101", err, "auto: the fallback's answer");
+        } else {
+            # HTTP/3 delivers the response with the end of the stream (the stream is done when it is read); on HTTP/2
+            # the end of the stream is processed before the stream state shows it, and installing the frame state
+            # fails
+            string expected = http_version == "3.0"
+                ? "^WEBSOCKET-ERROR: HTTP/3 server at URL .* accepted the WebSocket CONNECT request but ended the "
+                    "stream with its response"
+                : "^WEBSOCKET-ERROR: HTTP/2 server at URL .* accepted the WebSocket CONNECT request but the stream is "
+                    "closed";
+            assertRegex(expected, err, http_version + ": the ended stream fails the handshake");
+        }
+    }
+
+    #! HttpServer refuses an HTTP/3 extended CONNECT to a handler that is not a socket handler (#5667)
+    private testH3Refused() {
+        hash<auto> setup = startServer(False);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+        }
+        string err = connectError(getClient("wss://127.0.0.1:" + setup.port + "/ws", "3.0"), "3.0");
+        assertRegex("^WEBSOCKET-ERROR: HTTP/3 .* returned status code '501'", err, "3.0: the refusal is reported");
+    }
+
+%ifdef NoProcess
+    private testH2HeadersOnly() {
+        testSkip("the process module is not available");
+    }
+
+    private testH2Status202() {
+        testSkip("the process module is not available");
+    }
+%else
+    #! returns the node binary, or skips the test if node cannot serve RFC 8441 extended CONNECT
+    private string getNode() {
+        string node_bin = ENV.NODE_BIN ?? "node";
+        if (system(node_bin + " -e \"process.exit(require('http2').constants.NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL "
+                "? 0 : 1)\" > /dev/null 2>&1")) {
+            testSkip("node with RFC 8441 extended CONNECT support is not available");
+        }
+        return node_bin;
+    }
+
+    #! writes the test certificate and key to the directory
+    private writeCert(TmpDir dir) {
+        foreach hash<auto> i in ({"cert.pem": CertPem, "key.pem": KeyPem}.pairIterator()) {
+            File f();
+            f.open2(dir.path + "/" + i.key, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(i.value);
+            f.close();
+        }
+    }
+
+    #! starts a node server script and returns the process and the port from its READY line
+    private hash<auto> startNode(string node_bin, list<string> args, *hash<string, string> env) {
+        Process p(node_bin, args, env ? {"env": Process::getEnvironment() + env} : NOTHING);
+        on_error {
             if (p.running()) {
                 p.terminate();
             }
@@ -180,43 +291,56 @@ l50Xb2GWQesIt9k5jF5IOw==
             line += s;
         }
         *string port = (line =~ x/READY ([0-9]+)/)[0];
-        assertTrue(exists port, "the node server reported its port: " + line);
-        string err = connectError(getClient("wss://127.0.0.1:" + port + "/ws", http_version), http_version);
-        if (http_version == "auto") {
-            # the HTTP/1.1 Upgrade gets the page: its status is the server's real answer
-            assertRegex("^WEBSOCKET-ERROR: .*returned status code '200'.*expecting", err, "auto: the fallback's answer");
-        } else {
-            assertRegex("^WEBSOCKET-ERROR: HTTP/2 .*accepted the WebSocket CONNECT request but (ended the stream|the "
-                "stream is closed)", err, "2.0: the closed stream fails the handshake");
+        if (!exists port) {
+            throw "TEST-ERROR", "the node server reported no port: " + line;
         }
-%endif
+        return {"process": p, "port": port};
     }
 
-    #! HttpServer, which refuses an HTTP/3 extended CONNECT to a handler that is not a socket handler (#5667)
-    private testH3(string http_version) {
-        HttpServer server(<HttpServerOptionInfo>{
-            "logger": logger,
-            "debug": True,
+    private stopNode(Process p) {
+        if (p.running()) {
+            p.terminate();
+        }
+        p.wait();
+    }
+
+    #! a server (node) that answers the extended CONNECT with a 200 response that ends the stream in its HEADERS frame
+    private testH2HeadersOnly() {
+        string node_bin = getNode();
+        TmpDir dir("ws-connect-not-tunnel-");
+        writeCert(dir);
+        hash<auto> h = startNode(node_bin, (get_script_dir() + "/http2-plain-200-server.js", dir.path + "/cert.pem",
+            dir.path + "/key.pem", "headers-only"));
+        on_exit stopNode(h.process);
+        string err = connectError(getClient("wss://127.0.0.1:" + h.port + "/ws", "2.0"), "2.0");
+        assertRegex("^WEBSOCKET-ERROR: HTTP/2 server at URL .* accepted the WebSocket CONNECT request but ended the "
+            "stream with its response", err, "2.0: the ended stream fails the handshake");
+    }
+
+    #! a WebSocket server (node) that accepts the extended CONNECT with 202: any 2xx status establishes the tunnel
+    private testH2Status202() {
+        string node_bin = getNode();
+        TmpDir dir("ws-connect-not-tunnel-");
+        writeCert(dir);
+        hash<auto> h = startNode(node_bin, (get_script_dir() + "/http2-ws-server.js", "0", dir.path + "/cert.pem",
+            dir.path + "/key.pem"), {"WS_CONNECT_STATUS": "202"});
+        on_exit stopNode(h.process);
+        Queue q();
+        WebSocketClient wsc = getClient("wss://127.0.0.1:" + h.port + "/ws", "2.0", sub (*data msg) {
+            if (exists msg) {
+                q.push(msg);
+            }
         });
         on_exit {
-            server.stop();
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
         }
-        server.setHandler("plain", "", NOTHING, new PlainPageHandler());
-        server.setDefaultHandler("plain", new PlainPageHandler());
-        server.waitForAsyncIo();
-        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
-            "node": "127.0.0.1",
-            "service": 0,
-            "cert": new SSLCertificate(CertPem),
-            "key": new SSLPrivateKey(KeyPem),
-            "enable_h3": True,
-        });
-        server.waitForAsyncIo();
-        string err = connectError(getClient("wss://127.0.0.1:" + info.port + "/ws", http_version), http_version);
-        if (http_version == "auto") {
-            assertRegex("^WEBSOCKET-ERROR: .*returned status code '200'.*expecting", err, "auto: the fallback's answer");
-        } else {
-            assertRegex("^WEBSOCKET-ERROR: HTTP/3 .*returned status code '501'", err, "3.0: the refusal is reported");
-        }
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "the connection uses HTTP/2");
+        wsc.send("hello");
+        assertEq("hello", q.get(10s), "the tunnel carries messages");
     }
+%endif
 }
