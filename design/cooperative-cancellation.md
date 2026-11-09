@@ -499,7 +499,20 @@ Converted waits:
 | `Mutex`, `RWLock`, `Gate`, `AutoLock`, `AutoReadLock`, `AutoWriteLock`, `AutoGate`, `Condition::wait()` | `VLockCancellationPoint` |
 | `Queue`, `Counter`, `AutoSemaphore` | `QoreCondition::waitWithInterrupt()` (the redundant outer poll loops were removed) |
 | socket, TLS, HTTP/1, HTTP/2 and HTTP/3 synchronous operations | the caller waits for the async I/O controller's result on a `Queue` (`QoreCondition::waitWithInterrupt()`) |
-| process waits (`system()`, backquote child exit) | `QoreChildWait` on a `QoreCondition` |
+| process waits (`system()`, backquote child exit) | `QoreChildProcessWaiter` on a `QoreCondition` |
+
+#### Killing a command's process group
+
+A command that `system()` or backquote runs under a `SandboxManager` leads a process group of its own.
+When the wait is cancelled or interrupted, `SIGKILL` goes to the group, the leader's exit is waited for
+with `waitid(WNOWAIT)`, `SIGKILL` goes to the group again, and only then is the leader reaped
+(`qore_kill_child_process()` and the interrupted path of `qore_wait_child_process()` in
+`BackquoteNode.cpp`).  A signal sent to a process group does not reach a process that a member is
+creating with `fork()` at that moment on macOS, so the first signal can leave a new process running;
+once the leader has ended it can start no more, and its unreaped PID keeps the group ID from being
+reused, so the second signal reaches what is left of the group and no other.  `system.qtest` and
+`backquote.qtest` interrupt commands that start processes in a loop and read a FIFO that every process
+of the command holds open to end-of-file.
 
 #### Wakeup descriptor
 

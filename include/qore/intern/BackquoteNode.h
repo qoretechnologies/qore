@@ -87,7 +87,8 @@ enum class QoreChildWaitResult {
     wakes the caller through its interruptible condition wait.
 
     When the wait is cancelled, or the helper thread cannot be started, \a kill_target (the process, or its process
-    group as a negative number) is killed with SIGKILL, the process is reaped, and an exception is raised.
+    group as a negative number) is killed with SIGKILL, as with qore_kill_child_process(), the process is reaped, and
+    an exception is raised.
 
     @param pid the child process to wait for
     @param kill_target the argument for kill() to terminate the process: \a pid or the process group as -pgid
@@ -100,6 +101,17 @@ enum class QoreChildWaitResult {
 */
 DLLLOCAL QoreChildWaitResult qore_wait_child_process(pid_t pid, pid_t kill_target, int& status, int& wait_errno,
         const char* err, ExceptionSink* xsink);
+
+//! kills a child process, or the process group that it leads, with SIGKILL and reaps the child process
+/** When \a kill_target is the process group, SIGKILL is sent to the group again after the child process has ended and
+    before it is reaped: a signal sent to a process group does not reach a process that a member of the group is
+    creating at that moment on macOS, for example, and the leader can create no more processes once it has ended.
+
+    @param pid the child process
+    @param kill_target the argument for kill() to terminate the process: \a pid or the process group that it leads as
+    -pid
+*/
+DLLLOCAL void qore_kill_child_process(pid_t pid, pid_t kill_target);
 
 //! reaps a child process, blocking until it ends; waitpid() is retried when interrupted by a signal
 /** @return 0 if the process was reaped and \a status is set, -1 if waitpid() failed (errno is set)

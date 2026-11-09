@@ -112,6 +112,46 @@ int qore_reap_child_process(pid_t pid, int& status) {
 }
 
 namespace {
+// waits for a child process to end without reaping it, so that its PID, and the ID of the process group that it
+// leads, stay reserved until it is reaped; returns 0 when the process has ended, or the errno value of waitid()
+int qore_wait_child_exit(pid_t pid) {
+    while (true) {
+        siginfo_t info;
+        if (!waitid(P_PID, static_cast<id_t>(pid), &info, WEXITED | WNOWAIT)) {
+            return 0;
+        }
+        if (errno != EINTR) {
+            return errno;
+        }
+    }
+}
+
+// called after the child process \a pid, killed with SIGKILL sent to \a kill_target, has ended and before it is
+// reaped: when \a kill_target is the process group that the child leads, SIGKILL is sent to the group again
+/* A signal sent to a process group does not reach a process that a member of the group is creating with fork() at
+   that moment on macOS, for example: the new process is left running in the group, as an orphan once its parent has
+   been killed.  Once the leader has ended, it can create no more processes, and the processes that it created are
+   all in the group; its PID, which is the ID of the group, cannot be reused until it is reaped, so the signal cannot
+   reach another process group.
+*/
+void qore_kill_child_process_group_again(pid_t pid, pid_t kill_target) {
+    if (kill_target != pid) {
+        assert(kill_target == -pid);
+        kill(kill_target, SIGKILL);
+    }
+}
+}
+
+void qore_kill_child_process(pid_t pid, pid_t kill_target) {
+    kill(kill_target, SIGKILL);
+    if (!qore_wait_child_exit(pid)) {
+        qore_kill_child_process_group_again(pid, kill_target);
+    }
+    int ignored;
+    qore_reap_child_process(pid, ignored);
+}
+
+namespace {
 // the state that qore_wait_child_process() shares with its helper thread, which blocks until the process ends
 class QoreChildProcessWaiter {
 public:
@@ -122,17 +162,7 @@ public:
     // until the caller reaps it
     static void* run(void* arg) {
         QoreChildProcessWaiter* w = static_cast<QoreChildProcessWaiter*>(arg);
-        int err = 0;
-        while (true) {
-            siginfo_t info;
-            if (!waitid(P_PID, static_cast<id_t>(w->pid), &info, WEXITED | WNOWAIT)) {
-                break;
-            }
-            if (errno != EINTR) {
-                err = errno;
-                break;
-            }
-        }
+        int err = qore_wait_child_exit(w->pid);
         AutoLocker al(w->m);
         w->wait_errno = err;
         w->done = true;
@@ -169,9 +199,7 @@ QoreChildWaitResult qore_wait_child_process(pid_t pid, pid_t kill_target, int& s
     }
     if (rc) {
         // the process cannot be waited for with cancellation; it is not left running unsupervised
-        kill(kill_target, SIGKILL);
-        int ignored;
-        qore_reap_child_process(pid, ignored);
+        qore_kill_child_process(pid, kill_target);
         xsink->raiseErrnoException(err, rc, "cannot start a thread to wait for process %d", static_cast<int>(pid));
         return QoreChildWaitResult::RAISED;
     }
@@ -224,6 +252,7 @@ QoreChildWaitResult qore_wait_child_process(pid_t pid, pid_t kill_target, int& s
 
     if (interrupted) {
         if (!w.wait_errno) {
+            qore_kill_child_process_group_again(pid, kill_target);
             int ignored;
             qore_reap_child_process(pid, ignored);
         }
@@ -345,10 +374,8 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
             pfd.revents = 0;
             int prc = qore_cancellable_poll(&pfd, 1, -1, xsink, "backquote read");
             if (prc == QORE_POLL_CANCELLED) {
-                // Use SIGKILL to enforce immediate termination on interrupt.
-                kill((use_pgroup && pgroup_ok) ? -pid : pid, SIGKILL);
-                int ignored;
-                qore_reap_child_process(pid, ignored);
+                // SIGKILL ends the command at once on interrupt
+                qore_kill_child_process(pid, (use_pgroup && pgroup_ok) ? -pid : pid);
                 close(pipefd[0]);
                 rc = -1;
                 return nullptr;
@@ -446,10 +473,8 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
             pfd.revents = 0;
             int prc = qore_cancellable_poll(&pfd, 1, -1, xsink, "backquote read");
             if (prc == QORE_POLL_CANCELLED) {
-                // Use SIGKILL to enforce immediate termination on interrupt.
-                kill((use_pgroup && pgroup_ok) ? -pid : pid, SIGKILL);
-                int ignored;
-                qore_reap_child_process(pid, ignored);
+                // SIGKILL ends the command at once on interrupt
+                qore_kill_child_process(pid, (use_pgroup && pgroup_ok) ? -pid : pid);
                 close(pipefd[0]);
                 rc = -1;
                 return nullptr;
