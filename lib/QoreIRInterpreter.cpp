@@ -4975,6 +4975,19 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
     return true;
 }
 
+//! Returns the value of a closure-bound variable whose value slots the uninstantiation of the variable releases
+/** The value of a variable holding a reference is the reference, which no value slot holds: its referenced lvalue,
+    which eval() reads, is another variable's, which can be gone (the object or the Program of the lvalue deleted),
+    and reading it raised an exception when the scope of the variable was left, which the AST interpreter does not
+*/
+static QoreValue qore_ir_uninstantiate_scan_value(ClosureVarValue& cvv, ExceptionSink* xsink) {
+    if (ReferenceNode* ref = cvv.getHeldReference()) {
+        ref->deref(xsink);
+        return QoreValue();
+    }
+    return cvv.eval(xsink);
+}
+
 #ifdef DEBUG
 //! the closure calls that found a cache entry made for a closure of a deleted Program at the same addresses
 /** The entry is not used (see tryExecuteInterpreterInlineIRClosure() and tryExecClosureNativeLeaf()); a test that
@@ -12100,7 +12113,7 @@ load_local_done:
                                 ClosureVarValue* cvv = thread_try_find_closure_var(
                                     local_inst->local->getName());
                                 if (cvv) {
-                                    QoreValue cvval = cvv->eval(xsink);
+                                    QoreValue cvval = qore_ir_uninstantiate_scan_value(*cvv, xsink);
                                     if (cvval.hasNode()) {
                                         const AbstractQoreNode* node_ptr = cvval.getInternalNode();
                                         for (size_t vi = 0; vi < values.size(); ++vi) {
@@ -12150,7 +12163,9 @@ load_local_done:
                                 // returns object 'a') that hold extra references in
                                 // the IR values array beyond the load/init slots.
                                 bool nd = false;
-                                QoreValue lval = lvar->eval(nd, xsink);
+                                // the value of a variable holding a reference is the reference, which no value slot
+                                // holds: reading the referenced lvalue would read another variable, which can be gone
+                                QoreValue lval = lvar->isRef() ? QoreValue() : lvar->eval(nd, xsink);
                                 if (lval.hasNode()) {
                                     const AbstractQoreNode* node_ptr = lval.getInternalNode();
                                     bool is_obj = (lval.getType() == NT_OBJECT);
@@ -12250,7 +12265,7 @@ load_local_done:
                                 // 1. Scan values[] for refs to the CVV's contained value
                                 // and discard them BEFORE clearValue.
                                 {
-                                    QoreValue cvval = cvv->eval(xsink);
+                                    QoreValue cvval = qore_ir_uninstantiate_scan_value(*cvv, xsink);
                                     if (cvval.hasNode()) {
                                         const AbstractQoreNode* node_ptr = cvval.getInternalNode();
                                         for (size_t vi = 0; vi < values.size(); ++vi) {
