@@ -240,12 +240,15 @@ void QoreTypeInfo::applyNoNarrowCoercion(const QoreTypeInfo* ti, QoreValue& n,
                         cp->setHashDecl(nullptr);
                     }
                     cp->complexTypeInfo = autoHashTypeInfo;
+                    // the value replaced is released as it is held: a value read through an opaque reference ends
+                    // its registration with its reference (see design/dgc.md, "Opaque references")
+                    QoreValue old = n;
                     n = copy;
                     if (lvhelper) {
                         // lvalue locks may be held — defer the deref
-                        lvhelper->saveTemp(h);
+                        lvhelper->saveTemp(old);
                     } else {
-                        h->deref(xsink);
+                        old.discard(xsink);
                     }
                 } else {
                     if (hp->getHashDecl()) {
@@ -266,12 +269,14 @@ void QoreTypeInfo::applyNoNarrowCoercion(const QoreTypeInfo* ti, QoreValue& n,
             } else if (!l->is_unique()) {
                 QoreListNode* copy = l->copy();
                 qore_list_private::get(*copy)->complexTypeInfo = autoListTypeInfo;
+                // the value replaced is released as it is held (see above)
+                QoreValue old = n;
                 n = copy;
                 if (lvhelper) {
                     // lvalue locks may be held — defer the deref
-                    lvhelper->saveTemp(l);
+                    lvhelper->saveTemp(old);
                 } else {
-                    l->deref(xsink);
+                    old.discard(xsink);
                 }
             } else {
                 lp->complexTypeInfo = autoListTypeInfo;
@@ -1095,7 +1100,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
         // create an untyped list
         if (!l) {
             // save the old value for dereferencing outside any locks that may have been acquired
-            saveTemp(getValue().getInternalNode());
+            saveCurrentValue();
             const QoreTypeInfo* valueTypeInfo;
             if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
                 valueTypeInfo = nullptr;
@@ -1236,7 +1241,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         // create an untyped list
         if (!l) {
             // save the old value for dereferencing outside any locks that may have been acquired
-            saveTemp(getValue().getInternalNode());
+            saveCurrentValue();
             const QoreTypeInfo* valueTypeInfo;
             if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
                 valueTypeInfo = nullptr;
@@ -1373,7 +1378,7 @@ int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) 
         if (!h) {
             //printd(5, "LValueHelper::doHashLValue() this: %p saving value to dereference before making hash: %p "
             //    "'%s'\n", this, vp, get_type_name(vp));
-            saveTemp(getValue().getInternalNode());
+            saveCurrentValue();
             assignNodeIntern((h = new QoreHashNode(QoreTypeInfo::getElementType(
                 QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo)
             ))));
@@ -2090,7 +2095,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                     }
                     if (!l) {
                         // save the old value for dereferencing outside locks
-                        saveTemp(getValue().getInternalNode());
+                        saveCurrentValue();
                         const QoreTypeInfo* valueTypeInfo;
                         if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo
                             || typeInfo == listOrNothingTypeInfo) {

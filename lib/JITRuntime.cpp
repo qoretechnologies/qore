@@ -4646,15 +4646,16 @@ static uint64_t qore_rt_list_push_impl(QoreValue list_val, QoreValue push_val,
             if (xsink && *xsink) {
                 return toBits(QoreValue());
             }
-            return toBits(QoreValue(copy.release()));
+            // the copy of a list held through an opaque reference is held through one (see qore_value_with_copy())
+            return toBits(qore_value_with_copy(list_val, copy.release()));
         }
         l->push(push_val.refSelf(), xsink);
         if (xsink && *xsink) {
             return toBits(QoreValue());
         }
-        // Return same list with a new reference for the caller to own
-        l->ref();
-        return toBits(list_val);
+        // Return same list with a new reference for the caller to own; an opaque value's reference takes a
+        // registration of its own (refSelf())
+        return toBits(list_val.refSelf());
     }
 
     if (list_val.isNothing()) {

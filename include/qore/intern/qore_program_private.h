@@ -766,6 +766,9 @@ public:
         auto i = shard.targets.find(n);
         if (i == shard.targets.end()) {
             shard.targets.insert(opaque_target_map_t::value_type(n, OpaqueTargetInfo{pgm, 1}));
+#ifdef DEBUG
+            opaque_target_count.fetch_add(1);
+#endif
         } else {
             ++i->second.count;
         }
@@ -785,13 +788,33 @@ public:
         }
         if (!--i->second.count) {
             shard.targets.erase(i);
+#ifdef DEBUG
+            opaque_target_count.fetch_sub(1);
+#endif
         }
     }
+
+    //! Returns the Program that \a n is registered with as the target of an opaque reference, or nullptr if none
+    DLLLOCAL static QoreProgram* getOpaqueTargetProgram(const AbstractQoreNode* n);
+
+    //! Registers \a n, which exactly one opaque value refers to, with \a pgm
+    /** Used for the copy that replaces a container held through an opaque reference (see qore_value_with_copy()):
+        the copy is registered with the Program of the registration it replaces, so the teardown of the same
+        Program breaks a cycle through the reference whether or not the change copied the container.  An entry made
+        for \a n with another Program by the opaque value's constructor is given to \a pgm; with none, one is made.
+
+        @param n the target of the only opaque reference to it
+        @param pgm the Program responsible for breaking a cycle through this target at teardown
+    */
+    DLLLOCAL static void setOpaqueTargetProgram(AbstractQoreNode* n, QoreProgram* pgm);
 
     //! Breaks every cycle held up by an opaque reference created in this Program
     DLLLOCAL void clearOpaqueTargets(ExceptionSink* xsink);
 
 #ifdef DEBUG
+    //! the number of targets in the registry, so that a check of a freed node takes no lock while there are none
+    DLLLOCAL static std::atomic<size_t> opaque_target_count;
+
     //! Returns true if \a n is registered as the target of an opaque reference
     /** For qore_debug_check_freed_node_not_opaque_target()
     */
