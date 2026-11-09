@@ -1513,28 +1513,45 @@ public:
     */
     DLLLOCAL QoreSandboxManager* getSandboxManagerRef();
 
-    //! Returns true if the Program's code may not change the public variables of trusted modules (qore#5664)
-    /** A module's public variable is one variable that every importer shares, so a sandboxed Program, and a
-        Program that may not control the process (\c PO_NO_PROCESS_CONTROL), may only read it.  The Program of a
-        library module is not restricted by its parse options, which it inherits from the Program that loaded it
-        first, but only by a sandbox manager, which it never has.
+    //! Returns true if the Program's code may not change the state of trusted modules (qore#5664)
+    /** The state of a trusted module is its public variables and the static members of its classes: one value that
+        every importer shares, so a sandboxed Program, and a Program that may not control the process
+        (\c PO_NO_PROCESS_CONTROL), may only read it.  A child Program inherits PO_NO_PROCESS_CONTROL from its parent
+        (unless the parent has PO_NO_CHILD_PO_RESTRICTIONS, which a restricted Program must never have).  The Program
+        of a library module is not restricted by its parse options, which it inherits from the Program that loaded it
+        first, but only by being sandboxed, which it never is.
 
-        Decided when the variable is written, as the sandbox manager and the parse options can be set after the
-        code that writes it was parsed and the module imported; reads never call it.  The code of a Program that is
-        not a library module is also restricted while a sandbox governs it through its callers (see
-        Var::checkModuleVarWrite()).
+        Decided when the state is written, as the sandbox manager and the parse options can be set after the code that
+        writes it was parsed and the module imported; reads never call it.
     */
     DLLLOCAL static bool restrictsModuleVarWrites(const QoreProgram& pgm) {
         const qore_program_private* pp = pgm.priv;
-        if (pp->sandbox_manager.load(std::memory_order_acquire)) {
+        if (isSandboxedForModuleState(*pp)) {
             return true;
         }
         return !pp->library_module && pp->pwo.parse_options.hasAny(QoreParseOptions(PO_NO_PROCESS_CONTROL));
     }
 
-    //! Returns true if the Program is the Program of a library module (see QoreModuleManager::isTrustedModulePath())
-    DLLLOCAL static bool isLibraryModuleProgram(const QoreProgram& pgm) {
-        return pgm.priv->library_module;
+    //! Returns true if the Program is sandboxed, for restrictsModuleVarWrites()
+    /** A Program with a sandbox manager is sandboxed; where the Program also has a permanent \c sandboxed flag, which
+        a Program that sandboxed code creates gets as well (qore#5659), the flag counts too (see
+        programSandboxedFlag())
+    */
+    DLLLOCAL static bool isSandboxedForModuleState(const qore_program_private& pp) {
+        return pp.sandbox_manager.load(std::memory_order_acquire) || programSandboxedFlag(pp, 0);
+    }
+
+    //! Returns the permanent \c sandboxed flag of the Program where the Program has one (qore#5659)
+    template <typename T>
+    DLLLOCAL static auto programSandboxedFlag(const T& pp, int)
+            -> decltype(pp.sandboxed.load(std::memory_order_acquire)) {
+        return pp.sandboxed.load(std::memory_order_acquire);
+    }
+
+    //! Without the \c sandboxed flag, only a sandbox manager makes a Program sandboxed
+    template <typename T>
+    DLLLOCAL static bool programSandboxedFlag(const T&, long) {
+        return false;
     }
 
     //! Returns true if the Program is the Program of a trusted module (see restrictsModuleVarWrites())
@@ -1543,8 +1560,7 @@ public:
     */
     DLLLOCAL static bool isTrustedModuleProgram(const QoreProgram& pgm) {
         const qore_program_private* pp = pgm.priv;
-        return pp->pwo.parse_options.hasAny(QoreParseOptions(PO_IN_MODULE))
-            && !pp->sandbox_manager.load(std::memory_order_acquire);
+        return pp->pwo.parse_options.hasAny(QoreParseOptions(PO_IN_MODULE)) && !isSandboxedForModuleState(*pp);
     }
 
     DLLLOCAL void waitForTerminationAndClear(ExceptionSink* xsink);

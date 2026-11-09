@@ -1280,6 +1280,21 @@ public:
     //! the name of the class, for the error that checkOwnerReleased() raises
     const char* owner_class_name = nullptr;
 
+    //! What a static variable of a class of a trusted module records about the module (qore#5664)
+    struct TrustedModuleStatic {
+        //! the ID of the Program of the module that declares the class, whose code may always write the variable
+        qore_program_id_t pgm_id;
+        //! the name of the module
+        std::string module_name;
+        //! the path of the variable, ex: \c "MyModule::MyClass::var"
+        std::string path;
+    };
+    //! Set once for a static variable of a class of a trusted module, and then never changed until it is destroyed
+    /** Every Program that imports the module shares the variable; see checkTrustedModuleWrite().  Reads never look at
+        it.
+    */
+    std::atomic<TrustedModuleStatic*> trusted_module{nullptr};
+
     DLLLOCAL QoreVarInfo(const QoreProgramLocation* loc, const QoreTypeInfo* n_typeinfo = nullptr,
             QoreParseTypeInfo* n_parseTypeInfo = nullptr, QoreValue e = QoreValue(), ClassAccess n_access = Public) :
         QoreMemberInfoBaseAccess(loc, n_typeinfo, n_parseTypeInfo, e, n_access), finalized(false) {
@@ -1295,7 +1310,41 @@ public:
 
     DLLLOCAL ~QoreVarInfo() {
         assert(!val.hasValue());
+        delete trusted_module.load(std::memory_order_relaxed);
     }
+
+    //! Records that the variable belongs to a class of a trusted module; the first record is kept
+    /** @param pgm_id the ID of the module's Program
+        @param module_name the name of the module, or nullptr if unknown
+        @param class_path the path of the class, ex: \c "MyModule::MyClass"
+        @param var_name the name of the variable
+    */
+    DLLLOCAL void setTrustedModule(qore_program_id_t pgm_id, const char* module_name, const std::string& class_path,
+            const char* var_name);
+
+    //! Checks a write to the variable when it belongs to a class of a trusted module (qore#5664)
+    /** The code of the module's Program may always write it; the code of another Program may not when that Program
+        is sandboxed or has \c PO_NO_PROCESS_CONTROL set (see qore_program_private::restrictsModuleVarWrites())
+
+        @param lvh the helper resolving the variable: one that only reads it is not refused (see
+        LValueHelper::ReadAccess)
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int checkTrustedModuleWrite(LValueHelper& lvh) const {
+        TrustedModuleStatic* tm = trusted_module.load(std::memory_order_acquire);
+        return tm ? checkTrustedModuleWriteIntern(*tm, lvh) : 0;
+    }
+
+    //! Raises \c MODULE-VARIABLE-READ-ONLY and returns -1 if the current code may not remove the variable's value
+    DLLLOCAL int checkTrustedModuleRemove(ExceptionSink* xsink) const;
+
+private:
+    DLLLOCAL int checkTrustedModuleWriteIntern(const TrustedModuleStatic& tm, LValueHelper& lvh) const;
+    //! Returns true if the current code may not write the variable of a class of a trusted module
+    DLLLOCAL bool trustedModuleWriteRestricted(const TrustedModuleStatic& tm) const;
+
+public:
 
     //! evaluates the variable's initializer if it has not been evaluated yet
     /** @param name the variable's name, for error messages
@@ -1392,6 +1441,10 @@ public:
     DLLLOCAL int getLValue(LValueHelper& lvh, const char* name = "<static variable>") {
         // checked before evalInit(), which runs the initializer, and again under the lock (see below)
         if (checkOwnerReleased(name, lvh.vl.xsink)) {
+            return -1;
+        }
+        // a static variable of a class of a trusted module is shared by every Program that imports it (qore#5664)
+        if (checkTrustedModuleWrite(lvh)) {
             return -1;
         }
         if (get_cb) {

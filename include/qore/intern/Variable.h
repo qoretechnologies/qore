@@ -121,6 +121,22 @@ enum class LVPathStepKind : uint8_t;
 DLLLOCAL QoreVarInfo* qore_find_static_var_by_path(QoreProgram& pgm, const std::string& full_name,
         std::string& var_name);
 
+//! Returns true if the code of \a writer may not change the state of a trusted module now (qore#5664)
+/** The state of a trusted module is its public variables and the static members of its classes, which every
+    Program importing the module shares; see qore_program_private::restrictsModuleVarWrites()
+
+    @param writer the Program whose code writes, or nullptr if unknown, when the write is allowed
+*/
+DLLLOCAL bool qore_module_state_write_restricted(const QoreProgram* writer);
+
+//! Raises \c MODULE-VARIABLE-READ-ONLY for a write to a trusted module's state
+/** @param what what is written, ex: \c "public variable" or \c "static member"
+    @param path the name of what is written
+    @param module_name the module, or nullptr if unknown
+*/
+DLLLOCAL void qore_raise_module_state_read_only(ExceptionSink* xsink, const char* what, const char* path,
+        const char* module_name);
+
 // structure for global variables
 class Var : protected QoreReferenceCounter {
 private:
@@ -690,17 +706,17 @@ private:
     //! set while the helper only reads the lvalue that a reference names (see ReadAccess)
     /** A read-only import, such as a sandboxed Program's import of a trusted module's public variable, can then be
         read through a reference.  Resolving an element or member of such a variable could change it (it can create
-        a missing hash key or copy a shared container), so the reference's expression is then read instead (see
-        setReadByValue())
+        a missing hash key or copy a shared container), so its containers are then resolved without being changed
+        (see setReadOnlyResolution())
     */
     read_access_e read_access = RA_NONE;
     //! set when the caller needs isWriteProtected(): only then is the variable that a reference names checked
     bool track_write_protection = false;
     //! set with read_access when the variable read could not have been written; see isWriteProtected()
     bool write_protected = false;
-    //! set when the lvalue of an element or member of a write-protected variable was not resolved; see
-    //! isReadByValue()
-    bool read_by_value = false;
+    //! set while the containers of a write-protected variable are resolved to read an element; see
+    //! setReadOnlyResolution()
+    bool read_only_resolution = false;
     //! set when the lvalue rejected the value an operation converted for it; see ~LValueHelper()
     bool write_rejected = false;
     bool member_lvalue_modified = false;
@@ -768,17 +784,16 @@ public:
         write_protected = true;
     }
 
-    //! Records that the lvalue of an element or member was not resolved, as its variable is write-protected
-    /** The resolution fails with no exception; the caller reads the reference's expression instead
+    //! Records that the variable whose element or member a reference names may not be written
+    /** The containers in the variable (hashes and lists) are then resolved without being changed: a missing element
+        is not created, so that the lvalue does not exist and reads as no value, and a shared container is not
+        copied.  An object in the variable ends it: the object's members are resolved as for any other reference.
+        isWriteProtected() is then true.
     */
-    DLLLOCAL void setReadByValue() {
+    DLLLOCAL void setReadOnlyResolution() {
         assert(read_access == RA_ELEMENT);
-        read_by_value = true;
-    }
-
-    //! Returns true if the reference has to be read by evaluating its expression (see setReadByValue())
-    DLLLOCAL bool isReadByValue() const {
-        return read_by_value;
+        read_only_resolution = true;
+        write_protected = true;
     }
 
     //! Returns true if the variable read through a reference could not have been written through it
@@ -1087,6 +1102,10 @@ public:
     // only call if there is a reference-counted AbstractQoreNode value in place
     // FIXME: port operators to LValueHelper instead and remove this function
     DLLLOCAL void ensureUnique() {
+        // a write-protected variable's container is only read (see setReadOnlyResolution())
+        if (read_only_resolution) {
+            return;
+        }
         member_lvalue_modified = true;
         QoreValue current = getValue();
         if (current.isShortString()) {

@@ -30,7 +30,6 @@
 */
 
 #include <qore/Qore.h>
-#include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreStatementTemps.h"
 
 #include "qore/intern/RuntimeConfig.h"
@@ -476,19 +475,24 @@ void Var::setTrustedModuleVarImport(QoreProgram* importer, const char* module_na
     module_import.reset(new ModuleVarImport{importer, module_name ? module_name : "", std::move(path)});
 }
 
+bool qore_module_state_write_restricted(const QoreProgram* writer) {
+    return writer && qore_program_private::restrictsModuleVarWrites(*writer);
+}
+
+void qore_raise_module_state_read_only(ExceptionSink* xsink, const char* what, const char* path,
+        const char* module_name) {
+    if (!module_name || !*module_name) {
+        module_name = "<unknown>";
+    }
+    xsink->raiseException("MODULE-VARIABLE-READ-ONLY", "cannot change %s '%s' of module '%s': sandboxed code, and "
+        "code in a Program with PO_NO_PROCESS_CONTROL set, can read the %ss of a module but not change them, because "
+        "every Program that uses the module shares them; to let such code change the value, the module must export a "
+        "public function or method that sets it", what, path, module_name, what);
+}
+
 bool Var::moduleVarWriteRestricted() const {
     assert(module_import);
-    const QoreProgram& importer = *module_import->importer;
-    if (qore_program_private::restrictsModuleVarWrites(importer)) {
-        return true;
-    }
-    // code that a sandbox governs through its callers is sandboxed as well, such as the code of a Program that
-    // sandboxed code created; the code of a library module acts for its callers, as the module's own code does
-    if (qore_program_private::isLibraryModuleProgram(importer)) {
-        return false;
-    }
-    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-    return (bool)governing;
+    return qore_module_state_write_restricted(module_import->importer);
 }
 
 bool Var::refWriteRefused(bool check_import) const {
@@ -500,12 +504,8 @@ int Var::checkModuleVarWrite(ExceptionSink* xsink) const {
     if (!moduleVarWriteRestricted()) {
         return 0;
     }
-    const char* mod = module_import->module_name.c_str();
-    xsink->raiseException("MODULE-VARIABLE-READ-ONLY", "cannot change public variable '%s' of module '%s': "
-        "sandboxed code, and code in a Program with PO_NO_PROCESS_CONTROL set, can read a public variable of a module "
-        "but not change it, because every Program that imports the module shares the variable; to let importers "
-        "change the value, the module must export a public function or method that sets it",
-        module_import->path.c_str(), *mod ? mod : "<unknown>");
+    qore_raise_module_state_read_only(xsink, "public variable", module_import->path.c_str(),
+        module_import->module_name.c_str());
     return -1;
 }
 
@@ -528,11 +528,10 @@ int Var::getLValueIntern(LValueHelper& lvh, bool for_remove, bool check_import) 
                 }
                 break;
             case LValueHelper::RA_ELEMENT:
-                // resolving an element or member could change the variable: the reference's expression is read
-                // instead (see ReferenceNode::doEval())
+                // resolving an element or member could change the variable: the containers in it are then resolved
+                // without being changed (see LValueHelper::setReadOnlyResolution())
                 if (refWriteRefused(check_import)) {
-                    lvh.setReadByValue();
-                    return -1;
+                    lvh.setReadOnlyResolution();
                 }
                 break;
             case LValueHelper::RA_NONE:
@@ -767,7 +766,7 @@ LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::mo
         assignment_only(o.assignment_only), read_access(o.read_access),
         track_write_protection(o.track_write_protection),
         write_protected(o.write_protected),
-        read_by_value(o.read_by_value),
+        read_only_resolution(o.read_only_resolution),
         write_rejected(o.write_rejected),
         member_lvalue_modified(o.member_lvalue_modified), robj(o.robj),
         buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
@@ -1109,6 +1108,10 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     if (parent_rc) {
         return -1;
     }
+    // an element of a write-protected variable is resolved without creating it (see setReadOnlyResolution())
+    if (read_only_resolution) {
+        for_remove = true;
+    }
 
     QoreListNode* l = nullptr;
     if (getType() == NT_LIST) {
@@ -1253,6 +1256,10 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
     assignment_only = final_assignment;
     if (parent_rc) {
         return -1;
+    }
+    // an element of a write-protected variable is resolved without creating it (see setReadOnlyResolution())
+    if (read_only_resolution) {
+        for_remove = true;
     }
 
     QoreListNode* l = nullptr;
@@ -1580,8 +1587,14 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     } else if (t == NT_OBJECT) {
         o = getValue().get<QoreObject>();
     } else {
-        return doHashLValue(t, mem.c_str(), for_remove);
+        // a member of a write-protected variable's hash is resolved without creating it (see
+        // setReadOnlyResolution())
+        return doHashLValue(t, mem.c_str(), read_only_resolution || for_remove);
     }
+    // an object is not part of the variable that holds it: its members are resolved, and can be written, as for any
+    // other reference, under the object's own access control
+    read_only_resolution = false;
+    write_protected = false;
 
     return doObjLValue(o, mem.c_str(), for_remove);
 }
@@ -1624,8 +1637,14 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     } else if (t == NT_OBJECT) {
         o = getValue().get<QoreObject>();
     } else {
-        return doHashLValue(t, mem.c_str(), for_remove);
+        // a member of a write-protected variable's hash is resolved without creating it (see
+        // setReadOnlyResolution())
+        return doHashLValue(t, mem.c_str(), read_only_resolution || for_remove);
     }
+    // an object is not part of the variable that holds it: its members are resolved, and can be written, as for any
+    // other reference, under the object's own access control
+    read_only_resolution = false;
+    write_protected = false;
 
     const qore_class_private* class_ctx = rc.getClass() ? rc.getClass() : runtime_get_class();
     return doObjLValue(o, mem.c_str(), for_remove, class_ctx);

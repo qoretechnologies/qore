@@ -2502,14 +2502,14 @@ public:
 
         // the references to trusted modules' public variables that the copy made are read-only in a restricted
         // Program, as when it imports the modules (qore#5664)
-        markCopiedModuleVarImportsFrom(old.pgm);
+        markCopiedModuleVarImportsFrom(old);
 
         // rebuild root indexes - only for committed objects
         rebuildAllIndexes();
     }
 
-    //! Marks the references to trusted modules' public variables in this new root namespace copied from \a src_pgm
-    DLLLOCAL void markCopiedModuleVarImportsFrom(const QoreProgram* src_pgm);
+    //! Marks the references to trusted modules' public variables in this new root namespace copied from \a src
+    DLLLOCAL void markCopiedModuleVarImportsFrom(const qore_root_ns_private& src);
 
     DLLLOCAL ~qore_root_ns_private() {
     }

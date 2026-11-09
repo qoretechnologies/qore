@@ -1405,8 +1405,8 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     references; each global variable declared in a module is unique, and they reside in the module's
     @ref Qore::Program "Program" object.  A module cannot export a @ref thread_local "thread_local" variable; see
     @ref mod_public "public".  Sandboxed code and code in a @ref Qore::Program "Program" with
-    @ref Qore::PO_NO_PROCESS_CONTROL set can read but not change the variables that a trusted module exports; see
-    @ref module_public_variables.
+    @ref Qore::PO_NO_PROCESS_CONTROL set can read but not change the variables that a trusted module exports and the
+    static members of its classes; see @ref module_public_variables.
 
     Furthermore, when using an environment with multiple @ref Qore::Program "Program" objects, if a user module has
     already been loaded and initialized, then it's functional domain mask is compared against any importing
@@ -1659,10 +1659,10 @@ public namespace MyNamespace {
       set a value on a thread that any other importer reads on the same thread.  Keep thread-local variables private
       to the module and export public functions or methods that read and set them instead; see @ref thread_local.
 
-      Every importer shares a module's public variable, so sandboxed code and code in a @ref Qore::Program "Program"
-      with @ref Qore::PO_NO_PROCESS_CONTROL set can read it but not change it: a write raises a
-      \c MODULE-VARIABLE-READ-ONLY exception.  A module that lets such importers change a value exports a public
-      function or method that sets it; see @ref module_public_variables.
+      Every importer shares a module's public variable, and the static members of the module's classes, so sandboxed
+      code and code in a @ref Qore::Program "Program" with @ref Qore::PO_NO_PROCESS_CONTROL set can read them but not
+      change them: a write raises a \c MODULE-VARIABLE-READ-ONLY exception.  A module that lets such code change a
+      value exports a public function or method that sets it; see @ref module_public_variables.
 
     @note Global variable declarations in a namespace declaration cannot be initialized at the point they are
     declared, also, since @ref Qore::PO_NO_TOP_LEVEL_STATEMENTS is set for user module @ref Qore::Program "Program"

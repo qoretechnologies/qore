@@ -245,6 +245,17 @@ authenticate();
     around direct native implementations. Foreign runtime I/O that does not use Qore's policy checks remains outside
     this mechanism; provenance is execution context, not data taint tracking.
 
+    @subsection sandbox_module_state Module State
+
+    The public variables of a module and the static members of its classes are shared by every Program that imports
+    the module.  The code of a sandboxed Program, and of a Program with @ref Qore::PO_NO_PROCESS_CONTROL set, can read
+    the public variables and static members of a trusted module but not change them, also through a reference or a
+    closure that it creates; a write raises \c MODULE-VARIABLE-READ-ONLY.  The rule is decided on the Program whose
+    code writes: a function of a trusted Program that sandboxed code calls writes as usual.  The rule protects the
+    variable or static member, not the objects that it refers to, which keep the access control of their classes;
+    hashes and lists are copy-on-write values.  A module that lets such code change a value exports a function or
+    method that sets it.  See @ref module_public_variables.
+
     @subsection sandbox_module_init Module Initialization
 
     In this section, code that is not trusted is code that a sandbox governs, and code whose parse options restrict a

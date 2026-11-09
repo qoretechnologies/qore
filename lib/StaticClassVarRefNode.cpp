@@ -133,7 +133,69 @@ int StaticClassVarRefNode::getLValue(LValueHelper& lvh) const {
     return vi.getLValue(lvh, str.c_str());
 }
 
+void QoreVarInfo::setTrustedModule(qore_program_id_t pgm_id, const char* module_name, const std::string& class_path,
+        const char* var_name) {
+    if (trusted_module.load(std::memory_order_acquire)) {
+        return;
+    }
+    std::unique_ptr<TrustedModuleStatic> tm(new TrustedModuleStatic{pgm_id, module_name ? module_name : "",
+        class_path + "::" + var_name});
+    TrustedModuleStatic* expected = nullptr;
+    // the first record wins: a class imported into the Program of another module was recorded when its own module
+    // was merged into that Program
+    if (trusted_module.compare_exchange_strong(expected, tm.get(), std::memory_order_acq_rel)) {
+        tm.release();
+    }
+}
+
+bool QoreVarInfo::trustedModuleWriteRestricted(const TrustedModuleStatic& tm) const {
+    // decided on the Program that the writing code runs in: a method of the module's class runs in the module's
+    // Program and may always write, while a function of the module runs in the Program that calls it, with its
+    // restrictions
+    const QoreProgram* writer = getProgram();
+    if (writer && writer->getProgramId() == tm.pgm_id) {
+        return false;
+    }
+    return qore_module_state_write_restricted(writer);
+}
+
+int QoreVarInfo::checkTrustedModuleWriteIntern(const TrustedModuleStatic& tm, LValueHelper& lvh) const {
+    switch (lvh.getReadAccess()) {
+        case LValueHelper::RA_VAR:
+            // a reference that only reads the variable needs no write access (see LValueHelper::ReadAccess)
+            if (lvh.tracksWriteProtection() && trustedModuleWriteRestricted(tm)) {
+                lvh.setWriteProtected();
+            }
+            return 0;
+        case LValueHelper::RA_ELEMENT:
+            if (trustedModuleWriteRestricted(tm)) {
+                lvh.setReadOnlyResolution();
+            }
+            return 0;
+        case LValueHelper::RA_NONE:
+            break;
+    }
+    if (!trustedModuleWriteRestricted(tm)) {
+        return 0;
+    }
+    qore_raise_module_state_read_only(lvh.vl.xsink, "static member", tm.path.c_str(), tm.module_name.c_str());
+    return -1;
+}
+
+int QoreVarInfo::checkTrustedModuleRemove(ExceptionSink* xsink) const {
+    TrustedModuleStatic* tm = trusted_module.load(std::memory_order_acquire);
+    if (!tm || !trustedModuleWriteRestricted(*tm)) {
+        return 0;
+    }
+    qore_raise_module_state_read_only(xsink, "static member", tm->path.c_str(), tm->module_name.c_str());
+    return -1;
+}
+
 void QoreVarInfo::remove(LValueRemoveHelper& lvrh) {
+    // a static variable of a class of a trusted module is shared by every Program that imports it (qore#5664)
+    if (checkTrustedModuleRemove(lvrh.getExceptionSink())) {
+        return;
+    }
     if (get_cb) {
         ExceptionSink* xsink = lvrh.getExceptionSink();
         if (checkFinalized(xsink)) {

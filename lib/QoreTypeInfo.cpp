@@ -3529,21 +3529,24 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                     // (qore#5664)
                     std::optional<LValueHelper> lvh;
                     lvh.emplace(*r, xsink, LValueHelper::ReadAccess(), true);
-                    if ((*lvh && lvh->isWriteProtected()) || (!*lvh && lvh->isReadByValue())) {
-                        bool needs_write;
+                    if (*lvh && lvh->isWriteProtected()) {
+                        bool needs_write = false;
                         {
-                            ValueHolder val(xsink);
-                            if (*lvh) {
-                                val = lvh->getReferencedValue();
-                                // the variable's lock is released before it is resolved again
-                                lvh.reset();
-                            } else {
-                                // an element or member of such a variable is read by value
-                                lvh.reset();
-                                val = r->eval(xsink);
+                            ValueHolder val(lvh->getReferencedValue(), xsink);
+                            // the variable's lock is released before the value is converted, as for an assignment
+                            lvh.reset();
+                            if (!val->isNothing()) {
+                                // the value is converted as the assignment below would convert it: a value that the
+                                // type rejects raises the same error as for a variable that can be written, and only
+                                // a value that the conversion changes has to be written back
+                                ValueHolder conv(val->refSelf(), xsink);
+                                QoreTypeInfo::acceptAssignment(u.ti, "<reference>", *conv, xsink);
+                                if (!*xsink) {
+                                    needs_write = val->hasNode()
+                                        ? conv->getInternalNode() != val->getInternalNode()
+                                        : (conv->getType() != val->getType() || !conv->isEqualHard(*val));
+                                }
                             }
-                            needs_write = !*xsink && !val->isNothing()
-                                && !QoreTypeInfo::outputSuperSetOf(u.ti, val->getFullTypeInfo());
                         }
                         if (needs_write && !*xsink) {
                             // the value has to be changed: resolving the variable for writing raises the exception
