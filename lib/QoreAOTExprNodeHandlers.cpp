@@ -1707,6 +1707,10 @@ static QoreValue read_node_EN_STATIC_METH_REF(AOTExprNodeReadCtx& ctx) {
         if (!m) {
             m = qc->findMethod(method_name.c_str());
         }
+        // a reference read while the class is being loaded, as in a static member's initial value
+        if (!m) {
+            m = qore_aot_find_loading_method(qc, method_name.c_str(), true);
+        }
         if (m) {
             return QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, m));
         }

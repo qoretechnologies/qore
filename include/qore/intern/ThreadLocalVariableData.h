@@ -67,6 +67,20 @@ public:
         }
     }
 
+    //! Returns the number of variables on the stack (frame boundaries are not counted)
+    DLLLOCAL size_t getVarCount() const {
+        // each block's entries, frame boundaries excluded; the current block can be empty while earlier ones are not
+        size_t count = 0;
+        for (const Block* b = curr; b; b = b->prev) {
+            for (int p = 0; p < b->pos; ++p) {
+                if (!b->var[p].frame_boundary) {
+                    ++count;
+                }
+            }
+        }
+        return count;
+    }
+
     // deletes everything on the stack
     DLLLOCAL void del(ExceptionSink* xsink) {
         //printd(5, "ThreadLocalVariableData::del() this: %p empty: %d prev: %p pos: %d\n", this, empty(), curr->prev, curr->pos);

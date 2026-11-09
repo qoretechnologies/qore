@@ -104,4 +104,15 @@ DLLEXPORT bool qore_aot_write_module_source_fingerprints(const std::string& depf
 DLLEXPORT bool qore_aot_read_module_source_fingerprints(const std::string& path,
         std::map<std::string, QoreAOTModuleSourceFingerprint>& fingerprints);
 
+//! reads the dependency file that qcc wrote next to an AOT module (<tt>\<module\>.d</tt>)
+/** The dependency file is the one next to the file that \a qmod resolves to, and it is used only if the target of its
+    rule is that module (see design/aot-linked-module-sources.md)
+
+    @param qmod the module
+    @param deps receives the prerequisites of the rule
+
+    @return false if the module has no such dependency file (always on Windows)
+*/
+DLLEXPORT bool qore_aot_read_module_depfile(const std::string& qmod, std::vector<std::string>& deps);
+
 #endif

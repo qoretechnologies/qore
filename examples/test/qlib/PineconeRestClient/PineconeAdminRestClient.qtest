@@ -21,11 +21,11 @@
 */
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/PineconeRestClient.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/Logger
+%requires QUnit
+%requires PineconeRestClient
+%requires HttpServer
+%requires HttpServerUtil
+%requires Logger
 %requires json
 %exec-class PineconeAdminConnectionTest
 

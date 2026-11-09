@@ -2,8 +2,8 @@
 # Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/GoogleCalendarDataProvider
-%requires ../../../../qlib/GmailDataProvider
+%requires GoogleCalendarDataProvider
+%requires GmailDataProvider
 
 module OfflineIndexFixture {
     version = "1.0";

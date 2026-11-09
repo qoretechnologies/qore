@@ -277,6 +277,13 @@ lvalue, apart from the fast paths for plain locals and their subscripts, emits a
 AST-evaluated lvalue operation (`StoreLValue`, `AddAssignLValue`, ...): those only
 evaluated the lvalue's AST, keys included, at runtime.
 
+The fast paths for an element of a local container (`h{k} = v`, `l[i] = v`, `h{k} += v`) load the
+container without a reference of its own, so that the store can change it in place. They lower the
+key or the index before they load the container, as the AST interpreter evaluates it before it
+resolves the container: a key expression that assigns the container variable
+(`h{(h = x).firstKey()} = v`) then gives the container the store writes, and the container loaded is
+not released before its use (`ContainerKeyAssignsContainer.qtest`).
+
 A slice (a hash slice, a list slice or a range) is an lvalue only as the whole lvalue of
 `remove` and `delete`, which take it as the terminal step of the path; `check_lvalue()`
 rejects any other slice lvalue at parse time, and a key or index that is a list only at
@@ -531,13 +538,30 @@ Two rules keep its lifetime lexical, matching the AST interpreter:
   assigns the local); its inline cleanup would otherwise omit the local and leak
   the value.
 
-Object-typed locals whose type names a unique class stay on the runtime stack, but
-`*Class`, `auto`, and container-typed locals holding objects are IR-only, so
-destructor timing depends on these rules. As IR-only locals, object-typed locals ran a loop
-holding an object 2.5 times faster, but an object in a recursive graph held by such a local (a
-Queue that the values pushed to it refer to) made the collector decide at every dereference of
-the object, and such a loop ran 1.5 times the instructions of the runtime-stack variable; the
-cause is not known yet (see `computeIROnlyLocals()`). A third rule completes the lexical
+Body locals of an object type (a class, `object`, also optional: `*Class`) keep their value in
+IR storage (`QoreIRFunction::real_reference_locals`), as `auto` and container-typed locals
+holding objects do, so destructor timing depends on these rules. A variable on the runtime
+stack marks the object it holds with a real reference (`check_lvalue_object_in_out()`), which
+tells the collector that the object is reachable from a stack, so that releasing another
+reference to it needs no collection decision (see `design/dgc.md`). IR storage held a plain
+reference: an object in a recursive graph held only by IR storage (a Queue that the values
+pushed to it refer to) made the collector decide at every release of a reference to it, and a
+loop over such an object ran 1.5 times the instructions of the runtime-stack variable. The
+engines therefore mark the object an object local holds with a real reference from its storage:
+the IR interpreter's slot cache (`IRLocalSlotCache::set()` marks, `release()` releases with
+`realDeref()`; the frame's object slots are `interpreter_real_slots`) and native code
+(`qore_rt_object_slot_replace()` for a store, `qore_rt_object_slot_release()` for a scope exit
+and the exit release, where the array form tags the cache of an object local in the lowest bit
+of its address for `qore_rt_cleanup_run_allocas()`). The object has a real reference exactly
+while the local holds it, released in the same order as the value; a parameter stays on the
+runtime stack. A body local of no type (`auto`, `any`) that is IR-only stays in `ir_only_locals`, so the
+optimizations keyed on that set still apply to it, and the object it holds is marked too
+(`QoreIRFunction::real_reference_ir_only_locals`): its value is checked at run time by the same helpers
+(and by `qore_rt_element_local_replace_real()` for the variable of a foreach loop), and the writes to IR
+storage that bypass them (fused int updates, in-place string appends and list pushes, typed foreach)
+never replace an object (they apply to int and string locals, and to a local holding a list).
+`ObjectLocalRealReference.qtest` checks the counts against the AST interpreter's. A third rule
+completes the lexical
 lifetime of IR-only locals: when a function is left, the values they own are released last
 local first, as the AST interpreter releases the variables of a frame. When an exception leaves
 the function, IR-only locals and runtime-stack locals are released together in one sequence, last
@@ -623,6 +647,136 @@ engines take no reference the AST interpreter does not take:
   single reference can take it over or change it in place), and neither is an argument (a direct
   or inlined call can take its argument's slot over as its parameter;
   `BorrowedLocalArguments.qtest`).
+
+A value read from a variable without a reference of its own (native code reads the local cache
+this way, and the IR interpreter the base of a method call) is borrowed from the variable, and a
+write to the variable releases it. The AST interpreter evaluates every argument of a call and the
+receiver of a method call into a value of its own, so an argument that assigns the variable read
+for an earlier argument or for the receiver (`f(t = new T("a"), t = new T("b"))`, `f(t, t = x)`,
+`o.m(o = new T())`, `o.m(remove o)`) leaves the value read intact.
+`qore_ir_find_local_reads_overwritten_before_use()` finds the reads (LoadLocal, and StoreLocal,
+whose value is the variable's) that a write to the same variable (`qore_ir_get_written_local()`,
+which includes lvalue paths rooted at it; in a function that creates a reference, any call) can
+release before a use, through guards and Phis, on a path that does not execute the read again.
+Native code takes a reference of its own for each of them (`overwritten_local_reads`), released
+as a temporary's, and the IR interpreter borrows none of them as a method base. The AST interpreter
+holds a reference to a receiver read from a variable or a container while the call's arguments
+need evaluation (`QoreDotEvalOperatorNode::evalImpl()`). `LocalReadOverwrittenBeforeUse.qtest`.
+In the same way it holds a reference to a callable read from a variable while the arguments of a
+call through it need evaluation (`CallReferenceCallNode::evalImpl()`: `c(c = NOTHING)`,
+`c(c = other)`), and to a list or hash read from a variable while the index or key of `[]` or `{}`
+needs evaluation (`QoreSquareBracketsOperatorNode::evalImpl()`,
+`QoreHashObjectDereferenceOperatorNode::evalImpl()`: `l[(l = x).size() - 1]`,
+`h{(h = x).firstKey()}`), and to a sequence read from a variable while the indexes of a slice
+need evaluation (`QoreSquareBracketsRangeOperatorNode`: `l[0..(l = x).size()]`, also as the source
+of a functional operator); the compiled modes evaluate these operands into values of their own.
+`OperandAssignedByArgument.qtest`.
+
+The AST interpreter gives the temporary arguments of a call to the callee's parameters, which
+it releases last parameter first when the callee returns. The compiled modes release the
+temporaries a call consumes in the same order: native code and the IR interpreter release them last
+argument first after a call that does not take them over (`QoreIRToLLVM::releaseConsumedCallArgs()`,
+the interpreter's `releaseConsumedCallArgs` and `consumeLastUseCallArgSlots()`), and a Phi of
+temporaries that are used by the Phi once, and otherwise only before it in their own block, takes
+their references over, so that it is a temporary the call consumes too
+(`interpreter_phi_takes_incoming`; native code: `consumable_phis`, whose cleanup slot takes the
+incoming temporary's slot over at the end of each predecessor). The native slot is created when the
+Phi is lowered, before the statement's `DiscardTemps`, and the decision for each incoming value is
+made in the fixup pass, when every block is lowered: the blocks of a nested `?:` or `??` that give an
+incoming value are lowered after the outer Phi, whose temporaries otherwise were released at the next
+iteration of a loop. An incoming value with no cleanup slot of its own gives the Phi's slot a
+reference of its own. In the IR interpreter every Phi's slot owns its value, so every Phi is a
+temporary. `CallArgumentReleaseOrder.qtest`.
+
+When an exception leaves an expression, the AST interpreter unwinds its evaluation: the arguments
+of each call (and the elements of each list or hash literal) evaluated before the exception are
+released with their argument list, first argument first, the innermost call's first, and an
+operand that an operator holds is released as the operator is unwound; a receiver (the object of a
+method call, the container of `[]` or `{}`, the value of a cast, the callable of a call
+through a call reference) is held by the statement (`QoreStatementTempScope::holdReceiver()`) and
+released when it ends, last held first. The compiled modes register a statement's temporaries as
+they are created and release them last registered first, which gave another order
+(`f(new T("a"), new T("b"), thr())` destroyed `b` first). `qore_ir_build_exception_release_groups()`
+classifies each value used once by the instruction that uses it: an argument list (the arguments of
+a call, the elements of `MakeList`/`MakeHash` and the typed container constructors; the incoming
+values of a Phi in an argument list take the Phi's class), a receiver, or released on its own; and
+`qore_ir_order_exception_release()` orders a statement's temporaries for an exception: the lists
+last started first, each first registered first, then the receivers, last registered first. The IR
+interpreter orders the temp scopes it drains for an exception (`IRCleanupSlots::orderForException()`,
+from `cleanupToTempScope()` and `cleanupValues()` when they release for an exception); native code
+releases the temporaries of the raising statement in that order on the edge to an in-frame handler
+(`getExceptionEdgeTarget()`), and, for an exception leaving the function, on a per-site edge to the
+error return when the order of the temporaries that can run a destructor (a value whose type can hold
+an object, `QoreTypeInfo::needsScan()`) differs from the error return's (`getOrderedErrorReturnEdge()`;
+a statement with more than 256 temporaries keeps the error return's order, as each exception check
+orders the temporaries registered before it).
+`ExceptionTempReleaseOrder.qtest`.
+
+The AST interpreter evaluates the operands of an operator into holders that the operator releases
+when it returns, and a functional operator (`map`, `select`, `foldl`, `foldr`, map-select and the
+hash `map` operators) holds its source until it returns, so `f(new T("a") == new T("b"), g())`
+destroys `b` and `a` before `g()` runs. The compiled modes release a statement's temporaries when
+the statement ends unless an instruction releases them earlier, so the lowering emits
+`ReleaseOwnedTemp` for the operands of comparisons, `instanceof`, `exists` and slices that are calls
+once the operator has run (`qore_ir_release_operator_operand_temps()`; their values hold no reference
+to an operand's temporary; another operand's value can be a variable's or an implicit argument's,
+whose element slot a later `$1` reads again, and an operand whose type cannot hold an object is
+skipped), and for the value of
+the source of `map`, `select`, map-select and the hash `map` operators once the operator is lowered
+(`QoreIRLowering::FunctionalSourceRelease`, which records the source's value in `lowerExpression()`;
+the iterator of the loop holds a reference of its own). Only a temporary list is released (a call, a
+slice or another functional operator of a list type; for a fused pipeline, its base source): over a single value the compiled modes give the value itself, and a
+fold gives one of its source's elements without a reference of its own, so the source of `foldl`
+and `foldr`, and a source of another type, stay with the statement. `ReleaseOwnedTemp` releases a
+value only when the frame owns it as a temporary, so an operand read from a variable is left alone.
+The release is not a use of the value for the optimizations that count uses: an AOT aggregate-return
+projection of `exists f()` or `elements f()` makes the call give the operator's value, so no
+aggregate is made, and removes the release with the value (`qore_ir_fuse_aggregate_return_projections()`;
+counted as a use, it left the call with two uses, which no projection takes).
+The elements of a list or hash literal that are temporaries are released once the container holds
+them (`releaseContainerElementTemps()`), as the AST interpreter's holders are, so the container's
+references are their only ones. The value of a functional operator can be its source's (over a single
+value `map` gives `$1` and `select` the value itself, the same IR value) or one of its elements (the
+accumulator of a fold), so when the source is not known to be a list, and for every fold, the
+operator's value gets a reference of its own (RefSelf) before the source is released
+(`lowerWithSourceRelease()`); a value of a type that is never a node (`int`, `float`, `bool`) gets
+none, as it holds no reference to the source (a string or a date can be the source's own node). The
+elements that a fold's accumulator has passed are still released when the statement ends (the first
+element the accumulator takes and the accumulator Phi are temporaries of the statement), which can
+change the exception a caller catches: in `f((foldl $2, mk()), thr())` where the destructor of the
+first element throws, the AST interpreter catches the destructor's exception and the compiled modes
+`thr()`'s. The IR interpreter releases the last element of an iterator loop when
+the iterator is exhausted, as native code does (the next `qore_rt_iterator_next()` call releases the
+previous element and stores NOTHING when it is done). An exception that leaves a fused pipeline for a
+handler of the function releases the pipeline's iterator and base source in a cleanup block before
+the handler runs (`emitForeachExceptionCleanup()`), as the AST interpreter's functional iterators
+release them when the exception unwinds them.
+
+On the path of an exception, the IR interpreter releases the temporaries with the exception's sink
+(`cleanupValues()`, `cleanupToTempScope()`): an exception raised by a destructor is added to the one
+raised, as the AST interpreter adds it when it unwinds its holders; a null sink lost it and made
+`execDestructor()` assert in a debug build.
+
+The runtime frame wrapper (`execJITWithDeopt()`) pushes the body locals of a native function that
+need runtime storage (not IR-only, not closure-bound) on the thread's local variable stack and pops
+them when the function returns, so native code only clears such a local at the end of its scope
+(`qore_rt_uninstantiate_local_aot()`). A direct AOT fast entry, which compiled code calls without
+the wrapper, pushes them itself (`emitLocalInstantiation()`) and therefore pops them when it returns
+(`qore_rt_pop_local_aot()` from `emitLocalUninstantiation()`); clearing them left one entry on the
+stack for each call, and the lookup of a top-level local, which walks the stack, made a top-level
+loop of such calls quadratic. `RuntimeLocalStackBalance.qtest` checks the stack's size
+(`qore_test_local_var_stack_size()`, a test hook) around loops of calls in every mode.
+
+The native cache of a local on the runtime stack is retained by the local's reload tracker. A
+store releases the tracker's reference before the runtime assignment releases the variable's, so
+the value replaced is destroyed by the assignment, as with the AST interpreter. The tracker is
+created by the first store lowered when it does not exist yet, also for a reload-exempt local
+(`clearLocalReloadTracker(..., honor_reload_exempt = false)`, as the retain after the store
+creates it): a store executed again in a loop otherwise left the value it replaced in the tracker
+until the next store or the function's exit (`ObjectLocalLifetime.qtest`, `reassign_loop`). An lvalue
+path operation on a local clears the tracker with the eligibility of the reload that follows it in the
+same way, or an operation executed again found the tracker holding the container it reloaded the last
+time, which made the container look shared to the next change.
 
 `benchmark_exec_modes.qr` (object_local, object_list_index, new_object_member, builtin_method,
 queue_cycle) measures these patterns in every mode.

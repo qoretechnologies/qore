@@ -1,0 +1,114 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ./CMakeBuildHelpersTestBase.qm
+
+%exec-class CMakeGenericRebuildTest
+
+#! Generic qcc objects: rebuilds of the object group and the adoption of its object tree
+/** One scenario of the incremental life of the generic qcc object helper project of CMakeBuildHelpersTestBase.qm,
+    on a baseline built for it.  Each scenario is a file of its own, so that none comes near the time limit of a
+    test and test shards run them side by side.
+*/
+class CMakeGenericRebuildTest inherits CMakeBuildHelpersTestBase::GenericQccObjectTest {
+    constructor() : GenericQccObjectTest("CMakeGenericRebuildTest", "1.0", \ARGV) {
+        addTestCase("generic qcc objects: module, sibling and symbol rebuilds, and adopting a current or a stale tree",
+            \testRebuildAndAdoption());
+        set_return_value(main());
+    }
+
+    #! A module, a sibling and a symbol rebuild, then adopting a current object tree and rebuilding a stale one
+    /** Steps, each on the tree the step before it left:
+        - the module the group loads is replaced at the same path: one batch bootstrap republishes the group; this
+          is the first build after the baseline's reconfiguration, so it also reruns the object recipes that the
+          reconfiguration's new dependency scripts name (see @ref settleGenericBaseline())
+        - a comment in the consumer of a sibling's constant: the tree is current after the module rebuild, so that
+          consumer is the one stale component
+        - a function added to the provider: the source-symbol manifest names it; the link map is read from the
+          tree this build relinked
+        - the batch stamp removed from the current tree: it is adopted without a compile
+        - the batch stamp removed and the provider changed: the stale tree is rebuilt
+    */
+    testRebuildAndAdoption() {
+        TmpDir tmp("qore-cmake-qcc-rebuild-");
+        hash<GenericQccProject> project = buildGenericBaseline(tmp.path);
+
+        string build_dir = project.build_dir;
+        string provider = project.provider;
+        string sibling_const_consumer = project.sibling_const_consumer;
+        string late_object_module = project.late_object_module;
+        list<string> object_paths = project.object_paths;
+        string source_out = project.source_out;
+
+        date module_object_stamp = mtime(object_paths[0] + ".stamp");
+        write(late_object_module, replace(read(late_object_module),
+            "late-defined qcc object dependency",
+            "rebuilt qcc object dependency"));
+        string module_rebuild = run(buildCommand(build_dir));
+        assertTrue(module_rebuild.find(
+                "batch bootstrapping cmake-smoke (24 sources)") != -1,
+            "same-path qmod replacement reruns one coherent batch bootstrap: "
+                + module_rebuild);
+        assertNeq(module_object_stamp, mtime(object_paths[0] + ".stamp"),
+            "module replacement republishes the script object group");
+
+        write(sibling_const_consumer, read(sibling_const_consumer)
+            + "# force incremental sibling const_ref resolution\n");
+        string sibling_const_incremental = run(buildCommand(build_dir));
+        assertTrue(sibling_const_incremental.find("compiling 1 stale component(s)") != -1
+                && sibling_const_incremental.find("siblingconstconsumer_qc.qo") != -1,
+            "consumer-only rebuild exercises sibling static-default const_ref resolution: "
+                + sibling_const_incremental);
+        string sibling_const_static_out = run(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
+            qore_build_dir, build_dir + "/late-modules", build_dir + "/qo-static-host"));
+        assertEq(source_out, sibling_const_static_out,
+            "incremental sibling const_ref rebuild remains load-equivalent");
+        string source_symbols = read(build_dir + "/qo-scripts/source-symbols.manifest");
+        assertTrue(source_symbols.find("class\tCMakeQoProvider\t") != -1
+                && source_symbols.find("function\tcmakeQoFreeFunction\t") != -1
+                && source_symbols.find("function\tcmakeQoCallRefFunction\t") != -1,
+            "qcc object helper writes a source-symbol manifest: " + source_symbols);
+
+        # Source edits no longer force a CMake configure.  A build-time symbol
+        # barrier must nevertheless publish newly added providers before qcc
+        # selects cross-source preload inputs.
+        write(provider, read(provider)
+            + "\nstring sub cmakeQoIncrementalSymbol() { return \"incremental\"; }\n");
+        string symbol_rebuild = run(buildCommand(build_dir));
+        string updated_source_symbols = read(
+            build_dir + "/qo-scripts/source-symbols.manifest");
+        assertTrue(updated_source_symbols.find(
+                "function\tcmakeQoIncrementalSymbol\t") != -1,
+            "incremental source edits refresh the source-symbol manifest: "
+                + symbol_rebuild + updated_source_symbols);
+
+        string link_map = read(build_dir + "/linked.qo.qolink.json");
+        assertTrue(link_map.find("\"resolution\": \"resolved\"") != -1,
+            "qo-link map resolves standalone imports: " + link_map);
+        assertTrue(link_map.find("CMakeQoProvider::label") != -1,
+            "qo-link map records static method resolution: " + link_map);
+        assertTrue(link_map.find("CMakeQoGlobal") != -1,
+            "qo-link map records cross-file global resolution: " + link_map);
+
+        string bootstrap_stamp = build_dir + "/qo/.qcc-scc/.qcc-batch-bootstrap.stamp";
+        unlink(bootstrap_stamp);
+        string adopted = run(buildCommand(build_dir));
+        assertTrue(is_file(bootstrap_stamp)
+                && adopted.find("qcc: script-context .qo") == -1,
+            "existing current object tree is adopted without recompiling the batch: " + adopted);
+
+        unlink(bootstrap_stamp);
+        write(provider, read(provider) + "# force stale-tree detection\n");
+        string stale_adoption = run(buildCommand(build_dir));
+        assertTrue(stale_adoption.find("qcc: script-context .qo") != -1,
+            "existing stale object tree is batch rebuilt instead of adopted: " + stale_adoption);
+    }
+}

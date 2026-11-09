@@ -245,6 +245,77 @@ authenticate();
     around direct native implementations. Foreign runtime I/O that does not use Qore's policy checks remains outside
     this mechanism; provenance is execution context, not data taint tracking.
 
+    @subsection sandbox_module_init Module Initialization
+
+    In this section, code that is not trusted is code that a sandbox governs, and code whose parse options restrict a
+    functional domain.
+
+    The directories of library code are the directories of the process-wide module path when the library is
+    initialized: those of \c QORE_MODULE_DIR and the standard module directories (or those that the embedding
+    application sets before it initializes the library).  A directory added to the process-wide module path later,
+    with an unquoted \c %append-module-path directive or by the embedding application, is searched for modules but
+    does not hold library code: an application whose modules must be library code adds their directories before it
+    initializes the library, in \c QORE_MODULE_DIR or with the embedding API (Qorus, for example, adds
+    \c $OMQ_DIR/qlib and \c $OMQ_DIR/user/modules with \c ModuleManager::addModuleDir() before it initializes the
+    library; its own unquoted directives only repeat them as a fallback).  Code that is not trusted, and a %Program that is sandboxed
+    or restricted when it is parsed, cannot extend the process-wide module path: an unquoted
+    \c %append-module-path directive is a parse error there (a quoted path adds a directory to the %Program's own
+    module path), and the embedding API that adds directories ignores such a caller.  The source of a library module
+    can, whoever loads it first: whether such a directive is allowed depends on the source being parsed, not on the
+    code that loads it.
+
+    A module found in a directory of library code is library code.  It is loaded from the file that was found there:
+    a load by path through a link to a library module loads the library module's file.  Its initialization (the
+    static initializers of its classes, its global variable and constant initializers and its \c init closure) runs
+    with no sandbox provenance, also when code that is not trusted loads it first: the sandbox of the loading code
+    does not govern it, its interrupts and policy do not apply to it, and what it creates (objects, callbacks,
+    registrations in the module's own registries, threads it starts) belongs to no sandbox, so a later caller that
+    uses it is not affected by the sandbox of the code that happened to load the module.  Every later call into the
+    module is governed by its caller, as any other call.  The restrictions of the loading %Program's parse options
+    still apply to the module.  The time limits of the loading call still count the time that the initialization
+    takes.
+
+    Library code that code that is not trusted loads is not shaped by that code:
+    - its source is parsed with the parse defines that the loading %Program's host set (with
+      @ref Qore::Program::define() "Program::define()" by trusted code, or by the embedding application), but not
+      with those that the loading code defined in its source or set itself; a %Program that code that is not trusted
+      creates has no host, so no define of it (its parse option defines included) shapes library code, and a child
+      %Program keeps the record of the defines that its parent's host did not set;
+    - its dependencies (\c %requires), its optional dependencies (\c %try-module) and its child modules
+      (\c %try-child-module) are resolved through its own module paths and the process-wide module path, not through
+      the module paths that the loading %Program added, and never to a module that code that is not trusted chose
+      (see below), also when that code loaded it before: an optional dependency or a child module is then left out,
+      and a dependency is missing; the same holds for a module that library code loads at run time into its own
+      %Program, whoever calls it;
+    - a module that is not library code and that its initialization loads, by path or otherwise, is governed by the
+      sandbox of the loading code, and is subject to the same limits as a module that the loading code loads itself
+      (see below);
+    - code that is not trusted cannot mark imported classes and hashdecls for re-export to the modules that a
+      %Program loads (the \c reexport argument of @ref Qore::Program::importClass() "Program::importClass()" and
+      @ref Qore::Program::importHashDecl() "Program::importHashDecl()").
+
+    A module that a caller loads by path, or finds through a module path that a %Program added with
+    \c %prepend-module-path or \c %append-module-path, is not library code: it is initialized under the sandbox of
+    the code that loads it, and a source module's %Program keeps that sandbox.  Neither is a library module that code
+    that is not trusted loads into a %Program container of its own (for example with
+    @ref Qore::Program::loadApplyToPrivateUserModule() "Program::loadApplyToPrivateUserModule()"): it is parsed and
+    initialized with the container's code and parse defines, under the sandbox of the code that loads it.
+
+    Module names are process-wide: once a module is loaded, every later request for its name gets that module.  So
+    that code that is not trusted cannot replace a library module, or hand other code a module of its own choosing,
+    its loads are limited:
+    - it cannot load a module from outside the directories of library code (by path, through a module path that its
+      %Program added, or from source) under the name of a module in a directory of library code; the load raises
+      \c LOAD-MODULE-ERROR, naming the module, the path it was loaded from and the library module that it would
+      replace
+    - it cannot load a module into a %Program container of its own that is not private (for example with
+      @ref Qore::Program::loadApplyToUserModule() "Program::loadApplyToUserModule()") under the name of a module in a
+      directory of library code; the load raises \c LOAD-MODULE-ERROR, naming the module and the library module
+    - a module that it loaded from outside the directories of library code under any other name is given only to code
+      that is not trusted and that has the same sandbox, or, for code with no sandbox, that runs in the same %Program:
+      a later request for its name from other code, library code included, and a reload raise \c LOAD-MODULE-ERROR,
+      naming the module and its file
+
     @section sandbox_filesystem Filesystem Security
 
     The filesystem security system controls which paths can be accessed by sandboxed code. It supports:

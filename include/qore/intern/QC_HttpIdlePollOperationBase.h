@@ -36,6 +36,8 @@
 #include "qore/SocketPollOperationBase.h"
 #include "qore/QoreSocketObject.h"
 
+#include <atomic>
+
 //! C++ private data for HttpIdlePollOperationBase
 /** Monitors an idle HTTP keep-alive connection for:
     - New data arriving (indicating a new request)
@@ -111,8 +113,20 @@ protected:
     DLLLOCAL const char* getStateImpl() const override;
 
 private:
+    //! Ends the wait with @a s unless the operation ended meanwhile; returns false if it had ended
+    /** abort() runs on any thread (the Qore-level abort() method, or a worker dispatched by the I/O controller for a
+        timeout) and sets IdleState::CLOSED; the I/O thread checks the state and the socket, then sets the result.
+        A compare-exchange from IdleState::IDLE keeps an abort() made between the check and the store, which would
+        otherwise be reported as data available (or a timeout) instead of a close.
+
+        @param s the result: IdleState::DATA_AVAILABLE, IdleState::CLOSED or IdleState::TIMEOUT
+        @param site where the result is set, for the debug hook (see PollStateCloseHook)
+    */
+    DLLLOCAL bool finish(IdleState s, const char* site);
+
     QoreSocketObject* sock_obj;         //!< ref'd socket
-    IdleState idle_state = IdleState::IDLE;
+    //! the state; atomic: abort() sets it from any thread (see finish())
+    std::atomic<IdleState> idle_state{IdleState::IDLE};
     int64_t deadline_us;                //!< absolute deadline in microseconds since epoch
     int64_t ttl_us;                     //!< keep-alive timeout duration in microseconds
 

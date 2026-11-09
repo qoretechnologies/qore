@@ -1,0 +1,295 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class CallArgumentReleaseOrderTest
+
+#! Regression test: the temporary arguments of a call are released last argument first when the call returns
+/** The AST interpreter gives the temporary arguments of a call to the callee's parameters, which it releases last
+    parameter first when the callee returns, so the objects created for the arguments of a call (<tt>f(new T("a"), new
+    T("b"), new T("c"))</tt>) are destroyed c, b, a.  The compiled modes released the temporaries that a call consumes
+    after the call first argument first (native code: calls of closures, of static methods and from top-level code; the
+    IR interpreter: constructor calls, and calls of IR functions in an arbitrary order), and an argument given by a Phi
+    (<tt>c ? new T("b") : ...</tt>, <tt>new T("b") ?? ...</tt>) was not a temporary of its own: its incoming temporary
+    kept its reference until the end of the statement, after the arguments the call had consumed.  The script calls
+    functions, methods, static methods, constructors and closures with temporary arguments, and with a temporary given
+    by a Phi in each position, also by a nested ?: or ?? in a loop (whose temporaries native code released at the next
+    iteration, and the IR interpreter at the end of the statement), in a function and in top-level code, in every
+    execution mode, on the IR tier of tiered execution and as a qcc executable (see ExecModeOutputTest).
+*/
+class CallArgumentReleaseOrderTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+class T {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+class K {
+    constructor(auto a, auto b, auto c) { printf("K %s %s %s\n", a.n, b.n, c.n); }
+    m(auto a, auto b, auto c) { printf("m %s %s %s\n", a.n, b.n, c.n); }
+    static s(auto a, auto b, auto c) { printf("s %s %s %s\n", a.n, b.n, c.n); }
+}
+sub f(auto a, auto b, auto c) { printf("f %s %s %s\n", a.n, b.n, c.n); }
+sub g(auto a, auto b) { printf("g %s %s\n", a.n, b.n); }
+sub t(bool c, K k) {
+    code cl = sub (auto a, auto b, auto c) { printf("cl %s %s %s\n", a.n, b.n, c.n); };
+    printf("-- f\n");
+    f(new T("a"), new T("b"), new T("c"));
+    printf("-- f ?: second\n");
+    f(new T("a"), c ? new T("b") : new T("B"), new T("c"));
+    printf("-- f ?: first\n");
+    f(c ? new T("a") : new T("A"), new T("b"), new T("c"));
+    printf("-- f ?: last\n");
+    f(new T("a"), new T("b"), c ? new T("c") : new T("C"));
+    printf("-- f ??\n");
+    f(new T("a"), new T("b") ?? new T("x"), new T("c"));
+    printf("-- g ?: ?:\n");
+    g(c ? new T("p") : new T("P"), c ? new T("q") : new T("Q"));
+    printf("-- method ?:\n");
+    k.m(new T("a"), c ? new T("b") : new T("B"), new T("c"));
+    printf("-- static method\n");
+    K::s(new T("a"), new T("b"), new T("c"));
+    printf("-- static method ?:\n");
+    K::s(new T("a"), c ? new T("b") : new T("B"), new T("c"));
+    printf("-- new ?:\n");
+    new K(new T("a"), c ? new T("b") : new T("B"), new T("c"));
+    printf("-- closure\n");
+    cl(new T("a"), new T("b"), new T("c"));
+    printf("-- closure ?:\n");
+    cl(new T("a"), c ? new T("b") : new T("B"), new T("c"));
+    printf("-- end\n");
+}
+for (int i = 0; i < 2; ++i) {
+    t(!i, new K(new T("x1"), new T("x2"), new T("x3")));
+}
+new K(new T("y1"), new T("y2"), new T("y3"));
+f(new T("z1"), new T("z2"), new T("z3"));
+f(new T("z4"), True ? new T("z5") : new T("Z5"), new T("z6"));
+# a temporary given by a nested ?: or ??, in a loop, so that a temporary released late would be released at the next
+# iteration or at the end of the function
+sub nested(bool c, bool d) {
+    for (int i = 0; i < 2; ++i) {
+        g(new T("a" + i), c ? (d ? new T("b" + i) : new T("B" + i)) : new T("x" + i));
+        printf("-- nested ?:\n");
+        g(c ? (d ? new T("p" + i) : new T("P" + i)) : new T("y" + i), new T("q" + i));
+        printf("-- nested first\n");
+        g(new T("c" + i), (d ? new T("e" + i) : NOTHING) ?? new T("z" + i));
+        printf("-- nested ??\n");
+    }
+    printf("-- end nested\n");
+}
+nested(True, True);
+nested(True, False);
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "K x1 x2 x3",
+            "dtor x3",
+            "dtor x2",
+            "dtor x1",
+            "-- f",
+            "f a b c",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "-- f ?: second",
+            "f a b c",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "-- f ?: first",
+            "f a b c",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "-- f ?: last",
+            "f a b c",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "-- f ??",
+            "f a b c",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "-- g ?: ?:",
+            "g p q",
+            "dtor q",
+            "dtor p",
+            "-- method ?:",
+            "m a b c",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "-- static method",
+            "s a b c",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "-- static method ?:",
+            "s a b c",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "-- new ?:",
+            "K a b c",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "-- closure",
+            "cl a b c",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "-- closure ?:",
+            "cl a b c",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "-- end",
+            "K x1 x2 x3",
+            "dtor x3",
+            "dtor x2",
+            "dtor x1",
+            "-- f",
+            "f a b c",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "-- f ?: second",
+            "f a B c",
+            "dtor c",
+            "dtor B",
+            "dtor a",
+            "-- f ?: first",
+            "f A b c",
+            "dtor c",
+            "dtor b",
+            "dtor A",
+            "-- f ?: last",
+            "f a b C",
+            "dtor C",
+            "dtor b",
+            "dtor a",
+            "-- f ??",
+            "f a b c",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "-- g ?: ?:",
+            "g P Q",
+            "dtor Q",
+            "dtor P",
+            "-- method ?:",
+            "m a B c",
+            "dtor c",
+            "dtor B",
+            "dtor a",
+            "-- static method",
+            "s a b c",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "-- static method ?:",
+            "s a B c",
+            "dtor c",
+            "dtor B",
+            "dtor a",
+            "-- new ?:",
+            "K a B c",
+            "dtor c",
+            "dtor B",
+            "dtor a",
+            "-- closure",
+            "cl a b c",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "-- closure ?:",
+            "cl a B c",
+            "dtor c",
+            "dtor B",
+            "dtor a",
+            "-- end",
+            "K y1 y2 y3",
+            "dtor y3",
+            "dtor y2",
+            "dtor y1",
+            "f z1 z2 z3",
+            "dtor z3",
+            "dtor z2",
+            "dtor z1",
+            "f z4 z5 z6",
+            "dtor z6",
+            "dtor z5",
+            "dtor z4",
+            "g a0 b0",
+            "dtor b0",
+            "dtor a0",
+            "-- nested ?:",
+            "g p0 q0",
+            "dtor q0",
+            "dtor p0",
+            "-- nested first",
+            "g c0 e0",
+            "dtor e0",
+            "dtor c0",
+            "-- nested ??",
+            "g a1 b1",
+            "dtor b1",
+            "dtor a1",
+            "-- nested ?:",
+            "g p1 q1",
+            "dtor q1",
+            "dtor p1",
+            "-- nested first",
+            "g c1 e1",
+            "dtor e1",
+            "dtor c1",
+            "-- nested ??",
+            "-- end nested",
+            "g a0 B0",
+            "dtor B0",
+            "dtor a0",
+            "-- nested ?:",
+            "g P0 q0",
+            "dtor q0",
+            "dtor P0",
+            "-- nested first",
+            "g c0 z0",
+            "dtor z0",
+            "dtor c0",
+            "-- nested ??",
+            "g a1 B1",
+            "dtor B1",
+            "dtor a1",
+            "-- nested ?:",
+            "g P1 q1",
+            "dtor q1",
+            "dtor P1",
+            "-- nested first",
+            "g c1 z1",
+            "dtor z1",
+            "dtor c1",
+            "-- nested ??",
+            "-- end nested",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("CallArgumentReleaseOrder", Script, (map $1 + "\n", Expected).join(""),
+            "releases the temporary arguments of a call last argument first, as the AST interpreter does") {
+    }
+}

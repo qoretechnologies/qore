@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
+%requires QUnit
 %exec-class HashLookupNativeTest
 
 class HashLookupNativeTest inherits QUnit::Test {

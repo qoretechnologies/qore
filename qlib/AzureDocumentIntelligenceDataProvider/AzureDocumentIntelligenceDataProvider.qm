@@ -70,43 +70,46 @@ module AzureDocumentIntelligenceDataProvider {
             ),
         });
 
-        foreach RestSchemaActionSet actions in (AzureDocumentIntelligenceSchema::getActionSets()) {
-            actions.registerActions(AzureDocumentIntelligenceDataProvider::AppName);
-        }
-        AzureDocumentIntelligenceAnalyzeDocumentDataProvider::initializeTypes();
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(AzureDocumentIntelligenceDataProvider::AppName, sub () {
+            foreach RestSchemaActionSet actions in (AzureDocumentIntelligenceSchema::getActionSets()) {
+                actions.registerActions(AzureDocumentIntelligenceDataProvider::AppName);
+            }
 
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AzureDocumentIntelligenceDataProvider::AppName,
-            "path": "/analyze-document",
-            "action": "analyze-document",
-            "display_name": "Analyze Document",
-            "short_desc": "Run a Document Intelligence model over a document (async)",
-            "desc": "Submits a document to a Document Intelligence model and "
-                "waits for the analysis to complete. Returns extracted text, fields, tables, "
-                "and structure for use in subsequent workflow steps.\n\n"
-                "**Document source** — supply exactly one:\n"
-                "- `document_url` — public URL (Azure fetches the document)\n"
-                "- `document_bytes` — raw bytes (base64-encoded automatically)\n"
-                "- `document_path` — local file path (read and base64-encoded)",
-            "action_code": DPAT_API,
-            "groups": ("Document Extraction",),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                AzureDocumentIntelligenceAnalyzeRequestDataType::Fields{
-                    "model_id",
-                }, {
-                    "preselected": True, "required": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                AzureDocumentIntelligenceAnalyzeRequestDataType::Fields{
-                    "document_url", "document_bytes", "document_path",
-                }, {
-                    "preselected": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                AzureDocumentIntelligenceAnalyzeDocumentDataProvider::RequestType.getFields()
-                    - ("model_id", "document_url", "document_bytes", "document_path")
-            ),
-            "output_type": AzureDocumentIntelligenceAnalyzeDocumentDataProvider::ResponseType,
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": AzureDocumentIntelligenceDataProvider::AppName,
+                "path": "/analyze-document",
+                "action": "analyze-document",
+                "display_name": "Analyze Document",
+                "short_desc": "Run a Document Intelligence model over a document (async)",
+                "desc": "Submits a document to a Document Intelligence model and "
+                    "waits for the analysis to complete. Returns extracted text, fields, tables, "
+                    "and structure for use in subsequent workflow steps.\n\n"
+                    "**Document source** — supply exactly one:\n"
+                    "- `document_url` — public URL (Azure fetches the document)\n"
+                    "- `document_bytes` — raw bytes (base64-encoded automatically)\n"
+                    "- `document_path` — local file path (read and base64-encoded)",
+                "action_code": DPAT_API,
+                "groups": ("Document Extraction",),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    AzureDocumentIntelligenceAnalyzeRequestDataType::Fields{
+                        "model_id",
+                    }, {
+                        "preselected": True, "required": True,
+                    }
+                ) + DataProviderActionCatalog::getActionOptionFromFields(
+                    AzureDocumentIntelligenceAnalyzeRequestDataType::Fields{
+                        "document_url", "document_bytes", "document_path",
+                    }, {
+                        "preselected": True,
+                    }
+                ) + DataProviderActionCatalog::getActionOptionFromFields(
+                    AzureDocumentIntelligenceAnalyzeDocumentDataProvider::requestType().getFields()
+                        - ("model_id", "document_url", "document_bytes", "document_path")
+                ),
+                "output_type": AzureDocumentIntelligenceAnalyzeDocumentDataProvider::responseType(),
+            });
         });
     };
 }

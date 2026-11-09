@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - time zone lookup and creation from the system zoneinfo through the C++ API
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

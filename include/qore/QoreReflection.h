@@ -159,6 +159,9 @@ private:
 class QoreExternalStaticMember : public QoreExternalMemberVarBase {
 public:
     //! returns the current value of the member; caller owns an reference returned
+    /** Returns no value if the calling Program cannot access the member: the Program that defines its class has
+        been deleted (see setValue(), which raises \c PROGRAM-ERROR then)
+    */
     DLLEXPORT QoreValue getValue() const;
 
     //! sets the value of the member
@@ -694,6 +697,42 @@ public:
     */
     DLLEXPORT int checkClassCallAccess(const QoreClass* cls, const QoreProgram* target, ExceptionSink* xsink) const;
 
+    //! Returns true if the language's member access applies to the caller's use of reflection
+    /** It applies to code that a sandbox governs, also through a policy barrier or in a system-policy capability
+        (QoreSandboxManagerHelper::All), and to code whose runtime parse options restrict a functional domain; other
+        code may use every member of a class through reflection, whatever its access
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool appliesMemberAccess() const;
+
+    //! Checks that the caller may use an element of a class that is not public
+    /** For callers to which the language's member access applies (appliesMemberAccess()), the same rules as in the
+        language: a \c private element can be used from the class that declares it and the classes in its hierarchy
+        (its subclasses, and the classes it inherits), and a \c private:internal element only from the class that
+        declares it; the class context is the one of the code that called the reflection API.  Other callers may use
+        any element.
+
+        @par Example
+        Code that a sandbox governs reads a \c private:internal static member of a trusted module's class with
+        \c StaticMember::getValue(): the check refuses it, as the language refuses it, also from a subclass.
+
+        @param cls the class that declares the element
+        @param access the access of the element
+        @param kind the kind of element for the error message, e.g. \c "member" or \c "method"
+        @param name the name of the element
+        @param xsink raises \c REFLECTION-ACCESS-ERROR if the access is not allowed
+
+        @return 0 if allowed, -1 if an exception was raised
+
+        @throw REFLECTION-ACCESS-ERROR the element is not public, and the language would not allow the caller to use
+        it
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int checkClassElementAccess(const QoreClass* cls, ClassAccess access, const char* kind,
+            const char* name, ExceptionSink* xsink) const;
+
 private:
     int checkProgramAccess(const QoreProgram* target, const char* what, Access access, ExceptionSink* xsink,
         const QoreClass* cls) const;
@@ -703,6 +742,10 @@ private:
     QoreParseOptions po;
     //! the sandbox manager that governs the caller (referenced), or nullptr
     class QoreSandboxManager* sm;
+    //! the class context of the calling code, or nullptr
+    const class qore_class_private* caller_class;
+    //! true if the language's member access applies to the caller (see appliesMemberAccess())
+    bool member_access;
 
     QoreReflectionCaller(const QoreReflectionCaller&) = delete;
     QoreReflectionCaller& operator=(const QoreReflectionCaller&) = delete;

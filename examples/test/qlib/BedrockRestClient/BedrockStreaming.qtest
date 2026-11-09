@@ -2,11 +2,11 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/BedrockRestClient.qm
-%requires ../../../../qlib/AwsEventStream.qm
-%requires ../../../../qlib/QoreLlmTypes.qm
-%requires ../../../../qlib/QoreLlmUtils
+%requires QUnit
+%requires BedrockRestClient
+%requires AwsEventStream
+%requires QoreLlmTypes
+%requires QoreLlmUtils
 %requires json
 %exec-class BedrockStreamingTest
 

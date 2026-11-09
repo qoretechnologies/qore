@@ -57,6 +57,14 @@ public:
     DLLLOCAL static FunctionalOperatorInterface* getFunctionalIterator(
             FunctionalOperator::FunctionalValueType& value_type, QoreValue exp, bool fwd, const char* who,
             ExceptionSink* xsink);
+
+    //! Returns an iterator for a value that the IR computed: as getFunctionalIterator() for an expression giving it
+    /** A reference (ex: an element <tt>h.r</tt> holding <tt>\x</tt>) is iterated as a single value, as the
+        reference that the expression gives in the AST interpreter, instead of being evaluated as an expression
+    */
+    DLLLOCAL static FunctionalOperatorInterface* getFunctionalIteratorForValue(
+            FunctionalOperator::FunctionalValueType& value_type, QoreValue value, bool fwd, const char* who,
+            ExceptionSink* xsink);
 };
 
 class QoreFunctionalListOperator : public FunctionalOperatorInterface, public ConstListIterator {

@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - yaml module loaded as a dylib and its libyaml parser and emitter as built on macOS
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # -*- mode: qore; indent-tabs-mode: nil -*-
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - backquote child processes: SIGINT handling, killing the process group, output pipe closing
 
 %modern
 

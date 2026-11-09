@@ -3,8 +3,8 @@
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FsUtil.qm
+%requires QUnit
+%requires FsUtil
 %requires ../../ExecModeHarness.qm
 %exec-class RecursiveCapturedScopesTest
 

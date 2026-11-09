@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - reads and writes over INT_MAX bytes in one call (EINVAL on macOS), anonymous mappings
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

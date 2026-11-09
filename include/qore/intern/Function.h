@@ -978,6 +978,14 @@ protected:
 
 public:
     QoreProgram* pgm;
+    //! the ID of \a pgm, which identifies it after it has been deleted; see setProgram()
+    qore_program_id_t pgm_id;
+
+    //! sets the Program of the variant
+    DLLLOCAL void setProgram(QoreProgram* p) {
+        pgm = p;
+        pgm_id = p ? p->getProgramId() : 0;
+    }
 
 protected:
     // flag to recheck params against committed after type resolution

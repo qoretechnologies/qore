@@ -34,21 +34,44 @@ public class StabilityAiGenerateImageDataProvider inherits StabilityAiDataProvid
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
-
-        static *StabilityAiGenerateImageRequestDataType RequestType;
-        static StabilityAiGenerateImageResponseDataType ResponseType =
-            new StabilityAiGenerateImageResponseDataType();
     }
 
-    private { static Mutex type_mutex(); }
+    private {
+        #! The request type, built on first use; see requestType()
+        static *StabilityAiGenerateImageRequestDataType request_type;
+        #! The ID of the request type's builder; see requestType()
+        static int request_type_id = DataProviderActionCatalog::registerLazyValue(
+            \StabilityAiGenerateImageDataProvider::buildRequestType());
+        #! The response type, built on first use; see responseType()
+        static *StabilityAiGenerateImageResponseDataType response_type;
+        #! The ID of the response type's builder; see responseType()
+        static int response_type_id = DataProviderActionCatalog::registerLazyValue(
+            \StabilityAiGenerateImageDataProvider::buildResponseType());
+    }
 
-    #! Materializes schema-derived fields once after the independent inventory is registered
-    /** @throw REST-SCHEMA-ACTION-ERROR the pinned input schema is invalid
-        @note RequestType is immutable after initialization; inventory callbacks never call this method.
+    #! Returns the request type, which is built on first use
+    /** It is built from the vendored API description, so loading the module does not parse it; it is immutable
+        once built
+
+        @throw REST-SCHEMA-ACTION-ERROR the pinned input schema is invalid
     */
-    static initializeTypes() {
-        AutoLock lock(type_mutex);
-        if (!RequestType) { RequestType = new StabilityAiGenerateImageRequestDataType(); }
+    static StabilityAiGenerateImageRequestDataType requestType() {
+        return request_type ?? (request_type = DataProviderActionCatalog::getLazyValue(request_type_id));
+    }
+
+    #! Builds the request type; see requestType()
+    private static StabilityAiGenerateImageRequestDataType buildRequestType() {
+        return new StabilityAiGenerateImageRequestDataType();
+    }
+
+    #! Returns the response type, which is built on first use
+    static StabilityAiGenerateImageResponseDataType responseType() {
+        return response_type ?? (response_type = DataProviderActionCatalog::getLazyValue(response_type_id));
+    }
+
+    #! Builds the response type; see responseType()
+    private static StabilityAiGenerateImageResponseDataType buildResponseType() {
+        return new StabilityAiGenerateImageResponseDataType();
     }
 
     constructor(StabilityAiRestClient::StabilityAiRestClientIo rest)
@@ -56,8 +79,8 @@ public class StabilityAiGenerateImageDataProvider inherits StabilityAiDataProvid
     constructor(*hash<auto> options) : StabilityAiDataProviderCommon(options) {}
 
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
-    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return requestType(); }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return responseType(); }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     #! Rejects explicit null fields before optional type conversion can discard them
@@ -69,7 +92,7 @@ public class StabilityAiGenerateImageDataProvider inherits StabilityAiDataProvid
     auto doRequest(auto req, *hash<auto> request_options) {
         if (req.typeCode() != NT_HASH) { throw "STABILITYAI-INPUT-ERROR", "action options must be an object"; }
         foreach hash<auto> item in (req.pairIterator()) {
-            if (!RequestType.getFields().hasKey(item.key) || !exists item.value || item.value.typeCode() == NT_NULL) {
+            if (!requestType().getFields().hasKey(item.key) || !exists item.value || item.value.typeCode() == NT_NULL) {
                 throw "STABILITYAI-INPUT-ERROR", sprintf("unknown or null option %y", item.key);
             }
         }

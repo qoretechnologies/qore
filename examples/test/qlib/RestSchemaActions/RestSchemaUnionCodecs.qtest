@@ -2,9 +2,9 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/OpenApi3.qm
-%requires ../../../../qlib/RestSchemaActions
+%requires QUnit
+%requires OpenApi3
+%requires RestSchemaActions
 %requires json
 %exec-class UnionCodecTest
 

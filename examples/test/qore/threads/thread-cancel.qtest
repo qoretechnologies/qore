@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - cancellation of sleeps, timed lock and queue waits, pipe reads and file locks
 
 %modern
 %no-child-restrictions

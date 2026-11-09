@@ -3,7 +3,7 @@
 %modern
 %allow-weak-references
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires ../../../../../qlib/QUnit.qm
+%requires QUnit
 %exec-class TransientSourceIdentityTest
 
 #! the number of objects serialized in one operation in each test

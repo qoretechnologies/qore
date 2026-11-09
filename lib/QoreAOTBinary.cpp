@@ -304,7 +304,9 @@ inline uint64_t moduleInfoEnd(uint64_t off, uint64_t len) {
 //! Reads a module file at absolute offsets
 class AOTModuleFileReader {
 public:
-    explicit AOTModuleFileReader(const char* path) : f(fopen(path, "rb")) {
+    // only a regular file is read (see qore_open_regular_file()): a FIFO with the name of a module would block the
+    // loader, which reads the metadata with the module manager's mutex held
+    explicit AOTModuleFileReader(const char* path) : f(qore_open_regular_file(path)) {
         if (!f) {
             return;
         }
@@ -737,7 +739,10 @@ bool qoreAOTEncodeModuleInfo(const QoreAOTModuleFileInfo& info, std::vector<uint
     };
     if (!put_string(info.module_name, "module name")
             || !put_list(info.dependencies, "module dependency")
-            || !put_list(info.unavailable_optional_modules, "unavailable optional module")) {
+            || !put_list(info.unavailable_optional_modules, "unavailable optional module")
+            || !put_list(info.compiled_with, "module compiled with")
+            || !put_list(info.prepended_module_paths, "prepended module path")
+            || !put_list(info.appended_module_paths, "appended module path")) {
         return false;
     }
     record.reserve(QORE_AOT_MODULE_INFO_HEADER_SIZE + payload.size());
@@ -842,6 +847,14 @@ QoreAOTModuleInfoStatus qoreAOTDecodeModuleInfo(const uint8_t* data, size_t len,
     }
     if (!get_list(info.unavailable_optional_modules)) {
         return fail(cancel_error.empty() ? moduleInfoDamaged("the record has an invalid optional module list")
+            : cancel_error);
+    }
+    if (!get_list(info.compiled_with)) {
+        return fail(cancel_error.empty() ? moduleInfoDamaged("the record has an invalid list of the modules it was "
+            "compiled with") : cancel_error);
+    }
+    if (!get_list(info.prepended_module_paths) || !get_list(info.appended_module_paths)) {
+        return fail(cancel_error.empty() ? moduleInfoDamaged("the record has an invalid module path list")
             : cancel_error);
     }
     if (pos != size) {
@@ -16074,7 +16087,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             // Class already exists - use the existing one and delete the new one
             QoreClass* existing = ns_list[ns_idx]->classList.find(name);
             // release the class pointer (handle) reference in case the class is a wrapper
-            qore_class_private::derefClass(*qc, true, true);
+            qore_class_private::derefClass(*qc, true, false, true);
             qc = existing;
             class_already_existed = true;
             preexisting_classes.insert(i);

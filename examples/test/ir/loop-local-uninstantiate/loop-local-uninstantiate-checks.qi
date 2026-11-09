@@ -13,10 +13,12 @@
 # re-keying the twelfth.
 #
 # Only locals that are kept on the runtime local stack are recorded; the IR interpreter keeps others in its own
-# slots.  The loops below use the three kinds of such locals that a loop body commonly has: an object (kept there so
-# that its destructor runs when its block is left), a list extended with "+=" (assigned through the runtime stack),
-# and every local of a function that the IR interpreter cannot analyse completely, which is how the re-keying loop
-# has them: its function reports on stderr, and the IR interpreter does not analyse a method call on stderr.
+# slots.  The loops below use the kinds of locals that a loop body commonly has: an object, a list extended with "+="
+# (assigned through the runtime stack), and the locals of a function like the re-keying loop's.  An object local was
+# kept on the runtime stack so that its destructor ran when its block was left; the IR now keeps it in its own storage
+# and marks its object with a real reference (see QoreIRFunction::real_reference_locals), so the object loop's
+# locals are no longer recorded ("object-recorded" is 0), and the list loop and the placement loop are the ones whose
+# locals the list records ("list-recorded" and "placement-recorded").
 #
 # Two things are asserted, deterministically and without timing:
 #
@@ -55,7 +57,7 @@ class LluCounted {
 
 #! a loop whose body holds an object in a branch that continues and another one after it
 /** @return "object-growth": the growth of the list between two iterations; "object-recorded": the entries that the
-    branch's object adds to the list (more than 0 in the IR interpreter, where this loop's locals are recorded)
+    branch's object adds to the list (0: the IR keeps an object local in its own storage)
 */
 hash<string, int> sub llu_object_locals() {
     int before = 0;
@@ -93,12 +95,17 @@ hash<string, int> sub llu_object_locals() {
 }
 
 #! a loop whose body extends a list with "+=" in a branch that continues and another list after it
-/** @return "list-growth": the growth of the list of instantiated locals between two iterations
+/** @return "list-growth": the growth of the list of instantiated locals between two iterations; "list-recorded": the
+    entries that the branch's list adds to the list (more than 0 in the IR interpreter, which records this loop's list)
 */
 hash<string, int> sub llu_list_locals() {
+    int before = 0;
     int lo = 0;
     int hi = 0;
     int total = 0;
+    if (Option::HAVE_LIBRARY_DEBUGGING) {
+        before = call_function(LluEntriesFunc);
+    }
     foreach int i in (xrange(LluIters)) {
         if (i % 2 == 0) {
             list<hash<auto>> evens = ();
@@ -123,6 +130,7 @@ hash<string, int> sub llu_list_locals() {
     return {
         "list-total": total,
         "list-growth": hi - lo,
+        "list-recorded": lo - before,
     };
 }
 
@@ -134,7 +142,8 @@ hash<string, int> sub llu_list_locals() {
     @return "placed": the number of values placed; "placement-growth": the growth of the list between two iterations
     of the first round; "placement-round-growth": the growth between the start of the second and of the last round.
     The rounds are compared from the second one on, so that a local that the first round instantiates for the rest
-    of the function would stay in the list once without counting as growth
+    of the function would stay in the list once without counting as growth; "placement-recorded": the entries that the
+    function's locals add to the list up to the first sample (more than 0 in the IR interpreter)
 */
 hash<string, int> sub llu_placement() {
     hash<string, string> sources = map {sprintf("key %d", $1): sprintf("text %d", $1 % 7)}, xrange(LluIters);
@@ -143,6 +152,10 @@ hash<string, int> sub llu_placement() {
     int round_growth = 0;
     int lo = 0;
     int hi = 0;
+    int before = 0;
+    if (Option::HAVE_LIBRARY_DEBUGGING) {
+        before = call_function(LluEntriesFunc);
+    }
     foreach string locale in (LluLocales) {
         if (Option::HAVE_LIBRARY_DEBUGGING) {
             if (locale == LluLocales[1]) {
@@ -191,6 +204,7 @@ hash<string, int> sub llu_placement() {
         "placed": placed_count,
         "placement-growth": hi - lo,
         "placement-round-growth": round_growth,
+        "placement-recorded": lo - before,
     };
 }
 

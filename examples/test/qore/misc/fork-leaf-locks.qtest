@@ -20,6 +20,7 @@ class ForkLeafLocksTest inherits QUnit::Test {
             \testQuicIdleCloseHook());
         addTestCase("fork() while another thread holds the lock of the AOT module source hashes",
             \testAotModuleSourceHashes());
+        addTestCase("fork() while another thread holds the lock of the exit hooks", \testExitHooks());
         set_return_value(main());
     }
 
@@ -29,6 +30,11 @@ class ForkLeafLocksTest inherits QUnit::Test {
 
     testAotModuleSourceHashes() {
         forkWhileHeld("aot_module_source_hashes");
+    }
+
+    testExitHooks() {
+        # the lock is held while a system thread is reserved; a child that inherited it held would hang at its end
+        forkWhileHeld("exit_hooks");
     }
 
     private forkWhileHeld(string name) {

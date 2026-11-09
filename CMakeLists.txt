@@ -2942,6 +2942,21 @@ add_subdirectory(examples/plugins/sample-buffer EXCLUDE_FROM_ALL)
 
 # qcc - Qore Code Compiler (AOT)
 add_executable(qcc qcc-main.cpp)
+# qcc's test hooks run a command named in the environment at fixed points of a compile (QORE_QCC_TEST_*_COMMAND, see
+# qcc_run_test_hook() in qcc-main.cpp), for the tests that change a source while qcc compiles; a qcc that is
+# packaged must never run a command taken from its environment, so they are only in a debug build by default, and
+# CI's release builds enable them explicitly.  Like any option(), the value is cached at the first configure of a build
+# directory: changing CMAKE_BUILD_TYPE later does not change it; pass -DQORE_QCC_TEST_HOOKS=ON|OFF to change it
+if (QORE_BUILD_TYPE_LWR STREQUAL "debug")
+    set(_QORE_QCC_TEST_HOOKS_DEFAULT ON)
+else()
+    set(_QORE_QCC_TEST_HOOKS_DEFAULT OFF)
+endif()
+option(QORE_QCC_TEST_HOOKS "build qcc with its test hooks, which run commands from the environment (tests only)"
+    ${_QORE_QCC_TEST_HOOKS_DEFAULT})
+if (QORE_QCC_TEST_HOOKS)
+    target_compile_definitions(qcc PRIVATE QORE_QCC_TEST_HOOKS=1)
+endif()
 add_dependencies(qcc qore-aot-link-config)
 target_include_directories(qcc PRIVATE ${ZSTD_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIR})
 target_link_libraries(qcc libqore ${ZLIB_LIBRARIES} ${QORE_ZSTD_LIBS} ${CMAKE_DL_LIBS})
@@ -3636,6 +3651,17 @@ configure_file(
 unset(_qore_aot_probe_modules)
 unset(_qore_aot_probe_content)
 unset(_qore_exe)
+
+# The qmod build cache (design/qmod-build-cache.md): with QORE_QMOD_CACHE_DIR set, every qmod of this tree is looked up
+# in a content-addressed cache in that directory before qcc compiles it, and what qcc writes is stored there; the
+# loader's standard module directories are where an optional module that was unavailable could appear.  Empty (the
+# default): no cache, and the qmod rules are unchanged.
+set(QORE_QMOD_CACHE_DIR "" CACHE PATH "Directory of the qmod build cache (empty: no cache)")
+set(QORE_QMOD_CACHE_READ_DIRS "" CACHE STRING
+    "Directories of qmod build caches of a more trusted level, read after QORE_QMOD_CACHE_DIR and never written to")
+if (QORE_BUILD_AOT_MODULES)
+    QORE_QMOD_CACHE_SETUP(${MODULE_VER_DIR} ${USER_MODULE_VER_DIR} ${MODULE_DIR} ${USER_MODULE_DIR})
+endif()
 
 # base modules
 qore_user_module("qlib/DatasourceProvider.qm")

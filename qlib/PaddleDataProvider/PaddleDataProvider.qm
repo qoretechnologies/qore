@@ -75,33 +75,37 @@ module PaddleDataProvider {
             "groups": (DataProvider::AppGroup::Payments,),
         });
 
-        # register every action in the manifest
-        RestSchemaActionSet action_set = PaddleSchema::getActionSet();
-        action_set.registerActions(PaddleDataProvider::AppName);
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(PaddleDataProvider::AppName, sub () {
+            # register every action in the manifest
+            RestSchemaActionSet action_set = PaddleSchema::getActionSet();
+            action_set.registerActions(PaddleDataProvider::AppName);
 
-        # register the record-based table actions; declaring the tables is only half of it, and a table no
-        # action reaches is offered to nobody
-        RestSchemaTablesDataProvider::registerRecordActions(PaddleDataProvider::AppName,
-            "/" + PaddleDataProvider::TablesChildName, action_set, PaddleRecordTables::Tables,
-            PaddleRecordTables::RecordActionIds, {
-                "groups": (PaddleRecordTables::RecordGroup,),
-            });
+            # register the record-based table actions; declaring the tables is only half of it, and a table no
+            # action reaches is offered to nobody
+            RestSchemaTablesDataProvider::registerRecordActions(PaddleDataProvider::AppName,
+                "/" + PaddleDataProvider::TablesChildName, action_set, PaddleRecordTables::Tables,
+                PaddleRecordTables::RecordActionIds, {
+                    "groups": (PaddleRecordTables::RecordGroup,),
+                });
 
-        # register the webhook event actions
-        foreach hash<PaddleEventRegistrationInfo> event in (PaddleEvents) {
-            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-                "app": PaddleDataProvider::AppName,
-                "path": "/" + PaddleDataProvider::EventsChildName + "/" + event.event,
-                "action": event.event,
-                "display_name": event.display_name,
-                "short_desc": event.short_desc,
-                "desc": event.desc,
-                "action_code": DPAT_EVENT,
-                "action_val": event.event,
-                "groups": ("Events",),
-                "output_type": PaddleEventDataType,
-            });
-        }
+            # register the webhook event actions
+            foreach hash<PaddleEventRegistrationInfo> event in (PaddleEvents) {
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": PaddleDataProvider::AppName,
+                    "path": "/" + PaddleDataProvider::EventsChildName + "/" + event.event,
+                    "action": event.event,
+                    "display_name": event.display_name,
+                    "short_desc": event.short_desc,
+                    "desc": event.desc,
+                    "action_code": DPAT_EVENT,
+                    "action_val": event.event,
+                    "groups": ("Events",),
+                    "output_type": PaddleEventDataType,
+                });
+            }
+        });
     };
 }
 

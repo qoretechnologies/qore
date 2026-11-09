@@ -94,16 +94,41 @@ static QoreProgram* qore_check_pgm_context(QoreProgram* pgm) {
     return (pgm && qore_program_private::isConstructed(*pgm)) ? pgm : nullptr;
 }
 
-static QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreProgram* explicit_pgm = nullptr) {
+#ifdef DEBUG
+std::atomic<qore_class_private::dbg_source_program_taken_t> qore_class_private::dbg_source_program_taken{nullptr};
+#endif
+
+//! Returns the Program that a method of the class runs in; \a holder keeps the source Program for the call
+/** The holder must be declared before the CodeEvaluationHelper that enters the Program; see QoreSourceProgramHolder
+*/
+QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgramHolder& holder,
+        QoreProgram* explicit_pgm) {
     const qore_class_private* c = qore_class_private::get(cls);
     if (!c) {
         return qore_check_pgm_context(explicit_pgm);
     }
-    if (c->spgm) {
-        return qore_check_pgm_context(c->spgm);
+    holder.set(c);
+    QoreProgram* spgm = holder.get();
+    if (spgm) {
+        return qore_check_pgm_context(spgm);
+    }
+    // the Program that defines the class is being deleted in another thread: the code of the class cannot run, as
+    // when the call enters a Program whose teardown has started
+    if (holder.sourceDeleted()) {
+        if (ExceptionSink* xsink = holder.getExceptionSink()) {
+            xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and therefore "
+                "cannot be accessed at runtime");
+        }
+        return nullptr;
     }
     if (explicit_pgm) {
         return qore_check_pgm_context(explicit_pgm);
+    }
+    // the source Program has released the class (see qore_class_private::deleteClassData()): its namespace is
+    // destroyed with it, possibly in another thread, so it is not used; the method runs in the caller's Program, as
+    // it does once the namespace has been destroyed
+    if (c->released_spgm.load()) {
+        return nullptr;
     }
     // No source Program and no explicit Program (e.g. a builtin/system class such as a Qorus
     // UserApi/ServiceApi/JobApi imported into an interface Program): only switch into the namespace's
@@ -121,8 +146,9 @@ QoreValue qore_method_private::evalNormalVariant(QoreObject* self, RuntimeConfig
         const QoreTypeParamInstantiation* explicit_type_param_instantiation,
         const QoreTypeInfo* receiver_type_info) const {
     const AbstractQoreFunctionVariant* variant = reinterpret_cast<const AbstractQoreFunctionVariant*>(ev);
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, getFunction(), variant, getName(), args, self, parent_class->priv,
-        CT_UNUSED, false, nullptr, qore_get_method_pgm_context(*parent_class), receiver_type_info,
+        CT_UNUSED, false, nullptr, qore_get_method_pgm_context(*parent_class, spgm_holder), receiver_type_info,
         explicit_type_param_instantiation);
     if (*xsink) return QoreValue();
 
@@ -766,7 +792,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         hash(old.hash),
         ptr(old.ptr),
         mud(old.mud ? old.mud->copy() : nullptr),
-        spgm(old.spgm && old.deref_source_program ? old.spgm->programRefSelf() : old.spgm),
+        spgm(old.spgm && old.deref_source_program ? old.spgm.load()->programRefSelf() : old.spgm.load()),
         deref_source_program(old.deref_source_program),
         from_module(old.from_module),
         lang(old.lang) {
@@ -894,10 +920,10 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         // by construction and stay weak (deref_source_program=false) — exactly
         // the existing semantics for namespace-tree copies inside one Program.
         spgm(old.spgm && (old.deref_source_program
-                || (ns && ns->getProgram() != old.spgm))
-            ? old.spgm->programRefSelf() : old.spgm),
+                || (ns && ns->getProgram() != old.spgm.load()))
+            ? old.spgm.load()->programRefSelf() : old.spgm.load()),
         deref_source_program(old.spgm && (old.deref_source_program
-                || (ns && ns->getProgram() != old.spgm))),
+                || (ns && ns->getProgram() != old.spgm.load()))),
         from_module(old.from_module),
         lang(old.lang) {
     QORE_TRACE("qore_class_private::qore_class_private(const qore_class_private& old)");
@@ -915,8 +941,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     cls->priv = this;
 
     printd(5, "qore_class_private::qore_class_private() this: %p creating copy of '%s' (old: '%s') ID:%d cls: %p " \
-        "old: %p sys: %d pgm: %p -> %p\n", this, name.c_str(), old.name.c_str(), classID, cls, old.cls, sys, old.spgm,
-        spgm);
+        "old: %p sys: %d pgm: %p -> %p\n", this, name.c_str(), old.name.c_str(), classID, cls, old.cls, sys,
+        old.spgm.load(), spgm);
 
     // issue #3368: create new type info objects as the class ptr is derived from the typeInfo object in some cases
     typeInfo = new QoreClassTypeInfo(cls, name.c_str(), path.c_str());
@@ -990,20 +1016,32 @@ qore_class_private::~qore_class_private() {
     // memory can be reused for another class
     qore_bump_method_dispatch_epoch();
 
-    if (spgm) {
-        if (deref_source_program) {
-            spgm->deref(nullptr);
+    {
+        QoreProgram* p = spgm.exchange(nullptr);
+        if (p) {
+            releaseSourceProgram(p, nullptr);
         }
-        spgm = nullptr;
     }
     //assert(!spgm);
 
     assert(!refs.reference_count());
     assert(!var_refs.reference_count());
+    assert(var_ref_wrappers.empty());
+    assert(!data_refs.reference_count());
     assert(!const_refs.reference_count());
 
     if (!vars.empty()) {
         vars.del();
+    }
+
+    // release the key-value data set after the values of the static variables were released, by a destructor that
+    // their release ran, for example; exceptions raised by destructors are reported when the sink goes out of scope
+    if (!kvmap.empty()) {
+        ExceptionSink xsink;
+        for (auto& i : kvmap) {
+            i.second.discard(&xsink);
+        }
+        kvmap.clear();
     }
 
     // delete normal methods
@@ -3264,9 +3302,8 @@ void QoreClass::setSystem() {
     // its check silently passes.
     // Note that QoreBuiltinClass(QoreProgram*, ...) assigns the source Program after calling this
     // method, so a Program supplied explicitly by a module is preserved.
-    if (priv->spgm) {
-        QoreProgram* spgm = priv->spgm;
-        priv->spgm = nullptr;
+    QoreProgram* spgm = priv->spgm.exchange(nullptr);
+    if (spgm) {
         if (priv->deref_source_program) {
             priv->deref_source_program = false;
             spgm->deref(nullptr);
@@ -4081,7 +4118,7 @@ BCSMList::BCSMList(const BCSMList& old) {
 
 BCSMList::~BCSMList() {
     for (auto& i : *this) {
-        qore_class_private::derefClass(*i.first, false, false);
+        qore_class_private::derefClass(*i.first, false, false, false);
     }
 }
 
@@ -4246,7 +4283,7 @@ void BCSMList::resolveCopy() {
         QoreClass* old = i->first;
         i->first = old->priv->new_copy;
         qore_class_private::refClass(*i->first);
-        qore_class_private::derefClass(*old, false, false);
+        qore_class_private::derefClass(*old, false, false, false);
     }
 }
 
@@ -4258,10 +4295,16 @@ QoreClass::QoreClass(const QoreClass& old) : priv(old.priv) {
     assert(priv->orNothingTypeInfo);
 
     priv->pgmRef();
+    // the copy shares the values of the static variables if they are still shared; a class list entry takes over the
+    // reference (see qore_class_private::var_ref_wrappers)
+    bool vars = priv->varRef();
 
     // ensure atomicity when writing to qcrefs
     AutoLocker al(priv->gate.asl_lock);
     priv->qcrefs[this] = 1;
+    if (vars) {
+        priv->var_ref_wrappers.insert(this);
+    }
 }
 
 QoreClass::QoreClass(std::string&& nme, std::string&& ns_path, int64 dom)
@@ -4308,7 +4351,7 @@ QoreClass::~QoreClass() {
             }
         }
 
-        priv->deref(true, true, true);
+        priv->deref(true, priv->takeWrapperVarRef(*this), true, true);
     }
 }
 
@@ -4473,14 +4516,22 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
         // tree, while the class itself survives as long as anything still references it (an object
         // holds only a dependency reference to the Program).  There is then no Program to switch
         // into and the class data has already been cleared, so fail deterministically here rather
-        // than running the method against a stale context.
-        if (!spgm && !ns && ns_deleted) {
+        // than running the method against a stale context.  The holder keeps the source Program until the thread
+        // has left it (see QoreSourceProgramHolder); it is declared before the helper that enters the Program.
+        QoreSourceProgramHolder source_pgm_holder(this, xsink);
+        QoreProgram* source_pgm = source_pgm_holder.get();
+        // once the source Program has released the class (see deleteClassData()), its namespace is destroyed with
+        // it, possibly in another thread, so it is not used: the method can only be called by that Program itself
+        const QoreProgram* released = source_pgm ? nullptr : released_spgm.load();
+        // a source Program being deleted (see QoreSourceProgramHolder::sourceDeleted()) cannot run the method either
+        if (source_pgm_holder.sourceDeleted()
+                || (released ? released != getProgram() : (!source_pgm && !ns && ns_deleted))) {
             xsink->raiseException("PROGRAM-ERROR", "cannot call method '%s::%s()'; the Program object "
                 "that owns class '%s' has already been deleted and therefore cannot be accessed at "
                 "runtime", name.c_str(), nme, name.c_str());
             return nullptr;
         }
-        QoreProgram* lookup_pgm = spgm ? spgm : (ns ? ns->getProgram() : pgm);
+        QoreProgram* lookup_pgm = source_pgm ? source_pgm : (released ? pgm : (ns ? ns->getProgram() : pgm));
         // Keep the owning Program alive and select its context without claiming parse ownership.
         // A module loader can own parsing while waiting for an initializer in this thread, so
         // runtime readers must only take the committed namespace's read lock, never its parse lock.
@@ -6961,11 +7012,13 @@ void ConstructorMethodFunction::evalConstructor(const AbstractQoreFunctionVarian
     // QoreListNodeEvalOptionalRefHolder::evalIntern()), so that converting an argument needs no copy of the list,
     // which referenced every argument again
     assert(!tmp_args || !args || args->reference_count() == 1);
+    QoreSourceProgramHolder spgm_holder(xsink);
+    QoreProgram* mpgm = qore_get_method_pgm_context(thisclass, spgm_holder);
     CodeEvaluationHelper ceh = tmp_args
         ? CodeEvaluationHelper(xsink, rc, this, variant, "constructor", const_cast<QoreListNode*>(args), self,
-            qore_class_private::get(thisclass), CT_UNUSED, false, nullptr, qore_get_method_pgm_context(thisclass))
+            qore_class_private::get(thisclass), CT_UNUSED, false, nullptr, mpgm)
         : CodeEvaluationHelper(xsink, rc, this, variant, "constructor", args, self,
-            qore_class_private::get(thisclass), CT_UNUSED, false, nullptr, qore_get_method_pgm_context(thisclass));
+            qore_class_private::get(thisclass), CT_UNUSED, false, nullptr, mpgm);
     if (*xsink) {
         printd(5, "ConstructorMethodFunction::evalConstructor() %s variant=%p args=%p nargs=%d EXCEPTION in CEH\n",
             thisclass.getName(), static_cast<const void*>(variant), static_cast<const void*>(args),
@@ -6984,8 +7037,9 @@ void CopyMethodFunction::evalCopy(const QoreClass& thisclass, QoreObject* self, 
     qore_call_t ct = variant->getCallType();
 
     // setup call, save runtime position
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "copy", (QoreListNode*)nullptr, self,
-        qore_class_private::get(thisclass), ct, true, nullptr, qore_get_method_pgm_context(thisclass));
+        qore_class_private::get(thisclass), ct, true, nullptr, qore_get_method_pgm_context(thisclass, spgm_holder));
     if (*xsink) return;
 
     COPYMV_const(variant)->evalCopy(thisclass, self, old, ceh, scl, xsink);
@@ -7001,8 +7055,10 @@ void DestructorMethodFunction::evalDestructor(const QoreClass& thisclass, QoreOb
     // setup call, save runtime position
     //printd(5, "DestructorMethodFunction::evalDestructor() %s::%s() o: %p, v: %d, ct: %d\n", getClassName(),
     //  getName(), self, self->isValid(),ct);
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "destructor", (QoreListNode*)nullptr, self,
-        qore_class_private::get(thisclass), ct, false, nullptr, qore_get_method_pgm_context(thisclass));
+        qore_class_private::get(thisclass), ct, false, nullptr,
+        qore_get_method_pgm_context(thisclass, spgm_holder));
     if (*xsink) return;
 
     DESMV_const(variant)->evalDestructor(thisclass, self, rc, xsink);
@@ -7018,8 +7074,9 @@ QoreValue NormalMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& 
     const char* mname = getName();
     //printd(5, "NormalMethodFunction::evalMethod() %s::%s() v: %d\n", cname, mname, self->isValid());
     const qore_class_private* method_qc = qore_class_private::get(*qc);
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, self, method_qc, CT_UNUSED, false, cctx,
-        qore_get_method_pgm_context(*qc, pgm_ctx), nullptr, explicit_type_param_instantiation);
+        qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx), nullptr, explicit_type_param_instantiation);
     if (*xsink)
         return QoreValue();
 
@@ -7050,8 +7107,9 @@ QoreValue NormalMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeC
     //printd(5, "NormalMethodFunction::evalMethod() %s::%s() v: %d\n", cname, mname, self->isValid());
 
     const qore_class_private* method_qc = qore_class_private::get(*qc);
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, self, method_qc, CT_UNUSED, false, cctx,
-        qore_get_method_pgm_context(*qc), nullptr, explicit_type_param_instantiation);
+        qore_get_method_pgm_context(*qc, spgm_holder), nullptr, explicit_type_param_instantiation);
     if (*xsink)
         return QoreValue();
 
@@ -7083,8 +7141,9 @@ QoreValue NormalMethodFunction::evalPseudoMethod(ExceptionSink* xsink, RuntimeCo
     //printd(5, "NormalMethodFunction::evalPseudoMethod() '%s' cctx: '%s'\n", mname,
     //    cctx ? cctx->name.c_str() : "n/a");
     const qore_class_private* method_qc = qc ? qore_class_private::get(*qc) : nullptr;
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, nullptr, method_qc,
-        CT_UNUSED, false, cctx, qc ? qore_get_method_pgm_context(*qc) : nullptr);
+        CT_UNUSED, false, cctx, qc ? qore_get_method_pgm_context(*qc, spgm_holder) : nullptr);
     if (*xsink)
         return QoreValue();
 
@@ -7098,8 +7157,9 @@ QoreValue StaticMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& 
         QoreProgram* pgm_ctx, const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
     const char* mname = getName();
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, nullptr, qore_class_private::get(*qc),
-        CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc, pgm_ctx), receiver_type_info,
+        CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx), receiver_type_info,
         explicit_type_param_instantiation);
     if (*xsink) {
         return QoreValue();
@@ -7117,8 +7177,9 @@ QoreValue StaticMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeC
         const QoreTypeParamInstantiation* explicit_type_param_instantiation,
         const AbstractQoreFunctionVariant** resolved_variant) const {
     const char* mname = getName();
+    QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, nullptr, qore_class_private::get(*qc),
-        CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc), receiver_type_info,
+        CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc, spgm_holder), receiver_type_info,
         explicit_type_param_instantiation);
     if (*xsink)
         return QoreValue();
@@ -7459,11 +7520,41 @@ int QoreVarInfo::parseInit(const char* name) {
     return err;
 }
 
+bool QoreVarInfo::isOwnerReleasedForCaller() const {
+    qore_program_id_t owner_id = released_by_owner_id.load(std::memory_order_acquire);
+    if (!owner_id) {
+        return false;
+    }
+    const QoreProgram* pgm = getProgram();
+    return !pgm || pgm->getProgramId() != owner_id;
+}
+
+int QoreVarInfo::checkOwnerReleased(const char* name, ExceptionSink* xsink) const {
+    if (!isOwnerReleasedForCaller()) {
+        return 0;
+    }
+    if (xsink) {
+        xsink->raiseException("PROGRAM-ERROR", "cannot access static variable '%s::%s'; the Program object that owns "
+            "class '%s' has already been deleted and therefore cannot be accessed at runtime", owner_class_name, name,
+            owner_class_name);
+    }
+    return -1;
+}
+
 int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink, bool defer_pending) {
     printd(5, "QoreVarInfo::evalInit() %s committing %s var (exp: %s)\n", name, privpub(access), exp.getFullTypeName());
 
     if (eval_init) {
         return 0;
+    }
+
+    // a variable whose value has been released (see clear()) is not initialized again: its value stays NOTHING, like
+    // the values of the other variables of the class, as assignments are refused once the values have been released
+    {
+        QoreAutoVarRWReadLocker al(rwl);
+        if (finalized) {
+            return 0;
+        }
     }
 
     // The initializer is evaluated into its own sink: the caller's sink is shared by every initializer committed
@@ -7599,7 +7690,7 @@ void QoreVarMap::moveAllTo(QoreClass* qc, ClassAccess access) {
 QoreClassHolder::~QoreClassHolder() {
     if (c) {
         // release the class pointer (handle) reference in case the class is a wrapper
-        qore_class_private::derefClass(*c, true, true);
+        qore_class_private::derefClass(*c, true, false, true);
     }
 }
 

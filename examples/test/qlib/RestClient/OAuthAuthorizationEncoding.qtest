@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: MIT
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/QUnit.qm
+%requires RestClient
+%requires QUnit
 %exec-class OAuthAuthorizationEncodingTest
 
 class OAuthAuthorizationEncodingTest inherits QUnit::Test {

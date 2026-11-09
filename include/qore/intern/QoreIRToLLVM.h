@@ -609,6 +609,18 @@ private:
     size_t exit_temp_cleanup_count = 0;
     // Map from value ID to invoke-result alloca (for clearing at Return)
     std::unordered_map<uint32_t, llvm::Value*> invoke_alloca_map;
+    //! the value id of each cleanup alloca of invoke_alloca_map, for the order of the release of a statement's
+    //! temporaries by an exception
+    std::unordered_map<llvm::Value*, uint32_t> cleanup_alloca_value_ids;
+    //! the class of each value for the order of the release of a statement's temporaries by an exception (see
+    //! qore_ir_build_exception_release_groups())
+    std::vector<uint32_t> exception_release_groups;
+
+    //! Records the cleanup alloca of a value
+    void setInvokeAlloca(uint32_t id, llvm::Value* alloca) {
+        invoke_alloca_map[id] = alloca;
+        cleanup_alloca_value_ids[alloca] = id;
+    }
     //! the output slot of each IteratorNext, by its result id: it holds a reference to the current element, which
     //! ReleaseOwnedTemp releases when a return or an exception leaves the loop
     std::unordered_map<uint32_t, llvm::Value*> iterator_element_allocas;
@@ -742,6 +754,11 @@ private:
     // This avoids creating temporary strong references from weak member
     // dereferences that would keep objects alive for the function lifetime.
     std::unordered_set<uint32_t> dot_eval_only_bases;
+    //! The values read from a local's storage (LoadLocal and StoreLocal results) that a later write to the local can
+    //! release while they still have a use (see qore_ir_find_local_reads_overwritten_before_use()): a value read
+    //! from the local cache is borrowed from it, so each of these takes a reference of its own, released as a
+    //! temporary's
+    std::unordered_set<uint32_t> overwritten_local_reads;
 
     // Locals assigned through the weak assignment operator. Loads must go
     // through LocalVar::eval() so weak refs are resolved to the current target
@@ -775,6 +792,19 @@ private:
         return current_ir_func && current_ir_func->reference_slot_locals.count(key)
             && ir_only_locals_set && ir_only_locals_set->count(key);
     }
+
+    //! Returns true if a local is an object local whose object has a real reference from its native cache
+    /** See QoreIRFunction::real_reference_locals: a store marks the object stored and releases the object replaced
+        with its mark (qore_rt_object_slot_replace()), and a release of the cache releases the mark with the value
+        (qore_rt_object_slot_release())
+    */
+    bool isRealReferenceLocal(const void* key) const {
+        return current_ir_func && current_ir_func->hasRealReferenceStorage(key)
+            && ir_only_locals_set && ir_only_locals_set->count(key);
+    }
+
+    //! Returns true if an alloca is the native cache of an object local (see isRealReferenceLocal())
+    bool isRealReferenceAlloca(const llvm::AllocaInst* alloca) const;
 
     //! Returns the reference flag of a local (an i8 that is non-zero if its native cache holds a reference)
     /** Created in the entry block, cleared, the first time it is needed; null if the local has none (see
@@ -1089,8 +1119,22 @@ private:
         const QoreIRPhiInstruction* inst;
         const QoreIRBasicBlock* ir_block;
         QoreIRPhiValueKind value_kind;
+        //! the cleanup slot of a Phi of temporaries, which takes each incoming temporary's reference over at the end
+        //! of its predecessor (see consumable_phis); null for any other Phi
+        llvm::AllocaInst* temp_cleanup = nullptr;
     };
     std::vector<PendingPhi> pending_phis;
+
+    //! Phis of temporaries: QoreValue Phis whose every incoming value is used by the Phi only
+    /** When every incoming value owns its reference in a cleanup slot (a temporary, such as the result of a call or of
+        new), the Phi gets a cleanup slot of its own, which takes the reference over from the incoming value's slot at
+        the end of each predecessor: the Phi is then a temporary as the incoming values are, which a call consumes as
+        its argument as it consumes any temporary (f(new T(), c ? new T() : new T(), new T())).  Otherwise the
+        incoming slots kept their references until the end of the statement, after the temporaries that the call
+        consumed, which the AST interpreter releases last argument first when the call returns, as the callee's
+        parameters.
+    */
+    std::unordered_set<uint32_t> consumable_phis;
 
     // Pointer to current IR function being lowered (for reading type profiles)
     const QoreIRFunction* current_ir_func = nullptr;
@@ -1357,6 +1401,19 @@ private:
     // \a handler itself if there are none.  Pending SSA cleanups are promoted to cleanup allocas first.
     llvm::BasicBlock* getExceptionEdgeTarget(llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst, llvm::BasicBlock* handler);
+
+    // Returns the block that an exception raised by \a inst outside a try block branches to on its way to the
+    // function's error return \a target: a block that first releases the temporaries of the raising statement whose
+    // release can run a destructor, in the order in which the AST interpreter unwinds them, if the error return's
+    // release (last registered first) gives another order; otherwise \a target itself
+    llvm::BasicBlock* getOrderedErrorReturnEdge(llvm::Module& module, llvm::Function* llvm_func,
+            const QoreIRInstruction* inst, llvm::BasicBlock* target);
+
+    // Gives the cleanup allocas of a statement's temporaries, registered since \a start, in the order of their release
+    // when an exception leaves the statement (see qore_ir_order_exception_release()); returns true if it differs from
+    // the reverse of the registration order.  \a observable_only leaves out the values whose release cannot run a
+    // destructor
+    bool orderExceptionTemps(size_t start, bool observable_only, std::vector<llvm::Value*>& temps);
 
     // Emit statement/condition-boundary temp cleanup for values tracked since
     // the latest PushTempMark.
@@ -1750,8 +1807,11 @@ private:
     // Clear the reload tracker for a specific local, releasing the +1 reference
     // held from a previous reloadLocalFromRuntime() call.  Called before lvalue
     // compound operations (+=, -=, etc.) so that the container's refcount drops to 1,
-    // enabling copy-on-write to skip the copy (in-place modification).
-    void clearLocalReloadTracker(const void* key, llvm::Module& module, llvm::Function* llvm_func);
+    // enabling copy-on-write to skip the copy (in-place modification).  The tracker is created when it does not
+    // exist yet and the local can be reloaded (see canReloadLocalFromRuntime() for honor_reload_exempt), so that the
+    // clear is emitted for a later execution of the same code (a loop) as well.
+    void clearLocalReloadTracker(const void* key, llvm::Module& module, llvm::Function* llvm_func,
+            bool honor_reload_exempt = true);
 
     enum class LocalCacheClearMode {
         DuplicateRefsOnly,
@@ -1800,7 +1860,8 @@ private:
             llvm::Module& module);
 
     // Releases the temporary arguments of a call that the call consumes - their last use, in the block that
-    // defines them - as the AST interpreter releases the argument list of a call when it returns; \a use_pending
+    // defines them - last argument first, as the AST interpreter releases the parameters that took them over when
+    // the call returns; \a use_pending
     // is true when the uses of the call's operands have not been consumed yet (in an invoke lowerer).  Returns true
     // if any was released, as releasing can raise an exception
     bool releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::Module& module, bool use_pending);

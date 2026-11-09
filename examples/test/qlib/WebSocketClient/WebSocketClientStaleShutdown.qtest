@@ -178,6 +178,11 @@ class LifecycleWsClient inherits WebSocketClient {
         bool report_handoff_wait = False;
         #! released by the test to let the held action wait go on
         Counter release_action_wait(1);
+        #! hold the next thread about to register as a waiter for an action, after its first release of orphaned
+        #! actions, with the client's lock held
+        bool hold_registration = False;
+        #! released by the test to let the held registration go on
+        Counter release_registration(1);
         #! hold the next connectAsync() worker before it takes the action over
         bool hold_worker = False;
         #! the TID of the last connectAsync() worker that an action was handed over to
@@ -214,6 +219,14 @@ class LifecycleWsClient inherits WebSocketClient {
 
         #! report explicitDisconnect() calls
         bool report_explicit_disconnect = False;
+        #! hold the next explicitDisconnect() call until release_explicit_disconnect is released
+        bool hold_explicit_disconnect = False;
+        Counter release_explicit_disconnect(1);
+        #! hold the report of the connection with the close cause "test-1" in releaseAndNotifyForTest()
+        Counter release_test_notify(1);
+        #! gets the close cause of each connection that releaseAndNotifyForTest() released and reported closed
+        Queue test_released();
+        Queue test_notified();
 
         #! the TID of the thread that last waited for a close handshake
         int handshake_tid = 0;
@@ -362,6 +375,16 @@ class LifecycleWsClient inherits WebSocketClient {
         }
     }
 
+    private orphansReleasedHook() {
+        if (hold_registration && action_tid && action_tid != gettid()) {
+            hold_registration = False;
+            Queue q = events;
+            Counter r = release_registration;
+            q.push("registration-held");
+            r.waitForZero(HandoffTimeout);
+        }
+    }
+
     private waitingForActionHook() {
         if (hold_action_wait) {
             hold_action_wait = False;
@@ -489,6 +512,43 @@ class LifecycleWsClient inherits WebSocketClient {
         if (report_explicit_disconnect) {
             events.push("explicit-disconnect");
         }
+        if (hold_explicit_disconnect) {
+            hold_explicit_disconnect = False;
+            Queue q = events;
+            Counter r = release_explicit_disconnect;
+            q.push("explicit-disconnect-held");
+            r.waitForZero(HandoffTimeout);
+        }
+    }
+
+    #! releases and reports closed connections made up by the test (with a close cause "test-..."), on this thread
+    releaseAndNotifyForTest(list<hash<WscAsyncIoResources>> l) {
+        releaseAndNotifyClosed(l);
+    }
+
+    private releaseClaimedConnection(hash<WscAsyncIoResources> res) {
+        if (res.close_cause =~ /^test-/) {
+            test_released.push(res.close_cause);
+            return;
+        }
+        WebSocketClient::releaseClaimedConnection(res);
+    }
+
+    private bool notifyClosed(hash<WscAsyncIoResources> res) {
+        if (res.close_cause =~ /^test-/) {
+            if (res.close_cause == "test-1") {
+                events.push("test-notify-held");
+                try {
+                    release_test_notify.waitForZero(HandoffTimeout);
+                } catch (hash<ExceptionInfo> ex) {
+                    # like notifyClosed(), which logs the exceptions of the closing callback
+                    events.push("test-notify: " + ex.err);
+                }
+            }
+            test_notified.push(res.close_cause);
+            return True;
+        }
+        return WebSocketClient::notifyClosed(res);
     }
 
     private connectionOpened(hash<auto> info) {
@@ -872,7 +932,9 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         addTestCase("a cancelled connectAsync() caller and its cancelled worker do not keep the action",
             \cancelledConnectAsyncCallerAndWorkerTest());
         addTestCase("an action released while its waiter checked and did not wait yet is not missed",
-            \orphanedActionWakeupTest());
+            \orphanedActionWakeupTest(), "wait");
+        addTestCase("an action released while its waiter checked and did not register yet is not missed",
+            \orphanedActionWakeupTest(), "register");
         addTestCase("Discord: a destructor on another thread waits for a heartbeat thread reconnecting itself",
             \discordDeleteDuringInlineReconnectTest());
         addTestCase("Discord: a destructor on another thread waits for a heartbeat thread that stopped its own record",
@@ -886,6 +948,10 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             \cancelledActionWaiterPassesWakeupTest());
         addTestCase("the waiter registry completes its bookkeeping on a cancelled thread",
             \actionWaitersOnCancelledThreadTest());
+        addTestCase("an explicit disconnect cancelled in its subclass step releases its action",
+            \cancelledExplicitDisconnectTest());
+        addTestCase("connections taken by a thread cancelled while it reports them closed are all released",
+            \cancelledReleaseAndNotifyTest());
         addTestCase("a handshake in progress is canceled when the client is destroyed",
             \handshakeCanceledOnDestroyTest());
         foreach string proto in ("h2", "h3") {
@@ -1253,9 +1319,10 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     }
 
     #! A thread waits for the action of a connectAsync() caller; the caller and its worker are cancelled after the
-    #! waiter found the action held and before it waits: the record of the orphaned action wakes it all the same, so
-    #! it takes the action at once, not when its wait times out
-    orphanedActionWakeupTest() {
+    #! waiter found the action held and before it waits (\a at "wait"), or before it registers as a waiter (\a at
+    #! "register"): the record of the orphaned action is released all the same, so the waiter takes the action at
+    #! once, not when its wait times out
+    orphanedActionWakeupTest(string at) {
         TestThreads::cancel_expected = True;
         on_exit TestThreads::cancel_expected = False;
         # the action wait of the waiter is bounded only by a timeout far longer than the test's own waits
@@ -1290,8 +1357,18 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertTrue(caller_waits, "the caller waits for its worker");
         assertTrue(ev =~ /^worker-held:/, ev);
         int worker = ev.split(":")[1].toInt();
-        # a connect waits for the caller's action; it is held after its check, before its wait
-        c.hold_action_wait = True;
+        # a connect waits for the caller's action; it is held after its check, before its wait, or after its first
+        # release of orphaned actions, before it registers as a waiter (with the client's lock held, which the
+        # cancelled threads do not need to record the orphaned action)
+        Counter release_registration = c.release_registration;
+        on_exit if (release_registration.getCount()) {
+            release_registration.dec();
+        }
+        if (at == "wait") {
+            c.hold_action_wait = True;
+        } else {
+            c.hold_registration = True;
+        }
         Queue connected();
         background TestThreads::run(sub () {
             try {
@@ -1301,14 +1378,16 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
                 connected.push(ex.err);
             }
         });
-        assertEq("action-wait-held", events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq(at == "wait" ? "action-wait-held" : "registration-held",
+            events.get(LifecycleWsClient::HandoffTimeout));
         # the action is orphaned now: the caller, then the worker, is cancelled
         cancel_thread(caller, "test");
         assertEq("THREAD-CANCELLED", caller_done.get(LifecycleWsClient::HandoffTimeout), "the caller was cancelled");
         cancel_thread(worker, "test");
         thread_join(worker);
-        # the waiter waits only now: the wakeup made meanwhile is not lost
+        # the waiter registers or waits only now: the wakeup made meanwhile is not lost
         release_wait.dec();
+        release_registration.dec();
         assertEq("connected", connected.get(LifecycleWsClient::HandoffTimeout),
             "the waiter took the released action without waiting for its timeout");
         c.disconnect();
@@ -3816,6 +3895,93 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertEq("THREAD-CANCELLED", first_done.get(LifecycleWsClient::HandoffTimeout), "the first waiter was cancelled");
         assertEq("disconnected", second_done.get(LifecycleWsClient::HandoffTimeout),
             "the second waiter took the action without waiting for its timeout");
+        destroyChecked(remove ctx.wsc);
+    }
+
+    #! An explicit disconnect is cancelled in its subclass step (explicitDisconnect()), which runs without the
+    #! client's lock: it ends with the cancellation without closing the connection, and its action is released, so the
+    #! next disconnect takes it at once
+    cancelledExplicitDisconnectTest() {
+        TestThreads::cancel_expected = True;
+        on_exit TestThreads::cancel_expected = False;
+        # the action waits are bounded only by a timeout far longer than the test's own waits
+        LifecycleCtx ctx = makeCtx("h1", {"timeout": LifecycleWsClient::HandoffTimeout * 4});
+        connectChecked(ctx, "h1");
+        LifecycleWsClient c = ctx.wsc;
+        Queue events = c.events;
+        Counter release = c.release_explicit_disconnect;
+        on_exit if (release.getCount()) {
+            release.dec();
+        }
+        c.hold_explicit_disconnect = True;
+        Queue done();
+        int tid = background TestThreads::run(sub () {
+            try {
+                c.disconnect();
+                done.push("disconnected");
+            } catch (hash<ExceptionInfo> ex) {
+                done.push(ex.err);
+                # no other exception was raised meanwhile, e.g. by a lock released or taken without being held
+                if (ex.next) {
+                    done.push("chained: " + ex.next.err);
+                }
+            }
+        });
+        assertEq("explicit-disconnect-held", events.get(LifecycleWsClient::HandoffTimeout));
+        cancel_thread(tid, "test");
+        assertEq("THREAD-CANCELLED", done.get(LifecycleWsClient::HandoffTimeout),
+            "the cancelled disconnect ends with its cancellation");
+        thread_join(tid);
+        assertEq(0, done.size(), "no other exception was raised");
+        assertTrue(c.isOpen(), "the cancelled disconnect did not close the connection");
+        # the action of the cancelled disconnect is released: the next disconnect takes it without waiting
+        Queue next_done();
+        background TestThreads::run(sub () {
+            try {
+                c.disconnect();
+                next_done.push("disconnected");
+            } catch (hash<ExceptionInfo> ex) {
+                next_done.push(ex.err);
+            }
+        });
+        assertEq("disconnected", next_done.get(LifecycleWsClient::HandoffTimeout),
+            "the next disconnect took the action without waiting for its timeout");
+        assertFalse(c.isOpen(), "the next disconnect closed the connection");
+        destroyChecked(remove ctx.wsc);
+    }
+
+    #! A thread releasing the connections taken from its client is cancelled while it reports the first one closed:
+    #! the connections left are released and reported closed all the same (the cancellation, which stays set, is not
+    #! raised again by a loop)
+    cancelledReleaseAndNotifyTest() {
+        TestThreads::cancel_expected = True;
+        on_exit TestThreads::cancel_expected = False;
+        LifecycleCtx ctx = makeCtx("h1");
+        LifecycleWsClient c = ctx.wsc;
+        Queue events = c.events;
+        Counter release = c.release_test_notify;
+        on_exit if (release.getCount()) {
+            release.dec();
+        }
+        Queue done();
+        int tid = background TestThreads::run(sub () {
+            try {
+                c.releaseAndNotifyForTest((<WscAsyncIoResources>{"close_cause": "test-1"},
+                    <WscAsyncIoResources>{"close_cause": "test-2"}, <WscAsyncIoResources>{"close_cause": "test-3"}));
+                done.push("done");
+            } catch (hash<ExceptionInfo> ex) {
+                done.push(ex.err);
+            }
+        });
+        assertEq("test-notify-held", events.get(LifecycleWsClient::HandoffTimeout));
+        cancel_thread(tid, "test");
+        assertEq("test-notify: THREAD-CANCELLED", events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq("done", done.get(LifecycleWsClient::HandoffTimeout), "the release completed");
+        thread_join(tid);
+        list<string> released = map c.test_released.get(), xrange(c.test_released.size());
+        list<string> notified = map c.test_notified.get(), xrange(c.test_notified.size());
+        assertEq(("test-1", "test-2", "test-3"), released, "every connection was released");
+        assertEq(("test-1", "test-2", "test-3"), notified, "every connection was reported closed");
         destroyChecked(remove ctx.wsc);
     }
 

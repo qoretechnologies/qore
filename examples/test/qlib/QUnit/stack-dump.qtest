@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - SIGUSR1 handlers dumping thread stacks in child processes, reports through a FIFO
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -114,6 +115,32 @@ class ModuleBaseTest inherits StackDumpTestBase::Base {
 }
 ";
 
+        #! a test script that reports the event that its test object sent to the FIFO when it was created, if any
+        /** The FIFO is opened before the test object is created, so that the event stays in it
+        */
+        const ReportScript = "#!/usr/bin/env qore
+%modern
+%requires QUNIT_PATH
+class ReportTest inherits QUnit::Test {
+    constructor() : Test(\"ReportTest\", \"1.0\", ()) {
+        addTestCase(\"runs\", \\runs());
+    }
+    runs() {
+        assertEq(2, 1 + 1);
+    }
+}
+File fifo();
+fifo.open2(ENV.QORE_TEST_EVENT_FIFO, O_RDWR);
+ReportTest t();
+printf(\"pid %d\\n\", getpid());
+# the event is written while the test object is created, before this
+if (fifo.isDataAvailable(0)) {
+    printf(\"reported: %s\\n\", fifo.readLine(False));
+} else {
+    printf(\"nothing reported\\n\");
+}
+";
+
         #! a test script that sends no signal
         const QuietScript = "#!/usr/bin/env qore
 %modern
@@ -195,6 +222,7 @@ printf(\"handler reported: %s\\n\", fifo.readLine(False));
         addTestCase("a test's own SIGUSR1 handler replaces QUnit's", \ownHandlerTest());
         addTestCase("a test class from a module's base class prints its stacks", \moduleBaseTest());
         addTestCase("signal handling disabled", \signalsDisabledTest());
+        addTestCase("a test reports its handler through the FIFO", \reportHandlerTest());
         addTestCase("a host calls a test in a restricted Program", \hostRestrictedTest());
         addTestCase("a host calls a test in its own Program", \hostUnrestrictedTest());
         addTestCase("a test in a thread of a restricted Program", \hostRestrictedThreadTest());
@@ -242,6 +270,22 @@ printf(\"handler reported: %s\\n\", fifo.readLine(False));
             assertEq(0, rv.rc, opt + ": " + rv.out);
             assertRegex("Ran 1 test case, 1 succeeded", rv.out, opt);
             assertNRegex("(?i)warning", rv.out, opt);
+        }
+    }
+
+    reportHandlerTest() {
+        # run_tests.sh sends SIGUSR1 to a test that exceeds its time limit, where it cannot read the signal masks of
+        # the test's threads (macOS), only when the test's process has reported its handler
+        hash<auto> rv = runScript("report.q", ReportScript);
+        assertEq(0, rv.rc, rv.out);
+        *list<*string> pid = rv.out =~ x/^pid ([0-9]+)$/m;
+        assertEq(1, pid.size(), rv.out);
+        assertRegex("\nreported: handler " + pid[0] + "\n", rv.out);
+        # no handler is installed with signal handling disabled, and none is reported
+        foreach string opt in ("-b", "--disable-signals") {
+            rv = runScript("report.q", ReportScript, opt);
+            assertEq(0, rv.rc, opt + ": " + rv.out);
+            assertRegex("\nnothing reported\n", rv.out, opt);
         }
     }
 

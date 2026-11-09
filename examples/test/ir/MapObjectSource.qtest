@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class MapObjectSourceTest
+
+#! Regression test: map, select and foldl over objects in the compiled modes
+/** <tt>map $1.key, l</tt> is lowered to a loop that reads the key of each element (MapHashKeyValue); it read the key
+    of a hash only, so the member of an object element (and the result of its memberGate()) read as NOTHING in the IR,
+    JIT and tiered modes and in AOT-compiled code.  It now reads each element as <tt>$1.key</tt> does
+    (qore_rt_hash_key_access_impl()).  A functional operator over an object that is not an AbstractIterator (a map,
+    select or foldl over an \c auto source) gave a list of one value in those modes, as the source was taken for a
+    collection if it was any object (IsCollectionType); as with the AST interpreter, it is now a single value, and only
+    a list or an AbstractIterator is iterated.  The script maps and folds lists of objects, hashes and other values,
+    iterators and single objects, twice, in every execution mode, on the IR tier of tiered execution and as a qcc
+    executable (see ExecModeOutputTest).
+*/
+class MapObjectSourceTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%new-style
+%require-types
+class T {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    string memberGate(string k) { return "gate " + k; }
+}
+class It inherits AbstractIterator {
+    private { int i = 0; }
+    bool next() { return ++i <= 2; }
+    auto getValue() { return new T("it" + i); }
+    bool valid() { return i > 0 && i <= 2; }
+}
+hashdecl H { string n = "hd"; }
+# $1.key over a list of objects reads each object member, as over a list of hashes
+sub members() {
+    list<auto> l = (new T("a"), {"n": "h"}, 1, NOTHING, new hash<H>(), new T("b"));
+    printf("%y\n", (map $1.n, l));
+    printf("%y\n", (map $1.n, l[0..1]));
+    printf("%y\n", (map $1.x, l[0..3]));
+    printf("%y\n", (map $1.n, new It()));
+}
+# map, select and foldl over an object that is not an iterator give it as a single value
+sub single() {
+    auto x = new T("s");
+    printf("%y\n", (map $1.n, x));
+    printf("%y\n", (map $1.n + "!", x));
+    printf("%y\n", (select x, $1.n == "s").n);
+    printf("%y\n", (foldl $1 + $2, x).n);
+    auto y = 5;
+    printf("%y\n", (map $1 + 1, y));
+    auto it = new It();
+    printf("%y\n", (map $1.n, it));
+    printf("%y\n", (map $1.n + "?", new It()));
+    # a source of a class type that is not an iterator, and one that is
+    printf("%s\n", (select new T("ts"), True).type());
+    printf("%s\n", (select new T("tt"), $1.n == "tt").n);
+    T t1("tu");
+    printf("%s %s\n", (map $1, t1).type(), (map $1.n, t1));
+    printf("%s\n", (map $1.n, new T("tv"), True));
+    It it2();
+    printf("%y\n", (select it2, True).size());
+}
+for (int i = 0; i < 2; ++i) {
+    members();
+    single();
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "[\"a\", \"h\", null, null, \"hd\", \"b\"]",
+            "[\"a\", \"h\"]",
+            "[\"gate x\", null, null, null]",
+            "[\"it1\", \"it2\"]",
+            "\"s\"",
+            "\"s!\"",
+            "\"s\"",
+            "\"s\"",
+            "6",
+            "[\"it1\", \"it2\"]",
+            "[\"it1?\", \"it2?\"]",
+            "object",
+            "tt",
+            "object tu",
+            "tv",
+            "2",
+            "[\"a\", \"h\", null, null, \"hd\", \"b\"]",
+            "[\"a\", \"h\"]",
+            "[\"gate x\", null, null, null]",
+            "[\"it1\", \"it2\"]",
+            "\"s\"",
+            "\"s!\"",
+            "\"s\"",
+            "\"s\"",
+            "6",
+            "[\"it1\", \"it2\"]",
+            "[\"it1?\", \"it2?\"]",
+            "object",
+            "tt",
+            "object tu",
+            "tv",
+            "2",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("MapObjectSource", Script, (map $1 + "\n", Expected).join(""),
+            "maps the members of objects and gives a non-iterator object as a single value, as the AST interpreter does") {
+    }
+}

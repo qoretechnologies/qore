@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qcc --link-qo with the system linker: Mach-O symbol decoration, ld -r STABS, rpath linking
 
 %modern
 %no-child-restrictions

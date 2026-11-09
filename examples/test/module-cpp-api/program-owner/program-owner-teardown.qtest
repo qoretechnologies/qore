@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - binary module unload order at process teardown with Programs it owns
 
 # Copyright 2026 Qore Technologies, s.r.o.
 

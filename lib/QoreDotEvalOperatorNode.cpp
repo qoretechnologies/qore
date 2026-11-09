@@ -40,6 +40,18 @@ QoreValue QoreDotEvalOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
     if (*xsink) {
         return QoreValue();
     }
+    // a receiver read from a variable or a container is borrowed; the arguments are evaluated after it, and an
+    // argument can assign the variable or the container another value (o.m(o = new T())), which releases the only
+    // reference to the receiver before the call runs, so the call holds its own reference to a borrowed receiver
+    // while its arguments need evaluation: the call runs on the receiver it was given, as with a receiver of any
+    // other kind and in every other execution mode
+    ValueHolder borrowed_receiver(xsink);
+    if (!op.isTemp() && op->hasNode()) {
+        const QoreListNode* args = m->getArgs();
+        if (args && args->needs_eval()) {
+            borrowed_receiver = op->refSelf();
+        }
+    }
     // a temporary receiver lives until the end of the statement, so the rest of the chain - and a closure or call
     // reference that the method returns - can use it
     QoreStatementTempScope::holdReceiver(left, op, xsink);

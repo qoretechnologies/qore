@@ -7,8 +7,8 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QoreLlmTypes.qm
-%requires ../../../../qlib/QUnit.qm
+%requires QoreLlmTypes
+%requires QUnit
 
 %exec-class LlmCancellationTest
 

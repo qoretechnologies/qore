@@ -207,3 +207,7 @@ fontconfig/
 
 # python virtual environments created by the MCP and A2A integration test runners
 .venvs/
+
+# Python bytecode written by the Python tests (examples/test/cmake, examples/test/runner)
+__pycache__/
+*.pyc

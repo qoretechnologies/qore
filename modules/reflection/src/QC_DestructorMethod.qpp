@@ -133,6 +133,10 @@ auto DestructorMethod::call(object obj) {
     if (reflection_check_class_call(caller, m->m->getClass(), m->pgm, false, xsink)) {
         return QoreValue();
     }
+    // the access of the method's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, m->m, xsink)) {
+        return QoreValue();
+    }
 
     obj->doDelete(xsink);
 }

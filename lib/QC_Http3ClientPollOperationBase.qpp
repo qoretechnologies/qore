@@ -42,6 +42,8 @@
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/SocketSyncPoll.h"
 
+#include "qore/intern/PollStateCloseHook.h"
+
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
 extern QoreClass* QC_EVENTNOTIFIER;
@@ -251,7 +253,7 @@ QoreHashNode* Http3ClientPollOperationPriv::continuePoll(ExceptionSink* xsink) {
                 return handleReading(xsink);
 
             case H3State::WAIT_READ:
-                h3_state.store(H3State::READING, std::memory_order_release);
+                setOpenState(H3State::READING, "cycle-start");
                 continue;
 
             case H3State::CLOSED:
@@ -282,7 +284,7 @@ QoreHashNode* Http3ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
     // Check if handshake completed (inner state transitions to "reading")
     const char* inner_state = inner_op->getStateImpl();
     if (inner_state && !strcmp(inner_state, "reading")) {
-        h3_state.store(H3State::READING, std::memory_order_release);
+        setOpenState(H3State::READING, "handshake-done");
 
         // Get session ID from the QUIC session
         auto session = inner_op->getSession();
@@ -614,7 +616,7 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         dispatched = response_dispatched;
     }
     if (dispatched) {
-        h3_state.store(H3State::WAIT_READ, std::memory_order_release);
+        setOpenState(H3State::WAIT_READ, "response-dispatched");
         if (last_poll_info) {
             return last_poll_info;
         }
@@ -639,7 +641,7 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         return nullptr;
     }
 
-    h3_state.store(H3State::WAIT_READ, std::memory_order_release);
+    setOpenState(H3State::WAIT_READ, "request-sent");
     // The normal "request sent, waiting for the response" park.  Without the
     // QUIC timer deadline the I/O thread sleeps until a packet arrives, and a
     // peer that stays silent while computing a slow reply never sends one --
@@ -1294,6 +1296,29 @@ void Http3ClientPollOperationPriv::installSseState(int64_t stream_id, Queue* que
     if (completed_action) {
         ch_action->deref(xsink);
     }
+}
+
+
+void Http3ClientPollOperationPriv::setOpenState(H3State s, const char* site) {
+    assert(s == H3State::READING || s == H3State::WAIT_READ);
+#ifdef DEBUG
+    bool hook_fired = false;
+    if (PollStateCloseHook::take(this, site)) {
+        // what a submitting thread does when the QUIC layer refuses its request at this moment
+        setSubmitError("QUIC-HTTP3-ERROR", "debug hook: a submission was refused while the I/O thread set the state");
+        hook_fired = true;
+    }
+#endif
+    H3State cur = h3_state.load(std::memory_order_acquire);
+    while (cur != H3State::CLOSED
+            && !h3_state.compare_exchange_weak(cur, s, std::memory_order_acq_rel, std::memory_order_acquire)) {
+    }
+#ifdef DEBUG
+    // reports whether the store left the operation closed
+    if (hook_fired) {
+        PollStateCloseHook::fired(isClosed());
+    }
+#endif
 }
 
 void Http3ClientPollOperationPriv::setSubmitError(const char* err, const char* desc) {

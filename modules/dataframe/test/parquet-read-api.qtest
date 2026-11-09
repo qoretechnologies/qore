@@ -1,10 +1,11 @@
 #!/usr/bin/env qore
+# test-platform: macos - reading parquet tables and row groups with the Arrow/Parquet libraries built on macOS
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires ../../../qlib/QUnit.qm
-%requires ../../../qlib/Util.qm
+%requires QUnit
+%requires Util
 %requires dataframe
 %exec-class ParquetReadApiTest
 

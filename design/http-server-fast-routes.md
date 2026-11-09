@@ -547,7 +547,7 @@ a microsecond) on top.
 
 ## Measured (phase 2a: the first request of a plain TCP connection)
 
-`HttpServerFastRoutesBench.qtest`, Release build, a Qore client that opens a connection, sends one request and closes it
+`HttpServerFastRoutesPerf.qtest` (a performance test, which the test-perf CI job runs), Release build, a Qore client that opens a connection, sends one request and closes it
 (best of 5 rounds of 300), the handler path against a fast route for the same response:
 
 |!Path|!Time per connection and request

@@ -2,9 +2,10 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # MIT License
 %modern
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/FsUtil.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires FsUtil
 %requires json
 %exec-class RestCommandTest
 

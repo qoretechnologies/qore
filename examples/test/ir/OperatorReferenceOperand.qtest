@@ -1,0 +1,306 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class OperatorReferenceOperandTest
+
+#! Regression test: an operator takes a reference that arrives as a value as its operand as it is
+/** The AST interpreter evaluates the operand expressions of an operator and takes the values they give as they are:
+    an expression giving a reference (an element <tt>h.r</tt> holding <tt>\x</tt>) gives the reference itself, which
+    the arithmetic, bitwise and string operators do not read (ex: <tt>NOTHING + h.r</tt> is \c NOTHING,
+    <tt>h.r + 1</tt> is \c 1).  The IR interpreter's evaluation of these operators built AST operator nodes from the
+    values, which evaluated the reference again and read the referenced lvalue, as did the native helper for binary
+    operators (qore_rt_binary_op()), so every compiled mode gave the referenced value (\c 3 and \c 4).  Container
+    accesses (<tt>h.r[0]</tt>, <tt>h.r.a</tt>) and iterations (\c foreach, \c select, \c foldl, \c foldr) read the
+    referenced lvalue in the same way.  The script applies the unary, binary and ternary operators, the container
+    accesses and the iterations to such a reference, also with a missing hash key or an empty list or hash as the
+    other operand (<tt>h.r - h.missing</tt>, <tt>() + h.r</tt>), and the compound assignment operators with such a
+    reference as their right operand to locals of every kind, a hash element, a global, members and a closure-bound
+    local (<tt>a %= h.r</tt> gives \c 0, as <tt>a %= 0</tt> does), twice, in every execution mode, on the IR tier of
+    tiered execution and as a qcc executable (see ExecModeOutputTest).
+*/
+class OperatorReferenceOperandTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# operators with a reference operand that arrives as a value (an element holding \x): the AST interpreter evaluates
+# the operand expression to the reference itself, and the operator takes it as it is
+int x = 3;
+sub show(string n, auto v) { printf("%s: %y\n", n, v); }
+sub ops(hash h) {
+    show("nothing + r", NOTHING + h.r);
+    show("r + 1", h.r + 1);
+    show("1 + r", 1 + h.r);
+    show("r - 1", h.r - 1);
+    show("r * 2", h.r * 2);
+    show("r / 1", h.r / 1);
+    show("r % 2", h.r % 2);
+    show("r & 1", h.r & 1);
+    show("r | 4", h.r | 4);
+    show("r ^ 1", h.r ^ 1);
+    show("r << 1", h.r << 1);
+    show("r >> 1", h.r >> 1);
+    show("r == 3", h.r == 3);
+    show("r != 3", h.r != 3);
+    show("r < 5", h.r < 5);
+    show("r > 1", h.r > 1);
+    show("r <= 3", h.r <= 3);
+    show("r >= 4", h.r >= 4);
+    show("r <=> 3", h.r <=> 3);
+    show("r === 3", h.r === 3);
+    show("r !== 3", h.r !== 3);
+    show("str + r", "a" + h.r);
+    show("r + str", h.r + "b");
+    show("r ?? 9", h.r ?? 9);
+    show("r ?* 9", h.r ?* 9);
+    show("!r", !h.r);
+    show("-r", -h.r);
+    show("~r", ~h.r);
+    show("exists r", exists h.r);
+    show("r && 1", h.r && 1);
+    show("r || 0", h.r || 0);
+    show("r ? 1 : 2", h.r ? 1 : 2);
+    show("float r + 1.5", h.r + 1.5);
+    show("r instanceof int", h.r instanceof int);
+    show("r - missing", h.r - h.missing);
+    show("missing - r", h.missing - h.r);
+    show("() + r", elements (() + h.r));
+    show("r + ()", elements (h.r + ()));
+    show("{} + r", {} + h.r);
+    show("r + missing", h.r + h.missing);
+    show("r * missing", h.r * h.missing);
+    show("r == missing", h.r == h.missing);
+}
+for (int i = 0; i < 2; ++i) {
+    ops({"r": \x});
+}
+int gi = 5;
+auto sub getr(hash h) { return h.r; }
+class C {
+    public { int a = 5; auto b = 5; }
+    m(hash h) { a %= h.r; show("self.a %= r", a); b %= h.r; show("self.b %= r", b); }
+}
+# compound assignments with a reference that arrives as a value as their right operand
+sub compound(hash h, list l) {
+    int a = 5; a %= h.r; show("a %= r", a);
+    int b = 5; b %= l[0]; show("b %= l[0]", b);
+    int c = 5; c %= getr(h); show("c %= getr()", c);
+    hash<auto> g = {"a": 5}; g.a %= h.r; show("g.a %= r", g.a);
+    gi = 5; gi %= h.r; show("gi %= r", gi);
+    new C().m(h);
+    auto d = 5; d %= h.r; show("auto d %= r", d);
+    int e = 5; code cl = sub () { e %= h.r; }; cl(); show("closure e %= r", e);
+    softint f = 5; f %= h.r; show("softint f %= r", f);
+    int k = 5; show("value k %= r", k %= h.r);
+    int m = 5; m %= h.r + 0; show("m %= r + 0", m);
+    int n = 7; n &= l[0]; show("n &= l[0]", n);
+    int o = 7; o |= h.r; show("o |= r", o);
+    int p = 7; p ^= h.r; show("p ^= r", p);
+    int q = 7; q <<= h.r; show("q <<= r", q);
+    int r = 7; r >>= h.r; show("r >>= r", r);
+    int s = 5; s -= l[0]; show("s -= l[0]", s);
+    int t = 5; t += h.r; show("t += r", t);
+    int u = 5; u *= h.r; show("u *= r", u);
+    number v = 5n; v -= h.r; show("v -= r", v);
+    show("x", x);
+}
+for (int i = 0; i < 2; ++i) {
+    compound({"r": \x}, (\x,));
+}
+list<int> lx = (3, 4);
+hash<auto> hy = {"a": 1};
+sub containers(hash h, hash g, int i) {
+    show("r[0]", h.r[0]);
+    show("r[i]", h.r[i]);
+    show("r.a", g.r.a);
+    show("r{a}", g.r{"a"});
+    show("elements r", elements h.r);
+    show("keys r", keys g.r);
+    show("r.size()", h.r.size());
+    show("map", (map $1 * 2, h.r));
+    show("select", (select h.r, $1 > 3));
+    show("foldl", (foldl $1 + $2, h.r));
+}
+for (int i = 0; i < 2; ++i) {
+    containers({"r": \lx}, {"r": \hy}, 0);
+}
+sub fe(hash h) {
+    int n = 0;
+    foreach auto v in (h.r) {
+        ++n;
+    }
+    printf("foreach n=%d\n", n);
+    show("foldr", (foldr $1 + $2, h.r));
+}
+fe({"r": \lx});
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "nothing + r: null",
+            "r + 1: 1",
+            "1 + r: 1",
+            "r - 1: -1",
+            "r * 2: 0",
+            "r / 1: 0.0",
+            "r % 2: 0",
+            "r & 1: 0",
+            "r | 4: 4",
+            "r ^ 1: 1",
+            "r << 1: 0",
+            "r >> 1: 0",
+            "r == 3: False",
+            "r != 3: True",
+            "r < 5: True",
+            "r > 1: False",
+            "r <= 3: True",
+            "r >= 4: False",
+            "r <=> 3: -1",
+            "r === 3: False",
+            "r !== 3: True",
+            "str + r: \"a\"",
+            "r + str: \"b\"",
+            "r ?? 9: 3",
+            "r ?* 9: 9",
+            "!r: True",
+            "-r: 0",
+            "~r: -1",
+            "exists r: True",
+            "r && 1: False",
+            "r || 0: False",
+            "r ? 1 : 2: 2",
+            "float r + 1.5: 1.5",
+            "r instanceof int: False",
+            "r - missing: 3",
+            "missing - r: null",
+            "() + r: 1",
+            "r + (): 1",
+            "{} + r: {}",
+            "r + missing: null",
+            "r * missing: null",
+            "r == missing: False",
+            "nothing + r: null",
+            "r + 1: 1",
+            "1 + r: 1",
+            "r - 1: -1",
+            "r * 2: 0",
+            "r / 1: 0.0",
+            "r % 2: 0",
+            "r & 1: 0",
+            "r | 4: 4",
+            "r ^ 1: 1",
+            "r << 1: 0",
+            "r >> 1: 0",
+            "r == 3: False",
+            "r != 3: True",
+            "r < 5: True",
+            "r > 1: False",
+            "r <= 3: True",
+            "r >= 4: False",
+            "r <=> 3: -1",
+            "r === 3: False",
+            "r !== 3: True",
+            "str + r: \"a\"",
+            "r + str: \"b\"",
+            "r ?? 9: 3",
+            "r ?* 9: 9",
+            "!r: True",
+            "-r: 0",
+            "~r: -1",
+            "exists r: True",
+            "r && 1: False",
+            "r || 0: False",
+            "r ? 1 : 2: 2",
+            "float r + 1.5: 1.5",
+            "r instanceof int: False",
+            "r - missing: 3",
+            "missing - r: null",
+            "() + r: 1",
+            "r + (): 1",
+            "{} + r: {}",
+            "r + missing: null",
+            "r * missing: null",
+            "r == missing: False",
+            "a %= r: 0",
+            "b %= l[0]: 0",
+            "c %= getr(): 0",
+            "g.a %= r: 0",
+            "gi %= r: 0",
+            "self.a %= r: 0",
+            "self.b %= r: 0",
+            "auto d %= r: 0",
+            "closure e %= r: 0",
+            "softint f %= r: 0",
+            "value k %= r: 0",
+            "m %= r + 0: 0",
+            "n &= l[0]: 0",
+            "o |= r: 7",
+            "p ^= r: 7",
+            "q <<= r: 7",
+            "r >>= r: 7",
+            "s -= l[0]: 5",
+            "t += r: 5",
+            "u *= r: 0",
+            "v -= r: 5",
+            "x: 3",
+            "a %= r: 0",
+            "b %= l[0]: 0",
+            "c %= getr(): 0",
+            "g.a %= r: 0",
+            "gi %= r: 0",
+            "self.a %= r: 0",
+            "self.b %= r: 0",
+            "auto d %= r: 0",
+            "closure e %= r: 0",
+            "softint f %= r: 0",
+            "value k %= r: 0",
+            "m %= r + 0: 0",
+            "n &= l[0]: 0",
+            "o |= r: 7",
+            "p ^= r: 7",
+            "q <<= r: 7",
+            "r >>= r: 7",
+            "s -= l[0]: 5",
+            "t += r: 5",
+            "u *= r: 0",
+            "v -= r: 5",
+            "x: 3",
+            "r[0]: null",
+            "r[i]: null",
+            "r.a: null",
+            "r{a}: null",
+            "elements r: 0",
+            "keys r: null",
+            "r.size(): 2",
+            "map: 0",
+            "select: null",
+            "foldl: [3, 4]",
+            "r[0]: null",
+            "r[i]: null",
+            "r.a: null",
+            "r{a}: null",
+            "elements r: 0",
+            "keys r: null",
+            "r.size(): 2",
+            "map: 0",
+            "select: null",
+            "foldl: [3, 4]",
+            "foreach n=1",
+            "foldr: [3, 4]",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("OperatorReferenceOperand", Script, (map $1 + "\n", Expected).join(""),
+            "takes a reference that arrives as a value as an operand as the AST interpreter does") {
+    }
+}

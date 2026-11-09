@@ -219,7 +219,7 @@ qore_object_private::~qore_object_private() {
         h->deref();
     }
     // release the class pointer (handle) reference acquired in the constructor
-    qore_class_private::derefClass(*const_cast<QoreClass*>(theclass), false, false);
+    qore_class_private::derefClass(*const_cast<QoreClass*>(theclass), false, false, false);
     // release weak reference
     if (pgm) {
         pgm->depDeref();
@@ -1984,6 +1984,9 @@ QoreObject::~QoreObject() {
     if (qore_alloc_tracking_active()) {
         qore_alloc_tracking_object_destroyed(priv->theclass->getName());
     }
+#endif
+#ifdef DEBUG
+    qore_debug_check_freed_node_not_opaque_target(this);
 #endif
     delete priv;
 }

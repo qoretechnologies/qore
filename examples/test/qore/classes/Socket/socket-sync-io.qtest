@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - blocking socket I/O, timeouts, thread cancellation of waits, /dev/fd descriptor counts
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

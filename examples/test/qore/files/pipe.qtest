@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - File::getPipe() blocking and non-blocking reads, timeouts, competing readers, close
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 

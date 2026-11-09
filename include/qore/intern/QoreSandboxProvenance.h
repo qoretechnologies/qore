@@ -29,6 +29,12 @@ DLLLOCAL void qore_release_call_reference_provenance(const ResolvedCallReference
 DLLLOCAL QoreSandboxContext* qore_get_call_reference_provenance(const ResolvedCallReferenceNode* ref);
 DLLLOCAL ResolvedCallReferenceNode* qore_bind_sandbox_call(const ResolvedCallReferenceNode* callback, bool trusted,
     ExceptionSink* xsink);
+//! Creates a capability that starts a fixed callback in a new thread that no sandbox governs
+/** See SandboxManager::createSystemThreadCall(); raises SANDBOX-CAPABILITY-ERROR and returns nullptr if the creation is
+    refused
+*/
+DLLLOCAL ResolvedCallReferenceNode* qore_create_system_thread_call(const ResolvedCallReferenceNode* callback,
+    ExceptionSink* xsink);
 //! The immutable strong callback edge of a bound call reference, or nullptr for other call references.
 DLLLOCAL const ResolvedCallReferenceNode* qore_get_sandbox_bound_callback(const AbstractQoreNode* callback);
 

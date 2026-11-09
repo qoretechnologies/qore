@@ -1,0 +1,40 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# LazyAppActionsRestrictedValues.qm - test module that a restricted Program loads and that registers a lazy value
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+
+module LazyAppActionsRestrictedValues {
+    version = "1.0";
+    desc = "test module whose lazy value is registered by a Program restricted with PO_NO_UNCONTROLLED_APIS";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! The test module's lazy value
+public namespace LazyAppActionsRestrictedValues {
+public class RestrictedValues {
+    public {
+        #! the builds of the value
+        static int runs = 0;
+        #! the value
+        static int id = DataProviderActionCatalog::registerLazyValue(\RestrictedValues::build());
+    }
+
+    static int getRuns() {
+        return runs;
+    }
+
+    static int getId() {
+        return id;
+    }
+
+    static string build() {
+        ++runs;
+        return "restricted";
+    }
+}
+}

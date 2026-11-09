@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - atomic rename replacing the index (new inode), directory modes and unwritable dir errors
 
 %modern
 

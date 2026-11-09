@@ -1304,6 +1304,15 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                  if (*p == '"') {
                                                     qore_program_private::get(*getProgram())
                                                         ->applyModulePathDirective(false, yytext, *get_loc(yylloc));
+                                                 } else if (!QoreModuleManager::mayChangeModulePath(
+                                                        getProgram())) {
+                                                    // the process-wide module path is shared by all code
+                                                    parse_error(*get_loc(yylloc),
+                                                       "%%append-module-path with an unquoted path extends the "
+                                                       "process-wide module path, which code that a sandbox "
+                                                       "governs or whose functional domains are restricted cannot "
+                                                       "do; quote the path to add it to this Program's module "
+                                                       "path");
                                                  } else {
                                                     append_module_path(yytext);
                                                  }
@@ -1999,6 +2008,9 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                     } else {
                                                        // save file name string in QoreProgram's list
                                                        const char* str = qore_program_private::get(*pgm)->addString(fname->c_str());
+                                                       // and record the file as a source of what is parsed, for the
+                                                       // depfile of an AOT module
+                                                       qore_program_private::get(*pgm)->addIncludedFile(fn);
                                                        beginParsing(str, (void*)YY_CURRENT_BUFFER);
                                                        yy_switch_to_buffer(yy_create_buffer(yyin, YY_BUF_SIZE, yyscanner), yyscanner);
                                                        BEGIN(INITIAL);

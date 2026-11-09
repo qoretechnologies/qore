@@ -76,62 +76,66 @@ module KlaviyoDataProvider {
             "groups": (DataProvider::AppGroup::Marketing, DataProvider::AppGroup::Email),
         });
 
-        # register every action in the manifest
-        RestSchemaActionSet action_set = KlaviyoSchema::getActionSet();
-        action_set.registerActions(KlaviyoDataProvider::AppName);
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(KlaviyoDataProvider::AppName, sub () {
+            # register every action in the manifest
+            RestSchemaActionSet action_set = KlaviyoSchema::getActionSet();
+            action_set.registerActions(KlaviyoDataProvider::AppName);
 
-        # register the record-based table actions; declaring the tables is only half of it, and a table no
-        # action reaches is offered to nobody
-        RestSchemaTablesDataProvider::registerRecordActions(KlaviyoDataProvider::AppName,
-            "/" + KlaviyoDataProvider::TablesChildName, action_set, KlaviyoRecordTables::Tables,
-            KlaviyoRecordTables::RecordActionIds, {
-                "groups": (KlaviyoRecordTables::RecordGroup,),
-            });
+            # register the record-based table actions; declaring the tables is only half of it, and a table no
+            # action reaches is offered to nobody
+            RestSchemaTablesDataProvider::registerRecordActions(KlaviyoDataProvider::AppName,
+                "/" + KlaviyoDataProvider::TablesChildName, action_set, KlaviyoRecordTables::Tables,
+                KlaviyoRecordTables::RecordActionIds, {
+                    "groups": (KlaviyoRecordTables::RecordGroup,),
+                });
 
-        # register the nine hand-written actions; see @ref klaviyomanifest_handwritten for why they are
-        # not generated
-        foreach hash<KlaviyoRelationshipActionInfo> ri in (KlaviyoRelationshipActions.iterator()) {
-            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-                "app": KlaviyoDataProvider::AppName,
-                "path": "/" + ri.action,
-                "action": ri.action,
-                "display_name": ri.display_name,
-                "short_desc": ri.short_desc,
-                "desc": ri.desc,
-                "action_code": DPAT_API,
-                "groups": (ri.group,),
-                "options": DataProviderActionCatalog::getActionOptionFromFields(
-                    KlaviyoRelationshipDataProvider::getRequestType(ri).getFields()),
-            });
-        }
-        foreach hash<auto> ai in (KlaviyoWrittenActions) {
-            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-                "app": KlaviyoDataProvider::AppName,
-                "path": "/" + ai.action,
-                "action": ai.action,
-                "display_name": ai.display_name,
-                "short_desc": ai.short_desc,
-                "desc": ai.desc,
-                "action_code": DPAT_API,
-                "groups": (ai.group,),
-                "options": DataProviderActionCatalog::getActionOptionFromFields(ai.type.getFields()),
-            });
-        }
+            # register the nine hand-written actions; see @ref klaviyomanifest_handwritten for why they are
+            # not generated
+            foreach hash<KlaviyoRelationshipActionInfo> ri in (KlaviyoRelationshipActions.iterator()) {
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": KlaviyoDataProvider::AppName,
+                    "path": "/" + ri.action,
+                    "action": ri.action,
+                    "display_name": ri.display_name,
+                    "short_desc": ri.short_desc,
+                    "desc": ri.desc,
+                    "action_code": DPAT_API,
+                    "groups": (ri.group,),
+                    "options": DataProviderActionCatalog::getActionOptionFromFields(
+                        KlaviyoRelationshipDataProvider::getRequestType(ri).getFields()),
+                });
+            }
+            foreach hash<auto> ai in (KlaviyoWrittenActions) {
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": KlaviyoDataProvider::AppName,
+                    "path": "/" + ai.action,
+                    "action": ai.action,
+                    "display_name": ai.display_name,
+                    "short_desc": ai.short_desc,
+                    "desc": ai.desc,
+                    "action_code": DPAT_API,
+                    "groups": (ai.group,),
+                    "options": DataProviderActionCatalog::getActionOptionFromFields(ai.type.getFields()),
+                });
+            }
 
-        # register the polling event actions
-        foreach hash<auto> event in (KlaviyoEvents) {
-            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-                "app": KlaviyoDataProvider::AppName,
-                "path": "/" + KlaviyoDataProvider::EventsChildName + "/" + event.event,
-                "action": event.event,
-                "display_name": event.display_name,
-                "short_desc": event.short_desc,
-                "desc": event.desc,
-                "action_code": DPAT_EVENT,
-                "action_val": event.event,
-                "groups": ("Events",),
-            });
-        }
+            # register the polling event actions
+            foreach hash<auto> event in (KlaviyoEvents) {
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": KlaviyoDataProvider::AppName,
+                    "path": "/" + KlaviyoDataProvider::EventsChildName + "/" + event.event,
+                    "action": event.event,
+                    "display_name": event.display_name,
+                    "short_desc": event.short_desc,
+                    "desc": event.desc,
+                    "action_code": DPAT_EVENT,
+                    "action_val": event.event,
+                    "groups": ("Events",),
+                });
+            }
+        });
     };
 }
 

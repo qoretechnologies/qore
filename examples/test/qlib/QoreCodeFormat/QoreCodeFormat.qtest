@@ -8,8 +8,8 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/astparser"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/QoreCodeFormat
+%requires QUnit
+%requires QoreCodeFormat
 
 %exec-class QoreCodeFormatTest
 

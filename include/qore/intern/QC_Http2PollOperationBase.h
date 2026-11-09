@@ -33,6 +33,7 @@
 
 #define _QORE_CLASS_HTTP2POLLOPERATIONBASE_H
 
+#include <atomic>
 #include "qore/SocketPollOperationBase.h"
 #include "qore/QoreSocketObject.h"
 
@@ -378,7 +379,9 @@ private:
     QoreObject* current_op_obj;                 //!< ref'd QoreObject wrapping current_op (for DGC)
     mutable QoreHashNode* request;              //!< ref'd, last completed request
     QoreHashNode* error_info;                   //!< ref'd error info
-    H2ServerState h2_state;
+    //! The state; atomic: goalReached(), isClosed() and the other accessors read it without op_lock, from other
+    //! threads too, while the I/O thread and abort() change it with op_lock held
+    std::atomic<H2ServerState> h2_state;
     bool headers_only;                          //!< dispatch on HEADERS before END_STREAM
     mutable bool request_pending;               //!< set by continuePoll, cleared by getOutput
     bool keep_alive;                            //!< HTTP/2 connections are persistent by default

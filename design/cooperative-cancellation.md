@@ -823,10 +823,14 @@ waitOthers() {
 
 `WebSocketClient`'s thread accounting (`WscLibraryThreads`), its handoff of an action to a
 `connectAsync()` worker (`WscActionHandoff`, with `WscActionWaiters` recording an action that a
-cancelled thread cannot release; each thread waiting for an action waits on a Queue of its own, so
-the wakeup of such a record is never lost; one waiter is woken at a time, and a waiter that stops
-waiting without the action wakes the next one as it unregisters, so no wakeup needs a loop), and the Discord heartbeat record (`DiscordHeartbeat`) use this
-pattern.  `WscLibraryThreads::waitOthers()` supports a single waiter (the destructor): it pushes
+cancelled thread cannot release; each thread waiting for an action waits on a Queue of its own and
+releases the recorded actions again right after it registers, so a record made before it registered
+is released by itself and a record made afterwards wakes it, even before it waits; one waiter is
+woken at a time, and a waiter that stops waiting without the action wakes the next one as it
+unregisters, so no wakeup needs a loop; the connections that a cancelled thread took are released
+by recursion instead of a loop), and the Discord heartbeat record (`DiscordHeartbeat`) use this
+pattern.  A step that releases the client's lock (e.g. a subclass's `explicitDisconnect()`) and is
+cancelled cannot take the lock again: it records its action like a cancelled `connectAsync()` caller.  `WscLibraryThreads::waitOthers()` supports a single waiter (the destructor): it pushes
 one wakeup per change while a waiter is registered.
 
 Not covered yet: a **destructor running on a cancelled thread**.  The destructors of both clients
