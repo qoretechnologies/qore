@@ -33,6 +33,16 @@ public namespace ConvertApiDataProvider {
     #! How long the converter list from the \c info endpoint is cached
     public const ConverterCacheTtl = 1h;
 
+    #! ConvertAPI's conversion timeout in seconds when a request gives none in its \c timeout field
+    public const DefaultConversionTimeout = 900;
+
+    #! The time in seconds added to the conversion timeout for sending a conversion request and receiving its result
+    /** A conversion request is sent with a transport deadline of its conversion timeout plus this allowance, or of
+        the client's own request timeout if that is longer, so that the client neither gives up on a conversion that
+        ConvertAPI is still running nor sends it again.
+    */
+    public const ConversionTransferAllowance = 120;
+
     #! Set of retriable transport errors of the synchronous and asynchronous REST clients
     public const RetrySet = {
         "SOCKET-CONNECT-ERROR": True,

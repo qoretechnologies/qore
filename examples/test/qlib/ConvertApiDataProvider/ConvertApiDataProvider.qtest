@@ -50,6 +50,8 @@ class FakeConvertApiHandler inherits AbstractHttpRequestHandler {
         list<hash<auto>> requests = ();
         #! the number of requests still to be answered with 429 Too Many Requests
         int rate_limited;
+        #! how long a conversion request takes before it is answered, in milliseconds
+        int delay_ms;
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -59,6 +61,9 @@ class FakeConvertApiHandler inherits AbstractHttpRequestHandler {
             "authorization": hdr.authorization,
             "body": body ? parse_json(body.toString()) : NOTHING,
         };
+        if (delay_ms > 0 && hdr.path =~ /^convert\//) {
+            usleep(delay_ms * 1000);
+        }
         if (rate_limited > 0) {
             --rate_limited;
             return <HttpResponseInfo>{
@@ -364,6 +369,14 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         assertEq("convertapi", conn.getType());
         assertEq("https://v2.convertapi.com", conn.getAsync(False).getUrl());
         assertTrue(conn.getDataProvider() instanceof ConvertApiDataProvider::ConvertApiDataProvider);
+
+        # the config constructor keeps a configured URL and uses the default URL only when none is given
+        ConvertApiRestClient::ConvertApiRestConnection proxy_conn({"name": "proxy", "desc": "proxy connection",
+            "url": "convertapi://proxy.example.com", "opts": {"apikey": "fake-key-for-test"}}, {"monitor": False});
+        assertEq("https://proxy.example.com", proxy_conn.getAsync(False).getUrl());
+        ConvertApiRestClient::ConvertApiRestConnection default_conn({"name": "default", "desc": "default connection",
+            "opts": {"apikey": "fake-key-for-test"}}, {"monitor": False});
+        assertEq("https://v2.convertapi.com", default_conn.getAsync(False).getUrl());
     }
 
     #! Action catalog tests - verify all actions are registered
@@ -511,10 +524,20 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         assertEq("docx", ConvertApiDataProvider::ConvertApiDataProviderBase::checkFormat("DOCX"));
         assertEq("delete-pages", ConvertApiDataProvider::ConvertApiDataProviderBase::checkFormat("delete-pages"));
 
-        # a file and a URL cannot both be given
+        # a file and a URL cannot both be given, also when the URL is sent as a parameter (the html converters)
         assertThrows("CONVERTAPI-ERROR", \ConvertApiDataProvider::ConvertApiDataProviderBase::makeParameters(), ({
             "file": {"name": "a.docx", "content": binary("x")},
             "url": "https://example.com/a.docx",
+        },));
+        assertThrows("CONVERTAPI-ERROR", \ConvertApiDataProvider::ConvertApiDataProviderBase::makeParameters(), ({
+            "file": {"name": "a.html", "content": binary("x")},
+            "url": "https://example.com",
+        }, NOTHING, "Url"));
+
+        # a request without an input is rejected
+        assertThrows("CONVERTAPI-ERROR", \ConvertApiDataProvider::ConvertApiDataProviderBase::makeParameters(), ({
+            "store_file": True,
+            "parameters": {"PageRange": "1-2"},
         },));
 
         # parameters handled by the module cannot be given as converter parameters
@@ -549,6 +572,14 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         assertEq({"X-Test": 1, "Authorization": "Bearer key1"},
             ConvertApiRestClient::ConvertApiRestClientBase::getOptions({"apikey": "key1", "headers": {"X-Test": 1}})
                 .headers);
+        # an Authorization header is replaced whatever the case of its name
+        assertEq({"X-Test": 1, "Authorization": "Bearer key1"},
+            ConvertApiRestClient::ConvertApiRestClientBase::getOptions({"apikey": "key1", "headers": {
+                "authorization": "Bearer stale",
+                "X-Test": 1,
+                "AUTHORIZATION": "Basic c3RhbGU=",
+                "Authorization": "Bearer old",
+            }}).headers);
         assertThrows("CONVERTAPI-ERROR", \ConvertApiRestClient::ConvertApiRestClientBase::getOptions(),
             {"url": "http://x"});
     }
@@ -664,6 +695,49 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         assertEq(("docx", "pdf"), (map $1.value, convert.getReferenceData("source_formats")));
         assertEq(("pdf", "txt"), (map $1.value, convert.getReferenceData("destination_formats", {"from": "docx"})));
         assertNothing(convert.getReferenceData("destination_formats"));
+
+        # a conversion without an input is rejected before a request is made
+        handler.requests = ();
+        assertThrows("CONVERTAPI-ERROR", sub () {
+            provider.getChildProviderEx("convert-word-to-pdf").doRequest({"PageRange": "1-2"});
+        });
+        assertEq(0, handler.requests.size());
+
+        # an Authorization header given in another case is not sent instead of the API token
+        ConvertApiDataProvider::ConvertApiDataProvider mixed_case_provider({
+            "convertapirestclient_options": {
+                "url": url,
+                "apikey": "test-key",
+                "headers": {"authorization": "Bearer stale"},
+            },
+        });
+        handler.requests = ();
+        mixed_case_provider.getChildProviderEx("convert-word-to-pdf").doRequest({
+            "url": "https://example.com/a.docx",
+        });
+        assertEq(1, handler.requests.size());
+        assertEq("Bearer test-key", handler.requests[0].authorization);
+
+        # a conversion is sent with a deadline that covers its conversion timeout: a conversion that takes longer
+        # than the client's request timeout is neither cut off nor sent again
+        {
+            ConvertApiDataProvider::ConvertApiDataProvider slow_provider({
+                "convertapirestclient_options": {
+                    "url": url,
+                    "apikey": "test-key",
+                    "timeout": 1000,
+                },
+            });
+            handler.requests = ();
+            handler.delay_ms = 2000;
+            on_exit handler.delay_ms = 0;
+            result = slow_provider.getChildProviderEx("convert-word-to-pdf").doRequest({
+                "url": "https://example.com/a.docx",
+                "timeout": 10,
+            });
+            assertEq(1, result.ConversionCost);
+            assertEq(1, handler.requests.size());
+        }
     }
 
     #! Integration tests - require a real ConvertAPI token; each test runs one or more conversions

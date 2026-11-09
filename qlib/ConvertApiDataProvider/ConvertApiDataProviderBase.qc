@@ -250,6 +250,9 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
         @return the conversion result: \c ConversionCost and \c Files; the \c FileData of each file is decoded to
         a binary value
 
+        The request is sent with a transport deadline that covers its conversion timeout (see
+        getConversionRequestTimeout()), not with the client's request timeout alone.
+
         @throw CONVERTAPI-ERROR invalid request
         @throw CONVERTAPI-API-ERROR ConvertAPI returned an error
     */
@@ -257,7 +260,24 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
         list<hash<auto>> params = ConvertApiDataProviderBase::makeParameters(req, converter_params, url_param);
         string path = sprintf("convert/%s/to/%s", ConvertApiDataProviderBase::checkFormat(from),
             ConvertApiDataProviderBase::checkFormat(to));
-        return ConvertApiDataProviderBase::processResult(doPost(path, {"Parameters": params}));
+        return ConvertApiDataProviderBase::processResult(doPost(path, {"Parameters": params},
+            getConversionRequestTimeout(req.timeout)));
+    }
+
+    #! Returns the transport deadline of a conversion request in milliseconds
+    /** The deadline is the conversion timeout (@ref DefaultConversionTimeout if the request gives none) plus
+        @ref ConversionTransferAllowance for sending the request and receiving the result, or the client's own request
+        timeout if that is longer.  A conversion can run for up to 1200 seconds, much longer than the default request
+        timeout of the client, and a request that timed out would be sent again by the transport retries.
+
+        @param conversion_timeout the conversion timeout of the request in seconds, if any
+
+        @return the deadline in milliseconds
+    */
+    private int getConversionRequestTimeout(*softint conversion_timeout) {
+        int seconds = (conversion_timeout > 0 ? conversion_timeout : DefaultConversionTimeout)
+            + ConversionTransferAllowance;
+        return max(rest.getTimeout(), seconds * 1000);
     }
 
     #! Returns the ConvertAPI \c Parameters list for a request
@@ -270,6 +290,15 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
         @throw CONVERTAPI-ERROR invalid request
     */
     static list<hash<auto>> makeParameters(hash<auto> req, *hash<auto> converter_params, *string url_param) {
+        # the request must give an input (the fields of the "source" group), and a single input either as a file or
+        # as a URL; this is checked here, before a request is made, as the data types do not enforce required groups
+        if (!req.file && !req.url.val() && !req.files && !req.urls) {
+            throw "CONVERTAPI-ERROR", "no input: give 'file' or 'url', or 'files' or 'urls' for converters that "
+                "take several files";
+        }
+        if (req.file && req.url.val()) {
+            throw "CONVERTAPI-ERROR", "give either 'file' or 'url', not both";
+        }
         list<hash<auto>> params = ();
         # the main input
         if (req.file) {
@@ -278,8 +307,6 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
         if (req.url.val()) {
             if (url_param) {
                 params += {"Name": url_param, "Value": req.url};
-            } else if (req.file) {
-                throw "CONVERTAPI-ERROR", "give either 'file' or 'url', not both";
             } else {
                 params += {"Name": "File", "FileValue": {"Url": req.url}};
             }
@@ -430,12 +457,14 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
     #! Makes a POST request to the ConvertAPI API
     /** @param path the API path
         @param body the request body
+        @param timeout_ms a transport deadline for this request only, in milliseconds; if not given, the client's
+        request timeout applies
         @return the response body
 
         @throw CONVERTAPI-API-ERROR if the response indicates an error
     */
-    hash<auto> doPost(string path, *hash<auto> body) {
-        auto rv = doRestRequest("POST", path, body);
+    hash<auto> doPost(string path, *hash<auto> body, *int timeout_ms) {
+        auto rv = doRestRequest("POST", path, body, timeout_ms);
         return rv.typeCode() == NT_HASH ? rv : {};
     }
 
@@ -466,11 +495,13 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
     /** @param method the HTTP method
         @param path the API path
         @param body optional request body
+        @param timeout_ms a transport deadline for this request only, in milliseconds; if not given, the client's
+        request timeout applies; the client's own timeout is not changed
         @return the response body
 
         @throw CONVERTAPI-API-ERROR if the response indicates an error
     */
-    private auto doRestRequest(string method, string path, auto body = NOTHING) {
+    private auto doRestRequest(string method, string path, auto body = NOTHING, *int timeout_ms) {
         int retries = 0;
         while (True) {
             try {
@@ -478,7 +509,9 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
                 if (!exists send_body) {
                     throw "CONVERTAPI-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
-                hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
+                auto response = timeout_ms
+                    ? rest.restDoRequestWithTimeout(method, path, send_body ? body : NOTHING, NOTHING, timeout_ms)
+                    : rest.restDoRequest(method, path, send_body ? body : NOTHING);
                 return response.body;
             } catch (hash<ExceptionInfo> ex) {
                 if (retryRequest(ex, \retries)) {

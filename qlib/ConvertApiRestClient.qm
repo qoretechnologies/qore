@@ -153,9 +153,14 @@ public class ConvertApiRestClientBase {
         }
 
         # Set the Authorization header from the apikey option; the header is always recomputed, so it replaces any
-        # Authorization header already present; the apikey option is kept in the returned hash (it is ignored by the
-        # base classes), so that the options saved in the base class can be used to create a copy of the object with
-        # copyWithUrl(); this method must return the same result when called with its own output
+        # Authorization header already present, whatever the case of its name (header names are case-insensitive and
+        # RestClientIo lowercases them, so another spelling could be sent instead of the token); the apikey option is
+        # kept in the returned hash (it is ignored by the base classes), so that the options saved in the base class
+        # can be used to create a copy of the object with copyWithUrl(); this method must return the same result when
+        # called with its own output
+        if (hdr) {
+            hdr -= (map $1, keys hdr, $1.lwr() == "authorization");
+        }
         hdr.Authorization = "Bearer " + opts.apikey;
 
         rv.headers = hdr;
@@ -310,10 +315,11 @@ public class ConvertApiRestConnection inherits RestClient::RestConnection {
     }
 
     #! returns config for @ref ConvertApiRestConnection::constructor()
+    /** The default URL is used only if the config gives none, as with the other constructor, so that a connection
+        can be configured for another endpoint, such as a proxy
+    */
     private static hash<auto> getConfig(hash<auto> config) {
-        return config + {
-            "url": DefaultConnectionUrl,
-        };
+        return config.url.val() ? config : config + {"url": DefaultConnectionUrl};
     }
 
     #! returns \c "convertapi"
