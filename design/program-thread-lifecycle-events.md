@@ -45,22 +45,29 @@ hash<ProgramThreadSubscription> Program::subscribeThreadEvents(Queue queue,
 bool Program::unsubscribeThreadEvents(int id) [dom=THREAD_CONTROL,EMBEDDED_LOGIC]
 ```
 
-- `subscribeThreadEvents()` raises `PROGRAM-THREAD-EVENT-ERROR` when the queue has a maximum size, when the calling
-  code runs in the target Program (as for `setThreadEntryHandler()`: code must not observe or control its own
-  embedding), or when the Program is being destroyed.
-- The returned `ProgramThreadSubscription` holds the subscription `id`, the `program_id`, the hub sequence number
-  `seq` of the snapshot, the list of live background threads (`threads`, `list<hash<ProgramThreadInfo>>`), and
-  `active` (the Program's thread count at the snapshot). The registration and the snapshot are taken atomically
-  under the hub lock: every event with a sequence number greater than `seq` is delivered to the queue, and no
-  event at or below it is.
-- `unsubscribeThreadEvents()` returns `False` if the subscription does not exist (already removed). Events already
-  pushed stay in the queue; the consumer discards them by `subscription_id`.
-- `ProgramThreadEventOptions`: `events` (a bit mask of the event types; default all) and `activity` (also deliver
-  `ACTIVITY` events; default `False`).
+- `subscribeThreadEvents()` raises `PROGRAM-THREAD-EVENT-ERROR` when the queue has a maximum size, when the `events`
+  option is 0 or has bits other than the `PTE_*` constants, when the calling code runs in the target Program (as for
+  `setThreadEntryHandler()`: code must not observe or control its own embedding), or when the Program is being
+  destroyed. `unsubscribeThreadEvents()` raises it when the calling code runs in the target Program.
+- The returned `ProgramThreadSubscription` holds the subscription `id` (unique in the process), the `program_id`,
+  the hub sequence number `seq` of the snapshot, `idle` (the Program's activity state at the snapshot), and the list
+  of live background threads (`threads`, `list<hash<ProgramThreadInfo>>`, in the order they started, each with
+  `cancel_requested` set if a `CANCEL_REQUESTED` was published for it). The registration and the snapshot are taken
+  atomically under the hub lock: every event with a sequence number greater than `seq` is delivered to the queue,
+  and no event at or below it is.
+- `unsubscribeThreadEvents()` returns `False` if the subscription does not exist (already removed, or ended by
+  `CLOSED`). Events already pushed stay in the queue; the consumer discards them by `subscription_id`.
+- `ProgramThreadEventOptions` has one key, `events`: a bit mask of `PTE_STARTED`, `PTE_CANCEL_REQUESTED`,
+  `PTE_FINISHED`, `PTE_ACTIVITY` and `PTE_CLOSED` (`PTE_ALL` for all). The default, `PTE_DEFAULT`, is every event
+  but `ACTIVITY`, which a Program that is called often publishes often.
+- The queue is held as the Queue's private data, as `Socket::setEventQueue()` holds its queue: the Program never
+  keeps the consumer's `Queue` object alive, so no garbage-collection cycle can run through it. If the consumer
+  deletes the `Queue` object, the private data stays alive and receives the events until the subscription is
+  removed or the Program is destroyed, so a consumer removes its subscription when it stops reading.
 
 Hashdecls (`ProgramThreadSubscription`, `ProgramThreadEventOptions`, `ProgramThreadInfo`, `ProgramThreadEvent`) are
 declared in `lib/QC_Program.qpp` and initialized in `StaticSystemNamespace::StaticSystemNamespace()` so they appear
-in the documentation; event and outcome constants are declared in the same file.
+in the documentation; the `PTE_*` constants are declared in the same file.
 
 ### Thread identity
 
@@ -82,14 +89,14 @@ evaluation worker).
 | `event` | `string` | `STARTED`, `CANCEL_REQUESTED`, `FINISHED`, `ACTIVITY` or `CLOSED` |
 | `tid` | `*int` | the thread's TID (thread events) |
 | `thread_id` | `*int` | the thread's unique ID (thread events) |
-| `parent_tid`, `parent_thread_id` | `*int` | the starting thread (`STARTED`) |
+| `parent_tid`, `parent_thread_id` | `*int` | the starting thread (thread events) |
 | `name` | `*string` | the thread's name when available (`STARTED`: as created; `FINISHED`: as last set) |
 | `start` | `*date` | when the thread started (thread events) |
 | `end`, `duration_us` | `*date`, `*int` | when it finished and the elapsed time (`FINISHED`) |
-| `running` | `int` | the number of live background threads after this transition |
-| `active` | `*int` | the Program's thread count (`ACTIVITY`) |
+| `running` | `int` | the number of background threads that have published `STARTED` and not `FINISHED`, after the event |
+| `idle` | `*bool` | `True` if the Program became idle, `False` if it became active (`ACTIVITY`) |
 | `outcome` | `*string` | `COMPLETED`, `EXCEPTION`, `CANCELLED`, `INTERRUPTED`, `EXITED` or `START_FAILED` (`FINISHED`) |
-| `error` | `*hash<ExceptionInfo>` | the first exception that ended the thread |
+| `error` | `*hash<ExceptionInfo>` | the first exception that ended the thread (see "Event values" below) |
 | `exception_count` | `*int` | the number of exceptions that ended the thread |
 | `cleanup_error` | `*hash<ExceptionInfo>` | the first exception raised by the thread's teardown, if any |
 | `cancel_reason` | `*string` | the reason given with the request (`CANCEL_REQUESTED`) |
@@ -149,28 +156,73 @@ hub (see below), not to the Program, until it has published.
 
 ### Cancellation requests
 
-`CANCEL_REQUESTED` is published when a request is delivered to a live background thread of the Program, from
-`Program::cancelThread()`, `Program::cancelThreads()` (including threads caught by the cancellation wave as they
-start) and `cancel_thread()` / `qore_cancel_thread()`. It is published once per request: further requests while
-one is pending publish nothing, and a request after `clear_thread_cancel()` publishes again. It is collected under
-`thread_list.lck` and published after the lock is released; a request delivered after the thread's `FINISHED` is not
-published. "Requested" never means "terminated": the outcome is reported by `FINISHED`.
+`CANCEL_REQUESTED` is published when a request is delivered to a background thread of the Program while its code
+runs, from `Program::cancelThread()`, `Program::cancelThreads()` (including threads caught by the cancellation wave
+as they start) and `cancel_thread()` / `qore_cancel_thread()`. "Requested" never means "terminated": the outcome is
+reported by `FINISHED`.
+
+- The thread records its hub and `thread_id` in its `ThreadEntry` (`lifecycle_hub`, `lifecycle_thread_id`) under
+  `thread_list.lck` after publishing `STARTED` (`QoreThreadList::setLifecycleHub()`), and clears them when its code
+  has ended, right after its outcome is taken (`clearLifecycleHub()`). `QoreThreadList::cancelThread()` references
+  the hub under the lock when the request is new (the `QCR_THREAD_CANCEL` bit was not set) and publishes after
+  releasing it, so the request is published once: further requests while one is pending publish nothing, and a
+  request after `clear_thread_cancel()` publishes again.
+- A request made before the hub was set (by a cancellation wave in `startThread()`, or by a canceller that had the
+  TID from the starting thread) is found pending by `setLifecycleHub()` and published by the thread itself, right
+  after its `STARTED`.
+- A canceller that publishes after the thread's `FINISHED` finds no live record and publishes nothing; the hub lock
+  orders the two, so a `CANCEL_REQUESTED` is never delivered after the thread's `FINISHED`.
 
 ### Activity
 
-With `activity` set, `ACTIVITY` is published when the Program's thread count (`thread_count`, the value
-`getThreadCount()` returns and `waitForThreads()` waits on) becomes zero (`active == 0`) and when it leaves zero.
+With `PTE_ACTIVITY`, `ACTIVITY` is published when the Program's thread count (`thread_count`, the value
+`getThreadCount()` returns and `waitForThreads()` waits on) becomes zero (`idle: True`) and when it leaves zero
+(`idle: False`).
 Every function that changes `thread_count` - `incThreadCount()`, `decThreadCount()`, `preregisterNewThread()` (a
 parent starting a background thread) and `cancelPreregistration()` (a thread that failed to start) - detects the
 transition under `plock` and publishes after releasing it; `parse_count`, which `waitForThreads()` also waits on, is
-not part of it: the event reports code running in the Program, not parsing. This
-is what lets an embedder resume a request blocked by active Program code without a waiting thread; as an idle event
-does not reserve the Program, the embedder must still recheck before parsing.
+not part of it: the event reports code running in the Program, not parsing. This is what lets an embedder resume a
+request blocked by active Program code without a waiting thread; as an idle event does not reserve the Program, the
+embedder must still recheck before parsing.
+
+- Each transition increments the Program's `activity_gen` under `plock`. The transition is published after `plock`
+  is released by a `ProgramThreadActivityPublisher` declared before the lock, which holds a reference to the hub, as
+  another thread can destroy the Program once its thread count has been released. Transitions published by
+  different threads can reach the hub out of order; the hub keeps the generation of the last one recorded and drops
+  older ones, so the last state delivered is the Program's state.
+- The cost without an `ACTIVITY` subscription is the increment and one atomic load (`hasActivityInterest()`). A
+  subscription records its interest before it reads the Program's state (`activity_gen` and `thread_count` under
+  `plock`): a transition whose publisher read no interest was made under `plock` before the subscription read the
+  state, so the snapshot's `idle` includes it.
+- A background thread leaves the Program before it publishes `FINISHED` (see "Finish"), so the `ACTIVITY` event of
+  the Program becoming idle can come before the `FINISHED` of its last thread, whose `running` still counts it.
+- A call into the Program from outside (`Program::callFunction()`, for example) can make more than one transition:
+  the Program can become active and idle more than once for one call.
 
 ### Program destruction
 
-When the Program is destroyed (`qore_program_private::del()`), the hub publishes `CLOSED` once all background threads
-have published `FINISHED`, and drops its subscriptions. A destroyed Program publishes nothing else.
+When the Program is destroyed (`waitForTerminationAndClear()`, or `qore_program_private::del()` for a Program that
+was not cleared), the hub is closed: no subscription can be made, and `CLOSED` is published once all background
+threads have published `FINISHED` (by the last of them if some had left the Program but not published yet), and the
+subscriptions are removed. A destroyed Program publishes nothing else.
+
+### Event values
+
+Events refer to no objects or code: an event must not extend the life of the thread's values, and pushing one to a
+queue must need no garbage-collection scan (the hub pushes with `QoreQueue::pushAndTakeRef()`, which does not count
+values for the scanner, as `Socket` events do). `error` and `cleanup_error` are built by
+`program_thread_event_error()` from the exception (`QoreException::makeExceptionObjectWithoutChain()`), without
+chained exceptions (`next`), and with `err`, `desc` and `arg` left empty when their value needs a scan
+(`needs_scan()`). Releasing an event therefore never runs Qore code, which is why it can be released under the hub
+lock.
+
+### fork()
+
+In a child process, only the forking thread exists. `qore_program_private::fixupAfterFork()` calls
+`ProgramThreadHub::forkChild()`, which reinitializes the hub lock, drops the records of the other threads without
+events (with the hub references they held), sets the activity state to the child's, and publishes `CLOSED` if the
+Program was being destroyed and none of its threads remain. `ThreadEntry::abandonAfterFork()` clears the entries'
+hub fields. Subscriptions are kept: the queues are the child's copies.
 
 ## Implementation
 
@@ -180,36 +232,43 @@ have published `FINISHED`, and drops its subscriptions. A destroyed Program publ
 owned by `qore_program_private` (created with the Program). Each background thread references it from
 `BGThreadParams` until it has published `FINISHED`. It holds:
 
-- a mutex that is a leaf lock: it is never held while taking `plock`, `tlock`, `thread_list.lck`, or while running
-  Qore code;
+- a mutex that is a leaf lock: no other lock is taken while it is held but the lock of a subscription's queue, and
+  no Qore code runs while it is held;
 - the sequence counter;
-- the live set: `thread_id` → `{tid, parent, name, start, cancel_pending}`, maintained whether or not there are
-  subscribers so that a late subscription gets a correct snapshot (one insert and one remove per background thread);
-- the subscriptions: `id` → `{Queue, mask, activity}`, plus an atomic subscriber count for a fast path.
+- the live set: `thread_id` → `{tid, identity, name, start, zone, cancel_requested}`, maintained whether or not
+  there are subscribers so that a late subscription gets a correct snapshot (one insert and one remove per
+  background thread);
+- the subscriptions: `{id, Queue*, events}`;
+- the activity state: the generation and `idle` flag of the last transition recorded, and an atomic count of the
+  subscriptions that take `ACTIVITY` events.
+
+Dates use the time zone of the Program when the thread started (`currentTZ()` in the new thread, whose current
+Program is the thread's Program).
 
 ### Publication
 
 The event hash is built before taking the hub lock. Under the lock the sequence number is assigned, the live set is
 updated, and the event is pushed to each matching queue with the subscription ID; releasing values happens after the
 lock. Pushing under the lock gives one total order across threads. A push to an unlimited queue takes only the
-queue's own mutex and does not block or run Qore code; a push that fails (the queue was deleted or is in an error
-state) removes that subscription. Publication errors never reach the thread's `ExceptionSink`: they must not change
-the evaluated program's behavior.
+queue's own mutex and does not block or run Qore code; a queue in an error state discards the event. Publication
+raises no exceptions, so nothing reaches the thread's `ExceptionSink`: it must not change the evaluated program's
+behavior. Releasing the queues of removed subscriptions happens after the lock: it can run the destructors of values
+that the consumer pushed to its queue, if it holds the last reference to the queue's data.
 
 With no subscribers, publishing a thread event costs the live-set update; publishing `CANCEL_REQUESTED` and
 `ACTIVITY` costs one atomic load.
 
 ### Garbage collection
 
-A subscription holds a strong reference to its queue. A queue can contain values that refer back to the Program
-object only if the consumer pushes them there; the Program object reports the subscription queues to the scanner as
-Pattern B private data, as it reports thread entry handlers (`design/dgc.md`, issue #5590).
+A subscription references the queue's private data, not the `Queue` object, so the Program holds no reference that
+the scanner would need to follow: the `Queue` object, and any values the consumer pushed to it, are released when
+the consumer releases the object, as for a `Socket` event queue.
 
 ## QoreRepl
 
 ### Session events
 
-`QoreRepl` subscribes its Program with `activity` set and runs one dispatcher thread for the session (started with
+`QoreRepl` subscribes its Program with `PTE_ALL` and runs one dispatcher thread for the session (started with
 the first listener, ended by `close()`). The dispatcher belongs to the REPL's own Program, so it, the evaluation
 worker of a frontend and any capture threads are never reported as user threads: only `background` threads of the
 evaluated Program are.
@@ -273,14 +332,18 @@ Thread 19 failed: ERR: description (<repl:3>:1)
 
 ## Tests
 
-- `examples/test/qore/classes/Program/thread-lifecycle-events.qtest` (all execution modes through
-  `ExecModeHarness.qm`; `# test-platform: macos` for thread creation and cancellation): each outcome; caught and
-  deferred cancellation; parent-side start failure (no events) and entry handler failure (`START_FAILED`); very
-  short-lived threads; nested background threads (parent identity); concurrent subscription while threads start and
-  finish (no missed or duplicate events, by snapshot and `seq`); TID reuse ordering; a limited queue rejected;
-  deleted queue; unsubscription; Program destruction with threads running (`CLOSED`, no leaks); coexistence with
-  thread entry handlers; sandbox restrictions and self-subscription; activity transitions. Counters and gates only,
-  no sleeps. Run under valgrind with `qore -b`.
+- `examples/test/qore/classes/Program/thread-lifecycle-events.qtest` (`# test-platform: macos` for thread creation
+  and cancellation): each outcome; caught and deferred cancellation; a request published once while pending and
+  again after it was cleared; a cancellation wave that cancels a thread before its `STARTED`; entry handler failure
+  (`START_FAILED`); a teardown exception (`cleanup_error`); the snapshot; nested background threads (parent
+  identity); short-lived threads; concurrent subscriptions while threads start and finish (no missed or duplicate
+  events, by snapshot and `seq`); TID reuse (more threads than the thread list holds, the events of each TID
+  alternating); event masks; activity transitions; unsubscription; several subscriptions; a queue deleted by its
+  owner; Program destruction with and without threads running (`CLOSED` last); a limited queue, invalid events and
+  self-subscription rejected; sandbox restrictions. Counters and gates only, no sleeps. Clean under valgrind with
+  `qore -b --exec-mode=ir`.
+- `examples/test/ir/ThreadLifecycleEventModes.qtest`: the events of threads started by code in each execution mode
+  (`ExecModeHarness.qm`), as compiled code starts threads through `do_op_background_helper()`.
 - `examples/test/qlib/QoreRepl/QoreReplThreadEvents.qtest`: listener delivery, reset and stale events, grouping per
   verbosity level, exclusion of infrastructure threads, close with threads active; WebSocket and action session
   event tests.
@@ -289,11 +352,12 @@ Thread 19 failed: ERR: description (<repl:3>:1)
 
 ## Phases
 
-1. Core: hub, `STARTED`/`FINISHED` with outcomes, subscription and snapshot, Program destruction.
-2. Core: `CANCEL_REQUESTED` and `ACTIVITY`.
-3. QoreRepl: session events, state, notices, verbosity, reset handling.
-4. QoreRepl: action session emitter, WebSocket messages, AsyncAPI.
-5. module-ncurses: qrepl notices, status count, dialog dismissal, settings.
-6. Documentation and release notes.
+1. Core: hub, `STARTED`/`FINISHED` with outcomes, subscription and snapshot, Program destruction,
+   `CANCEL_REQUESTED` and `ACTIVITY` (phases 1 and 2 of the plan were done together, so that no event constant was
+   published without its events).
+2. QoreRepl: session events, state, notices, verbosity, reset handling.
+3. QoreRepl: action session emitter, WebSocket messages, AsyncAPI.
+4. module-ncurses: qrepl notices, status count, dialog dismissal, settings.
+5. Documentation and release notes.
 
 Each phase's tests pass, without warnings, before the next starts.

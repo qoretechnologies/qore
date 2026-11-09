@@ -456,6 +456,8 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     }
     thread_count = own;
     thread_waiting = 0;
+    // the background threads of the parent other than the forking thread do not exist in the child
+    thread_hub->forkChild(tid, ++activity_gen, !own);
     if (parse_tid != tid) {
         // a thread of the parent was parsing; the parse does not go on in the child
         parse_count = 0;
@@ -533,6 +535,8 @@ QoreProgramRegistryForkHandler program_registry_fork_handler;
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options, QoreProgram* p_pgm)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm) {
     registerProgram();
+    // the Program's ID is known now
+    thread_hub = new ProgramThreadHub(programId);
     // every member of this object now exists, so the Program can serve as a runtime context; until
     // this point code reached from the base constructor can see the Program but must not switch
     // into it
@@ -646,6 +650,12 @@ qore_program_private::~qore_program_private() {
     statementIds.clear();
     reverseStatementIds.clear();
     statementByLabelIndex.clear();
+
+    // threads that have left the Program and have not published FINISHED yet keep the hub
+    if (thread_hub) {
+        thread_hub->deref();
+        thread_hub = nullptr;
+    }
 
     assert(!parseSink);
     assert(!warnSink);
@@ -1852,6 +1862,10 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // that runs in the Program on behalf of other threads' data
         setThreadEntryHandler(nullptr, nullptr, xsink);
 
+        // no thread can start in the Program anymore: the lifecycle subscriptions are closed once the threads that
+        // have left it have published their FINISHED events
+        thread_hub->close(xsink);
+
         // free the thread-local data of every thread in this Program's family if it is a root; this is where the
         // data of the tearing-down thread used to be cleared, so that destructors run above can still use it
         freeFamilyThreadData(false, xsink);
@@ -2908,6 +2922,9 @@ void qore_program_private::del(ExceptionSink* xsink) {
 
     // a Program that never ran waitForTerminationAndClear() can still have handlers
     setThreadEntryHandler(nullptr, nullptr, xsink);
+
+    // and lifecycle subscriptions
+    thread_hub->close(xsink);
 
     base_object = false;
 

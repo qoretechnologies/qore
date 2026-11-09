@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - thread creation, cooperative cancellation wakeups and thread teardown order of native code
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class ThreadLifecycleEventModesTest
+
+#! Program::subscribeThreadEvents() with threads started by code in every execution mode
+/** A driver script embeds a child Program whose functions start background threads, and prints the lifecycle events
+    of each thread.  Compiled code starts threads through a path of its own (do_op_background_helper()), so the
+    driver runs in each execution mode; each function runs several times, so that tiered execution compiles it.
+*/
+class ThreadLifecycleEventModesTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BINARY ?? ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        #! the code of the child Program
+        const ChildCode = "
+our Counter entered;
+our Counter gate;
+
+int sub start_completed() {
+    return background sub () {}();
+}
+
+int sub start_exception() {
+    return background sub () { throw \"MODE-ERROR\", \"mode error\"; }();
+}
+
+int sub start_exit() {
+    return background sub () { thread_exit; }();
+}
+
+int sub start_cancelled() {
+    return background sub () { entered.dec(); gate.waitForZero(); }();
+}
+
+int sub start_caught() {
+    return background sub () {
+        try {
+            entered.dec();
+            gate.waitForZero();
+        } catch (hash<ExceptionInfo> ex) {
+            clear_thread_cancel();
+        }
+    }();
+}
+
+int sub start_nested() {
+    return background sub () { background sub () {}(); }();
+}
+";
+
+        #! the driver script
+        const DriverCode = "%modern
+
+Program pgm(PO_MODERN);
+pgm.parse(ARGV[0], \"child\");
+
+list<string> sub events(Queue q, int count) {
+    list<string> rv();
+    while (rv.size() < count) {
+        hash<ProgramThreadEvent> ev = q.get(60s);
+        string line = ev.event;
+        if (ev.event == \"FINISHED\") {
+            line += \"/\" + ev.outcome;
+            if (ev.error) {
+                line += \"/\" + ev.error.err;
+            }
+        }
+        rv += line;
+    }
+    return rv;
+}
+
+for (int i = 0; i < 4; ++i) {
+    Queue q();
+    hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(q);
+    foreach string name in ((\"completed\", \"exception\", \"exit\")) {
+        int tid = pgm.callFunction(\"start_\" + name);
+        list<string> l = events(q, 2);
+        printf(\"%s: %s\\n\", name, l.join(\" \"));
+    }
+    foreach string name in ((\"cancelled\", \"caught\")) {
+        Counter entered(1);
+        pgm.setGlobalVarValue(\"entered\", entered);
+        pgm.setGlobalVarValue(\"gate\", new Counter(1));
+        int tid = pgm.callFunction(\"start_\" + name);
+        entered.waitForZero();
+        pgm.cancelThread(tid, \"mode\");
+        list<string> l = events(q, 3);
+        printf(\"%s: %s\\n\", name, l.join(\" \"));
+    }
+    {
+        int tid = pgm.callFunction(\"start_nested\");
+        list<hash<ProgramThreadEvent>> l();
+        while (l.size() < 4) {
+            l += q.get(60s);
+        }
+        list<hash<ProgramThreadEvent>> started = (map $1, l, $1.event == \"STARTED\");
+        printf(\"nested: %y %y\\n\", started[0].tid == tid, started[1].parent_thread_id == started[0].thread_id);
+    }
+    pgm.unsubscribeThreadEvents(s.id);
+}
+";
+
+        #! the output of each pass of the driver
+        const Expected = "completed: STARTED FINISHED/COMPLETED
+exception: STARTED FINISHED/EXCEPTION/MODE-ERROR
+exit: STARTED FINISHED/EXITED
+cancelled: STARTED CANCEL_REQUESTED FINISHED/CANCELLED/THREAD-CANCELLED
+caught: STARTED CANCEL_REQUESTED FINISHED/COMPLETED
+nested: True True
+";
+    }
+
+    constructor() : Test("ThreadLifecycleEventModesTest", "1.0", \ARGV) {
+        addTestCase("execution modes", \executionModes());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static write(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+
+    executionModes() {
+        TmpDir tmp("thread-lifecycle-modes-");
+        string driver = tmp.path + "/driver.q";
+        write(driver, DriverCode);
+        string expected = strmul(Expected, 4);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the threads' uncaught exceptions are printed on stderr, which run() returns after stdout
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s "
+                "%s %s", quote(lib_dir), quote(lib_dir), quote(qore_bin), mode, quote(driver), quote(ChildCode)));
+            list<string> lines = (map $1, out.split("\n"), $1 =~ /^(completed|exception|exit|cancelled|caught|nested): /);
+            assertEq(expected, lines.join("\n") + "\n", mode);
+        }
+    }
+}

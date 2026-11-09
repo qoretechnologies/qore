@@ -40,6 +40,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <string>
 #include <vector>
 #include <pthread.h>
 #include <sys/types.h>
@@ -72,6 +73,7 @@ static_assert(!(QTF_NO_SANDBOX_INHERIT & (QTF_NO_STACK_GUARD | QTF_EXTERNAL_LIFE
 #endif
 
 class ThreadData;
+class ProgramThreadHub;
 class QoreSandboxBudgetStack;
 class QoreStringNode;
 class QoreCondition;
@@ -184,6 +186,15 @@ public:
     pid_t wake_pid = 0;
     //! the nesting depth of qore_cancel_wakeup_register() registrations; only used by the thread itself
     int wake_reg_depth = 0;
+
+    //! the lifecycle event hub of the Program of a background thread while its code runs, or nullptr
+    /** Set and cleared by the thread itself under thread_list.lck (QoreThreadList::setLifecycleHub() and
+        clearLifecycleHub()); the thread holds a reference to the hub while it is set, so cancelThread() can reference
+        it under the lock to publish a cancellation request.  See design/program-thread-lifecycle-events.md.
+    */
+    ProgramThreadHub* lifecycle_hub = nullptr;
+    //! the process-unique ID of the background thread in lifecycle_hub
+    int64 lifecycle_thread_id = 0;
 
 #ifdef DEBUG
     //! the number of times a cancellation request woke a wait that the thread had registered (debug builds)
@@ -590,6 +601,22 @@ public:
         @return 0 if the request was delivered, -1 if the thread is not active
     */
     DLLLOCAL int cancelThread(int tid, const char* reason, qore_program_id_t scope_pgm_id);
+
+    //! Sets the lifecycle event hub of the calling background thread, so that cancellation requests are published
+    /** @param tid the calling thread's TID
+        @param hub the hub of the thread's Program; the thread holds a reference until it calls clearLifecycleHub()
+        @param thread_id the thread's process-unique ID
+        @param reason set to the reason of a request already pending, if it has one
+        @param has_reason set to true if \a reason was set
+
+        @return true if a cancellation request is already pending: it was made before the hub was set, so it was not
+        published, and the caller publishes it
+    */
+    DLLLOCAL bool setLifecycleHub(int tid, ProgramThreadHub* hub, int64 thread_id, std::string& reason,
+            bool& has_reason);
+
+    //! Clears the lifecycle event hub of the calling background thread once its code has ended
+    DLLLOCAL void clearLifecycleHub(int tid);
 
     //! Clear cancellation for the given thread; acquires lock internally
     DLLLOCAL void clearCancel(int tid);
