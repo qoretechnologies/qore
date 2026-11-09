@@ -3879,20 +3879,23 @@ static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_
                 *pgm_id = p->getProgramId();
             }
         };
-        if (td->current_pgm) {
-            if (QoreSandboxManager* m = qore_program_private::get(*td->current_pgm)->getSandboxManagerRef()) {
-                inner.push_back(m);
-                note_pgm(td->current_pgm);
+        // a reference taken is held until the vector owns it, so that it is released if the vector cannot grow
+        auto add_pgm = [&](QoreProgram* p) {
+            ReferenceHolder<QoreSandboxManager> m(qore_program_private::get(*p)->getSandboxManagerRef(), nullptr);
+            if (m) {
+                inner.push_back(*m);
+                m.release();
+                note_pgm(p);
             }
+        };
+        if (td->current_pgm) {
+            add_pgm(td->current_pgm);
         }
         for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx;
                 ch && ch != td->sandbox_context_pgm_ctx && ch != barrier_ctx; ch = ch->getOldContext()) {
             QoreProgram* p = ch->getOldProgram();
             if (p) {
-                if (QoreSandboxManager* m = qore_program_private::get(*p)->getSandboxManagerRef()) {
-                    inner.push_back(m);
-                    note_pgm(p);
-                }
+                add_pgm(p);
             }
         }
         if (inner.empty()) {
