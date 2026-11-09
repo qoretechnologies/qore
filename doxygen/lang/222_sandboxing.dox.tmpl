@@ -763,11 +763,11 @@ try {
       large list, or a blocking call into a library that is not interruptible, is stopped when it returns, as with
       @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()".  A database query that a driver can cancel
       when the sandbox is interrupted is not cancelled by a timeout; the timeout is raised when the query returns.
-    - @ref Qore::defer_thread_cancel() "defer_thread_cancel()" defers a timeout like any other cancellation, so that
-      cleanup code can finish; do not give sandboxed code the \c THREAD_CONTROL functional domain
-      (@ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") if it must not be able to postpone its timeout.
-      The destructor of a trusted class, which completes on a cancelled thread, does not defer a timeout or a memory
-      limit; see @ref cancel_destructors.
+    - @ref Qore::defer_thread_cancel() "defer_thread_cancel()" in trusted code defers a timeout like any other
+      cancellation, so that cleanup code can finish; sandboxed code is never deferred, also when it has the
+      \c THREAD_CONTROL functional domain or when trusted code calls it in a cleanup section (see
+      @ref cancel_security).  The destructor of a trusted class, which completes on a cancelled thread, does not defer
+      a timeout or a memory limit; see @ref cancel_destructors.
     - If the resources to track a call's limits cannot be allocated, the call fails with \c SANDBOX-ERROR
       instead of running without them: at its next cancellation point, and, if it has a stack limit, at its next
       call.  The exception names the limits that cannot be enforced, and its \c arg hash has a key for each of them

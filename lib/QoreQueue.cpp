@@ -138,6 +138,8 @@ void qore_queue_private::releaseScanHolderIntern(ScanHolderRelease& release) {
 }
 
 int qore_queue_private::waitReadIntern(ExceptionSink *xsink, int timeout_ms) {
+    // a wait that ends without data waits again only for the rest of the timeout
+    QoreWaitDeadline deadline(timeout_ms);
     // if there is no data, then wait for condition variable
     while (!head) {
         if (!err.empty()) {
@@ -148,12 +150,16 @@ int qore_queue_private::waitReadIntern(ExceptionSink *xsink, int timeout_ms) {
         int rc;
         // issue #4077: do not call QoreCondition::wait() with a negative timeout value
         if (timeout_ms >= 0) {
-            incWaitingIntern(read_waiting);
-            // Use interruptible wait for sandbox support
             // Queue semantics: 0 = infinite wait, but waitWithInterrupt uses -1 for infinite
             int64 cond_timeout = (timeout_ms == 0) ? -1 : timeout_ms;
-            rc = read_cond.waitWithInterrupt(l, cond_timeout, xsink);
-            decWaitingIntern(read_waiting);
+            if (deadline.active() && !(cond_timeout = deadline.remainingMs())) {
+                rc = QORE_COND_RESULT_TIMEOUT;
+            } else {
+                incWaitingIntern(read_waiting);
+                // Use interruptible wait for sandbox support
+                rc = read_cond.waitWithInterrupt(l, cond_timeout, xsink);
+                decWaitingIntern(read_waiting);
+            }
             // Check for interrupt
             if (rc == QORE_COND_RESULT_INTERRUPTED) {
                 return QW_ERROR;  // Exception already raised
@@ -187,6 +193,8 @@ int qore_queue_private::waitReadIntern(ExceptionSink *xsink, int timeout_ms) {
 }
 
 int qore_queue_private::waitWriteIntern(ExceptionSink *xsink, int timeout_ms) {
+    // a wait that ends with the queue still full waits again only for the rest of the timeout
+    QoreWaitDeadline deadline(timeout_ms);
     // if the queue is full, then wait for condition variable
     while (max > 0 && getLenIntern() >= max) {
         if (!err.empty()) {
@@ -197,12 +205,16 @@ int qore_queue_private::waitWriteIntern(ExceptionSink *xsink, int timeout_ms) {
         int rc;
         // issue #4077: do not call QoreCondition::wait() with a negative timeout value
         if (timeout_ms >= 0) {
-            incWaitingIntern(write_waiting);
-            // Use interruptible wait for sandbox support
             // Queue semantics: 0 = infinite wait, but waitWithInterrupt uses -1 for infinite
             int64 cond_timeout = (timeout_ms == 0) ? -1 : timeout_ms;
-            rc = write_cond.waitWithInterrupt(l, cond_timeout, xsink);
-            decWaitingIntern(write_waiting);
+            if (deadline.active() && !(cond_timeout = deadline.remainingMs())) {
+                rc = QORE_COND_RESULT_TIMEOUT;
+            } else {
+                incWaitingIntern(write_waiting);
+                // Use interruptible wait for sandbox support
+                rc = write_cond.waitWithInterrupt(l, cond_timeout, xsink);
+                decWaitingIntern(write_waiting);
+            }
             // Check for interrupt
             if (rc == QORE_COND_RESULT_INTERRUPTED) {
                 return QW_ERROR;  // Exception already raised

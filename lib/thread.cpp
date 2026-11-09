@@ -6731,8 +6731,9 @@ void QoreThreadList::requestSandboxLimit(const std::vector<int>& tids) {
         assert(tid > 0 && tid < MAX_QORE_THREADS);
         // seq_cst pairs with the waiter side exactly as in cancelThread()
         entry[tid].cancel_requested.fetch_or(QCR_SANDBOX_LIMIT, std::memory_order_seq_cst);
-        wakeCondWaiter(tid);
-        signalWaitingFd(tid);
+        // a limit also ends the waits of a trusted destructor
+        wakeCondWaiter(tid, true);
+        signalWaitingFd(tid, true);
     }
 }
 
@@ -6740,8 +6741,9 @@ void QoreThreadList::requestSandboxLimit(int tid) {
     assert(tid > 0 && tid < MAX_QORE_THREADS);
     AutoLocker al(lck);
     entry[tid].cancel_requested.fetch_or(QCR_SANDBOX_LIMIT, std::memory_order_seq_cst);
-    wakeCondWaiter(tid);
-    signalWaitingFd(tid);
+    // a limit also ends the waits of a trusted destructor
+    wakeCondWaiter(tid, true);
+    signalWaitingFd(tid, true);
 }
 
 bool QoreThreadList::clearSandboxLimit(int tid, const QoreSandboxBudgetStack& budgets) {
@@ -6755,10 +6757,11 @@ bool QoreThreadList::clearSandboxLimit(int tid, const QoreSandboxBudgetStack& bu
     return true;
 }
 
-void QoreThreadList::signalWaitingFd(int tid) {
+void QoreThreadList::signalWaitingFd(int tid, bool limit) {
 #ifdef HAVE_POLL
     int fd = entry[tid].waiting_fd.load(std::memory_order_seq_cst);
-    if (fd >= 0) {
+    // a wait that only a sandbox limit can end is not woken for anything else: it would deliver nothing
+    if (fd >= 0 && (limit || !entry[tid].waiting_fd_limits_only.load(std::memory_order_relaxed))) {
 #ifdef DEBUG
         ++entry[tid].dbg_cancel_wakes;
 #endif
@@ -7152,7 +7155,7 @@ void qore_stop_cond_waker() {
     cond_waker.stop();
 }
 
-int QoreThreadList::registerCondWait(int tid, QoreCondition* cond, pthread_mutex_t* m) {
+int QoreThreadList::registerCondWait(int tid, QoreCondition* cond, pthread_mutex_t* m, bool limits_only) {
     assert(tid >= 0 && tid < MAX_QORE_THREADS);
     {
         AutoLocker al(cond_waker.lck);
@@ -7164,6 +7167,7 @@ int QoreThreadList::registerCondWait(int tid, QoreCondition* cond, pthread_mutex
         assert(!te.waiting_on && !te.wake_queued && !te.wake_busy);
         te.waiting_on = cond;
         te.waiting_mutex = m;
+        te.waiting_limits_only = limits_only;
     }
 #ifdef DEBUG
     // noted outside the registry lock: dbgCancelInWait() requests the cancellation with the debug lock held
@@ -7184,6 +7188,7 @@ void QoreThreadList::unregisterCondWait(int tid, pthread_mutex_t* m) {
     assert(te.waiting_mutex == m);
     te.waiting_on = nullptr;
     te.waiting_mutex = nullptr;
+    te.waiting_limits_only = false;
     if (!te.wake_queued && !te.wake_busy) {
         return;
     }
@@ -7197,10 +7202,11 @@ void QoreThreadList::unregisterCondWait(int tid, pthread_mutex_t* m) {
     pthread_mutex_lock(m);
 }
 
-void QoreThreadList::wakeCondWaiter(int tid) {
+void QoreThreadList::wakeCondWaiter(int tid, bool limit) {
     AutoLocker al(cond_waker.lck);
     ThreadEntry& te = entry[tid];
-    if (!te.waiting_on) {
+    // a wait that only a sandbox limit can end is not woken for anything else: it would deliver nothing
+    if (!te.waiting_on || (te.waiting_limits_only && !limit)) {
         return;
     }
 #ifdef DEBUG
@@ -7280,6 +7286,15 @@ int qore_fast_route_guard_probe(const char* kind, const ResolvedCallReferenceNod
 #endif
 }
 
+//! Returns true if only a sandbox limit can be delivered to the current thread's waits now
+/** In the destructor of a trusted class, a thread cancellation and a program interrupt are deferred, so a wait made
+    there is registered to be woken only by a sandbox limit (see ThreadEntry::waiting_limits_only)
+*/
+static bool qore_cancel_limits_only() {
+    ThreadData* td = thread_data.get();
+    return td && td->dtor_cancel_defer_count;
+}
+
 int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 timeout_ms, ExceptionSink* xsink,
         const char* operation) {
     // a fast route must never block
@@ -7293,7 +7308,7 @@ int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 ti
     if (tid < 0 || tid >= MAX_QORE_THREADS || qore_is_cancel_deferred()) {
         return cond.wait2(m, timeout_ms) ? QORE_COND_RESULT_TIMEOUT : QORE_COND_RESULT_SUCCESS;
     }
-    if (thread_list.registerCondWait(tid, &cond, m)) {
+    if (thread_list.registerCondWait(tid, &cond, m, qore_cancel_limits_only())) {
         if (xsink) {
             xsink->raiseErrnoException("THREAD-CREATION-FAILURE", errno, "%s: cannot start the condition waker "
                 "thread that wakes cancelled threads", operation);
@@ -7674,7 +7689,7 @@ int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, Exc
         // register, then check: either this check sees a request delivered before the registration, or the
         // canceller sees the registration and signals the channel (seq_cst on both sides)
         if (!nested) {
-            thread_list.setCurrentWaitingFd(tid, wake_fd);
+            thread_list.setCurrentWaitingFd(tid, wake_fd, qore_cancel_limits_only());
         }
         int rc = 0;
         int poll_errno = 0;
@@ -7757,7 +7772,7 @@ int qore_cancel_wakeup_register(ExceptionSink* xsink, const char* operation) {
     }
     // register, then check: either the check sees a request made before the registration, or the canceller sees the
     // registration and signals the channel
-    thread_list.setCurrentWaitingFd(tid, wake_fd);
+    thread_list.setCurrentWaitingFd(tid, wake_fd, qore_cancel_limits_only());
     if (qore_check_cancel(xsink, operation)) {
         thread_list.clearCurrentWaitingFd(tid);
         qore_cancel_wakeup_drain(wake_fd);

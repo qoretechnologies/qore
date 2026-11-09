@@ -545,6 +545,8 @@ sub hold_caller(Queue ev, string kind, Counter ready, Counter block, *Program ot
         addTestCase("a class of a Program that sandboxed code created is sandboxed", \childProgramTest());
         addTestCase("a sandboxed object that outlives its Program", \outlivesProgramTest());
         addTestCase("sandboxed code called by a trusted destructor is not deferred", \trustedCallsSandboxedTest());
+        addTestCase("a deferred cancellation does not wake the waits of a trusted destructor",
+            \deferredWaitNotWokenTest());
         addTestCase("a sandbox memory limit ends a trusted destructor", \memoryLimitTest());
         addTestCase("the rule holds in AST, IR, JIT and tiered execution", \execModesTest());
         addTestCase("the rule holds in AOT-compiled code", \aotTest());
@@ -1122,6 +1124,48 @@ sub run(Queue ev, DtorGate gate, Counter ready, Counter block) {
                 assertEq((), (select hooks, $1 != "hook:" + err), desc);
             }
         }
+    }
+
+    #! A cancellation requested while a trusted destructor waits on a Condition is deferred, so it does not wake the
+    #! wait: the wait returns when the Condition is signalled, and nothing else ended it
+    deferredWaitNotWokenTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library");
+        }
+        Queue ev();
+        Mutex m();
+        Condition c();
+        Counter entered(1);
+        Counter block(1);
+        DtorFlag state();
+        on_exit if (block.getCount()) {
+            block.dec();
+        }
+        int tid = background sub () {
+            try {
+                TrustedCondWaiter w(ev, m, c, entered, state);
+                block.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                ev.push("caught:" + ex.err);
+            }
+        }();
+        # the first request ends block.waitForZero(); the destructor then waits on the Condition
+        assertTrue(call_function("dbg_wait_for_cancellable_wait", tid, T.durationMilliseconds()));
+        assertTrue(cancel_thread(tid, Reason));
+        assertEq(0, entered.waitForZero(T));
+        assertTrue(call_function("dbg_wait_for_cancellable_wait", tid, T.durationMilliseconds()));
+        int wakes = call_function("dbg_get_cancel_wake_count", tid);
+        # a second request while the destructor waits: deferred, so the wait is not woken
+        assertTrue(cancel_thread(tid, Reason));
+        assertEq(wakes, call_function("dbg_get_cancel_wake_count", tid), "the deferred request did not wake the wait");
+        {
+            m.lock();
+            on_exit m.unlock();
+            state.signalled = True;
+            c.signal();
+        }
+        expect(ev, ("cond:0:signalled", "caught:THREAD-CANCELLED"));
+        thread_join(tid);
     }
 
     #! A trusted destructor in a sandbox call with a memory limit allocates without a bound: the limit is not

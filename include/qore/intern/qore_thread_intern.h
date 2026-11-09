@@ -948,6 +948,34 @@ private:
     bool skip_dtor = false;
 };
 
+//! The deadline of a wait with a timeout whose condition wait can end before the timeout without its predicate
+/** A condition wait can end early: a spurious wakeup, a wakeup for a cancellation request that is not delivered (out
+    of the thread's scope, or for another Program's interrupt), or another waiter that took what it waited for.  A
+    caller that waits again must wait only for the rest of its timeout, so that the timeout is not restarted.
+*/
+class QoreWaitDeadline {
+public:
+    //! A deadline \a timeout_ms from now if \a timeout_ms is positive, otherwise none
+    DLLLOCAL explicit QoreWaitDeadline(int64 timeout_ms) : deadline_us(timeout_ms > 0
+            ? q_get_monotonic_us() + timeout_ms * 1000 : 0) {
+    }
+
+    //! True if there is a deadline
+    DLLLOCAL bool active() const {
+        return deadline_us;
+    }
+
+    //! The timeout in ms of the next wait: at least 1 before the deadline, 0 once it has passed; needs a deadline
+    DLLLOCAL int64 remainingMs() const {
+        assert(deadline_us);
+        int64 remaining_us = deadline_us - q_get_monotonic_us();
+        return remaining_us <= 0 ? 0 : (remaining_us + 999) / 1000;
+    }
+
+private:
+    int64 deadline_us;
+};
+
 //! Returns true if the code of the Program is sandboxed
 /** True if the Program has or had a sandbox manager, or was created by sandboxed code (see
     qore_program_set_creator_sandbox()), or is a user module that a sandboxed Program loaded by a path it chose;

@@ -880,8 +880,8 @@ code): every destructor of every tier is dispatched there.
 
 | Class | Defined by | Destructor on a cancelled or interrupted thread |
 |---|---|---|
-| trusted | a builtin class (`sys`), or a Program without a sandbox manager (system code, modules loaded by trusted code) | runs with thread cancellation and program interrupts deferred; the request is raised at the first cancellation point after it, with its original reason and scope |
-| sandboxed | a Program with a sandbox manager (`qore_class_private::isSandboxedCode()`) | never runs under a deferral; skipped if a request is pending |
+| trusted | a builtin class (`sys`), or a Program whose code is not sandboxed (system code, modules loaded by trusted code) | runs with thread cancellation and program interrupts deferred; the request is raised at the first cancellation point after it, with its original reason and scope |
+| sandboxed | a sandboxed Program (`qore_class_private::isSandboxedCode()`, `qore_program_is_sandboxed()`; see [Which Program is sandboxed](#which-program-is-sandboxed)) | never runs under a deferral; skipped if a request is pending |
 
 **Trusted classes: the destructor deferral.**  `ThreadData::dtor_cancel_defer_count` is a second
 deferral depth, pushed for the destructor code of a trusted class.  `qore_check_cancel()` checks it
@@ -903,25 +903,28 @@ if (td && td->dtor_cancel_defer_count) return false; // a trusted destructor: ne
   `SANDBOX-MEMORY-LIMIT` at the destructor's next cancellation point, and the pending cancellation
   stays pending.  The destructor is then cut short, which is the accepted cost: the call it runs in
   is over its limits.
-- **Waits register while only the destructor deferral is active.**  `qore_is_cancel_deferred()`
-  reports only `cancel_defer_count`, so condition waits, descriptor waits and sleeps in a trusted
-  destructor stay registered for a wakeup: a sandbox limit wakes them at once.  A thread cancellation
-  or interrupt made meanwhile wakes them as well, finds nothing deliverable, and they resume their
-  wait: one spurious wakeup per request (the wakeup channel is drained before the check, so a
-  descriptor wait does not spin, see [Wakeup descriptor](#wakeup-descriptor)).
+- **Waits register while only the destructor deferral is active, for a sandbox limit only.**
+  `qore_is_cancel_deferred()` reports only `cancel_defer_count`, so condition waits, descriptor waits
+  and sleeps in a trusted destructor stay registered for a wakeup: a sandbox limit wakes them at once.
+  They are registered as *limits only* (`ThreadEntry::waiting_limits_only` for condition waits, under
+  the wait registry lock; `ThreadEntry::waiting_fd_limits_only` for descriptor waits, stored before
+  `waiting_fd`): `cancelThread()` and `SandboxManager::requestInterrupt()` do not wake them
+  (`wakeCondWaiter(tid)`, `signalWaitingFd(tid)`), and only `requestSandboxLimit()` does
+  (`limit = true`).  A wakeup that delivers nothing would end the wait spuriously: a caller that waits
+  again would restart its timeout, and `Condition::wait()` would return 0 unsignalled.
 - **Sandboxed code called by a trusted destructor does not get the deferral.**  A trusted base
   class's destructor can call a method that a sandboxed subclass overrides (`WebSocketClient`'s
   destructor calls `disconnect()` and `explicitDisconnect()`), or a callback that sandboxed code
-  supplied.  `ProgramThreadCountContextHelper::set()` saves the destructor-deferral depth and sets it
-  to zero when the thread enters a Program with a sandbox manager, also when that Program is already
-  the current one (a builtin class's destructor runs in its caller's Program), and restores it when
-  the context is left.  Without this, sandboxed code could evade a cancellation or interrupt by being
-  called from a trusted destructor.
-- **The explicit deferral is unchanged.**  `defer_thread_cancel()` / `QoreCancelDeferralHelper` and
-  the `terminating` deferral of thread teardown still defer a sandbox limit as well: they guard bounded
-  cleanup that must also complete after a timeout, such as the abandonment of an HTTP request whose
-  wait the timeout ended (`HttpClientConnectionManagerBase::abandonRequest()`), or the rollback of a
-  transaction left open at thread exit.
+  supplied.  See [Sandboxed code never runs deferred](#sandboxed-code-never-runs-deferred).
+- **The explicit deferral of trusted code also defers a sandbox limit.**  `QoreCancelDeferralHelper`
+  in trusted C++ code and the `terminating` deferral of thread teardown guard bounded cleanup that must
+  also complete after a timeout, such as the abandonment of an HTTP request whose wait the timeout
+  ended (`HttpClientConnectionManagerBase::abandonRequest()`), or the rollback of a transaction left
+  open at thread exit.  Sandboxed code never runs under it.
+- **The wall-time limit is the hard stop.**  A trusted destructor that waits on state the sandbox
+  controls (a gate that sandboxed code is to open) cannot be ended by a cancellation or a program
+  interrupt, which are deferred; only a sandbox limit ends it.  A host that must be able to stop such
+  calls gives the sandbox a wall-time limit (`SandboxManager::setWallTimeLimit()`).
 
 **Sandboxed classes: skipped when a request is pending.**  For a sandboxed class,
 `QoreDestructorCancelHelper` saves both deferral depths and sets them to zero for the destructor (a
@@ -939,13 +942,12 @@ before, and a cancellation arriving while it runs is delivered at its next cance
   `WebSocketClient`) skips only its own destructor; the trusted base destructor still runs, with the
   deferral.
 - **Which Program decides.**  `qore_class_private::spgm` is the Program that defined the class (for an
-  imported class, the source Program), and its sandbox manager is read when the destructor runs, so a
-  manager set after the class was parsed counts.  When that Program releases the class
-  (`deleteClassData()`), the state is latched in `released_sandboxed` under the same lock.  A builtin
-  class is always trusted, also when a binary module created it while a sandboxed Program was
-  current.  A user module that a sandboxed Program chose is governed by its loader's manager
-  (`inherit_module_sandbox_manager()`), so its classes are sandboxed; a module loaded by trusted code
-  is trusted.
+  imported class, the source Program), and whether it is sandboxed is read when the destructor runs,
+  so a manager set after the class was parsed counts.  When that Program releases the class
+  (`deleteClassData()`), the state is latched in `released_sandboxed` under the same lock; the flag of
+  [Which Program is sandboxed](#which-program-is-sandboxed) survives the manager, which
+  `qore_program_private::deleteData()` clears first.  A builtin class is always trusted, also when a
+  binary module created it while a sandboxed Program was current.
 - **Side effects.**  A cancelled or interrupted sandboxed program's destructors do not run, so
   external state that only its destructor would undo is not undone; resources held by builtin or
   module objects are still released, because their classes are trusted.  A trusted destructor that
@@ -953,13 +955,81 @@ before, and a cancellation arriving while it runs is delivered at its next cance
   limit); that is a bug in the trusted code.  `Program::cancelThreads()` (for example in a REPL) takes
   effect after the destructors of the Program's trusted classes that are running have returned.
 
+#### Which Program is sandboxed
+
+`qore_program_private_base::sandboxed` is a sticky flag (never cleared) that `qore_program_is_sandboxed()`
+reads together with the manager.  It is set:
+
+- when a sandbox manager is set on the Program (`QoreProgram::setSandboxManager()`);
+- when Qore code creates a Program (`Program::constructor()`, `qore_program_set_creator_sandbox()`) while
+  the creating code is sandboxed: its own Program is sandboxed, or a sandbox governs the thread (trusted
+  library code that sandboxed code called).  Such a Program has no manager of its own: the code it runs
+  is governed by its callers, but its classes must not count as trusted, or sandboxed code could get the
+  destructor deferral by defining its class in a child Program;
+- for a user module that a sandboxed Program without a manager of its own loads by a path it chose
+  (`inherit_module_sandbox_manager()`).
+
+A Program that C++ code creates directly is trusted, as native code is.  The same child-Program bypass
+was checked in the other code that asks whether a Program has a manager: `QoreModuleManager::mayChangeModulePath()`
+now uses the flag; the reflection privilege check (`QoreReflection.cpp`) fails closed for a Program
+without a manager; the governing-sandbox resolution (`find_thread_sandbox_stack_ref_intern()`) walks the
+callers of the child Program's code, and objects and closures created there carry their provenance, so
+the child's code is governed wherever it runs.
+
+#### Sandboxed code never runs deferred
+
+`ProgramThreadCountContextHelper::set()` saves both deferral depths (`cancel_defer_count` and
+`dtor_cancel_defer_count`) and sets them to zero when the thread enters a sandboxed Program, also when
+that Program is already the current one (a builtin class's destructor runs in its caller's Program;
+thread teardown runs in the thread's Program); `restoreDeferral()` adds them back when the context is
+left (added, because the `terminating` deferral of thread teardown can be pushed while the context is
+active and stays).  So no deferral reaches sandboxed code:
+
+- a trusted destructor's deferral (see above);
+- a cleanup critical section of trusted code that calls sandboxed code: `defer_thread_cancel()` in a
+  library module around observer notifications (`AbstractWatchDataProviderBase::notifyObservers()`) and
+  checkpoint persistence (`persistCheckpoint()`), or `QoreCancelDeferralHelper` around a completion action;
+- thread teardown, which runs thread-resource callbacks (`set_thread_resource()`) and thread-local
+  destructors under the `terminating` deferral;
+- `defer_thread_cancel()` called by sandboxed code: the function only calls its code when the calling
+  Program is sandboxed (`ql_thread.qpp`).  It is neutralised rather than refused: sandboxed code that
+  has the `THREAD_CONTROL` domain and uses it for cleanup keeps working, and its cleanup is stopped by
+  the host's cancellation, interrupt or limit like any other sandboxed code.  Refusing it would break
+  such code without protecting anything that the neutralisation does not.
+
+Trusted code keeps every deferral.  `AbstractWatchDataProviderBase::notifyObservers()` still runs the
+observers in `defer_thread_cancel()`, so a trusted observer's notification completes when polling is
+stopped (`WatchDataProviderShutdown.qtest`, "notification not interrupted by cancellation"); a sandboxed
+observer is stopped by a cancellation, an interrupt or a limit.  Before this, the deferral returned
+before the limit check, so a sandboxed observer of a `PO_NO_THREAD_CONTROL` sandbox with a 300 ms
+wall-time limit that blocked ran without bound.
+
+#### Timed waits woken early
+
+A condition wait can end without what it waits for: a spurious wakeup, a wakeup for a request that is
+not delivered (an out-of-scope cancellation that is dropped, the program interrupt of another sandbox,
+since `requestInterrupt()` wakes every registered wait), or another waiter that took what it waited
+for.  `Counter::waitForZero()`, `Queue::get()` / `push()`, `Mutex::lock()`, `RWLock::readLock()` /
+`writeLock()` and `Gate::enter()` wait again in a loop; with a timeout they wait only for the rest of it
+(`QoreWaitDeadline`, `qore_thread_intern.h`), so the timeout is not restarted.  `Condition::wait()`
+returns 0 for such a wakeup, as a POSIX condition variable may; this is documented, and callers wait
+in a loop on their predicate.
+
 **Tests.**  `examples/test/qore/threads/destructor-cancellation.qtest` (trusted destructors through
 Mutex, Condition, Queue and Counter waits on a cancelled thread, an explicit `delete` with other
 references, a throwing destructor, nested destructors, program interrupts and
 `Program::cancelThreads()`; sandboxed destructors skipped under a cancellation and an interrupt, run
-without one, released by a trusted destructor and inside `defer_thread_cancel()`; the mixed hierarchy;
-wall-time and memory limits ending a trusted destructor, also on a cancelled thread; a script run in
-every execution mode and as an AOT-compiled executable) and
+without one, released by a trusted destructor and inside `defer_thread_cancel()`, of a Program that
+sandboxed code created, and of an object that outlives its Program; the mixed hierarchy; a trusted
+destructor calling sandboxed code through a closure, a call reference, a method,
+`call_object_method()`, `sort()` and `map` callbacks, `Program::callFunction()` into another sandbox and
+a three-level override; wall-time and memory limits ending a trusted destructor, also on a cancelled
+thread; a deferred cancellation not waking a destructor's Condition wait; a script run in every
+execution mode and as an AOT-compiled executable), `sandboxed-code-deferral.qtest` (sandboxed observers
+and checkpoint callbacks of a watch provider, `defer_thread_cancel()` called by sandboxed code and by
+trusted code with a sandboxed callback, a sandboxed thread resource in thread teardown, stopped by a
+wall-time limit, an interrupt and a cancellation; trusted code keeping its deferral),
+`wait-deadline.qtest` (the timed waits woken over and over end at their timeout), and
 `examples/test/qlib/WebSocketClient/WebSocketClientStaleShutdown.qtest` (`WebSocketClient` and
 `DiscordWebSocketClient` destroyed on a cancelled thread close the connection and stop the heartbeat
 thread).
