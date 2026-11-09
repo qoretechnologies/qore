@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of the release of temporaries on exception edges
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ExceptionEdgeTempDrainTest
+
+#! issue #5689: an exception raised in a temp scope nested in its statement's releases the statement's temporaries
+/** A void map gives each element a temp scope of its own, nested in the scope of its statement, which holds the map's
+    source.  An exception raised in that scope released only its temporaries on the way to a handler outside the
+    statement: in JIT and AOT code the statement's temporaries were released after the handler of a try block, and
+    in the IR interpreter after the cleanup of an enclosing foreach statement and after the on_error handlers of the
+    block.  The AST interpreter releases the temporaries of every expression and statement that the exception
+    unwinds before the handler runs.
+
+    exception-edge-temp-drain.q runs each case and logs the release of every object and the objects that were not
+    released exactly once when the case returned.  Its output with the AST interpreter is checked, and it must be
+    the same in every other execution mode, on the IR tier and as AOT executables compiled with -O0 and -O3.
+*/
+class ExceptionEdgeTempDrainTest inherits QUnit::Test {
+    public {
+        #! lines of the output of the AST interpreter that decide the issue
+        const AstLines = (
+            "void_map: released h1; released h2; catch STAGE; after",
+            "void_map_ternary: released h1; released h2; catch STAGE; after",
+            "void_map_in_call: released h1; released h2; released a1; catch STAGE; after",
+            "nested_void_map: released h1; released h2; released o1; catch STAGE; after",
+            "in_foreach: released h1; released h2; released o1; catch STAGE; after",
+            "on_error_handler: released h1; released h2; on_exit; on_error; catch STAGE; after",
+            "on_error_in_try: released h1; released h2; on_error; catch STAGE; after",
+            "nested_rethrow: released h1; released h2; inner STAGE; catch STAGE; after",
+            "normal: released h1; released h2; done; after",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("exception edge temp drain", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/exception-edge-temp-drain.q";
+
+        addTestCase("AST interpreter", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executable -O0", \aotTest(), "-O0");
+        addTestCase("AOT executable -O3", \aotTest(), "-O3");
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter, which the other modes must give
+    private astTest() {
+        string out = ast();
+        list<string> lines = select out.split("\n"), $1;
+        foreach string line in (AstLines) {
+            assertTrue(inlist(line, lines), line);
+        }
+        # no object outlives its case or is released twice in the AST interpreter
+        assertEq(-1, out.find("ERROR:"));
+        # every case runs three times
+        assertEq(3 * ExceptionEdgeTempDrainTest::caseCount(lines), lines.size());
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = ast();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, script)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, script)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("exception-edge-temp-drain-aot-");
+        string exe = dir.path + "/exception-edge-temp-drain";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, script));
+        assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
+        assertEq(ast(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+    }
+
+    #! returns the output of the script with the AST interpreter
+    private string ast() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, script));
+    }
+
+    #! returns the number of distinct cases in the output
+    private static int caseCount(list<string> lines) {
+        hash<string, bool> cases;
+        foreach string line in (lines) {
+            cases{(line =~ x/^([^:]+):/)[0]} = True;
+        }
+        return cases.size();
+    }
+}

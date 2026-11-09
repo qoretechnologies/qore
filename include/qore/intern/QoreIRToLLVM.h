@@ -1395,9 +1395,10 @@ private:
     void emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit = false);
 
     // Returns the block that an exception raised by \a inst branches to on its way to the in-frame handler
-    // \a handler: a block that first releases the temporaries of the raising statement - the tracked call results
-    // registered since the mark of the instruction's temp scope - as the AST interpreter releases them when the
-    // statement unwinds and the IR interpreter drains them (cleanupToTempScope()) before the handler runs; or
+    // \a handler: a block that first releases the temporaries of the temp scopes that the exception leaves - the
+    // tracked call results registered since the mark of the first temp scope opened after the handler's
+    // (QoreIRBasicBlock::getHandlerTempScopeId()), or of the instruction's own scope - as the AST interpreter releases
+    // them when the expressions and statements unwind and the IR interpreter drains them before the handler runs; or
     // \a handler itself if there are none.  Pending SSA cleanups are promoted to cleanup allocas first.
     llvm::BasicBlock* getExceptionEdgeTarget(llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst, llvm::BasicBlock* handler);

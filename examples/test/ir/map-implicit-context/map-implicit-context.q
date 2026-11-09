@@ -104,6 +104,7 @@ sub local_map_raises(Log log) { list<Holder> l = holders(log, 3); try { list<Hol
 sub it_map_index_raises(Log log) { try { list<Holder> r = map fail_on($1, ($1.n =~ /x/) ? "x" : "it" + ($# + 1)), new It(log, 3); log.add("size " + r.size()); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
 # the value of the map is not used
 sub it_map_void_raises(Log log) { try { map fail_on($1, ($1.n =~ /x/) ? "x" : "it2"), new It(log, 3); log.add("done"); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+sub list_map_void_raises(Log log) { try { map fail_on($1, ($1.n =~ /x/) ? "x" : "h2"), holders(log, 3); log.add("done"); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
 # no handler in the function: the exception leaves it
 sub no_handler_inner(Log log) { list<Holder> r = map fail_on($1, ($1.n =~ /x/) ? "x" : "it2"), new It(log, 3); log.add("size " + r.size()); }
 sub no_handler(Log log) { try { no_handler_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
@@ -201,7 +202,7 @@ sub implicit_args(Log log) { args_inner(log, "a", "b"); log.add("after"); }
 
 const Cases = (
     "it_map_raises", "list_map_raises", "auto_map_raises", "local_map_raises", "it_map_index_raises",
-    "it_map_void_raises", "no_handler", "no_handler_list", "on_error_handler", "nested_raises", "fused_take_raises",
+    "it_map_void_raises", "list_map_void_raises", "no_handler", "no_handler_list", "on_error_handler", "nested_raises", "fused_take_raises",
     "fused_it_count_raises", "fused_foreach_raises", "fused_ternary_raises", "it_map_normal", "list_map_normal",
     "layout_list_ternary", "layout_list_elvis", "layout_list_and", "layout_it_ternary", "layout_it_elvis",
     "layout_it_and", "layout_fused_ternary", "layout_fused_elvis", "layout_fused_and", "layout_ctx_list_ternary",

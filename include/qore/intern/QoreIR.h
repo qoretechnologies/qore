@@ -3416,6 +3416,27 @@ public:
         instructions.insert(instructions.begin(), std::move(inst));
     }
 
+    //! Returns the temp scope in which the code of this block runs as the handler of an exception
+    /** The scope that the block's first instruction recorded (QoreIRInstruction::temp_scope_id), other than an
+        instruction that opens or closes a temp scope and records its own; 0 if none is known.  An exception that
+        branches to the block leaves every temp scope opened after this one, and releases their temporaries before
+        the block runs (see design/ir-exception-branch-temp-scope.md).
+    */
+    uint32_t getHandlerTempScopeId() const {
+        for (const auto& inst : instructions) {
+            switch (inst->opcode) {
+                case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::DiscardTemps:
+                case QoreIROpcode::DiscardTempsKeep:
+                case QoreIROpcode::UnwindTemps:
+                    continue;
+                default:
+                    return inst->temp_scope_id;
+            }
+        }
+        return 0;
+    }
+
     std::string name;
     std::vector<std::unique_ptr<QoreIRInstruction>> instructions;
 

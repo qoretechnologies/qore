@@ -36,6 +36,7 @@ class MapImplicitContextTest inherits QUnit::Test {
             "it_map_raises: released it2; released it1; catch STAGE; after",
             "list_map_raises: released h1; released h2; catch STAGE; after",
             "it_map_void_raises: released it1; released it2; catch STAGE; after",
+            "list_map_void_raises: released h1; released h2; catch STAGE; after",
             "no_handler: released it2; released it1; catch STAGE; after",
             "on_error_handler: released it2; released it1; on_error; catch STAGE; after",
             "nested_raises: released h1; released h2; catch STAGE; after",

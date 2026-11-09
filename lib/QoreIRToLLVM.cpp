@@ -3633,16 +3633,31 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
     if (!inst || !inst->temp_scope_id || temp_cleanup_marks.empty()) {
         return handler;
     }
-    const TempCleanupMark* mark = nullptr;
-    for (size_t i = temp_cleanup_marks.size(); i > 0; --i) {
-        if (temp_cleanup_marks[i - 1].scope_id == inst->temp_scope_id) {
-            mark = &temp_cleanup_marks[i - 1];
-            break;
-        }
+    size_t mark_index = temp_cleanup_marks.size();
+    while (mark_index > 0 && temp_cleanup_marks[mark_index - 1].scope_id != inst->temp_scope_id) {
+        --mark_index;
     }
-    if (!mark) {
+    if (!mark_index) {
         return handler;
     }
+    --mark_index;
+    // the exception leaves every temp scope opened after the handler's, which can be more than the instruction's own
+    // when it runs in a scope nested in its statement's (the per-element scope of a void map, the scope of an
+    // expression whose temporaries are released before the rest of its statement runs): their temporaries are
+    // released from the first of them, as the AST interpreter releases the temporaries of every expression and
+    // statement that the exception unwinds, and the IR interpreter drains them (exceptionBranchTempScope())
+    if (inst->exception_target) {
+        uint32_t handler_scope_id = inst->exception_target->getHandlerTempScopeId();
+        if (handler_scope_id && handler_scope_id != inst->temp_scope_id) {
+            for (size_t i = mark_index; i > 0; --i) {
+                if (temp_cleanup_marks[i - 1].scope_id == handler_scope_id) {
+                    mark_index = i;
+                    break;
+                }
+            }
+        }
+    }
+    const TempCleanupMark* mark = &temp_cleanup_marks[mark_index];
     // the temporaries of the statement must be in cleanup allocas to be released on the exception edge only
     if (pending_ssa_cleanup.size() > mark->pending_ssa_count) {
         promotePendingSsaToAllocas(module, llvm_func);
