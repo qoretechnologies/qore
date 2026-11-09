@@ -942,21 +942,22 @@ enum class QoreIROpcode : uint16_t {
     //! (QoreSquareBracketsOperatorNode::getFunctionalIteratorImpl())
     //!
     //! A QoreIRIteratorCreateInstruction: iterable = the sequence; operands[0] = the QoreIRListSelectorFlag flags
-    //! (native int: StringIndexChar); result = the iterator handle, as with IteratorCreate, which IteratorNext,
-    //! IteratorRelease and the cleanups of the frame use.  The AST interpreter iterates the selectors of a list
+    //! (native int: StringIndexChar, NegativeOffsets); operands[1] = the number of selectors (native int); result =
+    //! the iterator handle, as with IteratorCreate, which IteratorNextSelectors, IteratorRelease and the cleanups of the
+    //! frame use; no iterator (0) for a sequence that is not a list, a string or a binary object.  The AST interpreter iterates the selectors of a list
     //! sequence lazily (QoreFunctionalSquareBracketsComplexOperator): a selector is evaluated only when the elements
     //! of the previous ones have been given to the loop body or the operator's expression, and a range gives its
     //! indices one after the other, each normalized as an index of its own.  For a string or a binary sequence it
     //! evaluates every selector first and iterates the result as a single value, and for any other sequence it
     //! evaluates no selector and iterates nothing.  The lowering evaluates each selector in the loop when
-    //! SelectorIteratorPending asks for it and gives it to the iterator with SelectorIteratorFeed (qore#5675).
+    //! IteratorNextSelectors has no value and SelectorIteratorPending asks for it, and gives it to the iterator with
+    //! SelectorIteratorFeed (qore#5675).
     IteratorCreateSelectors = 421,
 
     //! Return the index of the selector that the iterator of IteratorCreateSelectors needs before the next
     //! IteratorNext, or -1 if it needs none
     //!
-    //! operands[0] = the iterator handle; operands[1] = the number of selectors (native int); result = the index
-    //! (native int).  -1 means that the iterator has the next
+    //! operands[0] = the iterator handle; result = the index (native int).  -1 means that the iterator has the next
     //! value or has no more values; IteratorNext then gives the value or ends the loop (qore#5675).
     SelectorIteratorPending = 422,
 
@@ -982,7 +983,15 @@ enum class QoreIROpcode : uint16_t {
     //! follows routes the exceptions, as a synthetic Rethrow does (qore#5675).
     ExceptionResume = 425,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (426, 427, ...)
+    //! Give the next value of the iterator of IteratorCreateSelectors, or branch if it has none now
+    //!
+    //! A QoreIRIteratorNextInstruction, as IteratorNext, except that the iterator is not released when it has no
+    //! value: it then needs the value of its next selector (SelectorIteratorPending), or it has given every value and
+    //! the lowering releases it with IteratorRelease.  One instruction per value, as for the iterator of a list
+    //! (qore#5675).
+    IteratorNextSelectors = 426,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (427, 428, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -991,8 +1000,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ExceptionResume);
-static_assert(QORE_IR_MAX_OPCODE == 425, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::IteratorNextSelectors);
+static_assert(QORE_IR_MAX_OPCODE == 426, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! The flags of QoreIROpcode::ListSelectorStep (operands[2])
@@ -1005,6 +1014,8 @@ enum class QoreIRListSelectorFlag : int64_t {
     StringIndexChar = 1 << 2,
     //! no selector: the result is the empty result for the sequence, or NOTHING if no selector applies to it
     Begin = 1 << 3,
+    //! negative indices count from the end (the parse option negative-offsets); IteratorCreateSelectors only
+    NegativeOffsets = 1 << 4,
 };
 
 //! The bound of a range that QoreIROpcode::CheckRangeBound checks (operands[1])

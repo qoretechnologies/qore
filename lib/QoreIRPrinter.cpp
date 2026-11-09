@@ -85,6 +85,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::SelectorIteratorFeed: return "selector.iterator.feed";
         case QoreIROpcode::ExceptionSuspend: return "exception.suspend";
         case QoreIROpcode::ExceptionResume: return "exception.resume";
+        case QoreIROpcode::IteratorNextSelectors: return "iterator.next.selectors";
         case QoreIROpcode::HashSetCommonType: return "hash.set.common.type";
         case QoreIROpcode::AddInt: return "add.int";
         case QoreIROpcode::AddFloat: return "add.float";
@@ -850,6 +851,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                 }
             } else if (inst->opcode == QoreIROpcode::IteratorNext
+                    || inst->opcode == QoreIROpcode::IteratorNextSelectors
                     || inst->opcode == QoreIROpcode::TypedForeachNextInt
                     || inst->opcode == QoreIROpcode::TypedForeachNextFloat
                     || inst->opcode == QoreIROpcode::TypedForeachNextBool
@@ -857,7 +859,8 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 auto* iter = dynamic_cast<const QoreIRIteratorNextInstruction*>(inst.get());
                 if (iter) {
                     out << " %" << iter->iterator.id;
-                    if (inst->opcode != QoreIROpcode::IteratorNext) {
+                    if (inst->opcode != QoreIROpcode::IteratorNext
+                            && inst->opcode != QoreIROpcode::IteratorNextSelectors) {
                         out << " index %" << iter->index.id << " limit %" << iter->limit.id;
                     }
                     if (iter->continue_target) {

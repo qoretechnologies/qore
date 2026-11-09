@@ -10486,7 +10486,8 @@ static bool qore_ir_selector_is_stable(const QoreValue& expr, bool range_bound, 
         }
         return false;
     }
-    if (dynamic_cast<const QorePlusOperatorNode*>(node) || dynamic_cast<const QoreMinusOperatorNode*>(node)) {
+    if (dynamic_cast<const QorePlusOperatorNode*>(node) || dynamic_cast<const QoreMinusOperatorNode*>(node)
+            || dynamic_cast<const QoreMultiplicationOperatorNode*>(node)) {
         auto* op = static_cast<const QoreBinaryOperatorNode<>*>(node);
         return qore_ir_selector_is_stable(op->getLeft(), true, locals)
             && qore_ir_selector_is_stable(op->getRight(), true, locals);
@@ -10525,6 +10526,7 @@ static bool qore_ir_selector_eval_is_inert(const QoreValue& expr) {
     // the sum, difference or negation of int locals that cannot be NOTHING has no side effects and cannot raise
     // (qore#5675)
     if (dynamic_cast<const QorePlusOperatorNode*>(node) || dynamic_cast<const QoreMinusOperatorNode*>(node)
+            || dynamic_cast<const QoreMultiplicationOperatorNode*>(node)
             || dynamic_cast<const QoreUnaryMinusOperatorNode*>(node)) {
         qore_ir_selector_locals_t locals;
         return qore_ir_selector_is_stable(expr, true, locals);
@@ -11067,6 +11069,7 @@ static bool qore_ir_consumer_expr_is_pure(const QoreValue& expr) {
         return false;
     }
     if (dynamic_cast<const QorePlusOperatorNode*>(node) || dynamic_cast<const QoreMinusOperatorNode*>(node)
+            || dynamic_cast<const QoreMultiplicationOperatorNode*>(node)
             || dynamic_cast<const QoreLogicalGreaterThanOperatorNode*>(node)
             || dynamic_cast<const QoreLogicalGreaterThanOrEqualsOperatorNode*>(node)
             || dynamic_cast<const QoreLogicalLessThanOperatorNode*>(node)
@@ -11187,6 +11190,18 @@ bool QoreIRLowering::getLazySelectorSource(const QoreValue& expr, LazySelectorSo
     return true;
 }
 
+int64_t QoreIRLowering::selectorIteratorFlags(const LazySelectorSource& src) {
+    int64_t flags = 0;
+    if (src.op->hasStringIndexChar()) {
+        flags |= static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar);
+    }
+    // the negative offsets of the operator, as the AST interpreter's iterator resolves its indices with them
+    if (src.op->hasNegativeOffsets()) {
+        flags |= static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets);
+    }
+    return flags;
+}
+
 QoreIRValue QoreIRLowering::lowerSourceIterator(const QoreValue& expr, const LazySelectorSource& src, bool iterate,
         bool in_temp_scope, const QoreProgramLocation* loc, QoreIRValue& source, std::string& error) {
     if (src) {
@@ -11198,9 +11213,8 @@ QoreIRValue QoreIRLowering::lowerSourceIterator(const QoreValue& expr, const Laz
         if (!source.isValid()) {
             return QoreIRValue();
         }
-        int64_t flags = src.op->hasStringIndexChar()
-            ? static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar) : 0;
-        return withExceptionTarget(builder.createIteratorCreateSelectors(source, flags, loc))->result;
+        return withExceptionTarget(builder.createIteratorCreateSelectors(source, selectorIteratorFlags(src),
+            static_cast<int64_t>(src.selectors.size()), loc))->result;
     }
     source = in_temp_scope ? lowerExpressionInTempScope(expr, loc, error, true) : lowerExpression(expr, error);
     if (!source.isValid()) {
@@ -11211,7 +11225,8 @@ QoreIRValue QoreIRLowering::lowerSourceIterator(const QoreValue& expr, const Laz
         : withExceptionTarget(builder.createIteratorCreate(source, nullptr, loc))->result;
 }
 
-bool QoreIRLowering::emitSelectorIteratorDispatch(const LazySelectorSource& src, QoreIRValue iter,
+QoreIRIteratorNextInstruction* QoreIRLowering::emitSelectorIteratorNext(const LazySelectorSource& src,
+        QoreIRValue iter, QoreIRBasicBlock* exit_block, QoreIRBasicBlock* body_block,
         QoreIRBasicBlock* exception_target, std::string& error) {
     assert(src);
     const QoreProgramLocation* loc = src.op->loc;
@@ -11226,7 +11241,7 @@ bool QoreIRLowering::emitSelectorIteratorDispatch(const LazySelectorSource& src,
             exception_target = createBlock("selectors.exception");
             if (!exception_target) {
                 error = "IR builder failed to create blocks for a lazy list of selectors";
-                return false;
+                return nullptr;
             }
             QoreIRBasicBlock* current = builder.getBlock();
             builder.setBlock(exception_target);
@@ -11237,11 +11252,12 @@ bool QoreIRLowering::emitSelectorIteratorDispatch(const LazySelectorSource& src,
         }
     }
 
-    QoreIRBasicBlock* pending_block = createBlock("selectors.pending");
-    QoreIRBasicBlock* next_block = createBlock("selectors.next");
-    if (!pending_block || !next_block) {
+    QoreIRBasicBlock* next_block = builder.getBlock();
+    QoreIRBasicBlock* need_block = createBlock("selectors.need");
+    QoreIRBasicBlock* done_block = createBlock("selectors.done");
+    if (!need_block || !done_block) {
         error = "IR builder failed to create blocks for a lazy list of selectors";
-        return false;
+        return nullptr;
     }
     // test_blocks[i] tests if selector i is needed; the last selector needs no test
     std::vector<QoreIRBasicBlock*> test_blocks;
@@ -11251,18 +11267,23 @@ bool QoreIRLowering::emitSelectorIteratorDispatch(const LazySelectorSource& src,
         QoreIRBasicBlock* test = i + 1 < count ? createBlock("selectors.test") : selector;
         if (!selector || !test) {
             error = "IR builder failed to create blocks for a lazy list of selectors";
-            return false;
+            return nullptr;
         }
         test_blocks.push_back(test);
         selector_blocks.push_back(selector);
     }
-    // the blocks follow the current one, before the blocks that use the value of IteratorNext in next_block, as LLVM
-    // lowering processes the blocks in list order
+
+    // one instruction per value: the iterator gives its next value, or branches when it needs its next selector or
+    // has given every value
+    auto* next_inst = builder.createIteratorNextSelectors(iter, need_block, body_block, loc);
+    next_inst->exception_target = exception_target;
+
+    // the blocks follow the current one, before the body, as LLVM lowering processes the blocks in list order
     {
         QoreIRFunction* func = builder.getFunction();
-        QoreIRBasicBlock* prev = builder.getBlock();
-        func->moveBlockAfter(pending_block, prev);
-        prev = pending_block;
+        QoreIRBasicBlock* prev = next_block;
+        func->moveBlockAfter(need_block, prev);
+        prev = need_block;
         for (size_t i = 0; i + 1 < count; ++i) {
             func->moveBlockAfter(test_blocks[i], prev);
             prev = test_blocks[i];
@@ -11271,22 +11292,26 @@ bool QoreIRLowering::emitSelectorIteratorDispatch(const LazySelectorSource& src,
             func->moveBlockAfter(selector, prev);
             prev = selector;
         }
-        func->moveBlockAfter(next_block, prev);
+        func->moveBlockAfter(done_block, prev);
     }
-    builder.createBranch(pending_block, loc);
 
-    // the iterator says which selector it needs, or -1 when it has the next value or has no more
-    builder.setBlock(pending_block);
-    QoreIRValue pending = builder.createSelectorIteratorPending(iter, static_cast<int64_t>(count), loc)->result;
+    // the iterator says which selector it needs, or -1 when it has given every value
+    builder.setBlock(need_block);
+    QoreIRValue pending = builder.createSelectorIteratorPending(iter, loc)->result;
     QoreIRValue zero = builder.createConstInt(0, loc)->result;
     QoreIRValue none = builder.createBinaryOp(QoreIROpcode::LtInt, pending, zero, loc)->result;
-    builder.createBranchIf(none, next_block, test_blocks[0], loc);
+    builder.createBranchIf(none, done_block, test_blocks[0], loc);
     for (size_t i = 0; i + 1 < count; ++i) {
         builder.setBlock(test_blocks[i]);
         QoreIRValue index = builder.createConstInt(static_cast<int64_t>(i), loc)->result;
         QoreIRValue is_index = builder.createBinaryOp(QoreIROpcode::EqInt, pending, index, loc)->result;
         builder.createBranchIf(is_index, selector_blocks[i], test_blocks[i + 1], loc);
     }
+
+    // every value has been given: the iterator is released, as an exhausted IteratorNext releases its iterator
+    builder.setBlock(done_block);
+    builder.createIteratorRelease(iter, loc);
+    builder.createBranch(exit_block, loc);
 
     // a selector raises its exception to the handler that releases the iterator
     struct ExceptionTargetHelper {
@@ -11318,7 +11343,7 @@ bool QoreIRLowering::emitSelectorIteratorDispatch(const LazySelectorSource& src,
             QoreValue end_expr = range->getRight();
             QoreIRValue start = lowerExpression(start_expr, error);
             if (!start.isValid()) {
-                return false;
+                return nullptr;
             }
             // the AST interpreter checks the start for NOTHING before it evaluates the end
             // (QoreRangeOperatorNode::getFunctionalIteratorImpl()); the iterator checks both bounds
@@ -11327,13 +11352,13 @@ bool QoreIRLowering::emitSelectorIteratorDispatch(const LazySelectorSource& src,
             }
             QoreIRValue end = lowerExpression(end_expr, error);
             if (!end.isValid()) {
-                return false;
+                return nullptr;
             }
             selector_values = {start, end};
         } else {
             QoreIRValue index = lowerExpression(src.selectors[i], error);
             if (!index.isValid()) {
-                return false;
+                return nullptr;
             }
             selector_values = {index};
         }
@@ -11343,11 +11368,9 @@ bool QoreIRLowering::emitSelectorIteratorDispatch(const LazySelectorSource& src,
         }
         withExceptionTarget(builder.createSelectorIteratorFeed(iter, flags, selector_values, loc));
         withExceptionTarget(builder.createDiscardTemps(nullptr));
-        builder.createBranch(pending_block, loc);
+        builder.createBranch(next_block, loc);
     }
-
-    builder.setBlock(next_block);
-    return true;
+    return next_inst;
 }
 
 static bool qore_ir_is_explicit_hash_value_type(const QoreTypeInfo* type_info) {
@@ -19608,9 +19631,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     }
     QoreIRIteratorCreateInstruction* iter_inst;
     if (selector_source) {
-        int64_t flags = selector_source.op->hasStringIndexChar()
-            ? static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar) : 0;
-        iter_inst = withExceptionTarget(builder.createIteratorCreateSelectors(source, flags, loc));
+        iter_inst = withExceptionTarget(builder.createIteratorCreateSelectors(source,
+            selectorIteratorFlags(selector_source), static_cast<int64_t>(selector_source.selectors.size()), loc));
     } else {
         iter_inst = source_uses_iterate
             ? withExceptionTarget(builder.createIteratorCreateIterate(source, loc))
@@ -19945,11 +19967,13 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     builder.createBranch(next_block, loc);
 
     builder.setBlock(next_block);
-    if (selector_source && !emitSelectorIteratorDispatch(selector_source, iter_val, pipeline_exception_cleanup_block,
-            error)) {
+    QoreIRIteratorNextInstruction* next_inst = selector_source
+        ? emitSelectorIteratorNext(selector_source, iter_val, exit_block, body_block, pipeline_exception_cleanup_block,
+            error)
+        : withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, loc));
+    if (!next_inst) {
         return QoreIRValue();
     }
-    auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, loc));
     QoreIRValue element_val = next_inst->result;
 
     builder.setBlock(body_block);
@@ -20822,11 +20846,13 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     builder.createBranch(next_block, loc);
 
     builder.setBlock(next_block);
-    if (selector_source && !emitSelectorIteratorDispatch(selector_source, iter_val, foreach_exception_cleanup_block,
-            error)) {
+    QoreIRIteratorNextInstruction* next_inst = selector_source
+        ? emitSelectorIteratorNext(selector_source, iter_val, exit_block, body_block, foreach_exception_cleanup_block,
+            error)
+        : withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, loc));
+    if (!next_inst) {
         return false;
     }
-    auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, loc));
     QoreIRValue element_val = next_inst->result;
 
     builder.setBlock(body_block);

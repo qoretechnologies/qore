@@ -416,6 +416,7 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     return false;
                 }
             } else if (inst->opcode == QoreIROpcode::IteratorNext
+                    || inst->opcode == QoreIROpcode::IteratorNextSelectors
                     || inst->opcode == QoreIROpcode::TypedForeachNextInt
                     || inst->opcode == QoreIROpcode::TypedForeachNextFloat
                     || inst->opcode == QoreIROpcode::TypedForeachNextBool
@@ -425,7 +426,7 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     error = "iterator.next missing iterator";
                     return false;
                 }
-                if (inst->opcode != QoreIROpcode::IteratorNext
+                if (inst->opcode != QoreIROpcode::IteratorNext && inst->opcode != QoreIROpcode::IteratorNextSelectors
                         && (!iter->index.isValid() || !iter->limit.isValid()
                             || inst->operands.size() != 3
                             || inst->operands[0].id != iter->iterator.id

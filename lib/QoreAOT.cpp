@@ -3715,6 +3715,7 @@ static void aotOutlineForEachValueUse(const QoreIRInstruction* inst, F&& cb) {
             cb(static_cast<const QoreIRIteratorCreateInstruction*>(inst)->iterable);
             break;
         case QoreIROpcode::IteratorNext:
+        case QoreIROpcode::IteratorNextSelectors:
             cb(static_cast<const QoreIRIteratorNextInstruction*>(inst)->iterator);
             break;
         default:

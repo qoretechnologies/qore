@@ -1787,24 +1787,33 @@ QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateIterate(Qore
 }
 
 QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateSelectors(QoreIRValue seq, int64_t flags,
-        const QoreProgramLocation* loc) {
+        int64_t count, const QoreProgramLocation* loc) {
     QoreIRValue flags_val = createConstInt(flags, loc)->result;
+    QoreIRValue count_val = createConstInt(count, loc)->result;
     auto inst = append<QoreIRIteratorCreateInstruction>(seq);
     inst->opcode = QoreIROpcode::IteratorCreateSelectors;
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(flags_val);
+    inst->operands.push_back(count_val);
     return inst;
 }
 
-QoreIRInstruction* QoreIRBuilder::createSelectorIteratorPending(QoreIRValue iterator, int64_t count,
+QoreIRInstruction* QoreIRBuilder::createSelectorIteratorPending(QoreIRValue iterator,
         const QoreProgramLocation* loc) {
-    QoreIRValue count_val = createConstInt(count, loc)->result;
     auto inst = append<QoreIRInstruction>(QoreIROpcode::SelectorIteratorPending);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(iterator);
-    inst->operands.push_back(count_val);
+    return inst;
+}
+
+QoreIRIteratorNextInstruction* QoreIRBuilder::createIteratorNextSelectors(QoreIRValue iterator,
+        QoreIRBasicBlock* none_target, QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRIteratorNextInstruction>(iterator, none_target, continue_target);
+    inst->opcode = QoreIROpcode::IteratorNextSelectors;
+    inst->loc = loc;
+    inst->result = func->createValue();
     return inst;
 }
 

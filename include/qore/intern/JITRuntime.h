@@ -1388,11 +1388,15 @@ uint64_t qore_rt_list_selector_step(uint64_t result_val, uint64_t seq_val, int64
 
 //! Creates the iterator of a list of selectors with ranges for the sequence \a seq_bits; see
 //! QoreIROpcode::IteratorCreateSelectors
-void* qore_rt_iterator_create_selectors(uint64_t seq_bits, int64_t flags, ExceptionSink* xsink);
+void* qore_rt_iterator_create_selectors(uint64_t seq_bits, int64_t flags, int64_t count, ExceptionSink* xsink);
 
-//! Returns the index of the selector that the iterator of a list of selectors of \a count selectors needs next, or -1;
-//! see QoreIROpcode::SelectorIteratorPending
-int64_t qore_rt_selector_iterator_pending(void* iter_ptr, int64_t count);
+//! Returns the index of the selector that the iterator of a list of selectors needs next, or -1; see
+//! QoreIROpcode::SelectorIteratorPending
+int64_t qore_rt_selector_iterator_pending(void* iter_ptr);
+
+//! Gives the next value of the iterator of a list of selectors in \a out_value; returns 1 if it has none now, without
+//! deleting the iterator; see QoreIROpcode::IteratorNextSelectors
+int64_t qore_rt_selector_iterator_next(void* iter_ptr, uint64_t* out_value, ExceptionSink* xsink);
 
 //! Gives the iterator of a list of selectors the value of its next selector; returns 1 if an exception was raised.
 //! See QoreIROpcode::SelectorIteratorFeed.

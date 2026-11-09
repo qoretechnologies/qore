@@ -500,6 +500,11 @@ auto sub pure_foldl() {
     return foldl $1 + $2, l[f("a", 0), f("b", 1)..f("c", 9)];
 }
 
+auto sub pure_map_mult() {
+    int z = 1;
+    return (map $1 * 2, l[f("a", 0), f("b", 1)..f("c", 3)]) + (map $1 * 3, l[z * 2, z..z * 3]);
+}
+
 auto sub pure_map_strings() {
     list<string> sl = ("a", "b", "c", "d");
     return map $1 + "x", sl[f("a", 0), f("b", 1)..f("c", 2)];
@@ -831,6 +836,7 @@ sub main() {
         t("pure map raises", \pure_map_raises());
         t("pure select", \pure_select());
         t("pure foldl", \pure_foldl());
+        t("pure map mult", \pure_map_mult());
         t("pure map strings", \pure_map_strings());
         t("written foreach", \written_foreach());
         t("written foreach inc", \written_foreach_inc());

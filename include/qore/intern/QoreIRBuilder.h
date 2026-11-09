@@ -419,12 +419,15 @@ public:
     /** @param seq the sequence
         @param flags the QoreIRListSelectorFlag flags (StringIndexChar)
     */
-    QoreIRIteratorCreateInstruction* createIteratorCreateSelectors(QoreIRValue seq, int64_t flags,
+    QoreIRIteratorCreateInstruction* createIteratorCreateSelectors(QoreIRValue seq, int64_t flags, int64_t count,
         const QoreProgramLocation* loc = nullptr);
     //! Returns the selector that the iterator of a list of selectors needs next; see
     //! QoreIROpcode::SelectorIteratorPending
-    QoreIRInstruction* createSelectorIteratorPending(QoreIRValue iterator, int64_t count,
-        const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createSelectorIteratorPending(QoreIRValue iterator, const QoreProgramLocation* loc = nullptr);
+    //! Gives the next value of the iterator of a list of selectors, or branches to \a none_target; see
+    //! QoreIROpcode::IteratorNextSelectors
+    QoreIRIteratorNextInstruction* createIteratorNextSelectors(QoreIRValue iterator, QoreIRBasicBlock* none_target,
+        QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc = nullptr);
     //! Gives the iterator of a list of selectors the value of its next selector; see
     //! QoreIROpcode::SelectorIteratorFeed
     /** @param iterator the iterator handle

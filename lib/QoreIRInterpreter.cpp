@@ -81,7 +81,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 425,
+static_assert(QORE_IR_MAX_OPCODE == 426,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -8587,10 +8587,9 @@ next_instruction:
                 break;
             }
             case QoreIROpcode::SelectorIteratorPending: {
-                // operands: the iterator handle and the number of selectors
+                // operands: the iterator handle
                 void* iter = reinterpret_cast<void*>(getIRValue(values, inst->operands[0]).getAsBigInt());
-                setValueSlotDirect(values, inst->result.id, QoreValue(qore_rt_selector_iterator_pending(iter,
-                    getIRValue(values, inst->operands[1]).getAsBigInt())));
+                setValueSlotDirect(values, inst->result.id, QoreValue(qore_rt_selector_iterator_pending(iter)));
                 ++ip;
                 break;
             }
@@ -12910,9 +12909,10 @@ load_local_done:
                 FunctionalOperator::FunctionalValueType value_type;
                 FunctionalOperatorInterface* iter = nullptr;
                 if (inst->opcode == QoreIROpcode::IteratorCreateSelectors) {
-                    // operands[0] = the flags
+                    // operands[0] = the flags; operands[1] = the number of selectors
                     iter = reinterpret_cast<FunctionalOperatorInterface*>(qore_rt_iterator_create_selectors(
-                        toBits(iterable), getIRValue(values, inst->operands[0]).getAsBigInt(), xsink));
+                        toBits(iterable), getIRValue(values, inst->operands[0]).getAsBigInt(),
+                        getIRValue(values, inst->operands[1]).getAsBigInt(), xsink));
                 } else if (iter_inst->iterator_func) {
                     iter = iter_inst->iterator_func->getFunctionalIterator(value_type, xsink);
                 } else if (inst->opcode == QoreIROpcode::IteratorCreateIterate) {
@@ -13000,8 +13000,12 @@ load_local_done:
                 ip = 0;
                 break;
             }
-            case QoreIROpcode::IteratorNext: {
+            case QoreIROpcode::IteratorNext:
+            case QoreIROpcode::IteratorNextSelectors: {
                 auto* iter_inst = static_cast<QoreIRIteratorNextInstruction*>(inst);
+                // the iterator of a list of selectors is not released when it has no value: it then needs its next
+                // selector, or the lowering releases it
+                const bool keep_iterator = inst->opcode == QoreIROpcode::IteratorNextSelectors;
                 QoreValue iter_val = getIRValue(values, iter_inst->iterator);
                 FunctionalOperatorInterface* iter = reinterpret_cast<FunctionalOperatorInterface*>(
                     iter_val.getAsBigInt());
@@ -13015,12 +13019,17 @@ load_local_done:
                 ValueOptionalRefHolder val(xsink);
                 bool done = iter->getNext(val, xsink);
                 if (xsink && *xsink) {
-                    active_iterators.erase(iter);
-                    delete iter;
+                    if (!keep_iterator) {
+                        active_iterators.erase(iter);
+                        delete iter;
+                    }
                     if (inst->exception_target) {
                         // the loop is left for the in-frame landing pad; the iterator is gone, so clear its slot
-                        // in case the handler runs the loop again
-                        setValueSlotDirect(values, iter_inst->iterator.id, QoreValue(static_cast<int64_t>(0)));
+                        // in case the handler runs the loop again; an iterator that is kept is released by the
+                        // handler's cleanup
+                        if (!keep_iterator) {
+                            setValueSlotDirect(values, iter_inst->iterator.id, QoreValue(static_cast<int64_t>(0)));
+                        }
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
@@ -13033,10 +13042,12 @@ load_local_done:
                 }
                 if (done) {
                     // Iterator exhausted - clean up and branch to done
-                    active_iterators.erase(iter);
-                    delete iter;
-                    // Clear the iterator value so we don't double-delete
-                    setValueSlot(values, iter_inst->iterator.id, QoreValue(static_cast<int64_t>(0)), xsink);
+                    if (!keep_iterator) {
+                        active_iterators.erase(iter);
+                        delete iter;
+                        // Clear the iterator value so we don't double-delete
+                        setValueSlot(values, iter_inst->iterator.id, QoreValue(static_cast<int64_t>(0)), xsink);
+                    }
                     // the last element is released when the loop ends, as the AST interpreter releases each element
                     // when its iteration ends and native code releases the element's slot here (the next call of
                     // qore_rt_iterator_next() releases the previous element and stores NOTHING when it is done)

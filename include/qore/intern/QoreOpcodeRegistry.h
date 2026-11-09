@@ -57,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[426] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[427] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -479,17 +479,18 @@ constexpr OpcodeInfo OPCODE_REGISTRY[426] = {
     { "CheckCancelEvery"               , false, false, false,  3, "Check for cancellation every 100 elements of an expression, as the AST interpreter does", true , true , "QoreFoldlOperatorNode", false, false, false, false, false }, // 418
     { "CheckRangeBound"                , false, false, false,  2, "Raise RANGE-ERROR for the start of a range that evaluated to NOTHING, before the end is evaluated", true , true , "QoreRangeOperatorNode", false, false, false, false, false }, // 419
     { "ListSelectorStep"               , true , false, false, OPCODE_MIN_OPERANDS(3), "Apply one selector of a list of selectors with ranges, as the AST interpreter does", true , true , "QoreSquareBracketsOperatorNode", true , false, false, false, false }, // 420
-    { "IteratorCreateSelectors"        , false, false, false,  1, "Create the iterator of a list of selectors with ranges, as the AST interpreter iterates it", false, true , "QoreSquareBracketsOperatorNode", true , false, false, false, false }, // 421
-    { "SelectorIteratorPending"        , false, false, false,  2, "Return the selector that the iterator of a list of selectors needs next, or -1", true , false, "QoreSquareBracketsOperatorNode", true , false, false, false, false }, // 422
+    { "IteratorCreateSelectors"        , false, false, false,  2, "Create the iterator of a list of selectors with ranges, as the AST interpreter iterates it", false, true , "QoreSquareBracketsOperatorNode", true , false, false, false, false }, // 421
+    { "SelectorIteratorPending"        , false, false, false,  1, "Return the selector that the iterator of a list of selectors needs next, or -1", true , false, "QoreSquareBracketsOperatorNode", true , false, false, false, false }, // 422
     { "SelectorIteratorFeed"           , false, false, false, OPCODE_MIN_OPERANDS(3), "Give the iterator of a list of selectors the value of its next selector", true , true , "QoreSquareBracketsOperatorNode", false, false, false, false, false }, // 423
     { "ExceptionSuspend"               , false, false, false,  0, "Set the exceptions raised aside for code that runs while they are raised", true , false, "QoreRemoveOperatorNode", true , false, false, false, false }, // 424
     { "ExceptionResume"                , false, false, false,  1, "Raise again the exceptions set aside, before any raised since", true , false, "QoreRemoveOperatorNode", false, false, false, false, false }, // 425
+    { "IteratorNextSelectors"          , false, false, true ,  0, "Give the next value of the iterator of a list of selectors, or branch if it has none now", true , true , "QoreSquareBracketsOperatorNode", true , false, false, false, false }, // 426
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 426,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 426"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 427,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 427"
 );
 
 //! ============================================================================

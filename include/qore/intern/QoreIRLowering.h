@@ -281,17 +281,21 @@ public:
     */
     QoreIRValue lowerSourceIterator(const QoreValue& expr, const LazySelectorSource& src, bool iterate,
         bool in_temp_scope, const QoreProgramLocation* loc, QoreIRValue& source, std::string& error);
-    //! Emits the evaluation of the next selector of a lazy list of selectors before IteratorNext
-    /** Branches to a block that asks the iterator which selector it needs (SelectorIteratorPending), evaluates it in
-        a temp scope of its own and gives it to the iterator (SelectorIteratorFeed), and returns to the question until
-        the iterator needs none; the builder is then left in the block where IteratorNext follows.  An exception
-        raised by a selector goes to \a exception_target, which must release the iterator; if it is null, to a block
-        that releases the iterator and branches to the handler in this frame, if any.
+    //! Emits the iteration of a lazy list of selectors in place of IteratorNext
+    /** Emits IteratorNextSelectors in the current block, which gives the next value to \a body_block; when the iterator
+        has no value, a block asks it which selector it needs (SelectorIteratorPending), evaluates it in a temp scope of
+        its own and gives it to the iterator (SelectorIteratorFeed), and returns to IteratorNextSelectors, or releases
+        the iterator and branches to \a exit_block when every value has been given.  An exception raised by a selector
+        or the iterator goes to \a exception_target, which must release the iterator; if it is null, to a block that
+        releases the iterator and branches to the handler in this frame, if any.
 
-        @return false on error
+        @return the IteratorNextSelectors instruction, whose result is the value, or nullptr on error
     */
-    bool emitSelectorIteratorDispatch(const LazySelectorSource& src, QoreIRValue iter,
-        QoreIRBasicBlock* exception_target, std::string& error);
+    QoreIRIteratorNextInstruction* emitSelectorIteratorNext(const LazySelectorSource& src, QoreIRValue iter,
+        QoreIRBasicBlock* exit_block, QoreIRBasicBlock* body_block, QoreIRBasicBlock* exception_target,
+        std::string& error);
+    //! Returns the QoreIRListSelectorFlag flags of the iterator of a lazy list of selectors
+    static int64_t selectorIteratorFlags(const LazySelectorSource& src);
     //! Fills the handler of a selector of a remove or delete expression with a list of selectors that raised an
     //! exception: it removes what the \a selector_count selectors before it select, releases the removed values,
     //! and branches with the exceptions to the handler of the expression, as the AST interpreter does
