@@ -986,11 +986,18 @@ public:
     QoreProgram* pgm;
     //! the ID of \a pgm, which identifies it after it has been deleted; see setProgram()
     qore_program_id_t pgm_id;
+    //! true once a call has found that \a pgm stays allocated while any code can run (a module's Program; see
+    //! qore_program_has_module_lifetime()), so a call from another Program needs no reference to it
+    /** Set by QoreSourceProgramHolder::setVariant() while it holds a reference to the Program; never cleared, as
+        setProgram() is called only before the variant can be called
+    */
+    mutable std::atomic<bool> pgm_module_lifetime{false};
 
     //! sets the Program of the variant
     DLLLOCAL void setProgram(QoreProgram* p) {
         pgm = p;
         pgm_id = p ? p->getProgramId() : 0;
+        pgm_module_lifetime.store(false, std::memory_order_relaxed);
     }
 
 protected:

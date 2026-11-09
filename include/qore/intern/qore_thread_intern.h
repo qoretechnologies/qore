@@ -999,6 +999,27 @@ DLLLOCAL bool qore_program_is_sandboxed(const QoreProgram* pgm);
 //! Marks the Program's code as sandboxed (see qore_program_is_sandboxed())
 DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
 
+//! Gives the Program of a module (a registered user module, or an AOT module) module lifetime
+/** The Program stays allocated (with a dependency reference) until qore_release_module_program_pins(), which
+    qore_cleanup() calls once no other thread can run Qore code, so code that calls into the module from another
+    Program needs no reference to the Program (see QoreSourceProgramHolder): entering it still fails once its teardown
+    has started.  The call is idempotent.
+*/
+DLLLOCAL void qore_program_set_module_lifetime(QoreProgram& pgm);
+
+//! Returns true if the Program has module lifetime and module lifetime is in effect
+/** The Program must be allocated: the caller holds a reference to it, or runs in it.  Returns false once
+    qore_release_module_program_pins() has been called
+*/
+DLLLOCAL bool qore_program_has_module_lifetime(const QoreProgram* pgm);
+
+//! Returns true while module lifetime is in effect: until qore_release_module_program_pins()
+DLLLOCAL bool qore_module_lifetime_active();
+
+//! Releases the dependency references of the Programs with module lifetime; called by qore_cleanup() once no other
+//! thread can run Qore code, before the binary modules are deleted
+DLLLOCAL void qore_release_module_program_pins();
+
 //! Marks a Program that Qore code creates (Program::constructor()) as sandboxed if its creator is sandboxed
 DLLLOCAL void qore_program_set_creator_sandbox(QoreProgram& pgm);
 

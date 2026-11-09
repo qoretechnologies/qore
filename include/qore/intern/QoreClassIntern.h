@@ -2245,6 +2245,11 @@ typedef vector_map_t<QoreClass*, unsigned> qc_ref_map_t;
 */
 DLLLOCAL bool qore_program_torn_down_by_current_thread(const QoreProgram* pgm);
 
+//! see qore_thread_intern.h
+DLLLOCAL bool qore_program_has_module_lifetime(const QoreProgram* pgm);
+//! see qore_thread_intern.h
+DLLLOCAL bool qore_module_lifetime_active();
+
 class qore_class_private {
 public:
     const QoreProgramLocation* loc; // location of declaration
@@ -2482,6 +2487,11 @@ public:
         getMethodForEval()); never dereferenced
     */
     std::atomic<const QoreProgram*> released_spgm{nullptr};
+
+    //! true once a call has found that the source Program has module lifetime (see
+    //! qore_program_has_module_lifetime()): it stays allocated while any code can run, so a call from another Program
+    //! needs neither the lock nor a reference to it (see getSourceProgramForCall()); never cleared
+    mutable std::atomic<bool> spgm_module_lifetime{false};
 
     //! true if the source Program had a sandbox manager when it released the class (see isSandboxedCode())
     /** Set with released_spgm, under gate.asl_lock
@@ -3712,12 +3722,20 @@ public:
         if (p == ::getProgram()) {
             return p;
         }
+        // a module's Program stays allocated while any code can run (module lifetime): entering it fails once its
+        // teardown has started, so no reference is needed
+        if (spgm_module_lifetime.load(std::memory_order_acquire) && qore_module_lifetime_active()) {
+            return p;
+        }
         {
             // see getReferencedSourceProgram()
             AutoLocker al(gate.asl_lock);
             p = spgm.load();
             if (p && p->optRef()) {
                 referenced = true;
+                if (qore_program_has_module_lifetime(p)) {
+                    spgm_module_lifetime.store(true, std::memory_order_release);
+                }
             } else if (p && !qore_program_torn_down_by_current_thread(p)) {
                 // the Program's last reference has been released, and another thread deletes it
                 p = nullptr;

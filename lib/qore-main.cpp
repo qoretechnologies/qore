@@ -445,6 +445,10 @@ void qore_cleanup() {
     // no thread can be waiting any more
     qore_stop_cond_waker();
 
+    // no other thread can run Qore code any more: the Programs of the modules no longer need module lifetime, and
+    // the Programs of the user modules, which delUser() deleted, are freed now, before the binary modules are deleted
+    qore_release_module_program_pins();
+
 #ifdef _Q_WINDOWS
     // do windows socket cleanup
     WSACleanup();

@@ -1955,6 +1955,11 @@ void QoreModuleManager::addModule(QoreAbstractModule* m) {
         }
     }
     map.insert(module_map_t::value_type(m->getName(), m));
+    // the Program of a registered user module (source or AOT) is deleted only by cleanup: it gets module lifetime,
+    // so calls into its code from other Programs need no reference to it (see qore_program_set_module_lifetime())
+    if (QoreProgram* mpgm = m->getModuleProgram()) {
+        qore_program_set_module_lifetime(*mpgm);
+    }
     //printd(5, "QoreModuleManager::addModule() m: %p '%s'\n", m, m->getName());
 }
 

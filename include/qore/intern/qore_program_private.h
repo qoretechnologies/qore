@@ -970,6 +970,10 @@ public:
     */
     std::atomic<bool> sandboxed{false};
 
+    //! true if the Program stays allocated while any code can run: a module's Program (see
+    //! qore_program_set_module_lifetime()); never cleared once set
+    std::atomic<bool> module_lifetime{false};
+
     // define map
     dmap_t dmap;
 

@@ -155,6 +155,12 @@ void QoreSourceProgramHolder::setVariant(const UserVariantBase* uvb) {
         pgm = p;
         return;
     }
+    // a module's Program stays allocated while any code can run (module lifetime), so a call from another Program
+    // needs no reference to it; entering it fails once its teardown has started
+    if (uvb->pgm_module_lifetime.load(std::memory_order_acquire) && qore_module_lifetime_active()) {
+        pgm = p;
+        return;
+    }
     pgm = qore_program_private::getReferencedProgram(p, uvb->pgm_id);
     if (!pgm) {
         // the Program has been deleted, or its last reference has been released and another thread deletes it
@@ -162,6 +168,10 @@ void QoreSourceProgramHolder::setVariant(const UserVariantBase* uvb) {
         return;
     }
     referenced = true;
+    // the Program is allocated while the reference is held: if it has module lifetime, later calls need none
+    if (qore_program_has_module_lifetime(pgm)) {
+        uvb->pgm_module_lifetime.store(true, std::memory_order_release);
+    }
 #ifdef DEBUG
     if (qore_class_private::dbg_source_program_taken_t hook = qore_class_private::dbg_source_program_taken.load()) {
         hook(nullptr, pgm, referenced);

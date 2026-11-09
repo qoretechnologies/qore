@@ -1543,6 +1543,61 @@ void qore_program_mark_sandboxed(QoreProgram& pgm) {
     qore_program_private::get(pgm)->sandboxed.store(true, std::memory_order_release);
 }
 
+namespace {
+//! the Programs with module lifetime, each with a dependency reference; see qore_program_set_module_lifetime()
+struct ModuleProgramPins {
+    std::mutex m;
+    std::vector<QoreProgram*> pgms;
+    //! true until qore_release_module_program_pins()
+    std::atomic<bool> active{true};
+};
+
+ModuleProgramPins& module_program_pins() {
+    // never destroyed: the pins are released by qore_cleanup(), which can run after static destructors started
+    static ModuleProgramPins* p = new ModuleProgramPins;
+    return *p;
+}
+}
+
+void qore_program_set_module_lifetime(QoreProgram& pgm) {
+    qore_program_private* pp = qore_program_private::get(pgm);
+    if (pp->module_lifetime.load(std::memory_order_acquire)) {
+        return;
+    }
+    ModuleProgramPins& pins = module_program_pins();
+    std::lock_guard<std::mutex> l(pins.m);
+    if (!pins.active.load(std::memory_order_relaxed) || pp->module_lifetime.load(std::memory_order_relaxed)) {
+        return;
+    }
+    pins.pgms.push_back(&pgm);
+    pgm.depRef();
+    // published after the reference has been taken
+    pp->module_lifetime.store(true, std::memory_order_release);
+}
+
+bool qore_program_has_module_lifetime(const QoreProgram* pgm) {
+    return pgm && module_program_pins().active.load(std::memory_order_acquire)
+        && qore_program_private::get(*const_cast<QoreProgram*>(pgm))->module_lifetime.load(
+            std::memory_order_acquire);
+}
+
+bool qore_module_lifetime_active() {
+    return module_program_pins().active.load(std::memory_order_acquire);
+}
+
+void qore_release_module_program_pins() {
+    ModuleProgramPins& pins = module_program_pins();
+    std::vector<QoreProgram*> pgms;
+    {
+        std::lock_guard<std::mutex> l(pins.m);
+        pins.active.store(false, std::memory_order_release);
+        pgms.swap(pins.pgms);
+    }
+    for (QoreProgram* pgm : pgms) {
+        pgm->depDeref();
+    }
+}
+
 void qore_program_set_creator_sandbox(QoreProgram& pgm) {
     // a Program created by sandboxed code: by code of a sandboxed Program, or by any code that a sandbox governs
     // (trusted library code called by sandboxed code, which can be given the source to parse)
