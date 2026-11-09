@@ -1260,6 +1260,20 @@ sub hold(Queue ev, Counter ready, Counter block) {
 sub block_in_destructor(Counter entered) {
     TrustedBlocker b(entered);
 }
+sub hold_child(Queue ev, Counter ready, Counter block) {
+    Program c(PO_NEW_STYLE);
+    c.parse('%modern
+class X {
+    private { Queue ev; }
+    constructor(Queue ev) { self.ev = ev; }
+    destructor() { ev.push(1); Mutex m(); m.lock(); m.unlock(); ev.push(2); }
+}
+object sub mk(Queue ev) { return new X(ev); }
+', 'child');
+    object x = c.callFunction('mk', ev);
+    ready.dec();
+    block.waitForZero();
+}
 \";
 
 list<string> sub drain(Queue ev, string last) {
@@ -1330,6 +1344,27 @@ list<string> out = ();
     block.dec();
     thread_join(tid);
 
+    # a class of a Program that the sandboxed code created is sandboxed: its destructor is skipped
+    {
+        Queue cev();
+        Counter cready(1);
+        Counter cblock(1);
+        Queue cres();
+        int ctid = background sub () {
+            try {
+                p.callFunction(\"hold_child\", cev, cready, cblock);
+            } catch (hash<ExceptionInfo> ex) {
+                cres.push(\"child-caught:\" + ex.err);
+            }
+        }();
+        cready.waitForZero(30s);
+        cancel_thread(ctid, \"mode\");
+        out += cres.get(30s);
+        out += \"child-events:\" + cev.size();
+        cblock.dec();
+        thread_join(ctid);
+    }
+
     # a wall time limit ends a trusted destructor
     sm.setWallTimeLimit(200);
     try {
@@ -1346,7 +1381,7 @@ printf(\"%s\\n\", out.join(\",\"));
 
     #! the output of the mode script when the rule holds
     const ModeExpected = "res-waiting,res-queue:x,caught:THREAD-CANCELLED,base-locked,hook:THREAD-CANCELLED,"
-        "base-end,caught:THREAD-CANCELLED,limit:SANDBOX-TIMEOUT\n";
+        "base-end,caught:THREAD-CANCELLED,child-caught:THREAD-CANCELLED,child-events:0,limit:SANDBOX-TIMEOUT\n";
 
     execModesTest() {
         TmpFile tf("qore-destructor-cancellation-", ".qr");
