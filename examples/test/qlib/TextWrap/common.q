@@ -1,8 +1,9 @@
 #!/usr/bin/env qore
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/TextWrap.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires TextWrap
 
 %allow-bare-refs
 

@@ -3,8 +3,8 @@
 # MIT License
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QoreLlmUtils
-%requires ../../../../qlib/QUnit.qm
+%requires QoreLlmUtils
+%requires QUnit
 %exec-class BillingMetadataTest
 
 class BillingMetadataTest inherits QUnit::Test {

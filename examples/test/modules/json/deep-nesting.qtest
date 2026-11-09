@@ -1,9 +1,10 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - native jsoncons recursion depth against the stack limit of a small thread stack
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
+%requires QUnit
 %requires json
 
 %exec-class DeepNestingTest

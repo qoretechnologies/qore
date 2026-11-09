@@ -4,22 +4,22 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/QoreRagTypes.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/VoyageRestClient.qm
-%requires ../../../../qlib/OpenAiRestClient.qm
-%requires ../../../../qlib/CohereRestClient.qm
-%requires ../../../../qlib/BgeM3RestClient.qm
-%requires ../../../../qlib/SGLangRestClient.qm
-%requires ../../../../qlib/GeminiRestClient.qm
-%requires ../../../../qlib/JinaRestClient.qm
-%requires ../../../../qlib/FireworksRestClient.qm
-%requires ../../../../qlib/TogetherRestClient.qm
-%requires ../../../../qlib/MistralRestClient.qm
-%requires ../../../../qlib/OllamaRestClient.qm
-%requires ../../../../qlib/BedrockRestClient.qm
+%requires QUnit
+%requires QoreRagTypes
+%requires HttpServer
+%requires HttpServerAsyncIo
+%requires VoyageRestClient
+%requires OpenAiRestClient
+%requires CohereRestClient
+%requires BgeM3RestClient
+%requires SGLangRestClient
+%requires GeminiRestClient
+%requires JinaRestClient
+%requires FireworksRestClient
+%requires TogetherRestClient
+%requires MistralRestClient
+%requires OllamaRestClient
+%requires BedrockRestClient
 %requires json
 %exec-class EmbedderRetryTest
 

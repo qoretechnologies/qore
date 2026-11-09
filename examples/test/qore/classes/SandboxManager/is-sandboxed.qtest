@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class IsSandboxedTest
+
+#! Returns what the two queries answer in the current thread's code
+hash<auto> sub queries() {
+    return {"isSandboxed": SandboxManager::isSandboxed(), "isGoverned": SandboxManager::isGoverned()};
+}
+
+#! Verifies SandboxManager::isSandboxed()
+/** The code that a sandboxed Program calls is created by the test, which no sandbox governs, before it is called,
+    as trusted infrastructure creates the code that serves sandboxed callers: code created while serving a
+    sandboxed caller carries its sandbox (see SandboxManager::callWithSystemPolicy())
+*/
+class IsSandboxedTest inherits QUnit::Test {
+    private {
+        #! the queries
+        code plain = \queries();
+        #! the queries under a policy barrier
+        code barrier;
+        #! the queries in a system-policy capability
+        code capability = SandboxManager::createSystemPolicyCall(\queries());
+        #! the queries in a thread that the calling code starts
+        code thread = hash<auto> sub () {
+            Queue q();
+            background sub () { q.push(queries()); }();
+            return q.get();
+        };
+    }
+
+    constructor() : Test("SandboxManager::isSandboxed()", "1.0", \ARGV) {
+        code queries_ref = \queries();
+        barrier = hash<auto> sub () { return SandboxManager::callWithSystemPolicy(queries_ref); };
+        addTestCase("trusted code is not sandboxed", \trustedTest());
+        addTestCase("sandboxed code, also under a policy barrier or in a capability", \sandboxedTest());
+        addTestCase("a thread that sandboxed code starts, and an object that it created", \inheritedTest());
+        addTestCase("restricted code can call it", \restrictedTest());
+        set_return_value(main());
+    }
+
+    trustedTest() {
+        assertEq({"isSandboxed": False, "isGoverned": False}, plain());
+        assertEq({"isSandboxed": False, "isGoverned": False}, barrier());
+        assertEq({"isSandboxed": False, "isGoverned": False}, capability());
+    }
+
+    sandboxedTest() {
+        Program p = sandboxed();
+        assertEq({"isSandboxed": True, "isGoverned": True}, p.callFunction("run", plain));
+        # a policy barrier masks the sandbox's policy, not the sandbox
+        assertEq({"isSandboxed": True, "isGoverned": False}, p.callFunction("run", barrier));
+        assertEq({"isSandboxed": True, "isGoverned": False}, p.callFunction("run", capability));
+    }
+
+    inheritedTest() {
+        Program p = sandboxed();
+        assertEq({"isSandboxed": True, "isGoverned": True}, p.callFunction("run", thread));
+        # the method of an object that sandboxed code created runs under its sandbox, also when trusted code calls it
+        object o = p.callFunction("make");
+        assertTrue(o.isSandboxed());
+    }
+
+    restrictedTest() {
+        Program r(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS, True);
+        r.parse("bool sub t() { return SandboxManager::isSandboxed(); }\n", "restricted");
+        assertFalse(r.callFunction("t"));
+        r.setSandboxManager(new SandboxManager());
+        assertTrue(r.callFunction("t"));
+    }
+
+    #! Returns a sandboxed Program that calls the code given
+    private Program sandboxed() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse("hash<auto> sub run(code c) { return c(); }\n"
+            "class Probe { bool isSandboxed() { return SandboxManager::isSandboxed(); } }\n"
+            "object sub make() { return new Probe(); }\n", "sandboxed");
+        p.setSandboxManager(new SandboxManager());
+        return p;
+    }
+}

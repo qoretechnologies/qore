@@ -28,7 +28,10 @@ class SplitTestsTest(unittest.TestCase):
             with self.subTest(qc=str(qc.relative_to(ROOT))):
                 name = qc.stem
                 parts = sorted({int(n) for n in PART_CASE.findall(qc.read_text())})
-                tests = sorted(qc.parent.glob(name + "-*.qtest"))
+                # the numbered part tests; other tests may share the name's prefix (CMakeBuildHelpers-preload.qtest)
+                part_test = re.compile(re.escape(name) + r"-(\d+)\.qtest")
+                tests = sorted((t for t in qc.parent.glob(name + "-*.qtest") if part_test.fullmatch(t.name)),
+                               key=lambda t: int(part_test.fullmatch(t.name).group(1)))
                 self.assertEqual(["%s-%d.qtest" % (name, n) for n in range(1, len(tests) + 1)],
                                  [t.name for t in tests], "the part tests are numbered from 1")
                 self.assertEqual(list(range(1, len(tests) + 1)), parts,

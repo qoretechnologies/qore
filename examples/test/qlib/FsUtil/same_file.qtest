@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - stat() vs lstat() device and inode identity of files, directories and symlinks
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util

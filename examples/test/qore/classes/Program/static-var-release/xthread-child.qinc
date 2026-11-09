@@ -1,0 +1,44 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# xthread-child.qinc - code of the child Program of xthread-delete.q: the guard's destructor creates two Programs
+# while the child's static variables are released, and deletes them in another thread
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+public class Alpha {
+    public {
+        static int v = 5;
+    }
+}
+
+#! the read function of the guard Programs: -1 if the variable cannot be read, as the Program of its class has released
+#! its value
+const ReadSrc = "int sub read(code c) { try { return c(); } catch (hash<ExceptionInfo> ex) { if (ex.err != \"PROGRAM-ERROR\") { rethrow; } return -1; } } ";
+
+public class Guard {
+    destructor() {
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse(ReadSrc + "int sub get() { return read(int sub () { return Alpha::v; }); }", "guard");
+            printf("guard Program result: %y\n", p.callFunction("get"));
+            del_elsewhere(p);
+        }
+        Program p2(PO_NEW_STYLE);
+        p2.parse(ReadSrc + "int sub getz() { return read(int sub () { return Zed::z; }); } "
+            "int sub geta() { return read(int sub () { return Alpha::v; }); }", "guard2");
+        printf("guard p2 z: %y a: %y\n", p2.callFunction("getz"), p2.callFunction("geta"));
+        kept += p2;
+        printf("guard done\n");
+    }
+}
+
+public class Holder {
+    public {
+        static Guard guard = new Guard();
+    }
+}
+
+public class Zed {
+    public {
+        static int z = 7;
+    }
+}

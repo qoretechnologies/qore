@@ -69,69 +69,73 @@ module LlamaParseDataProvider {
             "groups": (DataProvider::AppGroup::AiLlm, DataProvider::AppGroup::Documents,),
         });
 
-        # every action generated from the vendored LlamaIndex Cloud API description; see
-        # LlamaParseManifest for what is exported and why
-        map DataProviderActionCatalog::registerAction($1),
-            LlamaParseSchema::getActionSet().getActionInfoList(LlamaParseDataProvider::AppName);
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(LlamaParseDataProvider::AppName, sub () {
+            # every action generated from the vendored LlamaIndex Cloud API description; see
+            # LlamaParseManifest for what is exported and why
+            map DataProviderActionCatalog::registerAction($1),
+                LlamaParseSchema::getActionSet().getActionInfoList(LlamaParseDataProvider::AppName);
 
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": LlamaParseDataProvider::AppName,
-            "path": "/" + LlamaParseUploadFileDataProvider::ProviderName,
-            "action": "upload-file",
-            "display_name": "Upload File",
-            "short_desc": "Upload a document so that it can be parsed, extracted from or classified",
-            "desc": "Uploads a document to LlamaParse and returns the stored file.\n\n"
-                "Uploading is worth doing on its own rather than passing a URL to every job: the "
-                "document is stored once and referred to by ID afterwards, so parsing, extracting "
-                "from and classifying the same document costs one transfer rather than three.  It is "
-                "also the way to send a document that is not reachable at a public URL.\n\n"
-                "Give the document either inline as `file_data` or by `file_path`.",
-            "action_code": DPAT_API,
-            "groups": (LlamaParseManifest::GroupFiles,),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                LlamaParseUploadFileRequestDataType::Fields{
-                    "file_data", "file_path", "filename", "purpose",
-                }, {
-                    "preselected": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                LlamaParseUploadFileRequestDataType::Fields - (
-                    "file_data", "file_path", "filename", "purpose",
-                )
-            ),
-            "output_type": LlamaParseUploadFileDataProvider::ResponseType,
-        });
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": LlamaParseDataProvider::AppName,
+                "path": "/" + LlamaParseUploadFileDataProvider::ProviderName,
+                "action": "upload-file",
+                "display_name": "Upload File",
+                "short_desc": "Upload a document so that it can be parsed, extracted from or classified",
+                "desc": "Uploads a document to LlamaParse and returns the stored file.\n\n"
+                    "Uploading is worth doing on its own rather than passing a URL to every job: the "
+                    "document is stored once and referred to by ID afterwards, so parsing, extracting "
+                    "from and classifying the same document costs one transfer rather than three.  It is "
+                    "also the way to send a document that is not reachable at a public URL.\n\n"
+                    "Give the document either inline as `file_data` or by `file_path`.",
+                "action_code": DPAT_API,
+                "groups": (LlamaParseManifest::GroupFiles,),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    LlamaParseUploadFileRequestDataType::Fields{
+                        "file_data", "file_path", "filename", "purpose",
+                    }, {
+                        "preselected": True,
+                    }
+                ) + DataProviderActionCatalog::getActionOptionFromFields(
+                    LlamaParseUploadFileRequestDataType::Fields - (
+                        "file_data", "file_path", "filename", "purpose",
+                    )
+                ),
+                "output_type": LlamaParseUploadFileDataProvider::ResponseType,
+            });
 
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": LlamaParseDataProvider::AppName,
-            "path": "/parse-document",
-            "action": "parse-document",
-            "display_name": "Parse Document and Wait",
-            "short_desc": "Parse a document and wait for the extracted content",
-            "desc": "Submits a document to LlamaParse, waits for parsing to finish, and returns the "
-                "extracted content as markdown, plain text or structured JSON.\n\n"
-                "Use this when the calling flow can wait for the result - a single document, a user "
-                "waiting on a screen.  Use **Parse Document** and **Get Parse Job** instead when the "
-                "job should be started and collected later, which is what a large document or a "
-                "queue of them needs.",
-            "action_code": DPAT_API,
-            "groups": (LlamaParseManifest::GroupParse,),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                LlamaParseRequestDataType::Fields{"url",}, {
-                    "preselected": True, "required": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                LlamaParseRequestDataType::Fields{
-                    "result_type", "parsing_instruction", "language",
-                }, {
-                    "preselected": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                LlamaParseRequestDataType::Fields - (
-                    "url", "result_type", "parsing_instruction", "language",
-                )
-            ),
-            "output_type": LlamaParseDocumentDataProvider::ResponseType,
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": LlamaParseDataProvider::AppName,
+                "path": "/parse-document",
+                "action": "parse-document",
+                "display_name": "Parse Document and Wait",
+                "short_desc": "Parse a document and wait for the extracted content",
+                "desc": "Submits a document to LlamaParse, waits for parsing to finish, and returns the "
+                    "extracted content as markdown, plain text or structured JSON.\n\n"
+                    "Use this when the calling flow can wait for the result - a single document, a user "
+                    "waiting on a screen.  Use **Parse Document** and **Get Parse Job** instead when the "
+                    "job should be started and collected later, which is what a large document or a "
+                    "queue of them needs.",
+                "action_code": DPAT_API,
+                "groups": (LlamaParseManifest::GroupParse,),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    LlamaParseRequestDataType::Fields{"url",}, {
+                        "preselected": True, "required": True,
+                    }
+                ) + DataProviderActionCatalog::getActionOptionFromFields(
+                    LlamaParseRequestDataType::Fields{
+                        "result_type", "parsing_instruction", "language",
+                    }, {
+                        "preselected": True,
+                    }
+                ) + DataProviderActionCatalog::getActionOptionFromFields(
+                    LlamaParseRequestDataType::Fields - (
+                        "url", "result_type", "parsing_instruction", "language",
+                    )
+                ),
+                "output_type": LlamaParseDocumentDataProvider::ResponseType,
+            });
         });
     };
 }

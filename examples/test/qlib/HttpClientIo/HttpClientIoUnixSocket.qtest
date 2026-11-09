@@ -1,26 +1,27 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP and SSE over UNIX domain sockets in temp dirs, missing socket paths, timeouts
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/ServerSentEventHandler
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/RestSchemaValidator.qm
-%requires ../../../../qlib/Swagger.qm
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/HttpClientIo
-%requires ../../../../qlib/HttpClientStreamingIo
-%requires ../../../../qlib/RestClientIo.qm
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires FsUtil
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventHandler
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestSchemaValidator
+%requires Swagger
+%requires RestClient
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+%requires RestClientIo
 
 %try-module json
 %define NoJson

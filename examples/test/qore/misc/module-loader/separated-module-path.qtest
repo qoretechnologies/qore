@@ -1,11 +1,12 @@
 #!/usr/bin/env qore
+# test-platform: macos - module search path resolution of relative and absolute dirs under the symlinked temp dir
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires ../../../../../qlib/QUnit.qm
-%requires ../../../../../qlib/FsUtil.qm
+%requires QUnit
+%requires FsUtil
 %exec-class SeparatedModulePathTest
 
 #! Directory-module metadata must identify the file found in the module search path

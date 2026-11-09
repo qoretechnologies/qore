@@ -260,8 +260,8 @@ class AOTModuleStaleFallbackTest inherits QUnit::Test {
     }
 
     relativeTargetTest() {
-        # qcc writes the -o path as the target; one given relative to the build directory is relative to the
-        # directory of the depfile next to it
+        # qcc writes the real path of the module as the target, also for a relative -o; a relative target, as another
+        # tool can write, is relative to the directory of the depfile next to it
         TmpDir tmp("qore-aot-stale-fallback-");
         string src_dir = tmp.path + "/qlib";
         string qmod_dir = tmp.path + "/build/qlib-qmod";
@@ -271,9 +271,13 @@ class AOTModuleStaleFallbackTest inherits QUnit::Test {
         string out = run(sprintf("cd '%s' && %s QORE_MODULE_DIR=%s %s -m --depfile=Stale.qmod.d "
             "--depfile-module-deps=source -o Stale.qmod %s", qmod_dir, env, src_dir, qcc_bin, src_dir + "/Stale.qm"));
         assertTrue(is_file(qmod_dir + "/Stale.qmod.d"), out);
-        assertRegex("^Stale\\.qmod:", ReadOnlyFile::readTextFile(qmod_dir + "/Stale.qmod.d"));
+        string depfile = ReadOnlyFile::readTextFile(qmod_dir + "/Stale.qmod.d");
+        assertEq(realpath(qmod_dir + "/Stale.qmod"), (depfile =~ x/^([^:]+):/)[0]);
         string module_path = qmod_dir + ":" + src_dir;
         assertEq("v1 Stale.qmod", loadBoth(module_path, tmp.path));
+        # the same rule with a relative target
+        depfile =~ s/^[^:]+:/Stale.qmod:/;
+        write(qmod_dir + "/Stale.qmod.d", depfile);
         changeSource(src_dir);
         assertFallback(loadBoth(module_path, tmp.path));
         # a relative target names the module next to the depfile: one that is not there is not used

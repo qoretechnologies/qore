@@ -43,6 +43,7 @@ extern "C" {
 
 #include <string>
 #include <map>
+#include <set>
 #include <deque>
 #include <memory>
 #include <mutex>
@@ -175,6 +176,16 @@ DLLLOCAL void qore_declare_child_module(const QoreProgramLocation* loc, const ch
 //! returns the feature name in the given module specification (i.e. without any version constraint)
 DLLLOCAL void qore_get_module_spec_name(const char* spec, QoreString& name);
 
+//! the kinds of module loads that QoreModuleManager::checkShadowingLoad() checks
+enum qore_shadow_load_e {
+    //! a load from a file
+    QSL_LOAD,
+    //! a load into a Program container of the caller's that is not private
+    QSL_CONTAINER,
+    //! a load into a private Program container of the caller's
+    QSL_PRIVATE_CONTAINER,
+};
+
 class QoreAbstractModule {
     friend class QoreModuleManager;
     friend class ChildAttachHelper;
@@ -252,6 +263,34 @@ public:
 
     DLLLOCAL void setInitFailed() {
         init_failed = true;
+    }
+
+    //! returns true if the module is library code: it was loaded from a directory of library code
+    /** decided once, when the module was loaded (see QoreModuleManager::isTrustedModulePath()), and recorded when
+        it was registered (see QoreModuleManager::addModule())
+    */
+    DLLLOCAL bool isTrusted() const {
+        return trusted;
+    }
+
+    //! returns true if code that is not trusted loaded the module from outside the directories of library code
+    /** Such a module is given only to code that is not trusted and has the same sandbox (see tenantOwner()); see
+        QoreModuleManager::checkShadowingLoad()
+    */
+    DLLLOCAL bool isTenantChosen() const {
+        return tenant_chosen;
+    }
+
+    //! returns the sandbox of the code that loaded a module for which isTenantChosen() is true, if any
+    DLLLOCAL const QoreSandboxManager* tenantOwner() const {
+        return tenant_owner;
+    }
+
+    //! returns the ID of the Program of the code that loaded a module for which isTenantChosen() is true
+    /** used when that code has no sandbox; QORE_NO_PROGRAM_ID if it has one or had no Program
+    */
+    DLLLOCAL qore_program_id_t tenantOwnerProgramId() const {
+        return tenant_owner_pgm_id;
     }
 
     DLLLOCAL void addModuleReExport(const char* m) {
@@ -368,6 +407,17 @@ protected:
     // true while a thread is attaching this module's children; other threads wait for it to complete so
     // that a module load only returns once its children have been registered
     bool children_attaching = false;
+
+    // true if the module is library code; see isTrusted()
+    bool trusted = false;
+    // true once the module's load has been recorded on it (see QoreModuleManager::addModule())
+    bool load_recorded = false;
+    // true if code that is not trusted chose the module; see isTenantChosen()
+    bool tenant_chosen = false;
+    // the sandbox of that code, if any (a reference); see tenantOwner()
+    QoreSandboxManager* tenant_owner = nullptr;
+    // the ID of the Program of that code if it has no sandbox; see tenantOwnerProgramId()
+    qore_program_id_t tenant_owner_pgm_id = ~(qore_program_id_t)0;
 
     bool priv : 1,
         injected : 1,
@@ -573,6 +623,10 @@ struct DLHelper {
 };
 
 class ModuleLoadMapHelper;
+struct QoreAOTModuleFileInfo;
+
+//! The attributes of the module manager's mutex: an error-checking mutex in a debug build, the default otherwise
+DLLLOCAL const pthread_mutexattr_t* qore_module_manager_mutex_attr();
 
 class QoreModuleManager {
     friend class QoreAbstractModule;
@@ -595,11 +649,11 @@ public:
 
     DLLLOCAL int issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd, ExceptionSink* xsink);
 
-    DLLLOCAL void addModule(QoreAbstractModule* m) {
-        assert(map.find(m->getName()) == map.end());
-        map.insert(module_map_t::value_type(m->getName(), m));
-        //printd(5, "QoreModuleManager::addModule() m: %p '%s'\n", m, m->getName());
-    }
+    //! Registers a module under its current name
+    /** The first time a module is registered, what was decided when it was loaded (see
+        QoreModuleLoadFrameHelper) is recorded on it; a module registered under a new name keeps it
+    */
+    DLLLOCAL void addModule(QoreAbstractModule* m);
 
     DLLLOCAL QoreAbstractModule* findModule(const char* name) {
         AutoLocker al(mutex);
@@ -712,21 +766,91 @@ public:
     DLLLOCAL void getModuleCandidateFiles(const char* name, QoreProgram* pgm, std::vector<std::string>& files);
 
     //! Worker for ModuleManager::registerAOTStaticModule — no dlopen, skip filesystem search
+    /** @param aot_info the metadata record that qcc linked with the module (see qore_aot_register_into_program_v2()),
+        or nullptr; with it, the module's name is checked, an optional module that it was compiled without and that is
+        available now is reported (\c BINARY-MODULE-STALE, as the module has no source to fall back to), and its
+        dependencies are found with its own module path directives (QoreModulePathScope), as for a \c .qmod
+    */
     DLLLOCAL int registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreProgram* tpgm,
-            qore_binary_module_desc_t desc_fn, const char* path);
+            qore_binary_module_desc_t desc_fn, const char* path, const QoreAOTModuleFileInfo* aot_info = nullptr);
 
     DLLLOCAL QoreHashNode* getModuleHash();
     DLLLOCAL QoreListNode* getModuleList();
 
-    DLLLOCAL void addModuleDir(const char* dir) {
-        AutoLocker al(mutex);
-        moduleDirList.push_back(dir);
-    }
+    //! Returns true if a module file or directory is in a directory of library code
+    /** The directories of library code are the directories of the process-wide module path when the library was
+        initialized (\c QORE_MODULE_DIR and the standard module directories, or those set with addModuleDir() before
+        that), as recorded then (see init()).  A directory added to the process-wide module path afterwards, with
+        an unquoted \c %append-module-path directive or with addModuleDirList(), is searched but is not one of them,
+        and neither is a path that a caller names or that a Program adds with \c %prepend-module-path or
+        \c %append-module-path.  A module found in one of them is library code: its initialization runs with no
+        sandbox provenance (see QoreModuleInitSandboxBarrierHelper).
 
-    DLLLOCAL void addModuleDirList(const char* strlist) {
-        AutoLocker al(mutex);
-        moduleDirList.addDirList(strlist);
-    }
+        The file is in such a directory if the name given is an absolute path with no \c "." or \c ".." component
+        under the directory as configured (a module directory can hold links to the files of a build), or if the
+        file it names is under the directory's canonical path.
+
+        @param path the module's file or directory
+        @param load_path if not null and the module is library code, set to the path to load it from: the path as
+        given if it is under the directory as configured, otherwise the canonical path that was checked, so that the
+        file that was found to be library code is the file that is loaded, also if a link on the way is changed
+
+        Reads only data that is set once by init(), so it needs no lock.
+    */
+    DLLLOCAL bool isTrustedModulePath(const char* path, std::string* load_path = nullptr) const;
+
+    //! Returns the path of a module with the name given in a directory of library code, or an empty string
+    /** Looks in each directory of library code (see isTrustedModulePath()) for every form that the module search
+        loads a module from: binary modules for the active API versions and AOT modules, flat and in a split module
+        directory, source modules and separated module directories
+    */
+    DLLLOCAL std::string findTrustedModule(const char* name) const;
+
+    //! Checks a load of a module that is not in the process-wide module path for code that is not trusted
+    /** Sandboxed code, and code whose parse options restrict a functional domain, may not load a module by path, or
+        through module paths that its Program added, under the name of a module in the process-wide module path:
+        feature names are process-wide, so such a module would replace the library module for every later user.
+
+        @param path the module's file
+        @param feature the module's feature name
+        @param trusted the result of isTrustedModulePath() for \a path
+        @param tenant_chosen set to true if the load is for such code and is allowed: the module is then recorded as
+        chosen by that code when it is registered (see QoreAbstractModule::isTenantChosen())
+        @param owner set to the sandbox of that code, if any, a reference that the caller owns
+        @param owner_pgm_id set to the ID of the Program of that code if it has no sandbox
+        @param kind the kind of load: a load into a Program container of that code that is not private cannot have
+        the name of a library module either; a private one has a name of its own
+
+        @return 0 if the load is allowed, -1 if \c LOAD-MODULE-ERROR was raised
+    */
+    DLLLOCAL int checkShadowingLoad(ExceptionSink& xsink, const char* path, const char* feature, bool trusted,
+            bool& tenant_chosen, QoreSandboxManager*& owner, qore_program_id_t& owner_pgm_id,
+            qore_shadow_load_e kind = QSL_LOAD) const;
+
+    //! Returns true if the code running on the current thread may use a module that code that is not trusted chose
+    /** Only code that is not trusted, with the same sandbox as the code that loaded the module, or, if that code has
+        no sandbox, in the same Program; never library code while it is initialized (see qore_module_init_library()),
+        nor while the child modules of a library module are attached, nor for a load into the Program of a library
+        module (\a pgm, the target of the load, if any), whose modules every caller uses
+    */
+    DLLLOCAL static bool mayUseTenantModule(const QoreAbstractModule& mi, const QoreProgram* pgm);
+
+    //! Adds a directory to the process-wide module path; ignored for code that is not trusted
+    /** see qore_caller_is_untrusted(); a directory added after init() is not a directory of library code (see
+        isTrustedModulePath())
+    */
+    DLLLOCAL void addModuleDir(const char* dir);
+
+    //! Adds a list of directories to the process-wide module path; ignored for code that is not trusted
+    /** see addModuleDir()
+    */
+    DLLLOCAL void addModuleDirList(const char* strlist);
+
+    //! Returns true if the code parsed by the Program given can extend the process-wide module path
+    /** Not for code that is not trusted (see qore_caller_is_untrusted()), nor for a Program that a sandbox governs
+        or whose parse options restrict a functional domain
+    */
+    DLLLOCAL static bool mayChangeModulePath(const QoreProgram* pgm);
 
     DLLLOCAL void addStandardModulePaths();
 
@@ -831,6 +955,14 @@ public:
 
     DLLLOCAL int addModuleToBlacklist(const char* name, const char* msg);
 
+    //! Adds the names of the modules that the loaded module \a name requires directly to \a deps
+    /** For a user module loaded from its source, the user and binary modules it loaded while it was parsed; for an
+        AOT module, the dependencies its descriptor names; for a native binary module, those it declares
+        (qore_module_dependencies).  Nothing is added for a module that is not loaded.  qcc lists the files of the
+        modules a module requires, directly or not, in the depfile of an AOT module (see qore_aot_deps.h).
+    */
+    DLLLOCAL void getModuleDependencies(const char* name, strset_t& deps);
+
     //! Returns true if the module dependency map already has a path from \a from to \a to
     /** A path from \a from to \a to means that \a to must be deleted before \a from; adding the reverse edge
         would make a cycle, which module teardown (delUser()) cannot resolve.  The mutex must be held when
@@ -912,8 +1044,13 @@ private:
     DLLLOCAL void clearModuleLoadWaitEdge(int tid);
 
 protected:
-    // mutex for atomicity
-    QoreThreadLock mutex;
+    //! mutex for atomicity
+    /** Not recursive: a thread that takes it twice deadlocks, and one that releases it without holding it (as
+        UnlockedModuleProgramRelease and the loaders that release it while a module initializes do) corrupts it.  In a
+        debug build it is an error-checking mutex, so either mistake fails an assertion in QoreThreadLock instead;
+        see qore_module_manager_mutex_attr()
+    */
+    QoreThreadLock mutex{qore_module_manager_mutex_attr()};
 
     // user module dependency map: module -> dependents
     ModMap md_map;
@@ -964,6 +1101,21 @@ protected:
 
     // list of module directories
     UniqueDirectoryList moduleDirList;
+
+    //! a directory of library code; see isTrustedModulePath()
+    struct TrustedModuleDir {
+        //! the directory as configured, if it is an absolute path with no "." or ".." component; otherwise empty
+        std::string named;
+        //! the directory's canonical path, if it existed when it was recorded; otherwise empty
+        std::string real;
+    };
+    //! the directories of library code: the process-wide module path when the library was initialized
+    /** set once by init(), before the library is used, and never changed, so it is read without the mutex
+    */
+    std::vector<TrustedModuleDir> trusted_module_dirs;
+
+    //! Records the directories of the process-wide module path as the directories of library code
+    DLLLOCAL void setTrustedModuleDirs();
 
     DLLLOCAL QoreAbstractModule* loadModuleIntern(const char* name, QoreProgram* pgm, ExceptionSink& xsink) {
         AutoLocker sl(mutex); // make sure checking and loading are atomic
@@ -1017,6 +1169,32 @@ protected:
             QoreModuleInfo& mod_info, const char* path, const char* feature = nullptr, bool reexport = false,
             QoreProgram* mpgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
             ModuleLoadMapHelper* load_guard = nullptr);
+
+    //! Checks that the modules an AOT module of a build tree was compiled with are the ones it was compiled against
+    /** A module of a build tree has the depfile that qcc wrote next to it; for any other module nothing is checked.
+        The modules checked are the dependencies of its descriptor and the modules its metadata says it was compiled
+        with (those it requires, directly or not, and those they re-export); a module that is loaded is checked as it
+        is loaded, and one that is not as findModuleFileUnlocked() finds it.  A module is the one compiled against if
+        the file it comes from is listed in the depfile, is a copy of a listed file (the same name, size and content),
+        or is an AOT module of a build tree whose own sources are listed (an AOT module without a depfile is not
+        checked).  The mutex must be held.
+
+        @param aot_info the metadata of the AOT module
+        @param stale_desc set to why the AOT module is out of date
+
+        @return true if the AOT module is out of date; false if it is not, if it is not checked, or if the check was
+        cancelled (an exception is then raised in \a xsink, which the caller must check)
+    */
+    DLLLOCAL bool checkAOTModuleDependencyFiles(ExceptionSink& xsink, const char* path, const char* feature,
+            const QoreAOTModuleFileInfo& aot_info, QoreProgram* pgm, std::string& stale_desc);
+
+    //! Returns the file that loadModuleIntern() would load module \a name from, or an empty string
+    /** The search order of loadModuleIntern() in the module path of \a pgm, without loading anything: in each
+        directory the binary forms, those in a directory of the module's name, the source and a module directory.
+        The directories of the AOT modules whose dependencies this thread resolves for \a pgm are searched as well
+        (see QoreModulePathScope).  The mutex must be held.
+    */
+    DLLLOCAL std::string findModuleFileUnlocked(const char* name, QoreProgram* pgm);
 
     //! Load direct AOT descriptor dependencies while the parent module owns a load-map reservation.
     DLLLOCAL int loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
@@ -1304,6 +1482,8 @@ public:
 
     DLLLOCAL ~UnlockedModuleProgramRelease() {
         if (holder) {
+            // the mutex must be held here; in a debug build releasing it without holding it fails an assertion (see
+            // QoreModuleManager::mutex)
             AutoUnlocker au(QMM.mutex);
             holder = nullptr;
         }

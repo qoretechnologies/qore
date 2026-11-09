@@ -64,9 +64,11 @@ class LoopLocalUninstantiateTest inherits QUnit::Test {
             hash<string, int> results = runWorker(mode);
             checkGrowth(mode, results);
             if (mode == "ir") {
-                # the object of the branch that continues is recorded, so the growth checks test the list: a loop
-                # whose locals the IR interpreter keeps only in its own slots would pass them trivially
-                assertGt(0, results."object-recorded", "ir: the loop's object is recorded in the list");
+                # the list loop's and the placement loop's locals are recorded, so the growth checks test the list: a
+                # loop whose locals the IR interpreter keeps only in its own slots would pass them trivially (as the
+                # object loop's now do: the IR keeps an object local in its own storage)
+                assertGt(0, results."list-recorded", "ir: the list loop's list is recorded in the list");
+                assertGt(0, results."placement-recorded", "ir: the placement loop's locals are recorded in the list");
             }
         }
     }

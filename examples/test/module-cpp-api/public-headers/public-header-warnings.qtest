@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - public C++ headers compiled with the system compiler (Apple clang) without warnings
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # A module that includes <qore/Qore.h> and compiles with -Wall -Wextra gets no warnings from the public headers: with

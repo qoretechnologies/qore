@@ -6,10 +6,10 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./PgsqlTestIsolation.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/PgsqlSqlUtilBase.qm
-%requires ../../../../qlib/JdbcPostgresqlSqlUtil.qm
-%requires ../../../../qlib/BulkSqlUtil
+%requires QUnit
+%requires PgsqlSqlUtilBase
+%requires JdbcPostgresqlSqlUtil
+%requires BulkSqlUtil
 
 %try-module jni
 %define NO_JNI

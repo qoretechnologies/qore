@@ -273,6 +273,20 @@ public:
     QoreIRValue lowerDotEval(const QoreValue& expr, std::string& error);
     QoreIRValue lowerFoldl(const QoreValue& expr, std::string& error);
     QoreIRValue lowerFoldr(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerFoldlImpl(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerFoldrImpl(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerMapImpl(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerSelectImpl(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerMapSelectImpl(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerHashMapImpl(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerHashMapSelectImpl(const QoreValue& expr, std::string& error);
+    //! Lowers a functional operator and releases its source, if it is a temporary, once the operator has run
+    template <typename F>
+    QoreIRValue lowerWithSourceRelease(const QoreValue& expr, const QoreValue& source,
+            const QoreProgramLocation* loc, bool always_ref,
+            std::string& error, F&& lower);
+    //! Sets the source of the functional operator being lowered to the base source of its fused pipeline
+    void setFunctionalBaseSource(const QoreValue& base_source);
     QoreIRValue lowerMap(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSelect(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMapSelect(const QoreValue& expr, std::string& error);
@@ -638,6 +652,26 @@ private:
 
     //! Returns true when a concrete constant container can be loaded once instead of rebuilt per read
     bool constantContainerLoadsByReference(const QoreValue& expr) const;
+
+    //! Releases the temporaries of the elements of a list or hash literal once the container holds them
+    template <typename F>
+    void releaseContainerElementTemps(const std::vector<QoreIRValue>& values, F&& element_expr,
+            const QoreProgramLocation* loc);
+
+    //! Lowers an expression (see lowerExpression(), which records the value of a functional operator's source)
+    QoreIRValue lowerExpressionImpl(const QoreValue& expr, std::string& error);
+
+    //! The source of a functional operator being lowered and the value it gave, for its release after the operator
+    struct FunctionalSourceCapture {
+        const AbstractQoreNode* node = nullptr;
+        QoreIRValue value;
+        //! true if the operator's value can be the source's (a source that is not known to be a list)
+        bool may_alias = false;
+    };
+    //! The sources of the functional operators being lowered, innermost last
+    std::vector<FunctionalSourceCapture> functional_source_captures;
+    //! Releases the temporary that a functional operator's source gave once the operator has run (see the definition)
+    class FunctionalSourceRelease;
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;

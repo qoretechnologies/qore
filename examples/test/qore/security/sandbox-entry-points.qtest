@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - stat/statvfs/mkdir -p/chown/glob under sandbox policy, zoneinfo region path escapes
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # Filesystem entry points that bypassed the sandbox filesystem policy or the PO_NO_FILESYSTEM parse option: the static

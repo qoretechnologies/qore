@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - process environment locking across setenv, fork() and exec() while other threads run
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

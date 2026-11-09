@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - non-blocking File I/O, descriptor redirection and poll readiness of regular files
 
 %modern
 

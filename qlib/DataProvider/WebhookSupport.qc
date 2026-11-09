@@ -66,8 +66,14 @@ public class DataProviderWebhook {
         @param destroy a callback for deleting webhooks; takes the hash returned by \a create
 
         @throw WEBHOOK-API-ERROR the webhook APIs are already registered
+        @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller
     */
     static registerWebhookApis(code create, code destroy) {
+        # process-wide callbacks run on the threads of every interface that creates a webhook
+        if (SandboxManager::isSandboxed()) {
+            throw "DATA-PROVIDER-CALLBACK-ERROR", "code that a sandbox governs cannot register the webhook APIs: they "
+                "would run on the threads of other tenants and of trusted code";
+        }
         if (webhookCreate) {
             throw "WEBHOOK-API-ERROR", "Webhook APIs are already registered";
         }

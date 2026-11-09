@@ -1,0 +1,20 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# LazyAppActionsSandboxedLoad.qm - test module that sandboxed code loads, whose initialization reads an app
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+%requires ./LazyAppActionsHooks.qm
+
+module LazyAppActionsSandboxedLoad {
+    version = "1.0";
+    desc = "test module whose initialization reads the catalog under the sandbox of the Program loading it";
+    author = "Qore Technologies";
+    license = "MIT";
+    init = sub () {
+        # the code that the test sets runs here, in the thread loading the module, under the loader's sandbox
+        LazyAppActionsHooks::Hooks::run("LazyAppActionsSandboxedLoad");
+    };
+}

@@ -21,6 +21,8 @@ class ModuleContainerReleaseTest inherits QUnit::Test {
         addTestCase("a container for an already-loaded module is released", \testAlreadyLoaded());
         addTestCase("a container for a refused module name is released", \testRefusedName());
         addTestCase("a module name with a NUL character cannot be blacklisted", \testBlacklistNul());
+        addTestCase("the exit hook of a released container calls its class from another Program",
+            \testExitHookCallsClass());
         set_return_value(main());
     }
 
@@ -65,6 +67,44 @@ class ModuleContainerReleaseTest inherits QUnit::Test {
         released.inc();
         assertThrows("LOAD-MODULE-ERROR", \p.loadUserModuleWithProgramWarn(), ("Util\x00.txt", container(released)));
         assertEq(0, released.getCount(), "Program::loadUserModuleWithProgramWarn() releases the container");
+    }
+
+    #! the container's exit hook runs when its last reference is released, and calls a method of the container's class
+    #! through another Program
+    /** The container cannot be referenced any more, but the thread deleting it runs its code: the call raised
+        PROGRAM-ERROR when the exit hook ran before the thread recorded that it deletes the container
+    */
+    testExitHookCallsClass() {
+        Program b(PO_NEW_STYLE);
+        b.parse("auto sub call(object o) { return o.m(); }", "b");
+        Counter released(1);
+        Queue results();
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            class Watch {
+                private { Counter released; }
+                constructor(Counter released) { self.released = released; }
+                destructor() { released.dec(); }
+                string m() { return \"m\"; }
+            }
+            our *Watch watch;
+            sub init(Counter released, Program b, Queue results) {
+                watch = new Watch(released);
+                register_exit_hook(sub () {
+                    try {
+                        results.push(b.callFunction(\"call\", watch));
+                    } catch (hash<ExceptionInfo> ex) {
+                        results.push(ex.err + \": \" + ex.desc);
+                    }
+                });
+            }
+        ", "container");
+        p.callFunction("init", released, b, results);
+        # the call releases the last reference to the container, which runs its exit hook in this thread
+        load_user_module_with_program("Util", remove p);
+        assertEq(1, results.size(), "the exit hook ran when the container was released");
+        assertEq("m", results.get(0), "the exit hook called the method of the container's class");
+        assertEq(0, released.getCount(), "the container was released");
     }
 
     testBlacklistNul() {

@@ -1,0 +1,19 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# LazyAppActionsFailedLoad.qm - test module whose initialization registers a lazy value and fails
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+%requires ./LazyAppActionsHooks.qm
+
+module LazyAppActionsFailedLoad {
+    version = "1.0";
+    desc = "test module whose initialization runs the code that the test sets, which fails";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        LazyAppActionsHooks::Hooks::run("LazyAppActionsFailedLoad");
+    };
+}

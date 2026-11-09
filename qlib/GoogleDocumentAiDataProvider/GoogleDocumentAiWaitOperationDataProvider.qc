@@ -11,11 +11,20 @@ public class GoogleDocumentAiWaitOperationDataProvider inherits GoogleDocumentAi
             "constructor_options": ConstructorOptions};
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys});
-        static HashDataType RequestType;
-        static AbstractDataProviderType ResponseType;
     }
 
-    private { static Mutex type_lock(); }
+    private {
+        #! The request type, built on first use; see requestType()
+        static *HashDataType request_type;
+        #! The response type, built on first use; see responseType()
+        static *AbstractDataProviderType response_type;
+    }
+
+    private {
+        #! The ID of the builder of the types; see initializeTypes()
+        static int types_id = DataProviderActionCatalog::registerLazyValue(
+            \GoogleDocumentAiWaitOperationDataProvider::buildTypes());
+    }
 
     #! Creates the helper over the existing authenticated transport
     /** @param rest authenticated client
@@ -29,10 +38,34 @@ public class GoogleDocumentAiWaitOperationDataProvider inherits GoogleDocumentAi
     /** @param options options declared by ConstructorOptions */
     constructor(*hash<auto> options) : GoogleDocumentAiDataProviderCommon(options) {}
 
+    #! Returns the request type, which is built on first use
+    /** It is built from the vendored API description, so loading the module does not parse it
+    */
+    static HashDataType requestType() {
+        initializeTypes();
+        return request_type;
+    }
+
+    #! Returns the response type, which is built on first use
+    /** It is built from the vendored API description, so loading the module does not parse it
+    */
+    static AbstractDataProviderType responseType() {
+        initializeTypes();
+        return response_type;
+    }
+
     #! Initializes helper types after inventory publication
-    static initializeTypes() {
-        AutoLock al(type_lock);
-        if (RequestType) { return; }
+    private static initializeTypes() {
+        if (!request_type) {
+            hash<auto> types = DataProviderActionCatalog::getLazyValue(types_id);
+            # the request type is set last: it tells that both are set
+            response_type = types.response;
+            request_type = types.request;
+        }
+    }
+
+    #! Builds the types; see initializeTypes()
+    private static hash<auto> buildTypes() {
         HashDataType request("GoogleDocumentAiWaitOperationRequest");
         request.addQoreFields({
             "operation_id": {"type": AbstractDataProviderTypeMap."string", "required": True,
@@ -49,14 +82,13 @@ public class GoogleDocumentAiWaitOperationDataProvider inherits GoogleDocumentAi
         });
         list<AbstractDataProviderType> outcomes = map OpenApi3::OpenApi3HashDataType::forResponse(
             $1.getSchema().getTypeForReference("GoogleLongrunningOperation")), GoogleDocumentAiSchema::getActionSets();
-        ResponseType = new QoreUnionDataType(outcomes);
-        RequestType = request;
+        return {"request": request, "response": new QoreUnionDataType(outcomes)};
     }
 
     string getName() { return ProviderInfo.name; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
-    private *AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
-    private *AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *AbstractDataProviderType getRequestTypeImpl() { return requestType(); }
+    private *AbstractDataProviderType getResponseTypeImpl() { return responseType(); }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         timeout overall = req.operation_timeout ?? 5m;

@@ -4,10 +4,13 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+# qlib-requires-by-path: the test runs the AOT-compiled modules; by name, a module not built would load its source
 %requires ../../../../qlib/Schema/Schema.qmod
+# qlib-requires-by-path: the test runs the AOT-compiled modules; by name, a module not built would load its source
 %requires ../../../../qlib/SqlUtil/SqlUtil.qmod
 %requires json
 
+# qlib-requires-by-path: the test runs the AOT-compiled modules; by name, a module not built would load its source
 %requires ../../../../qlib/QUnit.qmod
 
 %exec-class DataSchemaTest

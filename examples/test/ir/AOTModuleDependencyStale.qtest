@@ -1,0 +1,666 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+%requires ../TestFileTime.qm
+
+%exec-class AOTModuleDependencyStaleTest
+
+#! An AOT module of a build tree is out of date when anything it was compiled from changes
+/** Beyond the module's own sources (see AOTModuleStaleFallback.qtest), these are:
+    - a file that a %include directive of the module opened: qcc lists it in the module's depfile;
+    - a module that a dependency of the module re-exports, or that a dependency requires: the depfile lists the
+      modules the module requires directly or not, as the module sees their declarations;
+    - the module that is loaded for a dependency: when it is another module than the one the module was compiled
+      against (one that appeared in a directory of the module path that is searched first), the module is out of
+      date (\c AOT-MODULE-STALE), and its source module is loaded instead.
+    See design/aot-linked-module-sources.md.
+*/
+class AOTModuleDependencyStaleTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTModuleDependencyStaleTest", "1.0", \ARGV) {
+        qore_bin = AOTModuleDependencyStaleTest::absolutePath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]
+            ?? "qore");
+        libqore_dir = normalize_dir(ENV.QORE_LIBDIR ?? dirname(qore_bin));
+        qcc_bin = AOTModuleDependencyStaleTest::absolutePath(ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc"));
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+
+        addTestCase("a changed include file makes a module out of date", \includeTest());
+        addTestCase("a changed module that a dependency re-exports makes a module out of date", \transitiveTest());
+        addTestCase("a module loaded for a dependency from another file makes a module out of date",
+            \shadowedDependencyTest());
+        addTestCase("a module a dependency re-exports, loaded from another file, makes a module out of date",
+            \reexportShadowTest());
+        addTestCase("a module further down the chain, loaded from another file, makes a module out of date",
+            \chainShadowTest());
+        addTestCase("without a source module, an out-of-date AOT module is not loaded", \noSourceTest());
+        addTestCase("another build of a native module is a different module unless it is an identical copy",
+            \nativeModuleTest());
+        addTestCase("a module compiled with a relative output path is checked", \relativeOutputTest());
+        addTestCase("a module file the sandbox does not let the loader read is not read", \sandboxDeniedTest());
+        addTestCase("the module check of library code is not governed by the sandbox of the code that loads it",
+            \sandboxLibraryTest());
+        addTestCase("an include file named like a module is not that module", \includedModuleNameTest());
+        addTestCase("a dependency is found as the module's own module path directives find it",
+            \modulePathDirectiveTest());
+        addTestCase("a dependency of the descriptor is loaded as the module's own module path directives find it",
+            \modulePathDescriptorDependencyTest());
+        addTestCase("a dependency or fingerprint file that is not a regular file is not read", \fifoDepfileTest());
+        addTestCase("a module required by the path of its AOT module is checked as when found by name",
+            \explicitPathTest());
+        set_return_value(main());
+    }
+
+    private static string absolutePath(string path) {
+        return path =~ /\// ? normalize_dir(path) : path;
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! sets the modification time of a file to a time after any build
+    private touchLater(string path) {
+        TestFileTime::set_file_times(2030-01-01T00:00:00Z, path);
+    }
+
+    #! writes the source of a module with the given directives and body
+    private writeModule(string dir, string name, string directives, string body) {
+        write(sprintf("%s/%s.qm", dir, name), sprintf("%%modern\n%s\nmodule %s { version = \"1.0\"; "
+            "desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n%s\n", directives, name, body));
+    }
+
+    #! compiles module \a name from \a src_dir into \a qmod_dir, with its depfile, as a build tree does
+    private compile(string module_path, string src_dir, string qmod_dir, string name) {
+        string qmod = sprintf("%s/%s.qmod", qmod_dir, name);
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m --depfile=%s.d --depfile-module-deps=source -o %s %s",
+            env, module_path, qcc_bin, qmod, qmod, sprintf("%s/%s.qm", src_dir, name)));
+        assertTrue(is_file(qmod), "compiled " + name + ": " + out);
+        assertTrue(is_file(qmod + ".d"), "depfile of " + name + ": " + out);
+    }
+
+    #! returns the dependencies that a depfile lists
+    private list<string> depfileDeps(string depfile) {
+        string text = ReadOnlyFile::readTextFile(depfile);
+        text =~ s/\\\n/ /g;
+        list<string> l = (text =~ x/^[^:]+:(.*)$/)[0].split(" ");
+        return map $1, l, $1.val();
+    }
+
+    #! runs a script with %requires in a child process, as a test run by run_tests.sh does, and returns its output
+    /** The script prints the value of \a expr and the file that each named module was loaded from
+    */
+    private string runRequires(string module_path, string script_dir, string name, string expr,
+            *string prefix) {
+        string script = script_dir + "/requires.q";
+        write(script, sprintf("%%modern\n%%requires %s\nprintf(\"%%s %%s\\n\", %s, "
+            "basename(get_module_hash().%s.filename));\n", name, expr, name));
+        return trim(run(sprintf("%s QORE_MODULE_DIR=%s %s%s %s", env, module_path, prefix ?? "", qore_bin, script)));
+    }
+
+    #! returns a command prefix that ends a command after the given number of seconds, or NOTHING if none is found
+    /** bounds a run that blocked before a fix, so that the test fails instead of stopping
+    */
+    private *string timeoutPrefix(int secs) {
+        string cmd = trim(backquote("command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true"));
+        if (cmd) {
+            return sprintf("%s %d ", cmd, secs);
+        }
+        string perl = trim(backquote("command -v perl 2>/dev/null || true"));
+        return perl ? sprintf("%s -e 'alarm shift; exec @ARGV' %d ", perl, secs) : NOTHING;
+    }
+
+    includeTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        write(src_dir + "/part.ql", "const Value = \"v1\";\n");
+        writeModule(src_dir, "Inc", "", "%include part.ql\npublic namespace Inc { public string sub value() { "
+            "return Value; } }");
+        compile(src_dir, src_dir, qmod_dir, "Inc");
+        # the depfile lists the include file
+        assertTrue(inlist(normalize_dir(src_dir) + "/part.ql", depfileDeps(qmod_dir + "/Inc.qmod.d")));
+        string module_path = qmod_dir + ":" + src_dir;
+        assertEq("v1 Inc.qmod", runRequires(module_path, tmp.path, "Inc", "Inc::value()"));
+
+        # the include file got another modification time only: the module is loaded
+        touchLater(src_dir + "/part.ql");
+        assertEq("v1 Inc.qmod", runRequires(module_path, tmp.path, "Inc", "Inc::value()"));
+
+        # the include file changed: the module is out of date, and its source is loaded
+        write(src_dir + "/part.ql", "const Value = \"v2\";\n");
+        touchLater(src_dir + "/part.ql");
+        string out = runRequires(module_path, tmp.path, "Inc", "Inc::value()");
+        assertEq("v2 Inc.qm", out.split("\n").last(), out);
+        assertRegex("AOT module '.*/Inc\\.qmod' for feature 'Inc' is out of date: its source '.*/part\\.ql' has "
+            "changed", out);
+    }
+
+    transitiveTest() {
+        # Top requires Mid, which re-exports Base; Top uses a class of Base
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        writeModule(src_dir, "Base", "", "public namespace Base { public class Value { public { string v = "
+            "\"v1\"; } } }");
+        writeModule(src_dir, "Mid", "%requires(reexport) Base", "public namespace Mid { public int sub one() { "
+            "return 1; } }");
+        writeModule(src_dir, "Top", "%requires Mid", "public namespace Top { public string sub value() { "
+            "return (new Base::Value()).v; } }");
+        string module_path = qmod_dir + ":" + src_dir;
+        compile(module_path, src_dir, qmod_dir, "Base");
+        compile(module_path, src_dir, qmod_dir, "Mid");
+        compile(module_path, src_dir, qmod_dir, "Top");
+        # the depfile lists the sources of the module that the dependency re-exports
+        assertTrue(inlist(normalize_dir(src_dir) + "/Base.qm", depfileDeps(qmod_dir + "/Top.qmod.d")));
+        assertEq("v1 Top.qmod", runRequires(module_path, tmp.path, "Top", "Top::value()"));
+
+        # Base changed: Top is out of date too
+        writeModule(src_dir, "Base", "", "public namespace Base { public class Value { public { string v = "
+            "\"v2\"; } } }");
+        touchLater(src_dir + "/Base.qm");
+        string out = runRequires(module_path, tmp.path, "Top", "Top::value()");
+        assertEq("v2 Top.qm", out.split("\n").last(), out);
+        assertRegex("AOT module '.*/Top\\.qmod' for feature 'Top' is out of date: its source '.*/Base\\.qm' has "
+            "changed", out);
+    }
+
+    shadowedDependencyTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        string shadow_dir = tmp.path + "/shadow";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        mkdir(shadow_dir);
+        writeModule(src_dir, "Dep", "", "public namespace Dep { public string sub value() { return \"dep\"; } }");
+        writeModule(src_dir, "User", "%requires Dep", "public namespace User { public string sub value() { "
+            "return Dep::value(); } }");
+        string module_path = qmod_dir + ":" + src_dir;
+        compile(module_path, src_dir, qmod_dir, "Dep");
+        compile(module_path, src_dir, qmod_dir, "User");
+
+        # Dep is loaded from its AOT module, which was compiled from the sources User was compiled against
+        assertEq("dep User.qmod", runRequires(module_path, tmp.path, "User", "User::value()"));
+        # Dep is loaded from its source, which User was compiled against: User's module is found through a link in a
+        # directory of its own, which is searched first
+        string user_dir = tmp.path + "/user";
+        mkdir(user_dir);
+        symlink(qmod_dir + "/User.qmod", user_dir + "/User.qmod");
+        string out = runRequires(user_dir + ":" + src_dir, tmp.path, "User", "User::value()");
+        assertEq("dep User.qmod", out, out);
+
+        # a copy of the same Dep in a directory that is searched first: the module compiled against
+        string copy_dir = tmp.path + "/copy";
+        mkdir(copy_dir);
+        write(copy_dir + "/Dep.qm", ReadOnlyFile::readTextFile(src_dir + "/Dep.qm"));
+        out = runRequires(copy_dir + ":" + module_path, tmp.path, "User", "User::value()");
+        assertEq("dep User.qmod", out, out);
+
+        # an AOT module of Dep compiled by hand without a depfile, in a directory that is searched first: what it was
+        # compiled from is not known, so it is not checked, as the loader does not check such a module's sources
+        string hand_dir = tmp.path + "/hand";
+        mkdir(hand_dir);
+        out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m -o %s/Dep.qmod %s/Dep.qm", env, src_dir, qcc_bin, hand_dir,
+            src_dir));
+        assertTrue(is_file(hand_dir + "/Dep.qmod"), out);
+        out = runRequires(hand_dir + ":" + module_path, tmp.path, "User", "User::value()");
+        assertEq("dep User.qmod", out, out);
+
+        # another Dep in a directory that is searched first: User is out of date, and its source is loaded
+        writeModule(shadow_dir, "Dep", "", "public namespace Dep { public string sub value() { return \"other\"; } "
+            "}");
+        out = runRequires(shadow_dir + ":" + module_path, tmp.path, "User", "User::value()");
+        assertEq("other User.qm", out.split("\n").last(), out);
+        assertRegex("AOT module '.*/User\\.qmod' for feature 'User' is out of date: it was compiled against other "
+            "files of module 'Dep' than '.*/shadow/Dep\\.qm'", out);
+    }
+
+    #! writes the Base, Mid and Top modules: Top requires Mid, which requires or re-exports Base; Top uses Base
+    private writeChain(string src_dir, bool reexport) {
+        writeModule(src_dir, "Base", "", "public namespace Base { public class Value { public { string v = "
+            "\"base\"; } } }");
+        writeModule(src_dir, "Mid", reexport ? "%requires(reexport) Base" : "%requires Base",
+            "public namespace Mid { public string sub value() { return (new Base::Value()).v; } }");
+        writeModule(src_dir, "Top", "%requires Mid", "public namespace Top { public string sub value() { "
+            "return Mid::value(); } }");
+    }
+
+    reexportShadowTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        string shadow_dir = tmp.path + "/shadow";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        mkdir(shadow_dir);
+        writeChain(src_dir, True);
+        string module_path = qmod_dir + ":" + src_dir;
+        foreach string name in ("Base", "Mid", "Top") {
+            compile(module_path, src_dir, qmod_dir, name);
+        }
+        assertEq("base Top.qmod", runRequires(module_path, tmp.path, "Top", "Top::value()"));
+        # the module Mid re-exports is not a dependency of its descriptor: it is found through Mid's depfile
+        writeModule(shadow_dir, "Base", "", "public namespace Base { public class Value { public { string v = "
+            "\"other\"; } } }");
+        string out = runRequires(shadow_dir + ":" + module_path, tmp.path, "Mid", "Mid::value()");
+        assertEq("other Mid.qm", out.split("\n").last(), out);
+        assertRegex("AOT module '.*/Mid\\.qmod' for feature 'Mid' is out of date: it was compiled against other "
+            "files of module 'Base' than '.*/shadow/Base\\.qm'", out);
+        out = runRequires(shadow_dir + ":" + module_path, tmp.path, "Top", "Top::value()");
+        assertEq("other Top.qm", out.split("\n").last(), out);
+        assertRegex("AOT module '.*/Top\\.qmod' for feature 'Top' is out of date: it was compiled against other "
+            "files of module '(Base|Mid)'", out);
+    }
+
+    chainShadowTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        string shadow_dir = tmp.path + "/shadow";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        mkdir(shadow_dir);
+        writeChain(src_dir, False);
+        string module_path = qmod_dir + ":" + src_dir;
+        foreach string name in ("Base", "Mid", "Top") {
+            compile(module_path, src_dir, qmod_dir, name);
+        }
+        # Mid comes from its source, which then loads another Base: Top, which requires Base only through Mid, is
+        # out of date too
+        unlink(qmod_dir + "/Mid.qmod");
+        writeModule(shadow_dir, "Base", "", "public namespace Base { public class Value { public { string v = "
+            "\"other\"; } } }");
+        string out = runRequires(shadow_dir + ":" + module_path, tmp.path, "Top", "Top::value()");
+        assertEq("other Top.qm", out.split("\n").last(), out);
+        assertRegex("AOT module '.*/Top\\.qmod' for feature 'Top' is out of date: it was compiled against other "
+            "files of module 'Base' than '.*/shadow/Base\\.qm'", out);
+    }
+
+    noSourceTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        string shadow_dir = tmp.path + "/shadow";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        mkdir(shadow_dir);
+        writeModule(src_dir, "Dep", "", "public namespace Dep { public string sub value() { return \"dep\"; } }");
+        writeModule(src_dir, "User", "%requires Dep", "public namespace User { public string sub value() { "
+            "return Dep::value(); } }");
+        string module_path = qmod_dir + ":" + src_dir;
+        compile(module_path, src_dir, qmod_dir, "Dep");
+        compile(module_path, src_dir, qmod_dir, "User");
+        unlink(qmod_dir + "/Dep.qmod");
+        writeModule(shadow_dir, "Dep", "", "public namespace Dep { public string sub value() { return \"other\"; } "
+            "}");
+        # User's source is not in the module path: an identical copy of the Dep it was compiled against is the same
+        # module, so its AOT module is loaded
+        string copy_dir = tmp.path + "/copy";
+        mkdir(copy_dir);
+        write(copy_dir + "/Dep.qm", ReadOnlyFile::readTextFile(src_dir + "/Dep.qm"));
+        string out = runRequires(copy_dir + ":" + qmod_dir, tmp.path, "User", "User::value()");
+        assertEq("dep User.qmod", out, out);
+
+        # another Dep: the AOT module is out of date, and without its source no module can be loaded for User
+        out = runRequires(shadow_dir + ":" + qmod_dir, tmp.path, "User", "User::value()");
+        assertRegex("AOT-MODULE-STALE: AOT module '.*/User\\.qmod' for feature 'User' is out of date: it was "
+            "compiled against other files of module 'Dep' than '.*/shadow/Dep\\.qm'", out);
+        # the script did not run
+        assertNRegex("(?m)^other User", out);
+        assertNRegex("BINARY-MODULE-STALE", out);
+    }
+
+    nativeModuleTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        string other_dir = tmp.path + "/installed";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        mkdir(other_dir);
+        # the directory of the json module of this process, which the module is compiled against
+        string json_file = trim(run(sprintf("%s %s -l json -X 'get_module_hash().json.filename'", env, qore_bin)));
+        json_file =~ s/^\"//;
+        json_file =~ s/\"$//;
+        assertTrue(is_file(json_file), json_file);
+        string json_dir = dirname(json_file);
+        writeModule(src_dir, "User", "%requires json", "public namespace User { public string sub value() { "
+            "return make_json({\"a\": 1}); } }");
+        string module_path = qmod_dir + ":" + src_dir + ":" + json_dir;
+        compile(module_path, src_dir, qmod_dir, "User");
+        # an identical copy of json in a directory that is searched first: the module compiled against
+        string other = other_dir + "/" + basename(json_file);
+        assertEq(0, system(sprintf("cp '%s' '%s'", json_file, other)));
+        string out = runRequires(other_dir + ":" + module_path, tmp.path, "User", "User::value()");
+        assertEq("{\"a\":1} User.qmod", out, out);
+
+        # another build of json, with the same name and module API version but other bytes: AOT code depends on more of
+        # a native module than the names of its symbols, so User is out of date, and its source is loaded
+        assertEq(0, system(sprintf("printf 'another build' >> '%s'", other)));
+        out = runRequires(other_dir + ":" + module_path, tmp.path, "User", "User::value()");
+        assertEq("{\"a\":1} User.qm", out.split("\n").last(), out);
+        assertRegex("AOT module '.*/User\\.qmod' for feature 'User' is out of date: it was compiled against other "
+            "files of module 'json' than '.*/installed/json[^']*\\.qmod'", out);
+    }
+
+    relativeOutputTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        writeModule(src_dir, "Rel", "", "public namespace Rel { public string sub value() { return \"v1\"; } }");
+        # qcc runs in the tree's root with an output path relative to it
+        string out = run(sprintf("cd %s && %s QORE_MODULE_DIR=%s %s -m --depfile=build/qlib-qmod/Rel.qmod.d "
+            "--depfile-module-deps=source -o build/qlib-qmod/Rel.qmod qlib/Rel.qm", tmp.path, env, src_dir, qcc_bin));
+        assertTrue(is_file(qmod_dir + "/Rel.qmod"), out);
+        # the depfile's target is the module's real path
+        string text = ReadOnlyFile::readTextFile(qmod_dir + "/Rel.qmod.d");
+        assertEq(realpath(qmod_dir + "/Rel.qmod"), (text =~ x/^([^:]+):/)[0]);
+        string module_path = qmod_dir + ":" + src_dir;
+        assertEq("v1 Rel.qmod", runRequires(module_path, tmp.path, "Rel", "Rel::value()"));
+        writeModule(src_dir, "Rel", "", "public namespace Rel { public string sub value() { return \"v2\"; } }");
+        touchLater(src_dir + "/Rel.qm");
+        out = runRequires(module_path, tmp.path, "Rel", "Rel::value()");
+        assertEq("v2 Rel.qm", out.split("\n").last(), out);
+    }
+
+    #! sets the access time of a file to one before its modification time, so that reading it changes it
+    private setOldAccessTime(string path) {
+        assertEq(0, system(sprintf("TZ=%s touch -a -t 200101010000 '%s'", TestFileTime::TouchZone, path)));
+    }
+
+    #! Makes the modules of the sandbox cases: Mid re-exports Base, which is loaded after Mid's module check, and
+    #! requires Zed; Base's AOT module is in a directory that the sandbox of the loading Program denies, another Zed in
+    #! a directory searched next, and there is no source of Mid: Mid is out of date, so Base is never loaded
+    /** @return a hash with "denied_dir", "shadow_dir", "qmod_dir" and "denied_qmod" (Base's AOT module in the denied
+        directory, with an access time before its modification time), or NOTHING if reading a file does not change
+        its access time on this filesystem
+    */
+    private *hash<auto> makeSandboxModules(TmpDir tmp) {
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        string denied_dir = tmp.path + "/denied";
+        string shadow_dir = tmp.path + "/shadow";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        mkdir(denied_dir);
+        mkdir(shadow_dir);
+
+        # reading a file must change its access time here, or what the module check reads cannot be seen
+        string control = tmp.path + "/control";
+        write(control, "control\n");
+        setOldAccessTime(control);
+        date old_atime = hstat(control).atime;
+        ReadOnlyFile::readTextFile(control);
+        if (hstat(control).atime == old_atime) {
+            return;
+        }
+
+        writeModule(src_dir, "Base", "", "public namespace Base { public string sub value() { return \"base\"; } }");
+        writeModule(src_dir, "Zed", "", "public namespace Zed { public string sub value() { return \"zed\"; } }");
+        writeModule(src_dir, "Mid", "%requires(reexport) Base\n%requires Zed", "public namespace Mid { public string "
+            "sub value() { return Base::value() + Zed::value(); } }");
+        string module_path = qmod_dir + ":" + src_dir;
+        foreach string name in ("Base", "Zed", "Mid") {
+            compile(module_path, src_dir, qmod_dir, name);
+        }
+        assertEq(0, system(sprintf("cp '%s/Base.qmod' '%s/Base.qmod'", qmod_dir, denied_dir)));
+        writeModule(shadow_dir, "Zed", "", "public namespace Zed { public string sub value() { return \"other\"; } "
+            "}");
+        string denied_qmod = denied_dir + "/Base.qmod";
+        setOldAccessTime(denied_qmod);
+        return {
+            "denied_dir": denied_dir,
+            "shadow_dir": shadow_dir,
+            "qmod_dir": qmod_dir,
+            "denied_qmod": denied_qmod,
+        };
+    }
+
+    #! Runs a script that requires Mid in a Program whose sandbox denies the given directory
+    /** @param module_dirs the directories of the Program's own module path, searched in this order
+        @param env_module_path the process-wide module path (QORE_MODULE_DIR)
+    */
+    private string runSandboxed(TmpDir tmp, string denied_dir, list<string> module_dirs, string env_module_path) {
+        string directives;
+        foreach string dir in (module_dirs) {
+            directives += sprintf("%%append-module-path \"%s\"\n", dir);
+        }
+        string script = tmp.path + "/sandbox.q";
+        write(script, sprintf("%%modern
+Program p(PO_NEW_STYLE);
+SandboxManager m();
+m.setFilesystemDefaultPolicy(True);
+m.addFilesystemDeniedPath(%y);
+p.setSandboxManager(m);
+try {
+    p.parse(%y, \"probe\");
+    print(\"loaded\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%%s: %%s\\n\", ex.err, ex.desc);
+}
+", realpath(denied_dir), directives + "%requires Mid\n"));
+        return trim(run(sprintf("%s QORE_MODULE_DIR=%s %s %s", env, env_module_path, qore_bin, script)));
+    }
+
+    sandboxDeniedTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        *hash<auto> h = makeSandboxModules(tmp);
+        if (!h) {
+            testSkip("reading a file does not change its access time on this filesystem");
+        }
+        date old_atime = hstat(h.denied_qmod).atime;
+        # Mid is found through the module path of the sandboxed code, so it is not library code: its module check is
+        # governed by that code's sandbox (see sandboxLibraryTest() for a module of the process-wide module path)
+        string out = runSandboxed(tmp, h.denied_dir, (h.denied_dir, h.shadow_dir, h.qmod_dir), tmp.path + "/none");
+        assertRegex("AOT module '.*/Mid\\.qmod' for feature 'Mid' is out of date: it was compiled against other "
+            "files of module 'Zed' than '.*/shadow/Zed\\.qm'", out);
+        # the module check did not read the file the sandbox denies
+        assertEq(old_atime, hstat(h.denied_qmod).atime, out);
+    }
+
+    sandboxLibraryTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        *hash<auto> h = makeSandboxModules(tmp);
+        if (!h) {
+            testSkip("reading a file does not change its access time on this filesystem");
+        }
+        date old_atime = hstat(h.denied_qmod).atime;
+        # Mid is in the process-wide module path, so it is library code, which is initialized with no sandbox
+        # provenance: its dependencies are found and loaded as library code, from the denied directory too, so its
+        # module check reads the file it would load (see design/aot-linked-module-sources.md)
+        string out = runSandboxed(tmp, h.denied_dir, (), sprintf("%s:%s:%s", h.denied_dir, h.shadow_dir,
+            h.qmod_dir));
+        assertRegex("AOT module '.*/Mid\\.qmod' for feature 'Mid' is out of date: it was compiled against other "
+            "files of module 'Zed' than '.*/shadow/Zed\\.qm'", out);
+        assertNeq(old_atime, hstat(h.denied_qmod).atime, out);
+    }
+
+    includedModuleNameTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        mkdir(src_dir + "/parts", 0755, True);
+        mkdir(qmod_dir, 0755, True);
+        # an include file with the name of a module, Other, that the module does not require
+        write(src_dir + "/parts/Other.qm", "const Value = \"v1\";\n");
+        writeModule(src_dir, "Other", "", "public namespace Other { public string sub value() { return \"other\"; } }");
+        writeModule(src_dir, "Inc2", "", "%include parts/Other.qm\npublic namespace Inc2 { public string sub value() { "
+            "return Value; } }");
+        string module_path = qmod_dir + ":" + src_dir;
+        compile(module_path, src_dir, qmod_dir, "Inc2");
+        assertTrue(inlist(normalize_dir(src_dir) + "/parts/Other.qm", depfileDeps(qmod_dir + "/Inc2.qmod.d")));
+        # the module was compiled with no module Other, so the one in the module path does not make it out of date
+        string out = runRequires(module_path, tmp.path, "Inc2", "Inc2::value()");
+        assertEq("v1 Inc2.qmod", out, out);
+    }
+
+    modulePathDirectiveTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        string own_dir = tmp.path + "/own";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        mkdir(own_dir);
+        # Mid re-exports Base, which its initialization loads with Mid's own module path, which its
+        # %prepend-module-path directive puts first
+        writeModule(src_dir, "Base", "", "public namespace Base { public string sub value() { return \"base\"; } }");
+        writeModule(src_dir, "Mid", sprintf("%%prepend-module-path %s\n%%requires(reexport) Base", own_dir),
+            "public namespace Mid { public string sub value() { return Base::value(); } }");
+        string module_path = qmod_dir + ":" + src_dir;
+        compile(module_path, src_dir, qmod_dir, "Base");
+        compile(module_path, src_dir, qmod_dir, "Mid");
+        assertEq("base Mid.qmod", runRequires(module_path, tmp.path, "Mid", "Mid::value()"));
+
+        # another Base in the directory of Mid's own directive: Mid would load it, so Mid is out of date, and its
+        # source is loaded
+        writeModule(own_dir, "Base", "", "public namespace Base { public string sub value() { return \"other\"; } }");
+        string out = runRequires(module_path, tmp.path, "Mid", "Mid::value()");
+        assertEq("other Mid.qm", out.split("\n").last(), out);
+        assertRegex("AOT module '.*/Mid\\.qmod' for feature 'Mid' is out of date: it was compiled against other "
+            "files of module 'Base' than '.*/own/Base\\.qm'", out);
+    }
+
+    modulePathDescriptorDependencyTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        string own_dir = tmp.path + "/own";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        mkdir(own_dir);
+        # Mid requires Dep, which its %prepend-module-path directive finds in its own directory, before another Dep
+        # in the module path; Dep requires Sub, which only that directory has, as the Program of Dep, a source
+        # module, inherits the directories of the Program it is loaded for
+        writeModule(own_dir, "Sub", "", "public namespace Sub { public string sub value() { return \"sub\"; } }");
+        writeModule(own_dir, "Dep", "%requires Sub", "public namespace Dep { public string sub value() { "
+            "return \"own-\" + Sub::value(); } }");
+        writeModule(src_dir, "Dep", "", "public namespace Dep { public string sub value() { return \"global\"; } }");
+        writeModule(src_dir, "Mid", sprintf("%%prepend-module-path %s\n%%requires Dep", own_dir),
+            "public namespace Mid { public string sub value() { return Dep::value(); } }");
+        string module_path = qmod_dir + ":" + src_dir;
+        compile(module_path, src_dir, qmod_dir, "Mid");
+        assertTrue(inlist(normalize_dir(own_dir) + "/Dep.qm", depfileDeps(qmod_dir + "/Mid.qmod.d")));
+
+        # the dependency of the descriptor is loaded with Mid's own directory first, as the source module loads it:
+        # the AOT module is the one compiled against it, not out of date
+        string out = runRequires(module_path, tmp.path, "Mid", "Mid::value()");
+        assertEq("own-sub Mid.qmod", out, out);
+        assertNRegex("BINARY-MODULE-SOURCE-FALLBACK|AOT-MODULE-STALE", out);
+    }
+
+    fifoDepfileTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        writeModule(src_dir, "Dep", "", "public namespace Dep { public string sub value() { return \"dep\"; } }");
+        writeModule(src_dir, "User", "%requires Dep", "public namespace User { public string sub value() { "
+            "return Dep::value(); } }");
+        string module_path = qmod_dir + ":" + src_dir;
+        compile(module_path, src_dir, qmod_dir, "Dep");
+        compile(module_path, src_dir, qmod_dir, "User");
+        *string prefix = timeoutPrefix(60);
+        # each file that the loader reads next to a module, replaced by a FIFO that no process writes: opening it for
+        # reading blocked before; such a file is not read, as if it did not exist
+        foreach string file in ("User.qmod.d", "User.qmod.d.fingerprints", "Dep.qmod.d", "Dep.qmod.d.fingerprints") {
+            string path = qmod_dir + "/" + file;
+            string saved = ReadOnlyFile::readTextFile(path);
+            unlink(path);
+            assertEq(0, system(sprintf("mkfifo '%s'", path)), file);
+            string out = runRequires(module_path, tmp.path, "User", "User::value()", prefix);
+            assertEq("dep User.qmod", out.split("\n").last(), file + ": " + out);
+            unlink(path);
+            write(path, saved);
+        }
+
+        # a FIFO with the name of the dependency's AOT module in a directory searched first: reading its metadata
+        # blocked the loader with its mutex held; it is no module file, and the source of Dep is loaded
+        string fifo_dir = tmp.path + "/fifo";
+        mkdir(fifo_dir);
+        assertEq(0, system(sprintf("mkfifo '%s/Dep.qmod'", fifo_dir)));
+        string out = runRequires(fifo_dir + ":" + module_path, tmp.path, "User", "User::value()", prefix);
+        assertEq("dep User.qmod", out.split("\n").last(), out);
+    }
+
+    #! runs a script that requires \a spec (a path or a name) and prints Sep::value(); returns its output
+    private string runSep(string module_path, string script_dir, string spec) {
+        string script = script_dir + "/sep.q";
+        write(script, sprintf("%%modern\n%%requires %s\nprintf(\"%%s\\n\", Sep::value());\n", spec));
+        return trim(run(sprintf("%s QORE_MODULE_DIR=%s %s %s", env, module_path, qore_bin, script)));
+    }
+
+    explicitPathTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        mkdir(src_dir + "/Sep", 0755, True);
+        mkdir(qmod_dir + "/Sep", 0755, True);
+        # a module directory whose main source includes nothing of the code that changes: only Part.qc does
+        write(src_dir + "/Sep/Sep.qm", "%modern\nmodule Sep { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; "
+            "license = \"MIT\"; }\n");
+        write(src_dir + "/Sep/Part.qc", "public namespace Sep { public string sub value() { return \"v1\"; } }\n");
+        string qmod = qmod_dir + "/Sep/Sep.qmod";
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m --depfile=%s.d --depfile-module-deps=source -o %s %s",
+            env, src_dir, qcc_bin, qmod, qmod, src_dir + "/Sep"));
+        assertTrue(is_file(qmod), "compiled Sep: " + out);
+        # the build tree links the AOT module into the source tree, where the tests require it by its path
+        symlink(qmod, src_dir + "/Sep/Sep.qmod");
+        list<string> specs = (src_dir + "/Sep/Sep.qmod", "Sep");
+        foreach string spec in (specs + qmod) {
+            assertEq("v1", runSep(src_dir, tmp.path, spec), spec);
+        }
+
+        # only the included file changed: whether the module is required by name or by the path of its AOT module
+        # through the link next to its source, the AOT module is out of date and its source is loaded
+        write(src_dir + "/Sep/Part.qc", "public namespace Sep { public string sub value() { return \"v2\"; } }\n");
+        touchLater(src_dir + "/Sep/Part.qc");
+        foreach string spec in (specs) {
+            out = runSep(src_dir, tmp.path, spec);
+            assertEq("v2", out.split("\n").last(), spec + ": " + out);
+            assertRegex("is out of date: its source '.*/Part\\.qc' has changed", out, spec);
+        }
+        # by its path in the build tree, with no source module next to it: the out-of-date module is not loaded
+        out = runSep(src_dir, tmp.path, qmod);
+        assertRegex("AOT-MODULE-STALE: AOT module '.*/build/qlib-qmod/Sep/Sep\\.qmod' for feature 'Sep' is out of "
+            "date: its source '.*/Part\\.qc' has changed since it was compiled, and there is no source module next to "
+            "it to load instead", out);
+        assertNRegex("(?m)^v[12]$", out);
+        # by name, in a module path with no source module: not loaded either, as by its path
+        out = runSep(qmod_dir, tmp.path, "Sep");
+        assertRegex("AOT-MODULE-STALE: AOT module '.*/build/qlib-qmod/Sep/Sep\\.qmod' for feature 'Sep' is out of "
+            "date: its source '.*/Part\\.qc' has changed since it was compiled, and there is no source module to "
+            "load instead", out);
+        assertNRegex("(?m)^v[12]$", out);
+    }
+}

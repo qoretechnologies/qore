@@ -47,6 +47,8 @@ void Queue::deref(ExceptionSink* xsink) {
 void qore_queue_private::destructor(ExceptionSink* xsink) {
     // declared before the lock, so that the weak reference is released after it
     ScanHolderRelease release;
+    // declared before the lock, so that the values are released after it
+    NodeListRelease values(xsink);
     AutoLocker al(&l);
     if (unsigned rw = getReadWaitingIntern()) {
         xsink->raiseException("QUEUE-ERROR", "Queue deleted while there %s %d waiting thread%s for reading", rw == 1 ? "is" : "are", rw, rw == 1 ? "" : "s");
@@ -58,7 +60,7 @@ void qore_queue_private::destructor(ExceptionSink* xsink) {
     }
 
     uncountAllIntern(release);
-    clearIntern(xsink);
+    takeAllIntern(values);
     setLenIntern(Queue_Deleted);
     if (desc) {
         desc->deref();
@@ -66,16 +68,21 @@ void qore_queue_private::destructor(ExceptionSink* xsink) {
     }
 }
 
-void qore_queue_private::clearIntern(ExceptionSink* xsink) {
+void qore_queue_private::takeAllIntern(NodeListRelease& release) {
+    assert(!release.head);
+    release.head = head;
+    head = nullptr;
+    tail = nullptr;
+}
+
+qore_queue_private::NodeListRelease::~NodeListRelease() {
     while (head) {
-        printd(5, "qore_queue_private::clearIntern() this: %p deleting %p (node '%s' %d)\n", this, head,
+        printd(5, "qore_queue_private::NodeListRelease::~NodeListRelease() deleting %p (node '%s' %d)\n", head,
             head->node.getTypeName(), head->node.getType());
         QoreQueueNode* w = head->next;
         head->del(xsink);
         head = w;
     }
-    head = nullptr;
-    tail = nullptr;
 }
 
 qore_queue_private::ScanHolderRelease::~ScanHolderRelease() {
@@ -509,6 +516,8 @@ void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
     {
         // declared before the lock, so that the weak reference is released after it
         ScanHolderRelease release;
+        // declared before the lock, so that the values are released after it
+        NodeListRelease values(xsink);
         AutoLocker al(&l);
 
         if (checkWriteIntern(xsink)) {
@@ -524,12 +533,12 @@ void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
         // the queue holds the object whose count includes it, so a queue cleared through the C++ API without the
         // Queue object is uncounted too
         assert(!self || !scan_holder || qore_object_private::get(*self) == scan_holder);
-        // the values are released below, under the lock, which can take references that the object's recursive set
-        // counts as internal (see RObject::remove_gen)
+        // the values are given up under the lock, and their release after it can take references that the
+        // object's recursive set counts as internal (see RObject::remove_gen)
         markRemovedIntern();
         uncountAllIntern(release);
 
-        clearIntern(xsink);
+        takeAllIntern(values);
         setLenIntern(0);
 
         if (getWriteWaitingIntern()) {
@@ -542,6 +551,8 @@ void qore_queue_private::setError(const char* n_err, const QoreStringNode* n_des
     {
         // declared before the lock, so that the weak reference is released after it
         ScanHolderRelease release;
+        // declared before the lock, so that the values are released after it
+        NodeListRelease values(xsink);
         AutoLocker al(&l);
         if (getLenIntern() == Queue_Deleted) {
             return;
@@ -556,13 +567,13 @@ void qore_queue_private::setError(const char* n_err, const QoreStringNode* n_des
         // the queue holds the object whose count includes it, so a queue cleared through the C++ API without the
         // Queue object is uncounted too
         assert(!self || !scan_holder || qore_object_private::get(*self) == scan_holder);
-        // the values are released below, under the lock, which can take references that the object's recursive set
-        // counts as internal (see RObject::remove_gen)
+        // the values are given up under the lock, and their release after it can take references that the
+        // object's recursive set counts as internal (see RObject::remove_gen)
         markRemovedIntern();
         uncountAllIntern(release);
 
         // clear the queue
-        clearIntern(xsink);
+        takeAllIntern(values);
         setLenIntern(0);
 
         if (getReadWaitingIntern()) {

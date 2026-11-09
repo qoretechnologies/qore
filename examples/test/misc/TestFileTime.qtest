@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - setting file times across DST changes, local time zones and the system touch command
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

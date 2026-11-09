@@ -35,16 +35,51 @@ public class CohereRerankDataProvider inherits CohereDataProviderCommon {
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
-        static CohereRerankRequestDataType RequestType = new CohereRerankRequestDataType();
-        static CohereRerankResponseDataType ResponseType = new CohereRerankResponseDataType();
+    }
+
+    private {
+        #! The request type, built on first use; see requestType()
+        static *CohereRerankRequestDataType request_type;
+        #! The ID of the request type's builder; see requestType()
+        static int request_type_id = DataProviderActionCatalog::registerLazyValue(
+            \CohereRerankDataProvider::buildRequestType());
+        #! The response type, built on first use; see responseType()
+        static *CohereRerankResponseDataType response_type;
+        #! The ID of the response type's builder; see responseType()
+        static int response_type_id = DataProviderActionCatalog::registerLazyValue(
+            \CohereRerankDataProvider::buildResponseType());
+    }
+
+    #! Returns the request type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static CohereRerankRequestDataType requestType() {
+        return request_type ?? (request_type = DataProviderActionCatalog::getLazyValue(request_type_id));
+    }
+
+    #! Builds the request type; see requestType()
+    private static CohereRerankRequestDataType buildRequestType() {
+        return new CohereRerankRequestDataType();
+    }
+
+    #! Returns the response type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static CohereRerankResponseDataType responseType() {
+        return response_type ?? (response_type = DataProviderActionCatalog::getLazyValue(response_type_id));
+    }
+
+    #! Builds the response type; see responseType()
+    private static CohereRerankResponseDataType buildResponseType() {
+        return new CohereRerankResponseDataType();
     }
 
     constructor(RestClientIo::RestClientIo rest) : CohereDataProviderCommon(rest) {}
     constructor(*hash<auto> options) : CohereDataProviderCommon(options) {}
 
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
-    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return requestType(); }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return responseType(); }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {

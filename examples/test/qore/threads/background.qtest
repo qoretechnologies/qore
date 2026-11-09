@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - thread names via pthread_setname_np and background thread stack size changes
 
 %modern
 %no-child-restrictions

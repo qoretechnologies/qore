@@ -2701,6 +2701,57 @@ FUNCTION (QORE_USER_MODULE_RESOURCE_DIRS _out _source_root)
     set(${_out} "${_rv}" PARENT_SCOPE)
 ENDFUNCTION (QORE_USER_MODULE_RESOURCE_DIRS)
 
+# Sets up the qmod build cache (design/qmod-build-cache.md) when QORE_QMOD_CACHE_DIR is set: the
+# qore-qmod-cache-context target, which writes the build context before any qmod, and QORE_QMOD_CACHE_LAUNCHER, which
+# QORE_USER_MODULE_AOT_RULES() puts before the qcc command of each module so that the module is looked up in the cache
+# in QORE_QMOD_CACHE_DIR (and then in the caches of QORE_QMOD_CACHE_READ_DIRS, which are never written to) before qcc
+# compiles it, and stored in QORE_QMOD_CACHE_DIR after a compile.  The arguments are the module
+# loader's standard module directories.  Uses QCC_FORMAT_STAMP, QORE_AOT_PROBE_STAMP (if defined),
+# QORE_QM_METADATA_ENV and qcc (the target, or QORE_QCC_EXECUTABLE); QORE_QMOD_CACHE_TOOL names the cache tool
+# (default: tools/qore-qmod-cache.py of the source tree).  Without QORE_QMOD_CACHE_DIR it does nothing.
+MACRO (QORE_QMOD_CACHE_SETUP)
+    unset(QORE_QMOD_CACHE_LAUNCHER)
+    if (QORE_QMOD_CACHE_DIR)
+        find_package(Python3 3.6 COMPONENTS Interpreter REQUIRED)
+        if (NOT QORE_QMOD_CACHE_TOOL)
+            set(QORE_QMOD_CACHE_TOOL ${CMAKE_SOURCE_DIR}/tools/qore-qmod-cache.py)
+        endif()
+        QORE_GET_QCC_COMMAND(_qore_qmod_cache_qcc)
+        set(QORE_QMOD_CACHE_CONTEXT ${CMAKE_BINARY_DIR}/qmod-cache-context.json)
+        set(_qore_qmod_cache_inputs --input=${QCC_FORMAT_STAMP} --input=${CMAKE_BINARY_DIR}/aot-link.conf)
+        if (DEFINED QORE_AOT_PROBE_STAMP)
+            list(APPEND _qore_qmod_cache_inputs --input=${QORE_AOT_PROBE_STAMP})
+        endif()
+        # runs in every build, before any qmod: the context is computed from file contents, and rewritten only when
+        # it changes
+        add_custom_target(qore-qmod-cache-context
+            COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
+                ${Python3_EXECUTABLE} -I ${QORE_QMOD_CACHE_TOOL} context
+                --source-dir=${CMAKE_SOURCE_DIR} --build-dir=${CMAKE_BINARY_DIR} --qcc=${_qore_qmod_cache_qcc}
+                ${_qore_qmod_cache_inputs} --output=${QORE_QMOD_CACHE_CONTEXT}
+            BYPRODUCTS ${QORE_QMOD_CACHE_CONTEXT}
+            COMMENT "Computing the qmod build cache context"
+            VERBATIM)
+        foreach(_qore_qmod_cache_dep qcc qcc-format-version qore-aot-runtime-identity)
+            if (TARGET ${_qore_qmod_cache_dep})
+                add_dependencies(qore-qmod-cache-context ${_qore_qmod_cache_dep})
+            endif()
+        endforeach()
+        set(QORE_QMOD_CACHE_LAUNCHER ${Python3_EXECUTABLE} -I ${QORE_QMOD_CACHE_TOOL} exec
+            --cache-dir=${QORE_QMOD_CACHE_DIR} --context=${QORE_QMOD_CACHE_CONTEXT} --build-dir=${CMAKE_BINARY_DIR})
+        # caches of a more trusted level, read after QORE_QMOD_CACHE_DIR and never written to
+        foreach(_qore_qmod_cache_dir ${QORE_QMOD_CACHE_READ_DIRS})
+            list(APPEND QORE_QMOD_CACHE_LAUNCHER --read-cache-dir=${_qore_qmod_cache_dir})
+        endforeach()
+        foreach(_qore_qmod_cache_dir ${ARGN})
+            list(APPEND QORE_QMOD_CACHE_LAUNCHER --default-module-dir=${_qore_qmod_cache_dir})
+        endforeach()
+        message(STATUS "qmod build cache: ${QORE_QMOD_CACHE_DIR}")
+        unset(_qore_qmod_cache_qcc)
+        unset(_qore_qmod_cache_inputs)
+    endif()
+ENDMACRO (QORE_QMOD_CACHE_SETUP)
+
 # Emit AOT-build rules for a user module producing a .qmod via qcc.
 #
 # Gated on QORE_BUILD_AOT_MODULES; uses the in-tree qcc target when building
@@ -2930,6 +2981,16 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     if (DEFINED QORE_AOT_PROBE_STAMP)
         set(_qmod_probe_dep ${QORE_AOT_PROBE_STAMP})
     endif()
+    # With the qmod build cache (QORE_QMOD_CACHE_DIR, see design/qmod-build-cache.md), qcc runs through the cache
+    # tool, which supplies the module from the cache when every input is unchanged; without it the command is qcc's
+    set(_qmod_cache_launcher "")
+    if (QORE_QMOD_CACHE_LAUNCHER)
+        set(_qmod_cache_launcher ${QORE_QMOD_CACHE_LAUNCHER} --name=${_name} --source-root=${_source_root})
+        foreach(_qmod_cache_source ${ARGN})
+            list(APPEND _qmod_cache_launcher --source=${_qmod_cache_source})
+        endforeach()
+        list(APPEND _qmod_cache_launcher --)
+    endif()
     if (${_is_dir})
         # Optional symlink at qlib/<name>/<name>.qmod (inside the source
         # subdir, alongside the resources).  Tests using
@@ -2943,7 +3004,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
             ${_qmod_jar_stage_commands}
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
-                ${_qore_qcc_command} ${_qmod_opt_flags} -m ${_source_root}
+                ${_qmod_cache_launcher} ${_qore_qcc_command} ${_qmod_opt_flags} -m ${_source_root}
                 --depfile=${_qmod_dep} --depfile-module-deps=source -o ${_qmod_out}
             DEPENDS ${ARGN} ${_qmod_jar_srcs} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep}
             DEPFILE ${_qmod_dep}
@@ -3008,7 +3069,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             ${_qmod_depfile_fresh_read_command}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
-                ${_qore_qcc_command} ${_qmod_opt_flags} -m ${_source_root}
+                ${_qmod_cache_launcher} ${_qore_qcc_command} ${_qmod_opt_flags} -m ${_source_root}
                 --depfile=${_qmod_dep} --depfile-module-deps=source -o ${_qmod_out}
             DEPENDS ${ARGN} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep}
             DEPFILE ${_qmod_dep}
@@ -3052,6 +3113,9 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     endif()
     if (TARGET qcc-format-source-qmod-clean)
         add_dependencies(${_name}-qmod qcc-format-source-qmod-clean)
+    endif()
+    if (_qmod_cache_launcher AND TARGET qore-qmod-cache-context)
+        add_dependencies(${_name}-qmod qore-qmod-cache-context)
     endif()
     if (DEFINED QORE_AOT_BINARY_MODULE_TARGETS)
         foreach(_qore_aot_binary_module ${QORE_AOT_BINARY_MODULE_TARGETS})

@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - OpenSSL reporting of a TCP FIN during the TLS handshake (empty error queue)
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved

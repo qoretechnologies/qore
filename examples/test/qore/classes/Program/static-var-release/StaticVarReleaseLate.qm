@@ -1,0 +1,31 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# StaticVarReleaseLate.qm - module of static-var-release.qtest: loaded at runtime by a destructor while the static
+# variables of the main Program are released; its public classes are in the root namespace, so they are added to
+# class lists whose data is being released
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module StaticVarReleaseLate {
+    version = "1.0";
+    desc = "module of the static variable release tests";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! reports its release
+public class LateMarker {
+    destructor() {
+        printf("late marker released\n");
+    }
+}
+
+#! has a constant and a static variable holding objects to release
+public class LateHolder {
+    public {
+        const marker = new LateMarker();
+        static LateMarker m = new LateMarker();
+        static int v = 3;
+    }
+}

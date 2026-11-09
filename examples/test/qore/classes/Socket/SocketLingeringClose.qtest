@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - lingering close discarding unread data so the peer gets a FIN, not a reset, plain and TLS
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved

@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - OpenSSL certificate verification with CA files and hashed CA dirs over TLS and QUIC
 # Copyright 2026 Qore Technologies, s.r.o.
 
 %modern

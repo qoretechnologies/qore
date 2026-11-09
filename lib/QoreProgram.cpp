@@ -80,6 +80,7 @@ extern bool threads_initialized;
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <condition_variable>
 #include <new>
 #include <map>
 
@@ -540,6 +541,66 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     // copy hook runs against a complete Program, as AbstractQoreProgramExternalData::copy()
     // documents
     copyExternalData();
+    // a Program that code that is not trusted creates has no host: none of its defines was set by one (its parse
+    // option defines included); the library modules that it loads have their own platform defines
+    if (qore_caller_is_untrusted()) {
+        for (const auto& i : dmap) {
+            source_defines.insert(i.first);
+        }
+    }
+}
+
+#ifdef DEBUG
+std::atomic<qore_program_private_base::dbg_teardown_hook_t> qore_program_private_base::dbg_teardown_hook{nullptr};
+#endif
+
+namespace {
+//! the Programs whose data the calling thread deletes, innermost last; see qore_program_torn_down_by_current_thread()
+/** Only the addresses are compared, so a Program deleted by another thread is never dereferenced
+*/
+thread_local std::vector<const QoreProgram*> qore_programs_torn_down;
+
+//! records that the calling thread deletes a Program's data while it exists
+class QoreProgramTeardownScope {
+public:
+    QoreProgramTeardownScope(const QoreProgram* pgm) {
+        qore_programs_torn_down.push_back(pgm);
+    }
+
+    ~QoreProgramTeardownScope() {
+        qore_programs_torn_down.pop_back();
+    }
+
+    QoreProgramTeardownScope(const QoreProgramTeardownScope&) = delete;
+    QoreProgramTeardownScope& operator=(const QoreProgramTeardownScope&) = delete;
+};
+}
+
+bool qore_program_torn_down_by_current_thread(const QoreProgram* pgm) {
+    return std::find(qore_programs_torn_down.begin(), qore_programs_torn_down.end(), pgm)
+        != qore_programs_torn_down.end();
+}
+
+QoreProgram* qore_program_private::getReferencedProgram(const QoreProgram* p, qore_program_id_t id) {
+    QoreAutoRWReadLocker al(&lck_programMap);
+    programid_to_program_map_t::const_iterator i = programid_to_program_map.find(id);
+    if (i == programid_to_program_map.end() || i->second != p) {
+        return nullptr;
+    }
+    // a registered Program has references (see derefUnregister())
+    return i->second->optRef() ? i->second : nullptr;
+}
+
+bool qore_program_private::runWithRegisteredPrograms(
+        const std::vector<std::pair<const QoreProgram*, qore_program_id_t>>& pgms, const std::function<bool()>& f) {
+    QoreAutoRWReadLocker al(&lck_programMap);
+    for (const auto& p : pgms) {
+        programid_to_program_map_t::const_iterator i = programid_to_program_map.find(p.second);
+        if (i == programid_to_program_map.end() || i->second != p.first) {
+            return false;
+        }
+    }
+    return f();
 }
 
 void qore_program_private::registerProgram() {
@@ -566,6 +627,8 @@ qore_program_private::~qore_program_private() {
     // wait till all debug calls are finished, no new calls possible as dpgm->removeProgram() set dpmg to NULL
     debug_program_counter.waitForZero();
     deleteAllBreakpoints();
+    // a hook that was not run (the Program was destroyed without being cleared) is never run
+    qore_drop_exit_hooks(pgm);
     QoreAutoRWWriteLocker al(&qore_program_private::lck_programMap);
     qore_program_set_t::iterator i = qore_program_set.find(pgm);
     assert(i != qore_program_set.end());
@@ -1539,10 +1602,11 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     if (lvl)
         sb.assignLocalVars(lvl);
 
-    // copy program defines to child program
+    // copy program defines to child program, with the record of those that the parent's host did not set
     for (auto& i : p_pgm->priv->dmap) {
         dmap[i.first] = i.second.refSelf();
     }
+    source_defines = p_pgm->priv->source_defines;
 
     // inherit parent's %prepend-module-path / %append-module-path lists so subprograms
     // see the same module search surface their parent established (design:
@@ -1622,8 +1686,10 @@ void qore_program_private_base::copyExternalData() {
 
 void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     bool atomic_rollback = static_cast<bool>(pwo.parse_options & PO_ALLOW_REPARSE);
-    // delete pending changes to namespaces
-    qore_root_ns_private::get(*RootNS)->parseRollback(xsink, atomic_rollback);
+    // delete pending changes to namespaces: only what the failed parse added is removed, also without
+    // PO_ALLOW_REPARSE, as the namespaces hold what the Program had before the parse, including the classes and
+    // other symbols inherited from its parent when it was created, which a new parse must still find
+    qore_root_ns_private::get(*RootNS)->parseRollback(xsink, true);
 
     // delete pending statements
     sb.parseRollback();
@@ -1676,6 +1742,14 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
 }
 
 void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
+    // the code of the Program's classes that runs while it is deleted (its exit hooks, the cleanup callback and the
+    // destructors run when its data is deleted) runs in it although its last reference may have been released (see
+    // qore_class_private::getSourceProgramForCall()); the Program stays allocated until this function returns
+    QoreProgramTeardownScope teardown_scope(pgm);
+
+    // the exit hooks that the Program registered can stop the threads waited for below
+    qore_run_exit_hooks(pgm);
+
     // detach itself from debug
     if (qore_debug_program_private* dp = dpgm.load(std::memory_order_relaxed)) {
         // if the object is being destroyed when thread is terminating via a deref then we send sync detach event to
@@ -1719,12 +1793,25 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     // otherwise workers on other threads fail with PROGRAM-ERROR.
     if (need_cleanup) {
         qore_call_program_cleanup_callback(pgm);
+#ifdef DEBUG
+        if (dbg_teardown_hook_t hook = dbg_teardown_hook.load()) {
+            hook(pgm, DbgTeardownPoint::AfterCleanupCallback);
+        }
+#endif
     }
 
     if (need_cleanup) {
         AutoLocker al(plock);
         // mark the program so that only code from this thread can run during data destruction
         ptid = q_gettid();
+#ifdef DEBUG
+        if (dbg_teardown_hook_t hook = dbg_teardown_hook.load()) {
+            hook(pgm, DbgTeardownPoint::BeforeFinalWait);
+        }
+#endif
+        // threads could enter the Program while the cleanup callback ran (ptid was not set yet): wait for them to
+        // leave it, as its data is destroyed below; no other thread can enter it now
+        waitForAllThreadsToTerminateIntern();
         clr = true;
     }
 
@@ -2452,23 +2539,66 @@ void qore_program_private::inheritParseImports(QoreProgram& child, QoreProgram& 
     (void)xsink;
 }
 
-void qore_program_private::inheritModulePathLists(QoreProgram& child, QoreProgram& parent) {
-    auto append_unique = [](std::vector<std::string>& target, const std::vector<std::string>& source) {
-        for (const std::string& path : source) {
-            bool seen = false;
-            for (const std::string& existing : target) {
-                if (existing == path) {
-                    seen = true;
-                    break;
-                }
-            }
-            if (!seen) {
-                target.push_back(path);
-            }
+namespace {
+//! Appends the directories of \a source that \a target does not have to \a target
+void qore_append_unique_module_paths(std::vector<std::string>& target, const std::vector<std::string>& source) {
+    for (const std::string& path : source) {
+        if (std::find(target.begin(), target.end(), path) == target.end()) {
+            target.push_back(path);
         }
-    };
-    append_unique(child.priv->prepended_module_paths, parent.priv->prepended_module_paths);
-    append_unique(child.priv->appended_module_paths, parent.priv->appended_module_paths);
+    }
+}
+
+//! An AOT module's own module path directories, added for a Program (see QoreModulePathScope)
+struct QoreModulePathScopeEntry {
+    const QoreProgram* pgm;
+    const std::vector<std::string>* prepended;
+    const std::vector<std::string>* appended;
+};
+
+//! The scopes of this thread, outermost first
+thread_local std::vector<QoreModulePathScopeEntry> qore_module_path_scopes;
+}
+
+QoreModulePathScope::QoreModulePathScope(const QoreProgram* pgm, const std::vector<std::string>& prepended,
+        const std::vector<std::string>& appended) {
+    qore_module_path_scopes.push_back({pgm, &prepended, &appended});
+}
+
+QoreModulePathScope::~QoreModulePathScope() {
+    assert(!qore_module_path_scopes.empty());
+    qore_module_path_scopes.pop_back();
+}
+
+void qore_program_private::getEffectiveModulePathLists(const QoreProgram* pgm, std::vector<std::string>& prepended,
+        std::vector<std::string>& appended) {
+    prepended.clear();
+    appended.clear();
+    // a nested module's own directories come before those of the module it is loaded for, as a source module's
+    // Program puts its own before those it inherits
+    for (auto i = qore_module_path_scopes.rbegin(), e = qore_module_path_scopes.rend(); i != e; ++i) {
+        if (i->pgm == pgm) {
+            qore_append_unique_module_paths(prepended, *i->prepended);
+        }
+    }
+    if (pgm) {
+        qore_append_unique_module_paths(prepended, pgm->priv->prepended_module_paths);
+        qore_append_unique_module_paths(appended, pgm->priv->appended_module_paths);
+    }
+    for (const QoreModulePathScopeEntry& entry : qore_module_path_scopes) {
+        if (entry.pgm == pgm) {
+            qore_append_unique_module_paths(appended, *entry.appended);
+        }
+    }
+}
+
+void qore_program_private::inheritModulePathLists(QoreProgram& child, QoreProgram& parent) {
+    // the lists that resolve modules for the parent in this thread, so that a source module loaded as a dependency
+    // of an AOT module finds its own dependencies with the AOT module's directories too
+    std::vector<std::string> prepended, appended;
+    getEffectiveModulePathLists(&parent, prepended, appended);
+    qore_append_unique_module_paths(child.priv->prepended_module_paths, prepended);
+    qore_append_unique_module_paths(child.priv->appended_module_paths, appended);
 }
 
 void qore_program_private::importFunction(ExceptionSink* xsink, QoreFunction* u, const qore_ns_private& oldns, const char* new_name, bool inject) {
@@ -2589,7 +2719,39 @@ public:
 };
 
 OpaqueTargetShardsForkHandler opaque_target_shards_fork_handler;
+
+#ifdef DEBUG
+//! false once the registry's shards are about to be destroyed at process exit; constant-initialized
+std::atomic<bool> opaque_registry_live{true};
+
+//! clears opaque_registry_live: defined after opaque_shards, it is destroyed before them
+struct OpaqueRegistryLiveSentinel {
+    ~OpaqueRegistryLiveSentinel() {
+        opaque_registry_live.store(false, std::memory_order_relaxed);
+    }
+};
+OpaqueRegistryLiveSentinel opaque_registry_live_sentinel;
+#endif
 }
+
+#ifdef DEBUG
+bool qore_program_private_base::isOpaqueTarget(const AbstractQoreNode* n) {
+    OpaqueTargetShard& shard = getOpaqueTargetShard(n);
+    AutoLocker al(shard.lock);
+    return shard.targets.find(const_cast<AbstractQoreNode*>(n)) != shard.targets.end();
+}
+
+void qore_debug_check_freed_node_not_opaque_target(const AbstractQoreNode* n) {
+    if (!opaque_registry_live.load(std::memory_order_relaxed)) {
+        return;
+    }
+    if (qore_program_private_base::isOpaqueTarget(n)) {
+        fprintf(stderr, "OPAQUE TARGET FREED WHILE REGISTERED: node %p (type %d): an opaque value's reference was "
+            "released without its registration\n", n, n->getType());
+        assert(false);
+    }
+}
+#endif
 
 void qore_program_private_base::clearOpaqueTargets(ExceptionSink* xsink) {
     // take this Program's entries out of the registry under the lock, then do all the work outside
@@ -2741,7 +2903,7 @@ void qore_program_private::del(ExceptionSink* xsink) {
     QoreJIT::instance().waitForBgCompileQueue(pgm);
 
     // delete the namespace and all data
-    qore_root_ns_private::get(*RootNS)->deleteData(!ns_vars, xsink);
+    qore_root_ns_private::get(*RootNS)->deleteData(xsink);
 
     // no more code of this Program runs: free the thread-local data of the family for the last time if this
     // Program is its root, including the data that the destructors run above have saved; the members of the family
@@ -3388,11 +3550,25 @@ void QoreProgram::waitForTermination() {
 void qore_program_private::decThreadCount(QoreProgram& pgm, int tid, ExceptionSink* xsink) {
     bool clear = false;
     unsigned derefs = pgm.priv->decThreadCount(tid, clear);
-    if (!derefs) {
-        return;
+    if (derefs) {
+        releaseDeferredDerefs(pgm, derefs, clear, xsink);
     }
-    // the thread deleted the Program while running its code, and has left it now: clear and dereference it as the
-    // deletion would have (see QoreProgram::waitForTerminationAndDeref())
+}
+
+void qore_program_private::unlockParsing(QoreProgram& pgm, ExceptionSink* xsink) {
+    bool clear = false;
+    unsigned derefs = pgm.priv->unlockParsing(clear);
+    if (derefs) {
+        releaseDeferredDerefs(pgm, derefs, clear, xsink);
+    }
+}
+
+void qore_program_private::releaseDeferredDerefs(QoreProgram& pgm, unsigned derefs, bool clear,
+        ExceptionSink* xsink) {
+    assert(derefs);
+    // the thread deleted the Program while running its code or holding its parse lock, and has left the code and
+    // released the lock now: clear and dereference it as the deletion would have (see
+    // QoreProgram::waitForTerminationAndDeref())
     ExceptionSink local_xsink;
     if (clear) {
         pgm.priv->waitForTerminationAndClear(&local_xsink);
@@ -5214,4 +5390,344 @@ QoreExternalProgramCallContextHelper::QoreExternalProgramCallContextHelper(QoreP
 
 QoreExternalProgramCallContextHelper::~QoreExternalProgramCallContextHelper() {
     delete priv;
+}
+
+// exit hooks: code that the library calls before it waits for the threads of the process, or of a Program being
+// deleted, to end; see qore_register_exit_hook()
+namespace {
+struct QoreExitHook {
+    //! the hook's ID, which also orders the hooks: they run in the reverse order of their registration
+    int64 id;
+    //! the Program whose code registered the hook, with a dependency reference (QoreProgram::depRef())
+    /** The reference keeps the Program's memory while the hook is taken out of the registry to run; it does not keep
+        the Program from being deleted, which runs the Program's hooks that are still registered
+    */
+    QoreProgram* pgm;
+    //! the hook; referenced
+    ResolvedCallReferenceNode* code;
+
+    //! Releases the hook's references; called without the registry lock
+    void release(ExceptionSink* xsink) {
+        code->deref(xsink);
+        pgm->depDeref();
+    }
+};
+
+//! guards the hooks; never held while a hook runs or a reference is released
+std::mutex exit_hook_lock;
+//! the hooks registered, in registration order
+std::vector<QoreExitHook> exit_hooks;
+//! the last hook ID assigned
+int64 exit_hook_seq = 0;
+//! set when the hooks of the process have started to run: no hook can be registered afterwards
+bool exit_hooks_closed = false;
+//! the system threads (qore_start_system_thread()) being started outside the lock
+/** The hooks do not start to run while one is being started, so that the hook that stops it runs after it exists
+*/
+int system_threads_starting = 0;
+//! signalled when the last system thread being started has been started
+std::condition_variable exit_hook_cond;
+
+//! The fork handler of the exit hook registry, a leaf lock: its holders take no other registered lock
+/** In the child, the threads that were starting system threads are gone with their reservations
+*/
+class QoreExitHookForkHandler : public QoreForkHandler {
+public:
+    QoreExitHookForkHandler() : QoreForkHandler(QFLR_LEAF, "exit_hooks") {
+    }
+
+    void prepare() noexcept override {
+        exit_hook_lock.lock();
+    }
+
+    void parent() noexcept override {
+        exit_hook_lock.unlock();
+    }
+
+    void child() noexcept override {
+        // the objects are created again in place: the waiters and the holder are gone with their threads
+        new (&exit_hook_cond) std::condition_variable();
+        new (&exit_hook_lock) std::mutex();
+        system_threads_starting = 0;
+    }
+};
+
+QoreExitHookForkHandler exit_hook_fork_handler;
+
+//! Closes the registry for the process, or for a Program, and waits for the system threads being started
+void qore_close_exit_hooks(QoreProgram* pgm) {
+    std::unique_lock<std::mutex> l(exit_hook_lock);
+    if (!pgm) {
+        exit_hooks_closed = true;
+    } else {
+        // the Program's hooks start: its code can register no more
+        qore_program_private::get(*pgm)->exit_hooks_closed = true;
+    }
+    exit_hook_cond.wait(l, [] () { return !system_threads_starting; });
+}
+
+//! Takes the last hook registered of a Program, or of any Program, out of the registry
+/** @return true if a hook was taken
+*/
+bool qore_take_last_exit_hook(QoreProgram* pgm, QoreExitHook& hook) {
+    std::lock_guard<std::mutex> l(exit_hook_lock);
+    for (auto i = exit_hooks.rbegin(), e = exit_hooks.rend(); i != e; ++i) {
+        if (!pgm || i->pgm == pgm) {
+            hook = *i;
+            exit_hooks.erase(std::next(i).base());
+            return true;
+        }
+    }
+    return false;
+}
+
+//! Runs a hook taken from the registry and releases it
+void qore_run_exit_hook(QoreExitHook& hook) {
+    ExceptionSink xsink;
+    {
+        // the hook runs in its Program, without the policy of a sandboxed caller that deletes a Program; a Program
+        // that is being deleted meanwhile refuses it with an exception
+        ProgramThreadCountContextHelper tch(&xsink, hook.pgm, true);
+        if (!xsink) {
+            QoreSandboxPolicyBarrierHelper barrier;
+            hook.code->invoke(nullptr, &xsink).discard(&xsink);
+        }
+    }
+    hook.release(&xsink);
+    // an exception is reported, and the next hook runs
+    xsink.handleExceptions();
+}
+}
+
+int64 qore_register_exit_hook(const ResolvedCallReferenceNode* code, ExceptionSink* xsink) {
+    // a hook runs, at the end of the process, with its Program's access and without a sandbox: sandboxed code
+    // cannot register one
+    {
+        QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
+        if (policy) {
+            xsink->raiseException("EXIT-HOOK-ERROR", "an exit hook cannot be registered by code that a sandbox "
+                "governs");
+            return -1;
+        }
+    }
+    QoreProgram* pgm = getProgram();
+    assert(pgm);
+    std::lock_guard<std::mutex> l(exit_hook_lock);
+    if (exit_hooks_closed) {
+        xsink->raiseException("EXIT-HOOK-ERROR", "an exit hook cannot be registered after the exit hooks have run");
+        return -1;
+    }
+    if (qore_program_private::get(*pgm)->exit_hooks_closed) {
+        // it would never run: the Program's hooks have run, or are running, because it is being deleted
+        xsink->raiseException("EXIT-HOOK-ERROR", "an exit hook cannot be registered by the code of a Program whose "
+            "exit hooks have run");
+        return -1;
+    }
+    int64 id = ++exit_hook_seq;
+    // taking the references cannot fail, and releasing them takes no lock
+    pgm->depRef();
+    exit_hooks.push_back({id, pgm, code->refRefSelf()});
+    return id;
+}
+
+bool qore_deregister_exit_hook(int64 id, ExceptionSink* xsink) {
+    QoreProgram* pgm = getProgram();
+    QoreExitHook hook;
+    bool found = false;
+    {
+        std::lock_guard<std::mutex> l(exit_hook_lock);
+        for (auto i = exit_hooks.begin(), e = exit_hooks.end(); i != e; ++i) {
+            // a Program removes only its own hooks
+            if (i->id == id && i->pgm == pgm) {
+                hook = *i;
+                exit_hooks.erase(i);
+                found = true;
+                break;
+            }
+        }
+    }
+    if (!found) {
+        return false;
+    }
+    hook.release(xsink);
+    return true;
+}
+
+void qore_run_exit_hooks(QoreProgram* pgm) {
+    // the hooks are taken one at a time, so that a hook that deletes a Program, or a Program deleted meanwhile by
+    // another thread, runs that Program's hooks still registered when it is deleted, and none is run after it
+    qore_close_exit_hooks(pgm);
+    QoreExitHook hook;
+    if (!qore_take_last_exit_hook(pgm, hook)) {
+        return;
+    }
+    // a hook runs in a Qore thread
+    QoreForeignThreadHelper qfth;
+    do {
+        qore_run_exit_hook(hook);
+    } while (qore_take_last_exit_hook(pgm, hook));
+}
+
+bool qore_exit_hooks_started() {
+    std::lock_guard<std::mutex> l(exit_hook_lock);
+    return exit_hooks_closed;
+}
+
+namespace {
+//! The argument of a thread started by qore_start_system_thread()
+struct QoreSystemThreadArg {
+    //! the callback; referenced
+    ResolvedCallReferenceNode* code;
+    //! the Program the callback runs in; with a dependency reference
+    QoreProgram* pgm;
+
+    //! takes the references; cannot throw
+    QoreSystemThreadArg(const ResolvedCallReferenceNode* code, QoreProgram* pgm) noexcept
+            : code(code->refRefSelf()), pgm(pgm) {
+        pgm->depRef();
+    }
+
+    void release(ExceptionSink* xsink) {
+        code->deref(xsink);
+        pgm->depDeref();
+    }
+};
+
+//! Releases the argument of a system thread that did not start, also when the start throws
+class QoreSystemThreadArgHolder {
+public:
+    QoreSystemThreadArgHolder(QoreSystemThreadArg* arg, ExceptionSink* xsink) : arg(arg), xsink(xsink) {
+    }
+
+    ~QoreSystemThreadArgHolder() {
+        if (arg) {
+            arg->release(xsink);
+            delete arg;
+        }
+    }
+
+    //! the thread owns the argument
+    void disown() {
+        arg = nullptr;
+    }
+
+    QoreSystemThreadArg* get() const {
+        return arg;
+    }
+
+private:
+    QoreSystemThreadArg* arg;
+    ExceptionSink* xsink;
+};
+
+//! Releases a system thread start reserved in qore_start_system_thread() however the start ends
+class QoreSystemThreadStartReservation {
+public:
+    ~QoreSystemThreadStartReservation() {
+        std::lock_guard<std::mutex> l(exit_hook_lock);
+        if (!--system_threads_starting) {
+            exit_hook_cond.notify_all();
+        }
+    }
+};
+
+void qore_system_thread_main(ExceptionSink* xsink, void* arg) {
+    std::unique_ptr<QoreSystemThreadArg> sta(static_cast<QoreSystemThreadArg*>(arg));
+    {
+        ProgramThreadCountContextHelper tch(xsink, sta->pgm, true);
+        if (!*xsink) {
+            // counted in the Program now: a cancellation of the Program's threads in progress includes this thread,
+            // as it includes the threads that the Program starts with background (see QoreProgram::cancelThreads())
+            if (qore_program_private::get(*sta->pgm)->cancellingNewThreads()) {
+                thread_list.cancelThread(q_gettid(), "Program thread cancellation requested",
+                    sta->pgm->getProgramId());
+            }
+            sta->code->invoke(nullptr, xsink).discard(xsink);
+        }
+    }
+    sta->release(xsink);
+}
+
+#ifdef DEBUG
+//! the number of system thread starts that fail after they were reserved; see qore_dbg_fail_next_system_thread_starts()
+std::atomic<int> system_thread_dbg_fail_starts{0};
+
+//! Returns true if a system thread start must fail (debug builds, for tests)
+bool qore_dbg_fail_system_thread_start() {
+    int count = system_thread_dbg_fail_starts.load();
+    while (count > 0) {
+        if (system_thread_dbg_fail_starts.compare_exchange_weak(count, count - 1)) {
+            return true;
+        }
+    }
+    return false;
+}
+#endif
+}
+
+int qore_start_system_thread(const ResolvedCallReferenceNode* code, QoreProgram* pgm, ExceptionSink* xsink) {
+    // allocated before the start is reserved: whatever throws after the reservation releases it, and the argument
+    QoreSystemThreadArgHolder arg(new QoreSystemThreadArg(code, pgm), xsink);
+    // the start is reserved under the lock; the hooks do not start to run until it has been made (see
+    // qore_close_exit_hooks()), so that the hook that stops the thread runs after it exists
+    {
+        std::lock_guard<std::mutex> l(exit_hook_lock);
+        if (exit_hooks_closed || qore_program_private::get(*pgm)->exit_hooks_closed) {
+            xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system thread cannot be started after the exit hooks "
+                "of the process or of its Program have started");
+            return -1;
+        }
+        ++system_threads_starting;
+    }
+    // released after the start, also if the start throws
+    QoreSystemThreadStartReservation reservation;
+    // started without the lock, which creating a thread must not hold (it takes other locks, and fork() handlers)
+#ifdef DEBUG
+    if (qore_dbg_fail_system_thread_start()) {
+        xsink->raiseException("THREAD-CREATION-FAILURE", "the system thread start failed (debug fault injection)");
+        return -1;
+    }
+#endif
+    int tid = q_start_thread(xsink, qore_system_thread_main, arg.get(), QTF_NO_SANDBOX_INHERIT);
+    if (tid >= 0) {
+        // the thread owns the argument
+        arg.disown();
+    }
+    return tid;
+}
+
+#ifdef DEBUG
+void qore_dbg_fail_next_system_thread_starts(int count) {
+    system_thread_dbg_fail_starts.store(count > 0 ? count : 0);
+}
+
+int qore_dbg_system_threads_starting() {
+    std::lock_guard<std::mutex> l(exit_hook_lock);
+    return system_threads_starting;
+}
+#endif
+
+void qore_drop_exit_hooks(QoreProgram* pgm) {
+    // the Program is destroyed: its hooks are released without their dependency references, which belong to the
+    // destruction already
+    std::vector<QoreExitHook> drop;
+    {
+        std::lock_guard<std::mutex> l(exit_hook_lock);
+        for (auto i = exit_hooks.begin(); i != exit_hooks.end();) {
+            if (i->pgm == pgm) {
+                drop.push_back(*i);
+                i = exit_hooks.erase(i);
+            } else {
+                ++i;
+            }
+        }
+    }
+    if (drop.empty()) {
+        return;
+    }
+    ExceptionSink xsink;
+    for (auto& i : drop) {
+        i.code->deref(&xsink);
+    }
+    xsink.handleExceptions();
 }

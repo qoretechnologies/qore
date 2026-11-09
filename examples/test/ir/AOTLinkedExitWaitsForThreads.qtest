@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - process exit and static destructors of a qcc-linked executable while threads tear down
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

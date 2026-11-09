@@ -5,11 +5,11 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/RestSchemaValidator.qm
-%requires ../../../../qlib/OpenApi3.qm
-%requires ../../../../qlib/Swagger.qm
+%requires QUnit
+%requires DataProvider
+%requires RestSchemaValidator
+%requires OpenApi3
+%requires Swagger
 %exec-class VariantOrderTest
 
 #! Verifies that each requiredness variant of a schema type or field is the same whichever variant is built first

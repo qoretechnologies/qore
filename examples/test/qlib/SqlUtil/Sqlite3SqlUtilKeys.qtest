@@ -1,16 +1,17 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - keys, indexes, upserts and introspection with the native SQLite3 library
 #
 # Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/SqlUtil
-%requires ../../../../qlib/Sqlite3SqlUtil.qm
-%requires ../../../../qlib/QUnit.qm
+%requires Util
+%requires DataProvider
+%requires SqlUtil
+%requires Sqlite3SqlUtil
+%requires QUnit
 
 %try-module sqlite3
 %define NoSqlite3

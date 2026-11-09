@@ -66,6 +66,16 @@
   anything in its own process (code in its own `Program`, results it computes itself, its own options given to a
   child); `examples/test/runner/test_exec_mode_markers.py` enforces it.  Put in-process checks of a long harness test in
   a test of their own (ex: `qore/operators/hash-value-increment-exec-modes/hash-value-increment-in-process.qtest`).
+- The Linux CI jobs run every test; the macOS job runs only the tests that declare `# test-platform: macos - <why>` (on
+  a line of its own after the `#!` and mode lines; `QORE_TEST_PLATFORM_SUBSET=macos ./run_tests.sh` runs the same
+  selection).  Declare it on a test whose checks depend on the platform: the OS-facing C++ code (files, pipes, FIFOs,
+  non-blocking I/O, sockets, DNS, HTTP/2 and HTTP/3/QUIC connections, TLS, WebSocket connections, processes, signals,
+  fork, threads and cancellation, sandboxing and file-system policy, module and dylib loading, time zones, iconv
+  encodings, stack limits), the JIT and AOT code generation and linking, the binary modules' native libraries, and
+  the database drivers that run on macOS (SQLite3); not on tests of platform-independent logic (parity matrices,
+  parsing, data provider metadata, REST schemas, SQL generation without a database), which the Linux jobs cover.  The
+  reason names the mechanism, ex: `non-blocking File I/O, descriptor redirection and poll readiness of regular files`;
+  `examples/test/runner/test_platform_markers.py` enforces the form.
 - `QORE_TEST_JOBS=<n>|auto ./run_tests.sh` runs n tests at a time (the macOS CI job runs as many as the VM has CPUs, the
   Linux test jobs as many as their pod's CPU and memory limits allow: `qore_ci_test_jobs` in
   `examples/test/docker_test/ci-resource-report.sh`) and prints each test's output whole when it ends.  Tests must

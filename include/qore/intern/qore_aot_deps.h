@@ -223,4 +223,17 @@ DLLEXPORT const QoreTypeInfo* qore_reflection_get_type_from_string(QoreProgram* 
     a separate binary linking libqore — sets it around its module-compile calls. */
 DLLEXPORT void qore_aot_set_module_dep_sink(std::vector<std::string>* sink);
 
+//! AOT module-dependency sink for the compile of an AOT module (.qmod), with everything the module depends on
+/** As qore_aot_set_module_dep_sink(), but the files recorded are:
+    - the files that %include directives of the module opened;
+    - the files of the modules the module requires, directly or not: a module also sees the declarations of the
+      modules its dependencies re-export, and the types of their own dependencies, so the depfile of a module whose
+      dependencies are listed as their sources (--depfile-module-deps=source) must list them all, or neither an
+      incremental build nor the module loader finds the module out of date when one of them changes;
+    - the files that %include directives of those modules opened, for those loaded from their sources;
+    - the candidate files of the modules of the module's failed %try-module directives.
+
+    See design/aot-linked-module-sources.md. */
+DLLEXPORT void qore_aot_set_module_closure_dep_sink(std::vector<std::string>* sink);
+
 #endif

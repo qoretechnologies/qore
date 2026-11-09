@@ -31,9 +31,9 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/DataProvider
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
 %requires i18n
 %requires json
 

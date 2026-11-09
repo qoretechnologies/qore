@@ -910,6 +910,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
                     // Owning program for the per-Program background-compile drain (always).
                     func->pgm = pgm;
+                    func->pgm_id = pgm->getProgramId();
                     // Debug-step hook context (issue #5352): the top-level block can run as
                     // JIT-compiled native code (executeWithFallback), so record its own
                     // StatementBlock and the program's attached-debugger slot to enable the

@@ -25,12 +25,12 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/DataProvider
+%requires Util
+%requires FsUtil
+%requires QUnit
+%requires DataProvider
 %requires yaml
-%requires ../../../../qlib/RestSchemaActions
+%requires RestSchemaActions
 
 %requires json
 

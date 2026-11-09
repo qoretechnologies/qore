@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - temporary directories under the system temp location, mkdir refused in the root directory
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util

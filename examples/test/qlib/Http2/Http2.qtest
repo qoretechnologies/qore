@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 over TCP and TLS with ALPN, non-blocking poll flow control, large bodies, timeouts
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -8,15 +9,15 @@
 %requires json
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/WebSocketClient.qm
-%requires ../../../../qlib/WebSocketHandler.qm
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpServerAsyncIo
+%requires WebSocketClient
+%requires WebSocketHandler
 %requires ../../TestCertificates.qm
 
 %exec-class Http2Test

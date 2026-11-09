@@ -30,13 +30,13 @@
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires ../../../../../qlib/QUnit.qm
-%requires ../../../../../qlib/Util.qm
-%requires ../../../../../qlib/Mime.qm
-%requires ../../../../../qlib/Logger.qm
-%requires ../../../../../qlib/HttpServerUtil.qm
-%requires ../../../../../qlib/HttpServer.qm
-%requires ../../../../../qlib/AsyncSocketIo
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires AsyncSocketIo
 %requires ../../../TestCertificates.qm
 
 %exec-class HttpClientRedirectTest

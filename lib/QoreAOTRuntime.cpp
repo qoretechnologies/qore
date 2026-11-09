@@ -5961,7 +5961,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     closure_ir->computeSlotIdsAndEmbed();
                     closure_variant->setCachedIR(closure_ir.release());
                 }
-                closure_variant->pgm = pgm;
+                closure_variant->setProgram(pgm);
 
                 if (closure_bindings && native_body_key && *native_body_key) {
                     AOTClosureRuntimeBinding binding;
@@ -8684,6 +8684,8 @@ static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm) {
     if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
         ir.ir_only_locals.clear();
         ir.reference_slot_locals.clear();
+        ir.real_reference_locals.clear();
+        ir.real_reference_ir_only_locals.clear();
         ir.ast_visible_body_locals = ir.all_body_locals;
     }
 
@@ -11686,9 +11688,29 @@ static void inheritAOTModulePathLists(QoreProgram* local_pgm, QoreProgram* paren
         return;
     }
 
-    const qore_program_private* parent_priv = nullptr;
+    // an AOT module initialized as library code (see QoreModuleInitSandboxBarrierHelper) has a library Program
+    if (qore_module_init_library()) {
+        local_priv->library_module = true;
+    }
+
+    // the lists are those of the Program loading the module when the module loader names it, as for the inherited
+    // parse options: the loader loads the module's descriptor dependencies and finds the modules it checks for an
+    // AOT module of a build tree with them (see QoreModuleManager::checkAOTModuleDependencyFiles()), so the modules
+    // that the module's initialization loads, those it re-exports among them, must be found in the same way
+    if (aot_module_init_loader_pgm) {
+        parent_pgm = aot_module_init_loader_pgm;
+    }
+    // with the directories of the AOT modules whose dependencies this thread is loading for it (this module is
+    // loaded as one of them; see QoreModulePathScope)
+    std::vector<std::string> parent_prepended, parent_appended;
     if (parent_pgm && parent_pgm != local_pgm) {
-        parent_priv = qore_program_private::get(*parent_pgm);
+        // library code does not resolve its own dependencies and child modules through the module paths of code that
+        // is not trusted that loads it, nor through the directories of the modules found with them; a library
+        // module's own Program has only library code's own
+        const qore_program_private* parent_priv = qore_program_private::get(*parent_pgm);
+        if (!qore_module_init_untrusted_loader() || parent_priv->library_module) {
+            qore_program_private::getEffectiveModulePathLists(parent_pgm, parent_prepended, parent_appended);
+        }
     }
 
     // Source modules inherit the importing Program's path lists, then apply
@@ -11696,10 +11718,8 @@ static void inheritAOTModulePathLists(QoreProgram* local_pgm, QoreProgram* paren
     // order: module prepends, inherited prepends, global module path,
     // inherited appends, module appends.
     append_unique_module_paths(local_priv->prepended_module_paths, module_prepended);
-    if (parent_priv) {
-        append_unique_module_paths(local_priv->prepended_module_paths, parent_priv->prepended_module_paths);
-        append_unique_module_paths(local_priv->appended_module_paths, parent_priv->appended_module_paths);
-    }
+    append_unique_module_paths(local_priv->prepended_module_paths, parent_prepended);
+    append_unique_module_paths(local_priv->appended_module_paths, parent_appended);
     append_unique_module_paths(local_priv->appended_module_paths, module_appended);
 }
 
@@ -13641,10 +13661,11 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
             if (!qore_program_private::get(*tpgm)->hasFeature(dep.c_str())) {
                 printd(5, "AOT module ns_init '%s': loading reexported dep '%s' into target program\n",
                     mod_name, dep.c_str());
-                // Use QMM.loadModuleForReexport() (like QoreAbstractModule::reexport()
-                // uses QMM.loadModuleIntern()) instead of MM.runTimeLoadModule() which
-                // would try to acquire the module manager mutex that is already held by
-                // parseLoadModule/runTimeLoadModule
+                // QMM.loadModuleForReexport() loads the dependency as QoreAbstractModule::reexport()
+                // does, with QMM.loadModuleIntern(); it takes the module manager mutex itself, which
+                // this thread does not hold here: qore_check_load_module_intern() releases it before
+                // it adds the module to the Program, as namespace initialization runs code (the mutex
+                // is not recursive; a debug build asserts that it is not taken twice)
                 QMM.loadModuleForReexport(xsink, dep.c_str(), tpgm);
                 if (xsink) {
                     // A failed reexport makes the public module surface incomplete.
@@ -16141,12 +16162,22 @@ extern "C" DLLEXPORT void qore_aot_raise_init_error(ExceptionSink* xsink, QoreSt
     }
 }
 
-extern "C" DLLEXPORT void qore_aot_register_into_program(QoreProgram* tpgm,
-        void (*desc_fn)(QoreModuleInfo&), const char* path) {
+extern "C" DLLEXPORT void qore_aot_register_into_program_v2(QoreProgram* tpgm,
+        void (*desc_fn)(QoreModuleInfo&), const char* path, const uint8_t* record, uint64_t record_len) {
     ExceptionSink xsink;
-    MM.registerAOTStaticModule(&xsink, tpgm,
-        reinterpret_cast<qore_binary_module_desc_t>(desc_fn),
-        path ? path : "<aot-static>");
+    if (!path) {
+        path = "<aot-static>";
+    }
+    QoreAOTModuleFileInfo info;
+    std::string error;
+    if (!record || qoreAOTDecodeModuleInfo(record, static_cast<size_t>(record_len), info, error)
+            != QoreAOTModuleInfoStatus::FOUND) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "the AOT module metadata linked "
+            "with a statically registered module is invalid: %s", record ? error.c_str() : "it is missing");
+    } else {
+        QMM.registerAOTStaticModuleIntern(xsink, tpgm, reinterpret_cast<qore_binary_module_desc_t>(desc_fn), path,
+            &info);
+    }
     if (xsink) {
         xsink.handleExceptions();
     }

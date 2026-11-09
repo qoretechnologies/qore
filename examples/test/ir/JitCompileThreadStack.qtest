@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - stack size of the JIT background compile thread (pthread default stack differs by OS)
 
 # Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 

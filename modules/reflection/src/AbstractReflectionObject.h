@@ -86,11 +86,22 @@ DLLLOCAL int reflection_check_class_call(const QoreReflectionCaller& caller, con
 DLLLOCAL int reflection_check_class_value_access(const QoreReflectionCaller& caller, const QoreClass* cls,
         const QoreProgram* target, ExceptionSink* xsink);
 
+//! Checks that the caller may use a method through reflection, whichever of its variants is selected
+/** For callers to which the language's member access applies (QoreReflectionCaller::appliesMemberAccess()), every
+    variant of the method must be accessible, as the variant is selected for the arguments at run time
+
+    @return 0 if allowed, -1 if REFLECTION-ACCESS-ERROR was raised
+*/
+DLLLOCAL int reflection_check_method_access(const QoreReflectionCaller& caller, const QoreMethod* m,
+        ExceptionSink* xsink);
+
 //! Checks the functional domain of a function or method variant called through reflection
-/** @param cname the class name for a method variant, or nullptr for a function variant
+/** For a method variant, also checks that the caller may use it (QoreReflectionCaller::checkClassElementAccess())
+
+    @param cname the class name for a method variant, or nullptr for a function variant
     @param fname the function or method name
 
-    @return 0 if allowed, -1 if INVALID-FUNCTION-ACCESS was raised
+    @return 0 if allowed, -1 if INVALID-FUNCTION-ACCESS or REFLECTION-ACCESS-ERROR was raised
 */
 DLLLOCAL int reflection_check_variant_call(const QoreReflectionCaller& caller, const QoreExternalVariant* variant,
         const char* cname, const char* fname, const QoreProgram* target, ExceptionSink* xsink);

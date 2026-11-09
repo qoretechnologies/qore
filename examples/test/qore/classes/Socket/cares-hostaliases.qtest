@@ -5,8 +5,8 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires ../../../../../qlib/QUnit.qm
-%requires ../../../../../qlib/Util.qm
+%requires QUnit
+%requires Util
 
 %exec-class CaresHostAliasesTest
 

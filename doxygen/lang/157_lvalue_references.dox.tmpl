@@ -27,6 +27,8 @@ reference lastorder = \lastrec.order[lastrec.order.size() - 1];
 lastorder.numberofitems = lastorder.items.size();
     @endcode
 
+    A @ref cast "cast" cannot be used in the lvalue of a reference; refer to the lvalue inside the cast instead.
+
     @note Local variables that are referenced are automatically converted to a special type of local variable that is
     protected by a mutual-exclusion thread lock so that the reference can be safely used in background threads.  The
     lvalue represented by the local variable will exist beyond its local scope; as long as the reference to the lvalue

@@ -7,6 +7,10 @@
     This module is always delivered with %Qore and therefore mirrors the %Qore version.
 
     @section reflection_3_0 reflection Module Version 3.0
+    - code that a sandbox governs, and code whose parse options restrict a functional domain, may use the
+      \c private and @ref private_members "private:internal" members, constants and methods of a class through
+      reflection only where the language allows it (see @ref reflection_member_access); other code may use them as
+      before
     - added the @ref Qore::Reflection::Enum "Enum" and @ref Qore::Reflection::EnumMember "EnumMember" classes for
       enum reflection, and @ref Qore::Reflection::Namespace::getEnums() "Namespace::getEnums()" and
       @ref Qore::Reflection::Namespace::getEnum() "Namespace::getEnum()" to list the enums of a namespace and to get

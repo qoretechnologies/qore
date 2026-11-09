@@ -79,53 +79,56 @@ module BflDataProvider {
             ),
         });
 
-        BflGenerateImageDataProvider::initializeTypes();
-        foreach hash<DataProviderActionInfo> action in (BflApi::getActionSet()
-                .getActionInfoList(BflDataProvider::AppName)) {
-            DataProviderActionCatalog::registerAction(action);
-        }
-        foreach hash<auto> helper in (BflJobDataProvider::Helpers.pairIterator()) {
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(BflDataProvider::AppName, sub () {
+            foreach hash<DataProviderActionInfo> action in (BflApi::getActionSet()
+                    .getActionInfoList(BflDataProvider::AppName)) {
+                DataProviderActionCatalog::registerAction(action);
+            }
+            foreach hash<auto> helper in (BflJobDataProvider::Helpers.pairIterator()) {
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": BflDataProvider::AppName, "action": helper.key, "path": "/" + helper.key,
+                    "display_name": helper.value[0], "short_desc": helper.value[1],
+                    "desc": helper.value[1] + (helper.key == "generate-video"
+                        ? "\n\nChoose the video mode and its required inputs. This action consumes credits. "
+                        : "\n\nUse the original job ID and regional polling URL. ")
+                        + "Timeout errors retain the identity needed to resume. Temporary media URLs expire; download promptly.",
+                    "action_code": DPAT_API, "mutates_state": helper.key == "generate-video",
+                    "options": DataProviderActionCatalog::getActionOptionFromFields(BflJobDataProvider::requestType(helper.key).getFields()),
+                    "output_type": helper.key == "download-result" ? BflDownloadedAsset : BflCompletedJob,
+                });
+            }
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-                "app": BflDataProvider::AppName, "action": helper.key, "path": "/" + helper.key,
-                "display_name": helper.value[0], "short_desc": helper.value[1],
-                "desc": helper.value[1] + (helper.key == "generate-video"
-                    ? "\n\nChoose the video mode and its required inputs. This action consumes credits. "
-                    : "\n\nUse the original job ID and regional polling URL. ")
-                    + "Timeout errors retain the identity needed to resume. Temporary media URLs expire; download promptly.",
-                "action_code": DPAT_API, "mutates_state": helper.key == "generate-video",
-                "options": DataProviderActionCatalog::getActionOptionFromFields(BflJobDataProvider::requestType(helper.key).getFields()),
-                "output_type": helper.key == "download-result" ? BflDownloadedAsset : BflCompletedJob,
+                "app": BflDataProvider::AppName,
+                "path": "/generate-image",
+                "action": "generate-image",
+                "display_name": "Generate Image",
+                "short_desc": "Generate an image from a text prompt (async)",
+                "desc": "Generates an image with the selected model, waits for completion, and downloads verified media. "
+                    "The response retains `result.sample` and service metadata and adds `media.data` with the image bytes.\n\n"
+                    "Only options supported by the selected model are accepted. `negative_prompt` is unsupported. "
+                    "The overall timeout includes submission, polling, and download; errors retain an existing job's identity.",
+                "action_code": DPAT_API,
+                "data_dependent_options": True,
+                "groups": ("Image Generation",),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    BflGenerateImageDataProvider::requestType().getFields(){"prompt",}, {
+                        "preselected": True, "required": True,
+                    }
+                ) + DataProviderActionCatalog::getActionOptionFromFields(
+                    BflGenerateImageDataProvider::requestType().getFields(){
+                        "model", "aspect_ratio",
+                    }, {
+                        "preselected": True,
+                    }
+                ) + DataProviderActionCatalog::getActionOptionFromFields(
+                    BflGenerateImageDataProvider::requestType().getFields() - (
+                        "prompt", "model", "aspect_ratio",
+                    )
+                ),
+                "output_type": BflGenerateImageDataProvider::ResponseType,
             });
-        }
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": BflDataProvider::AppName,
-            "path": "/generate-image",
-            "action": "generate-image",
-            "display_name": "Generate Image",
-            "short_desc": "Generate an image from a text prompt (async)",
-            "desc": "Generates an image with the selected model, waits for completion, and downloads verified media. "
-                "The response retains `result.sample` and service metadata and adds `media.data` with the image bytes.\n\n"
-                "Only options supported by the selected model are accepted. `negative_prompt` is unsupported. "
-                "The overall timeout includes submission, polling, and download; errors retain an existing job's identity.",
-            "action_code": DPAT_API,
-            "data_dependent_options": True,
-            "groups": ("Image Generation",),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                BflGenerateImageDataProvider::RequestType.getFields(){"prompt",}, {
-                    "preselected": True, "required": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                BflGenerateImageDataProvider::RequestType.getFields(){
-                    "model", "aspect_ratio",
-                }, {
-                    "preselected": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                BflGenerateImageDataProvider::RequestType.getFields() - (
-                    "prompt", "model", "aspect_ratio",
-                )
-            ),
-            "output_type": BflGenerateImageDataProvider::ResponseType,
         });
     };
 }

@@ -36,9 +36,44 @@ public class JinaRerankDataProvider inherits JinaDataProviderCommon {
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
-        static JinaRerankRequestDataType RequestType = new JinaRerankRequestDataType();
 
-        static JinaRerankResponseDataType ResponseType = new JinaRerankResponseDataType();
+    }
+
+    private {
+        #! The request type, built on first use; see requestType()
+        static *JinaRerankRequestDataType request_type;
+        #! The ID of the request type's builder; see requestType()
+        static int request_type_id = DataProviderActionCatalog::registerLazyValue(
+            \JinaRerankDataProvider::buildRequestType());
+        #! The response type, built on first use; see responseType()
+        static *JinaRerankResponseDataType response_type;
+        #! The ID of the response type's builder; see responseType()
+        static int response_type_id = DataProviderActionCatalog::registerLazyValue(
+            \JinaRerankDataProvider::buildResponseType());
+    }
+
+    #! Returns the request type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static JinaRerankRequestDataType requestType() {
+        return request_type ?? (request_type = DataProviderActionCatalog::getLazyValue(request_type_id));
+    }
+
+    #! Builds the request type; see requestType()
+    private static JinaRerankRequestDataType buildRequestType() {
+        return new JinaRerankRequestDataType();
+    }
+
+    #! Returns the response type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static JinaRerankResponseDataType responseType() {
+        return response_type ?? (response_type = DataProviderActionCatalog::getLazyValue(response_type_id));
+    }
+
+    #! Builds the response type; see responseType()
+    private static JinaRerankResponseDataType buildResponseType() {
+        return new JinaRerankResponseDataType();
     }
 
     constructor(RestClientIo::RestClientIo rest) : JinaDataProviderCommon(rest) {

@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - main and pthread stack size detection, guard size and overflow on small thread stacks
 
 %modern
 

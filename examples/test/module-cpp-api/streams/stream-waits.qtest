@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - timed pipe stream reads and writes, descriptor flags, closed-reader errors per platform
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

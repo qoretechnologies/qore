@@ -783,8 +783,9 @@ public class WscLibraryThreads {
 
 #! The threads waiting to start an action of a client, and the actions of threads that ended without releasing
 #! them; internal to WebSocketClient
-/** Each waiter waits on a Queue of its own, so a wakeup is never lost: one pushed before the waiter waits is still
-    there when it waits.  The state is changed in synchronized methods, and a Queue push is not a cancellation point,
+/** Each waiter waits on a Queue of its own, so a wakeup pushed after it registered and before it waits is still
+    there when it waits; an action recorded before it registered is released by the waiter itself, which releases the
+    recorded actions again right after it registers (see acquireActionUnlocked()).  The state is changed in synchronized methods, and a Queue push is not a cancellation point,
     so a cancelled thread records the action it cannot release (it cannot take the client's lock, a cancellation
     point), and the first waiter is woken to release it; the next thread that starts an action releases it too.
 
@@ -2646,7 +2647,12 @@ ws.connect();
     private disconnectIntern(int cmd = WSCC_GoingAway, *bool destroy, *bool explicit) {
         list<hash<WscAsyncIoResources>> taken = ();
         {
-            AutoLock al(m);
+            m.lock();
+            # the lock is not held when the thread was cancelled while it waited for the action or for the lock again
+            # (see below)
+            on_exit if (m.lockOwner()) {
+                m.unlock();
+            }
 
             if (destroy) {
                 # no connection is published from here on: a connect running on another thread (e.g. the worker of
@@ -2663,7 +2669,13 @@ ws.connect();
                 acquireActionUnlocked(getActionTimeout());
             }
             on_exit if (!destroy) {
-                releaseActionUnlocked();
+                if (m.lockOwner()) {
+                    releaseActionUnlocked();
+                } else {
+                    # cancelled while the lock was released (see below): the action is released by the next holder of
+                    # the lock (see releaseOrphanedActionsUnlocked()); not a cancellation point
+                    action_waiters.addOrphan(gettid());
+                }
             }
 
             # checked in the action, so no connection can be published between the check and the disconnect: an
@@ -2682,12 +2694,15 @@ ws.connect();
                 sleep_cond.broadcast();
                 # subclass steps of an explicit disconnect run in the action, without the lock
                 m.unlock();
-                on_exit m.lock();
                 try {
                     explicitDisconnect();
                 } catch (hash<ExceptionInfo> ex) {
                     logError("exception in explicitDisconnect(): %s", get_exception_string(ex));
                 }
+                # a cancellation point: when the thread was cancelled, e.g. in explicitDisconnect(), the exception
+                # leaves without the lock, the connection is not closed by this call, and the action is released by
+                # the next holder of the lock (see the on_exit code above)
+                m.lock();
             }
 
             if (destroy) {
@@ -2703,12 +2718,7 @@ ws.connect();
         # Release the connection and report it closed outside the action and without the lock; the connection is no
         # longer the client's, so re-entrant disconnect() calls are no-ops, and a connect() made meanwhile starts a
         # new connection
-        foreach hash<WscAsyncIoResources> res in (taken) {
-            releaseClaimedConnection(res);
-            if (!notifyClosed(res)) {
-                break;
-            }
-        }
+        releaseAndNotifyClosed(taken);
     }
 
     #! Removes any warning @ref Qore::Thread::Queue "Queue" object from the Socket
@@ -3286,15 +3296,21 @@ ws.setEventQueue();
         return rv;
     }
 
-    #! Releases connections taken with closeAllConnectionsUnlocked() and reports them closed; called without \c m held
-    /** @since WebSocketClient 2.5
+    #! Releases connections taken from the client and reports them closed; called without \c m held
+    /** In order, until the object is destroyed in a callback.  Recursive, with no loop: also called in cleanup on a
+        cancelled thread (e.g. by an \c on_exit block), where a loop is a cancellation point at each iteration that
+        would skip the connections left (see WscActionWaiters); the list is short (the connections of one client).
+
+        @since WebSocketClient 2.5
     */
     private releaseAndNotifyClosed(list<hash<WscAsyncIoResources>> l) {
-        foreach hash<WscAsyncIoResources> res in (l) {
-            releaseClaimedConnection(res);
-            if (!notifyClosed(res)) {
-                return;
-            }
+        if (!l) {
+            return;
+        }
+        hash<WscAsyncIoResources> res = shift l;
+        releaseClaimedConnection(res);
+        if (notifyClosed(res)) {
+            releaseAndNotifyClosed(l);
         }
     }
 
@@ -3664,6 +3680,7 @@ ws.setEventQueue();
         # the actions of threads that could not release them are released first; a thread with the TID of such a
         # thread does not take its action for its own
         releaseOrphanedActionsUnlocked();
+        orphansReleasedHook();
         # an action handed over to this thread (see connectAsync()) becomes this call's action, unless the handoff
         # was abandoned
         *WscActionHandoff handoff = action_handoffs.take();
@@ -3771,6 +3788,15 @@ ws.setEventQueue();
         @since WebSocketClient 2.5
     */
     private waitingForHandoffHook() {
+    }
+
+    #! Called by acquireActionUnlocked() after it released the orphaned actions, before it registers a waiter, with
+    #! the client's lock held; does nothing
+    /** A hook for tests, which can record an orphaned action before the thread registers as a waiter.
+
+        @since WebSocketClient 2.5
+    */
+    private orphansReleasedHook() {
     }
 
     #! Called by a thread about to wait for an action, without the client's lock; does nothing

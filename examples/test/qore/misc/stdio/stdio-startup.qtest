@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - startup with closed stdin/stdout/stderr descriptors: data files never alias fds 0-2
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

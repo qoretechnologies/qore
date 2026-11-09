@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# the "cppapiuser" test module is built into the build tree and never installed, so QORE_MODULE_DIR must include the
+# build tree (run_tests.sh does this)
+
+%modern
+
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class ClassCopyTest
+
+#! the releases reported by the child Program
+class CopyResults {
+    public {
+        static list<string> released = ();
+    }
+}
+
+#! records a release in the child Program
+sub copy_report(string what) {
+    CopyResults::released += what;
+}
+
+#! A copy of a class made by a module with QoreClass::copy() and added to a Program shares the class's static
+#! variables
+/** The copy takes a reference to the values of the static variables, which the class list entry that it is added to
+    releases when the Program's data is cleared; the values are released once, when the last reference is released.
+*/
+class ClassCopyTest inherits QUnit::Test {
+    public {
+        const Src = "
+class Marker {
+    destructor() {
+        copy_report(\"marker\");
+    }
+}
+
+public class CopySrc {
+    public {
+        static int v = 5;
+        static Marker m = new Marker();
+    }
+}
+
+bool sub add() {
+    return cpp_api_add_class_copy(\"CopySrc\", \"CppApiCopy\");
+}
+";
+    }
+
+    constructor() : QUnit::Test("ClassCopyTest", "1.0", \ARGV) {
+        addTestCase("class copy added by a module", \copyTest());
+        set_return_value(main());
+    }
+
+    copyTest() {
+        CopyResults::released = ();
+        {
+            Program p(PO_NEW_STYLE);
+            p.loadModule("cppapiuser");
+            p.importFunction("copy_report");
+            p.parse(Src, "copy");
+            assertTrue(p.callFunction("add"));
+            assertEq((), CopyResults::released);
+            delete p;
+        }
+        # the values are released once, with the Program
+        assertEq(("marker",), CopyResults::released);
+    }
+}

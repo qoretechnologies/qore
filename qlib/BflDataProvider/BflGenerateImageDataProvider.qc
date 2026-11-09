@@ -48,14 +48,45 @@ public class BflGenerateImageDataProvider inherits BflDataProviderCommon {
             "constructor_options": ConstructorOptions, "supports_request": True};
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys});
-        static *BflGenerateImageRequestDataType RequestType;
         const ResponseType = BflCompletedJob;
     }
-    private { static Mutex type_mutex(); }
+
+    private {
+        #! The request type, built on first use; see requestType()
+        static *BflGenerateImageRequestDataType request_type;
+    }
+    private {
+        #! The ID of the builder of the types; see initializeTypes()
+        static int types_id = DataProviderActionCatalog::registerLazyValue(
+            \BflGenerateImageDataProvider::buildTypes());
+    }
+    #! Returns the request type, which is built on first use
+    /** It is built from the vendored API description, so loading the module does not parse it
+    */
+    static BflGenerateImageRequestDataType requestType() {
+        initializeTypes();
+        return request_type;
+    }
+
+    #! Returns the response type
+    /** Unlike the request type, it is not built from the vendored API description, so it is a constant; this accessor
+        gives it the same form as the request type's
+    */
+    static AbstractDataProviderType responseType() {
+        return ResponseType;
+    }
+
     #! Initializes the immutable compatible form once
-    static initializeTypes() {
-        AutoLock lock(type_mutex);
-        if (!RequestType) { RequestType = new BflGenerateImageRequestDataType(); }
+    private static initializeTypes() {
+        if (!request_type) {
+            hash<auto> types = DataProviderActionCatalog::getLazyValue(types_id);
+            request_type = types.request;
+        }
+    }
+
+    #! Builds the types; see initializeTypes()
+    private static hash<auto> buildTypes() {
+        return {"request": new BflGenerateImageRequestDataType()};
     }
     #! Creates the action using an existing authenticated client
     constructor(BflRestClientIo rest) : BflDataProviderCommon(rest) {}
@@ -63,12 +94,12 @@ public class BflGenerateImageDataProvider inherits BflDataProviderCommon {
     constructor(*hash<auto> options) : BflDataProviderCommon(options) {}
     #! Returns the preserved action identity
     string getName() { return ProviderInfo.name; }
-    private *AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
+    private *AbstractDataProviderType getRequestTypeImpl() { return requestType(); }
     private *AbstractDataProviderType getRequestTypeWithOptionsImpl(*hash<auto> options) {
         string model = options.model ?? DefaultImageModel;
         if (!ImageModelPathMap.hasKey(model)) { throw "BFL-INPUT-ERROR", "select a supported image model"; }
         HashDataType type("BflSelectedImageRequest");
-        foreach string name in (("prompt", "model")) { type.addField(RequestType.getFields(){name}); }
+        foreach string name in (("prompt", "model")) { type.addField(requestType().getFields(){name}); }
         foreach AbstractDataField field in (BflApi::getActionSet().getOperationEx(
                 BflApi::actionForPath(ImageModelPathMap{model})).getRequestFields().iterator()) {
             if (!inlist(field.getName(), ("prompt", "webhook_url", "webhook_secret"))) { type.addField(field); }
@@ -79,7 +110,7 @@ public class BflGenerateImageDataProvider inherits BflDataProviderCommon {
     private *AbstractDataProviderType getRequestTypeWithDataImpl(auto req) {
         return getRequestTypeWithOptionsImpl(req.typeCode() == NT_HASH ? req : NOTHING);
     }
-    private *AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *AbstractDataProviderType getResponseTypeImpl() { return responseType(); }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     #! Executes one validated image generation and download

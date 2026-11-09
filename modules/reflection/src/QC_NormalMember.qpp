@@ -75,6 +75,10 @@ auto NormalMember::getValue(object obj) [flags=RET_VALUE_ONLY] {
     if (reflection_check_class_value_access(caller, m->cls, m->pgm, xsink)) {
         return QoreValue();
     }
+    // the member's access, as the language applies it, for code that a sandbox governs or that is restricted
+    if (caller.checkClassElementAccess(m->cls, m->getAccess(), "member", m->name.c_str(), xsink)) {
+        return QoreValue();
+    }
     // the object's own Program as well: the member's value belongs to it
     if (reflection_check_program_access(caller, obj->getProgram(), "read or write the members of objects of", xsink)) {
         return QoreValue();
@@ -114,6 +118,10 @@ nothing NormalMember::setValue(object obj, auto val) {
         return QoreValue();
     }
     if (reflection_check_class_value_access(caller, m->cls, m->pgm, xsink)) {
+        return QoreValue();
+    }
+    // the member's access, as the language applies it, for code that a sandbox governs or that is restricted
+    if (caller.checkClassElementAccess(m->cls, m->getAccess(), "member", m->name.c_str(), xsink)) {
         return QoreValue();
     }
     // the object's own Program as well: the member's value belongs to it

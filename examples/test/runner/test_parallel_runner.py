@@ -326,15 +326,17 @@ kill -9 $shells
         self.assertEqual(1, result.returncode, result.stdout + result.stderr)
         blocks = self.blocks(result.stdout)
         self.assertIn("out hang.qtest: started", blocks["hang.qtest"])
-        self.assertIn("TIMEOUT: test exceeded 1s limit", blocks["hang.qtest"])
-        self.assertIn("*** the test exceeded its 1s limit: SIGUSR1 sent for the call stacks of its threads ***",
-                      blocks["hang.qtest"])
+        # the test does not announce a SIGUSR1 handler (see test_watchdog.py), so it is aborted at once
+        self.assertIn("*** the test exceeded its 1s limit: SIGABRT sent at once, as it does not handle SIGUSR1, which"
+                      " would end it without its call stacks or a core dump ***", blocks["hang.qtest"])
+        self.assertIn("TIMEOUT: test exceeded 1s limit (it was ended by signal 6)", blocks["hang.qtest"])
         self.assertIn("Failed tests:\n./examples/test/hang.qtest\n", result.stdout)
 
     @unittest.skipUnless(sys.platform.startswith("linux"), "the runner looks for leftover processes in /proc")
     def test_leftover_processes_in_a_parallel_run(self):
         # a process that the test leaves with an environment of its own (no QORE_TEST_PROCESS_MARK) still holds the
-        # test's output, and is found by it
+        # test's output, and is found by it, although it has left the runner's process tree (init adopted it when the
+        # test ended): the log of a parallel run's test is the run's own, so no other runner holds it
         self.make_test("leaves.qtest", "env -i /bin/sleep 300 &\necho \"out leaves.qtest: left\"\n")
         self.make_test("ok.qtest", "exit 0\n")
         result = self.run_runner(2)

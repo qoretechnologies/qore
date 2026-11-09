@@ -1,11 +1,12 @@
 #!/usr/bin/env qore
+# test-platform: macos - process exit with signal threads, SIGINT callbacks and native thread-local cleanup
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # test-timeout: 30
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires ../../../../../qlib/QUnit.qm
+%requires QUnit
 
 %exec-class ExplicitExitTest
 

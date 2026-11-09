@@ -75,15 +75,19 @@ module AzureOpenAiDataProvider {
             "groups": (DataProvider::AppGroup::AiLlm,),
         });
 
-        foreach RestSchemaActionSet actions in (AzureOpenAiSchema::getActionSets()) {
-            foreach hash<DataProviderActionInfo> action in (
-                    actions.getActionInfoList(AzureOpenAiDataProvider::AppName)) {
-                if (action.action == "embedding") {
-                    action.mutates_state = False;
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(AzureOpenAiDataProvider::AppName, sub () {
+            foreach RestSchemaActionSet actions in (AzureOpenAiSchema::getActionSets()) {
+                foreach hash<DataProviderActionInfo> action in (
+                        actions.getActionInfoList(AzureOpenAiDataProvider::AppName)) {
+                    if (action.action == "embedding") {
+                        action.mutates_state = False;
+                    }
+                    DataProviderActionCatalog::registerAction(action);
                 }
-                DataProviderActionCatalog::registerAction(action);
             }
-        }
+        });
     };
 }
 

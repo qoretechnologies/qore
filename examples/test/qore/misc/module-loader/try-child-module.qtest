@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - dlopen of qcc-built child qmods and source fallback when a binary module fails to load
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 

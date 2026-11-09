@@ -2104,6 +2104,7 @@ pgm.importClass("MyNamespace::MyClass");
     @endcode
 
     @throw CLASS-IMPORT-ERROR Cannot import a class into the same Program object; class or namespace with this name already exists or the source class does not exist; injection indicated but @ref Qore::PO_ALLOW_INJECTION not set, or the class name or the name to import it as contains a NUL character (since %Qore 3.0)
+    @throw CLASS-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a sandbox or has parse options that restrict a functional domain; such code cannot re-export classes to the modules that a Program loads (see @ref sandbox_module_init)
     @throw ENCODING-CONVERSION-ERROR the class name could not be converted to the @ref default_encoding "default character encoding"
 
     @param reexport if @ref True "True", the imported class is marked for re-export to child Programs created when modules are required transitively from this Program — i.e. when this Program is the parent in a module-loader child-Program creation, qore_program_private::inheritParseImports() will propagate the imported class so the child's parse can resolve unqualified references to it.  Default is @ref False "False" (no re-export), which preserves the historical "imports stay local" semantic and avoids diamond conflicts with namespace-merged public classes that the host never opted to expose.
@@ -2140,6 +2141,12 @@ nothing Program::importClass(string class_name, *string import_as, *softbool inj
         if (nn->empty())
             return xsink->raiseException("CLASS-IMPORT-ERROR", "the new class name while importing class '%s' may not be empty", tmp->c_str());
     }
+    // a class re-exported to the modules that the Program loads is used by library code
+    if (reexport && qore_caller_is_untrusted()) {
+        return xsink->raiseException("CLASS-IMPORT-ERROR", "cannot import class '%s' for re-export: code that a "
+            "sandbox governs or whose functional domains are restricted cannot re-export classes to the modules "
+            "that a Program loads", tmp->c_str());
+    }
     qore_program_private::get(*p)->importClass(xsink, *qore_program_private::get(*getProgram()), tmp->c_str(),
         import_as ? nn->c_str() : nullptr, inject, static_cast<q_setpub_t>(module_visibility), reexport);
 }
@@ -2156,6 +2163,7 @@ pgm.importHashDecl("MyNamespace::MyHash");
     @endcode
 
     @throw HASHDECL-IMPORT-ERROR Cannot import a hashdecl into the same Program object; conflict with an existing definition, or the hashdecl name or the name to import it as contains a NUL character (since %Qore 3.0)
+    @throw HASHDECL-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a sandbox or has parse options that restrict a functional domain; such code cannot re-export hashdecls to the modules that a Program loads (see @ref sandbox_module_init)
     @throw ENCODING-CONVERSION-ERROR the hashdecl name could not be converted to the @ref default_encoding "default character encoding"
 
     @param reexport if @ref True "True", the imported hashdecl is marked for re-export to child Programs created when modules are required transitively from this Program — i.e. when this Program is the parent in a module-loader child-Program creation, qore_program_private::inheritParseImports() will propagate the imported hashdecl so the child's parse can resolve unqualified references to it (closest-to-root match algorithm).  Default is @ref False "False" (no re-export), which preserves the historical "imports stay local" semantic.
@@ -2189,6 +2197,12 @@ nothing Program::importHashDecl(string hashdecl_name, *string import_as, bool re
 
         if (nn->empty())
             return xsink->raiseException("HASHDECL-IMPORT-ERROR", "the new hashdecl name while importing hashdecl '%s' may not be empty", tmp->c_str());
+    }
+    // a hashdecl re-exported to the modules that the Program loads is used by library code
+    if (reexport && qore_caller_is_untrusted()) {
+        return xsink->raiseException("HASHDECL-IMPORT-ERROR", "cannot import hashdecl '%s' for re-export: code that "
+            "a sandbox governs or whose functional domains are restricted cannot re-export hashdecls to the modules "
+            "that a Program loads", tmp->c_str());
     }
     qore_program_private::get(*p)->importHashDecl(xsink, *qore_program_private::get(*getProgram()),
         tmp->c_str(), import_as ? nn->c_str() : nullptr, CSP_UNCHANGED, reexport);
@@ -3542,8 +3556,10 @@ bool Program::cancelThread(int tid, *string reason) [dom=THREAD_CONTROL,EMBEDDED
 //! Requests cooperative cancellation of all threads in this Program
 /** @param reason optional explanation @return number of registered threads receiving a request
     @throw PROGRAM-THREAD-ERROR called from inside this Program
-    @note Includes starting threads and descendants until the Program next becomes idle. Cancellation can
-    be caught or deferred; use waitForThreads() to observe completion. A later evaluation is unaffected.
+    @note Includes starting threads and descendants until the Program next becomes idle, also the threads that a
+    @ref Qore::SandboxManager::createSystemThreadCall() "system thread capability" of this Program starts.
+    Cancellation can be caught or deferred; use waitForThreads() to observe completion. A later evaluation is
+    unaffected.
     @since %Qore 3.0
 */
 int Program::cancelThreads(*string reason) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {

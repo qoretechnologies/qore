@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - FTP control and EPSV/PASV data connections over loopback sockets, FTPS
 
 %modern
 %enable-all-warnings

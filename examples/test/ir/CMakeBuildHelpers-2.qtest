@@ -7,11 +7,12 @@
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires ../../../qlib/QUnit.qm
-%requires ../../../qlib/FsUtil.qm
+%requires QUnit
+%requires FsUtil
 %requires ../TestFileTime.qm
+%requires ./CMakeBuildHelpersTestBase.qm
 # catalog install reconciliation is verified by composing what it leaves installed
-%requires ../../../qlib/DataProvider
+%requires DataProvider
 %requires i18n
 %requires json
 

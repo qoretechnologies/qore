@@ -30,6 +30,10 @@ A regular `.qmod` without a dependency file next to it is **not checked**:
 - a module compiled by hand with `qcc --compile-module` (or `qore --compile-module`) without `--depfile`: it is used
   even if its source has changed since; rebuild it, or compile it with `--depfile` to have it checked.
 
+qcc writes the real path of a `.qmod` as the target of its dependency file, also when `-o` is relative (before,
+a relative target was taken as relative to the dependency file's directory, not to the directory qcc ran in, so the
+loader ignored the file and checked nothing); `--depfile-target` names another target.
+
 A dependency file is **used only for the module that its rule names**: its target (the `-o` path qcc wrote it for)
 must resolve to the module that is checked, the regular file itself or, for a link, the module the link resolves
 to; a relative target is taken relative to the directory of the dependency file.  A dependency file whose target is
@@ -45,16 +49,92 @@ extraction gives files new modification times without changing them (see below),
 tell a changed source from a touched one.
 
 The check is skipped for a Program that cannot access the filesystem (`PO_NO_FILESYSTEM`), and a file that the
-filesystem policy of a sandbox does not allow to be read is not checked.  When the source module that is loaded
+filesystem policy of a sandbox does not allow to be read is not checked.  The sandbox is the one that governs the
+load: none for library code (a module from the process-wide module path, initialized with no sandbox provenance; see
+`QoreModuleInitSandboxBarrierHelper`), whose dependencies are found and loaded as library code, so its check reads
+the files that it would load; for a module that sandboxed code finds through its own module path or names by path,
+the sandbox of that code (`sandboxDeniedTest` and `sandboxLibraryTest` in
+`examples/test/ir/AOTModuleDependencyStale.qtest`).  When the source module that is loaded
 instead fails, `AOT-MODULE-STALE` follows its error in the exception chain (see
 `design/module-parse-option-masks.md`, "Reporting a refused AOT module").
 
 ## The sources of a module
 
 The sources are the files that the dependency file of the module lists (`<qmod>.d`, written by qcc with `--depfile`
-for make): the module's own `.qm`, `.qc` and `.ql` files and those of the modules it depends on, and the binary
-modules it depends on.  Without a dependency file, the main source of the module and the `.qm` and `.qc` files of its
+for make).  For an AOT module (`.qmod`), qcc lists everything the module was compiled from
+(`qore_aot_set_module_closure_dep_sink()` in `include/qore/intern/qore_aot_deps.h`):
+
+- the module's own `.qm`, `.qc` and `.ql` files;
+- the files that its `%include` directives opened (`qore_program_private::included_files`, recorded by the scanner):
+  they are parsed as part of the module; qcc listed none of them before, so neither an incremental build nor the
+  loader saw a change to one;
+- the modules it requires **directly or not**: the module sees the declarations of what its dependencies re-export,
+  and the types of their own dependencies, so a module that listed only its direct dependencies by their sources
+  (`--depfile-module-deps=source`) was not rebuilt, nor found out of date, when a module that a dependency re-exports
+  changed.  The closure follows `QoreModuleManager::getModuleDependencies()` (the user and binary modules a source
+  module loaded, the descriptor dependencies of an AOT module, the declared dependencies of a native binary module);
+  each module is listed by its sources (or its file, for a binary module), with the files its `%include` directives
+  opened when it was loaded from its source and, for an AOT module of a build tree, everything its own depfile lists;
+- the candidate files of the modules of its failed `%try-module` directives.
+
+The depfile of a script object (`.qo`) is unchanged: it lists the modules the script loads directly, and its include
+closure as before.  Without a dependency file, the main source of the module and the `.qm` and `.qc` files of its
 directory are the sources.
+
+## A dependency loaded from another module
+
+The sources say what the module was compiled from, not which module the loader finds for a dependency now: a module
+that appears in a directory of the module path that is searched first (an installed module, a test's stand-in) is
+loaded instead of the one the module was compiled against, and the module's code would run against declarations it
+was not compiled for.  So once the dependencies of an AOT module of a build tree are loaded, and before the module is
+mapped (`QoreModuleManager::checkAOTModuleDependencyFiles()`, called by `loadBinaryModuleFromPath()`), every module
+it was compiled with is checked:
+
+- the dependencies of its descriptor, and every module its metadata says it was compiled with: the modules it
+  requires, directly or not, and the modules they re-export.  qcc keeps `%requires(reexport)` modules out of the
+  descriptor's dependencies (a re-exported module can require the module back, and the loader loads the descriptor's
+  dependencies before it maps the module), and a module further down the chain can be loaded from another file while
+  its dependent comes from its source, so the descriptor alone is not enough.  qcc writes the names
+  (`QoreAOTModuleFileInfo::compiled_with`, format version 2 of the metadata record) from the modules loaded in the
+  Program the module was compiled in: the files of the depfile do not say which of them are modules (a file that an
+  `%include` directive opened can have the name of a module, `<x>.qm`);
+- a module that is loaded is checked as it was loaded; one that is not loaded yet (a module the AOT module
+  re-exports, which its initialization loads) is found without loading it, in the search order of
+  `loadModuleIntern()` (`QoreModuleManager::findModuleFileUnlocked()`), in the module path that the module's
+  initialization searches (`inheritAOTModulePathLists()`): the module's own `%prepend-module-path` directories, which
+  qcc writes into its metadata, those of the Program loading it, the module path, those the Program appends, and the
+  module's own `%append-module-path` directories.  The initialization inherits the lists of the Program loading the
+  module (the one the loader checks with), not of the Program that happens to be current, so both find the same file.
+
+A module is the one compiled against when:
+
+- the file it comes from is listed in the module's depfile (a source module, a binary module, or an AOT module with
+  `--depfile-module-deps=artifact`);
+- or it is a copy of such a file, with the same name, size and content hash (as the fingerprint file records them; a
+  link farm, an installed copy);
+- or it is an AOT module of a build tree whose own sources (the file of the module's main source, or the files of its
+  module directory, as its own depfile lists them) are listed there.
+
+A native binary module counts as the one compiled against only when it is the listed file or an identical copy of it.
+Another build of it, even with the same name and module API version (such as an installed one), is a different
+module: AOT code depends on more of a native module than the names of its symbols (constants folded into the code,
+the variants it was bound to, the hashdecls and placeholders it was compiled against, purity flags), and the module
+API version in the file's name (`<name>-api-<x>.<y>.qmod`) is the version of the module API, not of the module.
+
+An AOT module without its depfile (an installed module, or one compiled by hand without `--depfile`) is not checked:
+what it was compiled from is not known, and the loader does not check such a module's own sources either.
+Nor is a statically registered module (a `.qoa`, or a module object linked into a program): it has no file and no
+depfile of its own, and the build of the program that links it rebuilds it; its dependencies are still found with its
+own module path directives, from the metadata record linked with it (see `aot-object-files-and-module-artifacts.md`).
+
+Otherwise the module is out of date: the loader raises `AOT-MODULE-STALE`, which, as for any AOT module that cannot
+be loaded, loads the source module instead with a `BINARY-MODULE-SOURCE-FALLBACK` warning.  Without a source module
+the error stands: AOT code compiled against another module than the one loaded for it can misbehave, so it is not
+loaded with a warning (unlike an AOT module compiled without an optional module that is available now).  A module
+that differs only in its path (an identical copy) is not another module, so it never gets here.  A builtin
+module, a file the sandbox that governs the load does not let the loader read (see above) and a module loaded into a
+Program without filesystem access are not checked.  An incremental build cannot see such a module appear (a make
+prerequisite cannot be a file that does not exist); the loader reports it and asks for the module to be rebuilt.
 
 ## When a source has changed
 
@@ -102,6 +182,10 @@ process.
 another size) and a changed dependency are found; sources that only got new modification times are not; the
 fingerprint file lists the sources of the depfile; without a fingerprint file or a depfile, the modification time
 decides; a module that is not a link, or one that a Program without filesystem access loads, is not checked.
+`examples/test/ir/AOTModuleDependencyStale.qtest`: a changed include file and a changed module that a dependency
+re-exports make a module out of date and are listed in its depfile; a dependency loaded from another module makes a
+module out of date;
+one loaded from its source, from its own AOT module or from an identical copy is the module compiled against.
 `examples/test/ir/AOTModuleStaleFallback.qtest`: a built module that is a regular file with its depfile, first in the
 module path of a child process as in `run_tests.sh`, is checked (a changed source is found, a touched one is not, and
 without the depfile the module is loaded); a module compiled without `--depfile` is not checked; and an out-of-date

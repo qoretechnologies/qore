@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - polling a regular file's descriptor to stream FileInputStream bodies over HTTP/1.x and 3
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved

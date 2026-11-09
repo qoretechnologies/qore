@@ -4,13 +4,13 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/RestClientIo.qm
-%requires ../../../../qlib/QoreRagTypes.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/VoyageRestClient.qm
-%requires ../../../../qlib/VoyageDataProvider
+%requires QUnit
+%requires RestClientIo
+%requires QoreRagTypes
+%requires HttpServer
+%requires HttpServerAsyncIo
+%requires VoyageRestClient
+%requires VoyageDataProvider
 %requires json
 
 %exec-class VoyageEmbedderRateLimitTest

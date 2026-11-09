@@ -55,7 +55,7 @@ The convention both existing applications follow:
 ```
 qlib/<App>RestClient.qm              # connection + client; conventional, see the development guide
 qlib/<App>DataProvider/
-  <App>DataProvider.qm               # module definition, registerApp(), registerActions()
+  <App>DataProvider.qm               # module definition, registerApp(), registerLazyAppActions()
   <App>DataProviderDefs.qc           # module dir, logo, shared constants
   <App>DataProviderFactory.qc        # factory registration
   <App>DataProvider.qc               # root provider
@@ -322,6 +322,93 @@ same reason the canonical field of a name, which is also the recursion cut a pro
 is handed, is the field of the bare use, and a use with a description or default of its own gets a copy.
 `examples/test/qlib/RestSchemaValidator/VariantOrder.qtest` builds each variant on its own and after the others,
 for OpenAPI 3 and Swagger 2.0, and requires the same result.
+
+## Actions are registered on first use
+
+A module registers its app when it is loaded and its actions with
+`DataProviderActionCatalog::registerLazyAppActions()`: the closure it passes builds the action set and registers
+everything from the first generated action on, and runs the first time that the catalog is asked for the app or
+its actions. Loading the module then parses no schema and builds no action set; a program that only constructs a
+provider, or only needs the connection, never registers the actions at all.
+
+- **The closure registers everything that came after the first generated action**, the hand-written and event
+  actions included, so that the app's actions are registered in the same order as when they were registered at
+  load. What a provider needs without the catalog, such as codecs (`RestSchemaActionCodecs::registerCodec()`),
+  stays outside it.
+- **The getters that use the app run the closure first**, and so do `checkpointDiscoverySnapshot()` and
+  `sealDiscovery()`, so they return what they returned when the actions were registered at load. Concurrent first
+  uses wait for the one that runs the closure. `getActionsNoInit()` and `getAllAppsNoInit()` never run or wait for
+  it: listings, pickers and other readers that need actions without using the app read them from the provider
+  index, which holds every app's actions; `hasLazyAppActions()` says when an app's live catalog entry is partial.
+- **A trusted reader runs the closure on its own thread; a sandboxed reader never does.** An object created while
+  serving sandboxed code keeps that code's sandbox, interrupts included, and what the closure creates (schemas,
+  types) is shared by every reader. A sandboxed reader's closure runs on the catalog worker: a thread of the
+  DataProvider Program that no sandbox governs, started through a `SandboxManager::createSystemThreadCall()`
+  capability that the module creates when it is loaded, the first time a sandboxed reader needs it, so a process
+  with no sandboxed reader runs no extra thread. The worker runs only the module's fixed loop, which reads jobs
+  from the module's queue: an app, whose registrations made by trusted modules it runs, or a lazy value (below).
+  The reader waits for its job; its own interrupt or limit ends only its wait. Trusted readers never queue behind
+  the worker, so a reader holding a lock that another app's closure needs is not blocked by it, and
+  `registerAction()` waits only for an initialization of its app that it needs (a pending app), not for the app's
+  lazy closure. An exit hook (`register_exit_hook()`) stops the worker before the library waits for the process's
+  threads; the readers still waiting get `DATA-PROVIDER-LAZY-WORKER-STOPPED`, and so do those whose job the worker
+  had not run when a closure ended its thread. A sandboxed reader is refused with `DATA-PROVIDER-LAZY-INIT-ERROR`
+  when there is no worker (after the exit hook, or when the module was loaded by code that may not create the
+  capability) and when it is loading a module: a closure can load a module, which another thread cannot load until
+  this thread has loaded its own, and the module loader does not see a wait for the worker, so the two threads
+  would wait for each other. A closure that fails is retained as an initialization failure of the app and not run
+  again (at load, the same failure made the module fail to load), unless its thread was interrupted, cancelled or
+  over a limit, or exited: then the next reader runs it again, and the actions it registers replace those that the
+  stopped run registered, which differ from them in the objects that each run builds.
+- **No code that a tenant registers runs on another tenant's or trusted code's thread, and no trusted listener runs
+  under a tenant's sandbox.** A module from the module path is initialized with no sandbox provenance, also when
+  sandboxed code loads it first (Qore's module initialization barrier, `design/module-sandboxing-audit-guide.md`), so
+  its registrations are trusted and what they create belongs to no tenant; this replaces the earlier rule that a
+  module loaded first by sandboxed code made its registrations under that sandbox. A registration made under a
+  sandbox (sandboxed code itself, or a module that it loaded by path, also under a policy barrier), lazy or pending,
+  runs when it is made, on the registering thread, as before registrations were
+  deferred, and so do the `get_output_type` and `get_dynamic_options` callbacks of the actions it registers.
+  Sandboxed code cannot add a catalog change listener or set or clear a process-wide callback (the scheme lookup
+  callback, the generic API call action builder and `AbstractDataProvider`'s generic API call child builder):
+  `ConnectionProvider` and `RestClientDataProvider` set theirs as library code from the module path, and not when
+  sandboxed code loads a copy of them by path. The
+  listeners run on the threads that change the catalog, except a sandboxed one: a worker delivers the changes that it
+  makes itself (also when its reader stopped waiting), and those made on a sandboxed thread (`queueDelivery()`). The
+  workers are a pool of at most four threads, so one slow trusted closure delays no other sandboxed reader; a reader
+  waiting for a job is followed to the worker running it in the cycle check. A worker registers itself when it
+  starts, and only against a start that the catalog reserved, so a thread that the capability starts otherwise, or
+  that calls the worker's code otherwise, ends at once; the exit hook stops the reserved workers too.
+  All of the catalog's state is `private:internal`: a subclass, possibly a sandboxed one, cannot reach the workers'
+  capability, their state or the catalog's maps, and neither can sandboxed or restricted code through reflection
+  (see the storage rule in `design/module-sandboxing-audit-guide.md`).
+- **Every decision on where code runs uses `SandboxManager::isSandboxed()`**, which sees a sandbox through a policy
+  barrier and is not restricted, so code restricted with `PO_NO_UNCONTROLLED_APIS` uses the catalog after a trusted
+  load as any other code. The module creates the worker's capability by name (`call_static_method()`), so that its
+  code parses in any Program; when the module is loaded first by code that may not create the capability
+  (`PO_NO_UNCONTROLLED_APIS`, or sandboxed code loading it by path), there is no worker, and every deferred registration runs, and every lazy value is built, when it is
+  registered, in source and AOT form alike.
+- **A lazy value registered by a module whose load fails is removed** with the module's other registrations when the
+  load is rolled back (`ImplicitModuleTransaction`); a build running then does not store its value.
+  `examples/test/qlib/DataProvider/LazyAppActionsSafety.qtest` covers sandboxed readers, interrupted waits,
+  `thread_exit`, the catalog lock, lock-holding readers, module loads, deregistration during an initialization,
+  `fork()`, the worker's start on demand, its pool, its end, the end of the process, subclasses, lazy values, and
+  registrations and listeners of sandboxed code.
+- **A type built from the schema is built on first use, behind an accessor**, never in a constant, a static
+  member's initializer or the module's initialization: any of those parses the schema when the module is loaded,
+  whatever the catalog does. A provider class returns its types from `requestType()` and `responseType()`; a
+  shared type built from one (Jina's batch record types) is returned by an `instance()` accessor of its class. The
+  class registers the builder of each type with `DataProviderActionCatalog::registerLazyValue()` when the module is
+  loaded, and its accessor returns the type cached in a static member, or gets it with `getLazyValue()` the first
+  time, which builds it as a lazy closure is run: on a trusted reader's thread, or on the catalog worker for a
+  sandboxed reader, whose sandbox would otherwise deny the module's vendored description and keep the shared type. Before the accessors, `MistralDataProvider`, `CohereDataProvider`,
+  `JinaDataProvider`, `BflDataProvider`, `StabilityAiDataProvider`, `AzureDocumentIntelligenceDataProvider` and
+  `GoogleDocumentAiDataProvider` took 0.3 to 1.3 s to load on a debug build; they now take less than 0.1 s, as
+  the other modules do.
+- `examples/test/qlib/RestSchemaActions/LazyModuleActions.qtest` loads every module that makes a lazy
+  registration, checks that loading builds no action set (`RestSchemaActionSet::getConstructionCount()`) and that
+  the first read builds them once, also from concurrent threads, and fails if a module with a lazy registration is
+  not in its list. `LazySchemaTypes.qtest` checks the type accessors, and
+  `examples/test/qlib/DataProvider/LazyAppActions.qtest` covers the catalog.
 
 ### The type caches of schema objects and the garbage collector
 

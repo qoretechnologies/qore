@@ -1230,7 +1230,16 @@ public const JinaBatchDownloadRequestDataType = new JinaBatchDownloadRequestData
 #! JinaBatchRecordResponse fields
 public class JinaBatchRecordResponseDataType inherits HashDataType {
     private {
-        const Fields = {
+        #! The shared instance; see instance()
+        static *JinaBatchRecordResponseDataType shared_instance;
+        #! The ID of the shared instance's builder; see instance()
+        static int instance_id = DataProviderActionCatalog::registerLazyValue(
+            \JinaBatchRecordResponseDataType::buildInstance());
+    }
+
+    #! Returns the field descriptions of the type
+    private static hash<auto> fieldInfo() {
+        return {
             "status_code": {
                 "display_name": "HTTP Status",
                 "type": AbstractDataProviderTypeMap."*int",
@@ -1243,25 +1252,44 @@ public class JinaBatchRecordResponseDataType inherits HashDataType {
             },
             "body": {
                 "display_name": "Embeddings",
-                "type": JinaEmbeddingResponseDataType.getOrNothingType(),
+                "type": JinaEmbeddingDataProvider::responseType().getOrNothingType(),
                 "desc": "Embedding vectors and token usage for this record.",
             },
         };
     }
 
+    #! Returns the shared instance of the type, which is built on first use
+    /** It refers to types built from the pinned schema, so loading the module does not build it
+    */
+    static JinaBatchRecordResponseDataType instance() {
+        return shared_instance ?? (shared_instance = DataProviderActionCatalog::getLazyValue(instance_id));
+    }
+
+    #! Builds the shared instance; see instance()
+    private static JinaBatchRecordResponseDataType buildInstance() {
+        return new JinaBatchRecordResponseDataType();
+    }
+
     #! Creates the documented data type
     constructor() : HashDataType("JinaBatchRecordResponse") {
-        addQoreFields(Fields);
+        addQoreFields(fieldInfo());
         setDefaultOtherFieldType(AbstractDataProviderTypeMap."any");
     }
 }
 
-public const JinaBatchRecordResponseDataType = new JinaBatchRecordResponseDataType();
-
 #! JinaBatchRecord fields
 public class JinaBatchRecordDataType inherits HashDataType {
     private {
-        const Fields = {
+        #! The shared instance; see instance()
+        static *JinaBatchRecordDataType shared_instance;
+        #! The ID of the shared instance's builder; see instance()
+        static int instance_id = DataProviderActionCatalog::registerLazyValue(
+            \JinaBatchRecordDataType::buildInstance());
+    }
+
+    #! Returns the field descriptions of the type
+    private static hash<auto> fieldInfo() {
+        return {
             "custom_id": {
                 "display_name": "Custom ID",
                 "type": AbstractDataProviderTypeMap."*string",
@@ -1269,7 +1297,7 @@ public class JinaBatchRecordDataType inherits HashDataType {
             },
             "response": {
                 "display_name": "Response",
-                "type": JinaBatchRecordResponseDataType.getOrNothingType(),
+                "type": JinaBatchRecordResponseDataType::instance().getOrNothingType(),
                 "desc": "Result of the individual embedding request.",
             },
             "error": {
@@ -1280,33 +1308,62 @@ public class JinaBatchRecordDataType inherits HashDataType {
         };
     }
 
+    #! Returns the shared instance of the type, which is built on first use
+    /** It refers to types built from the pinned schema, so loading the module does not build it
+    */
+    static JinaBatchRecordDataType instance() {
+        return shared_instance ?? (shared_instance = DataProviderActionCatalog::getLazyValue(instance_id));
+    }
+
+    #! Builds the shared instance; see instance()
+    private static JinaBatchRecordDataType buildInstance() {
+        return new JinaBatchRecordDataType();
+    }
+
     #! Creates the documented data type
     constructor() : HashDataType("JinaBatchRecord") {
-        addQoreFields(Fields);
+        addQoreFields(fieldInfo());
         setDefaultOtherFieldType(AbstractDataProviderTypeMap."any");
     }
 }
 
-public const JinaBatchRecordDataType = new JinaBatchRecordDataType();
-
 #! Jina BatchDownloadResponse fields
 public class JinaBatchDownloadResponseDataType inherits HashDataType {
     private {
-        const Fields = {
+        #! The shared instance; see instance()
+        static *JinaBatchDownloadResponseDataType shared_instance;
+        #! The ID of the shared instance's builder; see instance()
+        static int instance_id = DataProviderActionCatalog::registerLazyValue(
+            \JinaBatchDownloadResponseDataType::buildInstance());
+    }
+
+    #! Returns the field descriptions of the type
+    private static hash<auto> fieldInfo() {
+        return {
             "records": {
                 "display_name": "Records",
-                "type": new ListDataType("JinaBatchRecords", JinaBatchRecordDataType),
+                "type": new ListDataType("JinaBatchRecords", JinaBatchRecordDataType::instance()),
                 "desc": "Parsed JSONL records in their original order. Each record includes its custom ID and response or error.",
             },
         };
     }
 
+    #! Returns the shared instance of the type, which is built on first use
+    /** It refers to types built from the pinned schema, so loading the module does not build it
+    */
+    static JinaBatchDownloadResponseDataType instance() {
+        return shared_instance ?? (shared_instance = DataProviderActionCatalog::getLazyValue(instance_id));
+    }
+
+    #! Builds the shared instance; see instance()
+    private static JinaBatchDownloadResponseDataType buildInstance() {
+        return new JinaBatchDownloadResponseDataType();
+    }
+
     #! Creates the documented data type
     constructor() : HashDataType("JinaBatchDownloadResponse") {
-        addQoreFields(Fields);
+        addQoreFields(fieldInfo());
     }
 }
-
-public const JinaBatchDownloadResponseDataType = new JinaBatchDownloadResponseDataType();
 
 }
