@@ -135,15 +135,6 @@ public:
         QoreIROnBlockExitInstruction* obe_inst = nullptr;   //!< instruction to attach compiled handler IR
     };
 
-    //! Captured variables needed by a handler for parent scope access
-    /** Phase 3b: Stores information about local and global variables referenced by a handler.
-     *  These are captured as parameters to the handler IR function so it can access parent scope.
-     */
-    struct HandlerVariableCapture {
-        std::vector<LocalVar*> referenced_locals;      //!< local vars referenced by handler
-        std::unordered_set<LocalVar*> referenced_set;  //!< set for O(1) duplicate detection
-    };
-
     explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr,
         const AOTConstantReverseMap* constant_reverse_map = nullptr);
 
@@ -318,20 +309,6 @@ private:
 
     //! Returns true and sets the lowering error if the thread's stack has reached the lowering reserve
     bool stackReserveReached(std::string& error);
-
-    //! Phase 3b: Analyze handler code for variable references to enable parameter capture
-    /** Walks the handler AST to identify which parent scope variables are referenced.
-     *  These variables will be passed as parameters to the compiled handler IR function.
-     */
-    HandlerVariableCapture analyzeHandlerVariables(const StatementBlock* handler_code);
-
-    //! Phase 3b: Compile handler code to IR function with captured variable parameters
-    /** Creates a QoreIRFunction for the handler with captured variables passed as parameters.
-     *  The handler body is lowered into the new function, which can be executed from any context.
-     *  Returns nullptr on compilation failure.
-     */
-    QoreIRFunction* compileHandlerToIR(const StatementBlock* handler_code,
-            const HandlerVariableCapture& capture, std::string& error);
 
     //! Native IR lowering for map operator with implicit argument context
     QoreIRValue lowerMapNative(const QoreMapOperatorNode* map, const QoreValue& expr, std::string& error);

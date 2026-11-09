@@ -2692,11 +2692,36 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
         func.interpreter_borrowed_bases = std::move(borrowed_bases);
     }
     // the locals owned by the function, which ensureLocalInstantiated() tells from the variables of an enclosing
-    // scope: the pre-instantiated locals and every body local
+    // scope: the pre-instantiated locals, every body local, and every local that the function instantiates or
+    // uninstantiates itself at its block (as the native code classifies them; see the locals with explicit
+    // InstantiateLocal/UninstantiateLocal in QoreIRToLLVM)
     {
         std::unordered_set<const void*> own_locals(func.pre_instantiated_locals);
         for (LocalVar* lv : func.all_body_locals) {
             own_locals.insert(reinterpret_cast<const void*>(lv));
+        }
+        for (const auto& block : func.blocks) {
+            for (const auto& inst : block->instructions) {
+                if (inst->opcode == QoreIROpcode::InstantiateLocal
+                        || inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                    const LocalVar* lv = static_cast<const QoreIRLocalInstruction*>(inst.get())->local;
+                    if (lv) {
+                        own_locals.insert(reinterpret_cast<const void*>(lv));
+                    }
+                }
+            }
+        }
+        // an on_block_exit handler owns every closure-bound local of a parent slot that is not pre-instantiated in it:
+        // the variables that the handler declares (see qore_ir_scope_handler_closure_locals()), which the function
+        // has slots for as it lowers the handler inline: block locals, but also catch, foreach, for and switch
+        // variables, which have no InstantiateLocal; the handler has no body locals (qore#5653)
+        if (func.parent_slot_count) {
+            for (const auto& [lv, slot_id] : func.local_var_slots) {
+                if (lv && slot_id < func.parent_slot_count && lv->closureUse()
+                        && !func.pre_instantiated_locals.count(reinterpret_cast<const void*>(lv))) {
+                    own_locals.insert(reinterpret_cast<const void*>(lv));
+                }
+            }
         }
         func.interpreter_function_own_locals = std::move(own_locals);
     }
@@ -6476,10 +6501,20 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Dirty parent-slot writeback uses this to read the authoritative runtime
     // local value instead of an invalidated cache entry.
     std::vector<LocalVar*> parent_slot_to_lvar;
+    // the parent slots of the closure-bound locals that this handler declares itself (see the handler's own locals in
+    // buildInterpreterAnalysis()): they do not hold the parent's values, so they are neither read from nor written
+    // back to the parent; written back, the variable, uninstantiated by then, raised an LVALUE-ERROR after the
+    // handler, which was chained to the exception that ran it (qore#5653)
+    std::vector<bool> handler_own_slot(func.parent_slot_count, false);
     if (func.parent_slot_count > 0) {
         parent_slot_to_lvar.resize(func.parent_slot_count, nullptr);
         for (auto& [lvar, slot_id] : func.local_var_slots) {
             if (lvar && slot_id < func.parent_slot_count) {
+                if (lvar->closureUse()
+                        && !func.pre_instantiated_locals.count(reinterpret_cast<const void*>(lvar))) {
+                    handler_own_slot[slot_id] = true;
+                    continue;
+                }
                 parent_slot_to_lvar[slot_id] = const_cast<LocalVar*>(lvar);
             }
         }
@@ -6496,7 +6531,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     }
     auto markParentSlotDirty = [&](uint32_t slot_id) {
-        if (slot_id < parent_slot_dirty.size()) {
+        if (slot_id < parent_slot_dirty.size() && !handler_own_slot[slot_id]) {
             parent_slot_dirty[slot_id] = true;
         }
     };
