@@ -503,16 +503,30 @@ Converted waits:
 
 #### Killing a command's process group
 
-A command that `system()` or backquote runs under a `SandboxManager` leads a process group of its own.
-When the wait is cancelled or interrupted, `SIGKILL` goes to the group, the leader's exit is waited for
-with `waitid(WNOWAIT)`, `SIGKILL` goes to the group again, and only then is the leader reaped
-(`qore_kill_child_process()` and the interrupted path of `qore_wait_child_process()` in
-`BackquoteNode.cpp`).  A signal sent to a process group does not reach a process that a member is
-creating with `fork()` at that moment on macOS, so the first signal can leave a new process running;
-once the leader has ended it can start no more, and its unreaped PID keeps the group ID from being
-reused, so the second signal reaches what is left of the group and no other.  `system.qtest` and
-`backquote.qtest` interrupt commands that start processes in a loop and read a FIFO that every process
-of the command holds open to end-of-file.
+A command that `system()` or backquote runs under a `SandboxManager` leads a process group of its own
+(`POSIX_SPAWN_SETPGROUP`; the group exists once `posix_spawn()` has succeeded, so no `setpgid()` result decides
+whether the group is killed).  When the wait is cancelled or interrupted, `qore_kill_child_process()` or the
+interrupted path of `qore_wait_child_process()` (`BackquoteNode.cpp`) sends `SIGKILL` to the group, waits for the
+leader with `waitid(WNOWAIT)`, kills the rest of the group (`qore_kill_child_process_group()`), and only then reaps
+the leader: its unreaped PID keeps the group ID from being reused, so no signal can reach another group.
+
+- **Linux**: a signal sent to a process group reaches every process in it, including one that a member is creating
+  with `fork()` (the kernel restarts a `fork()` that a signal interrupts); the first signal is enough.
+- **macOS**: a process that a member is creating with `fork()` when the signal is sent does not receive it.  Its
+  creator has been killed and ends once `fork()` returns, so the new process is in the group before its creator has
+  ended.  The group is killed and listed (`proc_listpgrppids()`) again while the list shows a process not yet waited
+  for or one newly found to have ended; otherwise every process in the group has been sent `SIGKILL` after it was
+  created, and each one is waited for with kqueue (`EVFILT_PROC`, `NOTE_EXIT`); when any of them end, the group is
+  killed and listed again.  It returns when no process but the leader is left, or when none has ended for
+  `QORE_PGROUP_EXIT_STALL_MS` (2 s): a killed process held by an uninterruptible wait would hold the call
+  indefinitely, and it has been sent `SIGKILL` after it was created, so it ends when that wait ends.  Killing the
+  group again only after the leader has ended is not enough: a subshell being created when the leader was killed
+  goes on starting processes, and a process that it is creating when the group is killed the second time escapes.
+- **Elsewhere**: the group is killed once more after the leader has ended, which reaches every process that the
+  leader itself created.
+
+`system.qtest` and `backquote.qtest` interrupt commands whose shell, or whose subshells after the shell has ended,
+are starting processes, and read a FIFO that every process of the command holds open to end-of-file.
 
 #### Wakeup descriptor
 
