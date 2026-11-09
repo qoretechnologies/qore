@@ -258,6 +258,7 @@ server.start();
     - @c {"type": "eval", "code": "1 + 1"} - Evaluate code
     - @c {"type": "command", "command": "/help"} - Execute REPL command
     - @c {"type": "complete", "input": "pri"} - Request code completions
+    - @c {"type": "subscribe", "activity": true} - Select the optional @c activity messages
     - @c {"type": "ping"} - Keepalive
 
     Server to Client:
@@ -266,6 +267,17 @@ server.start();
     - @c {"type": "prompt", "value": "qore> ", "needsMoreInput": false} - Prompt update
     - @c {"type": "completion", "id": "...", "items": [...]} - Completion results
     - @c {"type": "session", "sessionId": "...", "version": "1.0"} - Session info on connect
+    - @c {"type": "thread", "event": "finished", "tid": 17, "outcome": "COMPLETED", "notices": [...], ...} - A
+      background thread started by the session's code started (@c started), was asked to cancel
+      (@c cancel-requested) or ended (@c finished); sent as it happens (see @ref qorerepl_thread_events)
+    - @c {"type": "activity", "idle": true, "running": 0} - The session's Program became idle or active; only after
+      a @c subscribe message enabling it
+    - @c {"type": "programReplaced", "programId": 5, "running": 0, "threads": []} - @c /reset replaced the Program
+    - @c {"type": "subscribed", "activity": true} - The optional messages selected, in response to @c subscribe
+
+    @ref QoreRepl::QoreReplActionSession "QoreReplActionSession", which the WebSocket handler uses, emits the same
+    events to a callback set with @ref QoreRepl::QoreReplActionSession::setEmitter() "setEmitter()" (@c repl-thread,
+    @c repl-activity and @c repl-program-replaced), for platforms that provide their own transport.
 
     @section qorerepl_sandboxing Sandboxing and Security
 

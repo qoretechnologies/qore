@@ -34,6 +34,7 @@ public namespace QoreRepl {
     - \c eval: Evaluate code
     - \c command: Execute REPL command
     - \c interrupt: Interrupt execution (not yet implemented)
+    - \c subscribe: Selects the optional asynchronous messages: \c activity (boolean) enables \c activity messages
     - \c ping: Keepalive ping
 
     @par Server to Client Messages
@@ -44,6 +45,10 @@ public namespace QoreRepl {
     - \c pong: Response to ping
     - \c session: Session info on connect
     - \c exit: Session termination notification
+    - \c thread: A background thread started by the session's code started, was asked to cancel, or ended
+    - \c activity: The session's Program became idle or active (only after a \c subscribe message enabling it)
+    - \c subscribed: The optional messages selected, in response to \c subscribe
+    - \c programReplaced: \c /reset replaced the session's Program
 
     @see QoreReplWebSocketHandler
 */
@@ -56,6 +61,9 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
     private {
         #! Action session implementation
         QoreReplActionSession session;
+
+        #! True if the client selected \c activity messages
+        bool send_activity = False;
     }
 
     #! Creates a new REPL WebSocket connection
@@ -65,6 +73,8 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
     constructor(WebSocketHandler::WebSocketHandler handler, *hash<auto> repl_options)
             : WebSocketConnection(handler) {
         session = new QoreReplActionSession(repl_options);
+        # thread and activity events are sent as they happen, from the session's delivering thread
+        session.setEmitter(\emitEvent());
     }
 
     #! Called when the connection is registered and ready
@@ -113,6 +123,10 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
                 handleInterrupt(id);
                 break;
 
+            case "subscribe":
+                handleSubscribe(id, request.activity);
+                break;
+
             case "ping":
                 sendMessage({"type": "pong", "id": id});
                 break;
@@ -123,8 +137,10 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
     }
 
     #! Called when the connection is closed
+    /** Ends the session's events; the session's Program is released with the connection
+    */
     connectionClosed() {
-        # Cleanup - the repl instance will be garbage collected
+        session.close();
     }
 
     #! Returns the session ID
@@ -182,6 +198,19 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
             "id": id,
             "items": items,
         });
+    }
+
+    #! Handles a subscribe request
+    /** @param id Optional request ID for correlation
+        @param activity True to send \c activity messages
+    */
+    private handleSubscribe(*string id, auto activity) {
+        if (exists activity && activity.typeCode() != NT_BOOLEAN) {
+            sendError(id, "INVALID-PARAMETER", "Parameter 'activity' must be a boolean");
+            return;
+        }
+        send_activity = activity ?? False;
+        sendMessage({"type": "subscribed", "id": id, "activity": send_activity});
     }
 
     #! Handles an interrupt request
@@ -243,6 +272,23 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
         });
     }
 
+    #! Sends an asynchronous event of the session; called on the session's delivering thread
+    private emitEvent(hash<auto> event) {
+        sendEvents((event,));
+    }
+
+    #! Returns the wire form of a thread's summary
+    private static hash<auto> makeThreadInfo(hash<auto> t) {
+        return {
+            "tid": t.tid,
+            "threadId": t.thread_id,
+            "parentTid": t.parent_tid,
+            "parentThreadId": t.parent_thread_id,
+            "name": t.name,
+            "start": t.start,
+        };
+    }
+
     private sendEvents(list<hash<auto>> events) {
         foreach hash<auto> evt in (events) {
             string ev = evt.event ?? "";
@@ -281,6 +327,46 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
                         "type": "completion",
                         "id": data.request_id,
                         "items": data.items ?? (),
+                    });
+                    break;
+
+                case "repl-thread": {
+                    hash<auto> msg = {"type": "thread", "event": data.kind} + makeThreadInfo(data) + {
+                        "running": data.running,
+                        "notices": data.notices,
+                    };
+                    if (data.kind == "finished") {
+                        msg += {
+                            "outcome": data.outcome,
+                            "durationMs": data.duration_ms,
+                            "error": data.error,
+                            "cleanupError": data.cleanup_error,
+                        };
+                    } else if (data.kind == "cancel-requested") {
+                        msg.cancelReason = data.cancel_reason;
+                    }
+                    sendMessage(msg);
+                    break;
+                }
+
+                case "repl-activity":
+                    if (!send_activity) {
+                        break;
+                    }
+                    sendMessage({
+                        "type": "activity",
+                        "idle": data.idle,
+                        "running": data.running,
+                    });
+                    break;
+
+                case "repl-program-replaced":
+                    sendMessage({
+                        "type": "programReplaced",
+                        "programId": data.program_id,
+                        "running": data.running,
+                        "threads": (map makeThreadInfo($1) + {"cancelRequested": $1.cancel_requested},
+                            data.threads) ?? (),
                     });
                     break;
 

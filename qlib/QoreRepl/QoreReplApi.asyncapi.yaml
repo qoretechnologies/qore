@@ -31,6 +31,8 @@ channels:
         $ref: '#/components/messages/InterruptRequest'
       pingRequest:
         $ref: '#/components/messages/PingRequest'
+      subscribeRequest:
+        $ref: '#/components/messages/SubscribeRequest'
       # Server -> Client
       resultResponse:
         $ref: '#/components/messages/ResultResponse'
@@ -46,6 +48,14 @@ channels:
         $ref: '#/components/messages/SessionResponse'
       exitResponse:
         $ref: '#/components/messages/ExitResponse'
+      subscribedResponse:
+        $ref: '#/components/messages/SubscribedResponse'
+      threadEvent:
+        $ref: '#/components/messages/ThreadEvent'
+      activityEvent:
+        $ref: '#/components/messages/ActivityEvent'
+      programReplacedEvent:
+        $ref: '#/components/messages/ProgramReplacedEvent'
 
 operations:
   sendEval:
@@ -147,6 +157,55 @@ operations:
     messages:
       - $ref: '#/channels/repl/messages/exitResponse'
 
+  sendSubscribe:
+    action: send
+    channel:
+      $ref: '#/channels/repl'
+    summary: Select optional asynchronous messages
+    description: Enables or disables the optional asynchronous messages (activity messages)
+    messages:
+      - $ref: '#/channels/repl/messages/subscribeRequest'
+
+  receiveSubscribed:
+    action: receive
+    channel:
+      $ref: '#/channels/repl'
+    summary: Receive subscription state
+    description: Receives the optional messages selected, in response to a subscribe request
+    messages:
+      - $ref: '#/channels/repl/messages/subscribedResponse'
+
+  receiveThread:
+    action: receive
+    channel:
+      $ref: '#/channels/repl'
+    summary: Receive background thread event
+    description: >
+      Receives an event of a background thread started by the session's code, as it happens: the thread started,
+      cancellation was requested for it, or it ended. Threads of the server are never reported.
+    messages:
+      - $ref: '#/channels/repl/messages/threadEvent'
+
+  receiveActivity:
+    action: receive
+    channel:
+      $ref: '#/channels/repl'
+    summary: Receive Program activity event
+    description: >
+      Receives a notification that the session's Program became idle (code can be evaluated) or active; sent only
+      after a subscribe request enabling activity messages
+    messages:
+      - $ref: '#/channels/repl/messages/activityEvent'
+
+  receiveProgramReplaced:
+    action: receive
+    channel:
+      $ref: '#/channels/repl'
+    summary: Receive Program replacement
+    description: Receives a notification that /reset replaced the session's Program; later events are about it
+    messages:
+      - $ref: '#/channels/repl/messages/programReplacedEvent'
+
 components:
   schemas:
     # Client -> Server payloads
@@ -214,6 +273,22 @@ components:
         id:
           type: string
           description: Optional request ID for correlation
+
+    SubscribePayload:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          const: subscribe
+          description: Message type identifier
+        id:
+          type: string
+          description: Optional request ID for correlation
+        activity:
+          type: boolean
+          description: True to receive activity messages; false (the default) to stop them
 
     # Server -> Client payloads
     ResultPayload:
@@ -363,6 +438,160 @@ components:
             - server_shutdown
           description: Reason for session termination
 
+    SubscribedPayload:
+      type: object
+      required:
+        - type
+        - activity
+      properties:
+        type:
+          type: string
+          const: subscribed
+          description: Message type identifier
+        id:
+          type: string
+          description: Correlation ID from the subscribe request
+        activity:
+          type: boolean
+          description: Whether activity messages are sent
+
+    ThreadErrorInfo:
+      type: object
+      description: Summary of an exception
+      properties:
+        err:
+          type: string
+          description: Error code; empty if it is not a string
+        desc:
+          type: string
+          description: Error description; empty if it is not a string
+        file:
+          type: string
+          description: Source of the exception
+        line:
+          type: integer
+          description: Line number
+
+    ThreadInfo:
+      type: object
+      required:
+        - tid
+        - threadId
+      properties:
+        tid:
+          type: integer
+          description: Thread ID; reused after the thread ends
+        threadId:
+          type: integer
+          description: Thread ID unique in the server process
+        parentTid:
+          type: integer
+          description: Thread ID of the thread that started it
+        parentThreadId:
+          type: integer
+          description: Unique ID of the thread that started it, or 0 if that thread is not a background thread
+        name:
+          type: string
+          description: Thread name
+        start:
+          type: string
+          description: When the thread started
+        cancelRequested:
+          type: boolean
+          description: Whether cancellation was requested (programReplaced threads only)
+
+    ThreadPayload:
+      allOf:
+        - $ref: '#/components/schemas/ThreadInfo'
+        - type: object
+          required:
+            - type
+            - event
+            - running
+            - notices
+          properties:
+            type:
+              type: string
+              const: thread
+              description: Message type identifier
+            event:
+              type: string
+              enum:
+                - started
+                - cancel-requested
+                - finished
+              description: What happened to the thread
+            running:
+              type: integer
+              description: Number of background threads of the session running after the event
+            notices:
+              type: array
+              items:
+                type: string
+              description: Notice lines for the event at the session's thread notice level
+            outcome:
+              type: string
+              enum:
+                - COMPLETED
+                - EXCEPTION
+                - CANCELLED
+                - INTERRUPTED
+                - EXITED
+                - START_FAILED
+              description: How the thread ended (finished only)
+            durationMs:
+              type: integer
+              description: How long the thread ran in milliseconds (finished only)
+            error:
+              $ref: '#/components/schemas/ThreadErrorInfo'
+            cleanupError:
+              $ref: '#/components/schemas/ThreadErrorInfo'
+            cancelReason:
+              type: string
+              description: Reason given with the request (cancel-requested only)
+
+    ActivityPayload:
+      type: object
+      required:
+        - type
+        - idle
+        - running
+      properties:
+        type:
+          type: string
+          const: activity
+          description: Message type identifier
+        idle:
+          type: boolean
+          description: True if no code runs in the session's Program
+        running:
+          type: integer
+          description: Number of background threads of the session running
+
+    ProgramReplacedPayload:
+      type: object
+      required:
+        - type
+        - programId
+        - running
+        - threads
+      properties:
+        type:
+          type: string
+          const: programReplaced
+          description: Message type identifier
+        programId:
+          type: integer
+          description: ID of the new Program
+        running:
+          type: integer
+          description: Number of background threads of the new Program running
+        threads:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThreadInfo'
+          description: Background threads of the new Program
+
   messages:
     # Client -> Server messages
     EvalRequest:
@@ -396,6 +625,14 @@ components:
       contentType: application/json
       payload:
         $ref: '#/components/schemas/PingPayload'
+
+    SubscribeRequest:
+      name: SubscribeRequest
+      title: Subscribe Request
+      summary: Selects the optional asynchronous messages
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/SubscribePayload'
 
     # Server -> Client messages
     ResultResponse:
@@ -453,3 +690,35 @@ components:
       contentType: application/json
       payload:
         $ref: '#/components/schemas/ExitPayload'
+
+    SubscribedResponse:
+      name: SubscribedResponse
+      title: Subscribed Response
+      summary: Optional asynchronous messages selected
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/SubscribedPayload'
+
+    ThreadEvent:
+      name: ThreadEvent
+      title: Thread Event
+      summary: A background thread of the session started, was asked to cancel, or ended
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ThreadPayload'
+
+    ActivityEvent:
+      name: ActivityEvent
+      title: Activity Event
+      summary: The session's Program became idle or active
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ActivityPayload'
+
+    ProgramReplacedEvent:
+      name: ProgramReplacedEvent
+      title: Program Replaced Event
+      summary: The session's Program was replaced by /reset
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ProgramReplacedPayload'

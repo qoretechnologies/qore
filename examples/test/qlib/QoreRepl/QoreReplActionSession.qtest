@@ -37,6 +37,10 @@ class QoreReplActionSessionTest inherits QUnit::Test {
         addTestCase("repl-command returns prompt", \testCommand());
         addTestCase("repl-interrupt returns error", \testInterrupt());
         addTestCase("repl-close returns exit", \testClose());
+        addTestCase("emitter: thread events", \testEmitterThreads());
+        addTestCase("emitter: cancellation and failure", \testEmitterCancel());
+        addTestCase("emitter: activity and reset", \testEmitterActivity());
+        addTestCase("emitter: removal and close", \testEmitterRemoval());
 
         set_return_value(main());
     }
@@ -90,5 +94,132 @@ class QoreReplActionSessionTest inherits QUnit::Test {
         *hash<auto> exit_evt = findEvent(events, "repl-exit");
         assertTrue(exit_evt ? True : False, "Should include exit event");
         assertEq("user_request", exit_evt.data.reason, "Exit reason should be user_request");
+    }
+
+    #! the time to wait for an event before the test fails
+    const EventTimeout = 60s;
+
+    #! creates a session with an emitter that pushes the events to the returned queue, and the test's counters
+    private Queue emitting(QoreRepl::QoreReplActionSession session) {
+        Queue q();
+        session.setEmitter(sub (hash<auto> ev) { q.push(ev); });
+        list<hash<auto>> events = session.handleAction("repl-eval", {
+            "code": "our Counter entered = new Counter(1); our Counter gate = new Counter(1); our *int tid;",
+        });
+        assertNothing(findEvent(events, "repl-error"));
+        return q;
+    }
+
+    #! returns the emitted events up to the first with the given event and kind
+    private list<hash<auto>> until(Queue q, string event, *string kind) {
+        list<hash<auto>> rv();
+        while (True) {
+            hash<auto> ev = q.get(EventTimeout);
+            rv += ev;
+            if (ev.event == event && (!exists kind || ev.data.kind == kind)) {
+                return rv;
+            }
+        }
+    }
+
+    #! starts a thread with the given closure in the session's REPL and returns its TID
+    private int start(QoreRepl::QoreReplActionSession session, string closure) {
+        list<hash<auto>> events = session.handleAction("repl-eval", {"code": "tid = background " + closure + "();"});
+        assertNothing(findEvent(events, "repl-error"));
+        return session.getRepl().getProgram().getGlobalVariable("tid");
+    }
+
+    testEmitterThreads() {
+        QoreRepl::QoreReplActionSession session = newSession();
+        on_exit session.close();
+        Queue q = emitting(session);
+        int tid = start(session, "sub () {}");
+        list<hash<auto>> l = (map $1, until(q, "repl-thread", "finished"), $1.event == "repl-thread");
+        assertEq(("started", "finished"), (map $1.data.kind, l));
+        assertEq((tid, tid), (map $1.data.tid, l));
+        assertEq(1, l[0].data.running);
+        assertEq(gettid(), l[0].data.parent_tid);
+        assertEq("qore/" + tid, l[0].data.name);
+        assertEq(NT_DATE, l[0].data.start.typeCode());
+        assertEq(("Thread " + tid + " started",), l[0].data.notices);
+        assertEq(0, l[1].data.running);
+        assertEq("COMPLETED", l[1].data.outcome);
+        assertEq(NT_INT, l[1].data.duration_ms.typeCode());
+        assertNothing(l[1].data.error);
+        assertEq(l[0].data.thread_id, l[1].data.thread_id);
+    }
+
+    testEmitterCancel() {
+        QoreRepl::QoreReplActionSession session = newSession();
+        on_exit session.close();
+        Queue q = emitting(session);
+        int tid = start(session, "sub () { entered.dec(); gate.waitForZero(); }");
+        Counter entered = session.getRepl().getProgram().getGlobalVariable("entered");
+        entered.waitForZero();
+        list<hash<auto>> events = session.handleAction("repl-command", {"command": "cancel " + tid});
+        assertNothing(findEvent(events, "repl-error"));
+        list<hash<auto>> l = (map $1, until(q, "repl-thread", "finished"), $1.event == "repl-thread");
+        assertEq(("started", "cancel-requested", "finished"), (map $1.data.kind, l));
+        assertEq("REPL /cancel", l[1].data.cancel_reason);
+        assertEq("CANCELLED", l[2].data.outcome);
+        assertEq("THREAD-CANCELLED", l[2].data.error.err);
+        # the error is a summary: the call stack is not sent
+        assertEq(("desc", "err", "file", "line"), sort(keys l[2].data.error));
+        assertEq(("Thread " + tid + " cancelled",), l[2].data.notices);
+
+        tid = start(session, "sub () { throw \"ACTION-ERROR\", \"action error\"; }");
+        hash<auto> end = until(q, "repl-thread", "finished").last();
+        assertEq(tid, end.data.tid);
+        assertEq("EXCEPTION", end.data.outcome);
+        assertEq("ACTION-ERROR", end.data.error.err);
+        assertEq("action error", end.data.error.desc);
+        assertRegex("^Thread " + tid + " failed: ACTION-ERROR: action error", end.data.notices[0]);
+    }
+
+    testEmitterActivity() {
+        QoreRepl::QoreReplActionSession session = newSession();
+        on_exit session.close();
+        Queue q = emitting(session);
+        session.handleAction("repl-eval", {"code": "1 + 1"});
+        list<hash<auto>> l = (map $1, until(q, "repl-activity"), $1.event == "repl-activity");
+        assertFalse(l[0].data.idle);
+        assertEq(0, l[0].data.running);
+
+        list<hash<auto>> events = session.handleAction("repl-command", {"command": "reset"});
+        assertNothing(findEvent(events, "repl-error"));
+        hash<auto> ev = until(q, "repl-program-replaced").last();
+        assertEq(session.getRepl().getProgram().getProgramId(), ev.data.program_id);
+        assertEq(0, ev.data.running);
+        assertEq((), ev.data.threads);
+    }
+
+    testEmitterRemoval() {
+        QoreRepl::QoreReplActionSession session = newSession();
+        Queue q = emitting(session);
+        int tid = start(session, "sub () {}");
+        until(q, "repl-thread", "finished");
+        # without an emitter nothing is delivered
+        session.setEmitter();
+        int delivered = q.size();
+        tid = start(session, "sub () {}");
+        assertTrue(thread_join(tid, EventTimeout));
+        assertEq(delivered, q.size());
+
+        # an emitter that raises exceptions does not stop the delivery
+        Queue q2();
+        session.setEmitter(sub (hash<auto> ev) {
+            q2.push(ev);
+            throw "EMITTER-ERROR", "emitter error";
+        });
+        tid = start(session, "sub () {}");
+        until(q2, "repl-thread", "finished");
+
+        # after close, nothing is delivered and the emitter cannot be set
+        session.close();
+        delivered = q2.size();
+        assertThrows("REPL-ERROR", \session.setEmitter(), sub (hash<auto> ev) {});
+        tid = start(session, "sub () {}");
+        assertTrue(thread_join(tid, EventTimeout));
+        assertEq(delivered, q2.size());
     }
 }

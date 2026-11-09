@@ -349,8 +349,18 @@ received before each prompt.
 
 ### Other frontends
 
-- `QoreReplActionSession::setEmitter()` (`design/action-session-services.md`) emits the session events.
-- The WebSocket connection sends `thread` and `activity` messages; `QoreReplApi.asyncapi.yaml` documents them.
+- `QoreReplActionSession::setEmitter(*code<nothing(hash<auto>)> cb)` (`design/action-session-services.md`) adds a
+  REPL listener while a callback is set and emits `repl-thread` (`kind`: `started`, `cancel-requested` or
+  `finished`, the thread's identity, `running`, `notices` for the event at the session's level, and for `finished`
+  the outcome, `duration_ms` and a summary of `error`/`cleanup_error`: `err`, `desc`, `file`, `line`, without the
+  call stack), `repl-activity` (`idle`, `running`) and `repl-program-replaced`. `setEmitter()` with no callback
+  removes the listener (ending the delivering thread); `close()` ends the events and closes the REPL. The callback
+  is called on the delivering thread; its exceptions are ignored.
+- `QoreReplWebSocketConnection` sets an emitter when it is created and closes the session in
+  `connectionClosed()`. It sends `thread` messages (camelCase keys) as they happen and `programReplaced` on
+  `/reset`; `activity` messages, of which every evaluation makes at least two, are sent only after the client
+  enables them with `{"type": "subscribe", "activity": true}` (answered by `subscribed`). `QoreReplApi.asyncapi.yaml`
+  documents the messages and operations.
 
 ## module-ncurses (`bin/qrepl`)
 
@@ -382,7 +392,12 @@ received before each prompt.
   events, cancellation, the threads' state and `/threads`, nested threads, reset and stale events, exclusion of
   the embedding application's threads, listener exceptions and removal, a listener calling the session, `close()`
   (also from a listener) and the destructor, and the notices at each level and `/notify`.
-- WebSocket and action session event tests (phase 3).
+- `QoreReplActionSession.qtest`: emitted thread events (started, finished, cancellation request with its reason,
+  cancelled and failed outcomes with the error summary and notices), activity and `program-replaced`, removing
+  the emitter, an emitter that raises exceptions, and `close()`.
+- `QoreReplWebSocket.qtest`: `thread` messages over a connection, the `activity` subscription (invalid parameter,
+  enabling, messages, disabling), and the AsyncAPI schema loaded with `AsyncApi3Loader`; the test process ends
+  only if closing the connections ends their delivering threads.
 - `module-ncurses/test/ncurses-qrepl-live.qtest`: notices preserve the draft and cursor, live status count, dialogs
   close on idle and resume or cancel the right request, `/notify`, quit with threads active.
 
