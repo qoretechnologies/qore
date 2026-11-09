@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of the specialized select and map opcodes
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class SelectSpecializedTypesTest
+
+#! issue #5654: the specialized select and map opcodes give the result of the select and map operators
+/** IR lowers select with the predicates $1 > 0, $1 != 0 and $1.key > 0 to specialized opcodes, which test each
+    element (or the value of the key) converted to an int or a float, and whose int and float variants return the
+    converted values.  They were used whatever the type of the elements, so IR, JIT, tiered and AOT returned converted
+    values and kept or dropped other elements than the AST interpreter (("2", 3.7, True) became (2, 3, 1), "x" was
+    dropped by $1 != 0, 0.5 by $1.v > 0, and objects by $1.v > 0); they are now used only for elements of exactly that
+    type.  In a try block, the int and float variants were lowered with an exception edge that native code could not
+    lower: qcc could not compile the function, and JIT left it on the IR tier.
+
+    The script next to the test runs each kind of select in every execution mode, on the IR tier and as an AOT
+    executable, and its output must be that of the AST interpreter.
+
+    The specialized map opcodes ($1 * c, $1 + c, $1 * $1) had the same defect: used for any element type whose result
+    type was not known, they returned 3 for "2" + 1 instead of "21", and 2 for 1.5 * 2 instead of 3.0.
+*/
+class SelectSpecializedTypesTest inherits QUnit::Test {
+    public {
+        #! the output of select-types.q with the AST interpreter, which every execution mode and AOT must give
+        const Expected = (
+            "positive mixed: list<auto> [\"2\", 3.7, 2, True, 0.5]",
+            "non-zero mixed: list<auto> [\"2\", -1, 3.7, \"x\", 2, True, 0.5, -0.5]",
+            "positive mixed in try: list<auto> [\"2\", 3.7, 2, True, 0.5]",
+            "non-zero mixed in try: list<auto> [\"2\", -1, 3.7, \"x\", 2, True, 0.5, -0.5]",
+            "positive objects: list<object<C>> []",
+            "positive int: list<int> [3, 7]",
+            "non-zero int: list<int> [3, -1, 7]",
+            "positive int in try: list<int> [3, 7]",
+            "positive float: list<float> [0.5, 2.25]",
+            "non-zero float in try: list<float> [0.5, -0.5, 2.25]",
+            "positive *int: list<int> [1, 4]",
+            "non-zero *int: list<int> [1, 4]",
+            "positive number: list<number> [0.5, 3]",
+            "key auto: list<auto> [{v: 0.5}, {v: \"3\"}, \"object v=2\", {v: 2}]",
+            "key hash: list<hash<auto>> [{v: 0.5}, {v: \"3\"}, {v: 0.2}]",
+            "key int member: list<hash<IntMember>> [{v: 1}, {v: 9}]",
+            "key float member: list<hash<FloatMember>> [{v: 0.5}]",
+            "key int values: list<hash<string, int>> [{v: 1}, {v: 9}]",
+            "key int member in try: list<hash<IntMember>> [{v: 1}]",
+            "fused mixed: list<auto> [4, 7.4, 1.0, 2]",
+            "fused int: list<int> [4, 6]",
+            "fused float: list<float> [1.5, 4.25]",
+            "scale mixed: list<auto> [4, 3.0, 2, 4, 0, 0, 6]",
+            "scale mixed (constant first): list<auto> [4, 3.0, 2, 4, 0, 0, 6]",
+            "offset mixed: list<auto> [\"21\", 2.5, 2, 3, 1, \"x1\", 4]",
+            "offset mixed (constant first): list<auto> [\"12\", 2.5, 2, 3, 1, \"1x\", 4]",
+            "square mixed: list<auto> [null, 2.25, null, 4, null, null, 9]",
+            "scale int: list<int> [3, -6, 9]",
+            "scale int by float: list<float> [1.5, -3.0, 4.5]",
+            "offset float: list<float> [1.5, -1.0]",
+            "square float: list<float> [0.25, 4.0]",
+            "scale *int: list<int> [2, 0, 6]",
+        );
+
+        #! the script prints its lines this many times
+        const Iterations = 3;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string path;
+    }
+
+    constructor() : QUnit::Test("specialized select and map opcodes", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        path = get_script_dir() + "/select-types.q";
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executable", \aotTest());
+        set_return_value(main());
+    }
+
+    #! runs the script in every execution mode and on the IR tier; with JIT and tiered execution its functions must be
+    #! compiled to native code
+    private modesTest() {
+        string exp = expected();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, path)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, path)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("select-specialized-types-aot-");
+        string exe = dir.path + "/select-types";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, path));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        assertEq(expected(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT");
+    }
+
+    #! the expected output: the lines, printed once per iteration
+    private string expected() {
+        return strmul((foldl $1 + "\n" + $2, Expected) + "\n", Iterations);
+    }
+}
