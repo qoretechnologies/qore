@@ -17998,8 +17998,9 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             const_cast<UserClosureFunction*>(ucf)->getVList());
 #ifdef DEBUG
         // the runtime binds this body's slots to the variables of the serialized IR by index: both must have the same
-        // (variable -> slot) table, or a local of one is bound to another variable (a reservation made in only one of
-        // the two lowerings reorders the table)
+        // variable in each slot, or a local of one is bound to another variable (a reservation made in only one of the
+        // two lowerings reorders the table); the parameters of background helpers are created by each lowering, so
+        // they are the same when they have the same name
         {
             std::string closure_error;
             std::unique_ptr<QoreIRFunction> serialized_ir(::lowerClosureForSerialization(variant, &closure_error));
@@ -18007,8 +18008,26 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                 const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
                 if (qoreAOTPrepareClosureIRLocalSlots(serialized_ir.get(), sig, vlist)) {
                     qoreAOTPruneClosureIRBodyLocals(serialized_ir.get(), sig, vlist);
-                    assert(serialized_ir->local_var_slots == ir_func->local_var_slots
+                    auto by_slot = [](const QoreIRFunction& f) {
+                        std::map<uint32_t, const LocalVar*> rv;
+                        for (const auto& [lv, slot_id] : f.local_var_slots) {
+                            rv.emplace(slot_id, lv);
+                        }
+                        return rv;
+                    };
+                    std::map<uint32_t, const LocalVar*> native_slots = by_slot(*ir_func);
+                    std::map<uint32_t, const LocalVar*> serialized_slots = by_slot(*serialized_ir);
+                    assert(native_slots.size() == serialized_slots.size()
                         && "the native closure body and its serialized IR have different local slot tables");
+                    for (const auto& [slot_id, lv] : native_slots) {
+                        auto i = serialized_slots.find(slot_id);
+                        assert(i != serialized_slots.end()
+                            && (i->second == lv
+                                || (lv && i->second && lv->getName() && lv->getName()[0] == '%'
+                                    && !strcmp(lv->getName(), i->second->getName())))
+                            && "the native closure body and its serialized IR have different local slot tables");
+                        (void)i;
+                    }
                 }
             }
         }
