@@ -140,6 +140,14 @@ class FakeConvertApiHandler inherits AbstractHttpRequestHandler {
                 {"SourceFileFormats": ("docx",), "DestinationFileFormats": ("pdf",)},
                 {"SourceFileFormats": ("docx",), "DestinationFileFormats": ("txt",)},
                 {"SourceFileFormats": ("pdf",), "DestinationFileFormats": ("merge",)},
+                # a converter that takes its input in a parameter instead of a source file
+                {
+                    "SourceFileFormats": ("data",),
+                    "DestinationFileFormats": ("qrcode",),
+                    "ConverterParameterGroups": (
+                        {"Name": "Input", "ConverterParameters": ({"Name": "Data", "Type": "String"},)},
+                    ),
+                },
             );
         } else {
             code = 404;
@@ -536,11 +544,22 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
             "url": "https://example.com",
         }, NOTHING, "Url"));
 
-        # a request without an input is rejected
+        # a request without an input is rejected, unless the converter takes its input in a parameter
         assertThrows("CONVERTAPI-ERROR", \ConvertApiDataProvider::ConvertApiDataProviderBase::makeParameters(), ({
             "store_file": True,
             "parameters": {"PageRange": "1-2"},
         },));
+        hash<string, hash<auto>> dmap;
+        map dmap{$1.Name} = $1, ConvertApiDataProvider::ConvertApiDataProviderBase::makeParameters({
+            "parameters": {"Data": "12345"},
+        }, NOTHING, NOTHING, True);
+        assertEq("12345", dmap.Data.Value);
+
+        # the source is given only in the source fields: a Url parameter cannot conflict with them
+        assertThrows("CONVERTAPI-ERROR", \ConvertApiDataProvider::ConvertApiDataProviderBase::makeParameters(), ({
+            "file": {"name": "a.html", "content": binary("x")},
+            "parameters": {"url": "https://example.com"},
+        }, NOTHING, "Url"));
 
         # a conversion (POST) is not sent again after a transport error, which can come after ConvertAPI performed
         # the conversion; other requests are
@@ -715,9 +734,27 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
 
         # reference data
         AbstractDataProvider convert = provider.getChildProviderEx("convert");
-        assertEq(("docx", "pdf"), (map $1.value, convert.getReferenceData("source_formats")));
+        assertEq(("data", "docx", "pdf"), (map $1.value, convert.getReferenceData("source_formats")));
         assertEq(("pdf", "txt"), (map $1.value, convert.getReferenceData("destination_formats", {"from": "docx"})));
         assertNothing(convert.getReferenceData("destination_formats"));
+
+        # a converter that takes its input in a parameter (data to qrcode takes Data) needs no source file
+        handler.requests = ();
+        convert.doRequest({"from": "data", "to": "qrcode", "parameters": {"Data": "https://www.convertapi.com"}});
+        list<hash<auto>> posts = select handler.requests, $1.method == "POST";
+        assertEq(1, posts.size());
+        assertEq("convert/data/to/qrcode", posts[0].path);
+        pmap = {};
+        map pmap{$1.Name} = $1, posts[0].body.Parameters;
+        assertEq("https://www.convertapi.com", pmap.Data.Value);
+        assertFalse(pmap.hasKey("File"));
+
+        # the generic action still requires a source for a converter that takes a file
+        handler.requests = ();
+        assertThrows("CONVERTAPI-ERROR", sub () {
+            convert.doRequest({"from": "docx", "to": "pdf", "parameters": {"PageRange": "1-2"}});
+        });
+        assertEq(0, (select handler.requests, $1.method == "POST").size());
 
         # a rate-limited request is not sent again before the server permits it: a Retry-After delay longer than the
         # supported wait raises the error at once

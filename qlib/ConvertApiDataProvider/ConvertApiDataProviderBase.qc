@@ -246,6 +246,9 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
         @param url_param if set, the \c url request field is sent as a parameter with this name and a URL value
         instead of as the \c File parameter (for example \c "Url" for the \c html to \c pdf converter, which
         renders the web page)
+        @param input_in_parameters @ref True if the converter takes its input in a converter parameter instead of a
+        source file (such as \c data to \c qrcode, which takes \c Data), so that a request without a source file or
+        URL is valid
 
         @return the conversion result: \c ConversionCost and \c Files; the \c FileData of each file is decoded to
         a binary value
@@ -256,8 +259,10 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
         @throw CONVERTAPI-ERROR invalid request
         @throw CONVERTAPI-API-ERROR ConvertAPI returned an error
     */
-    hash<auto> convert(string from, string to, hash<auto> req, *hash<auto> converter_params, *string url_param) {
-        list<hash<auto>> params = ConvertApiDataProviderBase::makeParameters(req, converter_params, url_param);
+    hash<auto> convert(string from, string to, hash<auto> req, *hash<auto> converter_params, *string url_param,
+            *bool input_in_parameters) {
+        list<hash<auto>> params = ConvertApiDataProviderBase::makeParameters(req, converter_params, url_param,
+            input_in_parameters);
         string path = sprintf("convert/%s/to/%s", ConvertApiDataProviderBase::checkFormat(from),
             ConvertApiDataProviderBase::checkFormat(to));
         return ConvertApiDataProviderBase::processResult(doPost(path, {"Parameters": params},
@@ -280,19 +285,60 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
         return max(rest.getTimeout(), seconds * 1000);
     }
 
+    #! Returns @ref True if the request gives a source file or URL in its \c file, \c url, \c files or \c urls field
+    static bool hasInput(hash<auto> req) {
+        return req.file || req.url.val() || req.files || req.urls;
+    }
+
+    #! Returns @ref True unless the converter is known to take no source file
+    /** A few converters, such as \c data to \c qrcode, take their input in a converter parameter (\c Data) instead
+        of a \c File or \c Files parameter.  The converters are read from the cached list of the \c info endpoint
+        (see getConverters()).
+
+        @param from the source format
+        @param to the destination format
+
+        @return @ref False if the converter's parameters are known and include neither \c File nor \c Files, otherwise
+        @ref True
+    */
+    bool takesFileInput(string from, string to) {
+        foreach hash<auto> converter in (getConverters()) {
+            if (!inlist(from.lwr(), (map $1.lwr(), converter.SourceFileFormats))
+                || !inlist(to.lwr(), (map $1.lwr(), converter.DestinationFileFormats))) {
+                continue;
+            }
+            if (!converter.ConverterParameterGroups) {
+                return True;
+            }
+            foreach hash<auto> group in (converter.ConverterParameterGroups) {
+                foreach hash<auto> param in (group.ConverterParameters) {
+                    if (param.Name == "File" || param.Name == "Files") {
+                        return True;
+                    }
+                }
+            }
+            return False;
+        }
+        return True;
+    }
+
     #! Returns the ConvertAPI \c Parameters list for a request
     /** @param req the common request fields (see @ref ConvertApiCommonFields)
         @param converter_params other converter parameters with their ConvertAPI names
         @param url_param if set, the \c url field is sent as a parameter with this name and a URL value
+        @param input_in_parameters @ref True if the converter takes its input in a converter parameter, so that the
+        request does not need a source file or URL
 
         @return the list of ConvertAPI parameter hashes
 
         @throw CONVERTAPI-ERROR invalid request
     */
-    static list<hash<auto>> makeParameters(hash<auto> req, *hash<auto> converter_params, *string url_param) {
-        # the request must give an input (the fields of the "source" group), and a single input either as a file or
-        # as a URL; this is checked here, before a request is made, as the data types do not enforce required groups
-        if (!req.file && !req.url.val() && !req.files && !req.urls) {
+    static list<hash<auto>> makeParameters(hash<auto> req, *hash<auto> converter_params, *string url_param,
+            *bool input_in_parameters) {
+        # the request must give an input (the fields of the "source" group), unless the converter takes it in a
+        # converter parameter, and a single input either as a file or as a URL; this is checked here, before a
+        # request is made, as the data types do not enforce required groups
+        if (!input_in_parameters && !ConvertApiDataProviderBase::hasInput(req)) {
             throw "CONVERTAPI-ERROR", "no input: give 'file' or 'url', or 'files' or 'urls' for converters that "
                 "take several files";
         }
@@ -343,7 +389,9 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
             if (!exists other{name}) {
                 continue;
             }
-            if (name =~ /^(File|Files|StoreFile|FileName|Timeout|Secret|Token)$/i) {
+            # the source is given only in the source fields, so that a parameter cannot conflict with them; the html
+            # converters take the "url" field as their Url parameter
+            if (name =~ /^(File|Files|Url|StoreFile|FileName|Timeout|Secret|Token)$/i) {
                 throw "CONVERTAPI-ERROR", sprintf("parameter %y cannot be given as a converter parameter; use "
                     "the request field for it instead", name);
             }

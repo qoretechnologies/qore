@@ -107,6 +107,14 @@ public class ConvertApiConvertDataProvider inherits ConvertApiConversionDataProv
         return ("from", "to");
     }
 
+    #! Returns @ref True for a request without a source file or URL to a converter that takes no source file
+    /** Converters such as \c data to \c qrcode take their input in a converter parameter (\c Data); the converter
+        list is only checked when the request gives no source file or URL
+    */
+    private bool inputInParameters(hash<auto> formats, hash<auto> req) {
+        return !ConvertApiDataProviderBase::hasInput(req) && !takesFileInput(formats.from, formats.to);
+    }
+
     #! Returns the name of the parameter for the \c url field
     /** The \c html converters render the web page given with the \c Url parameter; all other converters download
         the source file from the URL

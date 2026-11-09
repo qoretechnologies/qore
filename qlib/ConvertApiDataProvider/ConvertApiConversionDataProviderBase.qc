@@ -49,7 +49,18 @@ public class ConvertApiConversionDataProviderBase inherits ConvertApiDataProvide
         if (other) {
             converter_params -= other;
         }
-        return convert(formats.from, formats.to, common, converter_params, getUrlParameter(req));
+        return convert(formats.from, formats.to, common, converter_params, getUrlParameter(req),
+            inputInParameters(formats, common));
+    }
+
+    #! Returns @ref True if the converter takes its input in a converter parameter instead of a source file
+    /** By default, a converter takes a source file, so a request must give a source file or URL
+
+        @param formats the source and destination formats (\c from and \c to keys)
+        @param req the common request fields
+    */
+    private bool inputInParameters(hash<auto> formats, hash<auto> req) {
+        return False;
     }
 
     #! Returns the request fields that are not converter parameters, other than the common fields
