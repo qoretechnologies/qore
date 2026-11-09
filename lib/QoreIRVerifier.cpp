@@ -45,6 +45,7 @@
 #include <qore/intern/SelfVarrefNode.h>
 #include <qore/intern/ObjectMethodReferenceNode.h>
 #include <qore/intern/ParseReferenceNode.h>
+#include <qore/intern/QoreParseHashNode.h>
 #include <qore/intern/QoreClosureParseNode.h>
 #include <qore/intern/StatementBlock.h>
 #include <qore/intern/IfStatement.h>
@@ -1094,10 +1095,43 @@ static void collectLocalSlotsFromExpr(const QoreValue& expr,
         collectLocalSlotsFromExpr(pref->getLVExp(), locals, seen);
         return;
     }
+    // the arguments of a new expression of a hashdecl or a complex type, which the instruction evaluates with the
+    // node: a local that only they use needs a slot as well, since a background helper takes exactly the locals that
+    // have slots as its parameters (QoreIRLowering::lowerBackgroundHelper()); without one, the new thread evaluated
+    // the arguments with the local not instantiated (LVALUE-ERROR).  A new object expression is a call, above.
+    if (ntype == NT_SCOPE_REF) {
+        const QoreParseListNode* plist = nullptr;
+        if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(node)) {
+            plist = nhd->args;
+        } else if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
+            plist = nch->args;
+        } else if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
+            collectLocalSlotsFromExpr(ncl->args, locals, seen);
+        } else if (auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
+            collectLocalSlotsFromExpr(ncb->args, locals, seen);
+        }
+        if (plist) {
+            for (size_t i = 0; i < plist->size(); ++i) {
+                collectLocalSlotsFromExpr(plist->get(i), locals, seen);
+            }
+        }
+        return;
+    }
     if (ntype == NT_PARSE_LIST) {
         auto* plist = expr.get<const QoreParseListNode>();
         for (size_t i = 0; i < plist->size(); ++i) {
             collectLocalSlotsFromExpr(plist->get(i), locals, seen);
+        }
+        return;
+    }
+    // a hash expression, such as the initializer of new hash<K, V>({"a": x})
+    if (ntype == NT_PARSE_HASH) {
+        auto* phash = expr.get<const QoreParseHashNode>();
+        for (const QoreValue& key : phash->getKeys()) {
+            collectLocalSlotsFromExpr(key, locals, seen);
+        }
+        for (const QoreValue& value : phash->getValues()) {
+            collectLocalSlotsFromExpr(value, locals, seen);
         }
     }
 }

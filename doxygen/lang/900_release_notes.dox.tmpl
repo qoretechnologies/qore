@@ -1771,6 +1771,12 @@
       value in the new thread, and modifying a member of the object is a parse error
     - fixed crashes, leaks and unhandled destructor exceptions of @ref background "background" when preparing its
       expression failed, its thread could not be created, or it released the last reference to an object
+    - fixed @ref background "background" expressions that use a local variable in the arguments of a
+      @ref new "new" expression or in the object of an object method reference (such as
+      <tt><b>background</b> f(<b>new</b> C(x))</tt> or <tt><b>background</b> (\\o.m())()</tt>): the thread raised
+      \c LVALUE-ERROR or used no value for the variable instead of the value it had when the thread started; with the
+      IR, JIT, tiered and AOT execution modes this happened with <tt>new hash<K, V>(...)</tt> and
+      <tt>new list<T>(...)</tt>
     - the smallest integer divided by \c -1 (@ref division_operator "/", @ref modulo_operator "%") crashed with
       \c SIGFPE
     - methods implemented by @ref Qore::SQL::AbstractDatasource "AbstractDatasource",

@@ -367,9 +367,108 @@ hash<string, string> sub expression_checks() {
     return rv;
 }
 
+#! a hashdecl constructed by a background expression
+hashdecl BgHashDecl {
+    int a;
+}
+
+#! An object holding the value its constructor is given
+public class Holder {
+    public {
+        auto v;
+    }
+
+    constructor(auto v) {
+        self.v = v;
+    }
+
+    auto get() {
+        return v;
+    }
+}
+
+#! An object whose constructor takes typed arguments
+public class TypedHolder {
+    public {
+        string v;
+    }
+
+    constructor(Mutex m, Counter c) {
+        v = sprintf("%s,%d", m.className(), c.getCount());
+    }
+}
+
+#! the arguments of new expressions and the object of a method reference take the values of the starting code's
+#! local variables when the thread starts (the AST interpreter evaluated them in the new thread, where the variables
+#! are not instantiated: LVALUE-ERROR, or no value for a closure-bound variable; the compiled tiers did so for new
+#! expressions of complex types)
+hash<string, string> sub construction_checks() {
+    hash<string, string> rv();
+
+    Queue q();
+    # each starting code changes its variable after starting the thread, which reads it only once the gate is open
+    Counter gate(1);
+    int x = 1;
+    background record(q, wait_gate(gate) + (new Holder(x)).v);
+    x = 2;
+    gate.dec();
+    rv."new-object" = get_str(q);
+
+    Mutex m();
+    Counter c(2);
+    background record(q, (new TypedHolder(m, c)).v);
+    rv."new-object-typed" = get_str(q);
+
+    # a variable that a closure captures is closure-bound
+    int cbx = 3;
+    code cl = int sub () { return cbx; };
+    gate = new Counter(1);
+    background record(q, wait_gate(gate) + (new Holder(cbx)).v);
+    cbx = 50;
+    gate.dec();
+    rv."new-object-closure-bound" = sprintf("%s,%d", get_str(q), cl());
+
+    gate = new Counter(1);
+    int hx = 4;
+    background record(q, wait_gate(gate) + (new hash<BgHashDecl>({"a": hx})).a);
+    hx = 0;
+    gate.dec();
+    rv."new-hashdecl" = get_str(q);
+
+    gate = new Counter(1);
+    int chx = 5;
+    background record(q, wait_gate(gate) + (new hash<string, int>({"a": chx})).a);
+    chx = 0;
+    gate.dec();
+    rv."new-complex-hash" = get_str(q);
+
+    gate = new Counter(1);
+    int clx = 6;
+    background record(q, wait_gate(gate) + (new list<int>(0, clx))[1]);
+    clx = 0;
+    gate.dec();
+    rv."new-complex-list" = get_str(q);
+
+    gate = new Counter(1);
+    list<int> lb = (7, 8);
+    background record(q, wait_gate(gate) + (new buffer<int8>(lb))[1]);
+    lb = (0, 0);
+    gate.dec();
+    rv."new-complex-buffer" = get_str(q);
+
+    gate = new Counter(1);
+    Holder o(9);
+    background record(q, wait_gate(gate) + (\o.get())());
+    o = new Holder(0);
+    gate.dec();
+    rv."object-method-ref" = get_str(q);
+    return rv;
+}
+
 #! returns all results
 public hash<string, string> sub get_results() {
-    return tid_checks() + {"blocking-arg": blocking_arg()} + snapshot_checks() + expression_checks();
+    return tid_checks() + {"blocking-arg": blocking_arg()} + snapshot_checks() + expression_checks()
+        + construction_checks();
 }
 
 #! raises an exception

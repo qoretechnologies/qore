@@ -10,8 +10,14 @@ operator's and is evaluated in the new thread.
 
 The AST interpreter implements this with `copy_value_and_resolve_lvar_refs()` (`lib/AbstractQoreNode.cpp`): the
 expression is copied with those values substituted, and the new thread evaluates the copy (`do_op_background()`,
-`lib/thread.cpp`). The IR interpreter, the JIT and AOT-compiled code use a helper function lowered from the
-expression.
+`lib/thread.cpp`). Every node that holds an expression must be copied there with its operands copied in turn: a node
+returned as it is is evaluated by the new thread as written, and a local variable in it is not instantiated there
+(`LVALUE-ERROR`, or no value at all for a closure-bound one). Besides the operators (`copyBackground()`), lists and
+hashes, these are the calls, the `new` expressions (`NT_SCOPE_REF`: `ScopedObjectCallNode`, `NewHashDeclNode` and the
+`NewComplex*Node` classes, whose copy constructors take the copied arguments) and object method references
+(`ParseObjectMethodReferenceNode`; a reference to a method of `self` is evaluated in the new thread, which has no
+object context, in every mode). The IR interpreter, the JIT and AOT-compiled code use a helper function lowered from
+the expression.
 
 ## The helper
 
@@ -46,7 +52,11 @@ A parameter is either:
   parameter is closure-bound, so a reference that the called code keeps outlives the helper's frame.
 
 The helper's parameters are the locals in its `local_var_slots` (the starting code's locals, in slot order), followed
-by the synthetic ones in the order recorded. A background expression declares no local variables of its own.
+by the synthetic ones in the order recorded. A background expression declares no local variables of its own. An
+instruction that evaluates an AST expression with its node (`new hash<K, V>()`, `new list<T>()`, ...) reads a local of
+that expression from the thread's local variable stack, so the slot walk (`collectLocalSlotsFromExpr()`,
+`lib/QoreIRVerifier.cpp`) must give every such local a slot: a local it misses is not a parameter, and the new thread
+raises `LVALUE-ERROR` when it evaluates the expression.
 
 If the expression calls a method of the starting code's object (`SelfFunctionCallNode` with a non-static or
 unresolved method, see `lowerSelfCall()`), `helper_uses_self` is set: the new thread runs with that object as its
