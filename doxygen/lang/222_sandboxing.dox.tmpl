@@ -914,8 +914,17 @@ sm.clearInterrupt();
     When interrupted, a \c PROGRAM-INTERRUPTED exception is raised.
     For external process functions (system(), backquote(), and the backquote operator), a SandboxManager also
     starts the child in a new process group so that requestInterrupt() can terminate the entire process group.
-    Without a SandboxManager, children remain in the current process group and receive terminal signals (for example,
-    Ctrl-C) along with the parent.
+    When the call is interrupted, every process in the group is sent \c SIGKILL before the call returns, including a
+    process that the command was starting at that moment:
+    - on Linux, the signal sent to the group reaches every process in it;
+    - on macOS, a process being started does not receive a signal sent to its group, so the call kills the group
+      again each time processes in it end, and returns when no process of the command is left, or when none has
+      ended for two seconds: a killed process can be held by an uninterruptible wait (for example, on a network file
+      system that does not respond), and it ends when that wait ends.
+
+    A process that the command moves to another process group or session is not killed.  Without a SandboxManager,
+    children remain in the current process group and receive terminal signals (for example, Ctrl-C) along with the
+    parent.
 
     @subsection sandbox_interrupt_polling Waking Blocked Threads
 

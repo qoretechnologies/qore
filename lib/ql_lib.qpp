@@ -734,7 +734,6 @@ int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
 
 #ifdef QORE_SYSTEM_POSIX_SPAWN
     pid_t spawn_pid = -1;
-    bool spawn_pgroup_ok = false;
     int spawn_rc = 0;
     posix_spawnattr_t attr;
     spawn_rc = posix_spawnattr_init(&attr);
@@ -774,12 +773,10 @@ int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
         xsink->raiseErrnoException("SYSTEM-ERROR", spawn_rc, "cannot start '/bin/sh' to execute the command");
         return -1;
     }
-    if (use_pgroup) {
-        if (setpgid(spawn_pid, spawn_pid) == 0 || errno == EACCES) {
-            spawn_pgroup_ok = true;
-        }
-    }
-    return wait_for_process(spawn_pid, spawn_pgroup_ok);
+    // posix_spawn() succeeded, so POSIX_SPAWN_SETPGROUP made the child the leader of a new process group before the
+    // command was executed (calling setpgid() here instead fails once the child has ended, ESRCH on macOS, and would
+    // kill only the child)
+    return wait_for_process(spawn_pid, use_pgroup);
 #elif defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING)
     // fallback for platforms without posix_spawn(): fork(), enable all signals, then execl(); in a multithreaded
     // process, the child of fork() may only call async-signal-safe functions before the command is executed
@@ -810,7 +807,10 @@ int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
         xsink->raiseErrnoException("SYSTEM-ERROR", errno, "cannot start '/bin/sh' to execute the command");
         return -1;
     }
-    if (use_pgroup && (setpgid(pid, pid) == 0 || errno == EACCES)) {
+    // the child makes itself the leader of a new process group as well, so that the group exists whichever of the
+    // two calls is made first: EACCES means the child has executed the command, and ESRCH (macOS) that it has ended,
+    // after its own call
+    if (use_pgroup && (setpgid(pid, pid) == 0 || errno == EACCES || errno == ESRCH)) {
         pgroup_ok = true;
     }
 
