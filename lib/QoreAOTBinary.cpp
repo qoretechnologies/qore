@@ -11828,9 +11828,57 @@ void qoreAOTAppendClosureCapture(std::vector<QoreAOTClosureCaptureInfo>& capture
     captures.push_back({lv, parent_slot});
 }
 
+//! Calls \a f for each parameter that a background helper in \a func owns, in instruction order
+/** These are the parameters that hold the values that a background expression takes when its thread starts
+    (QoreIRLowering::lowerBackgroundLeaf()); the other parameters of a helper are local variables of the code that
+    starts it.  Helpers in helpers and in on_block_exit handlers are walked too, as their IR is serialized with the
+    expression writer of the function that contains them.
+
+    @return false if \a f returned false
+*/
+template <typename F>
+bool qoreAOTForEachBackgroundHelperParam(const QoreIRFunction& func, F&& f) {
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::BackgroundInt) {
+                const auto* bi = static_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                if (bi->kind != QoreIRBackgroundKind::Helper || !bi->helper_ir) {
+                    continue;
+                }
+                for (const auto& param : bi->owned_params) {
+                    if (!f(param.get())) {
+                        return false;
+                    }
+                }
+                if (!qoreAOTForEachBackgroundHelperParam(*bi->helper_ir, f)) {
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                const auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
+                if (obei->handler_ir && !qoreAOTForEachBackgroundHelperParam(*obei->handler_ir, f)) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
 bool qoreAOTClosureOwnsLocal(const QoreIRFunction* closure_ir, const LocalVar* lv) {
     const void* var_ptr = reinterpret_cast<const void*>(lv);
     if (closure_ir->pre_instantiated_locals.count(var_ptr)) {
+        return true;
+    }
+    // a parameter of a background helper of the closure is the helper's own variable, not a capture
+    bool helper_param = false;
+    qoreAOTForEachBackgroundHelperParam(*closure_ir, [lv, &helper_param](const LocalVar* param) {
+        if (param == lv) {
+            helper_param = true;
+            return false;
+        }
+        return true;
+    });
+    if (helper_param) {
         return true;
     }
     for (const LocalVar* body_lv : closure_ir->all_body_locals) {
@@ -11897,6 +11945,13 @@ bool qoreAOTPrepareClosureIRLocalSlots(QoreIRFunction* closure_ir, const UserSig
                 return false;
             }
         }
+    }
+    // the IR of a background helper is serialized with the closure's expression writer, so a reference that the
+    // helper takes to one of its own parameters (background f(\x): QoreIRLowering::lowerBackgroundLeaf()) needs a
+    // slot of the closure, as the native helper's parameters take slots of the function that starts it (see
+    // buildAOTSlotMap()); issue #5677
+    if (!qoreAOTForEachBackgroundHelperParam(*closure_ir, reserve)) {
+        return false;
     }
     if (added_local) {
         // Relocation can leave signature locals referenced only by expression
