@@ -1543,19 +1543,6 @@ void qore_program_mark_sandboxed(QoreProgram& pgm) {
     qore_program_private::get(pgm)->sandboxed.store(true, std::memory_order_release);
 }
 
-void qore_program_set_creator_sandbox(QoreProgram& pgm) {
-    // a Program created by sandboxed code: by code of a sandboxed Program, or by any code that a sandbox governs
-    // (trusted library code called by sandboxed code, which can be given the source to parse)
-    if (qore_program_is_sandboxed(getProgram())) {
-        qore_program_mark_sandboxed(pgm);
-        return;
-    }
-    ReferenceHolder<QoreSandboxManager> sm(qore_caller_sandbox_ref(), nullptr);
-    if (sm) {
-        qore_program_mark_sandboxed(pgm);
-    }
-}
-
 //------------------------------------------------------------------------------
 // QoreSandboxManagerHelper implementation
 //------------------------------------------------------------------------------

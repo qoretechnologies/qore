@@ -1,0 +1,326 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The scenarios of native-program-sandbox.qtest (issue #5659), run in a process of their own in each execution mode
+# and as an AOT executable.  Each Program that the scenarios check is created by C++ code (libqore): by
+# ProgramControl::createEvalProgram(), or by the module manager for a module.  For each one, a line is printed with
+# the name of the scenario and how the code of the Program treats a cancellation pending on its thread:
+# "trusted" (the deferral of trusted code covers it) or "sandboxed" (it does not).
+#
+# usage: native-program-sandbox-probe.qr <exec mode of the Programs: ast|ir|jit|tiered> <directory for user modules>
+#
+# The scenario "library" needs the directory of NpsLibrary.qm in the process-wide module path (QORE_MODULE_DIR).
+
+%modern
+%allow-debugger
+%no-child-restrictions
+
+#! a limit for every wait; never reached unless a scenario fails
+const T = 30s;
+
+#! the code of each Program checked: a cancellation point, and a class whose destructor reaches one
+const ProbeSource = "%modern
+class Res {
+    private {
+        Queue ev;
+    }
+    constructor(Queue ev) {
+        self.ev = ev;
+    }
+    destructor() {
+        Mutex m();
+        m.lock();
+        m.unlock();
+        ev.push('dtor');
+    }
+}
+sub point() {
+    Mutex m();
+    m.lock();
+    m.unlock();
+}
+Res sub make(Queue ev) {
+    return new Res(ev);
+}
+";
+
+#! the code of the sandboxed Programs
+const SandboxedSource = "%modern
+Program sub create(ProgramControl pc) {
+    return pc.createEvalProgram(PO_NEW_STYLE);
+}
+auto sub call(code<auto()> c) {
+    return c();
+}
+sub load(string name) {
+    load_module(name);
+}
+Program sub child() {
+    Program c(PO_NEW_STYLE | PO_ALLOW_DEBUGGER);
+    c.parse('%modern
+Program sub create(ProgramControl pc) {
+    return pc.createEvalProgram(PO_NEW_STYLE);
+}', 'child');
+    return c;
+}
+";
+
+#! the code of a trusted Program that loads a user module
+const LoaderSource = "%modern
+sub load(string path) {
+    load_module(path);
+}
+auto sub call(string func, ...) {
+    return call_function_args(func, argv);
+}
+";
+
+#! the events of the probe for code that is trusted
+const TrustedEvents = ("caught:THREAD-CANCELLED", "deferred", "dtor", "released");
+#! the events of the probe for code that is sandboxed
+const SandboxedEvents = ("caught:THREAD-CANCELLED", "point:THREAD-CANCELLED", "released");
+
+#! returns the execution mode with the given name
+ExecMode sub exec_mode(string mode) {
+    switch (mode) {
+        case "ast": return EM_AST;
+        case "ir": return EM_IR;
+        case "jit": return EM_JIT;
+    }
+    return EM_TIERED;
+}
+
+#! returns how code treats a cancellation pending on its thread
+/** On a cancelled thread, @p point is called in a cleanup critical section of trusted code (defer_thread_cancel()),
+    and an object that @p make returned is released: trusted code keeps the deferral and its destructor completes;
+    sandboxed code is not deferred, and its destructor is skipped.
+
+    @return "trusted", "sandboxed", or the events if they are neither
+*/
+string sub probe(code<auto()> point, code<auto(Queue)> make) {
+    Queue ev();
+    Counter ready(1);
+    Counter block(1);
+    on_exit if (block.getCount()) {
+        block.dec();
+    }
+    int tid = background sub () {
+        object o = make(ev);
+        try {
+            ready.dec();
+            block.waitForZero();
+            ev.push("not-cancelled");
+        } catch (hash<ExceptionInfo> ex) {
+            ev.push("caught:" + ex.err);
+        }
+        defer_thread_cancel(sub () {
+            try {
+                point();
+                ev.push("deferred");
+            } catch (hash<ExceptionInfo> ex) {
+                ev.push("point:" + ex.err);
+            }
+        });
+        remove o;
+        ev.push("released");
+    }();
+    if (ready.waitForZero(T)) {
+        return "not-ready";
+    }
+    if (!cancel_thread(tid, "probe")) {
+        return "not-cancelled";
+    }
+    list<string> events = ();
+    while (True) {
+        *string e = ev.get(T);
+        events += e;
+        if (e == "released") {
+            break;
+        }
+    }
+    thread_join(tid);
+    if (events == TrustedEvents) {
+        return "trusted";
+    }
+    if (events == SandboxedEvents) {
+        return "sandboxed";
+    }
+    return events.join(",");
+}
+
+#! returns how the code of a Program treats a pending cancellation, once the probe code has been parsed in it
+string sub probe_program(Program p, string mode) {
+    p.setExecMode(exec_mode(mode));
+    p.parse(ProbeSource, "probe");
+    return probe(sub () { p.callFunction("point"); }, auto sub (Queue ev) { return p.callFunction("make", ev); });
+}
+
+#! returns how the code of a module that the Program @p t loaded treats a pending cancellation
+/** The functions of a user module run in the Program of their caller, as the caller's code; the module's own code
+    is that of its classes, whose destructors are checked
+*/
+string sub probe_module(Program t, string name) {
+    string rv = probe(sub () {}, auto sub (Queue ev) { return t.callFunction("call", name + "::make", ev); });
+    switch (rv) {
+        case "trusted": return "trusted";
+        case "caught:THREAD-CANCELLED,deferred,released": return "sandboxed";
+    }
+    return rv;
+}
+
+#! returns a sandboxed Program
+Program sub sandboxed(SandboxManager sm, string mode) {
+    Program s(PO_NEW_STYLE | PO_ALLOW_DEBUGGER);
+    s.setExecMode(exec_mode(mode));
+    s.setSandboxManager(sm);
+    s.parse(SandboxedSource, "sandboxed");
+    return s;
+}
+
+#! returns a trusted Program whose code a Program created for it inherits
+Program sub target(string mode) {
+    Program h(PO_NEW_STYLE | PO_ALLOW_DEBUGGER);
+    h.setExecMode(exec_mode(mode));
+    return h;
+}
+
+#! returns a trusted Program that loads user modules
+Program sub loader(string mode) {
+    Program t(PO_NEW_STYLE);
+    t.setExecMode(exec_mode(mode));
+    t.parse(LoaderSource, "loader");
+    return t;
+}
+
+#! writes a user module with the probe code in @p dir and returns its path
+string sub write_module(string dir, string name) {
+    string path = sprintf("%s/%s.qm", dir, name);
+    File f();
+    f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+    f.write(sprintf("%%modern
+module %s {
+    version = '1.0';
+    desc = 'a user module';
+    author = 'Qore Technologies, s.r.o.';
+    url = 'https://qore.org';
+    license = 'MIT';
+}
+public namespace %s {
+    public class Res {
+        private {
+            Queue ev;
+        }
+        constructor(Queue ev) {
+            self.ev = ev;
+        }
+        destructor() {
+            Mutex m();
+            m.lock();
+            m.unlock();
+            ev.push('dtor');
+        }
+    }
+    public Res sub make(Queue ev) {
+        return new Res(ev);
+    }
+}
+", name, name));
+    f.close();
+    return path;
+}
+
+#! runs one scenario and prints its result; an exception is printed as the result
+sub run(string name, code<string()> scenario) {
+    string result;
+    try {
+        result = scenario();
+    } catch (hash<ExceptionInfo> ex) {
+        result = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
+    }
+    printf("%s:%s\n", name, result);
+}
+
+if (ARGV.size() != 2) {
+    stderr.printf("usage: %s <ast|ir|jit|tiered> <directory for user modules>\n", get_script_name());
+    exit(1);
+}
+string mode = ARGV[0];
+string dir = ARGV[1];
+
+# sandboxed code creates a Program with ProgramControl::createEvalProgram()
+run("sandboxed-creates", string sub () {
+    SandboxManager sm();
+    Program s = sandboxed(sm, mode);
+    Program h = target(mode);
+    return probe_program(s.callFunction("create", h.getProgram()), mode);
+});
+
+# trusted code that sandboxed code calls creates a Program
+run("trusted-for-sandboxed", string sub () {
+    SandboxManager sm();
+    Program s = sandboxed(sm, mode);
+    Program h = target(mode);
+    Program e = s.callFunction("call", Program sub () { return h.getProgram().createEvalProgram(PO_NEW_STYLE); });
+    return probe_program(e, mode);
+});
+
+# the code of a Program that sandboxed code created creates a Program; no sandbox governs it here, as trusted code
+# calls it, and the Program has no manager of its own
+run("created-by-sandboxed", string sub () {
+    SandboxManager sm();
+    Program s = sandboxed(sm, mode);
+    Program c = s.callFunction("child");
+    Program h = target(mode);
+    return probe_program(c.callFunction("create", h.getProgram()), mode);
+});
+
+# trusted code that sandboxed code calls loads a user module
+run("user-module-for-sandboxed", string sub () {
+    SandboxManager sm();
+    sm.addFilesystemAllowedPath(dir, QSEC_READ);
+    Program s = sandboxed(sm, mode);
+    Program t = loader(mode);
+    string name = "NpsSandboxed" + mode.upr();
+    string path = write_module(dir, name);
+    s.callFunction("call", sub () { t.callFunction("load", path); });
+    return probe_module(t, name);
+});
+
+# trusted code creates a Program
+run("trusted-creates", string sub () {
+    Program h = target(mode);
+    return probe_program(h.getProgram().createEvalProgram(PO_NEW_STYLE), mode);
+});
+
+# trusted code creates a Program after a call into sandboxed code has returned
+run("trusted-after-sandboxed", string sub () {
+    SandboxManager sm();
+    Program s = sandboxed(sm, mode);
+    s.callFunction("call", sub () {});
+    Program h = target(mode);
+    return probe_program(h.getProgram().createEvalProgram(PO_NEW_STYLE), mode);
+});
+
+# trusted code loads a user module
+run("user-module-trusted", string sub () {
+    Program t = loader(mode);
+    string name = "NpsTrusted" + mode.upr();
+    t.callFunction("load", write_module(dir, name));
+    return probe_module(t, name);
+});
+
+# library code that sandboxed code loads first: its class and the Program that its initialization creates
+if (ENV.QORE_MODULE_DIR =~ /native-program-sandbox-lib/) {
+    SandboxManager sm();
+    Program s = sandboxed(sm, mode);
+    s.callFunction("load", "NpsLibrary");
+    load_module("NpsLibrary");
+    run("library-class", string sub () {
+        return probe(sub () { call_function("NpsLibrary::point"); },
+            auto sub (Queue ev) { return call_function("NpsLibrary::make", ev); });
+    });
+    run("library-init-program", string sub () {
+        return probe_program(call_function("NpsLibrary::init_program"), mode);
+    });
+}

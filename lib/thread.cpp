@@ -4071,6 +4071,47 @@ QoreSandboxManager* qore_caller_sandbox_ref() {
     return find_thread_sandbox_manager_ref_intern();
 }
 
+bool qore_creator_is_sandboxed() {
+    ThreadData* td = thread_data.get();
+    // before the library is initialized, only the embedding application runs
+    if (!td) {
+        return false;
+    }
+    // under a module initialization barrier, the code that loads library code does not create what the
+    // initialization of the library code creates (see QoreModuleInitSandboxBarrierHelper); under a lift it does
+    const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
+        || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
+    // the code of a sandboxed Program that has no manager of its own (one that sandboxed code created) is sandboxed
+    // also where no sandbox governs it, and so is the code that it calls: the Programs on the thread's call stack
+    // are walked as in find_thread_sandbox_stack_ref_intern()
+    if (!mib || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
+        if (qore_program_is_sandboxed(td->current_pgm)) {
+            return true;
+        }
+    }
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        if (mib && (ch == mib->ctx || ch->getOldContext() == mib->ctx)) {
+            break;
+        }
+        if (qore_program_is_sandboxed(ch->getOldProgram())) {
+            return true;
+        }
+    }
+    if (!mib && td->current_pgm != td->call_program_context
+        && qore_program_is_sandboxed(td->call_program_context)) {
+        return true;
+    }
+    // a sandbox that governs the thread: through the Programs on the call stack, the provenance of the code that
+    // runs and the sandbox inherited by the thread, as for interrupts and resource limits
+    try {
+        ReferenceHolder<QoreSandboxManager> sm(find_thread_sandbox_manager_ref_intern(), nullptr);
+        return static_cast<bool>(sm);
+    } catch (std::bad_alloc&) {
+        // the sandbox cannot be resolved: what the code creates is not trusted
+        return true;
+    }
+}
+
 //! returns the ID of the current Program of the thread, or QORE_NO_PROGRAM_ID
 static qore_program_id_t qore_current_program_id(ThreadData* td) {
     QoreProgram* pgm = td->current_pgm ? td->current_pgm : td->call_program_context;

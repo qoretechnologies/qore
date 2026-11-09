@@ -518,7 +518,11 @@ background sub () {
 
     A class is sandboxed if the %Program that defines it has a @ref Qore::SandboxManager "SandboxManager", or had
     one, or was created by sandboxed code (a %Program that sandboxed code creates has no sandbox manager of its own,
-    but its code is sandboxed all the same).
+    but its code is sandboxed all the same).  This holds also for a %Program that a module or %Qore itself creates
+    for sandboxed code, such as one created by
+    @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" or a user module that
+    trusted code loads while it serves sandboxed code; library code that sandboxed code loads first, and the
+    %Program objects that its initialization creates, stay trusted.
 
     @note
     - A trusted destructor must not wait for something that only a cancelled thread could release: a cancellation

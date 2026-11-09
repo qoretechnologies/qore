@@ -977,18 +977,30 @@ private:
 };
 
 //! Returns true if the code of the Program is sandboxed
-/** True if the Program has or had a sandbox manager, or was created by sandboxed code (see
-    qore_program_set_creator_sandbox()), or is a user module that a sandboxed Program loaded by a path it chose;
-    false for a Program that trusted code created (the host, a module loaded by trusted code).  Never changes from true
-    to false.
+/** True if the Program has or had a sandbox manager, or was created by sandboxed code, by Qore code or by C++ code
+    acting for it (see qore_creator_is_sandboxed()), or is a user module that a sandboxed Program loaded by a path it
+    chose; false for a Program that trusted code created (the host, library code, a module loaded by trusted code).
+    Never changes from true to false.
 */
 DLLLOCAL bool qore_program_is_sandboxed(const QoreProgram* pgm);
 
 //! Marks the Program's code as sandboxed (see qore_program_is_sandboxed())
 DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
 
-//! Marks a Program that Qore code creates (Program::constructor()) as sandboxed if its creator is sandboxed
-DLLLOCAL void qore_program_set_creator_sandbox(QoreProgram& pgm);
+//! Returns true if a Program created now on the current thread is sandboxed
+/** Decides for every Program when it is created, in the QoreProgram constructors (qore_program_private), so that it
+    holds wherever a Program is created: by Program::constructor() and ProgramControl::createEvalProgram(), by the
+    module manager for a module, or by a module's C++ code.  True if a sandboxed Program is on the thread's call
+    stack (also one without a manager of its own, which sandboxed code created and trusted code calls), or if a
+    sandbox governs the thread (trusted code that sandboxed code calls, see qore_find_thread_sandbox_manager_ref()).
+
+    Under a module initialization barrier (see QoreModuleInitSandboxBarrierHelper), the code that loads library code
+    is not looked at: library code and what its initialization creates are trusted, also when sandboxed code loads
+    it first, so that whether shared library state is trusted never depends on which code loaded the library first.
+
+    Fails closed: true if the governing sandbox cannot be resolved for lack of memory.
+*/
+DLLLOCAL bool qore_creator_is_sandboxed();
 
 
 //! Waits on a condition variable until it is signalled, the timeout expires, or the thread is cancelled or interrupted

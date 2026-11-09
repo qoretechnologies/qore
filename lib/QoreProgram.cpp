@@ -532,6 +532,11 @@ QoreProgramRegistryForkHandler program_registry_fork_handler;
 
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options, QoreProgram* p_pgm)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm) {
+    // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
+    // every Program wherever it is created, and before the Program is registered and can be found
+    if (qore_creator_is_sandboxed()) {
+        sandboxed.store(true, std::memory_order_release);
+    }
     registerProgram();
     // every member of this object now exists, so the Program can serve as a runtime context; until
     // this point code reached from the base constructor can see the Program but must not switch

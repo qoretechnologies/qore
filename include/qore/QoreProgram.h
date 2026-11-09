@@ -168,6 +168,14 @@ DLLEXPORT void qore_call_program_cleanup_callback(QoreProgram* pgm);
     objects now reference the dependency counter, so when the object's counter reaches zero and
     the global variable list is deleted, then the variables will in turn dereference the program
     so it can be deleted.
+
+    @par Sandboxed Programs
+    A Program created while a sandbox governs the calling thread, or while the code of a sandboxed Program is on its
+    call stack, is sandboxed: its code does not count as trusted (the destructors of its classes do not get the
+    cancellation deferral of trusted destructors, for example), although it has no sandbox manager of its own.  This
+    holds for every constructor, so a module that creates a Program for its caller needs to do nothing for it.  A
+    Program created with no sandbox governing the thread, and one created while a library module is initialized, is
+    trusted.  Use setSandboxManager() to restrict what the code of a Program may do.
 */
 class QoreProgram : public AbstractPrivateData {
     friend class qore_program_private_base;
