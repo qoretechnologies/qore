@@ -43,8 +43,19 @@
     provides definitions required to load qore modules
  */
 
-#define QORE_MODULE_API_MAJOR 2  //!< the major number of the Qore module API implemented
-#define QORE_MODULE_API_MINOR 0  //!< the minor number of the Qore module API implemented
+//! the major number of the Qore module API implemented
+#define QORE_MODULE_API_MAJOR 2
+//! the minor number of the Qore module API implemented
+/** A binary module carries the inline code and the layouts of the public headers that it was compiled with, and Qore
+    loads only a module whose module API it supports (qore_mod_api_list).  Any change to inline code or to an
+    exported or inline-visible type or function in the public headers (include/qore, outside include/qore/intern) that
+    a module built with the previous headers would get wrong must increment this number, so that such modules are
+    refused with an API mismatch error instead of failing at run time; see design/module-api-version.md.
+
+    @since %Qore 3.0: 2.1 (binary modules built with the module API 2.0 headers handle enum values without the
+    declaration ownership of qore#5519 and are refused)
+*/
+#define QORE_MODULE_API_MINOR 1
 
 #define QORE_MODULE_COMPAT_API_MAJOR QORE_MODULE_API_MAJOR  //!< the major number of the earliest recommended Qore module API
 #define QORE_MODULE_COMPAT_API_MINOR QORE_MODULE_API_MINOR  //!< the minor number of the earliest recommended Qore module API

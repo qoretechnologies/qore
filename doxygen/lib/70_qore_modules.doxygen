@@ -7,8 +7,21 @@
     Binary modules are shared libraries (<tt>.so</tt> / <tt>.dylib</tt> / <tt>.dll</tt>) that extend the %Qore language with new classes,
     functions, constants, and namespaces.
 
-    Since %Qore 3.0, binary modules use Module API 2.0, which requires a single
+    Since %Qore 3.0, binary modules use Module API 2.1, which requires a single
     \c extern \c "C" module description function instead of the old-style exported global variables.
+
+    @subsection module_api_version Module API Version
+
+    A binary module carries the inline code and the type layouts of the %Qore headers that it was compiled with, so
+    %Qore loads only a module built for the module API that it implements (@ref QORE_MODULE_API_MAJOR and
+    @ref QORE_MODULE_API_MINOR, which the module sets in its description function); any other module is refused with
+    a \c LOAD-MODULE-ERROR exception that reports the API mismatch.  A module built with the headers of an earlier
+    module API must be rebuilt.  Module API 2.1 replaced 2.0 in %Qore 3.0: modules built with the 2.0 headers handle
+    enum values without the ownership of their declaration that %Qore 3.0 requires.
+
+    @note Any change to inline code, or to an exported or inline-visible type or function, in the public headers
+    (<tt>include/qore</tt>, outside <tt>include/qore/intern</tt>) that a module compiled with the previous headers would
+    get wrong increments @ref QORE_MODULE_API_MINOR (or @ref QORE_MODULE_API_MAJOR for an incompatible redesign).
 
     @subsection module_header Module Description Function
 

@@ -88,8 +88,10 @@
 #include <dirent.h>
 #endif
 
+// only the current module API is supported: modules built for an earlier one carry the inline code of the headers
+// they were built with, which this library does not support (see QORE_MODULE_API_MINOR)
 static const qore_mod_api_compat_s qore_mod_api_list_l[] = {
-    {2, 0},
+    {QORE_MODULE_API_MAJOR, QORE_MODULE_API_MINOR},
 };
 #define QORE_MOD_API_LEN (sizeof(qore_mod_api_list_l)/sizeof(struct qore_mod_api_compat_s))
 
@@ -5156,7 +5158,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     QoreStringMaker suggested_sym("%s_qore_module_desc", feature);
     suggested_sym.replaceAll("-", "_");
     xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "module '%s': modules must implement "
-        "the API 2.0 module description function '%s'", path, suggested_sym.c_str());
+        "the module description function '%s'", path, suggested_sym.c_str());
     return nullptr;
 }
 

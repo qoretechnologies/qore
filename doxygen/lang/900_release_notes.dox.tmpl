@@ -144,10 +144,10 @@
     A child process created with @ref Qore::fork() "fork()" gives up the database connections that it inherits and
     opens its own; continuing a transaction of the parent raises \c DATASOURCE-FORK-ERROR.  See @ref datasource_fork.
 
-    @par Binary Modules Implement Module API 2.0
-    Every external binary module must be rebuilt for module API 2.0, which registers its metadata with a
-    \c {name}_qore_module_desc() function and reports initialization errors as exceptions; see "Developing Qore
-    Modules" in the C++ API documentation.
+    @par Binary Modules Implement Module API 2.1
+    Every external binary module must be rebuilt for module API 2.1, which registers its metadata with a
+    \c {name}_qore_module_desc() function and reports initialization errors as exceptions; a module built for another
+    module API is refused with \c LOAD-MODULE-ERROR.  See "Developing Qore Modules" in the C++ API documentation.
 
     @par AsyncSocketIo 3.0 Requires an Owner for Each Operation and Has No exec() Method
     @ref AsyncSocketIo::AsyncSocketIoController::submit() "AsyncSocketIoController::submit()" requires an \c owner
