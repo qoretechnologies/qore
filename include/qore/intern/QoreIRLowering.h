@@ -462,9 +462,13 @@ private:
 
         @return true if the list is iterated lazily
     */
+    /** With \a pure_consumer_ok (a map, select, map/select or foldl operator without other stages), a list whose
+        selectors have side effects is also evaluated before the iteration when the operator's expressions only
+        compute values from numeric elements (qore_ir_consumer_expr_is_pure()), as neither side can observe the other
+    */
     bool decideLazySelectorSource(const QoreValue& source, const std::vector<LazyPipelineStage>& stages,
         const std::vector<const QoreValue*>& consumer_exprs, const QoreValue* written_lvalue = nullptr,
-        const StatementBlock* block = nullptr);
+        const StatementBlock* block = nullptr, bool pure_consumer_ok = false);
     //! The decisions of decideLazySelectorSource(), by list of selectors
     std::unordered_map<const AbstractQoreNode*, bool> lazy_selector_decisions;
 

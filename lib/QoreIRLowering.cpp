@@ -11045,9 +11045,46 @@ static bool qore_ir_block_may_write_locals(const StatementBlock* block, const qo
     return false;
 }
 
+//! Returns true if \a expr, the expression of a map, select or foldl operator over numeric values, only computes a
+//! value from $1, $2 and constants: it has no side effects, reads no other state and cannot raise an exception
+/** Its evaluation then cannot be observed, nor can it observe anything: the selectors of a list of selectors that the
+    operator iterates can be evaluated before the iteration even when they have side effects (qore#5675).  The values
+    are ints or floats, or NOTHING for an index outside the list, for which the arithmetic and comparison operators
+    accepted cannot raise.
+*/
+static bool qore_ir_consumer_expr_is_pure(const QoreValue& expr) {
+    if (!expr.hasNode()) {
+        return true;
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (node->is_value()) {
+        return true;
+    }
+    if (auto* arg = dynamic_cast<const QoreImplicitArgumentNode*>(node)) {
+        return arg->getOffset() == 0 || arg->getOffset() == 1;
+    }
+    if (qore_ir_walk_stack_reserve_reached()) {
+        return false;
+    }
+    if (dynamic_cast<const QorePlusOperatorNode*>(node) || dynamic_cast<const QoreMinusOperatorNode*>(node)
+            || dynamic_cast<const QoreLogicalGreaterThanOperatorNode*>(node)
+            || dynamic_cast<const QoreLogicalGreaterThanOrEqualsOperatorNode*>(node)
+            || dynamic_cast<const QoreLogicalLessThanOperatorNode*>(node)
+            || dynamic_cast<const QoreLogicalLessThanOrEqualsOperatorNode*>(node)
+            || dynamic_cast<const QoreLogicalEqualsOperatorNode*>(node)
+            || dynamic_cast<const QoreLogicalNotEqualsOperatorNode*>(node)) {
+        auto* op = dynamic_cast<const QoreBinaryOperatorNode<>*>(node);
+        return op && qore_ir_consumer_expr_is_pure(op->getLeft()) && qore_ir_consumer_expr_is_pure(op->getRight());
+    }
+    if (auto* op = dynamic_cast<const QoreUnaryMinusOperatorNode*>(node)) {
+        return qore_ir_consumer_expr_is_pure(op->getExp());
+    }
+    return false;
+}
+
 bool QoreIRLowering::decideLazySelectorSource(const QoreValue& source, const std::vector<LazyPipelineStage>& stages,
         const std::vector<const QoreValue*>& consumer_exprs, const QoreValue* written_lvalue,
-        const StatementBlock* block) {
+        const StatementBlock* block, bool pure_consumer_ok) {
     auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(source.getInternalNode());
     if (!op || !dynamic_cast<const QoreParseListNode*>(op->getRight().getInternalNode())) {
         return false;
@@ -11088,6 +11125,24 @@ bool QoreIRLowering::decideLazySelectorSource(const QoreValue& source, const std
         }
         if (!lazy && block) {
             lazy = qore_ir_block_may_write_locals(block, locals);
+        }
+    }
+    // a map, select or foldl operator whose expressions only compute values from numeric elements cannot observe
+    // when the selectors are evaluated, and its evaluation cannot be observed either
+    if (lazy && pure_consumer_ok && stages.empty() && !written_lvalue && !block && !consumer_exprs.empty()) {
+        const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(getExprTypeInfo(op->getLeft()));
+        if (elem_type == bigIntTypeInfo || elem_type == floatTypeInfo || elem_type == bigIntOrNothingTypeInfo
+                || elem_type == floatOrNothingTypeInfo) {
+            bool pure = true;
+            for (const QoreValue* e : consumer_exprs) {
+                if (!e || !qore_ir_consumer_expr_is_pure(*e)) {
+                    pure = false;
+                    break;
+                }
+            }
+            if (pure) {
+                lazy = false;
+            }
         }
     }
     lazy_selector_decisions[op] = lazy;
@@ -15716,7 +15771,7 @@ QoreIRValue QoreIRLowering::lowerFoldlImpl(const QoreValue& expr, std::string& e
                     && ((sum && (scale || square || (offset && offset_enabled))) || (product && scale));
             }
         }
-        if ((decideLazySelectorSource(base_source, source_stages, {&foldl->getFoldExpression()})
+        if ((decideLazySelectorSource(base_source, source_stages, {&foldl->getFoldExpression()}, nullptr, nullptr, true)
                 || !source_stages.empty()) && !specialized_map_fold) {
             setFunctionalBaseSource(base_source);
             LazyPipelineRoot root;
@@ -16058,7 +16113,7 @@ QoreIRValue QoreIRLowering::lowerMapImpl(const QoreValue& expr, std::string& err
         if (!collectLazyPipelineStages(map->getIteratorExpr(), base_source, source_stages, error)) {
             return QoreIRValue();
         }
-        if (decideLazySelectorSource(base_source, source_stages, {&map->getMapExpression()})
+        if (decideLazySelectorSource(base_source, source_stages, {&map->getMapExpression()}, nullptr, nullptr, true)
                 || !source_stages.empty()) {
             setFunctionalBaseSource(base_source);
             source_stages.push_back({LazyPipelineStage::Map, &map->getMapExpression(), nullptr, map->loc,
@@ -16308,7 +16363,8 @@ QoreIRValue QoreIRLowering::lowerSelectImpl(const QoreValue& expr, std::string& 
         if (!collectLazyPipelineStages(select->getSourceExpression(), base_source, source_stages, error)) {
             return QoreIRValue();
         }
-        if (decideLazySelectorSource(base_source, source_stages, {&select->getPredicateExpression()})
+        if (decideLazySelectorSource(base_source, source_stages, {&select->getPredicateExpression()}, nullptr,
+                nullptr, true)
                 || !source_stages.empty()) {
             setFunctionalBaseSource(base_source);
             source_stages.push_back({LazyPipelineStage::Select, &select->getPredicateExpression(), nullptr,
@@ -16409,7 +16465,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectImpl(const QoreValue& expr, std::strin
             return QoreIRValue();
         }
         if (decideLazySelectorSource(base_source, source_stages, {&map_select->getMapExpression(),
-                &map_select->getSelectExpression()}) || !source_stages.empty()) {
+                &map_select->getSelectExpression()}, nullptr, nullptr, true) || !source_stages.empty()) {
             setFunctionalBaseSource(base_source);
             source_stages.push_back({LazyPipelineStage::MapSelect, &map_select->getMapExpression(),
                 &map_select->getSelectExpression(), map_select->loc, map_select->getMapExpType()});

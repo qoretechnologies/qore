@@ -481,6 +481,30 @@ auto sub written_other_local() {
     return (rv, other);
 }
 
+# --- map, select and foldl expressions that only compute values from numeric elements: the selectors, which have
+# side effects, can be evaluated before the iteration, which cannot observe it ---
+
+auto sub pure_map() {
+    return map $1 + 1, l[f("a", 0), f("b", 1)..f("c", 3), -f("d", 1)];
+}
+
+auto sub pure_map_raises() {
+    return map $1 - 1, l[f("a", 0), k..f("c", 3)];
+}
+
+auto sub pure_select() {
+    return select l[f("a", 0), f("b", 1)..f("c", 4)], $1 > 11;
+}
+
+auto sub pure_foldl() {
+    return foldl $1 + $2, l[f("a", 0), f("b", 1)..f("c", 9)];
+}
+
+auto sub pure_map_strings() {
+    list<string> sl = ("a", "b", "c", "d");
+    return map $1 + "x", sl[f("a", 0), f("b", 1)..f("c", 2)];
+}
+
 # --- iterated elements are the elements of the value: a list of selectors with a range that a foreach statement or
 # an operator iterates gives the elements that it gives as a value, for every bound (qore#5688) ---
 
@@ -764,6 +788,11 @@ sub main() {
         t("inert pipeline", \inert_pipeline());
         t("inert value", \inert_value());
         t("inert remove", \inert_remove());
+        t("pure map", \pure_map());
+        t("pure map raises", \pure_map_raises());
+        t("pure select", \pure_select());
+        t("pure foldl", \pure_foldl());
+        t("pure map strings", \pure_map_strings());
         t("written foreach", \written_foreach());
         t("written foreach inc", \written_foreach_inc());
         t("written foreach nested var", \written_foreach_nested_var());
