@@ -3,6 +3,17 @@
 # when the handler runs on an exception and on the normal exit path; see on-block-exit-closure-locals.qtest (the
 # cases that AOT cannot run yet are in handler-modes.q)
 
+#! describes an exception and the exceptions chained to it, which must be only those that the code raised
+string sub chain(hash<ExceptionInfo> ex) {
+    list<string> l;
+    *hash<ExceptionInfo> e = ex;
+    while (e) {
+        l += e.err == "LVALUE-ERROR" ? sprintf("%s(%s)", e.err, e.desc) : e.err;
+        e = e.next;
+    }
+    return l.join("+");
+}
+
 #! a closure whose on_exit handler declares a local that it references
 string sub closure_ref_exit(bool fail) {
     list<string> log;
@@ -24,7 +35,7 @@ string sub closure_ref_exit(bool fail) {
     try {
         c();
     } catch (hash<ExceptionInfo> ex) {
-        log += "caught " + ex.err;
+        log += "caught " + chain(ex);
     }
     return log.join("; ");
 }
@@ -45,7 +56,7 @@ string sub closure_capture_exit(bool fail) {
     try {
         c();
     } catch (hash<ExceptionInfo> ex) {
-        log += "caught " + ex.err;
+        log += "caught " + chain(ex);
     }
     return log.join("; ");
 }
@@ -82,7 +93,7 @@ string sub nested_handlers() {
     try {
         c();
     } catch (hash<ExceptionInfo> ex) {
-        log += "caught " + ex.err;
+        log += "caught " + chain(ex);
     }
     return log.join("; ");
 }
@@ -106,7 +117,7 @@ string sub recursive_handler() {
     try {
         c(0);
     } catch (hash<ExceptionInfo> ex) {
-        log += "caught " + ex.err;
+        log += "caught " + chain(ex);
     }
     return log.join("; ");
 }
@@ -132,9 +143,86 @@ string sub success_and_parent(bool fail) {
     try {
         c();
     } catch (hash<ExceptionInfo> ex) {
-        log += "caught " + ex.err;
+        log += "caught " + chain(ex);
     }
     return log.join("; ");
+}
+
+#! a catch variable that an on_error handler declares and a closure captures
+string sub catch_variable() {
+    list<string> log;
+    code c = sub () {
+        on_error {
+            try {
+                throw "INNER";
+            } catch (hash<ExceptionInfo> e) {
+                code d = string sub () { return e.err; };
+                log += "catch variable " + d();
+            }
+            log += "after the try";
+        }
+        throw "M";
+    };
+    try {
+        c();
+    } catch (hash<ExceptionInfo> ex) {
+        log += "caught " + chain(ex);
+    }
+    return log.join("; ");
+}
+
+#! thread_exit in a closure whose on_exit handler declares a captured local, in a background thread
+string sub thread_exit_closure() {
+    Queue q();
+    code c = sub () {
+        on_exit {
+            string s = "closure";
+            code d = string sub () { return s; };
+            q.push("on_exit " + d());
+        }
+        thread_exit;
+    };
+    background sub () {
+        on_exit {
+            q.push("END");
+        }
+        c();
+        q.push("not reached");
+    }();
+    list<string> l;
+    while (True) {
+        string v = q.get(60s);
+        if (v == "END") {
+            break;
+        }
+        l += v;
+    }
+    return l.join("; ");
+}
+
+#! thread_exit in a function run as a background thread, whose on_exit handler declares a captured local
+sub thread_exit_function(Queue q) {
+    on_exit {
+        string s = "function";
+        code d = string sub () { return s; };
+        q.push("on_exit " + d());
+        q.push("END");
+    }
+    thread_exit;
+}
+
+string sub thread_exit_function_run() {
+    Queue q();
+    background thread_exit_function(q);
+    list<string> l;
+    while (True) {
+        string v = q.get(60s);
+        if (v == "END") {
+            break;
+        }
+        l += v;
+    }
+    return l.join("; ");
 }
 
 sub main() {
@@ -151,13 +239,16 @@ sub main() {
         try {
             function_capture_exit(\log, True);
         } catch (hash<ExceptionInfo> ex) {
-            log += "caught " + ex.err;
+            log += "caught " + chain(ex);
         }
         printf("function capture exit: %s\n", log.join("; "));
         printf("nested handlers: %s\n", nested_handlers());
         printf("recursive handler: %s\n", recursive_handler());
         printf("success and parent: %s\n", success_and_parent(False));
         printf("success and parent: %s\n", success_and_parent(True));
+        printf("catch variable: %s\n", catch_variable());
+        printf("thread_exit in a closure: %s\n", thread_exit_closure());
+        printf("thread_exit in a thread function: %s\n", thread_exit_function_run());
     }
 }
 

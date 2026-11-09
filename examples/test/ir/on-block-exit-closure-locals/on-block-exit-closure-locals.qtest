@@ -21,6 +21,12 @@
     container, and the handler stopped at its first access with an LVALUE-ERROR, which was not reported: the handler
     did nothing.
 
+    The IR interpreter also wrote such a variable back to the function's slot after the handler, when it had been
+    uninstantiated, which raised an LVALUE-ERROR that was chained to the exception that ran the handler (or reported
+    as unhandled after a thread_exit); and it skipped handlers whose closure-bound variable was a catch, foreach, for
+    or switch variable, which have no InstantiateLocal.  The scripts print each exception with the exceptions chained
+    to it.
+
     The scripts next to the test run each kind of handler on both paths in every execution mode and on the IR tier,
     and handler-locals.q as an AOT executable too, and their output must be that of the AST interpreter.
 */
@@ -39,10 +45,15 @@ class OnBlockExitClosureLocalsTest inherits QUnit::Test {
                 "recursive handler: depth 2; depth 1; depth 0; caught R",
                 "success and parent: exit parent; success+parent",
                 "success and parent: exit parent; caught S",
+                "catch variable: catch variable INNER; after the try; caught M",
+                "thread_exit in a closure: on_exit closure",
+                "thread_exit in a thread function: on_exit function",
             ),
             "handler-modes": (
                 "closure ref error: error i=11; caught Y",
                 "loop in handler: loop [0, 10, 20]; caught L",
+                "foreach variable: foreach 0; foreach 1; after the loop; caught FE",
+                "statement variables: for [2, 2]; switch; while 0; while 3; caught SV",
             ),
         };
 
