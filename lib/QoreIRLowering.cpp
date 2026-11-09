@@ -2514,9 +2514,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             if (!collectLazyPipelineStages(list_expr, base_source, source_stages, error)) {
                 return false;
             }
-            // a list of selectors with ranges is iterated lazily, as the AST interpreter iterates it (qore#5675)
-            LazySelectorSource selector_source;
-            if (!source_stages.empty() || getLazySelectorSource(base_source, selector_source)) {
+            // a list of selectors with ranges is iterated lazily, as the AST interpreter iterates it, when the body
+            // can observe the evaluation of its selectors (qore#5675)
+            QoreValue foreach_var = foreach_stmt->getVar();
+            if (decideLazySelectorSource(base_source, source_stages, {}, &foreach_var, foreach_stmt->getCode())
+                    || !source_stages.empty()) {
                 return lowerForeachLazyPipelineFused(foreach_stmt, base_source, source_stages, error);
             }
         }
@@ -10453,6 +10455,48 @@ QoreIRValue QoreIRLowering::lowerShiftRightEquals(const QoreValue& expr, std::st
     selector of a list of selectors, and the end of a range, only after the code before it has run without an
     exception (qore#5665).
 */
+//! The locals that the stable selectors of a list of selectors read; see qore_ir_selector_is_stable()
+typedef std::vector<const LocalVar*> qore_ir_selector_locals_t;
+
+//! Returns true if \a expr is a selector whose value cannot be changed by the code that iterates the list of selectors
+//! except through the locals it adds to \a locals, and whose evaluation has no side effects and cannot raise
+/** A stable selector is a constant, a read of an int local that no closure captures and of which no reference is
+    taken (LocalVar::closureUse(); nothing but the function's own code can assign it), or the sum, difference or
+    negation of such int values.  A range bound must not be NOTHING, which raises RANGE-ERROR.  A list of stable
+    selectors that the consumer's code does not write gives the same elements whether it is evaluated before the
+    iteration or lazily during it (qore#5675).
+*/
+static bool qore_ir_selector_is_stable(const QoreValue& expr, bool range_bound, qore_ir_selector_locals_t& locals) {
+    if (!expr.hasNode()) {
+        return !(range_bound && expr.isNothing());
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (node->is_value()) {
+        return !(range_bound && expr.isNothing());
+    }
+    if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+        if (var->getType() != VT_LOCAL || !var->ref.id || var->ref.id->closureUse()) {
+            return false;
+        }
+        const QoreTypeInfo* ti = var->ref.id->getTypeInfo();
+        if (ti == bigIntTypeInfo || ti == softBigIntTypeInfo
+                || (!range_bound && (ti == bigIntOrNothingTypeInfo || ti == softBigIntOrNothingTypeInfo))) {
+            locals.push_back(var->ref.id);
+            return true;
+        }
+        return false;
+    }
+    if (dynamic_cast<const QorePlusOperatorNode*>(node) || dynamic_cast<const QoreMinusOperatorNode*>(node)) {
+        auto* op = static_cast<const QoreBinaryOperatorNode<>*>(node);
+        return qore_ir_selector_is_stable(op->getLeft(), true, locals)
+            && qore_ir_selector_is_stable(op->getRight(), true, locals);
+    }
+    if (auto* op = dynamic_cast<const QoreUnaryMinusOperatorNode*>(node)) {
+        return qore_ir_selector_is_stable(op->getExp(), true, locals);
+    }
+    return false;
+}
+
 static bool qore_ir_selector_eval_is_inert(const QoreValue& expr) {
     if (!expr.hasNode()) {
         return true;
@@ -10477,6 +10521,13 @@ static bool qore_ir_selector_eval_is_inert(const QoreValue& expr) {
         const QoreTypeInfo* ti = var->ref.id ? var->ref.id->getTypeInfo() : nullptr;
         return ti == bigIntTypeInfo || ti == bigIntOrNothingTypeInfo || ti == softBigIntTypeInfo
             || ti == softBigIntOrNothingTypeInfo;
+    }
+    // the sum, difference or negation of int locals that cannot be NOTHING has no side effects and cannot raise
+    // (qore#5675)
+    if (dynamic_cast<const QorePlusOperatorNode*>(node) || dynamic_cast<const QoreMinusOperatorNode*>(node)
+            || dynamic_cast<const QoreUnaryMinusOperatorNode*>(node)) {
+        qore_ir_selector_locals_t locals;
+        return qore_ir_selector_is_stable(expr, true, locals);
     }
     return false;
 }
@@ -10800,6 +10851,249 @@ QoreIRValue QoreIRLowering::lowerListSelectorSteps(const QoreSquareBracketsOpera
     return builder.createPhi(incoming)->result;
 }
 
+//! Returns true if \a locals holds the root variable of the lvalue \a lvalue, or if the root is not known
+static bool qore_ir_lvalue_root_in(const QoreValue& lvalue, const qore_ir_selector_locals_t& locals) {
+    QoreValue n = lvalue;
+    for (unsigned depth = 0; depth < 1000; ++depth) {
+        const AbstractQoreNode* node = n.getInternalNode();
+        if (!node) {
+            return false;
+        }
+        if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+            return std::find(locals.begin(), locals.end(), var->ref.id) != locals.end();
+        }
+        if (dynamic_cast<const SelfVarrefNode*>(node)) {
+            return false;
+        }
+        if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+            n = sb->getLeft();
+            continue;
+        }
+        if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+            n = hd->getLeft();
+            continue;
+        }
+        return true;
+    }
+    return true;
+}
+
+static bool qore_ir_block_may_write_locals(const StatementBlock* block, const qore_ir_selector_locals_t& locals);
+
+//! Returns true if evaluating \a expr can write one of \a locals; conservatively true for an unknown kind of node
+static bool qore_ir_expr_may_write_locals(const QoreValue& expr, const qore_ir_selector_locals_t& locals) {
+    if (!expr.hasNode()) {
+        return false;
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (node->is_value() || dynamic_cast<const VarRefNode*>(node) || dynamic_cast<const SelfVarrefNode*>(node)
+            || dynamic_cast<const QoreImplicitArgumentNode*>(node)
+            || dynamic_cast<const QoreImplicitElementNode*>(node)) {
+        return false;
+    }
+    if (qore_ir_walk_stack_reserve_reached()) {
+        return true;
+    }
+    auto args_may_write = [&locals](const QoreParseListNode* parse_args, const QoreListNode* args) {
+        if (parse_args) {
+            for (size_t i = 0; i < parse_args->size(); ++i) {
+                if (qore_ir_expr_may_write_locals(parse_args->get(i), locals)) {
+                    return true;
+                }
+            }
+        }
+        if (args) {
+            ConstListIterator li(args);
+            while (li.next()) {
+                if (qore_ir_expr_may_write_locals(li.getValue(), locals)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+    // an operator that writes an lvalue writes one of the locals if the lvalue's root is one
+    if (dynamic_cast<const LValueOperatorNode*>(node)) {
+        if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<LValueOperatorNode>*>(node)) {
+            return qore_ir_lvalue_root_in(binop->getLeft(), locals)
+                || qore_ir_expr_may_write_locals(binop->getRight(), locals);
+        }
+        if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>(node)) {
+            return qore_ir_lvalue_root_in(unop->getExp(), locals);
+        }
+        return true;
+    }
+    if (auto* call = dynamic_cast<const FunctionCallBase*>(node)) {
+        // a call cannot write a local that no closure captures and of which no reference is taken
+        return args_may_write(call->getParseArgs(), call->getArgs());
+    }
+    if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        const MethodCallNode* method = dot->getMethodCall();
+        return qore_ir_expr_may_write_locals(dot->getExpression(), locals)
+            || (method && args_may_write(method->getParseArgs(), method->getArgs()));
+    }
+    if (auto* call = dynamic_cast<const CallReferenceCallNode*>(node)) {
+        return qore_ir_expr_may_write_locals(call->getExp(), locals)
+            || args_may_write(call->getParseArgs(), call->getArgs());
+    }
+    if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
+        return qore_ir_expr_may_write_locals(binop->getLeft(), locals)
+            || qore_ir_expr_may_write_locals(binop->getRight(), locals);
+    }
+    if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
+        return qore_ir_expr_may_write_locals(unop->getExp(), locals);
+    }
+    if (auto* top = dynamic_cast<const QoreNOperatorNodeBase<3>*>(node)) {
+        for (unsigned i = 0; i < 3; ++i) {
+            if (qore_ir_expr_may_write_locals(top->get(i), locals)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        return qore_ir_expr_may_write_locals(sb->getLeft(), locals)
+            || qore_ir_expr_may_write_locals(sb->getRight(), locals);
+    }
+    if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        return qore_ir_expr_may_write_locals(hd->getLeft(), locals)
+            || qore_ir_expr_may_write_locals(hd->getRight(), locals);
+    }
+    if (auto* pl = dynamic_cast<const QoreParseListNode*>(node)) {
+        for (size_t i = 0; i < pl->size(); ++i) {
+            if (qore_ir_expr_may_write_locals(pl->get(i), locals)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (auto* ph = dynamic_cast<const QoreParseHashNode*>(node)) {
+        for (const QoreValue& k : ph->getKeys()) {
+            if (qore_ir_expr_may_write_locals(k, locals)) {
+                return true;
+            }
+        }
+        for (const QoreValue& v : ph->getValues()) {
+            if (qore_ir_expr_may_write_locals(v, locals)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    return true;
+}
+
+//! Returns true if executing \a stmt can write one of \a locals; conservatively true for an unknown kind of statement
+static bool qore_ir_stmt_may_write_locals(const AbstractStatement* stmt, const qore_ir_selector_locals_t& locals) {
+    if (!stmt) {
+        return false;
+    }
+    if (qore_ir_walk_stack_reserve_reached()) {
+        return true;
+    }
+    if (auto* block = dynamic_cast<const StatementBlock*>(stmt)) {
+        return qore_ir_block_may_write_locals(block, locals);
+    }
+    if (auto* s = dynamic_cast<const ExpressionStatement*>(stmt)) {
+        return qore_ir_expr_may_write_locals(s->getExpression(), locals);
+    }
+    if (auto* s = dynamic_cast<const ReturnStatement*>(stmt)) {
+        return qore_ir_expr_may_write_locals(s->getExpression(), locals);
+    }
+    if (auto* s = dynamic_cast<const ThrowStatement*>(stmt)) {
+        return qore_ir_expr_may_write_locals(s->getArgs(), locals);
+    }
+    if (dynamic_cast<const BreakStatement*>(stmt) || dynamic_cast<const ContinueStatement*>(stmt)) {
+        return false;
+    }
+    if (auto* s = dynamic_cast<const IfStatement*>(stmt)) {
+        return qore_ir_expr_may_write_locals(s->getCond(), locals)
+            || qore_ir_block_may_write_locals(s->getIfCode(), locals)
+            || qore_ir_block_may_write_locals(s->getElseCode(), locals);
+    }
+    if (auto* s = dynamic_cast<const WhileStatement*>(stmt)) {
+        return qore_ir_expr_may_write_locals(s->getCond(), locals)
+            || qore_ir_block_may_write_locals(s->getCode(), locals);
+    }
+    if (auto* s = dynamic_cast<const DoWhileStatement*>(stmt)) {
+        return qore_ir_expr_may_write_locals(s->getCond(), locals)
+            || qore_ir_block_may_write_locals(s->getCode(), locals);
+    }
+    if (auto* s = dynamic_cast<const ForStatement*>(stmt)) {
+        return qore_ir_expr_may_write_locals(s->getAssignment(), locals)
+            || qore_ir_expr_may_write_locals(s->getCond(), locals)
+            || qore_ir_expr_may_write_locals(s->getIterator(), locals)
+            || qore_ir_block_may_write_locals(s->getCode(), locals);
+    }
+    if (auto* s = dynamic_cast<const ForEachStatement*>(stmt)) {
+        return qore_ir_lvalue_root_in(s->getVar(), locals)
+            || qore_ir_expr_may_write_locals(s->getList(), locals)
+            || qore_ir_block_may_write_locals(s->getCode(), locals);
+    }
+    return true;
+}
+
+static bool qore_ir_block_may_write_locals(const StatementBlock* block, const qore_ir_selector_locals_t& locals) {
+    if (!block) {
+        return false;
+    }
+    for (const AbstractStatement* stmt : block->getStatements()) {
+        if (qore_ir_stmt_may_write_locals(stmt, locals)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool QoreIRLowering::decideLazySelectorSource(const QoreValue& source, const std::vector<LazyPipelineStage>& stages,
+        const std::vector<const QoreValue*>& consumer_exprs, const QoreValue* written_lvalue,
+        const StatementBlock* block) {
+    auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(source.getInternalNode());
+    if (!op || !dynamic_cast<const QoreParseListNode*>(op->getRight().getInternalNode())) {
+        return false;
+    }
+    std::vector<QoreValue> selectors;
+    if (!collectListIndexRangeSelectors(op->getRight(), selectors)) {
+        return false;
+    }
+    // the list is evaluated before the iteration if its selectors are stable and the code that iterates it does not
+    // write the locals that they read: the iteration then gives the same elements at the same time
+    qore_ir_selector_locals_t locals;
+    bool lazy = false;
+    for (const QoreValue& selector : selectors) {
+        if (auto* range = dynamic_cast<const QoreRangeOperatorNode*>(selector.getInternalNode())) {
+            if (!qore_ir_selector_is_stable(range->getLeft(), true, locals)
+                    || !qore_ir_selector_is_stable(range->getRight(), true, locals)) {
+                lazy = true;
+                break;
+            }
+        } else if (!qore_ir_selector_is_stable(selector, false, locals)) {
+            lazy = true;
+            break;
+        }
+    }
+    if (!lazy && !locals.empty()) {
+        for (const LazyPipelineStage& stage : stages) {
+            if ((stage.primary && qore_ir_expr_may_write_locals(*stage.primary, locals))
+                    || (stage.secondary && qore_ir_expr_may_write_locals(*stage.secondary, locals))) {
+                lazy = true;
+                break;
+            }
+        }
+        for (size_t i = 0; !lazy && i < consumer_exprs.size(); ++i) {
+            lazy = consumer_exprs[i] && qore_ir_expr_may_write_locals(*consumer_exprs[i], locals);
+        }
+        if (!lazy && written_lvalue) {
+            lazy = qore_ir_lvalue_root_in(*written_lvalue, locals);
+        }
+        if (!lazy && block) {
+            lazy = qore_ir_block_may_write_locals(block, locals);
+        }
+    }
+    lazy_selector_decisions[op] = lazy;
+    return lazy;
+}
+
 bool QoreIRLowering::getLazySelectorSource(const QoreValue& expr, LazySelectorSource& src) const {
     auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(expr.getInternalNode());
     // the AST interpreter iterates only a parse list of selectors with a range lazily (rhs_list_range)
@@ -10810,14 +11104,25 @@ bool QoreIRLowering::getLazySelectorSource(const QoreValue& expr, LazySelectorSo
     if (!collectListIndexRangeSelectors(op->getRight(), selectors)) {
         return false;
     }
-    // with inert selectors, the order of the evaluation cannot be observed, and the list that the selectors select
-    // is iterated as it is
-    bool lazy = false;
-    for (const QoreValue& selector : selectors) {
-        if (!qore_ir_selector_eval_is_inert(selector)) {
-            lazy = true;
-            break;
+    // the decision of the consumer that iterates the list (decideLazySelectorSource()); without one, only a list of
+    // constants is evaluated before the iteration
+    auto i = lazy_selector_decisions.find(op);
+    bool lazy;
+    if (i != lazy_selector_decisions.end()) {
+        lazy = i->second;
+    } else {
+        qore_ir_selector_locals_t locals;
+        lazy = false;
+        for (const QoreValue& selector : selectors) {
+            auto* range = dynamic_cast<const QoreRangeOperatorNode*>(selector.getInternalNode());
+            if (range ? !qore_ir_selector_is_stable(range->getLeft(), true, locals)
+                    || !qore_ir_selector_is_stable(range->getRight(), true, locals)
+                    : !qore_ir_selector_is_stable(selector, false, locals)) {
+                lazy = true;
+                break;
+            }
         }
+        lazy = lazy || !locals.empty();
     }
     if (!lazy) {
         return false;
@@ -15411,7 +15716,8 @@ QoreIRValue QoreIRLowering::lowerFoldlImpl(const QoreValue& expr, std::string& e
                     && ((sum && (scale || square || (offset && offset_enabled))) || (product && scale));
             }
         }
-        if ((!source_stages.empty() || hasLazySelectorSource(base_source)) && !specialized_map_fold) {
+        if ((decideLazySelectorSource(base_source, source_stages, {&foldl->getFoldExpression()})
+                || !source_stages.empty()) && !specialized_map_fold) {
             setFunctionalBaseSource(base_source);
             LazyPipelineRoot root;
             root.kind = LazyPipelineRoot::Foldl;
@@ -15752,7 +16058,8 @@ QoreIRValue QoreIRLowering::lowerMapImpl(const QoreValue& expr, std::string& err
         if (!collectLazyPipelineStages(map->getIteratorExpr(), base_source, source_stages, error)) {
             return QoreIRValue();
         }
-        if (!source_stages.empty() || hasLazySelectorSource(base_source)) {
+        if (decideLazySelectorSource(base_source, source_stages, {&map->getMapExpression()})
+                || !source_stages.empty()) {
             setFunctionalBaseSource(base_source);
             source_stages.push_back({LazyPipelineStage::Map, &map->getMapExpression(), nullptr, map->loc,
                 map->getMapExpType()});
@@ -16001,7 +16308,8 @@ QoreIRValue QoreIRLowering::lowerSelectImpl(const QoreValue& expr, std::string& 
         if (!collectLazyPipelineStages(select->getSourceExpression(), base_source, source_stages, error)) {
             return QoreIRValue();
         }
-        if (!source_stages.empty() || hasLazySelectorSource(base_source)) {
+        if (decideLazySelectorSource(base_source, source_stages, {&select->getPredicateExpression()})
+                || !source_stages.empty()) {
             setFunctionalBaseSource(base_source);
             source_stages.push_back({LazyPipelineStage::Select, &select->getPredicateExpression(), nullptr,
                 select->loc});
@@ -16100,7 +16408,8 @@ QoreIRValue QoreIRLowering::lowerMapSelectImpl(const QoreValue& expr, std::strin
         if (!collectLazyPipelineStages(map_select->getIteratorExpr(), base_source, source_stages, error)) {
             return QoreIRValue();
         }
-        if (!source_stages.empty() || hasLazySelectorSource(base_source)) {
+        if (decideLazySelectorSource(base_source, source_stages, {&map_select->getMapExpression(),
+                &map_select->getSelectExpression()}) || !source_stages.empty()) {
             setFunctionalBaseSource(base_source);
             source_stages.push_back({LazyPipelineStage::MapSelect, &map_select->getMapExpression(),
                 &map_select->getSelectExpression(), map_select->loc, map_select->getMapExpType()});
@@ -20810,7 +21119,7 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
     if (!collectLazyPipelineStages(op->getSource(), base_source, source_stages, error)) {
         return QoreIRValue();
     }
-    if (!source_stages.empty() || hasLazySelectorSource(base_source)) {
+    if (decideLazySelectorSource(base_source, source_stages, {&op->getPredicate()}) || !source_stages.empty()) {
         return lowerStreamingFused(op, base_source, source_stages, error);
     }
 

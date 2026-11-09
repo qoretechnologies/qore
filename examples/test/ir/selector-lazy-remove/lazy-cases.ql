@@ -409,6 +409,78 @@ auto sub inert_remove() {
     return (r, m);
 }
 
+# --- int locals read by the selectors and written by the code that iterates the list: the selectors are evaluated
+# lazily, after the writes of the iterations before them ---
+
+auto sub written_foreach() {
+    int z = 0;
+    list<auto> rv = ();
+    foreach int x in (l[0, z..2]) {
+        push rv, x;
+        z = 4;
+    }
+    return rv;
+}
+
+auto sub written_foreach_inc() {
+    int z = 0;
+    int e = 1;
+    list<auto> rv = ();
+    foreach auto x in (l[z, z..e, e]) {
+        push rv, x;
+        ++z;
+        e += 2;
+    }
+    return rv;
+}
+
+auto sub written_foreach_nested_var() {
+    int z = 0;
+    list<auto> rv = ();
+    foreach int x in (l[1, z..2]) {
+        foreach z in (3, 4) {
+            push rv, x * 100 + z;
+        }
+    }
+    return rv;
+}
+
+auto sub written_map() {
+    int z = 0;
+    return map (z = $1 - 10, $1)[1], l[0, z..2];
+}
+
+auto sub written_select() {
+    int z = 0;
+    return select l[0, z..3], (z = 3, True)[1];
+}
+
+auto sub written_foldl() {
+    int z = 0;
+    return foldl (z = 2, $1 + $2)[1], l[0, 1, z..4];
+}
+
+auto sub stable_arithmetic() {
+    int z = 1;
+    int e = 3;
+    list<auto> rv = ();
+    foreach int x in (l[z - 1, z + 1..e + 1, -e]) {
+        push rv, x;
+    }
+    return (rv, (map $1 + 1, l[z - 1, z + 1..e + 1, -e]), l[z - 1, z + 1..e + 1, -e]);
+}
+
+auto sub written_other_local() {
+    int z = 1;
+    int other = 0;
+    list<auto> rv = ();
+    foreach int x in (l[z, z..3]) {
+        push rv, x;
+        other = x;
+    }
+    return (rv, other);
+}
+
 # --- iterated elements are the elements of the value: a list of selectors with a range that a foreach statement or
 # an operator iterates gives the elements that it gives as a value, for every bound (qore#5688) ---
 
@@ -692,6 +764,14 @@ sub main() {
         t("inert pipeline", \inert_pipeline());
         t("inert value", \inert_value());
         t("inert remove", \inert_remove());
+        t("written foreach", \written_foreach());
+        t("written foreach inc", \written_foreach_inc());
+        t("written foreach nested var", \written_foreach_nested_var());
+        t("written map", \written_map());
+        t("written select", \written_select());
+        t("written foldl", \written_foldl());
+        t("stable arithmetic", \stable_arithmetic());
+        t("written other local", \written_other_local());
         t("same list", \same_list());
         t("same string", \same_string());
         t("same binary", \same_binary());

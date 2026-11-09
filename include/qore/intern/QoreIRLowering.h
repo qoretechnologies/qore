@@ -455,6 +455,18 @@ private:
     //! Collects a supported lazy source chain into ordered stages and an innermost source expression.
     bool collectLazyPipelineStages(const QoreValue& source, QoreValue& base_source,
         std::vector<LazyPipelineStage>& source_stages, std::string& error);
+    //! Decides if the list of selectors \a source, which a consumer iterates, is iterated lazily, and records it
+    /** It is iterated lazily unless its selectors are stable and the consumer's code - the expressions of \a stages,
+        \a consumer_exprs, the lvalue \a written_lvalue and the statements of \a block - does not write the locals that
+        they read (qore#5675).  getLazySelectorSource() then gives the decision.
+
+        @return true if the list is iterated lazily
+    */
+    bool decideLazySelectorSource(const QoreValue& source, const std::vector<LazyPipelineStage>& stages,
+        const std::vector<const QoreValue*>& consumer_exprs, const QoreValue* written_lvalue = nullptr,
+        const StatementBlock* block = nullptr);
+    //! The decisions of decideLazySelectorSource(), by list of selectors
+    std::unordered_map<const AbstractQoreNode*, bool> lazy_selector_decisions;
 
     //! Lowers a pipeline stage with virtual $1/$# values and materializes the runtime context only for AST delegation.
     QoreIRValue lowerLazyPipelineStage(const QoreValue& stage_expr, const QoreProgramLocation* stage_loc,
