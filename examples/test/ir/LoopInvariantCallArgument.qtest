@@ -1,0 +1,306 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class LoopInvariantCallArgumentTest
+
+#! Regression test (qore#5638): a variable given to a call as an argument in a loop keeps its value in every iteration
+/** A call releases an argument that a read of a variable gave a reference of its own to when the call returns
+    (design/temporary-lifetime.md).  Loop-invariant code motion moves a read of a local or a parameter that the loop
+    does not write to the preheader of the loop, and the moved read keeps the temp scope of the statement in the loop
+    body; the IR interpreter and native code took the shared temp scope, or the one static use, as proof that the
+    read was defined for that execution of the call, so the first call released the read, and every later iteration
+    gave the call NOTHING (in CapturingLoggerAppender::hasMessageContaining(): <tt>\<string\>::find(nothing)</tt>).
+
+    Each generated case gives a parameter, a local, a closure-bound local or a global, read once in the loop, to a
+    string pseudo-method, a function, a method, a static method, builtin functions, and, as a list and a hash, to a
+    function, in a \c foreach, \c for and \c while loop of a function and of a method, and checks the result of
+    every iteration.  The hand-written cases are the shape that found the bug, nested loops, a map in a loop, a call
+    in a \c try block in a loop, a loop that a \c catch block continues, loops in closures, a map and foldl
+    expression and a method of \c self.  Every mode, the IR tier and qcc executables built at -O0 and -O3 must give
+    the AST interpreter's output, which must give the expected result of every case.
+
+    Before the fix, the IR interpreter, native code and the IR tier failed the cases that give a parameter or a local
+    to a read-only string pseudo-method (\c find(), \c startsWith(), \c contains()) or to \c index() in a
+    \c foreach loop, the \c toupper() cases in every loop (which also failed before the release of variable reads
+    at call return), the shape that found the bug, the nested loops and the map in a loop, and, in native code, the
+    loop in a closure reading its parameter; the qcc executables passed.
+*/
+class LoopInvariantCallArgumentTest inherits ExecModeOutputTest {
+    public {
+        #! the kinds of variable read in a loop
+        const Kinds = ("param", "local", "closure", "global");
+
+        #! the loops
+        const Loops = ("foreach", "for", "while");
+
+        #! the calls: the type of the argument, the call (%e: the element of the loop, %v: the variable) and the
+        #! result of the case with the list ("ab", "ba", "cb", "b")
+        const Calls = {
+            "find": ("string", "%e.find(%v)", 2),
+            "startswith": ("string", "(%e.startsWith(%v) ? 1 : 0)", 2),
+            "contains": ("string", "(%e.contains(%v) ? 1 : 0)", 4),
+            "func": ("string", "argLen(%v)", 4),
+            "method": ("string", "u.len(%v)", 4),
+            "static": ("string", "U::slen(%v)", 4),
+            "builtin": ("string", "strlen(%v)", 4),
+            "index": ("string", "index(%e, %v)", 2),
+            "upper": ("string", "toupper(%v).size()", 4),
+            "list": ("list<int>", "argElems(%v)", 8),
+            "hash": ("hash<auto>", "argKeys(%v)", 4),
+        };
+
+        #! the value of a variable of each type
+        const Values = {
+            "string": "\"b\"",
+            "list<int>": "(1, 2)",
+            "hash<auto>": "{\"a\": 1}",
+        };
+
+        #! the global of each type
+        const Globals = {
+            "string": "gs",
+            "list<int>": "gl",
+            "hash<auto>": "gh",
+        };
+
+        #! the results of the hand-written cases
+        const Special = {
+            "has": "True False",
+            "nested": "1111000011110000",
+            "map_in_loop": "[1, 0, 1, 0][1, 0, 1, 0][1, 0, 1, 0][1, 0, 1, 0]",
+            "try_in_loop": "1010",
+            "catch_continue": "1c0.1c0.",
+            "closure_loop": "2",
+            "closure_param_loop": "2",
+            "map_foldl": "6",
+            "method_self_loop": "2",
+        };
+    }
+
+    constructor() : ExecModeOutputTest("LoopInvariantCallArgument", LoopInvariantCallArgumentTest::makeScript(),
+            ExecModeOutputTest::ast_output("LoopInvariantCallArgument",
+                LoopInvariantCallArgumentTest::makeScript()),
+            "gives a variable read in a loop to a call in every iteration", ("has True False",),
+            \LoopInvariantCallArgumentTest::checkResults(),
+            ("-O0", "-O3")) {
+    }
+
+    #! returns the script: the generated cases and the hand-written ones, each run twice
+    static string makeScript() {
+        string funcs;
+        string methods;
+        string calls;
+        foreach string host in (("f", "m")) {
+            foreach string kind in (Kinds) {
+                foreach string loop in (Loops) {
+                    foreach hash<auto> c in (Calls.pairIterator()) {
+                        string name = sprintf("%s_%s_%s_%s", host, kind, loop, c.key);
+                        string type = c.value[0];
+                        string init = Values{type};
+                        string params = "list<string> l";
+                        string pre = "";
+                        string v = "v";
+                        switch (kind) {
+                            case "param": params += ", " + type + " v"; break;
+                            case "local": pre = sprintf("%s v = %s; ", type, init); break;
+                            case "closure": pre = sprintf("%s v = %s; code keep = auto sub () { return v; }; ", type,
+                                init); break;
+                            default: v = Globals{type}; break;
+                        }
+                        string elem = loop == "foreach" ? "e" : "l[i]";
+                        string expr = replace(replace(c.value[1], "%e", elem), "%v", v);
+                        string body;
+                        switch (loop) {
+                            case "foreach": body = sprintf("foreach string e in (l) { r += %s; }", expr); break;
+                            case "for": body = sprintf("for (int i = 0; i < l.size(); ++i) { r += %s; }", expr);
+                                break;
+                            default: body = sprintf("int i = 0; while (i < l.size()) { r += %s; ++i; }", expr);
+                                break;
+                        }
+                        string def = sprintf("int %s(%s) { U u(); %sint r = 0; %s return r; }\n", name, params, pre,
+                            body);
+                        if (host == "f") {
+                            funcs += "int sub " + def.substr(4);
+                        } else {
+                            methods += "    " + def;
+                        }
+                        string args = "l" + (kind == "param" ? ", " + init : "");
+                        calls += sprintf("    check(\"%s\", auto sub () { return %s%s(%s); });\n", name,
+                            host == "m" ? "w." : "", name, args);
+                    }
+                }
+            }
+        }
+        return '%modern
+%disable-all-warnings
+
+int sub argLen(string s) { return s.size(); }
+int sub argElems(list<auto> l) { return l.size(); }
+int sub argKeys(hash<auto> h) { return h.size(); }
+
+class U {
+    int len(string s) { return s.size(); }
+    static int slen(string s) { return s.size(); }
+    # the shape that found the bug: CapturingLoggerAppender::hasMessageContaining()
+    static bool has(list<string> messages, string text) {
+        foreach string message in (messages) {
+            if (message.find(text) >= 0) {
+                return True;
+            }
+        }
+        return False;
+    }
+}
+
+our string gs = "b";
+our list<int> gl = (1, 2);
+our hash<auto> gh = {"a": 1};
+
+' + funcs + '
+class W {
+' + methods + '
+    # a parameter given to a call in a loop and to a method of self
+    int self_loop(list<string> l, string v) { int r = 0; foreach string e in (l) { r += find(e, v); } return r; }
+    int find(string e, string v) { return e.find(v); }
+}
+
+# the read is hoisted out of the inner loop and the outer one
+string sub nested(list<string> l, string v) {
+    string r;
+    foreach string e in (l) {
+        for (int j = 0; j < 2; ++j) {
+            for (int k = 0; k < 2; ++k) {
+                r += e.find(v);
+            }
+        }
+    }
+    return r;
+}
+string sub map_in_loop(list<string> l, string v) {
+    string r;
+    foreach string e in (l) {
+        r += sprintf("%y", (map $1.find(v), l));
+    }
+    return r;
+}
+string sub try_in_loop(list<string> l, string v) {
+    string r;
+    foreach string e in (l) {
+        try {
+            r += e.find(v);
+        } catch (hash<ExceptionInfo> ex) {
+            r += "!";
+        }
+    }
+    return r;
+}
+# the loop is continued by a catch block, after a throw that follows the call
+string sub catch_continue(list<string> l, string v) {
+    string r;
+    int i = 0;
+    while (i < l.size()) {
+        try {
+            r += l[i].find(v);
+            ++i;
+            if (i % 2) {
+                throw "X";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            r += "c";
+            continue;
+        }
+        r += ".";
+    }
+    return r;
+}
+# a loop in a closure, reading a captured local and a parameter of the closure
+int sub closure_loop(list<string> l) {
+    string v = "b";
+    code c = int sub () { int r = 0; foreach string e in (l) { r += e.find(v); } return r; };
+    return c();
+}
+int sub closure_param_loop(list<string> l) {
+    code c = int sub (string v) { int r = 0; foreach string e in (l) { r += e.find(v); } return r; };
+    return c("b");
+}
+int sub map_foldl(list<string> l, string v) {
+    return foldl $1 + $2, (map argLen(v) + $1.find(v), l);
+}
+
+sub check(string name, code c) {
+    try {
+        printf("%s %s\n", name, c());
+    } catch (hash<ExceptionInfo> ex) {
+        printf("%s %s: %s\n", name, ex.err, ex.desc.split("\n")[0]);
+    }
+}
+
+list<string> l = ("ab", "ba", "cb", "b");
+W w();
+for (int pass = 0; pass < 2; ++pass) {
+    printf("-- run %d\n", pass);
+' + calls + '
+    check("has", auto sub () { return sprintf("%y %y", U::has(("a", "b", "xx ASYNC"), "ASYNC"), U::has(("a", "b"), "ASYNC")); });
+    check("nested", auto sub () { return nested(l, "b"); });
+    check("map_in_loop", auto sub () { return map_in_loop(l, "b"); });
+    check("try_in_loop", auto sub () { return try_in_loop(l, "b"); });
+    check("catch_continue", auto sub () { return catch_continue(l, "b"); });
+    check("closure_loop", auto sub () { return closure_loop(l); });
+    check("closure_param_loop", auto sub () { return closure_param_loop(l); });
+    check("map_foldl", auto sub () { return map_foldl(l, "b"); });
+    check("method_self_loop", auto sub () { return w.self_loop(l, "b"); });
+}
+';
+    }
+
+    #! returns the cases whose result is missing or not the expected one, in each run
+    static list<string> checkResults(string out) {
+        hash<string, string> exp = Special;
+        foreach string host in (("f", "m")) {
+            foreach string kind in (Kinds) {
+                foreach string loop in (Loops) {
+                    foreach hash<auto> c in (Calls.pairIterator()) {
+                        exp{sprintf("%s_%s_%s_%s", host, kind, loop, c.key)} = c.value[2].toString();
+                    }
+                }
+            }
+        }
+        list<string> rv = ();
+        list<hash<string, string>> runs = ();
+        foreach string line in (out.split("\n")) {
+            if (line =~ /^-- run /) {
+                runs += {};
+                continue;
+            }
+            if (!runs) {
+                continue;
+            }
+            *list<*string> m = line =~ x/^([a-z_]+) (.*)$/;
+            if (m) {
+                runs[runs.size() - 1]{m[0]} = m[1];
+            }
+        }
+        if (runs.size() != 2) {
+            rv += sprintf("runs: %d, expected 2", runs.size());
+        }
+        foreach hash<string, string> run in (runs) {
+            foreach hash<auto> e in (exp.pairIterator()) {
+                if (run{e.key} !== e.value) {
+                    rv += sprintf("run %d: %s: %y, expected %y", $#, e.key, run{e.key}, e.value);
+                }
+            }
+        }
+        return rv;
+    }
+}

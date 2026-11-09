@@ -2317,6 +2317,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     value_def_temp_scope.clear();
     value_defined_by_call.clear();
     value_defined_by_variable_read.clear();
+    reused_call_args.clear();
     reference_read_slots.clear();
     last_reference_read_slot = nullptr;
     immediate_closure_creates.clear();
@@ -5688,10 +5689,11 @@ bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::
         if (uses_it == operand_remaining_uses.end() || uses_it->second > (use_pending ? 1 : 0)) {
             continue;
         }
-        // a value defined outside the block, such as a loop invariant hoisted out of a loop, is used again by each
-        // execution of the block; one defined in another block of the same temp scope (statement) is not: a call in
-        // a try block is an invoke that ends its block, and its arguments are defined in the blocks before it,
-        // while a hoisted invariant is defined in a temp scope of its own
+        // a value defined outside the block can be used again by the next execution of the block; one defined in
+        // another block of the same temp scope (statement) is not, as a call in a try block is an invoke that ends its
+        // block, and its arguments are defined in the blocks before it, unless the call's block can run again
+        // without the defining block: a loop invariant hoisted out of a loop keeps the temp scope of the statement
+        // in the loop body that it was moved from (reused_call_args, see qore_ir_find_reused_call_args())
         auto def_it = value_def_block.find(id);
         if (def_it == value_def_block.end()) {
             continue;
@@ -5700,6 +5702,9 @@ bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::
             auto scope_it = value_def_temp_scope.find(id);
             if (scope_it == value_def_temp_scope.end() || !scope_it->second
                     || scope_it->second != inst->temp_scope_id) {
+                continue;
+            }
+            if (id < reused_call_args.size() && reused_call_args[id]) {
                 continue;
             }
         }
@@ -5984,10 +5989,13 @@ llvm::Value* QoreIRToLLVM::buildArgCleanupArray(const QoreIRInstruction* inst,
             // multiple calls (for example, map (f($1), g($1)), (map make($1), xs)).
             // Only let the callee release its cleanup at the final use; otherwise
             // the first call frees the value while later operands still refer to it.
+            // An argument that a later execution of the call uses again (a read hoisted out of a loop, whose one
+            // static use runs on every iteration) is not given to the callee either.
             auto uses_it = operand_remaining_uses.find(value_id);
             auto alloca_it = invoke_alloca_map.find(value_id);
             if (alloca_it != invoke_alloca_map.end()
-                    && (uses_it == operand_remaining_uses.end() || uses_it->second <= 1)) {
+                    && (uses_it == operand_remaining_uses.end() || uses_it->second <= 1)
+                    && !(value_id < reused_call_args.size() && reused_call_args[value_id])) {
                 cleanup_ptr = alloca_it->second;
                 if (!cleanup_ptr) {
                     cleanup_ptr = promoteSsaEntryToAlloca(value_id,
@@ -11822,6 +11830,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     value_def_temp_scope.clear();
     value_defined_by_call.clear();
     value_defined_by_variable_read.clear();
+    {
+        // the call arguments that a later execution of the call uses again, such as a read hoisted out of a loop:
+        // no call releases them (see design/temporary-lifetime.md)
+        size_t reuse_check_count = 0;
+        reused_call_args = qore_ir_find_reused_call_args(func, reuse_check_count);
+    }
     reference_read_slots.clear();
     last_reference_read_slot = nullptr;
     immediate_closure_creates.clear();

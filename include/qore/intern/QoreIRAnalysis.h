@@ -68,6 +68,31 @@ struct QoreIRNaturalLoop {
 //! @return natural loops ordered from smallest to largest
 std::vector<QoreIRNaturalLoop> qore_ir_find_natural_loops(const QoreIRControlFlowGraph& cfg);
 
+//! Returns the values that a call takes as an argument and that a later execution of the call uses again.
+/** A call that consumes an argument releases it when the call returns (see design/temporary-lifetime.md); that is
+    only correct if the argument is defined again for each execution of the call.  Neither the static use count nor
+    the temp scope of the defining instruction tells: loop-invariant code motion moves a read of a variable that the
+    loop does not write to the preheader of the loop and keeps the temp scope of the statement in the loop body that
+    it came from, so a value defined once before the loop has one use, in the temp scope of a call that runs on every
+    iteration.  Such an argument is defined in another block than the call, and the call's block can run again
+    without the defining block running in between: the next execution of the call uses the value again, and no
+    execution of the call may release it.
+
+    The control-flow edges are the normal successors and the exception edges (an instruction's or a throw's
+    exception target), so a loop that a catch handler continues is seen as well.  A block can only run again through
+    a cycle of its strongly connected component, so only blocks in a cycle are searched, within their component.  A
+    cancelled analysis flags every value, so that no call releases an argument: the values live to the end of their
+    statements.
+
+    @param func the IR function
+    @param check_count the shared cooperative-cancellation counter
+
+    @return a flag for each value id (QoreIRFunction::max_value_id + 1 entries): non-zero for a value that a call
+    takes as an argument (an operand from qore_ir_call_arg_start() on) and that a later execution of the call can use
+    again without the value being defined again
+*/
+std::vector<uint8_t> qore_ir_find_reused_call_args(const QoreIRFunction& func, size_t& check_count);
+
 struct QoreIROptimizationStats {
     size_t loops_analyzed = 0;
     size_t instructions_hoisted = 0;

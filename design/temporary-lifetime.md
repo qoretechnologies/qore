@@ -17,8 +17,22 @@ argument list of a call (`CodeEvaluationHelper`): the IR interpreter releases th
 (`QoreIRToLLVM::releaseConsumedCallArgs()`, the `_consume_args` helpers).  An argument created by a call (a function,
 method or closure call or an object construction) and a value read from a variable that the read gave a reference of
 its own to (see [Values read from variables](#values-read-from-variables)), in the block or the temp scope of the
-call, are released there; a value borrowed from a variable or a constant has no reference of the frame to release, and
-a loop invariant is defined in a temp scope of its own.
+call, are released there; a value borrowed from a variable or a constant has no reference of the frame to release.
+
+Only a value defined again for each execution of the call is released by it.  Loop-invariant code motion moves a read
+of a local or a parameter that a loop does not write (`qore_ir_is_hoistable_query_load()`) to the preheader of the
+loop, and the moved instruction keeps the temp scope of the statement in the loop body that it came from, so neither
+the static use count (one use) nor the temp scope tells a hoisted read from an argument defined in an earlier block of
+the statement (a call in a `try` block is an invoke that ends its block).  `qore_ir_find_reused_call_args()` gives the
+call arguments defined in another block than the call whose block can run again without the defining block running
+in between (over the normal and the exception edges, searched within the strongly connected component of the call's
+block); no call releases them or takes their slot: the IR interpreter leaves them out of `consumed_call_args` and of
+`consumeLastUseCallArgSlots()`, native code out of `releaseConsumedCallArgs()` and of the cleanup array that a
+`_consume_args` helper or `qore_rt_clear_arg_cleanups()` releases (`buildArgCleanupArray()`).  Such a read lives until
+the end of the statement that the preheader belongs to.  Before, `foreach string m in (l) { m.find(text); }` (since the
+release of variable reads at call return) and `foreach string m in (l) { toupper(text); }` (before it) released the
+hoisted read of `text` at the first call, and every later iteration gave the call NOTHING in the IR interpreter and
+native code (qore#5638; examples/test/ir/LoopInvariantCallArgument.qtest).
 
 ## Statement boundaries
 

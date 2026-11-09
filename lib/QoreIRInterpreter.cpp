@@ -2345,14 +2345,16 @@ static bool qore_ir_operator_keeps_no_operand(QoreIROpcode op) {
 
 static bool buildValueUseCounts(const QoreIRFunction& func,
         std::vector<uint32_t>& counts, std::vector<uint8_t>& dot_eval_only_bases,
-        std::vector<uint8_t>& consumed_call_args, std::vector<uint8_t>& phi_takes_incoming, ExceptionSink* xsink) {
+        std::vector<uint8_t>& consumed_call_args, std::vector<uint8_t>& phi_takes_incoming,
+        const std::vector<uint8_t>& reused_call_args, ExceptionSink* xsink) {
     counts.assign(func.max_value_id + 1, 0);
     std::vector<uint8_t> dot_eval_base_candidates(counts.size(), 0);
     std::vector<uint8_t> non_dot_eval_uses(counts.size(), 0);
     // values used as call arguments by a call in the block or the temp scope (the statement) that defines them: a
     // call in a try block is an invoke that ends its block, and its arguments are defined in the blocks before it, as
-    // is an argument given by a Phi (c ? new T() : new T()); a loop invariant hoisted out of a loop is defined in a
-    // temp scope of its own
+    // is an argument given by a Phi (c ? new T() : new T()).  A loop invariant hoisted out of a loop keeps the temp
+    // scope of the statement in the loop body that it was moved from: it is in reused_call_args
+    // (qore_ir_find_reused_call_args()) and is never consumed, as the next iteration uses it again
     std::vector<uint8_t> same_block_call_args(counts.size(), 0);
     // the block and the temp scope defining each value
     std::vector<const QoreIRBasicBlock*> def_block(counts.size(), nullptr);
@@ -2456,6 +2458,7 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 QoreIRValue arg = inst->operands[i];
                 if (arg.isValid() && arg.id < def_block.size()
                         && (def_by_call[arg.id] || def_by_variable_read[arg.id])
+                        && !(arg.id < reused_call_args.size() && reused_call_args[arg.id])
                         && (def_block[arg.id] == block.get()
                             || (def_scope[arg.id] && def_scope[arg.id] == inst->temp_scope_id))) {
                     same_block_call_args[arg.id] = 1;
@@ -2493,8 +2496,12 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     std::vector<uint8_t> dot_eval_only_bases;
     std::vector<uint8_t> consumed_call_args;
     std::vector<uint8_t> phi_takes_incoming;
+    // the call arguments that a later execution of the call uses again (a read hoisted out of a loop): no call
+    // releases them (see design/temporary-lifetime.md)
+    size_t reuse_check_count = 0;
+    std::vector<uint8_t> reused_call_args = qore_ir_find_reused_call_args(func, reuse_check_count);
     if (!buildValueUseCounts(func, value_use_counts, dot_eval_only_bases, consumed_call_args, phi_takes_incoming,
-            xsink)) {
+            reused_call_args, xsink)) {
         return false;
     }
     std::vector<int32_t> operand_use_counts(func.max_value_id + 1, 0);
@@ -2647,6 +2654,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_value_use_counts = std::move(value_use_counts);
     func.interpreter_dot_eval_only_bases = std::move(dot_eval_only_bases);
     func.interpreter_consumed_call_args = std::move(consumed_call_args);
+    func.interpreter_reused_call_args = std::move(reused_call_args);
     func.interpreter_phi_takes_incoming = std::move(phi_takes_incoming);
     {
         std::vector<uint32_t> release_groups;
@@ -5249,16 +5257,19 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     return true;
 }
 
+// counts the occurrences of each argument that the call can take the slot of: an argument that a later execution of
+// the call uses again (reused_call_args, a read hoisted out of a loop) is left out, as its slot stays valid for it
 static void countCallArgOccurrences(const IRValueSlots& values,
         const std::vector<QoreIRValue>& operands, size_t start_index,
-        const std::vector<uint32_t>& value_use_counts,
+        const std::vector<uint32_t>& value_use_counts, const std::vector<uint8_t>& reused_call_args,
         std::unordered_map<uint32_t, uint32_t>& occurrences) {
     occurrences.clear();
     occurrences.reserve(operands.size() - start_index);
     for (size_t i = start_index; i < operands.size(); ++i) {
         QoreIRValue operand = operands[i];
         if (operand.isValid() && operand.id < values.size()
-                && operand.id < value_use_counts.size()) {
+                && operand.id < value_use_counts.size()
+                && !(operand.id < reused_call_args.size() && reused_call_args[operand.id])) {
             ++occurrences[operand.id];
         }
     }
@@ -5266,10 +5277,10 @@ static void countCallArgOccurrences(const IRValueSlots& values,
 
 static void consumeLastUseCallArgSlots(IRValueSlots& values, IRCleanupSlots& cleanup,
         const std::vector<QoreIRValue>& operands, size_t start_index,
-        const std::vector<uint32_t>& value_use_counts,
+        const std::vector<uint32_t>& value_use_counts, const std::vector<uint8_t>& reused_call_args,
         const std::unordered_map<uint32_t, int32_t>* borrowed_slots, ExceptionSink* xsink) {
     std::unordered_map<uint32_t, uint32_t> occurrences;
-    countCallArgOccurrences(values, operands, start_index, value_use_counts, occurrences);
+    countCallArgOccurrences(values, operands, start_index, value_use_counts, reused_call_args, occurrences);
     // last argument first, as the AST interpreter releases the parameters that took the arguments over when the
     // callee returns (an argument given twice is released at its last position)
     uint32_t checked = 0;
@@ -5305,9 +5316,10 @@ static void consumeLastUseCallArgSlots(IRValueSlots& values, IRCleanupSlots& cle
 }
 
 static bool hasLastUseCallArgSlots(const IRValueSlots& values, const std::vector<QoreIRValue>& operands,
-        size_t start_index, const std::vector<uint32_t>& value_use_counts) {
+        size_t start_index, const std::vector<uint32_t>& value_use_counts,
+        const std::vector<uint8_t>& reused_call_args) {
     std::unordered_map<uint32_t, uint32_t> occurrences;
-    countCallArgOccurrences(values, operands, start_index, value_use_counts, occurrences);
+    countCallArgOccurrences(values, operands, start_index, value_use_counts, reused_call_args, occurrences);
     for (const auto& [id, occurrences_in_args] : occurrences) {
         if (value_use_counts[id] != occurrences_in_args) {
             continue;
@@ -6567,6 +6579,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     const std::vector<uint32_t>& value_use_counts = func.interpreter_value_use_counts;
     const std::vector<uint8_t>& dot_eval_only_bases = func.interpreter_dot_eval_only_bases;
     const std::vector<uint8_t>& consumed_call_args = func.interpreter_consumed_call_args;
+    const std::vector<uint8_t>& reused_call_args = func.interpreter_reused_call_args;
     auto isDotEvalOnlyBase = [&](const QoreIRInstruction* i) -> bool {
         return i && i->result.isValid() && i->result.id < dot_eval_only_bases.size()
             && dot_eval_only_bases[i->result.id];
@@ -15742,7 +15755,7 @@ load_local_done:
                             : nullptr;
                     }
                     bool has_last_use_args = direct_inst->func && hasLastUseCallArgSlots(values,
-                        direct_inst->operands, 0, value_use_counts);
+                        direct_inst->operands, 0, value_use_counts, reused_call_args);
                     bool prefer_inline_ir = has_last_use_args
                         && !explicit_inst
                         && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs) > 0;
@@ -15753,7 +15766,7 @@ load_local_done:
                             return returnAfterUnhandledException();
                         }
                         consumeLastUseCallArgSlots(values, cleanup, direct_inst->operands, 0,
-                            value_use_counts, &weak_load_temp_slots, xsink);
+                            value_use_counts, reused_call_args, &weak_load_temp_slots, xsink);
                         if (xsink && *xsink) {
                             return returnAfterUnhandledException();
                         }
@@ -15835,7 +15848,7 @@ load_local_done:
                     }
                     if (has_last_use_args) {
                         consumeLastUseCallArgSlots(values, cleanup, direct_inst->operands, 0,
-                            value_use_counts, &weak_load_temp_slots, xsink);
+                            value_use_counts, reused_call_args, &weak_load_temp_slots, xsink);
                         if (xsink && *xsink) {
                             return returnAfterUnhandledException();
                         }
@@ -15864,7 +15877,7 @@ load_local_done:
                 if (static_inst->variant && static_call_expr) {
                     int nargs = static_cast<int>(static_inst->operands.size());
                     if (hasLastUseCallArgSlots(values, static_inst->operands, 0,
-                            value_use_counts)) {
+                            value_use_counts, reused_call_args)) {
                         QoreListNode* arg_list = buildArgList(values,
                             static_inst->operands, 0, xsink);
                         if (xsink && *xsink) {
@@ -15874,7 +15887,8 @@ load_local_done:
                             return returnAfterUnhandledException();
                         }
                         consumeLastUseCallArgSlots(values, cleanup,
-                            static_inst->operands, 0, value_use_counts, &weak_load_temp_slots, xsink);
+                            static_inst->operands, 0, value_use_counts, reused_call_args, &weak_load_temp_slots,
+                            xsink);
                         if (xsink && *xsink) {
                             if (arg_list) {
                                 arg_list->deref(xsink);
@@ -16039,7 +16053,7 @@ load_local_done:
                         return returnAfterUnhandledException();
                     }
                     consumeLastUseCallArgSlots(values, cleanup, inst->operands, arg_start,
-                        value_use_counts, &weak_load_temp_slots, xsink);
+                        value_use_counts, reused_call_args, &weak_load_temp_slots, xsink);
                     if (xsink && *xsink) {
                         if (arg_list) {
                             arg_list->deref(xsink);
