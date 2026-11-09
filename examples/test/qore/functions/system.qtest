@@ -12,6 +12,17 @@
 %exec-class SystemCallTest
 
 class SystemCallTest inherits QUnit::Test {
+    #! a script that starts processes in a loop and writes the shell's PID to descriptor 3 after starting 20 of them
+    const ShellLoop = "i=0; while [ $i -lt 200 ]; do sleep 120 & i=$((i + 1)); [ $i -eq 20 ] && echo $$ >&3; done; "
+        "wait";
+    #! a script that starts subshells, each of which starts subshells that start processes, and writes the shell's PID
+    #! to descriptor 3 once it has started the first subshells
+    /** The first subshells are starting subshells when the command is interrupted, and a subshell being started then
+        goes on starting processes after the shell has ended.
+    */
+    const SubshellLoops = "j=0; while [ $j -lt 8 ]; do ( i=0; while [ $i -lt 8 ]; do ( k=0; while [ $k -lt 4 ]; do "
+        "sleep 120 & k=$((k + 1)); done; wait ) & i=$((i + 1)); done; wait ) & j=$((j + 1)); done; echo $$ >&3; wait";
+
     constructor() : Test("SystemCallTest", "1.0") {
         addTestCase("system() test", \testMethod());
         addTestCase("system() exit code", \testExitCode());
@@ -63,29 +74,35 @@ class SystemCallTest inherits QUnit::Test {
     }
 
     #! interrupting the sandbox of a thread waiting in system() kills every process of the command
-    /** The interrupt can arrive while the command's shell is starting a process: on macOS, a SIGKILL sent to the
-        process group does not reach a process created at that moment, and system() sends it to the group again once
-        the shell has ended; each command starts processes until it is killed, and several commands are interrupted,
-        so that the interrupt arrives while the shell is starting a process.
+    /** The interrupt can arrive while a process of the command is starting a process: on macOS, a process being
+        created when SIGKILL is sent to its process group does not receive it, and system() kills the group
+        again each time processes in it end, until none is left but the command's shell.  The commands start
+        processes in loops and write the shell's PID once some have been started, so that the interrupt arrives
+        while processes are being started: by the shell, or by subshells, which go on starting processes after the
+        shell has ended.
     */
     testInterruptKillsProcessGroup() {
 %ifdef Windows
         testSkip("Windows");
 %endif
-        for (int i = 1; i <= 5; ++i) {
-            interruptCommand(i);
+        for (int i = 1; i <= 3; ++i) {
+            interruptCommand(sprintf("round %d: the shell starts processes", i), ShellLoop);
+        }
+        for (int i = 1; i <= 8; ++i) {
+            interruptCommand(sprintf("round %d: subshells start processes", i), SubshellLoops);
         }
     }
 
     #! runs a command in a sandboxed Program, interrupts the sandbox and checks that every process of the command ends
-    /** The processes of the command hold the write end of a FIFO open, so that end-of-file on its read end shows that
-        every one of them has exited.
+    /** The shell opens a FIFO on descriptor 3, which every process of the command inherits and holds open, so that
+        end-of-file on its read end shows that every one of them has exited; the script writes the shell's PID, which
+        is the ID of its process group, to the FIFO.
     */
-    private interruptCommand(int round) {
+    private interruptCommand(string label, string script) {
         # a directory of its own, so that concurrent runs of this test do not share the FIFO
         TmpDir tmp("qore-system-");
         string fifo = tmp.path + DirSep + "fifo";
-        assertEq(0, mkfifo(fifo), sprintf("round %d: FIFO created", round));
+        assertEq(0, mkfifo(fifo), label + ": FIFO created");
 
         SandboxManager sm();
         sm.addFilesystemAllowedPath("/bin/sh", QSEC_EXECUTE);
@@ -104,12 +121,19 @@ int sub run_system(string cmd) {
         *string ex_err;
         int rc = -999;
 
-        # the shell opens the FIFO on descriptor 3, which every process that it starts inherits, and writes its PID,
-        # which is the ID of its process group
-        string cmd = sprintf("exec 3> %s; echo $$ >&3; i=0; while [ $i -lt 200 ]; do sleep 120 & i=$((i + 1)); "
-            "done; wait", fifo);
+        string cmd = sprintf("exec 3> %s; %s", fifo, script);
         background sub () {
-            on_exit done.dec();
+            on_exit {
+                # opens the FIFO and closes it at once: if the command failed before its shell opened the FIFO, this
+                # ends the open() of its read end below; the open() returns at once otherwise, as the read end is open
+                try {
+                    File w();
+                    w.open2(fifo, O_WRONLY);
+                } catch (hash<ExceptionInfo> ex) {
+                    stderr.printf("%s: cannot open the FIFO to write: %s\n", label, get_exception_string(ex));
+                }
+                done.dec();
+            }
             try {
                 rc = p.callFunction("run_system", cmd);
             } catch (hash<ExceptionInfo> ex) {
@@ -135,18 +159,18 @@ int sub run_system(string cmd) {
         }
 
         pgid = int(f.readLine());
-        assertGt(0, pgid, sprintf("round %d: process group ID read", round));
+        assertGt(0, pgid, label + ": process group ID read");
 
         sm.requestInterrupt();
         # a backstop only: the interrupt ends the wait at once
-        assertEq(0, done.waitForZero(20s), sprintf("round %d: the interrupted wait ended", round));
-        assertEq("PROGRAM-INTERRUPTED", ex_err, sprintf("round %d: system() raised PROGRAM-INTERRUPTED", round));
-        assertEq(-999, rc, sprintf("round %d: system() returned no value", round));
+        assertEq(0, done.waitForZero(20s), label + ": the interrupted wait ended");
+        assertEq("PROGRAM-INTERRUPTED", ex_err, label + ": system() raised PROGRAM-INTERRUPTED");
+        assertEq(-999, rc, label + ": system() returned no value");
 
         # end-of-file is read when every process holding the FIFO open has exited; the timeout is a hang guard, not
         # synchronization: the processes have been killed, and the read returns when the last one has exited
         try {
-            while (f.readBinary(1, 60s)) {
+            while (f.readBinary(1, 30s)) {
             }
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "FILE-READ-TIMEOUT") {
@@ -154,7 +178,7 @@ int sub run_system(string cmd) {
             }
             left_running = True;
         }
-        assertFalse(left_running, sprintf("round %d: every process of the command has exited", round));
+        assertFalse(left_running, label + ": every process of the command has exited");
     }
 
     testRestrictedAccess() {
