@@ -17,15 +17,16 @@
 #! Regression test: the caches of closure calls are not used for a closure of a deleted Program
 /** The IR interpreter's call of a closure (tryExecuteInterpreterInlineIRClosure()) and the native code's call of a
     closure that it runs as a leaf (tryExecClosureNativeLeaf()) cache the metadata of the last closure that a thread
-    called, keyed by the addresses of the closure, its function and variant, and its Program.  These objects are
-    freed with the Program, and the allocator gives their memory to the objects of the Program created after it, so a
-    closure of the new Program could have every address that the cache held for a closure of the deleted one: the
-    call then ran the freed IR of the deleted closure, or the IR and signature of another function that had been
-    given the memory (a RUNTIME-TYPE-ERROR for a parameter of another function, a wrong result, an
+    called; they were keyed by the addresses of the closure, its function and variant, and its Program.  These
+    objects are freed with the Program, and the allocator gives their memory to the objects of the Program created
+    after it, so a closure of the new Program could have every address that the cache held for a closure of the
+    deleted one: the call then ran the freed IR of the deleted closure, or the IR and signature of another function
+    that had been given the memory (a RUNTIME-TYPE-ERROR for a parameter of another function, a wrong result, an
     IR-EXEC-ERROR "function has no basic blocks", or a crash).  It was seen in
     dgc-opaque-object-local-release.qtest, whose "hash reference argument" cycle case parses the same closure in two
-    Programs, one after the other, on macOS, whose allocator reuses freed memory at once.  The caches now also hold
-    the ID of the Program, which is never reused.
+    Programs, one after the other, on macOS, whose allocator reuses freed memory at once.  The caches are now keyed
+    by the closure function's serial, which is never reused (UserClosureFunction::serial);
+    ClosureCacheExpressionReuse.qtest tests closures freed while their Program lives.
 
     The driver creates a Program for each of many closures in turn, each one with the same code as the one before but
     a different result, calls it and deletes the Program; it starts each round of Programs with other memory held, so
@@ -41,7 +42,8 @@ class ClosureCacheProgramReuseTest inherits QUnit::Test {
 const Families = (
     # a closure called by the IR interpreter
     {"name": "string closure",
-        "code": "%%modern\nstring sub t() { return string sub (int i) { return %s + i; }(1); }\n", "args": ("\"A\"", "\"B\""), "expected": ("A1", "B1")},
+        "code": "%%modern\nstring sub t() { return string sub (int i) { return %s + i; }(1); }\n",
+        "args": ("\"A\"", "\"B\""), "expected": ("A1", "B1")},
     # a closure that native code runs as a leaf
     {"name": "int closure", "code": "%%modern\nint sub t() { code f = int sub (int i) { return i %s 1; }; "
         "return f(10); }\n", "args": ("+", "-"), "expected": (11, 9)},

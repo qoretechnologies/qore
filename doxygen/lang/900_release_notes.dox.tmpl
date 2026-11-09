@@ -1640,10 +1640,11 @@
       could be a value that the variable's type does not store (ex: <tt>any v; (v += <StatInfo>{}).fullType()</tt>
       gave \c "hash<StatInfo>" while \c v holds a plain \c hash); the result is now the value the variable holds, as
       with the AST interpreter
-    - in the IR, JIT and tiered execution modes, a closure of a @ref Qore::Program "Program" created after another
-      Program had been deleted could run the code of a closure of the deleted Program, or of another function: the
-      call gave a wrong result, a \c RUNTIME-TYPE-ERROR for a parameter of another function, an \c IR-EXEC-ERROR, or
-      crashed; a closure now always runs its own code
+    - in the IR, JIT and tiered execution modes, a closure could run the code of a closure that had been freed: the
+      closure of an @ref Qore::Expression "Expression" evaluated after another Expression with a closure had been
+      deleted, and a closure of a @ref Qore::Program "Program" created after another Program had been deleted; the call
+      gave a wrong result, a \c RUNTIME-TYPE-ERROR for a parameter of another function or an \c IR-EXEC-ERROR, or
+      crashed; a closure now runs its own code
     - in the IR execution mode, and where the JIT and tiered modes use the IR interpreter, a \c thread_local variable
       read after an assignment or an in-place change in the same function could give a value it does not hold, such
       as the unconverted value assigned or its value before the change; the variable's value is now given, as with

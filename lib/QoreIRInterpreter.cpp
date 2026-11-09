@@ -5008,21 +5008,21 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         return false;
     }
 
-    // The cache outlives the objects whose addresses it holds: a closure's function, its variant and the variant's IR
-    // belong to the Program that parsed it and are freed with it, and the allocator can give their memory and the
-    // Program's to the objects of a Program created after it, so that a closure of the new Program has the addresses
-    // that the cache holds for a closure of the deleted one.  The metadata cached would then be read from freed memory
-    // or from the objects that now live there: the call ran the freed IR of the deleted Program's closure, or another
-    // function's IR with that function's signature.  The ID of a Program is never reused, so the cache is used only
-    // while the Program whose closure it holds is the caller's Program: the caller's Program is alive, and the objects
-    // cached with it, since a variant and its IR are freed only with the Program and the IR of a variant is never
-    // replaced (see UserVariantBase::setCachedIR())
+    // The cache outlives the objects it holds: a closure function, its variant and the variant's IR are freed with the
+    // code that parsed them, with their Program or while it lives (the code of an Expression), and the allocator can
+    // give their memory to the closure function parsed next, so a closure function at the address of the one cached
+    // can be another one.  The cache is therefore keyed by the closure function's serial, which is never reused
+    // (UserClosureFunction::serial): a closure function with the serial cached is the one cached and is alive, as the
+    // closure called holds it, and with it its variant and the variant's IR, which is never replaced
+    // (UserVariantBase::setCachedIR()).  The caller's Program is compared as well, as a closure is run inline only by
+    // code of its own Program; the Program cached is that of the live variant, so it cannot be another Program at its
+    // address.  Before the serial, the cache was keyed by addresses, and a call ran the freed IR of another closure or
+    // the IR of the function given its memory.
     struct ClosureInlineCache {
-        const AbstractQoreNode* node = nullptr;
-        UserClosureFunction* function = nullptr;
+        //! the serial of the closure function cached; 0 if none (serials start at 1)
+        uint64_t serial = 0;
+        //! the Program of uvb
         QoreProgram* caller_pgm = nullptr;
-        //! the ID of caller_pgm, which is the Program of uvb
-        qore_program_id_t caller_pgm_id = 0;
         const UserVariantBase* uvb = nullptr;
         const QoreIRFunction* callee_ir = nullptr;
         const UserSignature* sig = nullptr;
@@ -5037,14 +5037,9 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     const UserSignature* sig = nullptr;
     const QoreIRIncrementLocalIntInstruction* simple_increment = nullptr;
     unsigned num_params = 0;
-    const qore_program_id_t caller_pgm_id = qore_program_private::get(*caller_pgm)->getProgramId();
-    bool use_cached_metadata = closure_inline_cache.node == node
-        && closure_inline_cache.function == uf
+    // an entry has a variant, IR and a signature: it is made only with them
+    bool use_cached_metadata = closure_inline_cache.serial == uf->getSerial()
         && closure_inline_cache.caller_pgm == caller_pgm
-        && closure_inline_cache.caller_pgm_id == caller_pgm_id
-        && closure_inline_cache.uvb
-        && closure_inline_cache.callee_ir
-        && closure_inline_cache.sig
         && ((closure_inline_cache.direct_params_eligible
                 && nargs >= static_cast<int>(closure_inline_cache.num_params))
             || nargs == static_cast<int>(closure_inline_cache.num_params));
@@ -5080,10 +5075,8 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         num_params = sig->numParams();
         simple_increment = nargs == 0 ? getSimpleClosureIncrementInstruction(callee_ir) : nullptr;
         closure_inline_cache = {
-            node,
-            uf,
+            uf->getSerial(),
             caller_pgm,
-            caller_pgm_id,
             uvb,
             callee_ir,
             sig,

@@ -7330,34 +7330,33 @@ static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
             || !uvb->isStaticallyFastCallEligible()) {
         return false;
     }
-    const QoreIRFunction* callee_ir = uvb->getCachedIR();
-    const UserSignature* sig = uvb->getUserSignature();
-    if (!callee_ir || !sig) {
-        return false;
-    }
 
     struct NativeClosureLeafCache {
         NativeClosureLeafCache()
             : descriptor(nullptr, nullptr, nullptr, QoreValue()) {
         }
 
-        const UserVariantBase* uvb = nullptr;
-        //! the ID of the Program of uvb
-        qore_program_id_t pgm_id = 0;
+        //! the serial of the variant that the descriptor is for; 0 if none (serials start at 1)
+        uint64_t serial = 0;
         int nargs = -1;
         QoreIRCallDirectInstruction descriptor;
     };
-    // The cache outlives the variant and the IR whose addresses it holds: they are freed with their Program, and the
-    // allocator can give their memory to the variant and the IR of a closure of a Program created after it, so equal
-    // addresses do not make the descriptor that of the variant called; its native leaf state, derived from the IR of
-    // the deleted Program, would be used for another closure.  The ID of a Program is never reused, and a variant and
-    // its IR are freed only with their Program, so a variant of the same Program at the same address is the same
-    // variant
+    // The cache outlives the variant and the IR it holds: they are freed with the closure function, with their Program
+    // or while it lives (the code of an Expression), and the allocator can give their memory to the closure function
+    // parsed next, so a variant at the address of the one cached can be another one; the native leaf state of the
+    // descriptor, derived from the IR of the freed variant, was used for another closure then.  The cache is
+    // therefore keyed by the serial of the variant, which is never reused (UserVariantBase::serial): the variant with
+    // the serial cached is the variant cached, and its IR, which is never replaced (UserVariantBase::setCachedIR()),
+    // the IR cached
     static thread_local NativeClosureLeafCache cache;
-    if (cache.uvb != uvb || cache.pgm_id != uvb->pgm_id || cache.nargs != nargs
-            || cache.descriptor.cached_callee_ir != callee_ir) {
-        cache.uvb = uvb;
-        cache.pgm_id = uvb->pgm_id;
+    if (cache.serial != uvb->serial || cache.nargs != nargs) {
+        // an entry is made only with the variant's IR, so a call that finds its entry has it
+        const QoreIRFunction* callee_ir = uvb->getCachedIR();
+        const UserSignature* sig = uvb->getUserSignature();
+        if (!callee_ir || !sig) {
+            return false;
+        }
+        cache.serial = uvb->serial;
         cache.nargs = nargs;
         cache.descriptor.cached_callee_ir = callee_ir;
         cache.descriptor.cached_uvb = uvb;

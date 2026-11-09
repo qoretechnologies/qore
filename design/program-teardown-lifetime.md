@@ -87,29 +87,38 @@ cancels or waits for.  Refused work leaves the function in its tier for good (`j
 refused again; only work refused because the compiler stops can be submitted again.  `dbg_close_program_bg_compile()`, `dbg_get_bg_compile_refused_count()` and
 `dbg_program_registered_with_id()` test it.
 
-## Caches that outlive a Program
+## Caches that outlive their objects
 
-A cache that is not deleted with a Program (a `thread_local` or process-wide cache) must not identify the
-Program's objects by their addresses alone: when a Program is deleted, the allocator gives the memory of its
-functions, variants, IR and of the Program itself to the objects of the next one, so an object of a later Program
-can have every address that the cache holds.  macOS reuses freed memory at once, so a Program parsed right after
-another with the same code gets the same addresses for its objects in many runs.  Such a cache also holds the ID of
-the Program (`qore_program_private::getProgramId()`, `UserVariantBase::pgm_id`), which is never reused, and is used
-only for the same ID.  The objects cached with the ID stay valid while that Program lives: a variant and its IR are
-freed only with the Program, and the IR of a variant is published once and never replaced
-(`UserVariantBase::setCachedIR()`).
+A cache that is not deleted with the objects it holds (a `thread_local` or process-wide cache) must not identify
+them by their addresses, nor by the ID of their Program: the allocator gives the memory of freed functions, variants
+and IR to the objects created next, so an object created later can have every address that the cache holds, and code
+is freed while its Program lives as well.  An Expression parses its code into its Program, and deleting the
+Expression frees that code with the closures in it (`qore_program_private::deleteExpression()`;
+`~QoreClosureParseNode()` deletes the `UserClosureFunction`), so the closure of the next Expression gets the
+addresses of the freed one in the same Program, on every platform.  A deleted Program frees its code too, and macOS
+gives its memory to a Program parsed right after it at once.
 
-- The IR interpreter's cache of the last closure called inline (`tryExecuteInterpreterInlineIRClosure()`) holds the
-  ID of the caller's Program, which is the Program of the closure's variant;
-- the cache of the last closure that native code ran as a leaf (`tryExecClosureNativeLeaf()`) holds the ID of the
-  Program of the variant.
+Such a cache is keyed by an identity that is never reused: the serial of a variant (`UserVariantBase::serial`) or of
+a closure function (`UserClosureFunction::serial`), both from one 64-bit counter (`UserVariantBase::getNextSerial()`).
+The IR of a variant is published once and never replaced (`UserVariantBase::setCachedIR()`), and a closure function
+has one variant, so a variant or a closure function with the serial cached, which the closure called holds, has the
+variant and the IR cached.  The serial makes the comparisons of addresses and of the Program ID redundant, so a call
+compares no more than it did before:
 
-Before they held the ID, a closure of a new Program with the addresses of a closure of a deleted one ran the freed
-IR of the deleted closure, or the IR and the signature of the function that had been given that memory: a wrong
-result, a `RUNTIME-TYPE-ERROR` for a parameter of another function, an `IR-EXEC-ERROR` or a crash.
-`examples/test/ir/ClosureCacheProgramReuse.qtest` tests it; a test cannot make the allocator reuse the addresses, so
-it creates many Programs, starting each round of them with another heap layout.  The caches that resolve type and
-hashdecl paths in native code (`qore_rt_resolve_hashdecl_path_cached()` and
+- the IR interpreter's cache of the last closure called inline (`tryExecuteInterpreterInlineIRClosure()`) compares
+  the serial of the closure function, which the call has at hand, and the caller's Program, as a closure runs inline
+  only in code of its own Program; the Program cached is that of the live variant, so it cannot be another Program at
+  its address;
+- the cache of the last closure that native code ran as a leaf (`tryExecClosureNativeLeaf()`) compares the serial of
+  the variant, which the call has at hand, and the number of arguments.
+
+Before the serial, the caches were keyed by addresses: a closure with the addresses of a freed closure ran the freed
+IR, or the IR and the signature of the function that had been given that memory: a wrong result, a
+`RUNTIME-TYPE-ERROR` for a parameter of another function, an `IR-EXEC-ERROR` or a crash.
+`examples/test/ir/ClosureCacheExpressionReuse.qtest` tests closures of deleted Expressions, which reuse the memory
+in every run; `examples/test/ir/ClosureCacheProgramReuse.qtest` tests closures of deleted Programs, which reuse it
+only when the allocator does, so it creates many Programs and starts each round of them with another heap layout.
+The caches that resolve type and hashdecl paths in native code (`qore_rt_resolve_hashdecl_path_cached()` and
 `qore_rt_resolve_full_type_path_cached()`) hold a generation that is never reused for the same reason.
 
 ## Where the teardown can wait for ever
