@@ -170,7 +170,8 @@ sm.setWallTimeLimit(5000);  # 5 seconds per call
     clearInterrupt()) raises \c SANDBOX-ACCESS-ERROR for any other manager, such as the one that governs the code,
     which @ref Qore::Program::getSandboxManager() "Program::getSandboxManager()" returns, or one that governs another
     %Program.  A change that only adds restrictions (a stricter limit, denying by default, denying a path or address
-    range, blockPrivateNetworks(), blockLocalhost(), allowHTTPSOnly() and requestInterrupt()) is allowed.  Such code
+    range, blockPrivateNetworks(), blockLocalhost(), requestInterrupt(), and allowHTTPSOnly() unless the allowed ports
+    are an allowlist that lacks 443/TCP) is allowed.  Such code
     also cannot replace the sandbox manager of a %Program (see
     @ref Qore::Program::setSandboxManager() "Program::setSandboxManager()").  Trusted code may change any manager,
     also when a sandbox governs it because sandboxed code called it.
@@ -811,7 +812,13 @@ sm.allowHTTPSOnly();
     @endcode
 */
 nothing SandboxManager::allowHTTPSOnly() {
-    // only adds restrictions: allowed for any caller (see qore_sandbox_manager_check_change())
+    // it adds 443/TCP to the allowed ports: with no port rule every port is allowed already, so it only restricts
+    // the ports then (as it does when 443/TCP is allowed already), but it loosens an allowlist that lacks the port
+    // (see qore_sandbox_manager_check_change())
+    if (!sm->network().allowsPort(443, QSEC_NET_TCP)
+        && qore_sandbox_manager_check_change(sm, "SandboxManager::allowHTTPSOnly()", xsink)) {
+        return QoreValue();
+    }
     sm->network().allowHTTPSOnly();
 }
 

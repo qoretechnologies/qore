@@ -354,6 +354,11 @@ public:
     //! Preset: Allows only HTTPS connections (port 443)
     DLLEXPORT void allowHTTPSOnly();
 
+    //! Returns true if a connection to the port with the protocol is allowed by the port rules
+    /** True also when no port rule is set, which allows every port
+    */
+    DLLLOCAL bool allowsPort(int port, int proto) const;
+
     //! Sets default policy for unlisted destinations
     /** @param allow If true, unlisted destinations are allowed; if false (default), denied
     */

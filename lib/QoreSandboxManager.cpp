@@ -837,6 +837,10 @@ void QoreNetworkSecurityManager::allowHTTPSOnly() {
     addAllowedPort(443, QSEC_NET_TCP);
 }
 
+bool QoreNetworkSecurityManager::allowsPort(int port, int proto) const {
+    return priv->isPortAllowed(port, proto);
+}
+
 void QoreNetworkSecurityManager::setDefaultPolicy(bool allow) {
     priv->default_allow = allow;
 }

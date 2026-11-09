@@ -91,6 +91,7 @@ string sub own_manager(Program p, string path) {
         addTestCase("a sandbox cannot change the manager that governs it", \changeGoverningTest());
         addTestCase("a sandbox cannot change the manager of another Program", \changeOtherTest());
         addTestCase("a sandbox can add restrictions to the manager that governs it", \tightenTest());
+        addTestCase("allowHTTPSOnly() on a port allowlist that lacks 443", \httpsOnlyTest());
         addTestCase("restricted code follows the same rule", \restrictedTest());
         addTestCase("code that is not trusted can change the managers that it creates", \ownManagerTest());
         addTestCase("trusted code can change any manager", \trustedTest());
@@ -165,6 +166,25 @@ string sub own_manager(Program p, string path) {
         assertEq("changed", s.callFunction("change", s, "setMaxThreads", 50));
         assertEq("SANDBOX-ACCESS-ERROR", s.callFunction("change", s, "setMaxThreads", 200));
         assertEq("FILESYSTEM-ACCESS-DENIED", s.callFunction("rd", secret));
+    }
+
+    httpsOnlyTest() {
+        # with no port rule every port is allowed, so allowing only 443/TCP restricts the ports
+        Program s = pgm(strict(), ChangeSource);
+        assertEq("changed", s.callFunction("change", s, "allowHTTPSOnly", ()));
+        # it is allowed again when 443/TCP is allowed already
+        assertEq("changed", s.callFunction("change", s, "allowHTTPSOnly", ()));
+        # an allowlist of port 80 only: adding 443/TCP would loosen it, as addNetworkAllowedPort(443) would
+        SandboxManager sm = strict();
+        sm.addNetworkAllowedPort(80);
+        Program s80 = pgm(sm, ChangeSource);
+        assertEq("SANDBOX-ACCESS-ERROR", s80.callFunction("change", s80, "allowHTTPSOnly", ()));
+        assertEq("SANDBOX-ACCESS-ERROR", s80.callFunction("change", s80, "addNetworkAllowedPort", 443));
+        # the allowlist is unchanged
+        list<auto> ports = sm.getNetworkConfiguration().allowed_ports;
+        assertEq(1, ports.size());
+        assertEq(80, ports[0].low);
+        assertEq(80, ports[0].high);
     }
 
     changeOtherTest() {
