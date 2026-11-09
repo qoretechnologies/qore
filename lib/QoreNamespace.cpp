@@ -4350,7 +4350,11 @@ static void mark_trusted_module_statics(const qore_root_ns_private& mod_root) {
         ConstClassListIterator cli(ns->classList);
         while (cli.next()) {
             qore_class_private* qc = qore_class_private::get(*const_cast<QoreClass*>(cli.get()));
-            if (qc->vars.empty()) {
+            // only the classes that the module declares in Qore: not the system classes, which every Program has,
+            // nor the classes of other modules that the module imported (their own module records them), nor the
+            // classes of binary modules, which hold their static state in C++ and decide themselves who may change
+            // it (an accessor-backed static calls the module's code for every read and write)
+            if (qc->vars.empty() || qc->sys || qc->spgm.load(std::memory_order_acquire) != mod_root.pgm) {
                 continue;
             }
             const char* module_name = qc->getModuleName();

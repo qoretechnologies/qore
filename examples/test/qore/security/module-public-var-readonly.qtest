@@ -68,7 +68,8 @@ class ModulePublicVarReadOnlyTest inherits QUnit::Test {
     const ReflAccessErr = "REFLECTION-ACCESS-ERROR";
 
     #! the files of the fixture directory that the probes use
-    const FixtureFiles = ("OurVarMod.qm", "LibMod.qm", "FirstMod.qm", "Forms.ql", "probe.q", "bypath/PathMod.qm");
+    const FixtureFiles = ("OurVarMod.qm", "LibMod.qm", "FirstMod.qm", "BinUserMod.qm", "Forms.ql", "probe.q",
+        "bypath/PathMod.qm");
 
     constructor() : QUnit::Test("restricted code cannot change a trusted module's state", "1.0", \ARGV) {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
@@ -203,6 +204,9 @@ class ModulePublicVarReadOnlyTest inherits QUnit::Test {
             };
         }
         rv += {
+            # a binary module's static member, which the binary module holds, is not a Qore module's state
+            "binary-static": "ok",
+            "binary-static-state": "5",
             # the module's Program has PO_NO_PROCESS_CONTROL from the Program that loaded it first
             "first-module.static-set": ModVarForms::ErrCode,
             "first-module.global-set": ModVarForms::ErrCode,

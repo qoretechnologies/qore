@@ -187,6 +187,18 @@ foreach string ctx in (("sandbox", "no-pc")) {
     result("first-module.state", p.callFunction("state"));
 }
 
+# the static members of a binary module's classes are held by the binary module, which decides who may change them:
+# they are not the state of the Qore module that uses the binary module
+{
+    Program p(PO_NEW_STYLE);
+    p.setSandboxManager(new SandboxManager());
+    p.parse("%requires BinUserMod\n%requires cppapiuser\n"
+        "sub w() { Qore::CppApiTest::MemberAccessorProbe::scount = 5; }\n"
+        "int sub r() { return BinUserMod::get(); }\n", "binary");
+    result("binary-static", try_call(p, "w"));
+    result("binary-static-state", sprintf("%d", p.callFunction("r")));
+}
+
 # the messages name what is written and the module, and say what to do instead
 sub check_message(string key, Program p, string func, string what) {
     try {
