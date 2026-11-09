@@ -351,6 +351,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       status of a refusal is reported when the response's headers arrive with its body (issue #5668)
     - a connection that the client closes is no longer reported open on another thread after it was reported closed,
       when the server answers the close frame at once (issue #5679)
+    - an HTTP/2 server that does not support WebSocket connections over HTTP/2 (RFC 8441) is no longer retried on
+      fresh connections: with \c http_version \c "2.0" the connection fails at once with the new
+      \c HTTP2-EXTENDED-CONNECT-UNSUPPORTED error, and in the default \c "auto" mode the HTTP/1.1 Upgrade is tried at
+      once (issue #5672)
     - a thread of the client that is cancelled (e.g. with \c cancel_thread() or
       @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()") is no longer waited for by
       the destructor, and a cancelled @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" worker
