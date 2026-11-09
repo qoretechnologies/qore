@@ -604,7 +604,6 @@ public:
         base_object : 1,
         requires_exception : 1,
         parsing_done : 1,
-        parsing_in_progress : 1,
         parse_commit_runtime_init : 1,
         parse_commit_in_progress : 1,
         ns_const : 1,
@@ -612,6 +611,13 @@ public:
         expression_mode : 1,
         parsing_stub_declarations : 1
         ;
+
+    //! true while code is parsed in the Program or is pending (parsePending() before parseCommit() or parseRollback())
+    /** Written only by the thread that holds the parse lock (see lockParsing()), and read by other threads without it
+        (incThreadCount() refuses to run code in a Program that is being parsed), so it is not part of the bit field
+        above, whose other members the parsing thread writes as well
+    */
+    std::atomic<bool> parsing_in_progress{false};
 
     //! Set once the program cleanup callbacks have been run for this Program
     /** There are two teardown entry points - waitForTerminationAndClear() and clearNamespaceData()
@@ -1042,7 +1048,6 @@ public:
             base_object(false),
             requires_exception(false),
             parsing_done(false),
-            parsing_in_progress(false),
             parse_commit_runtime_init(false),
             parse_commit_in_progress(false),
             ns_const(false),
@@ -1590,9 +1595,9 @@ public:
     */
 
     //! Enters the Program's thread count for a copy of its code (ProgramControl::createEvalProgram())
-    /** Refuses a Program that is deleted or being deleted, also by the current thread, or that is being parsed, with
-        \c PROGRAM-ERROR; while the count is held, the Program's data are not cleared (see
-        waitForTerminationAndClear()).  Released with decThreadCount().
+    /** Refuses a Program that is deleted or being deleted, also by the current thread, with \c PROGRAM-ERROR; while
+        the count is held, the Program's data are not cleared (see waitForTerminationAndClear()).  Released with
+        decThreadCount().  Whether the Program is being parsed is checked by the caller with the parse lock held.
 
         @return 0 if the count was taken, -1 if an exception was raised
     */
@@ -1602,11 +1607,6 @@ public:
         AutoLocker al(plock);
         if (ptid) {
             xsink->raiseException("PROGRAM-ERROR", "the Program has already been deleted; its code cannot be "
-                "inherited");
-            return -1;
-        }
-        if (parsing_in_progress) {
-            xsink->raiseException("PROGRAM-ERROR", "the Program is currently undergoing parsing; its code cannot be "
                 "inherited");
             return -1;
         }
@@ -2039,12 +2039,18 @@ public:
     //! Returns the number of error (not warning) diagnostics rendered.  Implemented in QoreProgram.cpp.
     DLLLOCAL unsigned renderParseDiagnosticFrames(const char* source_text, FILE* os) const;
 
-    DLLLOCAL int checkParse(ExceptionSink* xsink) const {
+    DLLLOCAL int checkParse(ExceptionSink* xsink) {
         // For REPL mode (PO_ALLOW_REPARSE), ensure no threads are running in the Program
         // The calling thread (doing the parsing) is not attached to this Program,
         // so any thread_count > 0 means background threads are still active
         if (pwo.parse_options & PO_ALLOW_REPARSE) {
-            if (thread_count > 0) {
+            // the thread count is changed by other threads under the lock (incThreadCount(), decThreadCount())
+            int count;
+            {
+                AutoLocker al(plock);
+                count = thread_count;
+            }
+            if (count > 0) {
                 xsink->raiseException("PARSE-ERROR", "cannot parse while threads are active in the Program "
                     "(for REPL mode, wait for all threads to finish before parsing)");
                 return -1;

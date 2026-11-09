@@ -1574,10 +1574,12 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     joinThreadDataFamily(p_pgm);
 
     {
-        // make sure no parsing is running in the parent while we copy namespaces; the parent is the current Program
-        // (Program::constructor()), or a Program that the caller holds a thread count on
-        // (ProgramControl::createEvalProgram()), so its data are not cleared while they are copied, also if its
-        // deletion starts meanwhile, in which case entering it fails and the exception is discarded
+        // keeps the parent from being cleared while its namespaces are copied; it takes no parse lock: the copy is
+        // made under the parent's namespace read lock, and ProgramControl::createEvalProgram() holds the parent's
+        // parse lock as well, so that no code is parsed in it meanwhile.  The parent is the current Program
+        // (Program::constructor()), or a Program that the caller holds a thread count on (createEvalProgram()), so
+        // its data are not cleared while they are copied, also if its deletion starts meanwhile, in which case
+        // entering it fails and the exception is discarded
         ExceptionSink rah_xsink;
         ProgramRuntimeParseAccessHelper rah(&rah_xsink, p_pgm);
         rah_xsink.clear();

@@ -43,6 +43,7 @@ public nothing sub write_file(string path) { File f(); f.open2(path, O_CREAT | O
         addTestCase("the restrictions of the evaluation Program", \restrictionTest());
         addTestCase("errors", \errorTest());
         addTestCase("a deleted Program", \deletedTest());
+        addTestCase("a Program that another thread parses code in", \concurrentParseTest());
         set_return_value(main());
     }
 
@@ -160,5 +161,52 @@ string sub go() {
 ", "sandboxed");
             assertEq("PROGRAM-ERROR", s.callFunction("go"));
         }
+    }
+
+    #! createEvalProgram() while another thread parses code in the Program: each call either copies the Program between
+    #! two parses or is refused, and a parse is refused while a copy runs; the outcome of each depends on timing, the
+    #! rule does not (the copy holds the Program's parse lock; see ProgramControl::createEvalProgram())
+    concurrentParseTest() {
+        Program base(PO_NEW_STYLE | PO_ALLOW_DEBUGGER);
+        # an evaluation Program can be parsed again and again
+        Program t = base.getProgram().createEvalProgram(PO_NEW_STYLE | PO_ALLOW_DEBUGGER | PO_ALLOW_REPARSE);
+        t.parse("int sub f0() { return 0; }", "f0");
+        ProgramControl pc = t.getProgram();
+        Counter done(1);
+        hash<string, bool> parse_errors;
+        int parsed = 0;
+        int tid = background sub () {
+            on_exit done.dec();
+            for (int i = 1; i <= 300; ++i) {
+                try {
+                    t.parse(sprintf("int sub f%d() { return %d; }", i, i), "f" + i);
+                    ++parsed;
+                } catch (hash<ExceptionInfo> ex) {
+                    parse_errors{ex.err + ": " + ex.desc} = True;
+                }
+            }
+        }();
+        hash<string, bool> copy_errors;
+        int copied = 0;
+        while (done.getCount()) {
+            try {
+                Program e = pc.createEvalProgram(PO_NEW_STYLE);
+                # the copy has the code of every parse that completed before it, and is usable
+                e.parse("int sub e() { return f0(); }", "e");
+                assertEq(0, e.callFunction("e"));
+                ++copied;
+            } catch (hash<ExceptionInfo> ex) {
+                copy_errors{ex.err + ": " + ex.desc} = True;
+            }
+        }
+        thread_join(tid);
+        # the only reasons for a refusal
+        foreach string err in (keys parse_errors) {
+            assertRegex("^PARSE-ERROR: cannot parse while threads are active", err);
+        }
+        foreach string err in (keys copy_errors) {
+            assertRegex("^PROGRAM-ERROR: the Program is currently undergoing parsing", err);
+        }
+        assertGt(0, copied + parsed);
     }
 }
