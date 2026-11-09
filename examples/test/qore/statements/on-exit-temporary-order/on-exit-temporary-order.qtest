@@ -18,9 +18,10 @@
     the block then runs its on_exit and on_error handlers, and the statements that enclose the block release their
     temporaries after them, such as the list of a foreach statement whose body has the handlers.  The IR tier ran the
     handlers of a function that the exception left before it released the temporaries (issue #5639).  The worker
-    records the order of these events when an exception, a return or a break leaves the blocks, and its output must
-    be that of the AST interpreter in every execution mode, on the IR tier of tiered execution and as a qcc-compiled
-    executable.
+    records the order of these events when an exception, a return, a break or a thread_exit leaves the blocks, also
+    when a handler or a destructor raises an exception during the unwind and when a try statement's landing pad leaves
+    the blocks, and its output must be that of the AST interpreter in every execution mode, on the IR tier of tiered
+    execution and as a qcc-compiled executable.
 */
 class OnExitTemporaryOrderTest inherits QUnit::Test {
     public {
@@ -52,12 +53,27 @@ class OnExitTemporaryOrderTest inherits QUnit::Test {
             "foreach in loop body: +l +t ~t ~l on_exit caught CASE-ERROR",
             "foreach body in try: +l +t ~t on_exit ~l catch",
             "foreach in try: +l +t ~t ~l on_exit catch",
+            "handler raises in nested blocks: +l +t ~t inner on_exit 2 inner on_exit 1 raises ~l outer on_error "
+                "outer on_exit caught CASE-ERROR HANDLER-ERROR",
+            "first handler raises: +t ~t on_exit 2 raises on_exit 1 caught CASE-ERROR HANDLER-ERROR",
+            "handler raises on normal exit: +t ~t on_exit 2 raises +ht ~ht on_exit 1 outer on_exit caught HANDLER-ERROR",
+            "on_error rethrows: +t ~t on_error caught CASE-ERROR",
+            "destructors raise in nested blocks: ~tt inner on_exit ~tl outer on_exit caught CASE-ERROR DTOR-ERROR "
+                "DTOR-ERROR",
+            "nested frames: +l +t +ct ~ct closure on_exit ~t body on_exit ~l on_exit caught CASE-ERROR",
+            "reference foreach: +t1 ~t1 body on_exit 1 +t2 ~t2 body on_exit 2 outer on_exit caught CASE-ERROR",
+            "reference foreach in try: +t1 ~t1 body on_exit 1 +t2 ~t2 body on_exit 2 try on_exit catch after 1,2",
+            "context statement: +t1 ~t1 context on_exit 1 +t2 ~t2 context on_exit 2 outer on_exit caught CASE-ERROR",
+            "landing pad destructors raise: ~tt body on_exit ~tl try on_exit catch CASE-ERROR DTOR-ERROR DTOR-ERROR",
+            "landing pad handler raises: +l +t ~t body on_exit 2 body on_exit raises +ht ~ht ~l try on_exit catch "
+                "CASE-ERROR HANDLER-ERROR after",
             "foreach in block with local: +local +l +t ~t ~l ~local on_exit caught CASE-ERROR",
             "block with local in foreach body: +l +local +t ~t ~local on_exit ~l caught CASE-ERROR",
             "return value: +t ~t on_exit",
             "break in condition: +t ~t on_exit",
             "break in foreach: +l +t ~t on_exit ~l after",
             "return in foreach: +l +t ~t on_exit ~l",
+            "thread exit: +l +t ~t inner on_exit ~l outer on_success outer on_exit",
         );
     }
 

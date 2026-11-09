@@ -7342,22 +7342,20 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     };
 
-    // RAII guard: fire remaining on_block_exit handlers on ANY function exit path.
-    // Normal exits fire handlers via ScopeExit instructions (which clear scope_stack
-    // and on_block_exit_handlers). Error exits (exception from Call/ExprOp/etc.)
-    // skip ScopeExit and return false directly, leaving handlers unfired.
-    // This guard catches those cases by calling fireScopeExits(0) before return,
-    // ensuring on_exit/on_error/on_success handlers always fire.
+    // RAII guard, a backstop only: it fires the handlers of the scopes still open when the function returns by a
+    // path that left them open.  Normal exits fire handlers via ScopeExit instructions, and every exit on an
+    // exception or a thread_exit leaves the scopes in unwindForException(), which releases the temps of each scope's
+    // statements before its handlers run, as the AST does; both leave scope_stack empty, so the guard does nothing.
+    // An exit that returns without either (such as an internal error before the scopes were left) still runs the
+    // handlers here, but after the frame's values were released, so that path does not keep the AST order; a new
+    // exit path must call unwindForException() (or returnAfterUnhandledException()) instead of relying on the guard.
     // Constructed AFTER local_cleanup so it's destroyed BEFORE it — handlers fire
     // while runtime locals are still valid on the thread-local variable stack.
-    // Only fires handlers if scope_stack is not empty (handlers weren't already fired
-    // via normal ScopeExit instructions).
     struct ScopeExitGuard {
         decltype(fireScopeExits)& fire;
         std::vector<IRScopeEntry>& scope_stack;
         ~ScopeExitGuard() {
-            // Only fire remaining handlers if scope_stack is not empty (handlers weren't already
-            // fired via normal ScopeExit instructions during function execution).
+            // only the scopes that an exit path left open remain (see above)
             if (!scope_stack.empty()) {
                 fire(0);
             }
