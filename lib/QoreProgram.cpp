@@ -3989,6 +3989,12 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
 }
 
 void QoreProgram::parseCommit(ExceptionSink* xsink, ExceptionSink* wS, int wm) {
+    // before the commit switches to the Program: a sandboxed caller stays the caller of the initializers that the
+    // commit runs (see QoreCallerSandboxHelper)
+    QoreCallerSandboxHelper caller_sandbox(this, xsink);
+    if (*xsink) {
+        return;
+    }
     ProgramRuntimeParseCommitContextHelper pch(xsink, this);
     if (*xsink)
         return;
@@ -4303,6 +4309,12 @@ void QoreProgram::parseCmdLineDefines(const std::map<std::string, std::string> d
 }
 
 void QoreProgram::parseCmdLineDefines(ExceptionSink& xs, ExceptionSink& ws, int wm, const std::map<std::string, std::string>& defmap) {
+    // before the parse switches to the Program, as for any parse (see qore_program_private::parse())
+    QoreCallerSandboxHelper caller_sandbox(this, &xs);
+    if (xs) {
+        return;
+    }
+    priv->markSandboxedParse();
     ProgramRuntimeParseCommitContextHelper pch(&xs, this);
 
     if (xs) {

@@ -2129,8 +2129,14 @@ public:
     }
 
     DLLLOCAL int parseCommit(ExceptionSink* xsink, ExceptionSink* wS, int wm) {
-        ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         assert(xsink);
+        // before the commit switches to the Program: a sandboxed caller stays the caller of the initializers that
+        // the commit runs (see QoreCallerSandboxHelper); inactive when QoreProgram::parseCommit() switched already
+        QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         if (*xsink) {
             return -1;
         }

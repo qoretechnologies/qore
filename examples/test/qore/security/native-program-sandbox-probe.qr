@@ -428,6 +428,24 @@ bool sub governed() {
     return h.callFunction("governed") ? "governed" : "not-governed";
 });
 
+# the same with Program::parsePending() and Program::parseCommit(): the initializers that the commit runs are governed
+run("parse-pending-into-trusted-governed", string sub () {
+    SandboxManager sm();
+    Program s = sandboxed(sm, mode);
+    Program h = target(mode);
+    s.callFunction("parse_pending_into", h, "%modern
+class G {
+    public {
+        static bool governed = SandboxManager::isSandboxed();
+    }
+}
+bool sub governed() {
+    return G::governed;
+}
+");
+    return h.callFunction("governed") ? "governed" : "not-governed";
+});
+
 # trusted code loads a user module by path into a trusted Program with Program::loadModule()
 run("load-module-trusted", string sub () {
     Program t = loader(mode);
