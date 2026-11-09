@@ -1354,8 +1354,19 @@ releases its value with `qore_release_real_reference_value()` for this reason: i
 reference was released, and the teardown of its Program read it after it had been freed. A library with
 debugging checks the rule where it is broken: a hash, list or object freed while it is still registered
 aborts (`qore_debug_check_freed_node_not_opaque_target()`).
-`examples/test/qore/misc/dgc-opaque-object-local-release.qtest` covers the locals of every kind in every
-execution mode.
+
+A **change through an opaque reference** to a hash or a list that is shared copies it (copy-on-write) like a
+change through an ordinary reference, and the copy is held through an opaque reference
+(`qore_value_copy_on_write()`, `qore_value_with_copy()`, used by `LValueHelper::ensureUnique()` and by a push
+in native code): a change in place keeps the reference opaque, so a copy does too, and whether the collector
+follows the edge never depends on whether the container was shared. The copy takes a registration of its own,
+with the Program that makes the change, and the value replaced is released as it was held. A coercion that
+copies a value read through an opaque reference for an assignment (`hash<auto!>`, `list<auto!>` and the other
+container type conversions) gives an ordinary value, as any value read through an opaque reference is
+assigned with `=` as an ordinary reference, and releases the value it replaces as it was held.
+
+`examples/test/qore/misc/dgc-opaque-object-local-release.qtest` covers the locals of every kind, assignments
+with `:=` and `@=`, copy-on-write and coercions in every execution mode and in a qcc executable.
 
 `qore_program_private::clearOpaqueTargets()` then deletes every still-registered target during
 `waitForTerminationAndClear()`, next to `clearSavedObjects()` and for the same reason: deleting a

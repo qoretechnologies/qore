@@ -766,6 +766,9 @@ public:
         auto i = shard.targets.find(n);
         if (i == shard.targets.end()) {
             shard.targets.insert(opaque_target_map_t::value_type(n, OpaqueTargetInfo{pgm, 1}));
+#ifdef DEBUG
+            opaque_target_count.fetch_add(1);
+#endif
         } else {
             ++i->second.count;
         }
@@ -785,6 +788,9 @@ public:
         }
         if (!--i->second.count) {
             shard.targets.erase(i);
+#ifdef DEBUG
+            opaque_target_count.fetch_sub(1);
+#endif
         }
     }
 
@@ -792,6 +798,9 @@ public:
     DLLLOCAL void clearOpaqueTargets(ExceptionSink* xsink);
 
 #ifdef DEBUG
+    //! the number of targets in the registry, so that a check of a freed node takes no lock while there are none
+    DLLLOCAL static std::atomic<size_t> opaque_target_count;
+
     //! Returns true if \a n is registered as the target of an opaque reference
     /** For qore_debug_check_freed_node_not_opaque_target()
     */

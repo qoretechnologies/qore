@@ -240,12 +240,15 @@ void QoreTypeInfo::applyNoNarrowCoercion(const QoreTypeInfo* ti, QoreValue& n,
                         cp->setHashDecl(nullptr);
                     }
                     cp->complexTypeInfo = autoHashTypeInfo;
+                    // the value replaced is released as it is held: a value read through an opaque reference ends
+                    // its registration with its reference (see design/dgc.md, "Opaque references")
+                    QoreValue old = n;
                     n = copy;
                     if (lvhelper) {
                         // lvalue locks may be held — defer the deref
-                        lvhelper->saveTemp(h);
+                        lvhelper->saveTemp(old);
                     } else {
-                        h->deref(xsink);
+                        old.discard(xsink);
                     }
                 } else {
                     if (hp->getHashDecl()) {
@@ -266,12 +269,14 @@ void QoreTypeInfo::applyNoNarrowCoercion(const QoreTypeInfo* ti, QoreValue& n,
             } else if (!l->is_unique()) {
                 QoreListNode* copy = l->copy();
                 qore_list_private::get(*copy)->complexTypeInfo = autoListTypeInfo;
+                // the value replaced is released as it is held (see above)
+                QoreValue old = n;
                 n = copy;
                 if (lvhelper) {
                     // lvalue locks may be held — defer the deref
-                    lvhelper->saveTemp(l);
+                    lvhelper->saveTemp(old);
                 } else {
-                    l->deref(xsink);
+                    old.discard(xsink);
                 }
             } else {
                 lp->complexTypeInfo = autoListTypeInfo;

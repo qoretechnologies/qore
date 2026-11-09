@@ -2735,7 +2735,14 @@ OpaqueRegistryLiveSentinel opaque_registry_live_sentinel;
 }
 
 #ifdef DEBUG
+std::atomic<size_t> qore_program_private_base::opaque_target_count{0};
+
 bool qore_program_private_base::isOpaqueTarget(const AbstractQoreNode* n) {
+    // a target is counted when it is inserted and uncounted when it is erased, under its shard's lock and with
+    // sequentially consistent operations, so a node still registered when it is freed is counted then
+    if (!opaque_target_count.load()) {
+        return false;
+    }
     OpaqueTargetShard& shard = getOpaqueTargetShard(n);
     AutoLocker al(shard.lock);
     return shard.targets.find(const_cast<AbstractQoreNode*>(n)) != shard.targets.end();
@@ -2764,6 +2771,9 @@ void qore_program_private_base::clearOpaqueTargets(ExceptionSink* xsink) {
             if (i->second.pgm == pgm) {
                 roots.push_back(i->first);
                 i = shard.targets.erase(i);
+#ifdef DEBUG
+                opaque_target_count.fetch_sub(1);
+#endif
             } else {
                 ++i;
             }

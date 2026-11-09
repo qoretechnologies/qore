@@ -3618,14 +3618,34 @@ void ensure_unique(QoreValue& v, ExceptionSink* xsink) {
     if (!v.hasNode()) {
         return;
     }
-    AbstractQoreNode* n = v.getInternalNode();
-    if (!n->is_unique()) {
-        AbstractQoreNode* old = n;
-        n = old->realCopy();
-        old->deref(xsink);
-        assert(!*xsink);
-        v = n;
+    qore_value_copy_on_write(v).discard(xsink);
+    assert(!xsink || !*xsink);
+}
+
+QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* copy) {
+    assert(copy);
+    if (v.isOpaque()) {
+        // an object is never copied
+        assert(!v.isOpaqueObject());
+        QoreValue rv = v.isOpaqueHash()
+            ? QoreValue::makeOpaqueHash(static_cast<QoreHashNode*>(copy))
+            : QoreValue::makeOpaqueList(static_cast<QoreListNode*>(copy));
+        // the opaque value took a reference of its own; the copy is not shared, so this does not release it
+        copy->deref(nullptr);
+        return rv;
     }
+    return QoreValue(copy);
+}
+
+QoreValue qore_value_copy_on_write(QoreValue& v) {
+    AbstractQoreNode* n = v.getInternalNode();
+    assert(n && n->getType() != NT_OBJECT);
+    if (n->is_unique()) {
+        return QoreValue();
+    }
+    QoreValue old = v;
+    v = qore_value_with_copy(old, n->realCopy());
+    return old;
 }
 
 // checks for illegal "self" assignments in an object context
