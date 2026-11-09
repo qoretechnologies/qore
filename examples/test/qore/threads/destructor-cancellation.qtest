@@ -404,9 +404,12 @@ sub gate_grow_in_destructor(Counter entered, Counter gate) {
     TrustedGateGrower g(entered, gate);
 }
 
-# a Program that the sandboxed code creates has no sandbox manager of its own; its code is sandboxed all the same
+# a Program that the sandboxed code creates has no sandbox manager of its own; its code is sandboxed all the same;
+# it is kept, so that the code of its class can run when the object is released
+our *Program child;
 object sub make_in_child(Queue ev, Counter gate) {
     Program c(PO_NEW_STYLE);
+    child = c;
     c.parse(\"%modern
 class X {
     private {
@@ -1260,8 +1263,11 @@ sub hold(Queue ev, Counter ready, Counter block) {
 sub block_in_destructor(Counter entered) {
     TrustedBlocker b(entered);
 }
+our *Program child;
 sub hold_child(Queue ev, Counter ready, Counter block) {
+    # kept, so that the code of its class can run when the object is released
     Program c(PO_NEW_STYLE);
+    child = c;
     c.parse('%modern
 class X {
     private { Queue ev; }
