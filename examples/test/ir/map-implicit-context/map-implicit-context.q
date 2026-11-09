@@ -140,6 +140,42 @@ sub layout_ctx_fused_elvis(Log log) { list r = (take 2, (map ($2 ?: fail_on($1, 
 # a fused stage whose body creates blocks raises
 sub fused_ternary_raises(Log log) { try { list<Holder> r = (take 3, (map fail_on($1, $2 ? "x" : "h2"), holders(log, 4))); log.add("size " + r.size()); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
 
+# select and map-select over a typed list whose predicate needs the implicit argument list and raises, or whose
+# predicate creates blocks that hold a call's temporary
+bool sub sel_fail(Holder h, string name) { if (h.n == name) { throw "SELECT", h.n; } return True; }
+sub select_ctx_raises(Log log) { try { list<Holder> r = select holders(log, 3), sel_fail(new hash<string, Holder>({"h": $1}).h, "h2"); log.add("size " + r.size()); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+sub map_select_ctx_raises(Log log) { try { list<Holder> r = map $1, holders(log, 3), sel_fail(new hash<string, Holder>({"h": $1}).h, "h2"); log.add("size " + r.size()); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+sub map_select_ctx_map_raises(Log log) { try { list<Holder> r = map fail_on(new hash<string, Holder>({"h": $1}).h, "h2"), holders(log, 3), True; log.add("size " + r.size()); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
+sub layout_select_and(Log log) { list r = select holders(log, 3), (($1.n =~ /h/) && fail_on($1, "none")); log.add("size " + r.size()); remove r; log.add("after"); }
+sub layout_map_select_and(Log log) { list r = map $1.n, holders(log, 3), (($1.n =~ /h/) && fail_on($1, "none")); log.add("size " + r.size()); remove r; log.add("after"); }
+
+# operands that the AST interpreter evaluates at run time (new hash<K, V>(...), new list<T>(...)) in map, select and
+# map-select over typed and untyped lists and iterators, in a function that has arguments of its own
+sub new_inner(Log log, ...) {
+    list<int> tl = (1, 2);
+    list ul = (1, 2);
+    log.add("map tl $1 " + fmt(map (new hash<string, int>({"a": $1})).a, tl));
+    log.add("map tl $# " + fmt(map (new hash<string, int>({"a": $#})).a, tl));
+    log.add("map tl $2 " + fmt(map (new list<auto>(($2,)))[0], tl));
+    log.add("map tl list " + fmt(map (new list<int>($1))[0], tl));
+    log.add("map ul $1 " + fmt(map (new hash<string, int>({"a": $1})).a, ul));
+    log.add("map it $1 " + fmt(map (new hash<string, int>({"a": $1})).a, ul.iterator()));
+    log.add("select tl $1 " + fmt(select tl, (new hash<string, int>({"a": $1})).a == 2));
+    log.add("select tl $# " + fmt(select tl, (new hash<string, int>({"a": $#})).a == 1));
+    log.add("select tl $2 " + fmt(select tl, !exists (new list<auto>(($2,)))[0]));
+    log.add("select tl list " + fmt(select tl, (new list<int>($1))[0] == 1));
+    log.add("select ul $1 " + fmt(select ul, (new hash<string, int>({"a": $1})).a == 2));
+    log.add("select it $1 " + fmt(select ul.iterator(), (new hash<string, int>({"a": $1})).a == 2));
+    log.add("map-select tl pred " + fmt(map $1, tl, (new hash<string, int>({"a": $1})).a == 2));
+    log.add("map-select tl map " + fmt(map (new hash<string, int>({"a": $#})).a, tl, True));
+    log.add("map-select tl $2 " + fmt(map $1, tl, !exists (new list<auto>(($2,)))[0]));
+    log.add("map-select tl list " + fmt(map (new list<int>($1))[0] + $#, tl, $1 > 0));
+    log.add("map-select ul " + fmt(map (new hash<string, int>({"a": $1})).a, ul, (new hash<string, int>({"a": $1})).a > 1));
+    log.add("map-select it " + fmt(map (new hash<string, int>({"a": $1})).a, ul.iterator(), (new hash<string, int>({"a": $#})).a == 0));
+    log.add("fn " + fmt(($1, $2)));
+}
+sub new_operands(Log log) { new_inner(log, "a", "b"); log.add("after"); }
+
 # the implicit arguments in map bodies, in a function that has arguments of its own: $1 and $# are those of the map,
 # $2 is NOTHING, and the function's arguments are those of the function again after the map
 sub args_inner(Log log, ...) {
@@ -206,7 +242,8 @@ const Cases = (
     "fused_it_count_raises", "fused_foreach_raises", "fused_ternary_raises", "it_map_normal", "list_map_normal",
     "layout_list_ternary", "layout_list_elvis", "layout_list_and", "layout_it_ternary", "layout_it_elvis",
     "layout_it_and", "layout_fused_ternary", "layout_fused_elvis", "layout_fused_and", "layout_ctx_list_ternary",
-    "layout_ctx_it_and", "layout_ctx_fused_elvis", "implicit_args",
+    "layout_ctx_it_and", "layout_ctx_fused_elvis", "select_ctx_raises", "map_select_ctx_raises",
+    "map_select_ctx_map_raises", "layout_select_and", "layout_map_select_and", "new_operands", "implicit_args",
 );
 
 #! runs a case and returns its line: the log, and every object that was not released exactly once when it returned

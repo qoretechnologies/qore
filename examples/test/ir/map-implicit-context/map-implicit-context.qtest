@@ -20,7 +20,7 @@
     restoration: the element was released after the handler.  A body without a delegated operation did not set them,
     and read the implicit arguments of the enclosing function: <tt>$2</tt> gave the function's second argument
     instead of NOTHING, as did the operands that the AST interpreter evaluates at run time (new hash<K, V>(...),
-    new list<T>(...)).  In JIT and AOT code, the temporaries of a body that creates blocks (?:, a ternary, &&) were
+    new list<T>(...)), also in the predicate and the map expression of select and map-select over a typed list.  In JIT and AOT code, the temporaries of a body that creates blocks (?:, a ternary, &&) were
     released after the code that followed the statement had run, or in the wrong order, as the blocks came after
     the blocks that follow the loop.
 
@@ -47,6 +47,10 @@ class MapImplicitContextTest inherits QUnit::Test {
             "layout_list_and: released h1; released h2; size 2; after",
             "layout_it_elvis: size 2; released it1; released it2; after",
             "layout_fused_and: size 2; released h1; released h2; released h3; removed; after",
+            "select_ctx_raises: released h1; released h2; catch SELECT; after",
+            "map_select_ctx_raises: released h1; released h2; catch SELECT; after",
+            "map_select_ctx_map_raises: released h1; released h2; catch STAGE; after",
+            "layout_select_and: size 2; released h1; released h2; after",
         );
 
         #! parts of the implicit_args line of the AST interpreter: $2 is NOTHING in every map body

@@ -16856,53 +16856,48 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
             element_val = builder.createListGetValue(input_list, index_val, select->loc)->result;
         }
 
-        // Set virtual implicit context
-        VirtualImplicitContext saved = virtual_implicit;
-        virtual_implicit.arg0 = element_val;
-        virtual_implicit.arg1 = QoreIRValue();
-        virtual_implicit.element = index_val;
-        virtual_implicit.active = true;
+        QoreIRValue predicate_bool;
+        if (qore_ir_body_needs_implicit_context(select->getRight(), 1)) {
+            // the predicate runs with the element as the implicit argument list, which the thread-local stack also
+            // holds, and is converted to a bool before its temporaries are released; see lowerWithImplicitContext()
+            // (qore#5680)
+            predicate_bool = lowerWithImplicitContext(element_val, index_val, select->loc, nullptr, error,
+                [&]() -> QoreIRValue {
+                    QoreIRValue predicate_result = lowerExpression(select->getRight(), error);
+                    if (!predicate_result.isValid()) {
+                        return QoreIRValue();
+                    }
+                    return builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result, select->loc)->result;
+                });
+            if (!predicate_bool.isValid()) {
+                return QoreIRValue();
+            }
+        } else {
+            // the predicate reads the implicit arguments only as the element and its index (see
+            // qore_ir_body_needs_implicit_context())
+            VirtualImplicitContext saved = virtual_implicit;
+            virtual_implicit.arg0 = element_val;
+            virtual_implicit.arg1 = QoreIRValue();
+            virtual_implicit.element = index_val;
+            virtual_implicit.active = true;
 
-        // Lower predicate - track AST delegation
-        int saved_ast_count = ast_delegate_count;
-        QoreIRValue predicate_result = lowerExpression(select->getRight(), error);
+            QoreIRValue predicate_result = lowerExpression(select->getRight(), error);
 
-        // Restore virtual context
-        virtual_implicit = saved;
+            // Restore virtual context
+            virtual_implicit = saved;
 
-        if (!predicate_result.isValid()) {
-            return QoreIRValue();
+            if (!predicate_result.isValid()) {
+                return QoreIRValue();
+            }
+
+            // Convert predicate to bool
+            predicate_bool = builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result, select->loc)->result;
         }
 
-        bool needs_implicit_push = (ast_delegate_count > saved_ast_count);
-        if (needs_implicit_push) {
-            QoreIRFunction* func = builder.getFunction();
-
-            auto push_elem = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitElement);
-            push_elem->result = func->createValue();
-            push_elem->operands.push_back(index_val);
-            push_elem->loc = select->loc;
-            QoreIRValue old_element = push_elem->result;
-
-            auto push_argv = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
-            push_argv->result = func->createValue();
-            push_argv->operands.push_back(element_val);
-            push_argv->loc = select->loc;
-            QoreIRValue old_argv = push_argv->result;
-
-            size_t insert_pos = 1;  // After element load
-            body_block->instructions.insert(body_block->instructions.begin() + insert_pos,
-                std::move(push_elem));
-            body_block->instructions.insert(body_block->instructions.begin() + insert_pos + 1,
-                std::move(push_argv));
-
-            builder.createPopImplicitArg(old_argv, select->loc);
-            builder.createPopImplicitElement(old_element, select->loc);
-        }
-
-        // Convert predicate to bool
-        QoreIRValue predicate_bool = builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result,
-            select->loc)->result;
+        // the blocks that the predicate created (a ternary, a short-circuit operator) come before the blocks after
+        // the loop, as the code runs (see lowerMapNative())
+        builder.getFunction()->moveBlockToEnd(exit_block);
+        builder.getFunction()->moveBlockToEnd(final_block);
 
         // Branch: if true append, else skip
         QoreIRBasicBlock* predicate_exit_block = builder.getBlock();
@@ -17816,70 +17811,15 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
             element_val = builder.createListGetValue(input_list, index_val, ms->loc)->result;
         }
 
-        // Set virtual implicit context
-        VirtualImplicitContext saved = virtual_implicit;
-        virtual_implicit.arg0 = element_val;
-        virtual_implicit.arg1 = QoreIRValue();
-        virtual_implicit.element = index_val;
-        virtual_implicit.active = true;
+        // the select predicate (operand 2) and the map expression (operand 0) run with the element as the implicit
+        // argument list also at run time when either needs it, each with a temp scope of its own; see
+        // lowerWithImplicitContext() (qore#5680)
+        bool needs_context = qore_ir_body_needs_implicit_context(ms->get(2), 1)
+            || qore_ir_body_needs_implicit_context(ms->get(0), 1);
 
-        // Track AST delegation
-        int saved_ast_count = ast_delegate_count;
-
-        // Lower the select predicate (operand 2)
-        QoreIRValue predicate_result = lowerExpression(ms->get(2), error);
-        if (!predicate_result.isValid()) {
-            virtual_implicit = saved;
-            return QoreIRValue();
-        }
-
-        QoreIRValue predicate_bool = builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result,
-            ms->loc)->result;
-        QoreIRBasicBlock* predicate_exit_block = builder.getBlock();
-        builder.createBranchIf(predicate_bool, append_block, cont_block, ms->loc);
-
-        // Append block: evaluate map expression and append to result
-        builder.setBlock(append_block);
-
-        if (!need_result) {
-            builder.createPushTempMark(ms->loc);
-        }
-        QoreIRValue map_result = lowerExpression(ms->get(0), error);
-        if (!map_result.isValid()) {
-            virtual_implicit = saved;
-            return QoreIRValue();
-        }
-
-        // Restore virtual context
-        virtual_implicit = saved;
-
-        bool needs_implicit_push = (ast_delegate_count > saved_ast_count);
-        QoreIRValue old_element;
-        QoreIRValue old_argv;
-        if (needs_implicit_push) {
-            QoreIRFunction* func = builder.getFunction();
-
-            auto push_elem = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitElement);
-            push_elem->result = func->createValue();
-            push_elem->operands.push_back(index_val);
-            push_elem->loc = ms->loc;
-            old_element = push_elem->result;
-
-            auto push_argv = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
-            push_argv->result = func->createValue();
-            push_argv->operands.push_back(element_val);
-            push_argv->loc = ms->loc;
-            old_argv = push_argv->result;
-
-            size_t insert_pos = 1;  // After element load
-            body_block->instructions.insert(body_block->instructions.begin() + insert_pos,
-                std::move(push_elem));
-            body_block->instructions.insert(body_block->instructions.begin() + insert_pos + 1,
-                std::move(push_argv));
-        }
-
+        // stores the value of the map expression in the result list
         QoreIRValue appended_type_state;
-        if (need_result) {
+        auto store_value = [&](QoreIRValue map_result) {
             if (use_typed_scalar_construction) {
                 // LLVM selects a guardless native store only from lowered
                 // Assigned + never-NOTHING facts.  Otherwise ListSetValue
@@ -17902,8 +17842,75 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
             } else {
                 builder.createListAppend(result_list, map_result, ms->loc);
             }
+        };
+
+        QoreIRValue predicate_bool;
+        if (needs_context) {
+            predicate_bool = lowerWithImplicitContext(element_val, index_val, ms->loc, nullptr, error,
+                [&]() -> QoreIRValue {
+                    QoreIRValue predicate_result = lowerExpression(ms->get(2), error);
+                    if (!predicate_result.isValid()) {
+                        return QoreIRValue();
+                    }
+                    return builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result, ms->loc)->result;
+                });
+            if (!predicate_bool.isValid()) {
+                return QoreIRValue();
+            }
         } else {
-            createDiscardTemps(ms->loc);
+            // the predicate reads the implicit arguments only as the element and its index (see
+            // qore_ir_body_needs_implicit_context())
+            VirtualImplicitContext saved = virtual_implicit;
+            virtual_implicit.arg0 = element_val;
+            virtual_implicit.arg1 = QoreIRValue();
+            virtual_implicit.element = index_val;
+            virtual_implicit.active = true;
+            QoreIRValue predicate_result = lowerExpression(ms->get(2), error);
+            virtual_implicit = saved;
+            if (!predicate_result.isValid()) {
+                return QoreIRValue();
+            }
+            predicate_bool = builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result, ms->loc)->result;
+        }
+        QoreIRBasicBlock* predicate_exit_block = builder.getBlock();
+        builder.createBranchIf(predicate_bool, append_block, cont_block, ms->loc);
+
+        // Append block: evaluate map expression and append to result
+        builder.setBlock(append_block);
+
+        if (needs_context) {
+            // the value is stored, which takes a reference of its own, before the expression's temporaries are
+            // released
+            QoreIRValue map_result = lowerWithImplicitContext(element_val, index_val, ms->loc, nullptr, error,
+                [&]() -> QoreIRValue {
+                    QoreIRValue value = lowerExpression(ms->get(0), error);
+                    if (value.isValid() && need_result) {
+                        store_value(value);
+                    }
+                    return value;
+                });
+            if (!map_result.isValid()) {
+                return QoreIRValue();
+            }
+        } else {
+            VirtualImplicitContext saved = virtual_implicit;
+            virtual_implicit.arg0 = element_val;
+            virtual_implicit.arg1 = QoreIRValue();
+            virtual_implicit.element = index_val;
+            virtual_implicit.active = true;
+            if (!need_result) {
+                builder.createPushTempMark(ms->loc);
+            }
+            QoreIRValue map_result = lowerExpression(ms->get(0), error);
+            virtual_implicit = saved;
+            if (!map_result.isValid()) {
+                return QoreIRValue();
+            }
+            if (need_result) {
+                store_value(map_result);
+            } else {
+                createDiscardTemps(ms->loc);
+            }
         }
         QoreIRValue selected_output_index = output_index;
         if (use_typed_scalar_construction) {
@@ -17929,11 +17936,6 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         if (type_state_phi) {
             next_type_state = builder.createPhi({{type_state_phi->result, predicate_exit_block},
                 {appended_type_state, append_exit_block}}, ms->loc, QoreIRPhiValueKind::NativeInt)->result;
-        }
-
-        if (needs_implicit_push) {
-            builder.createPopImplicitArg(old_argv, ms->loc);
-            builder.createPopImplicitElement(old_element, ms->loc);
         }
 
         QoreIRValue one = builder.createConstInt(1, ms->loc)->result;
@@ -17964,6 +17966,11 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
             type_state_phi->operands.push_back(type_state_init);
             type_state_phi->operands.push_back(next_type_state);
         }
+
+        // the blocks that the predicate and the map expression created (a ternary, a short-circuit operator) come
+        // before the blocks after the loop, as the code runs (see lowerMapNative())
+        builder.getFunction()->moveBlockToEnd(exit_block);
+        builder.getFunction()->moveBlockToEnd(final_block);
 
         // Exit block: result_list is the result (empty for size 0)
         builder.setBlock(exit_block);
