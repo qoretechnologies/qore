@@ -1,0 +1,222 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) WebSocket handshakes over TLS connections, and a helper process
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires FsUtil
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketClient
+
+%try-module process >= 2.2
+%define NoProcess
+%endtry
+
+%exec-class WebSocketClientConnectNotTunnelTest
+
+#! a handler that is not a socket handler and answers every request with a page, as a catch-all web UI handler does
+class PlainPageHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": "<html><body>index</body></html>",
+            "hdr": {"Content-Type": MimeTypeHtml},
+        };
+    }
+}
+
+#! issue #5668: a WebSocket client does not report an HTTP/2 or HTTP/3 CONNECT that the server did not tunnel as connected
+/** The client accepted an extended CONNECT on a 200 status alone, reported the connection as connected and failed
+    later (\c HTTPCLIENT-STREAM-CLOSED: cannot install frame state), when the server had answered with a page and the
+    end of the stream; in "auto" mode the documented HTTP/1.1 fallback was not tried, as the failure came after the
+    handshake.  An HTTP/3 refusal whose headers, body and end of stream arrived together was reported as "no response
+    received".  The handshake now installs the frame state and fails when the stream is closed.
+*/
+class WebSocketClientConnectNotTunnelTest inherits Test {
+    private {
+        *Logger logger;
+
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("WebSocketClientConnectNotTunnelTest", "1.0") {
+        addTestCase("HTTP/2: a CONNECT answered with a 200 that ends the stream fails the handshake",
+            sub () { testH2("2.0"); });
+        addTestCase("HTTP/2 auto mode: the HTTP/1.1 Upgrade fallback is tried", sub () { testH2("auto"); });
+        addTestCase("HTTP/3: a refused CONNECT reports the server's status", sub () { testH3("3.0"); });
+        addTestCase("HTTP/3 auto mode: the HTTP/1.1 Upgrade fallback is tried", sub () { testH3("auto"); });
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("ws-connect-not-tunnel-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+    }
+
+    #! returns the error that connecting raises; a client that connected is a failure
+    private string connectError(WebSocketClient wsc, string label) {
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        try {
+            wsc.connect();
+        } catch (hash<ExceptionInfo> ex) {
+            assertFalse(wsc.isOpen(), label + ": the client is not connected");
+            return sprintf("%s: %s", ex.err, ex.desc);
+        }
+        fail(label + ": the client reported the connection as connected");
+    }
+
+    private WebSocketClient getClient(string url, string http_version) {
+        return new WebSocketClient(sub (*data msg) {}, {
+            "url": url,
+            "logger": logger,
+            "http_version": http_version,
+            "ssl_verify_cert": False,
+            "timeout": 10s,
+            "connect_timeout": 10s,
+        });
+    }
+
+    #! a server (node) that answers an HTTP/2 extended CONNECT with a 200 response that ends the stream
+    private testH2(string http_version) {
+%ifdef NoProcess
+        testSkip("the process module is not available");
+%else
+        string node_bin = ENV.NODE_BIN ?? "node";
+        if (system(node_bin + " -v > /dev/null 2>&1")) {
+            testSkip("node is not available");
+        }
+        TmpDir dir("ws-connect-not-tunnel-");
+        string cert = dir.path + "/cert.pem";
+        string key = dir.path + "/key.pem";
+        File f();
+        f.open2(cert, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(CertPem);
+        f.close();
+        f.open2(key, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(KeyPem);
+        f.close();
+        # the server ends the stream in the HEADERS frame of its 200 response, so that the end of the stream arrives with
+        # the status: a 200 whose end of stream arrives in a later frame cannot be told apart from a tunnel that the
+        # server accepted and closed at once, which the client reports as connected and then closed
+        Process p(node_bin, (get_script_dir() + "/http2-plain-200-server.js", cert, key, "headers-only"));
+        on_exit {
+            if (p.running()) {
+                p.terminate();
+            }
+            p.wait();
+        }
+        string line = "";
+        while (line !~ /\n/) {
+            *string s = p.readStdout(1024, 60s);
+            if (!exists s) {
+                throw "TEST-ERROR", sprintf("the node server did not start: %s", p.readStderr(4096, 0) ?? "");
+            }
+            line += s;
+        }
+        *string port = (line =~ x/READY ([0-9]+)/)[0];
+        assertTrue(exists port, "the node server reported its port: " + line);
+        string err = connectError(getClient("wss://127.0.0.1:" + port + "/ws", http_version), http_version);
+        if (http_version == "auto") {
+            # the HTTP/1.1 Upgrade gets the page: its status is the server's real answer
+            assertRegex("^WEBSOCKET-ERROR: .*returned status code '200'.*expecting", err, "auto: the fallback's answer");
+        } else {
+            assertRegex("^WEBSOCKET-ERROR: HTTP/2 .*accepted the WebSocket CONNECT request but (ended the stream|the "
+                "stream is closed)", err, "2.0: the closed stream fails the handshake");
+        }
+%endif
+    }
+
+    #! HttpServer, which refuses an HTTP/3 extended CONNECT to a handler that is not a socket handler (#5667)
+    private testH3(string http_version) {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        on_exit {
+            server.stop();
+        }
+        server.setHandler("plain", "", NOTHING, new PlainPageHandler());
+        server.setDefaultHandler("plain", new PlainPageHandler());
+        server.waitForAsyncIo();
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        });
+        server.waitForAsyncIo();
+        string err = connectError(getClient("wss://127.0.0.1:" + info.port + "/ws", http_version), http_version);
+        if (http_version == "auto") {
+            assertRegex("^WEBSOCKET-ERROR: .*returned status code '200'.*expecting", err, "auto: the fallback's answer");
+        } else {
+            assertRegex("^WEBSOCKET-ERROR: HTTP/3 .*returned status code '501'", err, "3.0: the refusal is reported");
+        }
+    }
+}
