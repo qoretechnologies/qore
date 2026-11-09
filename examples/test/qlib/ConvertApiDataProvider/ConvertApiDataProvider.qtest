@@ -50,6 +50,8 @@ class FakeConvertApiHandler inherits AbstractHttpRequestHandler {
         list<hash<auto>> requests = ();
         #! the number of requests still to be answered with 429 Too Many Requests
         int rate_limited;
+        #! the Retry-After header of the 429 responses
+        string retry_after = "1";
         #! how long a conversion request takes before it is answered, in milliseconds
         int delay_ms;
     }
@@ -68,7 +70,7 @@ class FakeConvertApiHandler inherits AbstractHttpRequestHandler {
             --rate_limited;
             return <HttpResponseInfo>{
                 "code": 429,
-                "hdr": {"Content-Type": MimeTypeJson, "Retry-After": "1"},
+                "hdr": {"Content-Type": MimeTypeJson, "Retry-After": retry_after},
                 "body": make_json({"Code": 4290, "Message": "Too many requests"}),
             };
         }
@@ -540,6 +542,27 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
             "parameters": {"PageRange": "1-2"},
         },));
 
+        # a conversion (POST) is not sent again after a transport error, which can come after ConvertAPI performed
+        # the conversion; other requests are
+        assertFalse(ConvertApiDataProvider::ConvertApiDataProviderBase::isRetriableTransportError(
+            {"err": "SOCKET-CLOSED", "desc": "closed"}, "POST"));
+        assertFalse(ConvertApiDataProvider::ConvertApiDataProviderBase::isRetriableTransportError(
+            {"err": "HTTPCLIENT-TIMEOUT", "desc": "timed out"}, "POST"));
+        assertTrue(ConvertApiDataProvider::ConvertApiDataProviderBase::isRetriableTransportError(
+            {"err": "SOCKET-CLOSED", "desc": "closed"}, "GET"));
+        assertFalse(ConvertApiDataProvider::ConvertApiDataProviderBase::isRetriableTransportError(
+            {"err": "CONVERTAPI-ERROR", "desc": "other"}, "GET"));
+
+        # a rate-limited request waits for the Retry-After delay, or is not sent again when the delay is longer than
+        # the supported wait or not given in seconds
+        assertEq(5, ConvertApiDataProvider::ConvertApiDataProviderBase::getRetryAfterWait());
+        assertEq(2, ConvertApiDataProvider::ConvertApiDataProviderBase::getRetryAfterWait("2"));
+        assertEq(1, ConvertApiDataProvider::ConvertApiDataProviderBase::getRetryAfterWait("0"));
+        assertEq(60, ConvertApiDataProvider::ConvertApiDataProviderBase::getRetryAfterWait(" 60 "));
+        assertNothing(ConvertApiDataProvider::ConvertApiDataProviderBase::getRetryAfterWait("61"));
+        assertNothing(ConvertApiDataProvider::ConvertApiDataProviderBase::getRetryAfterWait(
+            "Wed, 21 Oct 2026 07:28:00 GMT"));
+
         # parameters handled by the module cannot be given as converter parameters
         assertThrows("CONVERTAPI-ERROR", \ConvertApiDataProvider::ConvertApiDataProviderBase::makeParameters(), ({
             "url": "https://example.com/a.docx",
@@ -695,6 +718,26 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         assertEq(("docx", "pdf"), (map $1.value, convert.getReferenceData("source_formats")));
         assertEq(("pdf", "txt"), (map $1.value, convert.getReferenceData("destination_formats", {"from": "docx"})));
         assertNothing(convert.getReferenceData("destination_formats"));
+
+        # a rate-limited request is not sent again before the server permits it: a Retry-After delay longer than the
+        # supported wait raises the error at once
+        {
+            handler.requests = ();
+            handler.rate_limited = 1;
+            handler.retry_after = "3600";
+            on_exit {
+                handler.rate_limited = 0;
+                handler.retry_after = "1";
+            }
+            try {
+                provider.getChildProviderEx("compress-pdf").doRequest({"url": "https://example.com/a.pdf"});
+                assertTrue(False, "no exception");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("CONVERTAPI-API-ERROR", ex.err);
+                assertEq(429, ex.arg.status_code);
+            }
+            assertEq(1, handler.requests.size());
+        }
 
         # a conversion without an input is rejected before a request is made
         handler.requests = ();

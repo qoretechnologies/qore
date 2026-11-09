@@ -514,7 +514,7 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
                     : rest.restDoRequest(method, path, send_body ? body : NOTHING);
                 return response.body;
             } catch (hash<ExceptionInfo> ex) {
-                if (retryRequest(ex, \retries)) {
+                if (retryRequest(ex, \retries, method)) {
                     continue;
                 }
                 ConvertApiDataProviderBase::checkError(ex);
@@ -524,27 +524,67 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Checks if a request should be retried
-    private bool retryRequest(hash<ExceptionInfo> ex, reference<int> retries) {
+    /** Requests are retried after the transport errors of @ref isRetriableTransportError() and after an HTTP 429
+        response, after the delay that the server asks for (see @ref getRetryAfterWait())
+    */
+    private bool retryRequest(hash<ExceptionInfo> ex, reference<int> retries, string method) {
         if (retries >= MaxRetries || DataProviderRetryUtil::retriesSuppressed()) {
             return False;
         }
-        if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet)) {
+        if (ConvertApiDataProviderBase::isRetriableTransportError(ex, method)) {
             ++retries;
             DataProviderRetryUtil::waitTransportRetry(pow(2, retries));
             return True;
         }
-        # Retry on rate limit errors (HTTP 429)
+        # Retry on rate limit errors (HTTP 429): the server refused the request, so it can be sent again
         if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 429) {
-            ++retries;
-            *string retry_after = ex.arg.headers."retry-after";
-            int wait_secs = retry_after.val() ? retry_after.toInt() : 5;
-            if (wait_secs < 1 || wait_secs > 60) {
-                wait_secs = 5;
+            *int wait_secs = ConvertApiDataProviderBase::getRetryAfterWait(ex.arg.headers."retry-after");
+            if (!exists wait_secs) {
+                return False;
             }
+            ++retries;
             sleep(wait_secs * 1000ms);
             return True;
         }
         return False;
+    }
+
+    #! Returns @ref True if a request that failed with the given transport error is to be sent again
+    /** A conversion (a \c POST request) is not sent again after a transport error: the connection can fail after
+        ConvertAPI performed the conversion, which would then be charged again.  The HTTP client already sends a
+        request again when that is safe, for example when it was not submitted (see
+        \c HttpClientIo::HttpClientConnectionManager::resendRequest()).  Other requests are retried after the
+        transport errors of @ref RetrySet (see \c DataProviderRetryUtil::isRetriableTransportError()).
+
+        @param ex the exception raised by the request
+        @param method the HTTP method of the request
+
+        @return @ref True if the request is to be sent again
+    */
+    static bool isRetriableTransportError(hash<auto> ex, string method) {
+        return method != "POST" && DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet);
+    }
+
+    #! Returns how long to wait before a rate-limited request is sent again, in seconds
+    /** @param retry_after the value of the \c Retry-After header of the HTTP 429 response, if any
+
+        @return the delay in seconds that the header gives (at least 1), @ref DefaultRetryAfter if there is no
+        header, or @ref NOTHING if the request is not to be sent again: the server asks for a longer wait than
+        @ref MaxRetryAfter, or gives the time in another form than a number of seconds, so a retry could come before
+        the server permits it
+    */
+    static *int getRetryAfterWait(*string retry_after) {
+        if (!retry_after.val()) {
+            return DefaultRetryAfter;
+        }
+        if (retry_after !~ /^\s*[0-9]+\s*$/) {
+            return;
+        }
+        int wait_secs = retry_after.toInt();
+        if (wait_secs > MaxRetryAfter) {
+            return;
+        }
+        return wait_secs < 1 ? 1 : wait_secs;
     }
 
     #! Raises a ConvertAPI error response as a \c CONVERTAPI-API-ERROR exception

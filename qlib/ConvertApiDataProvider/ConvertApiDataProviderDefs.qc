@@ -30,6 +30,15 @@ public namespace ConvertApiDataProvider {
     #! Maximum number of retries for transient errors
     public const MaxRetries = 3;
 
+    #! The longest wait in seconds that a rate-limited request (HTTP 429) waits for before it is sent again
+    /** If the \c Retry-After header of the response asks for a longer wait, the request is not sent again and the
+        error is raised, as a retry after a shorter wait would come before the server permits it
+    */
+    public const MaxRetryAfter = 60;
+
+    #! The wait in seconds before a rate-limited request is sent again when the response has no \c Retry-After header
+    public const DefaultRetryAfter = 5;
+
     #! How long the converter list from the \c info endpoint is cached
     public const ConverterCacheTtl = 1h;
 
