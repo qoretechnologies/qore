@@ -1586,10 +1586,7 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     // after they change (by the child's own %modern, for example); otherwise the child selects its automatic mode from
     // its own parse options (modern -> tiered, legacy -> AST); see syncExecModeWithParseOptions()
     applyParseOptionImplications();
-    inherited_user_requested_exec_mode = p_pgm->priv->user_requested_exec_mode;
-    inherited_exec_mode = p_pgm->priv->user_requested_exec_mode ? p_pgm->priv->exec_mode : QEM_AST;
-    user_requested_exec_mode = false;
-    syncExecModeWithParseOptions();
+    inheritExecMode(p_pgm->priv);
 
     // copy parent feature list; this Program is not visible to other threads yet, but the parent's list gains
     // entries while a module is loaded into the parent in another thread
@@ -2130,9 +2127,10 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             }
 
             // After directives and extension-based defaults are known, choose
-            // the implicit execution mode.  Modern code defaults to tiered,
-            // which also validates the %modern IR-lowerability guarantee below.
-            applyDefaultExecMode();
+            // the execution mode: an inherited explicit mode if the final parse options support it (they may have
+            // been restored without a sync, see restoreParseOptions()), otherwise the implicit mode; modern code
+            // defaults to tiered, which also validates the %modern IR-lowerability guarantee below.
+            syncExecModeWithParseOptions();
 
             // Eagerly compile all functions if --exec-mode=ir, --exec-mode=jit, or --exec-mode=tiered was specified.
             // Gate on PO_MODERN: `ensureIrExecMode` in parseCommit runs
@@ -3994,8 +3992,8 @@ int QoreProgram::parseRollback(ExceptionSink* xsink) {
 
 void QoreProgram::setExecMode(qore_exec_mode_t mode, bool user_requested) {
     priv->exec_mode = mode;
-    priv->user_requested_exec_mode = user_requested;
-    priv->inherited_user_requested_exec_mode = false;
+    priv->user_requested_exec_mode.store(user_requested, std::memory_order_release);
+    priv->inherited_user_requested_exec_mode.store(false, std::memory_order_release);
 }
 
 qore_exec_mode_t QoreProgram::getExecMode() const {

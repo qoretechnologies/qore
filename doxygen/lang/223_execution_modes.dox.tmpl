@@ -588,9 +588,17 @@ int result = pgm.callFunction("compute");
     by @ref Qore::Program::setParseOptions() "Program::setParseOptions()".  While its parse options do not meet the
     @ref exec_mode_requirements "requirements" of the mode, it runs on the AST interpreter, without an error, and
     @ref Qore::Program::getExecMode() "Program::getExecMode()" returns @ref Qore::ExecMode::EM_AST "EM_AST"; the mode
-    applies again once they do.  A child whose parent's mode was not requested explicitly selects its mode from its
-    own parse options: tiered execution for \c %%modern code, AST otherwise.  Calling
+    applies again once they do (the options in effect when its code is committed decide, also after
+    \c %%push-parse-options restored them).
+
+    The mode is passed on: a Program created by such a child inherits it, also when the child does not run in it
+    itself (a child without \c %%modern, for example), and so does the Program of a user module that such a Program
+    loads.  It is taken when the Program is created: a later
+    @ref Qore::Program::setExecMode() "Program::setExecMode()" call on the parent does not change it.  Calling
     @ref Qore::Program::setExecMode() "Program::setExecMode()" on the child sets its own mode instead.
+
+    A Program whose parent's mode was not requested explicitly, and a Program created without a parent, select their
+    mode from their own parse options: tiered execution for \c %%modern code, AST otherwise.
 
     @subsection exec_mode_enum ExecMode Enum
 
