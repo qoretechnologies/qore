@@ -875,6 +875,29 @@ DLLLOCAL void qore_process_params(unsigned num_params, type_vec_t& typeList, arg
 void ensure_unique(AbstractQoreNode** v, ExceptionSink* xsink);
 void ensure_unique(QoreValue& v, ExceptionSink* xsink);
 
+//! Returns a value holding \a copy, a copy of the hash or list that \a v holds, in the representation of \a v
+/** A copy of a container held through an opaque reference (the \c \@= operator) is held through an opaque
+    reference, with a registration of its own with the opaque target registry, with the Program of the registration
+    of \a v (the current Program if \a v has none); any other copy is held as an ordinary value.  A write through an opaque reference changes the container that the reference holds: when the
+    container is shared, the reference is given a copy to change (copy-on-write), and the reference stays opaque,
+    as it does when the container is changed in place, so that whether the collector follows the edge never
+    depends on whether the container was shared.
+
+    @param v the value that the copy replaces
+    @param copy the copy, whose reference is taken by the value returned
+*/
+DLLLOCAL QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* copy);
+
+//! Replaces the node that \a v holds with a copy if it is not unique (copy-on-write), keeping the representation of \a v
+/** See qore_value_with_copy().  The value replaced is returned as it was held, for the caller to release with
+    QoreValue::discard() or LValueHelper::saveTemp(): releasing it as a plain node would leave the registration of
+    an opaque value with the opaque target registry (see design/dgc.md, "Opaque references").
+
+    @param v a value holding a node other than an object
+    @return the value replaced, or NOTHING if the node was unique
+*/
+DLLLOCAL QoreValue qore_value_copy_on_write(QoreValue& v);
+
 #ifndef HAVE_ATOLL
 #ifdef HAVE_STRTOIMAX
 static inline long long atoll(const char* str) {

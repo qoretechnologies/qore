@@ -1092,6 +1092,8 @@ static constexpr uint64_t PAYLOAD_MASK       = 0x0000FFFFFFFFFFFFULL;
 static constexpr uint64_t TAG_MASK           = 0xFFFF000000000000ULL;  // Phase 4: NaN-boxing tag extraction
 static constexpr uint64_t TAG_POINTER        = 0xFFFA000000000000ULL;  // Phase 4: Tag for pointer type
 static constexpr uint64_t TAG_CHAR           = 0xFFFC000000000000ULL;
+// the top 12 bits of an opaque reference (QoreValue::TAG12_OPAQUE)
+static constexpr uint64_t TAG12_OPAQUE       = 0xFFD;
 static constexpr uint64_t DOUBLE_ENCODE_OFFSET = 0x0001000000000000ULL;
 static constexpr uint64_t VAL_NOTHING        = 0;
 static constexpr uint64_t VAL_NULL           = 0xFFFB000000000001ULL;
@@ -1922,13 +1924,18 @@ llvm::Value* QoreIRToLLVM::unboxBool(llvm::Value* qv) {
 }
 
 // Phase 4: Check if value has a node (inline NaN-boxing check)
-// Returns true if the value is a pointer (tag == TAG_POINTER) with non-null address
+// Returns true if the value holds a node with a non-null address, as QoreValue::isPointer() and hasNode() do: a
+// pointer value (tag == TAG_POINTER) or an opaque reference (the 0xFFD tag family), which owns its node like a pointer
+// value; a node held through an opaque reference must be referenced and released like any other
 // Uses bit operations to extract tag and check for pointer type
 llvm::Value* QoreIRToLLVM::hasNodeInline(llvm::Value* qv) {
     // Extract tag: tag = qv & 0xFFFF000000000000
     llvm::Value* tag = builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, TAG_MASK));
-    // Check if tag == TAG_POINTER (0xFFFA000000000000)
-    llvm::Value* is_pointer = builder->CreateICmpEQ(tag, llvm::ConstantInt::get(i64_type, TAG_POINTER));
+    // Check if tag == TAG_POINTER (0xFFFA000000000000) or the top 12 bits are the opaque tag family (0xFFD)
+    llvm::Value* is_ptr_tag = builder->CreateICmpEQ(tag, llvm::ConstantInt::get(i64_type, TAG_POINTER));
+    llvm::Value* tag12 = builder->CreateLShr(qv, llvm::ConstantInt::get(i64_type, 52));
+    llvm::Value* is_opaque = builder->CreateICmpEQ(tag12, llvm::ConstantInt::get(i64_type, TAG12_OPAQUE));
+    llvm::Value* is_pointer = builder->CreateOr(is_ptr_tag, is_opaque);
 
     // Extract pointer: ptr = qv & 0x0000FFFFFFFFFFFF
     llvm::Value* payload = builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, PAYLOAD_MASK));
