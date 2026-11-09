@@ -7411,7 +7411,12 @@ static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
     // Program, but the variant and IR of a Program created after it was deleted can have their addresses, and the
     // descriptor's analysis of the deleted IR (the leaf's operation) and its return type would then be used for them
     // (see tryExecuteInterpreterInlineIRClosure())
-    const qore_program_id_t pgm_id = uvb->pgm ? qore_program_private::get(*uvb->pgm)->getProgramId() : 0;
+    const qore_program_id_t pgm_id = uvb->pgm_id;
+#ifdef DEBUG
+    if (cache.uvb == uvb && cache.descriptor.cached_callee_ir == callee_ir && cache.pgm_id != pgm_id) {
+        qore_dbg_closure_call_cache_program_misses.fetch_add(1, std::memory_order_relaxed);
+    }
+#endif
     if (cache.uvb != uvb || cache.pgm_id != pgm_id || cache.nargs != nargs
             || cache.descriptor.cached_callee_ir != callee_ir) {
         cache.uvb = uvb;

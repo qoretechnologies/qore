@@ -2476,12 +2476,13 @@ public:
     */
     std::atomic<QoreProgram*> spgm{nullptr};
 
-    //! the source Program that released the class with deleteClassData(), for identification only
+    //! the ID of the source Program that released the class with deleteClassData(), or 0
     /** Set before spgm is cleared there: from then on, the namespace of the class is destroyed with that Program in
         its thread, so method calls in other threads do not use it (see qore_get_method_pgm_context() and
-        getMethodForEval()); never dereferenced
+        getMethodForEval()).  The ID identifies the Program: its address can be given to a Program created after it
+        was deleted, which would have been taken for it.
     */
-    std::atomic<const QoreProgram*> released_spgm{nullptr};
+    std::atomic<qore_program_id_t> released_spgm_id{0};
 
     // if the souorce program should be dereference when the class is destroyed
     bool deref_source_program = true;
@@ -3643,7 +3644,7 @@ public:
             {
                 // see getReferencedSourceProgram()
                 AutoLocker al(gate.asl_lock);
-                released_spgm.store(pgm);
+                released_spgm_id.store(pgm->getProgramId());
                 taken = spgm.compare_exchange_strong(expected, nullptr);
             }
             if (taken) {
@@ -3658,7 +3659,7 @@ public:
                 AutoLocker al(gate.asl_lock);
                 p = spgm.load();
                 if (p) {
-                    released_spgm.store(p);
+                    released_spgm_id.store(p->getProgramId());
                     p = spgm.exchange(nullptr);
                 }
             }

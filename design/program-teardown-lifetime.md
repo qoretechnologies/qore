@@ -105,11 +105,16 @@ code what was cached for the deleted code.  The thread-local caches of closure c
   entry by the variant, its IR and the ID of the variant's Program; it caches the analysis of the IR (the leaf's
   operation) and the return type, and computed the deleted closure's operation.
 
-A Program's functions and variants live as long as it does, so the ID identifies them while its code runs.
+A Program's functions and variants live as long as it does, so the ID identifies them while its code runs; the
+inline call also checks that the cached variant is still its function's variant.  The source Program that released a
+class (`qore_class_private::released_spgm_id`) is recorded by its ID for the same reason.
 `examples/test/ir/ClosureCacheProgramReuse.qtest` creates Programs one after another, each with a closure computing
 another operation, in every execution mode.  Whether a deleted Program's addresses are given to the next one
 depends on the allocator and the layout of the process's heap, so the test runs its driver several times; macOS's
-allocator gave them in most runs, glibc's in none, so the test declares macOS as a platform it must run on.
+allocator gave them in most runs, glibc's in none, so the test declares macOS as a platform it must run on.  A library
+with debugging counts the calls that found an entry of a deleted Program at the same addresses
+(`dbg_closure_call_cache_program_misses()`), and the test fails on macOS if no run was given the addresses, so that it
+cannot stop reproducing the reuse unnoticed.
 
 A cache keyed by the metadata of a class or a hashdecl can use the method dispatch epoch instead
 (`qore_get_method_dispatch_epoch()`): the destruction of a class or a hashdecl increments it before the memory can be

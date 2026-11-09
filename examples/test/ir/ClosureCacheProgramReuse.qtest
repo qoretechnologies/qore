@@ -80,12 +80,19 @@ foreach hash<auto> i in (Code.pairIterator()) {
     }
     printf("%%s: %%d of %%d right\n", i.key, right, total);
 }
+# the calls that found an entry made for a closure of a deleted Program at the same addresses; -1 without debugging
+printf("cache entries of deleted Programs: %%d\n", exists_function("dbg_closure_call_cache_program_misses")
+    ? call_function("dbg_closure_call_cache_program_misses") : -1);
 ';
     }
 
     private {
         string qore_bin;
         string libqore_dir;
+        #! the closure calls of every run that found a cache entry made for a closure of a deleted Program
+        int program_misses = 0;
+        #! true if the library has debugging, so that the driver could count them
+        bool counted = False;
     }
 
     constructor() : QUnit::Test("ClosureCacheProgramReuseTest", "1.0", \ARGV) {
@@ -96,6 +103,7 @@ foreach hash<auto> i in (Code.pairIterator()) {
                 getModeTest(mode));
         }
         addTestCase("closure calls in Programs created one after another on the IR tier", \runIrTier());
+        addTestCase("the runs gave the next Program the addresses of a deleted one", \checkReuse());
         set_return_value(main());
     }
 
@@ -113,7 +121,7 @@ foreach hash<auto> i in (Code.pairIterator()) {
         string path = writeScript(tmp);
         list<string> wrong = ();
         for (int i = 0; i < Runs; ++i) {
-            string out = ExecModeHarness::run(getCommand(mode, path, mode));
+            string out = takeMisses(ExecModeHarness::run(getCommand(mode, path, mode)));
             if (out != getExpected()) {
                 wrong += out;
             }
@@ -127,12 +135,41 @@ foreach hash<auto> i in (Code.pairIterator()) {
         string path = writeScript(tmp);
         list<string> wrong = ();
         for (int i = 0; i < Runs; ++i) {
-            string out = ExecModeHarness::run_ir_tier(getCommand("tiered", path, "tiered"));
+            string out = takeMisses(ExecModeHarness::run_ir_tier(getCommand("tiered", path, "tiered")));
             if (out != getExpected()) {
                 wrong += out;
             }
         }
         assertEq((), wrong, ExecModeHarness::IRTierName);
+    }
+
+    #! checks that the runs reproduced what the test is for: a closure call found the entry of a deleted Program
+    /** Whether a deleted Program's addresses are given to the next Program depends on the allocator: macOS's gave
+        them in most runs, so the test fails there if no run of any mode was given them; with glibc's, it is skipped
+    */
+    checkReuse() {
+        if (!counted) {
+            testSkip("the library has no debugging, so the driver cannot count the entries");
+        }
+        if (Qore::PlatformOS != "Darwin") {
+            testSkip(sprintf("the allocator of %s does not give a deleted Program's addresses to the next one "
+                "reliably (%d calls found an entry of a deleted Program)", Qore::PlatformOS, program_misses));
+        }
+        assertGt(0, program_misses);
+    }
+
+    #! returns the output of the driver without its count of the entries of deleted Programs, which it adds up
+    private string takeMisses(string out) {
+        *list<*string> m = (out =~ x/cache entries of deleted Programs: (-?[0-9]+)\n/);
+        if (m) {
+            int n = m[0].toInt();
+            if (n >= 0) {
+                counted = True;
+                program_misses += n;
+            }
+            out = regex_subst(out, "cache entries of deleted Programs: -?[0-9]+\n", "");
+        }
+        return out;
     }
 
     #! returns the command running the driver

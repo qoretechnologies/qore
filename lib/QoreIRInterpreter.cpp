@@ -4975,6 +4975,14 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
     return true;
 }
 
+#ifdef DEBUG
+//! the closure calls that found a cache entry made for a closure of a deleted Program at the same addresses
+/** The entry is not used (see tryExecuteInterpreterInlineIRClosure() and tryExecClosureNativeLeaf()); a test that
+    reproduces the reuse of a deleted Program's addresses checks that it occurred (dbg_closure_call_cache_program_misses())
+*/
+std::atomic<int64_t> qore_dbg_closure_call_cache_program_misses{0};
+#endif
+
 static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram* caller_pgm,
         const QoreProgramLocation* call_loc, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
         bool* may_invalidate_external_caches = nullptr) {
@@ -5028,11 +5036,19 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         && closure_inline_cache.function == uf
         && closure_inline_cache.caller_pgm_id == caller_pgm_id
         && closure_inline_cache.uvb
+        // the cached variant is the function's own; a check that does not rely on the lifetime of the function
+        && uf->first() && uf->first()->getUserVariantBase() == closure_inline_cache.uvb
         && closure_inline_cache.callee_ir
         && closure_inline_cache.sig
         && ((closure_inline_cache.direct_params_eligible
                 && nargs >= static_cast<int>(closure_inline_cache.num_params))
             || nargs == static_cast<int>(closure_inline_cache.num_params));
+#ifdef DEBUG
+    if (closure_inline_cache.node == node && closure_inline_cache.function == uf
+            && closure_inline_cache.caller_pgm_id != caller_pgm_id) {
+        qore_dbg_closure_call_cache_program_misses.fetch_add(1, std::memory_order_relaxed);
+    }
+#endif
     if (use_cached_metadata) {
         uvb = closure_inline_cache.uvb;
         if (uvb->hasCachedFunction()) {
