@@ -43,6 +43,7 @@
 #include "qore/intern/ql_type.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QuicSession.h"
@@ -9751,6 +9752,59 @@ static void ut_asyncio_logger(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "cleanup succeeds");
 }
 
+// The references of an operation that a synchronous exec() call waits for go to the caller (AsyncIoSyncRelease):
+// those added before its wait ends are released by finish() on the caller's thread, and later ones are refused, so
+// that the I/O thread hands them to a callback worker instead
+static void ut_async_io_sync_release(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> h1(new QoreHashNode(autoTypeInfo), &xsink);
+    ReferenceHolder<QoreHashNode> h2(new QoreHashNode(autoTypeInfo), &xsink);
+    {
+        AsyncIoSyncRelease box;
+        AsyncIoDeferredRelease empty;
+        UT_ASSERT(c, box.add(empty), "an empty set of references is taken");
+
+        AsyncIoDeferredRelease refs;
+        refs.other = h1->hashRefSelf();
+        UT_ASSERT(c, box.add(refs), "references added before the wait ends are taken");
+        UT_ASSERT(c, refs.empty(), "the references taken are cleared from the caller's set");
+        UT_ASSERT_EQ(c, 2, h1->reference_count(), "the box holds the reference it took");
+
+        box.finish(&xsink);
+        UT_ASSERT(c, !xsink, "the release at the end of the wait raises nothing");
+        UT_ASSERT_EQ(c, 1, h1->reference_count(), "the end of the wait releases the references taken");
+
+        AsyncIoDeferredRelease late;
+        late.other = h2->hashRefSelf();
+        UT_ASSERT(c, !box.add(late), "references added after the wait has ended are refused");
+        UT_ASSERT(c, late.other == *h2, "refused references are left to the caller");
+        UT_ASSERT_EQ(c, 2, h2->reference_count(), "the box keeps no refused reference");
+        late.release(&xsink);
+        UT_ASSERT_EQ(c, 1, h2->reference_count(), "the caller releases the refused references");
+
+        box.finish(&xsink);
+        UT_ASSERT(c, !xsink, "a second end of the wait releases nothing more");
+    }
+    xsink.clear();
+}
+
+// The count of async I/O loggers set (qore_async_io_logger_count) follows each logger's changes from none to one and
+// back, and not a change from one logger to another
+static void ut_async_io_logger_count(UnitTestCounters& c) {
+    int start = qore_async_io_logger_count.load();
+    int a, b;
+    qore_async_io_note_logger_change(nullptr, &a);
+    UT_ASSERT_EQ(c, start + 1, qore_async_io_logger_count.load(), "setting a logger counts it");
+    UT_ASSERT(c, qore_async_io_any_logger(), "a logger is reported while one is set");
+    qore_async_io_note_logger_change(&a, &b);
+    UT_ASSERT_EQ(c, start + 1, qore_async_io_logger_count.load(), "replacing a logger does not change the count");
+    qore_async_io_note_logger_change(nullptr, nullptr);
+    UT_ASSERT_EQ(c, start + 1, qore_async_io_logger_count.load(),
+        "clearing an unset logger does not change the count");
+    qore_async_io_note_logger_change(&b, nullptr);
+    UT_ASSERT_EQ(c, start, qore_async_io_logger_count.load(), "clearing a logger uncounts it");
+}
+
 static void ut_asyncio_wait_for_processing_empty(UnitTestCounters& c) {
     ExceptionSink xsink;
     AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(false, &xsink);
@@ -10974,6 +11028,192 @@ private:
     int64_t cancelled_stream_id = -1;
     bool cancel_deliverable_during_cleanup = false;
 };
+
+//! A connection with no I/O whose close notification can be sent by a test; it counts its destruction
+class UtNotifiedConnection : public HttpClientConnectionBase {
+public:
+    DLLLOCAL UtNotifiedConnection(std::atomic<int>* destroyed = nullptr)
+            : HttpClientConnectionBase("unit-test.invalid", 80, false), destroyed(destroyed) {
+    }
+
+    DLLLOCAL ~UtNotifiedConnection() override {
+        if (destroyed) {
+            ++*destroyed;
+        }
+    }
+
+    DLLLOCAL int getActiveStreamCount() const override {
+        return 0;
+    }
+
+    DLLLOCAL void fireCloseHook() {
+        onClosedHook();
+    }
+
+private:
+    std::atomic<int>* destroyed;
+};
+
+//! A manager whose new connections have sent their close notification before they are pooled, as a connection
+//! whose connect fails on the I/O thread after its reservation can
+class UtNotifiedBeforePoolManager : public HttpClientConnectionManagerBase {
+public:
+    DLLLOCAL UtNotifiedBeforePoolManager(const Options& opts, ExceptionSink* xsink)
+            : HttpClientConnectionManagerBase(opts, xsink) {
+    }
+
+    std::atomic<int> created{0};
+    std::atomic<int> destroyed{0};
+
+    DLLLOCAL HttpClientConnectionBase* createConnection(const std::string& key, const char* host, int port,
+            bool ssl_required, ExceptionSink* xsink, bool wait_for_ready = true) override {
+        ++created;
+        UtNotifiedConnection* conn = new UtNotifiedConnection(&destroyed);
+        conn->setManager(this);
+        // the notification runs before the creator pools the connection; the connection is not marked closed, so
+        // its stream is reserved
+        conn->fireCloseHook();
+        return conn;
+    }
+
+    DLLLOCAL HttpClientConnectionBase* swap(HttpClientConnectionBase* neg, HttpClientConnectionBase* concrete,
+            ExceptionSink* xsink) {
+        return swapNegotiatedConnection(neg, concrete, false, xsink);
+    }
+
+    DLLLOCAL void addPooled(HttpClientConnectionBase* conn, const std::string& key) {
+        conn->setPoolKey(key);
+        conn->setManager(this);
+        conn->ref();
+        std::unique_lock<std::shared_mutex> wl(pool_lock_);
+        pool_[key].push_back(conn);
+    }
+};
+
+// A new connection whose close notification ran after its stream was reserved and before it got its pool key is
+// not pooled: the creator gets the connection's error, and the connection is released
+static void ut_manager_new_connection_notified_after_reservation(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H1;
+    ReferenceHolder<UtNotifiedBeforePoolManager> mgr(new UtNotifiedBeforePoolManager(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "notified-before-pool manager constructs");
+    if (xsink || !mgr) {
+        xsink.clear();
+        return;
+    }
+    HttpClientConnectionBase* conn = mgr->acquireConnectionAsync("http", "unit-test.invalid", 80, &xsink);
+    UT_ASSERT_EQ(c, 1, mgr->created.load(), "one connection was created");
+    UT_ASSERT(c, !conn, "no connection is returned for a connection whose close notification has run");
+    UT_ASSERT(c, xsink.isException(), "the creator gets an error");
+    if (xsink.isException()) {
+        QoreStringValueHelper err(xsink.getExceptionErr());
+        UT_ASSERT(c, !strcmp(err->c_str(), "HTTPCLIENT-CONNECT-ERROR"),
+            (std::string("the error is the new connection's: ") + err->c_str()).c_str());
+    }
+    xsink.clear();
+    UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "the connection is not in the pool");
+    UT_ASSERT_EQ(c, 0, mgr->getAttachedConnectionCount(), "the released connection does not notify the manager");
+    UT_ASSERT_EQ(c, 1, mgr->destroyed.load(), "the connection is released");
+    mgr->closeAll(&xsink);
+    xsink.clear();
+}
+
+// The concrete connection of an ALPN negotiation whose close notification has run is not pooled in place of the
+// transitional one: the transitional entry is removed and the pool's reference to it released, and the caller gets
+// the concrete connection
+static void ut_manager_swap_concrete_notified(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H1;
+    ReferenceHolder<UtNotifiedBeforePoolManager> mgr(new UtNotifiedBeforePoolManager(opts, &xsink), &xsink);
+    std::atomic<int> neg_destroyed{0};
+    std::atomic<int> concrete_destroyed{0};
+    ReferenceHolder<UtNotifiedConnection> neg(new UtNotifiedConnection(&neg_destroyed), &xsink);
+    UT_ASSERT(c, !xsink, "swap fixtures construct");
+    if (xsink || !mgr || !neg) {
+        xsink.clear();
+        return;
+    }
+    mgr->addPooled(*neg, "unit-test.invalid:80");
+    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(), "the transitional connection is pooled");
+    UT_ASSERT_EQ(c, 2, neg->reference_count(), "the pool and the test hold the transitional connection");
+
+    UtNotifiedConnection* concrete = new UtNotifiedConnection(&concrete_destroyed);
+    concrete->setManager(*mgr);
+    concrete->fireCloseHook();
+    ReferenceHolder<HttpClientConnectionBase> rv(mgr->swap(*neg, concrete, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "the swap raises nothing");
+    UT_ASSERT(c, *rv == concrete, "the caller gets the concrete connection");
+    UT_ASSERT_EQ(c, 1, rv->reference_count(), "the caller holds the only reference to the concrete connection");
+    UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "neither connection is in the pool");
+    UT_ASSERT_EQ(c, 1, neg->reference_count(), "the pool's reference to the transitional connection is released");
+    UT_ASSERT_EQ(c, 0, neg_destroyed.load(), "the test's reference keeps the transitional connection");
+    UT_ASSERT_EQ(c, 0, mgr->getAttachedConnectionCount(),
+        "neither connection notifies the manager: the transitional one left the pool, the concrete one is the caller's");
+    rv = nullptr;
+    UT_ASSERT_EQ(c, 1, concrete_destroyed.load(), "the concrete connection is released with the caller's reference");
+
+    // a concrete connection that has not closed takes the transitional one's place
+    ReferenceHolder<UtNotifiedConnection> neg2(new UtNotifiedConnection(), &xsink);
+    mgr->addPooled(*neg2, "unit-test.invalid:80");
+    UtNotifiedConnection* concrete2 = new UtNotifiedConnection();
+    concrete2->setManager(*mgr);
+    ReferenceHolder<HttpClientConnectionBase> rv2(mgr->swap(*neg2, concrete2, &xsink), &xsink);
+    UT_ASSERT(c, *rv2 == concrete2, "the caller gets the pooled concrete connection");
+    UT_ASSERT_EQ(c, 2, rv2->reference_count(), "the pool and the caller hold the concrete connection");
+    UT_ASSERT(c, rv2->getPoolKey() == "unit-test.invalid:80", "the concrete connection takes the pool key");
+    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(), "the concrete connection is pooled");
+    UT_ASSERT_EQ(c, 1, neg2->reference_count(), "the pool's reference to the transitional connection is released");
+    UT_ASSERT_EQ(c, 1, mgr->getAttachedConnectionCount(),
+        "only the pooled concrete connection notifies the manager; the transitional one left the pool");
+    rv2 = nullptr;
+    mgr->closeAll(&xsink);
+    UT_ASSERT(c, !xsink, "the manager closes the pooled connection");
+    xsink.clear();
+}
+
+// A connection that is still connecting when its creator pools it can fail on the I/O thread meanwhile: its close
+// notification, which reads the pool key, can run before the key is set.  The key is then refused, so the creator
+// does not pool a connection that no notification would remove; a connection that got its key is removed by its
+// notification.
+static void ut_manager_pool_key_refused_after_close_notification(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<UtCloseQueueManager> mgr(
+        new UtCloseQueueManager(HttpClientConnectionManagerBase::Options{}, &xsink),
+        &xsink);
+    ReferenceHolder<UtBlockingPoolConnection> closed_conn(new UtBlockingPoolConnection(), &xsink);
+    ReferenceHolder<UtBlockingPoolConnection> keyed_conn(new UtBlockingPoolConnection(), &xsink);
+    UT_ASSERT(c, !xsink, "pool key fixtures construct");
+    if (xsink || !mgr || !closed_conn || !keyed_conn) {
+        xsink.clear();
+        return;
+    }
+
+    // the close notification runs before the creator sets the key
+    closed_conn->setManager(*mgr);
+    closed_conn->fireCloseHook();
+    UT_ASSERT(c, !closed_conn->setPoolKey("unit-test.invalid:80"),
+        "a connection whose close notification has run gets no pool key");
+    UT_ASSERT(c, closed_conn->getPoolKey().empty(), "the refused key is not stored");
+    mgr->drainClosed(&xsink);
+    UT_ASSERT(c, !xsink, "draining the close queue raises nothing");
+    UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "the notification without a key queued nothing to remove");
+    closed_conn->setManager(nullptr);
+
+    // the key is set first: the notification carries it and removes the connection
+    mgr->addPooled(*keyed_conn);
+    UT_ASSERT(c, keyed_conn->getPoolKey() == "unit-test.invalid:80",
+        "a connection that has not closed gets its pool key");
+    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(), "the keyed connection is pooled");
+    keyed_conn->fireCloseHook();
+    mgr->drainClosed(&xsink);
+    UT_ASSERT(c, !xsink, "draining the keyed close notification raises nothing");
+    UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "the close notification with the key removes the connection");
+    UT_ASSERT(c, !keyed_conn->setPoolKey("unit-test.invalid:80"),
+        "a key set again after the close notification is refused");
+    xsink.clear();
+}
 
 // An HTTP/1.1 request abandoned mid-exchange leaves a connection that cannot be
 // resynchronized: it must leave the pool so no later checkout can hand it out.
@@ -15096,6 +15336,31 @@ static QoreValue f_dbg_event_loop_unmatched_kernel_events(const QoreListNode* pa
     return QoreEventLoop::dbgUnmatchedKernelEvents();
 }
 
+//! Debug-only: returns the sets of references of synchronous operations that their callers took and refused
+/** @return a hash with keys \c taken and \c refused; see AsyncIoSyncRelease
+*/
+static QoreValue f_dbg_async_io_sync_release_counts(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), xsink);
+    h->setKeyValue("taken", static_cast<int64>(qore_dbg_sync_release_taken.load(std::memory_order_relaxed)), xsink);
+    h->setKeyValue("refused", static_cast<int64>(qore_dbg_sync_release_refused.load(std::memory_order_relaxed)),
+        xsink);
+    return h.release();
+}
+
+//! Debug-only: waits until the Socket has an operation on the async I/O controller; returns false on the timeout
+static QoreValue f_dbg_socket_wait_controller_op(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreObject* obj = get_param_value(params, 0).get<QoreObject>();
+    SimpleRefHolder<QoreSocketObject> s(static_cast<QoreSocketObject*>(obj->getReferencedPrivateData(CID_SOCKET,
+        xsink)));
+    if (!s) {
+        return QoreValue();
+    }
+    return my_socket_priv::getPriv(**s)->dbgWaitForControllerOp(
+        static_cast<int>(get_param_value(params, 1).getAsBigInt()));
+}
+
 //! Debug-only: advances the QUIC test clock of the process; see qore_quic_test_advance_clock()
 static QoreValue f_dbg_quic_advance_clock(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     int64_t total = qore_quic_test_advance_clock(get_param_value(params, 0).getAsBigInt(), xsink);
@@ -16822,6 +17087,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_shutdown_new_connection_detached(c);
     ut_async_redirect_task_error_counted_on_driving_thread(c);
     ut_manager_abandon_h1_evicts_connection(c);
+    ut_manager_pool_key_refused_after_close_notification(c);
+    ut_manager_new_connection_notified_after_reservation(c);
+    ut_manager_swap_concrete_notified(c);
     ut_manager_abandon_multiplexed_keeps_connection(c);
     ut_manager_abandon_completed_request_is_a_no_op(c);
     ut_manager_abandon_runs_while_cancelled(c);
@@ -16857,6 +17125,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_httpclient_conn_mgr_post(c);
     ut_httpclient_conn_mgr_error_passthru(c);
     ut_asyncio_logger(c);
+    ut_async_io_sync_release(c);
+    ut_async_io_logger_count(c);
     ut_cgroup_cpu_limit(c);
     ut_asyncio_wait_for_processing_empty(c);
     ut_asyncio_stop_clear(c);
@@ -18527,6 +18797,8 @@ static QoreValue f_dbg_release_http1_connection_close(const QoreListNode* params
 std::atomic<qore_dbg_http1_send_hook_t> qore_dbg_http1_send_hook{nullptr};
 std::atomic<qore_dbg_socket_send_hook_t> qore_dbg_socket_send_hook{nullptr};
 std::atomic<int64_t> qore_dbg_ssl_close_notify_count{0};
+std::atomic<int64_t> qore_dbg_sync_release_taken{0};
+std::atomic<int64_t> qore_dbg_sync_release_refused{0};
 
 namespace {
 //! the state of the HTTP/1 client send-failure test hooks
@@ -19915,6 +20187,12 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_event_loop_unmatched_kernel_events", f_dbg_event_loop_unmatched_kernel_events,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_sync_release_counts", f_dbg_async_io_sync_release_counts,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_socket_wait_controller_op", f_dbg_socket_wait_controller_op,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, boolTypeInfo, 2,
+        QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_quic_advance_clock", f_dbg_quic_advance_clock,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");

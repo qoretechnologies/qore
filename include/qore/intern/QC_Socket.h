@@ -265,8 +265,37 @@ public:
             return -1;
         }
         ++async_io_count;
+#ifdef DEBUG
+        ++dbg_controller_ops;
+        dbg_controller_ops_cond.broadcast();
+#endif
         return 0;
     }
+
+#ifdef DEBUG
+    //! Debug-only: waits until the socket has an operation on the async I/O controller
+    /** @param timeout_ms a guard against a hang of the test
+
+        @return true if the socket has one, false if the guard expired first
+    */
+    DLLLOCAL bool dbgWaitForControllerOp(int timeout_ms) {
+        AutoLocker al(m);
+        int64 deadline_us = q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000;
+        while (!dbg_controller_ops) {
+            int64 remaining_us = deadline_us - q_get_monotonic_us();
+            if (remaining_us <= 0) {
+                return false;
+            }
+            dbg_controller_ops_cond.wait2(&m, (remaining_us + 999) / 1000);
+        }
+        return true;
+    }
+
+    //! Debug-only: the number of operations of the socket on the async I/O controller (startAsyncIo())
+    int dbg_controller_ops = 0;
+    //! Debug-only: signaled when an operation of the socket is submitted to the controller
+    QoreCondition dbg_controller_ops_cond;
+#endif
 
     //! Starts a multi-step async controller sequence and claims async ownership until clearAsyncSequenceIo() is called
     DLLLOCAL int startAsyncSequenceIo(ExceptionSink* xsink, unsigned direction) {
@@ -302,6 +331,10 @@ public:
         assert(async_io_count > 0);
 
         --async_io_count;
+#ifdef DEBUG
+        assert(dbg_controller_ops > 0);
+        --dbg_controller_ops;
+#endif
     }
 
     //! Clears a multi-step async controller sequence claim

@@ -14,6 +14,10 @@ targeted cancel/close of `AsyncIoControllerPriv` (`getSocketThreadIndexes()`) in
   (`CLOSE_ONLY=1` leaves the closes out of the measurement).  An accept cost about 47,000 user-space instructions,
   of which about 18,000 per pollable object (each `Socket` object and accepted socket) were the SHA-1 digest of its
   I/O identity, which a sequence number replaces now.
+- `socket-wait-loop.qr [<round trips>]`: a `Socket` ping-pong between two threads over one connection in which every
+  receive waits (each side receives before the other side sends), so that every round trip has two calls that go
+  through the async I/O controller; prints microseconds per round trip; `socket-wait-loop.py` is the same loop in
+  Python.
 - `run-http.sh <keepalive 0|1> <requests>`: an `HttpServer` with a trivial handler in its own process and a client
   loop in another; prints the client's microseconds per request and the server process' CPU time (clock ticks of
   10 ms) read when the client asks it to quit.  Server CPU per request is `(user + sys) * 10000 / (requests + 51)`

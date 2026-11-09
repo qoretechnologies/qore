@@ -178,6 +178,70 @@ struct AsyncIoDeferredRelease {
     DLLLOCAL void release(ExceptionSink* xsink);
 };
 
+//! The references that the controller drops for an operation that a synchronous exec() call waits for
+/** The controller's references to an operation can be the last ones, so an I/O thread hands them to a callback
+    worker to release (AsyncIoControllerPriv::releaseOffIoThread()), which wakes a third thread for every operation.
+    The caller of exec() waits on its own thread while the operation runs, and runs Qore code there: it takes the
+    references instead, and releases them when its wait ends (finish()).  A reference that the controller drops
+    after that, which happens when the caller gave the call up or took its result before the controller was done
+    with the operation, is refused (add() returns false), and the controller hands it to a callback worker as before.
+
+    The lock is held only to add or to take the references: never while they are released or while anything waits.
+
+    See design/sync-socket-first-step.md, "5. A cheaper round trip for the calls that do wait".
+
+    @since %Qore 3.0
+*/
+class AsyncIoSyncRelease {
+public:
+    DLLLOCAL AsyncIoSyncRelease() = default;
+    DLLLOCAL AsyncIoSyncRelease(const AsyncIoSyncRelease&) = delete;
+    DLLLOCAL AsyncIoSyncRelease& operator=(const AsyncIoSyncRelease&) = delete;
+
+    //! The caller always calls finish() before it drops its own pointer, and nothing is added after that
+    DLLLOCAL ~AsyncIoSyncRelease() {
+        assert(refs.empty());
+    }
+
+    //! Takes references for the caller
+    /** @param r the references; cleared if they were taken
+
+        @return true if the references were taken, false if the caller's wait has ended, in which case @a r is
+        unchanged
+    */
+    DLLLOCAL bool add(AsyncIoDeferredRelease& r) {
+        if (r.empty()) {
+            return true;
+        }
+        AutoLocker al(m);
+        if (done) {
+            return false;
+        }
+        refs.push_back(r);
+        r = AsyncIoDeferredRelease();
+        return true;
+    }
+
+    //! Ends the caller's wait: releases the references taken on the calling thread; later ones are refused
+    DLLLOCAL void finish(ExceptionSink* xsink) {
+        std::vector<AsyncIoDeferredRelease> taken;
+        {
+            AutoLocker al(m);
+            done = true;
+            taken.swap(refs);
+        }
+        for (AsyncIoDeferredRelease& r : taken) {
+            r.release(xsink);
+        }
+    }
+
+private:
+    QoreThreadLock m;
+    //! True once the caller's wait has ended
+    bool done = false;
+    std::vector<AsyncIoDeferredRelease> refs;
+};
+
 //! A native task run on a callback worker, off the async I/O execution path
 /** Native poll operations use this for a step that may block, and so must run neither on the async I/O thread nor
     in a continuePoll() dispatch; for example, acquiring a connection to another server to follow an HTTP redirect.
@@ -705,7 +769,8 @@ public:
         @return a Queue object for receiving the result (or nullptr if callback was provided)
     */
     DLLLOCAL QoreObject* submit(QoreObject* self, QoreHashNode* info, bool replace, ExceptionSink* xsink,
-        int* thread_idx = nullptr, std::string* key_out = nullptr);
+        int* thread_idx = nullptr, std::string* key_out = nullptr,
+        std::shared_ptr<AsyncIoSyncRelease> sync_release = std::shared_ptr<AsyncIoSyncRelease>());
 
     //! Execute an async operation synchronously
     /** @param self the QoreObject wrapping this controller
@@ -713,6 +778,10 @@ public:
         @param replace if true, cancel any existing operation with the same key
         @param xsink for exception handling
         @return the SocketPollResultInfo hash
+
+        @note the references that the controller drops for the operation before the wait ends are released on the
+        calling thread when it ends (see AsyncIoSyncRelease): a destructor that releasing the last reference to the
+        operation's object runs, runs on the calling thread, and its exception is raised in @a xsink
     */
     DLLLOCAL QoreHashNode* exec(QoreObject* self, QoreHashNode* info, bool replace, ExceptionSink* xsink);
 
@@ -1088,6 +1157,8 @@ private:
         std::string submit_route_sock_hash;              //!< Submit-time wake route/object mapping, if published
         int submit_route_thread_idx = -1;                //!< I/O thread for submit_route_sock_hash
         AsyncIoSandboxContext submit_sandbox_ctx;        //!< For SubmitOp: the submitter's sandbox context
+        //! For SubmitOp: the references taken by the synchronous exec() call that waits for the operation, or empty
+        std::shared_ptr<AsyncIoSyncRelease> submit_sync_release;
     };
 
     //! Internal poll info (mirrors Qore Priv::PollInfo)
@@ -1170,6 +1241,8 @@ private:
         uint64_t op_id = 0;
         //! The sandbox context of the submitter, applied to the operation's steps on callback workers
         AsyncIoSandboxContext sandbox_ctx;
+        //! The references taken by the synchronous exec() call that waits for the operation, or empty
+        std::shared_ptr<AsyncIoSyncRelease> sync_release;
         //! Back-ref to the owning controller (not ref'd; outlives pinfo).
         //! Used by cleanup() to erase the submit-time obj_to_sock_hash entry
         //! before deref'ing sock_obj — without this the map can accumulate
@@ -1306,6 +1379,8 @@ private:
         QoreHashNode* result;              //!< Referenced
         std::string owner;                 //!< Owner identifier for per-owner flush tracking
         AsyncIoSandboxContext sandbox_ctx; //!< The submitter's sandbox context, for onComplete()
+        //! The references taken by the synchronous exec() call that waits for the result, or empty
+        std::shared_ptr<AsyncIoSyncRelease> sync_release;
     };
 
     //! Timer info stored under lock
@@ -1883,6 +1958,21 @@ private:
     */
     DLLLOCAL void releaseOffIoThread(AsyncIoDeferredRelease& refs, ExceptionSink* xsink);
 
+    //! Releases references held by the controller for an operation, off the async I/O thread
+    /** As releaseOffIoThread(AsyncIoDeferredRelease&, ExceptionSink*), except that on an I/O thread the references
+        of an operation that a synchronous exec() call waits for (@a sync_release is set) go to that caller, which
+        releases them on its own thread when its wait ends, instead of to a callback worker (see
+        @ref AsyncIoSyncRelease); a caller whose wait has already ended no longer takes them.
+
+        The references must not be used after the call: the caller can release them at any time.
+
+        @param refs the references to release; all members are cleared on return
+        @param xsink exception sink for immediate releases
+        @param sync_release the references taken by the synchronous caller of the operation, or nullptr
+    */
+    DLLLOCAL void releaseOffIoThread(AsyncIoDeferredRelease& refs, ExceptionSink* xsink,
+        AsyncIoSyncRelease* sync_release);
+
 #ifdef DEBUG
 public:
     //! Debug-only: holds the references that the I/O threads of every controller release off the I/O thread
@@ -2341,7 +2431,7 @@ private:
     */
     DLLLOCAL void deliverResult(Queue* queue, QoreObject* queue_obj, QoreObject* spop_obj, bool has_on_complete,
         QoreHashNode* result, ExceptionSink* xsink, const std::string& owner = std::string(),
-        AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+        AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(), AsyncIoSyncRelease* sync_release = nullptr);
 
     //! Notes the state an operation with a state queue has after a step, and reports it if it changed
     /** Called on the I/O thread with the state read after each step: the first state read is always reported,

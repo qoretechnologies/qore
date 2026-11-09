@@ -571,7 +571,10 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     // releasing the context runs no Qore code (it only holds sandbox manager references)
     sandbox_ctx.reset();
     if (controller) {
-        controller->releaseOffIoThread(refs, xsink);
+        // the references of an operation that a synchronous call waits for go to that caller; see
+        // AsyncIoSyncRelease
+        controller->releaseOffIoThread(refs, xsink, sync_release.get());
+        sync_release.reset();
     } else {
         refs.release(xsink);
     }
@@ -769,6 +772,29 @@ void AsyncIoControllerPriv::releaseOffIoThread(AsyncIoDeferredRelease& refs, Exc
     }
 #endif
     call_dispatcher.load(std::memory_order_acquire)->dispatchReleaseAsync(deferred.release());
+}
+
+void AsyncIoControllerPriv::releaseOffIoThread(AsyncIoDeferredRelease& refs, ExceptionSink* xsink,
+        AsyncIoSyncRelease* sync_release) {
+    if (sync_release && on_async_io_thread && !refs.empty()) {
+#ifdef DEBUG
+        // a test that holds the releases (dbg_async_io_hold_releases()) holds those of synchronous operations as well
+        if (AsyncIoDebugHeldReleases::get().hold.load(std::memory_order_acquire)) {
+            releaseOffIoThread(refs, xsink);
+            return;
+        }
+#endif
+        if (sync_release->add(refs)) {
+#ifdef DEBUG
+            qore_dbg_sync_release_taken.fetch_add(1, std::memory_order_relaxed);
+#endif
+            return;
+        }
+#ifdef DEBUG
+        qore_dbg_sync_release_refused.fetch_add(1, std::memory_order_relaxed);
+#endif
+    }
+    releaseOffIoThread(refs, xsink);
 }
 
 void AsyncIoControllerPriv::dispatchNativeTask(AsyncIoNativeTask* task) {
@@ -2686,8 +2712,13 @@ void AsyncIoControllerPriv::deref(ExceptionSink* xsink) {
             }
         }
         if (logger) {
-            logger->deref(xsink);
-            logger = nullptr;
+            QoreLoggerBridge* old_logger = logger;
+            {
+                AutoLocker al(m);
+                logger = nullptr;
+                qore_async_io_note_logger_change(old_logger, nullptr);
+            }
+            old_logger->deref(xsink);
         }
         if (timer_callback) {
             timer_callback->deref(xsink);
@@ -2802,7 +2833,7 @@ void AsyncIoControllerPriv::flushCallbacksByOwner(const std::string& owner) {
 // --- Public API ---
 
 QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, bool replace,
-        ExceptionSink* xsink, int* thread_idx, std::string* key_out) {
+        ExceptionSink* xsink, int* thread_idx, std::string* key_out, std::shared_ptr<AsyncIoSyncRelease> sync_release) {
     // Callers transfer ownership of `info`; hold it here so it is deref'd on
     // any return path.  Otherwise the submission hash (spop ref, owner
     // string, sock ref, etc.) leaks for every FTP connect/command and every
@@ -3180,6 +3211,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         socket_async_io_guard.release();
         pinfo.controller = this;
         pinfo.sandbox_ctx = std::move(sandbox_ctx);
+        pinfo.sync_release = std::move(sync_release);
 
         // Queue for first continuePoll + timeout arming in Phase 1 Step A.
         // Without this the worker-path SubmitOp does (see new_entry_ids
@@ -3239,6 +3271,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         cmd.submit_has_qore_on_complete = has_qore_on_complete;
         cmd.submit_socket_async_io = socket_async_io_guard.active;
         cmd.submit_sandbox_ctx = std::move(sandbox_ctx);
+        cmd.submit_sync_release = std::move(sync_release);
 
         // Compute socket hash BEFORE publishing the cmd so it is read while
         // the sock pointer is still safe to deref: once target->cmdq.push()
@@ -3367,12 +3400,29 @@ QoreHashNode* AsyncIoControllerPriv::exec(QoreObject* self, QoreHashNode* info, 
         return nullptr;
     }
 
+    // The controller's references to the operation are released on this thread, when the wait ends, instead of on a
+    // callback worker (see AsyncIoSyncRelease); the guard ends the wait on every return path, after the holders
+    // below have released this thread's own references
+    std::shared_ptr<AsyncIoSyncRelease> sync_release = std::make_shared<AsyncIoSyncRelease>();
+    class SyncReleaseGuard {
+    public:
+        SyncReleaseGuard(AsyncIoSyncRelease& sync_release, ExceptionSink* xsink)
+                : sync_release(sync_release), xsink(xsink) {
+        }
+        ~SyncReleaseGuard() {
+            sync_release.finish(xsink);
+        }
+    private:
+        AsyncIoSyncRelease& sync_release;
+        ExceptionSink* xsink;
+    } sync_release_guard(*sync_release, xsink);
+
     // the operation is held until exec() returns, so that it can be canceled by its object (see below)
     spop_obj->ref();
     ReferenceHolder<QoreObject> spop_holder(spop_obj, xsink);
     std::string key;
-    ReferenceHolder<QoreObject> queue_obj(submit(self, info_holder.release(), replace, xsink, nullptr, &key),
-        xsink);
+    ReferenceHolder<QoreObject> queue_obj(submit(self, info_holder.release(), replace, xsink, nullptr, &key,
+        sync_release), xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -5297,6 +5347,7 @@ void AsyncIoControllerPriv::setLogger(QoreObject* logger_obj, ExceptionSink* xsi
         AutoLocker al(m);
         old_logger = logger;
         logger = logger_obj ? new QoreLoggerBridge(logger_obj) : nullptr;
+        qore_async_io_note_logger_change(old_logger, logger);
     }
     // Deref old bridge outside lock — destructor may call Qore user code
     if (old_logger) {
@@ -6394,6 +6445,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         dd.result = result_hash;
                         dd.owner = pinfo.owner;
                         dd.sandbox_ctx = pinfo.sandbox_ctx;
+                        dd.sync_release = pinfo.sync_release;
                         deferred_deliveries.push_back(std::move(dd));
                     }
 
@@ -6780,7 +6832,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             ASYNC_IO_TRACE("deliverResult key='%s' onComplete=%d\n",
                 dd.key.c_str(), (int)dd.has_on_complete);
             deliverResult(dd.queue, dd.queue_obj, dd.spop_obj, dd.has_on_complete, dd.result, xsink, dd.owner,
-                std::move(dd.sandbox_ctx));
+                std::move(dd.sandbox_ctx), dd.sync_release.get());
             dd.spop_obj = nullptr;
             dd.result = nullptr;
             if (dd.queue) {
@@ -6792,8 +6844,9 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 AsyncIoDeferredRelease refs;
                 refs.queue_obj = dd.queue_obj;
                 dd.queue_obj = nullptr;
-                releaseOffIoThread(refs, xsink);
+                releaseOffIoThread(refs, xsink, dd.sync_release.get());
             }
+            dd.sync_release.reset();
         }
 
         // Re-check autostop after deliveries (callbacks may have submitted new ops)
@@ -7891,6 +7944,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         pinfo.submit_route_sock_hash = cmd.submit_route_sock_hash;
                         pinfo.submit_route_thread_idx = cmd.submit_route_thread_idx;
                         pinfo.controller = this;
+                        pinfo.sync_release = std::move(cmd.submit_sync_release);
                         // Null command fields to prevent double-deref on
                         // command destruction — pinfo.cleanup() owns them now.
                         cmd.submit_sock_obj = nullptr;
@@ -7961,6 +8015,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             pinfo.submit_route_sock_hash = cmd.submit_route_sock_hash;
                             pinfo.submit_route_thread_idx = cmd.submit_route_thread_idx;
                             pinfo.controller = this;
+                            pinfo.sync_release = std::move(cmd.submit_sync_release);
                             // Null command fields to prevent double-deref on
                             // command destruction — pinfo.cleanup() owns them now.
                             cmd.submit_sock_obj = nullptr;
@@ -8056,6 +8111,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     pinfo.submit_route_thread_idx = cmd.submit_route_thread_idx;
                     pinfo.controller = this;
                     pinfo.sandbox_ctx = std::move(cmd.submit_sandbox_ctx);
+                    pinfo.sync_release = std::move(cmd.submit_sync_release);
 
                     // Set controller back-reference so wakeIoThread() works
                     if (pinfo.spop_base) {
@@ -8162,6 +8218,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 dd.result = result_hash;
                                 dd.owner = pinfo.owner;
                                 dd.sandbox_ctx = pinfo.sandbox_ctx;
+                                dd.sync_release = pinfo.sync_release;
                             }
 
                             // Terminal completion committed (or consumed by
@@ -8303,7 +8360,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     // Deliver result outside lock
                     if (finished && deliver_finished) {
                         deliverResult(dd.queue, dd.queue_obj, dd.spop_obj, dd.has_on_complete,
-                            dd.result, xsink, dd.owner, std::move(dd.sandbox_ctx));
+                            dd.result, xsink, dd.owner, std::move(dd.sandbox_ctx), dd.sync_release.get());
                         dd.spop_obj = nullptr;
                         dd.result = nullptr;
                         if (dd.queue) {
@@ -8314,8 +8371,9 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             AsyncIoDeferredRelease refs;
                             refs.queue_obj = dd.queue_obj;
                             dd.queue_obj = nullptr;
-                            releaseOffIoThread(refs, xsink);
+                            releaseOffIoThread(refs, xsink, dd.sync_release.get());
                         }
+                        dd.sync_release.reset();
                     }
                     break;
                 }
@@ -8403,7 +8461,7 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
             pinfo.spop_obj->ref();
         }
         deliverResult(pinfo.queue, pinfo.queue_obj, pinfo.spop_obj, pinfo.has_qore_on_complete, result, xsink,
-            pinfo.owner, pinfo.sandbox_ctx);
+            pinfo.owner, pinfo.sandbox_ctx, pinfo.sync_release.get());
     }
     // A terminal completion has now been committed for this op; the
     // cleanup() backstop must not synthesize a duplicate.
@@ -8455,7 +8513,7 @@ void AsyncIoControllerPriv::deliverBackstopCompletionIfUndelivered(PollInfo& pin
         pinfo.spop_obj->ref();
     }
     deliverResult(pinfo.queue, pinfo.queue_obj, pinfo.spop_obj, pinfo.has_qore_on_complete, result, xsink,
-        pinfo.owner, pinfo.sandbox_ctx);
+        pinfo.owner, pinfo.sandbox_ctx, pinfo.sync_release.get());
 }
 
 bool AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint64_t op_id,
@@ -9369,6 +9427,10 @@ void AsyncIoControllerPriv::waitCancel(const std::string& key) {
 }
 
 void AsyncIoControllerPriv::log(int level, const char* fmt, ...) const {
+    // no logger can take the message: no lock is taken (see qore_async_io_logger_count)
+    if (!qore_async_io_any_logger()) {
+        return;
+    }
     va_list args;
     va_start(args, fmt);
     bool logged = logOwnV(level, fmt, args);
@@ -9532,7 +9594,7 @@ void AsyncIoControllerPriv::callAbort(QoreObject* spop_obj, ExceptionSink* xsink
 
 void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* queue_obj, QoreObject* spop_obj,
         bool has_on_complete, QoreHashNode* result, ExceptionSink* xsink,
-        const std::string& owner, AsyncIoSandboxContext sandbox_ctx) {
+        const std::string& owner, AsyncIoSandboxContext sandbox_ctx, AsyncIoSyncRelease* sync_release) {
     ASYNC_IO_TRACE("deliverResult: has_on_complete=%d spop_obj=%p queue=%p class=%s\n",
         (int)has_on_complete, (void*)spop_obj, (void*)queue,
         spop_obj ? spop_obj->getClassName() : "null");
@@ -9558,6 +9620,15 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* queue_obj, Q
         QoreHashNode* queue_result = dispatch_on_complete && result
             ? result->hashRefSelf()
             : result;
+        // the reference to the operation is not used for the push: for a synchronous caller, it is handed over
+        // before it, so that the caller, which can end its wait as soon as the result is pushed, takes it (see
+        // AsyncIoSyncRelease)
+        if (!dispatch_on_complete && sync_release && spop_obj) {
+            AsyncIoDeferredRelease refs;
+            refs.spop_obj = spop_obj;
+            releaseOffIoThread(refs, xsink, sync_release);
+            spop_obj = nullptr;
+        }
         // pushed with the Queue's object, as Queue::push() does: the collector then sees the references the result
         // holds (to the operation, for one), so a result left in a Queue that the operation references is collected
         queue->push(xsink, queue_obj, queue_result);

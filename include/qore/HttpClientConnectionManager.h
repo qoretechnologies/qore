@@ -79,12 +79,14 @@ class HttpClientEventSink;
     @par Lock ordering
     See section 7.2 of the design doc:
     @code
-    Http1ClientConnection::onclose_lock  (per connection)
-        ↓
     pool_lock                            (this class — shared_mutex)
         ↓
-    AsyncIoControllerPriv::m             (controller)
+    HttpClientConnectionBase::onclose_lock  (per connection: setPoolKey(), setManager())
+        ↓
+    closed_lock, create_lock             (this class: onConnectionClosed())
     @endcode
+    The close notification (onConnectionClosed(), called with @c onclose_lock held) never takes @c pool_lock, and no
+    manager lock is held while the controller is entered.
 
     @par Subclassing
     The class is designed to be subclassed by the Qore-level
@@ -773,6 +775,25 @@ protected:
     DLLLOCAL virtual HttpClientConnectionBase* createConnection(
         const std::string& key, const char* host, int port,
         bool ssl_required, ExceptionSink* xsink, bool wait_for_ready = true);
+
+    //! Replaces the pooled transitional connection of an ALPN negotiation with its concrete connection
+    /** The last step of @ref finalizeAsyncConnection: the concrete connection takes the transitional one's place
+        in the pool, unless the transitional one has left the pool already or the concrete one's close notification
+        has been sent (HttpClientConnectionBase::setPoolKey() refuses its key), in which case the concrete
+        connection is returned to the caller without being pooled, and a transitional connection still in the pool
+        is removed from it.
+
+        @param neg the transitional connection; the caller keeps its reference
+        @param concrete the concrete connection; the reference of the caller is taken
+        @param reserve_stream true to reserve a stream on the concrete connection for the caller
+        @param xsink exception sink
+
+        @return the concrete connection, with a reference for the caller
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL HttpClientConnectionBase* swapNegotiatedConnection(HttpClientConnectionBase* neg,
+        HttpClientConnectionBase* concrete, bool reserve_stream, ExceptionSink* xsink);
 
 private:
     friend class HttpClientConnectionBase;

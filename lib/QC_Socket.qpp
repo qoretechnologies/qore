@@ -32,6 +32,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/WeakReferenceNode.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Queue.h"
@@ -99,6 +100,13 @@ static void socket_raise_poll_result_exception(const QoreHashNode* ex, Exception
         arg.refSelf());
 }
 
+// The operation object of a synchronous call holds its socket's object with a weak reference: every read of the
+// member (SocketPollOperationBase::getReferencedSocketObject(), in a step of the operation) is made while the
+// controller holds the socket's object for the operation (PollInfo::sock_obj), and the call holds it as well, and an
+// ordinary reference would cost a scan for recursive references when the member is set and again when the
+// operation's object is deleted.  The steps of these operations run on the I/O thread, never on a callback worker
+// (SocketPollOperationBase::needsWorkerDispatch() is false for them): a step on a worker could outlive the
+// controller's reference when the I/O thread exits
 static QoreHashNode* socket_exec_poll_operation(QoreObject* self, QoreSocketObject* s, QoreObject* op_obj,
         int timeout_ms, const char* owner_name, ExceptionSink* xsink, QoreHashNode** ex_out = nullptr) {
     SocketSyncPoll::assertNotOnIoThread("Socket", owner_name, xsink);
@@ -208,7 +216,7 @@ static int socket_exec_send_poll(QoreObject* self, QoreSocketObject* s, SocketPo
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
         op_obj->setValue("goal", new QoreStringNode("send"), xsink);
     }
     if (*xsink) {
@@ -233,7 +241,7 @@ static QoreValue socket_exec_poll_output(QoreObject* self, QoreSocketObject* s, 
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
         op_obj->setValue("goal", new QoreStringNode(goal), xsink);
     }
     if (*xsink) {
@@ -777,7 +785,7 @@ static int socket_exec_connect_operation(QoreObject* self, QoreSocketObject* s,
 
     const char* goal = ssl ? "connect-ssl" : "connect";
     if (!*xsink) {
-        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
         op_obj->setValue("goal", new QoreStringNode(goal), xsink);
     }
     if (*xsink) {
@@ -835,7 +843,7 @@ static int socket_exec_upgrade_ssl(QoreObject* self, QoreSocketObject* s, int ti
 
     const char* goal = server ? "upgrade-server-ssl" : "upgrade-client-ssl";
     if (!*xsink) {
-        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
         op_obj->setValue("goal", new QoreStringNode(goal), xsink);
     }
     if (*xsink) {
@@ -873,7 +881,7 @@ static QoreValue socket_exec_accept(QoreObject* self, QoreSocketObject* s, int t
 
     const char* goal = ssl ? "accept-ssl" : "accept";
     if (!*xsink) {
-        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
         op_obj->setValue("goal", new QoreStringNode(goal), xsink);
     }
     if (*xsink) {
@@ -948,7 +956,7 @@ static QoreValue socket_exec_recv_poll(QoreObject* self, QoreSocketObject* s, So
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
         op_obj->setValue("goal", new QoreStringNode("received"), xsink);
     }
     if (*xsink) {
@@ -1151,7 +1159,7 @@ static int socket_exec_recv_output_stream_poll(QoreObject* self, QoreSocketObjec
     poller.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
         op_obj->setValue("goal", new QoreStringNode("received"), xsink);
     }
     if (*xsink) {
@@ -1204,7 +1212,7 @@ static int socket_exec_write_output_stream_poll(QoreObject* self, QoreSocketObje
     poller.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
         op_obj->setValue("goal", new QoreStringNode("written"), xsink);
     }
     if (*xsink) {
@@ -1262,7 +1270,7 @@ static QoreHashNode* socket_exec_read_http_header(QoreObject* self, QoreSocketOb
     poller.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
         op_obj->setValue("goal", new QoreStringNode("received"), xsink);
     }
     if (*xsink) {
@@ -1483,7 +1491,7 @@ static bool socket_exec_wait_readiness(QoreObject* self, QoreSocketObject* s, in
     poller.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
         op_obj->setValue("goal", new QoreStringNode(owner_name), xsink);
     }
     if (*xsink) {
@@ -1528,7 +1536,7 @@ static bool socket_exec_is_data_available(QoreObject* self, QoreSocketObject* s,
     poller.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
         op_obj->setValue("goal", new QoreStringNode("isDataAvailable"), xsink);
     }
     if (*xsink) {

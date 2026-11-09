@@ -34,6 +34,7 @@
 #include <qore/QoreSocketObject.h>
 #include <qore/InputStream.h>
 #include <qore/SocketPollOperation.h>
+#include "qore/intern/WeakReferenceNode.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QC_Socket.h"
@@ -77,6 +78,10 @@ static bool qore_socket_object_exec_exception_is(const QoreHashNode& ex, const c
     return QoreStringDataHelper(ex_err) == err;
 }
 
+// The operation object of a synchronous call holds its socket's object with a weak reference: every read of the
+// member (SocketPollOperationBase::getReferencedSocketObject(), in a step of the operation) is made while the
+// controller holds the socket's object for the operation, and the call holds it as well, and an ordinary reference
+// would cost a scan for recursive references when the member is set and again when the operation's object is deleted
 static QoreHashNode* qore_socket_object_exec_poll_operation(QoreSocketObject* s, QoreObject* sock_obj,
         QoreObject* op_obj, int timeout_ms, const char* owner_name, ExceptionSink* xsink,
         QoreHashNode** ex_out = nullptr) {
@@ -2587,7 +2592,7 @@ static QoreObject* qore_socket_object_make_poll_op(QoreObject* sock_obj, SocketP
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", sock_obj->objectRefSelf(), xsink);
+        op_obj->setValue("sock", new WeakReferenceNode(sock_obj), xsink);
         op_obj->setValue("goal", new QoreStringNode(goal), xsink);
     }
     return *xsink ? nullptr : op_obj.release();

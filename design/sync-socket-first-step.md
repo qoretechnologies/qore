@@ -234,6 +234,42 @@ to count where they come from, on a loop whose calls always wait (each receive i
 Every user of the controller benefits from this, including `HttpServer`, which is why it is part of the design even
 though section 1 removes the round trip from the calls that need no wait.
 
+#### As implemented (phase 3)
+
+Measured on `design/benchmarks/5587/socket-wait-loop.qr`, a ping-pong between two threads over one connection in
+which every receive waits (two waiting calls per round trip), with `strace -f -k -e trace=futex` for the call sites:
+44 `futex` calls per round trip, 31 of them from the release of the controller's references on a callback worker
+(the dispatch, and the worker's wake and wait), 6.5 from the result `Queue`.
+
+- **The synchronous caller releases the controller's references.**  `exec()` gives the operation an
+  `AsyncIoSyncRelease`; the references that the I/O thread drops for the operation (`PollInfo::cleanup()`, the
+  operation reference of `deliverResult()`, the `Queue` object reference of a deferred delivery) go into it instead of
+  to a callback worker, and the caller releases them on its own thread when its wait ends, on every return path.  A
+  reference is handed over only after its last use on the I/O thread, as the caller can end its wait at any time (a
+  cancellation): the operation reference before the push of the result, which does not use it, the `Queue` references
+  after it.  One that the I/O thread drops after the caller's wait has ended is refused, and goes to a callback worker
+  as before; the box's lock is held only to add or take references.  Nothing more runs on the I/O thread than before.
+- **The operation object of a synchronous call holds its socket with a weak reference.**  Its `sock` member,
+  which `SocketPollOperationBase::getReferencedSocketObject()` reads for the poll info, was an ordinary reference:
+  setting it and deleting the operation's object each scanned for recursive references, about 10K instructions per
+  waiting call.  Every read of the member is made in a step of the operation, while the controller holds the
+  socket's object for it (`PollInfo::sock_obj`) or the call does, so the reference needs no strength of its own;
+  `getReferencedSocketObject()` reads every kind of reference.  An opaque reference (`@=`) is not used: a Program
+  that is torn down deletes the targets of its opaque references, which a call from another Program's thread on the
+  socket would see.
+- **A message that no logger can take costs no lock.**  `submit()` logs every submission at debug level; with no
+  logger set, `AsyncIoControllerPriv::log()` took the controller's lock, the global logger's lock and the global
+  controller's lock to find that out.  A process-wide count of the loggers set (`qore_async_io_logger_count`) is checked
+  first.
+
+Result: 9 `futex` calls per round trip instead of 44, and 288K user-space instructions instead of 325K; the time per
+round trip did not change (about 25 µs, Python about 7.5 µs on the same host): the worker's wakes were not on the
+critical path, which is two thread wakes per waiting call (the I/O thread by `epoll`, then the caller by the `Queue`)
+where a blocking `recv()` has one.  The rest of the instructions are spread thinly (allocation, hashing of string keys,
+building the operation object, the submission hash and the result hash).  Reaching Python's time needs the waiting
+call to wait on its own thread, which is a change of the architecture (the controller would hand the wait to the
+caller, with its cancellation, close and timeout handling) and is not part of this design.
+
 ## Problems found while writing this
 
 These were in the code, independent of the design; each was shown by a test before it was fixed (phase 1).
@@ -290,9 +326,9 @@ its own.
 1. Sections 2 and 3, the audit of section 1, and problems 1 to 3, each with its test.
 2. Section 1 with the deferral, for the receive, send and accept operations of `Socket`, then connect, then the
    HTTP reads and writes, then the TLS upgrades.  Expected: no hand-off for a call that needs no wait, which is every call of the benchmark
-   loop but the closes.
-3. Section 5: count, then remove, the `futex` calls of a round trip.
-4. Section 4, if the closes still matter after phase 2.
+   loop but the closes.  **Shelved** (see "Status" above).
+3. Section 5: count, then remove, the `futex` calls of a round trip (done: "As implemented (phase 3)").
+4. Section 4, if the closes still matter after phase 2.  **Shelved** (see "Status" above).
 
 The aim of the benchmark loop after phase 2: no `futex` calls in steady state except those of the two closes, and
 fewer microseconds per request than Python on the same host.
