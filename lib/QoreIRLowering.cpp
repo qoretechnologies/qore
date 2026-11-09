@@ -13454,11 +13454,21 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
             size_t slice_start = dynamic_operands.size() - count;
             for (size_t i = slice_start + 1; i < dynamic_operands.size(); ++i) {
                 const QoreValue& selector = dynamic_operands[i];
-                // an inert selector cannot raise, unless it is a range with a bound that can be NOTHING
+                // an inert selector cannot raise, unless it is a range with a bound that can be NOTHING; an int local
+                // always holds an int
                 if (qore_ir_selector_eval_is_inert(selector)) {
                     auto* range = dynamic_cast<const QoreRangeOperatorNode*>(selector.getInternalNode());
-                    if (!range || (!rangeBoundMayBeNothing(range->getLeft())
-                            && !rangeBoundMayBeNothing(range->getRight()))) {
+                    auto bound_may_be_nothing = [this](const QoreValue& bound) -> bool {
+                        if (auto* var = dynamic_cast<const VarRefNode*>(bound.getInternalNode())) {
+                            const QoreTypeInfo* ti = var->ref.id ? var->ref.id->getTypeInfo() : nullptr;
+                            if (ti == bigIntTypeInfo || ti == softBigIntTypeInfo) {
+                                return false;
+                            }
+                        }
+                        return rangeBoundMayBeNothing(bound);
+                    };
+                    if (!range || (!bound_may_be_nothing(range->getLeft())
+                            && !bound_may_be_nothing(range->getRight()))) {
                         continue;
                     }
                 }

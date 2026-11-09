@@ -14644,8 +14644,14 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         ExceptionSink* xsink) {
     const bool is_delete = (unary_op == LVUnaryOp::Delete);
     // a negative index counts from the end with negative offsets, as in the AST interpreter (do_list_value(),
-    // do_string_value() and do_binary_value() in Variable.cpp)
-    const bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
+    // do_string_value() and do_binary_value() in Variable.cpp); the option is read for the first negative index only
+    int negative_offsets_state = -1;
+    auto negative_offsets = [&negative_offsets_state]() -> bool {
+        if (negative_offsets_state < 0) {
+            negative_offsets_state = runtime_check_parse_option(PO_NEGATIVE_OFFSETS) ? 1 : 0;
+        }
+        return negative_offsets_state != 0;
+    };
 
     // Helper: push an int operand OR iterate a list operand (range-produced)
     // pushing its entries onto the caller-provided ind-collector.  Matches
@@ -14680,7 +14686,7 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
             if (each_index(operand, [&](int64_t ind, bool is_range) -> bool {
                 QoreValue p{};
                 bool push;
-                if (negative_offsets && ind < 0) {
+                if (ind < 0 && negative_offsets()) {
                     ind += static_cast<int64_t>(l->size());
                 }
                 if (ind >= 0 && ind < (int64_t)l->size()) {
@@ -14753,7 +14759,7 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
             bool had_error = false;
             if (each_index(operand, [&](int64_t ind, bool /*is_range*/) -> bool {
                 if (had_error) return true;
-                if (negative_offsets && ind < 0) {
+                if (ind < 0 && negative_offsets()) {
                     ind += static_cast<int64_t>(len);
                 }
                 if (ind >= 0 && ind < (int64_t)len) {
@@ -14804,7 +14810,7 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         std::set<int64_t, std::greater<int64_t>> iset;
         for (const QoreValue& operand : last_step.slice_values) {
             if (each_index(operand, [&](int64_t ind, bool /*is_range*/) -> bool {
-                if (negative_offsets && ind < 0) {
+                if (ind < 0 && negative_offsets()) {
                     ind += static_cast<int64_t>(bin->size());
                 }
                 if (ind >= 0 && ind < (int64_t)bin->size()) {
