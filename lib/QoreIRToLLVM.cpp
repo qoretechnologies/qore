@@ -5255,7 +5255,7 @@ llvm::Value* QoreIRToLLVM::emitValueIsReference(llvm::Value* value, QoreIRValue 
 
 // documented in QoreIRToLLVM.h
 llvm::Value* QoreIRToLLVM::emitReferenceLocalRead(const void* key, llvm::Value* cached, llvm::Module& module,
-        llvm::Function* llvm_func) {
+        llvm::Function* llvm_func, const QoreIRInstruction* inst) {
     llvm::AllocaInst* ref_flag = localReferenceFlag(key, llvm_func);
     assert(ref_flag);
     llvm::Type* i8_type = llvm::Type::getInt8Ty(ctx);
@@ -5296,6 +5296,11 @@ llvm::Value* QoreIRToLLVM::emitReferenceLocalRead(const void* key, llvm::Value* 
     builder->CreateCall(decref_fn, {old_previous, xsink_arg});
     builder->CreateBr(released_bb);
     builder->SetInsertPoint(released_bb);
+    if (inst) {
+        // the referenced lvalue can be gone (a member of a deleted object, a variable of a deleted Program): the
+        // exception raised goes to the load's exception target, as in the AST interpreter
+        emitExceptionCheck(module, llvm_func, inst);
+    }
     llvm::BasicBlock* read_end_bb = builder->GetInsertBlock();
     builder->CreateBr(done_bb);
     builder->SetInsertPoint(done_bb);
@@ -13798,6 +13803,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
     auto load_local_int_for_fused = [&](LocalVar* local, const void* key,
             LocalAllocaMap::iterator alloca_it,
             const char* name) -> llvm::Value* {
+        // a local whose type allows a reference reads the referenced lvalue if it holds one, which raises an
+        // exception if the lvalue is gone: the runtime reads below are followed by the check that takes the fused
+        // instruction's exception edge, as for LoadLocal; a local of another type cannot raise, and is not checked
+        const bool may_hold_reference = local && (!QoreTypeInfo::hasType(local->getTypeInfo())
+            || QoreTypeInfo::isReference(local->getTypeInfo()));
+        auto check_reference_read = [&]() {
+            if (may_hold_reference) {
+                emitExceptionCheck(module, llvm_func, inst);
+            }
+        };
         if (local && local->closureUse()) {
             llvm::Value* boxed;
             if (aot_mode) {
@@ -13821,6 +13836,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
             builder->CreateCall(decref_fn, {boxed, xsink_arg});
+            check_reference_read();
             return rv;
         }
 
@@ -13859,6 +13875,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             builder->CreateCall(decref_fn, {loaded, xsink_arg});
             builder->CreateBr(done_bb);
             builder->SetInsertPoint(done_bb);
+            check_reference_read();
             return rv;
         }
 
@@ -13885,7 +13902,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             // a local of no type holding a reference reads as the referenced lvalue, as LoadLocal reads it
             if (localReferenceFlag(key, llvm_func)) {
-                raw = emitReferenceLocalRead(key, raw, module, llvm_func);
+                raw = emitReferenceLocalRead(key, raw, module, llvm_func, inst);
             }
             // an integer in the boxed value is converted inline, without the runtime call
             return emitBoxedToIntInline(raw);
@@ -13913,6 +13930,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
         builder->CreateCall(decref_fn, {boxed, xsink_arg});
+        check_reference_read();
         return rv;
     };
 
@@ -14846,6 +14864,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool is_native_int = native_int_locals.count(key) > 0;
             bool is_native_float = native_float_locals.count(key) > 0;
             bool is_native_bool = native_bool_locals.count(key) > 0;
+            // a local whose type allows a reference reads the referenced lvalue if it holds one, which raises an
+            // exception if the lvalue is gone (a member of a deleted object, a variable of a deleted Program): the
+            // runtime helpers that read it are followed by the check that takes the load's exception edge, as the
+            // AST interpreter handles the exception at the read
+            bool may_hold_reference = linst->local
+                && (!QoreTypeInfo::hasType(linst->local->getTypeInfo())
+                    || QoreTypeInfo::isReference(linst->local->getTypeInfo()));
 
             // Closure-bound locals must always be read from the runtime stack
             // because closures can modify the value between IR instructions.
@@ -14900,6 +14925,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             local_cleanup_allocas[key].push_back(ca);
                         }
                     }
+                }
+                if (may_hold_reference) {
+                    emitExceptionCheck(module, llvm_func, inst);
                 }
                 return true;
             }
@@ -15000,6 +15028,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(result, inst->result.id, llvm_func);
+                if (may_hold_reference) {
+                    emitExceptionCheck(module, llvm_func, inst);
+                }
                 return true;
             }
 
@@ -15025,6 +15056,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(result, inst->result.id, llvm_func);
+                if (may_hold_reference) {
+                    emitExceptionCheck(module, llvm_func, inst);
+                }
                 return true;
             }
 
@@ -15055,6 +15089,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(result, inst->result.id, llvm_func);
+                if (may_hold_reference) {
+                    emitExceptionCheck(module, llvm_func, inst);
+                }
                 return true;
             }
 
@@ -15201,7 +15238,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // holds no reference reads its cache as any other; the value read is owned, and kept for
                     // its consumers until the next read at this site (see emitReferenceLocalRead())
                     if (localReferenceFlag(key, llvm_func)) {
-                        loaded = emitReferenceLocalRead(key, loaded, module, llvm_func);
+                        loaded = emitReferenceLocalRead(key, loaded, module, llvm_func, inst);
                     }
                     nanboxed_values.insert(inst->result.id);
                     if (assigned_non_nothing_locals.count(key)) {

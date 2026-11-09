@@ -9259,6 +9259,12 @@ next_instruction:
                     bool needs_deref = true;
                     out = local_inst->local->eval(needs_deref, xsink);
                     if (xsink && *xsink) {
+                        if (needs_deref) {
+                            out.discard(xsink);
+                        }
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
                         cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
@@ -9306,6 +9312,9 @@ next_instruction:
                             }
                             if (xsink && *xsink) {
                                 out.discard(xsink);
+                                if (branchToExceptionTarget(inst)) {
+                                    break;
+                                }
                                 cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                                 cleanupLocalCaches();
                                 return false;
@@ -9360,6 +9369,12 @@ next_instruction:
                         bool needs_deref = true;
                         QoreValue val = local_inst->local->eval(needs_deref, xsink);
                         if (xsink && *xsink) {
+                            if (needs_deref) {
+                                val.discard(xsink);
+                            }
+                            if (branchToExceptionTarget(inst)) {
+                                break;
+                            }
                             cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
@@ -9451,6 +9466,12 @@ next_instruction:
                         bool needs_deref = true;
                         out = local_inst->local->eval(needs_deref, xsink);
                         if (xsink && *xsink) {
+                            if (needs_deref) {
+                                out.discard(xsink);
+                            }
+                            if (branchToExceptionTarget(inst)) {
+                                break;
+                            }
                             cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
@@ -9567,6 +9588,9 @@ load_local_done:
                             QoreValue val = cv->evalWeakBorrowed(is_weak_ref_local, xsink);
                             if (is_weak_ref_local) {
                                 if (xsink && *xsink) {
+                                    if (branchToExceptionTarget(inst)) {
+                                        break;
+                                    }
                                     cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                                     cleanupLocalCaches();
                                     return false;
@@ -9575,6 +9599,9 @@ load_local_done:
                             } else {
                                 if (xsink && *xsink) {
                                     val.discard(xsink);
+                                    if (branchToExceptionTarget(inst)) {
+                                        break;
+                                    }
                                     cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                                     cleanupLocalCaches();
                                     return false;
@@ -9594,6 +9621,12 @@ load_local_done:
                                 bool needs_deref = false;
                                 out = lvv->eval(needs_deref, xsink);
                                 if (xsink && *xsink) {
+                                    if (needs_deref) {
+                                        out.discard(xsink);
+                                    }
+                                    if (branchToExceptionTarget(inst)) {
+                                        break;
+                                    }
                                     cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                                     cleanupLocalCaches();
                                     return false;
@@ -10287,6 +10320,9 @@ load_local_done:
                         if (ref_needs_deref) {
                             rv.discard(xsink);
                         }
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
                         cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
@@ -10306,6 +10342,12 @@ load_local_done:
                     bool nd = true;
                     QoreValue sv = fused_inst->source->eval(nd, xsink);
                     if (xsink && *xsink) {
+                        if (nd) {
+                            sv.discard(xsink);
+                        }
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
                         cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
