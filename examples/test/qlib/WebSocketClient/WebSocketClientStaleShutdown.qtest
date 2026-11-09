@@ -221,6 +221,16 @@ class LifecycleWsClient inherits WebSocketClient {
 
         #! gets an event when the destructor starts
         Queue destructor_started();
+        #! gets the TID of the thread that runs the destructor
+        Queue destructor_tids();
+
+        #! do not deliver the frames received with the handshake of the next connection
+        /** The delivery task that delivers them (see WebSocketClient::runInitialDrain()) holds the client while it
+            runs, so a thread that drops the client's last other reference meanwhile does not destroy it: the destructor
+            then runs on the delivery task's thread when the task returns.  Set by a test that needs the thread
+            dropping its reference to run the destructor; the test server sends nothing with the handshake.
+        */
+        bool skip_initial_drain = False;
 
         #! report a thread that starts to wait for a close handshake
         bool report_handshake_wait = False;
@@ -259,6 +269,7 @@ class LifecycleWsClient inherits WebSocketClient {
     }
 
     destructor() {
+        destructor_tids.push(gettid());
         destructor_started.push(True);
     }
 
@@ -351,6 +362,10 @@ class LifecycleWsClient inherits WebSocketClient {
             hold_before_open = False;
             events.push("before-open");
             release_before_open.waitForZero(HandoffTimeout);
+        }
+        if (skip_initial_drain) {
+            skip_initial_drain = False;
+            return;
         }
         WebSocketClient::runInitialDrain(c);
     }
@@ -1564,11 +1579,18 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! The client is released while THREAD-CANCELLED unwinds the thread holding it (issue #5634): the destructor runs
     #! with the cancellation deferred, so it completes: the connection is closed and reported closed once
+    /** With HTTP/2 and HTTP/3, connect() schedules a delivery task for the frames received with the handshake; it
+        is not scheduled here, as it holds the client while it runs: the thread would not drop the last reference then,
+        and the destructor would run on the delivery task's thread after the task returned
+    */
     destructorOnCancelledThreadTest(string proto) {
         TestThreads::cancel_expected = True;
         on_exit TestThreads::cancel_expected = False;
         LifecycleCtx ctx = makeCtx(proto);
+        ctx.wsc.skip_initial_drain = True;
         connectChecked(ctx, proto);
+        # read before the handoff: the queue is read after the object is gone
+        Queue destructor_tids = ctx.wsc.destructor_tids;
         # the thread takes the only reference
         Queue handoff();
         handoff.push(remove ctx.wsc);
@@ -1594,6 +1616,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertEq("THREAD-CANCELLED", result.get(LifecycleWsClient::HandoffTimeout));
         assertTrue(result.get(LifecycleWsClient::HandoffTimeout), "the cancellation stays pending");
         thread_join(tid);
+        # the premise of the case: the thread dropped the last reference, so the destructor ran on it
+        assertEq(tid, destructor_tids.get(LifecycleWsClient::HandoffTimeout), "the destructor ran on the cancelled thread");
         assertEq(1, ctx.closed.getCount(), "the connection is reported closed once");
     }
 

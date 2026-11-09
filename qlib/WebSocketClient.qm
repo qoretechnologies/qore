@@ -4235,11 +4235,13 @@ ws.setEventQueue();
         }
 
         while (True) {
-            # Check if the object is being destroyed; closures capture self with
-            # a weak reference, so the destructor can run while this thread is active.
+            # Check if the object is being destroyed.  A stored closure captures self with a weak
+            # reference, but this running task keeps the client alive until it returns: when another
+            # thread drops the last other reference meanwhile, the destructor runs on this thread once
+            # the task returns.  The object can still be destroyed while the task runs: by an explicit
+            # delete on another thread, or by the destructor running on THIS thread from a user
+            # callback (the self-deadlock case, where it could not wait for the thread to exit).
             # When !self, member objects (delivery_mutex etc.) may already be destroyed.
-            # This check is needed for the self-deadlock case where the destructor ran
-            # on THIS thread (from a user callback) and could not wait for thread exit.
             if (!self) {
                 return;
             }
