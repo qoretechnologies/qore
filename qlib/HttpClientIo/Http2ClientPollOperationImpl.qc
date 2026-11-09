@@ -73,14 +73,18 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
         @param client_pk private key matching \a client_cert (optional)
         @param ssl_ca_file a PEM file with the CA certificates to verify the server with instead of the default CAs
         @param ssl_ca_path a directory with the CA certificates to verify the server with instead of the default CAs
+        @param offer_http11 if @ref True, ALPN offers \c http/1.1 after \c h2, so that a TLS server without HTTP/2
+        selects it (the connection then fails with \c HTTP2-ALPN-ERROR, which an automatic protocol selection falls
+        back to HTTP/1.1 on) instead of refusing the handshake
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *hash<auto> proxy_info, HttpClientConnection connection,
-            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path) :
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path,
+            bool offer_http11 = False) :
             Http2ClientPollOperationBase(
                 Http2ClientPollOperation::createAndConfigureSocket(url_info, ssl_verify_mode,
-                    accept_all_certs, client_cert, client_pk, ssl_ca_file, ssl_ca_path),
+                    accept_all_certs, client_cert, client_pk, ssl_ca_file, ssl_ca_path, offer_http11),
                 Http2ClientPollOperation::computeConnectTarget(url_info, proxy_info),
                 url_info.host, url_info.port,
                 url_info.protocol == "https",
@@ -183,7 +187,7 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
     #! Internal: creates and configures a TCP socket for HTTP/2
     private static Socket createAndConfigureSocket(hash<auto> url_info, *int ssl_verify_mode,
             bool accept_all_certs, *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file,
-            *string ssl_ca_path) {
+            *string ssl_ca_path, bool offer_http11) {
         Socket sock();
         bool ssl_required = url_info.protocol == "https";
         if (ssl_required) {
@@ -202,7 +206,10 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
             if (ssl_ca_file || ssl_ca_path) {
                 sock.setSslCaLocations(ssl_ca_file, ssl_ca_path);
             }
-            sock.setAlpnProtocols(("h2",));
+            # with an automatic protocol selection, a server without HTTP/2 can select http/1.1; offered h2 alone, a
+            # strict server refuses the TLS handshake (no_application_protocol), which gave no HTTP/1.1 fallback
+            # (issue #5671)
+            sock.setAlpnProtocols(offer_http11 ? ("h2", "http/1.1") : ("h2",));
         }
         return sock;
     }
