@@ -97,9 +97,11 @@
     \c MODULE-PUBLIC-THREAD-LOCAL parse exception, also when the module is compiled with \c qcc.  A module's public
     variable is shared by every %Program that imports the module, so a public thread-local variable let any importer
     set a value that another importer reads on the same thread.  A third-party module that declares one must keep the
-    variable private and export public functions or methods that read and set it; see @ref thread_local.  A
-    <tt>public thread_local</tt> variable of a %Program, which is passed to the child Programs it creates, is still
-    supported.  None of the modules distributed with %Qore declare one.
+    variable private and export public functions or methods that read and set it; see @ref thread_local.  A module
+    compiled with an earlier version of \c qcc that exports such a variable is refused when it is loaded, and must be
+    changed in the same way and recompiled.  A <tt>public thread_local</tt> variable of a %Program, which is passed to
+    the child Programs it creates directly, is still supported.  None of the modules distributed with %Qore declare
+    one.
 
     @par Final Methods Hold for the Whole Class Hierarchy
     A subclass can no longer bypass a @ref final_methods "final" method with an overload that accepts the same

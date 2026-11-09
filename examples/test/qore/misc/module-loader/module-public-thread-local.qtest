@@ -21,6 +21,11 @@
     supported.
 
     Every scenario runs in a child process in each execution mode, and the modules are also compiled with qcc.
+
+    A module merge also refuses a public thread_local that an AOT module image compiled by an earlier qcc with the same
+    AOT runtime identity still exports.  That path needs such a qcc: set \c QORE_OLD_QCC to it (and
+    \c QORE_OLD_LIBDIR to the directory of its libqore, if it is not the directory of the qcc) to run the case that
+    covers it; without one the case is skipped, and the path is covered by manual verification only.
 */
 class ModulePublicThreadLocalTest inherits QUnit::Test {
     private {
@@ -54,6 +59,25 @@ class ModulePublicThreadLocalTest inherits QUnit::Test {
         "PubTlSandbox": "public namespace PubTlSandbox {\n    public thread_local int value;\n}\n",
     };
 
+    #! modules with a public variable list declaration that has an element with another scope ("my a")
+    /** the element raises a parse error; it is a local variable reference when the list is made public, which must
+        not crash the parse
+    */
+    const ListScopeModules = {
+        "PubTlListMy": "public namespace PubTlListMy {\n    public sub f() { public thread_local (my a, b); }\n}\n",
+        "PubOurListMy": "public namespace PubOurListMy {\n    public sub f() { public our (my a, b); }\n}\n",
+    };
+
+    #! a module with public thread_local variables in two namespaces, compiled by an earlier qcc
+    const OldModuleSource = "%modern\n"
+        "module OldPubTl { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; url = \"https://qore.org\"; }\n"
+        "public namespace OldPubTl {\n"
+        "    public thread_local int value;\n"
+        "    public namespace Inner {\n"
+        "        public thread_local int inner_value;\n"
+        "    }\n"
+        "}\n";
+
     #! the expected probe results
     const Expected = {
         "requires-PubTlNs": ErrCode,
@@ -63,6 +87,12 @@ class ModulePublicThreadLocalTest inherits QUnit::Test {
         "requires-PubTlRoot": ErrCode,
         "load-module": ErrCode,
         "sandbox": ErrCode,
+        # a public list declaration with an element of another scope is a parse error, in a module and in a locked-down
+        # Program
+        "requires-PubTlListMy": "PARSE-EXCEPTION",
+        "requires-PubOurListMy": "PARSE-EXCEPTION",
+        "lockdown-list-thread-local": "PARSE-EXCEPTION",
+        "lockdown-list-our": "PARSE-EXCEPTION",
         # the error says what to do instead
         "message": "ok",
         # a private module thread_local has one value per thread
@@ -82,6 +112,8 @@ class ModulePublicThreadLocalTest inherits QUnit::Test {
         addTestCase("a module may not declare a public thread_local in any execution mode", \sourceTest());
         addTestCase("qcc refuses a module with a public thread_local", \aotRefusalTest());
         addTestCase("a compiled module keeps a private thread_local", \aotPrivateTest());
+        addTestCase("a module compiled by an earlier qcc that exports a public thread_local is refused",
+            \aotOldImageTest());
         addTestCase("a Program-level public thread_local in this Program is passed to a child Program",
             \inProcessInheritTest());
         set_return_value(main());
@@ -105,6 +137,50 @@ class ModulePublicThreadLocalTest inherits QUnit::Test {
             assertFalse(is_file(qmod), mod_name);
             assertRegex(ErrCode, rv.out, mod_name);
             assertRegex("keep it private", rv.out, mod_name);
+        }
+    }
+
+    aotOldImageTest() {
+        *string old_qcc = ENV.QORE_OLD_QCC;
+        if (!old_qcc.val()) {
+            testSkip("QORE_OLD_QCC is not set: this case needs a qcc that predates the refusal of public thread_local "
+                "variables in modules and has the AOT runtime identity of this Qore; the load-time refusal is otherwise "
+                "covered by manual verification only");
+        }
+        string old_libdir = ENV.QORE_OLD_LIBDIR ?? dirname(old_qcc);
+        TmpDir tmp("qore-module-public-tl-old-");
+        write(tmp.path, "OldPubTl.qm", OldModuleSource);
+        string qmod = tmp.path + DirSep + "OldPubTl.qmod";
+        int status;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s "
+            "--module --strip-source -o %s %s 2>&1", old_libdir, old_libdir, old_libdir, tmp.path, old_qcc, qmod,
+            tmp.path + DirSep + "OldPubTl.qm"), \status);
+        if (status || !is_file(qmod)) {
+            testSkip(sprintf("QORE_OLD_QCC (%s) did not compile a module with a public thread_local variable, so it "
+                "does not predate the refusal: %s", old_qcc, out));
+        }
+        # the probe must load the compiled module, not its source
+        unlink(tmp.path + DirSep + "OldPubTl.qm");
+        write(tmp.path, "old.q", "%modern\n"
+            "Program p(PO_NEW_STYLE);\n"
+            "try {\n"
+            "    p.parse(\"%requires OldPubTl\\n\", \"old\");\n"
+            "    printf(\"old=loaded\\n\");\n"
+            "} catch (hash<ExceptionInfo> ex) {\n"
+            "    printf(\"old=%s\\ndesc=%s\\n\", ex.err, ex.desc);\n"
+            "}\n");
+        foreach string mode in (ExecModes) {
+            string probe = runProbe(tmp.path, mode, "old.q");
+            if (probe =~ /AOT runtime identity/) {
+                testSkip(sprintf("QORE_OLD_QCC (%s) has a different AOT runtime identity, so its modules are refused "
+                    "by the identity check before they are merged: %s", old_qcc, probe));
+            }
+            assertRegex("(^|\n)old=MODULE-LOAD-ERROR\n", probe, mode);
+            # every exported public thread_local is named in the one error
+            assertRegex("'OldPubTl::value'", probe, mode);
+            assertRegex("'OldPubTl::Inner::inner_value'", probe, mode);
+            assertRegex("must be changed and recompiled", probe, mode);
+            assertRegex("keep it private", probe, mode);
         }
     }
 
@@ -165,7 +241,7 @@ class ModulePublicThreadLocalTest inherits QUnit::Test {
     }
 
     private writeFixtures(string dir) {
-        foreach hash<auto> i in (PublicModules.pairIterator()) {
+        foreach hash<auto> i in ((PublicModules + ListScopeModules).pairIterator()) {
             write(dir, i.key + ".qm", "%modern\n"
                 "module " + i.key + " { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; "
                     "url = \"https://qore.org\"; }\n" + i.value);
@@ -210,7 +286,8 @@ class ModulePublicThreadLocalTest inherits QUnit::Test {
         "    return \"ok\";\n"
         "}\n"
         "\n"
-        "foreach string mod in ((\"PubTlNs\", \"PubTlUntyped\", \"PubTlList\", \"PubTlPrivNs\", \"PubTlRoot\")) {\n"
+        "foreach string mod in ((\"PubTlNs\", \"PubTlUntyped\", \"PubTlList\", \"PubTlPrivNs\", \"PubTlRoot\",\n"
+        "        \"PubTlListMy\", \"PubOurListMy\")) {\n"
         "    result(\"requires-\" + mod, parse_code(\"%requires \" + mod + \"\\n\"));\n"
         "}\n"
         "\n"
@@ -234,6 +311,12 @@ class ModulePublicThreadLocalTest inherits QUnit::Test {
         "    result(\"sandbox\", parse_code(\"%requires PubTlSandbox\\n\", sm,\n"
         "        PO_NEW_STYLE | PO_NO_THREAD_CONTROL));\n"
         "}\n"
+        "\n"
+        "# a public variable list with an element of another scope in a locked-down Program\n"
+        "result(\"lockdown-list-thread-local\", parse_code(\"sub f() { public thread_local (my a, b); }\\n\", NOTHING,\n"
+        "    PO_NEW_STYLE | PO_LOCKDOWN));\n"
+        "result(\"lockdown-list-our\", parse_code(\"sub f() { public our (my a, b); }\\n\", NOTHING,\n"
+        "    PO_NEW_STYLE | PO_LOCKDOWN));\n"
         "\n"
         "# a public thread_local of a Program is passed to its child Programs\n"
         "{\n"

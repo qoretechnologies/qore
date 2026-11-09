@@ -51,6 +51,14 @@
 #include <vector>
 #include <list>
 
+//! the guidance given when a module declares a public thread_local variable or an AOT module image holds one
+/** A module's public variable is one variable shared by every Program that imports the module (qore#5662).
+*/
+#define QORE_MODULE_PUBLIC_THREAD_LOCAL_HELP "a module's public variable is one variable shared by every Program " \
+    "that imports the module, so any importer could set a value on a thread that any other importer reads on the " \
+    "same thread; keep it private (declare it without 'public') and export public functions or methods that read " \
+    "and set it"
+
 class qore_root_ns_private;
 class qore_ns_private;
 class qore_class_private;
@@ -751,16 +759,22 @@ public:
     */
     DLLLOCAL static int checkPublicThreadLocalDecl(const Var& v);
 
-    //! raises a module load error for each public thread_local variable in an exported namespace tree
-    /** A module parsed from source cannot declare one (see checkPublicThreadLocalDecl()); this check refuses one that
-        an AOT module image compiled before the declaration was refused still holds.
+    //! appends the path of each public thread_local variable in an exported namespace tree to a list
+    /** A module parsed from source cannot declare one (see checkPublicThreadLocalDecl()); an AOT module image compiled
+        before the declaration was refused, by a qcc with the same AOT runtime identity, can still hold one, and the
+        module merge refuses it (see qore_root_ns_private::scanMergeCommittedNamespace()).
+
+        The check is not made when the image's GLOBALS section is deserialized: the deserializer is an AOT runtime
+        identity input, and with a changed identity every image compiled before the change is refused anyway, so a
+        check there could never see such an image.
 
         @param mns the namespace to scan, with its exported subnamespaces
-        @param qmc the module context that collects the errors
         @param path the namespace path of \a mns, ending with \c "::", or empty for the root namespace
+        @param list the list to append to: each path is quoted and separated from the previous one by \c ", "
     */
-    DLLLOCAL static void scanExportedThreadLocals(const qore_ns_private& mns, QoreModuleContext& qmc,
-            const std::string& path = std::string());
+    DLLLOCAL static void scanExportedThreadLocals(const qore_ns_private& mns, const std::string& path,
+            std::string& list);
+
     DLLLOCAL void parseAddGlobalVarDecl(const QoreProgramLocation* loc, char* name, const QoreTypeInfo* typeInfo,
             QoreParseTypeInfo* parseTypeInfo, bool pub, qore_var_t type);
 
@@ -3135,8 +3149,15 @@ public:
 
     DLLLOCAL static void scanMergeCommittedNamespace(const RootQoreNamespace& ns, const RootQoreNamespace& mns,
             QoreModuleContext& qmc) {
-        // every module merge (source, AOT, and runtime) scans the module first, so this check covers each of them
-        qore_ns_private::scanExportedThreadLocals(*(mns.priv), qmc);
+        // every module merge (source, AOT, and runtime) scans the module first, so this check covers each of them;
+        // all the variables are named in one error
+        std::string public_thread_locals;
+        qore_ns_private::scanExportedThreadLocals(*(mns.priv), std::string(), public_thread_locals);
+        if (!public_thread_locals.empty()) {
+            qmc.error("the module was compiled by an earlier version of qcc and exports public thread_local " \
+                "variable(s) %s; it must be changed and recompiled: " QORE_MODULE_PUBLIC_THREAD_LOCAL_HELP,
+                public_thread_locals.c_str());
+        }
         ns.priv->scanMergeCommittedNamespace(*(mns.priv), qmc);
     }
 
