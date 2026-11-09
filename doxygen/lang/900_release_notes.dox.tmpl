@@ -101,7 +101,9 @@
     member accesses and method calls, lives until the end of its statement instead of until the call that used it
     returns; code that relies on such an object being destroyed earlier must assign it to a variable.  A value read
     through a reference, or from a global, thread-local or closure-bound variable, also lives until the end of its
-    statement, even if the statement assigns the variable another value.  See @ref temporary_lifetime.
+    statement when it is the receiver of a call or a member access or the operand of an operator, even if the
+    statement assigns the variable another value; given to a call as an argument, it is released when the call
+    returns, as every argument is.  See @ref temporary_lifetime.
 
     @par Data Provider Types Restored From Their Descriptions Can Be Cyclic and Shared
     \c DataProvider::AbstractDataProviderType::get() restores each type of a description once, so a recursive type is

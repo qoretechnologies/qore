@@ -207,6 +207,20 @@ QoreValue VarRefNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSi
     return v;
 }
 
+QoreValue VarRefNode::evalCallArg(ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    bool needs_deref = true;
+    QoreValue v = evalValue(rc, needs_deref, xsink);
+    if (*xsink) {
+        if (needs_deref) {
+            v.discard(xsink);
+        }
+        return QoreValue();
+    }
+    // a value borrowed from the variable is referenced for the argument list
+    return needs_deref ? v : v.refSelf();
+}
+
 QoreValue VarRefNode::evalValue(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     QoreValue v{};
     if (type == VT_LOCAL) {

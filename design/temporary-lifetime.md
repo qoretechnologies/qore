@@ -14,10 +14,11 @@ When a statement ends, the temporaries that it still holds are released in the r
 A temporary passed to a call as an argument is released when the call returns, as the AST interpreter releases the
 argument list of a call (`CodeEvaluationHelper`): the IR interpreter releases the arguments that a call consumes
 (`releaseConsumedCallArgs()`, `consumeLastUseCallArgSlots()`), native code clears their cleanup slots
-(`QoreIRToLLVM::releaseConsumedCallArgs()`, the `_consume_args` helpers).  Only an argument created by a call (a
-function, method or closure call or an object construction), in the block or the temp scope of the call, is released
-there: a value loaded from a variable or a constant is not a temporary, and a loop invariant is defined in a temp scope of
-its own.
+(`QoreIRToLLVM::releaseConsumedCallArgs()`, the `_consume_args` helpers).  An argument created by a call (a function,
+method or closure call or an object construction) and a value read from a variable that the read gave a reference of
+its own to (see [Values read from variables](#values-read-from-variables)), in the block or the temp scope of the
+call, are released there; a value borrowed from a variable or a constant has no reference of the frame to release, and
+a loop invariant is defined in a temp scope of its own.
 
 ## Statement boundaries
 
@@ -75,13 +76,23 @@ expression results needed to execute a statement while the statement is being ev
   local that a reference is taken of (`\o`) anywhere in its function is read this way in the whole function, also by
   a statement that does not use the reference.
 
-So in `auto v = \o; string s = v.name() + (o = NOTHING) + mark();` the object that `v` gave is destroyed after
-`mark()` has run, also when a call later in the statement throws, whatever uses the value: the receiver of a chain,
-the operand of an operator (`!v`, `v && ...`, `v ? ... : ...`, `exists`, `instanceof`, a comparison, `keys`,
-`elements`, `??`, a slice), the source of a functional operator, the value of an assignment, an element of a
-literal, an argument of a method, closure or constructor call, or the value of a `return` statement (released before
-the `on_exit` handlers run).  An expression evaluated for each element of a `map` keeps the value that it read last
-only, as for any other temporary.
+The statement holds the value as long as it uses it, by what it is used for (David, 2026-11-09):
+
+- the receiver of a chain (a method call, a member or element access, a cast, a call reference and the callee of a
+  call through a call reference), the operand of an operator (`!v`, `v && ...`, `v ? ... : ...`, `exists`,
+  `instanceof`, a comparison, `keys`, `elements`, `??`, `?*`, a slice), the source of a functional operator, the
+  value of an assignment, an element of a literal and the value of a `return` statement live until the end of the
+  statement (a `return` statement releases its temporaries before the `on_exit` handlers run).  So in
+  `auto v = \o; string s = v.name() + (o = NOTHING) + mark();` the object that `v` gave is destroyed after `mark()`
+  has run, also when a call later in the statement throws;
+- an argument of a call - of a function, a static method, a method, a method of `self`, a closure, a call reference,
+  a constructor, a builtin function, also of a builtin conversion that compiled code runs inline (`boolean()`,
+  `int()`, `float()`, `string()`) - is released when the call returns, as every argument is: the call cannot use the
+  value after it returns, and a callee that keeps it holds a reference of its own.  So in
+  `string s = f(v) + (o = NOTHING) + mark();` the object is destroyed by the assignment, before `mark()` runs.
+
+An expression evaluated for each element of a `map` keeps the value that it read last only, as for any other
+temporary.
 
 The IR interpreter and native code keep the result of such a load in the temp scope of the statement until
 `DiscardTemps` (a load through a reference is owned: `qore_local_reference_eval()`, `LoadLocal`).  The AST
@@ -89,6 +100,21 @@ interpreter holds it in the innermost `QoreStatementTempScope` (`VarRefNode::eva
 `QoreStatementTempScope::holdRead()`), which takes a reference of its own: the code that evaluated the variable keeps
 its reference, so a value that it keeps after the scope ends (the scope of a condition, or of an operand that is a
 statement of its own) stays valid.
+
+An argument is released at the return of the call:
+
+- AST interpreter: the argument list of a call reads a variable given as an argument without handing the value to
+  the statement (`VarRefNode::evalCallArg()`, used by `qore_list_private::eval()`), so the argument list holds the only
+  reference that the read took and releases it when the call returns (`CodeEvaluationHelper`);
+- IR interpreter: a value read by `LoadLocal`, `LoadArg`, `LoadClosure`, `LoadGlobal` or `LoadThreadLocal` and used
+  once, as an argument of a call in its block or temp scope, is consumed by the call as a temporary created by a call
+  is (`buildValueUseCounts()`: `consumed_call_args`); only a read that owns its value has a cleanup entry to release;
+- native code: such a read is released by `QoreIRToLLVM::releaseConsumedCallArgs()` when the call returns, or passed
+  to a `_consume_args` helper with its cleanup slot.  A read through a reference keeps its reference in the slot of
+  its read site (`emitReferenceLocalRead()`), which holds the cached value's predecessor when the local holds no
+  reference, so the slot is released only if it holds the value read (`qore_rt_release_reference_read()`);
+- a builtin conversion that the lowering runs inline (`lowerBuiltinTypeConversion()`: `ToBool`, `ToInt`, `ToFloat`,
+  `ToString`) releases its argument after it with `ReleaseOwnedTemp`, as the call it replaces would.
 
 These reads are not held:
 
@@ -102,10 +128,6 @@ These reads are not held:
   the reference is held as a whole by the variable reference that read it.  The suspension also keeps a reference
   that compiled code resolves (`qore_local_reference_eval()`, `ClosureVarValue::eval()`) from holding a value in the
   scope of the AST statement that called the compiled code.
-
-The compiled modes still differ from each other in one case: a value read through a reference and given to a
-function or a static method as an argument is released when the call returns by the IR interpreter, which consumes
-the argument, and kept to the end of the statement by native code, as by the AST interpreter.
 
 ## IR interpreter and native code
 

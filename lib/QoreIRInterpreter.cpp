@@ -2296,6 +2296,22 @@ static void markIRValueUse(std::vector<uint8_t>& uses, QoreIRValue value) {
     running cleanup code) would get the exception again from a call that the AST interpreter runs to its first check
     point of its own, such as a loop.  A pending cancellation is raised at the program's next check point instead.
 */
+// returns true for an instruction that reads a variable, whose value a call that takes it as an argument releases
+// when it returns if the read gave the frame a reference of its own; an implicit argument ($1) is not one: a later $1
+// reads its element slot again
+static bool qore_ir_reads_variable_for_call_arg(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::LoadLocal:
+        case QoreIROpcode::LoadArg:
+        case QoreIROpcode::LoadClosure:
+        case QoreIROpcode::LoadGlobal:
+        case QoreIROpcode::LoadThreadLocal:
+            return true;
+        default:
+            return false;
+    }
+}
+
 static bool buildValueUseCounts(const QoreIRFunction& func,
         std::vector<uint32_t>& counts, std::vector<uint8_t>& dot_eval_only_bases,
         std::vector<uint8_t>& consumed_call_args, std::vector<uint8_t>& phi_takes_incoming, ExceptionSink* xsink) {
@@ -2313,6 +2329,10 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
     // values created by a call: the temporaries whose release is observable; a value loaded from a variable or a
     // constant is not a temporary, and the interpreter can read it again from its slot
     std::vector<uint8_t> def_by_call(counts.size(), 0);
+    // values read from a variable: a read that gives the frame a reference of its own (through a reference, or of a
+    // closure-bound, global or thread-local variable) and that a call takes as an argument is released when the call
+    // returns, as any argument; a read borrowed from the variable has no cleanup entry and is left as it is
+    std::vector<uint8_t> def_by_variable_read(counts.size(), 0);
     std::vector<const QoreIRPhiInstruction*> phis;
     for (const auto& block : func.blocks) {
         for (const auto& inst_uptr : block->instructions) {
@@ -2347,6 +2367,7 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 def_block[inst->result.id] = block.get();
                 def_scope[inst->result.id] = inst->temp_scope_id;
                 def_by_call[inst->result.id] = arg_start >= 0;
+                def_by_variable_read[inst->result.id] = qore_ir_reads_variable_for_call_arg(inst->opcode);
             }
         }
     }
@@ -2402,7 +2423,8 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             }
             for (size_t i = static_cast<size_t>(arg_start); i < inst->operands.size(); ++i) {
                 QoreIRValue arg = inst->operands[i];
-                if (arg.isValid() && arg.id < def_block.size() && def_by_call[arg.id]
+                if (arg.isValid() && arg.id < def_block.size()
+                        && (def_by_call[arg.id] || def_by_variable_read[arg.id])
                         && (def_block[arg.id] == block.get()
                             || (def_scope[arg.id] && def_scope[arg.id] == inst->temp_scope_id))) {
                     same_block_call_args[arg.id] = 1;

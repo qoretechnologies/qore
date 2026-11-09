@@ -86,6 +86,15 @@ public:
     */
     DLLLOCAL bool parseEqualTo(const VarRefNode& other) const;
 
+    //! evaluates the variable as an argument of a call
+    /** A value that the read gives a reference of its own to is a temporary of the statement (see evalImpl()), but a
+        temporary given to a call as an argument is released when the call returns: the argument list takes the
+        read's reference over and the statement does not hold the value, as for any argument
+
+        @return the value read, referenced for the caller
+    */
+    DLLLOCAL QoreValue evalCallArg(ExceptionSink* xsink) const;
+
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const;
 
