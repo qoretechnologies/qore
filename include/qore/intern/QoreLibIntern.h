@@ -1194,6 +1194,17 @@ DLLLOCAL extern std::atomic<bool> qore_initialized;
 DLLLOCAL extern std::atomic<bool> qore_shutdown;
 DLLLOCAL extern std::atomic<bool> qore_exiting;
 
+#ifdef DEBUG
+//! Asserts that a hash, list or object being freed is not registered as the target of an opaque reference
+/** A registered target is alive because the opaque values referring to it hold references to it (see
+    qore_program_private_base::registerOpaqueTarget()); one freed while registered has had an opaque value's reference
+    released without its registration, and the teardown of the Program owning the entry reads freed memory.  Called by
+    the destructors of QoreHashNode, QoreListNode and QoreObject, which report the release that broke the rule where it
+    happens.
+*/
+DLLLOCAL void qore_debug_check_freed_node_not_opaque_target(const AbstractQoreNode* n);
+#endif
+
 DLLLOCAL extern int qore_library_options;
 DLLLOCAL extern std::atomic<int> qore_global_http2_mode;
 

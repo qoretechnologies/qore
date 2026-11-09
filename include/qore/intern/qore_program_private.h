@@ -791,6 +791,13 @@ public:
     //! Breaks every cycle held up by an opaque reference created in this Program
     DLLLOCAL void clearOpaqueTargets(ExceptionSink* xsink);
 
+#ifdef DEBUG
+    //! Returns true if \a n is registered as the target of an opaque reference
+    /** For qore_debug_check_freed_node_not_opaque_target()
+    */
+    DLLLOCAL static bool isOpaqueTarget(const AbstractQoreNode* n);
+#endif
+
     //! Records an IR fallback event for later reporting
     DLLLOCAL void recordIRFallback(const std::string& reason) const {
         // Always bump the counter under ir_fallback_report so tests can

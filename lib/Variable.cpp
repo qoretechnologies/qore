@@ -205,6 +205,16 @@ void check_lvalue_object_in_out(AbstractQoreNode* in, AbstractQoreNode* out) {
     }
 }
 
+void qore_release_real_reference_value(QoreValue& v, ExceptionSink* xsink) {
+    if (v.getType() == NT_OBJECT) {
+        // takeNode() ends the registration of an opaque value with its representation and keeps its reference, which
+        // is released here with the real reference that the storage gave the object
+        static_cast<QoreObject*>(v.takeNode())->realDeref(xsink);
+        return;
+    }
+    v.discard(xsink);
+}
+
 static bool is_no_narrow_container_type(const QoreTypeInfo* ti) {
     return QoreTypeInfo::isNoNarrowContainer(ti);
 }
@@ -2327,40 +2337,36 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, Assign
     QoreTypeInfo::applyNoNarrowCoercion(typeInfo, n, vl.xsink, this);
 
     // process weak assignment
+    // the value replaced by its weak or opaque form is released through the temporary list as it is held, as the
+    // target cannot be dereferenced while the lvalue lock is held: a value read through an opaque reference keeps its
+    // opaque representation, and releasing it as a plain node would leave its registration with the opaque target
+    // registry (see design/dgc.md, "Opaque references")
     if (mode == AssignmentMode::Weak) {
+        QoreValue old = n;
         if (n.getType() == NT_OBJECT) {
-            QoreObject* o = n.get<QoreObject>();
-            n = new WeakReferenceNode(o);
-            // cannot dereference object in lock
-            saveTemp(o);
+            n = new WeakReferenceNode(n.get<QoreObject>());
+            saveTemp(old);
         } else if (n.getType() == NT_HASH) {
-            QoreHashNode* h = n.get<QoreHashNode>();
-            n = new WeakHashReferenceNode(h);
-            // cannot dereference a container in lock
-            saveTemp(h);
+            n = new WeakHashReferenceNode(n.get<QoreHashNode>());
+            saveTemp(old);
         } else if (n.getType() == NT_LIST) {
-            QoreListNode* l = n.get<QoreListNode>();
-            n = new WeakListReferenceNode(l);
-            // cannot dereference a container in lock
-            saveTemp(l);
+            n = new WeakListReferenceNode(n.get<QoreListNode>());
+            saveTemp(old);
         }
     } else if (mode == AssignmentMode::Opaque) {
         // an opaque reference keeps the strong reference the value already carries but stores it in
         // a representation the DGC scanner does not follow; the reference taken by the make*()
-        // calls replaces the one held by "n", which is released through the temporary list because
-        // the target cannot be dereferenced while the lvalue lock is held
+        // calls replaces the one held by "n"
+        QoreValue old = n;
         if (n.getType() == NT_OBJECT) {
-            QoreObject* o = n.get<QoreObject>();
-            n = QoreValue::makeOpaqueObject(o);
-            saveTemp(o);
+            n = QoreValue::makeOpaqueObject(n.get<QoreObject>());
+            saveTemp(old);
         } else if (n.getType() == NT_HASH) {
-            QoreHashNode* h = n.get<QoreHashNode>();
-            n = QoreValue::makeOpaqueHash(h);
-            saveTemp(h);
+            n = QoreValue::makeOpaqueHash(n.get<QoreHashNode>());
+            saveTemp(old);
         } else if (n.getType() == NT_LIST) {
-            QoreListNode* l = n.get<QoreListNode>();
-            n = QoreValue::makeOpaqueList(l);
-            saveTemp(l);
+            n = QoreValue::makeOpaqueList(n.get<QoreListNode>());
+            saveTemp(old);
         }
     }
 

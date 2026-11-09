@@ -369,6 +369,9 @@ QoreListNode::QoreListNode(const QoreTypeInfo* valueTypeInfo) : QoreListNode() {
 }
 
 QoreListNode::~QoreListNode() {
+#ifdef DEBUG
+    qore_debug_check_freed_node_not_opaque_target(this);
+#endif
     delete priv;
 }
 

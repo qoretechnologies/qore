@@ -1165,12 +1165,12 @@ public:
 
     //! Releases the value stored in the given slot, which the caller then replaces
     /** The object held by the slot of an object local (QoreIRFunction::real_reference_locals) has a real reference
-        from the slot, which is released with it
+        from the slot, which is released with it (see qore_release_real_reference_value())
     */
     DLLLOCAL void release(size_t i, ExceptionSink* xsink) {
         QoreValue& v = slots[i];
-        if (isRealSlot(i) && v.getType() == NT_OBJECT) {
-            v.get<QoreObject>()->realDeref(xsink);
+        if (isRealSlot(i)) {
+            qore_release_real_reference_value(v, xsink);
             return;
         }
         v.discard(xsink);
