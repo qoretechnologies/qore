@@ -457,7 +457,7 @@ struct ThreadLocalVarRegistry {
         /** A value left when the registry itself is destroyed, at the end of the process, is not released: its
             variable's Program was never deleted
         */
-        DLLLOCAL ~Orphan() {
+        ~Orphan() {
             if (lv.assigned) {
                 lv.reset_to_empty();
             }
@@ -479,7 +479,7 @@ struct ThreadLocalVarRegistry {
     //! Removes the holder of the given thread from an entry; called with the lock held
     /** @return true if the thread's value was registered
     */
-    DLLLOCAL static bool removeHolder(Entry& e, const ThreadData* td) {
+    static bool removeHolder(Entry& e, const ThreadData* td) {
         std::vector<Holder>& v = e.holders;
         for (size_t j = 0; j < v.size(); ++j) {
             if (v[j].td == td) {
@@ -6747,12 +6747,12 @@ namespace {
 //! Refuses the assignment of the current thread's thread_local variables while the data of its task is cleared
 class ThreadLocalVarClearingHelper {
 public:
-    DLLLOCAL ThreadLocalVarClearingHelper(ThreadData& td) : td(td) {
+    ThreadLocalVarClearingHelper(ThreadData& td) : td(td) {
         assert(!td.tlv_clearing);
         td.tlv_clearing = true;
     }
 
-    DLLLOCAL ~ThreadLocalVarClearingHelper() {
+    ~ThreadLocalVarClearingHelper() {
         td.tlv_clearing = false;
     }
 
