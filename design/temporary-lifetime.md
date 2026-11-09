@@ -26,10 +26,19 @@ the static use count (one use) nor the temp scope tells a hoisted read from an a
 the statement (a call in a `try` block is an invoke that ends its block).  `qore_ir_find_reused_call_args()` gives the
 call arguments defined in another block than the call whose block can run again without the defining block running
 in between (over the normal and the exception edges, searched within the strongly connected component of the call's
-block); no call releases them or takes their slot: the IR interpreter leaves them out of `consumed_call_args` and of
-`consumeLastUseCallArgSlots()`, native code out of `releaseConsumedCallArgs()` and of the cleanup array that a
-`_consume_args` helper or `qore_rt_clear_arg_cleanups()` releases (`buildArgCleanupArray()`).  Such a read lives until
-the end of the statement that the preheader belongs to.  Before, `foreach string m in (l) { m.find(text); }` (since the
+block; an argument defined outside that component is reused without a search); no call releases them or takes their
+slot.  The IR interpreter counts such an argument one use more in its use counts (`buildValueUseCounts()`), so
+`consumed_call_args`, `consumeLastUseCallArgSlots()` and the moves of a value used once leave it alone with no check at
+run time; native code leaves it out of `releaseConsumedCallArgs()` and of the cleanup array that a `_consume_args`
+helper or `qore_rt_clear_arg_cleanups()` releases (`buildArgCleanupArray()`).  Such a read lives until the end of the
+statement that the preheader belongs to.
+
+The answer is a property of the function, cached for every thread that runs it, so it must not depend on the thread
+that computes it: the IR interpreter runs the analysis without cancellation check points, as its other analyses, and
+native code fails the compilation when it is cancelled.  Before, a cancelled analysis gave every value as reused, and a
+function first called by a thread whose cancellation was pending (one that caught the THREAD-CANCELLED exception) never
+released an argument at the return of its call again, in any thread
+(examples/test/ir/ReusedCallArgumentCancel.qtest).  Before, `foreach string m in (l) { m.find(text); }` (since the
 release of variable reads at call return) and `foreach string m in (l) { toupper(text); }` (before it) released the
 hoisted read of `text` at the first call, and every later iteration gave the call NOTHING in the IR interpreter and
 native code (qore#5638; examples/test/ir/LoopInvariantCallArgument.qtest).

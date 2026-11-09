@@ -3861,9 +3861,6 @@ public:
     //! call arguments that the call consumes: their only use is a call in the block that defines them, so the value
     //! cannot be needed again (a later execution of the block recomputes it first)
     mutable std::vector<uint8_t> interpreter_consumed_call_args;
-    //! call arguments that a later execution of the call uses again without their definition running again, such as
-    //! a read hoisted out of a loop (qore_ir_find_reused_call_args()): no call releases them or takes their slot
-    mutable std::vector<uint8_t> interpreter_reused_call_args;
     //! Non-zero for an incoming value of a Phi that is a temporary used by the Phi once (and otherwise only before it
     //! in its own block): the Phi's slot takes its reference over; every Phi is a temporary that a call consumes
     mutable std::vector<uint8_t> interpreter_phi_takes_incoming;

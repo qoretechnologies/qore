@@ -80,18 +80,24 @@ std::vector<QoreIRNaturalLoop> qore_ir_find_natural_loops(const QoreIRControlFlo
 
     The control-flow edges are the normal successors and the exception edges (an instruction's or a throw's
     exception target), so a loop that a catch handler continues is seen as well.  A block can only run again through
-    a cycle of its strongly connected component, so only blocks in a cycle are searched, within their component.  A
-    cancelled analysis flags every value, so that no call releases an argument: the values live to the end of their
-    statements.
+    a cycle of its strongly connected component, so only calls in a cycle are considered; an argument defined outside
+    the call's component is reused, and one defined inside it is reused if a search within the component finds a
+    cycle through the call's block that avoids the defining block.
+
+    The result is a property of the function that its callers cache (QoreIRFunction::interpreter_reused_call_args),
+    so it must not depend on the thread that computes it: the IR interpreter runs the analysis without check points
+    (\a check_count null), as buildValueUseCounts(); native code polls cancellation and fails the compilation if it
+    is requested.
 
     @param func the IR function
-    @param check_count the shared cooperative-cancellation counter
+    @param reused set to a flag for each value id (QoreIRFunction::max_value_id + 1 entries): non-zero for a value
+    that a call takes as an argument (an operand from qore_ir_call_arg_start() on) and that a later execution of the
+    call can use again without the value being defined again; not to be used if the function returns false
+    @param check_count the shared cooperative-cancellation counter, or null to run without check points
 
-    @return a flag for each value id (QoreIRFunction::max_value_id + 1 entries): non-zero for a value that a call
-    takes as an argument (an operand from qore_ir_call_arg_start() on) and that a later execution of the call can use
-    again without the value being defined again
+    @return true if the analysis completed, false if cancellation was requested (only with \a check_count)
 */
-std::vector<uint8_t> qore_ir_find_reused_call_args(const QoreIRFunction& func, size_t& check_count);
+bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8_t>& reused, size_t* check_count);
 
 struct QoreIROptimizationStats {
     size_t loops_analyzed = 0;

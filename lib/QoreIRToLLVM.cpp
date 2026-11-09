@@ -11832,9 +11832,13 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     value_defined_by_variable_read.clear();
     {
         // the call arguments that a later execution of the call uses again, such as a read hoisted out of a loop:
-        // no call releases them (see design/temporary-lifetime.md)
+        // no call releases them (see design/temporary-lifetime.md); a cancelled analysis fails the compilation, as
+        // compiling with a partial answer would make it permanent
         size_t reuse_check_count = 0;
-        reused_call_args = qore_ir_find_reused_call_args(func, reuse_check_count);
+        if (!qore_ir_find_reused_call_args(func, reused_call_args, &reuse_check_count)) {
+            error = "cancelled during LLVM reused call argument analysis";
+            return false;
+        }
     }
     reference_read_slots.clear();
     last_reference_read_slot = nullptr;

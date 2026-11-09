@@ -27,7 +27,9 @@
     function, in a \c foreach, \c for and \c while loop of a function and of a method, and checks the result of
     every iteration.  The hand-written cases are the shape that found the bug, nested loops, a map in a loop, a call
     in a \c try block in a loop, a loop that a \c catch block continues, loops in closures, a map and foldl
-    expression and a method of \c self.  Every mode, the IR tier and qcc executables built at -O0 and -O3 must give
+    expression, a method of \c self, the elements of a fixed list and a fixed hash given to calls, stored and pushed
+    in a loop, a variable assigned in an outer loop and read in the inner one, and the destruction of an object held
+    by a hash that the loop reads, which must happen when the hash is removed after the loop.  Every mode, the IR tier and qcc executables built at -O0 and -O3 must give
     the AST interpreter's output, which must give the expected result of every case.
 
     Before the fix, the IR interpreter, native code and the IR tier failed the cases that give a parameter or a local
@@ -85,7 +87,24 @@ class LoopInvariantCallArgumentTest inherits ExecModeOutputTest {
             "closure_param_loop": "2",
             "map_foldl": "6",
             "method_self_loop": "2",
+            "scal_list": "18 [\"b\", \"b\", \"b\", \"b\"]",
+            "scal_hash": "18 [\"b\", \"b\", \"b\", \"b\"]",
+            "outer_inner": "11-1-1-1-122",
+            "dtor_hoisted": "6",
+            "plain_write_later": "pwok",
+            "plain_write_branch": "pbok",
+            "plain_no_write": "pnok",
         };
+
+        #! lines of the output that must come in this order in each run: the destruction of an object held by a hash
+        #! that a loop reads, and of an object read from a plain local given to a call when the statement writes the
+        #! local after the call (in the call's block and in another block) and when it does not
+        const Ordered = (
+            ("mark dh-loop-done", "dtor dh", "mark dh-removed"),
+            ("dtor pw", "mark pw"),
+            ("dtor pb", "mark pb"),
+            ("mark pn", "dtor pn", "mark pn-removed"),
+        );
     }
 
     constructor() : ExecModeOutputTest("LoopInvariantCallArgument", LoopInvariantCallArgumentTest::makeScript(),
@@ -148,6 +167,14 @@ class LoopInvariantCallArgumentTest inherits ExecModeOutputTest {
 int sub argLen(string s) { return s.size(); }
 int sub argElems(list<auto> l) { return l.size(); }
 int sub argKeys(hash<auto> h) { return h.size(); }
+auto sub mark(string m) { printf("mark %s\n", m); return ""; }
+
+class E {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+string sub argName(E e) { return e.n; }
 
 class U {
     int len(string s) { return s.size(); }
@@ -238,6 +265,76 @@ int sub map_foldl(list<string> l, string v) {
     return foldl $1 + $2, (map argLen(v) + $1.find(v), l);
 }
 
+# a fixed list and a fixed hash, whose elements are values defined before the loop, given to calls, stored and pushed
+string sub scal_list(list<string> l) {
+    list<string> fx = ("b", "zz");
+    int r = 0;
+    list<string> out = ();
+    foreach string e in (l) {
+        r += e.find(fx[0]) + argLen(fx[1]);
+        push out, fx[0];
+        string st = fx[1];
+        r += st.size();
+    }
+    return sprintf("%d %y", r, out);
+}
+string sub scal_hash(list<string> l) {
+    hash<auto> fh = {"a": "b", "c": "zz"};
+    int r = 0;
+    list<string> out = ();
+    foreach string e in (l) {
+        r += e.find(fh.a) + argLen(fh.c);
+        push out, fh.a;
+        string st = fh.c;
+        r += st.size();
+    }
+    return sprintf("%d %y", r, out);
+}
+# a variable assigned in the outer loop and read in the inner one
+string sub outer_inner(list<string> l) {
+    string r;
+    foreach string e in (l) {
+        string v = e;
+        for (int j = 0; j < 2; ++j) {
+            r += "xab".find(v);
+        }
+    }
+    return r;
+}
+# a hash holding an object, read in the loop: the object is destroyed when the hash is removed after the loop
+string sub dtor_hoisted(list<string> l) {
+    hash<auto> h = {"o": new E("dh")};
+    string text = "b";
+    int r = 0;
+    foreach string e in (l) {
+        r += argKeys(h) + e.find(text);
+    }
+    mark("dh-loop-done");
+    remove h;
+    mark("dh-removed");
+    return r.toString();
+}
+
+# a plain local given to a call: the read is released when the call returns if the statement writes the local after
+# the call (in the block of the call or in another one), so that the write destroys the object before the mark
+string sub plain_write_later() {
+    auto o = new E("pw");
+    string s = argName(o) + ((o = NOTHING) ? "" : "") + mark("pw");
+    return s + "ok";
+}
+string sub plain_write_branch(bool c) {
+    auto o = new E("pb");
+    string s = argName(o) + (c ? ((o = NOTHING) ? "" : "") : "") + mark("pb");
+    return s + "ok";
+}
+string sub plain_no_write() {
+    auto o = new E("pn");
+    string s = argName(o) + mark("pn");
+    remove o;
+    mark("pn-removed");
+    return s + "ok";
+}
+
 sub check(string name, code c) {
     try {
         printf("%s %s\n", name, c());
@@ -260,6 +357,13 @@ for (int pass = 0; pass < 2; ++pass) {
     check("closure_param_loop", auto sub () { return closure_param_loop(l); });
     check("map_foldl", auto sub () { return map_foldl(l, "b"); });
     check("method_self_loop", auto sub () { return w.self_loop(l, "b"); });
+    check("scal_list", auto sub () { return scal_list(l); });
+    check("scal_hash", auto sub () { return scal_hash(l); });
+    check("outer_inner", auto sub () { return outer_inner(l); });
+    check("dtor_hoisted", auto sub () { return dtor_hoisted(l); });
+    check("plain_write_later", auto sub () { return plain_write_later(); });
+    check("plain_write_branch", auto sub () { return plain_write_branch(True); });
+    check("plain_no_write", auto sub () { return plain_no_write(); });
 }
 ';
     }
@@ -278,10 +382,21 @@ for (int pass = 0; pass < 2; ++pass) {
         }
         list<string> rv = ();
         list<hash<string, string>> runs = ();
+        # the position of each ordered line in each run
+        list<hash<string, int>> positions = ();
         foreach string line in (out.split("\n")) {
             if (line =~ /^-- run /) {
                 runs += {};
+                positions += {};
                 continue;
+            }
+            if (runs && !exists positions[positions.size() - 1]{line}) {
+                foreach list<string> seq in (Ordered) {
+                    if (inlist(line, seq)) {
+                        positions[positions.size() - 1]{line} = $#;
+                        break;
+                    }
+                }
             }
             if (!runs) {
                 continue;
@@ -293,6 +408,18 @@ for (int pass = 0; pass < 2; ++pass) {
         }
         if (runs.size() != 2) {
             rv += sprintf("runs: %d, expected 2", runs.size());
+        }
+        foreach hash<string, int> pos in (positions) {
+            int run = $#;
+            foreach list<string> seq in (Ordered) {
+                for (int i = 0; i < seq.size(); ++i) {
+                    if (!exists pos{seq[i]}) {
+                        rv += sprintf("run %d: %y missing", run, seq[i]);
+                    } else if (i && exists pos{seq[i - 1]} && pos{seq[i - 1]} > pos{seq[i]}) {
+                        rv += sprintf("run %d: %y before %y", run, seq[i], seq[i - 1]);
+                    }
+                }
+            }
         }
         foreach hash<string, string> run in (runs) {
             foreach hash<auto> e in (exp.pairIterator()) {

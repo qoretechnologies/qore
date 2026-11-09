@@ -2185,6 +2185,28 @@ void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVi
     }
 }
 
+//! Visits the exception edges of a block: the exception target of each instruction and of each throw
+/** A target can be visited more than once.  With \a check_count, polls cancellation and returns false if it is
+    requested; without it, runs without check points.
+*/
+static bool qore_ir_visit_exception_targets(const QoreIRBasicBlock& block, const QoreIRBlockVisitor& visitor,
+        size_t* check_count, const char* operation) {
+    for (const auto& inst : block.instructions) {
+        if (check_count && qore_ir_analysis_cancelled(*check_count, operation)) {
+            return false;
+        }
+        if (inst->exception_target) {
+            visitor(inst->exception_target);
+        }
+        if (const auto* throw_inst = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
+            if (throw_inst->exception_target) {
+                visitor(throw_inst->exception_target);
+            }
+        }
+    }
+    return true;
+}
+
 QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
         bool include_exception_edges) {
     blocks.reserve(func.blocks.size());
@@ -2230,17 +2252,10 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
                 successors[block_id].push_back(it->second);
                 predecessors[it->second].push_back(block_id);
             };
-            for (const auto& inst : block->instructions) {
-                if (qore_ir_analysis_cancelled(check_count,
-                        "IR exceptional control-flow analysis")) {
-                    cancelled = true;
-                    return;
-                }
-                add_exception_successor(inst->exception_target);
-                if (const auto* throw_inst =
-                        dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
-                    add_exception_successor(throw_inst->exception_target);
-                }
+            if (!qore_ir_visit_exception_targets(*block, add_exception_successor, &check_count,
+                    "IR exceptional control-flow analysis")) {
+                cancelled = true;
+                return;
             }
         }
     }
@@ -2328,12 +2343,12 @@ bool QoreIRControlFlowGraph::dominates(size_t dominator, size_t block) const {
         && (dominators[block][dominator / 64] & (uint64_t(1) << (dominator % 64)));
 }
 
-std::vector<uint8_t> qore_ir_find_reused_call_args(const QoreIRFunction& func, size_t& check_count) {
-    std::vector<uint8_t> reused(func.max_value_id + 1, 0);
-    // a cancelled analysis gives every value, so that no call releases an argument that it might use again
-    auto all_values = [&]() {
-        return std::vector<uint8_t>(func.max_value_id + 1, 1);
+bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8_t>& reused, size_t* check_count) {
+    static const char* const operation = "IR reused call argument analysis";
+    auto cancelled = [&]() -> bool {
+        return check_count && qore_ir_analysis_cancelled(*check_count, operation);
     };
+    reused.assign(func.max_value_id + 1, 0);
     const size_t nblocks = func.blocks.size();
     std::unordered_map<const QoreIRBasicBlock*, size_t> block_ids;
     block_ids.reserve(nblocks);
@@ -2342,14 +2357,12 @@ std::vector<uint8_t> qore_ir_find_reused_call_args(const QoreIRFunction& func, s
     }
     // the defining block of each value
     std::vector<uint32_t> def_block(reused.size(), UINT32_MAX);
-    // the successors of each block: the same edges as QoreIRControlFlowGraph with include_exception_edges
+    // the successors of each block: the edges of QoreIRControlFlowGraph with include_exception_edges, which also
+    // computes dominators (not needed here) and always polls cancellation
     std::vector<std::vector<size_t>> succ(nblocks);
     for (size_t i = 0; i < nblocks; ++i) {
         const QoreIRBasicBlock* block = func.blocks[i].get();
-        auto add = [&](const QoreIRBasicBlock* target) {
-            if (!target) {
-                return;
-            }
+        auto add = [&](QoreIRBasicBlock* target) {
             auto it = block_ids.find(target);
             if (it != block_ids.end()
                     && std::find(succ[i].begin(), succ[i].end(), it->second) == succ[i].end()) {
@@ -2357,18 +2370,12 @@ std::vector<uint8_t> qore_ir_find_reused_call_args(const QoreIRFunction& func, s
             }
         };
         if (!block->instructions.empty()) {
-            qore_ir_visit_successors(*block->instructions.back(), [&](QoreIRBasicBlock* target) {
-                add(target);
-            });
+            qore_ir_visit_successors(*block->instructions.back(), add);
+        }
+        if (!qore_ir_visit_exception_targets(*block, add, check_count, operation)) {
+            return false;
         }
         for (const auto& inst : block->instructions) {
-            if (qore_ir_analysis_cancelled(check_count, "IR reused call argument analysis")) {
-                return all_values();
-            }
-            add(inst->exception_target);
-            if (const auto* throw_inst = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
-                add(throw_inst->exception_target);
-            }
             if (inst->result.isValid() && inst->result.id < def_block.size()) {
                 def_block[inst->result.id] = static_cast<uint32_t>(i);
             }
@@ -2395,10 +2402,11 @@ std::vector<uint8_t> qore_ir_find_reused_call_args(const QoreIRFunction& func, s
             stack.push_back(root);
             on_stack[root] = 1;
             while (!work.empty()) {
-                if (qore_ir_analysis_cancelled(check_count, "IR reused call argument analysis")) {
-                    return all_values();
+                if (cancelled()) {
+                    return false;
                 }
-                auto& [v, pos] = work.back();
+                size_t v = work.back().first;
+                size_t& pos = work.back().second;
                 if (pos < succ[v].size()) {
                     size_t w = succ[v][pos++];
                     if (index[w] == SIZE_MAX) {
@@ -2411,13 +2419,12 @@ std::vector<uint8_t> qore_ir_find_reused_call_args(const QoreIRFunction& func, s
                     }
                     continue;
                 }
-                size_t done = v;
                 work.pop_back();
                 if (!work.empty()) {
                     size_t parent = work.back().first;
-                    low[parent] = std::min(low[parent], low[done]);
+                    low[parent] = std::min(low[parent], low[v]);
                 }
-                if (low[done] == index[done]) {
+                if (low[v] == index[v]) {
                     size_t c = comp_cyclic.size();
                     size_t members = 0;
                     size_t w;
@@ -2427,8 +2434,8 @@ std::vector<uint8_t> qore_ir_find_reused_call_args(const QoreIRFunction& func, s
                         on_stack[w] = 0;
                         comp[w] = c;
                         ++members;
-                    } while (w != done);
-                    bool self_loop = std::find(succ[done].begin(), succ[done].end(), done) != succ[done].end();
+                    } while (w != v);
+                    bool self_loop = std::find(succ[v].begin(), succ[v].end(), v) != succ[v].end();
                     comp_cyclic.push_back(members > 1 || self_loop);
                 }
             }
@@ -2436,14 +2443,15 @@ std::vector<uint8_t> qore_ir_find_reused_call_args(const QoreIRFunction& func, s
     }
 
     // (call block, defining block) -> whether the call's block can run again without the defining block
-    std::map<std::pair<size_t, size_t>, bool> answers;
+    std::unordered_map<uint64_t, bool> answers;
     // the blocks visited by the current search, by the search's stamp
     std::vector<uint32_t> visited(nblocks, 0);
     uint32_t stamp = 0;
     std::vector<size_t> worklist;
-    bool cancelled = false;
+    bool search_cancelled = false;
+    // the call's block is in a cyclic component (the caller checks)
     auto reentered = [&](size_t use, size_t def) -> bool {
-        auto key = std::make_pair(use, def);
+        uint64_t key = (static_cast<uint64_t>(use) << 32) | static_cast<uint64_t>(def);
         auto it = answers.find(key);
         if (it != answers.end()) {
             return it->second;
@@ -2453,8 +2461,8 @@ std::vector<uint8_t> qore_ir_find_reused_call_args(const QoreIRFunction& func, s
         worklist.clear();
         worklist.push_back(use);
         while (!found && !worklist.empty()) {
-            if (qore_ir_analysis_cancelled(check_count, "IR reused call argument analysis")) {
-                cancelled = true;
+            if (cancelled()) {
+                search_cancelled = true;
                 return true;
             }
             size_t b = worklist.back();
@@ -2464,7 +2472,6 @@ std::vector<uint8_t> qore_ir_find_reused_call_args(const QoreIRFunction& func, s
                     found = true;
                     break;
                 }
-                // a cycle through the call's block stays in its component
                 if (s == def || visited[s] == stamp || comp[s] != comp[use]) {
                     continue;
                 }
@@ -2478,8 +2485,8 @@ std::vector<uint8_t> qore_ir_find_reused_call_args(const QoreIRFunction& func, s
 
     for (size_t i = 0; i < nblocks; ++i) {
         for (const auto& inst : func.blocks[i]->instructions) {
-            if (qore_ir_analysis_cancelled(check_count, "IR reused call argument analysis")) {
-                return all_values();
+            if (cancelled()) {
+                return false;
             }
             int arg_start = qore_ir_call_arg_start(inst.get());
             if (arg_start < 0) {
@@ -2488,15 +2495,12 @@ std::vector<uint8_t> qore_ir_find_reused_call_args(const QoreIRFunction& func, s
             for (size_t op = static_cast<size_t>(arg_start); op < inst->operands.size(); ++op) {
                 QoreIRValue arg = inst->operands[op];
                 if (!arg.isValid() || arg.id >= def_block.size() || def_block[arg.id] == UINT32_MAX
-                        || def_block[arg.id] == i) {
-                    continue;
-                }
-                if (comp[i] == SIZE_MAX || !comp_cyclic[comp[i]]) {
+                        || def_block[arg.id] == i || comp[i] == SIZE_MAX || !comp_cyclic[comp[i]]) {
                     continue;
                 }
                 bool again = reentered(i, def_block[arg.id]);
-                if (cancelled) {
-                    return all_values();
+                if (search_cancelled) {
+                    return false;
                 }
                 if (again) {
                     reused[arg.id] = 1;
@@ -2504,7 +2508,7 @@ std::vector<uint8_t> qore_ir_find_reused_call_args(const QoreIRFunction& func, s
             }
         }
     }
-    return reused;
+    return true;
 }
 
 std::vector<QoreIRNaturalLoop> qore_ir_find_natural_loops(const QoreIRControlFlowGraph& cfg) {
