@@ -463,7 +463,8 @@ DLLLOCAL QoreParseOptions runtime_get_own_program_state_parse_options(const Qore
     - \a caller_pgm or the Program running on the thread is sandboxed (qore_program_is_sandboxed()),
     - the thread runs for sandboxed code: it inherited or applied a captured sandbox (a thread that sandboxed code
       started, a pool task or an asynchronous operation submitted by it), or
-    - module code already runs with the restrictions of a sandboxed caller, which pass on to the module code it calls
+    - module code already runs for a sandboxed caller (QoreCallParseOptionsOverride::sandboxed), whose restrictions
+      pass on to the module code it calls, also through module code whose own options have them already
 */
 DLLLOCAL bool runtime_module_call_inherits_caller_restrictions(const QoreProgram* caller_pgm);
 
@@ -790,6 +791,7 @@ private:
     QoreParseOptions old_caller_restrictions;
     const QoreProgram* old_module_pgm;
     qore_program_id_t old_app_pgm_id;
+    bool old_sandboxed;
 };
 
 //! Makes the next user call on the current thread a call made on behalf of another Program
@@ -838,6 +840,11 @@ struct QoreCallParseOptionsOverride {
         restrictions the module code inherits
     */
     qore_program_id_t app_pgm_id = 0;
+    //! true if the module code runs for a sandboxed caller (see runtime_module_call_inherits_caller_restrictions())
+    /** Set whether or not the caller has restrictions that the module does not have: the module code that the code
+        calls runs with the caller's restrictions in any case
+    */
+    bool sandboxed = false;
 };
 
 class RuntimeParseOptionsOverrideHelper {
@@ -859,6 +866,7 @@ private:
     QoreParseOptions old_caller_restrictions;
     const QoreProgram* old_module_pgm;
     qore_program_id_t old_app_pgm_id;
+    bool old_sandboxed;
 
     DLLLOCAL void set(const QoreCallParseOptionsOverride& o);
 };

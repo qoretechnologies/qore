@@ -2144,6 +2144,11 @@ pgm.importFunction("log");
     @throw PROGRAM-IMPORTFUNCTION-NO-FUNCTION The function does not exist, or the function name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR the function name could not be converted to the @ref default_encoding "default character encoding"
 
+    @note The imported function runs in the Program that it is imported from, with that Program's options and
+    names, as a method of a class imported with importClass() does; the @ref Qore::SandboxManager "SandboxManager" of
+    a sandboxed calling Program still governs it.  A call after that Program has been deleted raises
+    \c PROGRAM-ERROR
+
     @since %Qore 0.8.4 the function name can include a namespace path (ex \c "Namespace::func")
  */
 nothing Program::importFunction(string function_name) [flags=NAMED_ARGS] {
@@ -2180,6 +2185,11 @@ pgm.importFunction("service_log", "log");
     @throw PROGRAM-IMPORTFUNCTION-NO-FUNCTION The function does not exist, or the function name or the name to import it as contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR the function name could not be converted to the
     @ref default_encoding "default character encoding"
+
+    @note The imported function runs in the Program that it is imported from, with that Program's options and
+    names, as a method of a class imported with importClass() does; the @ref Qore::SandboxManager "SandboxManager" of
+    a sandboxed calling Program still governs it.  A call after that Program has been deleted raises
+    \c PROGRAM-ERROR
 
     @since
     - %Qore 0.8.4 the function name can include a namespace path (ex \c "Namespace::func")

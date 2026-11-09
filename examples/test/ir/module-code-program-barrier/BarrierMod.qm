@@ -84,9 +84,9 @@ public auto sub func_thread_data() {
     return Priv::run(auto sub () { save_thread_data("barrier", "function"); return get_thread_data("barrier"); });
 }
 
-#! runs code of the caller asynchronously (MODULE_OWNED)
+#! schedules code of the caller to run asynchronously (MODULE_OWNED)
 public auto sub func_async(code c) {
-    return Priv::run(auto sub () { return call_async(c).get(); });
+    return Priv::run(auto sub () { call_async(c); return "scheduled"; });
 }
 
 #! calls code of the caller
@@ -129,7 +129,7 @@ public class Probe {
     }
 
     static auto async(code c) {
-        return Priv::run(auto sub () { return call_async(c).get(); });
+        return Priv::run(auto sub () { call_async(c); return "scheduled"; });
     }
 
     static auto callback(code c) {

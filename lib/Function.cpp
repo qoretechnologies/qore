@@ -4749,6 +4749,27 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     return variant;
 }
 
+//! enters the explicit Program of a call of a user function that the Program does not define
+/** A call made in another Program (QoreProgram::callFunction()) of a function defined elsewhere (an imported
+    function, a module function) runs in the Program that defined the function, and is made from the call's Program:
+    that Program is entered first, so that it is the caller of the function, with its restrictions and its sandbox,
+    as for a call that its own code makes.  Nothing is done if the call's Program is the current one or the function's
+*/
+class QoreCallProgramEntryHelper {
+public:
+    DLLLOCAL QoreCallProgramEntryHelper(ExceptionSink* xsink, QoreProgram* call_pgm, QoreProgram* exec_pgm) {
+        if (call_pgm && exec_pgm && call_pgm != exec_pgm && call_pgm != ::getProgram()) {
+            ptcch.emplace(xsink, call_pgm, true);
+        }
+    }
+
+    QoreCallProgramEntryHelper(const QoreCallProgramEntryHelper&) = delete;
+    QoreCallProgramEntryHelper& operator=(const QoreCallProgramEntryHelper&) = delete;
+
+private:
+    std::optional<ProgramThreadCountContextHelper> ptcch;
+};
+
 // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL, then it is
 // identified at run time
 QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
@@ -4781,6 +4802,12 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
     if (*xsink) {
         return QoreValue();
     }
+    // a call made in another Program (QoreProgram::callFunction()) of a function that it does not define is made
+    // from that Program: it is entered first, so its restrictions and its sandbox apply as for a call of its own code
+    QoreCallProgramEntryHelper call_pgm_entry(xsink, pgm, exec_pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
@@ -4804,6 +4831,12 @@ QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* v
     if (*xsink) {
         return QoreValue();
     }
+    // a call made in another Program (QoreProgram::callFunction()) of a function that it does not define is made
+    // from that Program: it is entered first, so its restrictions and its sandbox apply as for a call of its own code
+    QoreCallProgramEntryHelper call_pgm_entry(xsink, pgm, exec_pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
@@ -4818,8 +4851,15 @@ QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* v
 // program parse options
 QoreValue QoreFunction::evalDynamic(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const {
     const char* fname = getName();
-    const AbstractQoreFunctionVariant* variant = 0;
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args);
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    // see evalFunction(); a builtin function runs in the current Program, as before
+    QoreSourceProgramHolder exec_pgm_holder(xsink);
+    QoreProgram* exec_pgm = qore_get_function_pgm_context(this, variant, exec_pgm_holder, nullptr);
+    if (*xsink) {
+        return QoreValue();
+    }
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
+        exec_pgm);
     if (*xsink) {
         return QoreValue();
     }
@@ -4833,6 +4873,12 @@ QoreValue QoreFunction::evalDynamicTmpArgs(QoreListNode* args, QoreProgram* pgm,
     // see evalFunction()
     QoreSourceProgramHolder exec_pgm_holder(xsink);
     QoreProgram* exec_pgm = qore_get_function_pgm_context(this, variant, exec_pgm_holder, pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // a call made in another Program (QoreProgram::callFunction()) of a function that it does not define is made
+    // from that Program: it is entered first, so its restrictions and its sandbox apply as for a call of its own code
+    QoreCallProgramEntryHelper call_pgm_entry(xsink, pgm, exec_pgm);
     if (*xsink) {
         return QoreValue();
     }
@@ -4947,8 +4993,14 @@ QoreCallParseOptionsOverride qore_get_module_call_runtime_po_override(const Qore
     // a module is a capability: once it is loaded, any caller can use it, and its code runs with its own options;
     // only the sandbox governs it at run time.  For a sandboxed caller, the caller's restrictions are part of its
     // sandbox: the module code also runs with them (the restricting options of both and only the explicitly-allowed
-    // options that both have)
-    if ((composed & o.mask) == (own_po & o.mask) || !runtime_module_call_inherits_caller_restrictions(caller_pgm)) {
+    // options that both have), and passes them on to the module code it calls, also when the module's own options
+    // have them already
+    if (!runtime_module_call_inherits_caller_restrictions(caller_pgm)) {
+        o.value = own_po;
+        return o;
+    }
+    o.sandboxed = true;
+    if ((composed & o.mask) == (own_po & o.mask)) {
         o.value = own_po;
         return o;
     }

@@ -38,6 +38,7 @@
 #include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/QoreSandboxMemory.h"
 #include "qore/intern/ThreadPool.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <cassert>
 #include <cctype>
@@ -1547,6 +1548,8 @@ namespace {
 //! the Programs with module lifetime, each with a dependency reference; see qore_program_set_module_lifetime()
 struct ModuleProgramPins {
     std::mutex m;
+    //! leaf lock: only the reference count is changed while it is held
+    QoreForkStdMutex fork_handler{m, QFLR_LEAF, "module_program_pins"};
     std::vector<QoreProgram*> pgms;
     //! true until qore_release_module_program_pins()
     std::atomic<bool> active{true};

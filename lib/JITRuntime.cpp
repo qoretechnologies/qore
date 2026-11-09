@@ -10793,6 +10793,15 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     }
 }
 
+//! returns true if a call of a user function with the explicit Program \a call_pgm needs to enter that Program first
+/** A call made in another Program (QoreProgram::callFunction()) of a function that the Program does not define (an
+    imported function) is made from that Program: the slow call path enters it first (see
+    QoreFunction::evalFunction()), so that its restrictions and its sandbox apply as for a call that its own code makes
+*/
+static bool qore_rt_call_needs_call_program(const QoreProgram* call_pgm, const UserVariantBase* uvb) {
+    return call_pgm && call_pgm != uvb->pgm && call_pgm != getProgram();
+}
+
 //! returns the Program a user function runs in when it is called from the current context
 /** A user function runs in the Program that defined it, as an AST call runs it (see QoreFunction::evalFunction() and
     qore_get_function_pgm_context()), and as a method runs in the source Program of its class: a module function
@@ -11058,8 +11067,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     }
 
     // If the callee has neither JIT nor IR, fall back to the slow path.
-    // This can happen in tiered compilation when the callee hasn't been promoted yet.
-    if (!uvb->hasCachedFunction() && !uvb->getCachedIR()) {
+    // This can happen in tiered compilation when the callee hasn't been promoted yet.  A call made in another Program
+    // of a function that it does not define takes the slow path as well, which enters that Program first.
+    if ((!uvb->hasCachedFunction() && !uvb->getCachedIR()) || qore_rt_call_needs_call_program(pgm, uvb)) {
         return qore_rt_call_function_direct(func, variant, pgm, args, nargs, xsink);
     }
 
@@ -15810,7 +15820,10 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
     if (!resolved_uvb && target.variant) {
         resolved_uvb = target.variant->getUserVariantBase();
     }
-    if (resolved_uvb && resolved_uvb->isStaticallyFastCallEligible()) {
+    // a call made in another Program of a function that it does not define is made from that Program, which the
+    // call path enters first (see QoreFunction::evalFunction())
+    if (resolved_uvb && resolved_uvb->isStaticallyFastCallEligible()
+            && !qore_rt_call_needs_call_program(target.pgm, resolved_uvb)) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_direct_aot", "function", "use");
         const UserVariantBase* uvb = resolved_uvb;
 

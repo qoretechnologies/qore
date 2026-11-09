@@ -25,7 +25,10 @@
     Program without restrictions, from one restricted by parse options only, from a sandboxed one with the same
     restrictions, and from the main Program, with the source module and with the module AOT-compiled with
     <tt>--compile-module</tt>, in every execution mode and as an AOT-compiled script, against the expected output of
-    the source module with the AST interpreter.
+    the source module with the AST interpreter.  It also checks that a sandboxed caller's restrictions pass on through
+    module code whose own options have them already, that a host's call of an imported module function in a sandboxed
+    Program is made from that Program, and that module code refuses to run a sandboxed caller's reference to a
+    function whose Program has been deleted.
 */
 class ModuleCodeProgramBarrierTest inherits QUnit::Test {
     private {
@@ -51,8 +54,8 @@ unrestricted: function nested module code: \"ok\"
 unrestricted: method nested module code: \"ok\"
 unrestricted: function own thread data: \"function\"
 unrestricted: method own thread data: \"method\"
-unrestricted: function async caller code: \"async\"
-unrestricted: method async caller code: \"async\"
+unrestricted: function async caller code: \"scheduled\"
+unrestricted: method async caller code: \"scheduled\"
 unrestricted: function callback: \"ok\"
 unrestricted: method callback: \"ok\"
 unrestricted: function object call reference: \"readers: 0\"
@@ -73,8 +76,8 @@ restricted by parse options: function nested module code: \"ok\"
 restricted by parse options: method nested module code: \"ok\"
 restricted by parse options: function own thread data: \"function\"
 restricted by parse options: method own thread data: \"method\"
-restricted by parse options: function async caller code: \"async\"
-restricted by parse options: method async caller code: \"async\"
+restricted by parse options: function async caller code: \"scheduled\"
+restricted by parse options: method async caller code: \"scheduled\"
 restricted by parse options: function callback: \"INVALID-FUNCTION-ACCESS\"
 restricted by parse options: method callback: \"INVALID-FUNCTION-ACCESS\"
 restricted by parse options: function object call reference: \"readers: 0\"
@@ -103,6 +106,14 @@ sandboxed: function object call reference: \"INVALID-FUNCTION-ACCESS\"
 sandboxed: method object call reference: \"INVALID-FUNCTION-ACCESS\"
 sandboxed: function call reference: \"module\"
 sandboxed: function call_function: \"module\"
+sandboxed: function through a module: \"CREATE-OBJECT-ERROR\"
+sandboxed: method through a module: \"CREATE-OBJECT-ERROR\"
+restricted by parse options: function through a module: \"Mutex\"
+restricted by parse options: method through a module: \"Mutex\"
+restricted by parse options: host call of an imported function: \"ok\"
+sandboxed: host call of an imported function: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: async reference to an imported function: \"scheduled\"
+sandboxed: async reference to a function of a deleted Program: \"INVALID-FUNCTION-ACCESS\"
 main: function program: \"module\"
 main: method program: \"module\"
 main: function private function by name: \"private\"
@@ -128,13 +139,16 @@ main: method private function by name: \"private\"
     }
 
     private compileModule() {
-        string qmod_path = qmod_dir + "/BarrierMod.qmod";
-        if (is_file(qmod_path)) {
-            return;
+        # ChainMod requires BarrierMod, which is found in the AOT module directory
+        foreach string mod in ("BarrierMod", "ChainMod") {
+            string qmod_path = qmod_dir + "/" + mod + ".qmod";
+            if (is_file(qmod_path)) {
+                continue;
+            }
+            string out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1", env(),
+                qmod_dir, qore_bin, qmod_path, src_dir + "/" + mod + ".qm"));
+            assertTrue(is_file(qmod_path), sprintf("compiled %s.qmod: %s", mod, out));
         }
-        string out = backquote(sprintf("%s %s -b --compile-module --output %s %s 2>&1", env(), qore_bin, qmod_path,
-            src_dir + "/BarrierMod.qm"));
-        assertTrue(is_file(qmod_path), sprintf("compiled BarrierMod.qmod: %s", out));
     }
 
     private hash<ExecModeHarness::ModeRunResult> runScript(string module_dir, string mode) {

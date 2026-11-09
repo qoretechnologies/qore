@@ -88,6 +88,46 @@ for (int pass = 0; pass < 3; ++pass) {
     }
 }
 
+# module code called by module code: ChainMod is loaded first by the sandboxed Program, so it has its restrictions
+# itself; they still apply to the BarrierMod code that it calls for the sandboxed caller, but not for a caller
+# restricted only by its parse options
+callers.sandboxed.loadModule("ChainMod");
+Program chain_s(PO_NEW_STYLE | Restrictions);
+chain_s.setSandboxManager(new SandboxManager());
+chain_s.parse("%requires ChainMod
+auto sub f() { return ChainMod::create_through('Mutex'); }
+auto sub m() { return ChainMod::Chain::createThrough('Mutex'); }", "chain sandboxed");
+Program chain_r(PO_NEW_STYLE | Restrictions);
+chain_r.parse("%requires ChainMod
+auto sub f() { return ChainMod::create_through('Mutex'); }
+auto sub m() { return ChainMod::Chain::createThrough('Mutex'); }", "chain restricted");
+foreach hash<auto> i in ({"label": "sandboxed", "pgm": chain_s}, {"label": "restricted by parse options",
+        "pgm": chain_r}) {
+    printf("%s: function through a module: %y\n", i.label, i.pgm.callFunction("f"));
+    printf("%s: method through a module: %y\n", i.label, i.pgm.callFunction("m"));
+}
+
+# a host calling a module function that a Program imported, in that Program: the call is made from the Program
+foreach string label in ("restricted by parse options", "sandboxed") {
+    printf("%s: host call of an imported function: %y\n", label,
+        callers{label}.callFunction("BarrierMod::func_call_by_name", "gethostname"));
+}
+
+# module code running a sandboxed caller's reference to a function whose Program has been deleted
+{
+    Program defining(PO_NEW_STYLE);
+    defining.parse("string sub defined() { return 'defined'; }
+sub export_to(Program p) { p.importFunction('defined'); }", "defining");
+    Program user(PO_NEW_STYLE | Restrictions);
+    user.setSandboxManager(new SandboxManager());
+    defining.callFunction("export_to", user);
+    user.parse("%requires BarrierMod
+auto sub run() { return BarrierMod::func_async(\\defined()); }", "user");
+    printf("sandboxed: async reference to an imported function: %y\n", user.callFunction("run"));
+    delete defining;
+    printf("sandboxed: async reference to a function of a deleted Program: %y\n", user.callFunction("run"));
+}
+
 # the main Program calling the module directly, which compiled with AOT is a native call into the module
 printf("main: function program: %y\n", BarrierMod::func_program());
 printf("main: method program: %y\n", BarrierMod::Probe::program());
