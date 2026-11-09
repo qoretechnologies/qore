@@ -87,6 +87,30 @@ cancels or waits for.  Refused work leaves the function in its tier for good (`j
 refused again; only work refused because the compiler stops can be submitted again.  `dbg_close_program_bg_compile()`, `dbg_get_bg_compile_refused_count()` and
 `dbg_program_registered_with_id()` test it.
 
+## Caches of a Program's code that outlive it
+
+A cache that outlives the Programs whose code it describes (a thread-local or a static cache) must find its entries
+by the ID of the Program as well as by the addresses of the code's objects.  The functions, variants, IR and
+signatures of a Program are freed with it, and the Program created after it, its functions, variants, IR and the
+closures they create can have the addresses of the deleted ones, so an entry found by addresses alone gives the new
+code what was cached for the deleted code.  The thread-local caches of closure calls are found so:
+
+- the IR interpreter's inline closure call (`tryExecuteInterpreterInlineIRClosure()` in `lib/QoreIRInterpreter.cpp`)
+  finds its entry by the closure, its function and the ID of the calling Program, which owns the function (the call
+  is only made inline when it does); it caches the variant, its IR and signature.  It found the entry by the
+  Program's address, and ran the deleted Program's freed IR with its freed signature: a wrong result, a crash, or a
+  reference argument released wrongly (`examples/test/qore/misc/dgc-opaque-object-local-release.qtest` saw a cycle
+  collected while its Program lived, in the IR execution mode, on macOS);
+- native code's call of a closure as a native leaf (`tryExecClosureNativeLeaf()` in `lib/JITRuntime.cpp`) finds its
+  entry by the variant, its IR and the ID of the variant's Program; it caches the analysis of the IR (the leaf's
+  operation) and the return type, and computed the deleted closure's operation.
+
+A Program's functions and variants live as long as it does, so the ID identifies them while its code runs.
+`examples/test/ir/ClosureCacheProgramReuse.qtest` creates Programs one after another, each with a closure computing
+another operation, in every execution mode.  Whether a deleted Program's addresses are given to the next one
+depends on the allocator and the layout of the process's heap, so the test runs its driver several times; macOS's
+allocator gave them in most runs, glibc's in none, so the test declares macOS as a platform it must run on.
+
 ## Where the teardown can wait for ever
 
 Steps 1 and 3 wait without a timeout for the threads in the Program; the teardown hangs if one of them never

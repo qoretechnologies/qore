@@ -4999,10 +4999,16 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         return false;
     }
 
+    // The entry is found by the closure, its function and the id of the Program that owns the function and the
+    // variant, IR and signature cached for it.  A Program's id is never reused, but its address is: a Program created
+    // after the cached one was deleted can have its address, and its closure function, closure and variant can have
+    // the addresses of the deleted ones, so an entry found by the Program's address ran the deleted Program's freed IR
+    // with its freed signature (a wrong result, a wrong release of a reference argument, or a crash).  The function
+    // and its variant live as long as their Program, so the id identifies them while the Program's code runs.
     struct ClosureInlineCache {
         const AbstractQoreNode* node = nullptr;
         UserClosureFunction* function = nullptr;
-        QoreProgram* caller_pgm = nullptr;
+        qore_program_id_t caller_pgm_id = 0;
         const UserVariantBase* uvb = nullptr;
         const QoreIRFunction* callee_ir = nullptr;
         const UserSignature* sig = nullptr;
@@ -5017,9 +5023,10 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     const UserSignature* sig = nullptr;
     const QoreIRIncrementLocalIntInstruction* simple_increment = nullptr;
     unsigned num_params = 0;
+    const qore_program_id_t caller_pgm_id = qore_program_private::get(*caller_pgm)->getProgramId();
     bool use_cached_metadata = closure_inline_cache.node == node
         && closure_inline_cache.function == uf
-        && closure_inline_cache.caller_pgm == caller_pgm
+        && closure_inline_cache.caller_pgm_id == caller_pgm_id
         && closure_inline_cache.uvb
         && closure_inline_cache.callee_ir
         && closure_inline_cache.sig
@@ -5060,7 +5067,7 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         closure_inline_cache = {
             node,
             uf,
-            caller_pgm,
+            caller_pgm_id,
             uvb,
             callee_ir,
             sig,
