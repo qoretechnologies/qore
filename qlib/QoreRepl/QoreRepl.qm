@@ -58,6 +58,10 @@ module QoreRepl {
     author = "Qore Technologies, s.r.o.";
     url = "https://qoretechnologies.com";
     license = "MIT";
+    init = sub () {
+        # sessions with listeners run a thread, which the exit hook stops before the process waits for its threads
+        QoreRepl::ReplDeliveryRegistry::init();
+    };
 }
 
 /** @mainpage QoreRepl Module
@@ -190,11 +194,12 @@ repl.eval("/reset");
     session delivers them in order, and a thread that starts and ends between two updates of a UI is reported as
     well.  @ref QoreRepl::QoreRepl::getBackgroundThreads() "getBackgroundThreads()" returns the running background
     threads and @ref QoreRepl::QoreRepl::isProgramIdle() "isProgramIdle()" the Program's state, as of the last event
-    delivered (or from a snapshot when the session has no listeners).  The thread that delivers the events runs
-    while the session has listeners: removing the last one, @ref QoreRepl::QoreRepl::close() "close()" and the
-    destructor end it.  A process waits for its threads before it ends, so a script removes its listeners or closes
-    the session when it no longer needs the events; a listener that refers to the session keeps it alive until
-    then.
+    delivered (or from a snapshot when the session has no listeners).  The activity events (@c program-busy and
+    @c program-idle) are delivered only to the listeners that ask for them, as every call into the Program produces
+    them.  The thread that delivers the events runs while the session has listeners: removing the last one,
+    @ref QoreRepl::QoreRepl::close() "close()" and the destructor end it, and the module stops it before the process
+    waits for its threads, so a session kept in a global variable does not keep the process from ending.  A listener
+    that refers to the session keeps it alive until it is removed or the session is closed.
 
     @ref QoreRepl::QoreRepl::formatThreadNotices() "formatThreadNotices()" turns a batch of events (the events a
     frontend received since it last displayed notices) into notices, at a level set with the

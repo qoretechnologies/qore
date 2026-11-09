@@ -16390,6 +16390,44 @@ static QoreValue f_dbg_run_program_thread_hub_tests(const QoreListNode* params, 
 }
 #endif
 
+#ifdef DEBUG
+//! Debug-only: cancels a thread and publishes the request's lifecycle event only after the thread has ended
+/** The canceller publishes a claimed request after it releases the thread list's lock; this makes it publish after
+    the thread has ended, which can otherwise happen only by chance, so that a test can check that the thread published
+    the request before its FINISHED event (design/program-thread-lifecycle-events.md)
+
+    @return True if the request was delivered
+*/
+static QoreValue f_dbg_cancel_thread_after_end(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int tid = static_cast<int>(HARD_QORE_VALUE_INT(params, 0));
+    const QoreStringNode* reason = get_param_value(params, 1).getType() == NT_STRING
+        ? get_param_value(params, 1).get<const QoreStringNode>()
+        : nullptr;
+    std::function<void()> wait_for_end = [tid]() {
+        ExceptionSink join_xsink;
+        thread_list.joinThread(tid, 60000, &join_xsink);
+        join_xsink.clear();
+    };
+    qore_dbg_cancel_before_publish = &wait_for_end;
+    ON_BLOCK_EXIT([]() { qore_dbg_cancel_before_publish = nullptr; });
+    return !qore_cancel_thread(tid, reason ? reason->c_str() : nullptr);
+}
+#endif
+
+#ifdef DEBUG
+//! Debug-only: returns the number of cancellation requests of a thread not yet published by their canceller
+/** Each new cancellation request of a background thread is claimed for its lifecycle events; the canceller removes
+    the claim once it has published it, and the thread publishes those left before its FINISHED event
+    (design/program-thread-lifecycle-events.md)
+*/
+static QoreValue f_dbg_get_lifecycle_cancel_claim_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(thread_list.getLifecycleCancelClaimCount(
+        static_cast<int>(HARD_QORE_VALUE_INT(params, 0))));
+}
+#endif
+
 //! Debug-only: runs the unit tests of the poll operation states that need no connection (Http3ServerPollStateTest)
 static QoreValue f_dbg_run_poll_state_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
@@ -19742,6 +19780,11 @@ void init_debug_functions(QoreNamespace& qns) {
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_program_thread_hub_tests", f_dbg_run_program_thread_hub_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_cancel_thread_after_end", f_dbg_cancel_thread_after_end, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", stringOrNothingTypeInfo,
+        QORE_PARAM_NO_ARG, "reason");
+    qns.addBuiltinVariant("dbg_get_lifecycle_cancel_claim_count", f_dbg_get_lifecycle_cancel_claim_count,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid");
 #endif
     qns.addBuiltinVariant("dbg_run_poll_state_tests", f_dbg_run_poll_state_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);

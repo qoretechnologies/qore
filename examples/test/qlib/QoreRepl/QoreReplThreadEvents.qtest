@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.  SPDX-License-Identifier: MIT
+# test-platform: macos - background delivery threads, thread cancellation wakeups and process exit with running threads
 
 %modern
 
@@ -8,6 +9,10 @@
 %requires QUnit
 %requires QoreRepl
 %requires FsUtil
+
+%try-module process
+%define NoProcess
+%endtry
 
 %exec-class ReplThreadEventsTest
 
@@ -75,9 +80,9 @@ class ReplThreadEventsTest inherits QUnit::Test {
     }
 
     #! adds a listener that pushes the events to a queue, which is returned
-    private Queue listen(QoreRepl::QoreRepl repl) {
+    private Queue listen(QoreRepl::QoreRepl repl, bool activity = False) {
         Queue q();
-        repl.addEventListener(sub (hash<ReplEvent> ev) { q.push(ev); });
+        repl.addEventListener(sub (hash<ReplEvent> ev) { q.push(ev); }, activity);
         return q;
     }
 
@@ -111,6 +116,8 @@ class ReplThreadEventsTest inherits QUnit::Test {
         int tid = start(repl, "sub () {}");
         list<hash<ReplEvent>> l = selectThreadEvents(until(q, "thread-finished", tid));
         assertEq(("thread-started", "thread-finished"), (map $1.event, l));
+        # no listener receives the activity events, so the Program's state is not known to the events
+        assertNothing(l[0].idle);
         assertEq(tid, l[0].thread.tid);
         assertEq(1, l[0].running);
         assertEq(0, l[1].running);
@@ -126,7 +133,9 @@ class ReplThreadEventsTest inherits QUnit::Test {
 
     evaluationEvents() {
         QoreRepl::QoreRepl repl = makeRepl();
-        Queue q = listen(repl);
+        Queue q = listen(repl, True);
+        # a listener that did not ask for activity events receives the other events only
+        Queue q_no_activity = listen(repl);
         repl.eval("1 + 1");
         # the evaluation makes the Program active and idle; the order is that of the evaluation
         list<hash<ReplEvent>> l = until(q, "eval-finished");
@@ -146,6 +155,13 @@ class ReplThreadEventsTest inherits QUnit::Test {
         }
         assertEq("program-idle", activity.last().event);
         assertTrue(repl.isProgramIdle());
+        list<hash<ReplEvent>> other;
+        while (other.size() < 2) {
+            other += next(q_no_activity);
+        }
+        assertEq(("eval-started", "eval-finished"), (map $1.event, other));
+        # the Program's state is known, as another listener of the session receives the activity events
+        assertTrue(other[0].idle.typeCode() == NT_BOOLEAN);
 
         # a command that does not run code has no evaluation events
         repl.eval("/vars");
@@ -175,9 +191,11 @@ class ReplThreadEventsTest inherits QUnit::Test {
         QoreRepl::QoreRepl repl = makeRepl(2, 1);
         Queue q = listen(repl);
         on_exit release(repl);
-        # both threads are started by one evaluation, as a running thread blocks the next one; the second thread
-        # defers cancellation, so it keeps running after its request
-        assertNothing(repl.eval("our *int tid2; last_tid = background sub () { entered.dec(); gate.waitForZero(); }(); "
+        # both threads are started by one evaluation, as a running thread blocks the next one; the second thread is
+        # started only once the first is running, as the threads are listed in the order they published STARTED, and
+        # it defers cancellation, so it keeps running after its request
+        assertNothing(repl.eval("our *int tid2; Counter first(1); last_tid = background sub () { first.dec(); "
+            "entered.dec(); gate.waitForZero(); }(); first.waitForZero(); "
             "tid2 = background sub () { defer_thread_cancel(sub () { entered.dec(); gate.waitForZero(); }); }();").error);
         int tid1 = repl.getProgram().getGlobalVariable("last_tid");
         int tid2 = repl.getProgram().getGlobalVariable("tid2");
@@ -393,25 +411,54 @@ class ReplThreadEventsTest inherits QUnit::Test {
     }
 
     processExit() {
-        # a process waits for its background threads before it ends: a session runs a thread only while it has
-        # listeners, so a script whose listener has been removed ends
+%ifdef NoProcess
+        testSkip("the process module is required");
+%else
+        # a process waits for its background threads before it ends: the module stops the thread that delivers the
+        # events before that, so a session with a listener does not keep the process from ending, wherever it is kept
         string qore = ENV.QORE_BINARY ?? ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        # Process searches PATH for a command without a directory
+        if (qore =~ /\//) {
+            qore = realpath(qore);
+        }
         string qlib = realpath(get_script_dir() + "/../../../../qlib");
         TmpDir tmp("repl-exit-");
-        string script = tmp.path + "/exit.q";
-        {
-            File f();
-            f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
-            f.write(sprintf("%%modern\n%%prepend-module-path %s\n%%requires QoreRepl\n"
-                "QoreRepl::QoreRepl repl({\"history_file\": NOTHING});\n"
+        hash<string, string> scripts = {
+            "listener removed": "QoreRepl::QoreRepl repl({\"history_file\": NOTHING});\n"
                 "int id = repl.addEventListener(sub (hash<QoreRepl::ReplEvent> ev) {});\n"
                 "repl.eval(\"background sub () {}()\");\n"
-                "repl.removeEventListener(id);\n"
-                "printf(\"done\\n\");\n", qlib));
+                "repl.removeEventListener(id);\n",
+            "top-level local": "QoreRepl::QoreRepl repl({\"history_file\": NOTHING});\n"
+                "repl.addEventListener(sub (hash<QoreRepl::ReplEvent> ev) {}, True);\n"
+                "repl.eval(\"background sub () {}()\");\n",
+            "global": "our QoreRepl::QoreRepl repl({\"history_file\": NOTHING});\n"
+                "repl.addEventListener(sub (hash<QoreRepl::ReplEvent> ev) {});\n",
+            "listener refers to the session": "QoreRepl::QoreRepl repl({\"history_file\": NOTHING});\n"
+                "repl.addEventListener(sub (hash<QoreRepl::ReplEvent> ev) { repl.getThreadNoticeLevel(); });\n"
+                "repl.eval(\"background sub () {}()\");\n",
+        };
+        foreach hash<auto> i in (scripts.pairIterator()) {
+            string script = tmp.path + "/exit-" + $# + ".q";
+            {
+                File f();
+                f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
+                f.write(sprintf("%%modern\n%%prepend-module-path %s\n%%requires QoreRepl\n%sprintf(\"done\\n\");\n",
+                    qlib, i.value));
+            }
+            StringOutputStream out();
+            StringOutputStream err();
+            Process p(qore, (script,), {"stdout": out, "stderr": err});
+            # a hang fails the test instead of stalling the run
+            bool done = p.wait(60s);
+            if (!done) {
+                p.terminate();
+                p.wait();
+            }
+            assertTrue(done, i.key + ": the process ended");
+            assertEq(0, p.exitCode(), i.key + ": " + err.getData());
+            assertEq("done\n", out.getData(), i.key);
         }
-        # a hang fails the test instead of stalling the run
-        string out = backquote(sprintf("timeout 60 %s %s 2>/dev/null; echo \"rc=$?\"", qore, script));
-        assertEq("done\nrc=0\n", out);
+%endif
     }
 
     #! returns a thread event for the notice tests

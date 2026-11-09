@@ -38,7 +38,9 @@ public namespace QoreRepl {
       @ref QoreRepl::QoreRepl::formatThreadNotices() "QoreRepl::formatThreadNotices()"); for \c "finished" also
       \c outcome, \c duration_ms, \c error and \c cleanup_error (\c err, \c desc, \c file and \c line of the
       exception), and for \c "cancel-requested" \c cancel_reason
-    - \c repl-activity: the Program became idle or active; \c data has \c idle and \c running
+    - \c repl-activity: the Program became idle or active; \c data has \c idle and \c running; emitted only when
+      enabled (see @ref QoreRepl::QoreReplActionSession::setActivityEvents() "setActivityEvents()"), as every call
+      into the Program produces them
     - \c repl-program-replaced: @c /reset replaced the Program; \c data has \c program_id, \c running and
       \c threads (the new Program's background threads)
 */
@@ -63,6 +65,9 @@ public class QoreReplActionSession {
 
         #! the ID of the REPL listener that calls the emitter, if any
         *int listener_id;
+
+        #! True if the emitter receives activity events
+        bool activity = False;
     }
 
     #! Creates a new action session
@@ -75,6 +80,8 @@ public class QoreReplActionSession {
     /** @param cb called with each event, a hash with \c event and \c data keys (see the class description), on a
         thread of the session that delivers the events in order; @ref nothing removes the callback, which ends that
         thread; an exception that the callback raises is ignored
+        @param activity @ref True to emit \c repl-activity events as well; see
+        @ref QoreRepl::QoreReplActionSession::setActivityEvents() "setActivityEvents()"
 
         @par Example:
         @code{.py}
@@ -88,15 +95,18 @@ session.setEmitter(sub (hash<auto> ev) { connection.send(make_json(ev)); });
         @ref QoreRepl::QoreReplActionSession::close() "close()"; a process waits for the thread that calls it
         before it ends
     */
-    setEmitter(*code<nothing(hash<auto>)> cb) {
+    setEmitter(*code<nothing(hash<auto>)> cb, bool activity = False) {
         *int old_id;
         {
             emitter_lock.lock();
             on_exit emitter_lock.unlock();
             emitter = cb;
+            self.activity = activity;
             if (cb && !exists listener_id) {
-                listener_id = repl.addEventListener(\replEvent());
-            } else if (!cb && exists listener_id) {
+                listener_id = repl.addEventListener(\replEvent(), activity);
+            } else if (cb) {
+                repl.setEventListenerActivity(listener_id, activity);
+            } else if (exists listener_id) {
                 old_id = remove listener_id;
             }
         }
@@ -104,6 +114,23 @@ session.setEmitter(sub (hash<auto> ev) { connection.send(make_json(ev)); });
         if (exists old_id) {
             repl.removeEventListener(old_id);
         }
+    }
+
+    #! Sets whether the emitter receives \c repl-activity events
+    /** @param activity @ref True to emit them; they are emitted for every call into the Program
+
+        @return @ref True if an emitter is set, @ref False if not (the setting applies to the next emitter set with
+        @ref QoreRepl::QoreReplActionSession::setEmitter() "setEmitter()" only through its own argument)
+    */
+    bool setActivityEvents(bool activity) {
+        emitter_lock.lock();
+        on_exit emitter_lock.unlock();
+        self.activity = activity;
+        if (!exists listener_id) {
+            return False;
+        }
+        repl.setEventListenerActivity(listener_id, activity);
+        return True;
     }
 
     #! Ends the session's asynchronous events and closes its REPL

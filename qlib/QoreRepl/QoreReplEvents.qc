@@ -38,7 +38,9 @@ public const DefaultThreadNoticeLevel = "summary";
     - \c "thread-finished": a background thread ended; \c thread has the Program's \c FINISHED event, with its
       outcome and error
     - \c "program-busy", \c "program-idle": the Program became active or idle: code runs in it (an evaluation, a
-      background thread, a callback), or none does; parsing, @c /load, @c /type and @c /reset need an idle Program
+      background thread, a callback), or none does; parsing, @c /load, @c /type and @c /reset need an idle Program;
+      delivered only to the listeners added with \a activity set, as every call into the Program makes it active
+      and idle
     - \c "eval-started", \c "eval-finished": the session started and finished a request that runs code in the
       Program (foreground evaluation); \c input has the request
     - \c "program-replaced": @c /reset replaced the Program; \c threads has the background threads of the new
@@ -56,8 +58,9 @@ public hashdecl ReplEvent {
     #! the number of background threads of the Program running after the event
     int running;
 
-    #! @ref True if the Program is idle after the event
-    bool idle;
+    #! @ref True if the Program is idle after the event; set only while a listener receives the activity events, and
+    #! for \c "program-replaced"
+    *bool idle;
 
     #! the Program's thread event (thread events)
     *hash<ProgramThreadEvent> thread;
@@ -89,10 +92,12 @@ hashdecl ReplDeliveryMessage {
     @ref Qore::Program::subscribeThreadEvents() "Program::subscribeThreadEvents()") and runs one thread that reads the
     subscription's queue, keeps the state of the Program's background threads and calls the listeners.  When the
     last listener is removed, the subscription is removed and the thread ends, so a session without listeners runs
-    no thread (a script that ends waits for its background threads); its state is then taken from a snapshot.
+    no thread; its state is then taken from a snapshot.  The Program's activity (\c ACTIVITY events) is subscribed to
+    only while a listener asked for it, as every call into the Program makes it active and idle.
 
     The thread holds the dispatcher, not the REPL, so the REPL can be destroyed while it runs: its destructor stops
-    the dispatcher.
+    the dispatcher.  The module's exit hook stops every delivery before the process waits for its threads
+    (ReplDeliveryRegistry), so a session kept until the process ends does not keep it from ending.
 */
 class ReplEventDispatcher {
     private {
@@ -105,8 +110,11 @@ class ReplEventDispatcher {
         #! the delivery, while the session has listeners
         *ReplEventDelivery delivery;
 
-        #! the listeners, by ID
+        #! the listeners, by ID, in the order they were added
         hash<string, code<nothing(hash<ReplEvent>)>> listeners;
+
+        #! the IDs of the listeners that receive the Program's activity events
+        hash<string, bool> activity_listeners;
 
         #! the last listener ID handed out
         int listener_id = 0;
@@ -121,15 +129,40 @@ class ReplEventDispatcher {
     }
 
     #! adds a listener and starts the delivery if it has not started; returns the listener's ID
-    int addListener(code<nothing(hash<ReplEvent>)> listener) {
+    /** @param listener the listener
+        @param activity @ref True if the listener receives the Program's activity events
+    */
+    int addListener(code<nothing(hash<ReplEvent>)> listener, bool activity) {
         m.lock();
         on_exit m.unlock();
         checkStoppedIntern();
         if (!delivery) {
             delivery = new ReplEventDelivery(self, pgm);
         }
-        listeners{++listener_id} = listener;
+        string id = string(++listener_id);
+        listeners{id} = listener;
+        if (activity) {
+            activity_listeners{id} = True;
+            delivery.setActivity(True);
+        }
         return listener_id;
+    }
+
+    #! sets whether a listener receives the Program's activity events; returns @ref False if there is no such
+    #! listener
+    bool setListenerActivity(int id, bool activity) {
+        m.lock();
+        on_exit m.unlock();
+        if (!exists listeners{id}) {
+            return False;
+        }
+        if (activity) {
+            activity_listeners{id} = True;
+        } else {
+            remove activity_listeners{id};
+        }
+        delivery.setActivity(!!activity_listeners);
+        return True;
     }
 
     #! removes a listener; the delivery ends with the last one; returns @ref False if there is no such listener
@@ -142,8 +175,11 @@ class ReplEventDispatcher {
                 return False;
             }
             remove listeners{id};
-            if (!listeners && delivery) {
+            remove activity_listeners{id};
+            if (!listeners) {
                 ended = remove delivery;
+            } else if (!activity_listeners) {
+                delivery.setActivity(False);
             }
         }
         if (ended) {
@@ -165,22 +201,25 @@ class ReplEventDispatcher {
         return snapshotIntern().threads;
     }
 
-    #! returns @ref True if the Program is idle; see getThreads() for the state reported
+    #! returns @ref True if the Program is idle: as of the last event processed while a listener receives activity
+    #! events, otherwise from a snapshot
     bool isIdle() {
         m.lock();
         on_exit m.unlock();
         checkStoppedIntern();
-        if (delivery) {
+        if (delivery && activity_listeners) {
             return delivery.isIdle();
         }
         return snapshotIntern().idle;
     }
 
-    #! returns the listeners to call, in the order they were added
-    list<code<nothing(hash<ReplEvent>)>> getListeners() {
+    #! returns the listeners to call with an event, in the order they were added
+    /** @param activity @ref True for an activity event, which only the listeners that asked for them receive
+    */
+    list<code<nothing(hash<ReplEvent>)>> getListeners(bool activity) {
         m.lock();
         on_exit m.unlock();
-        return (map listeners{$1}, sort(map $1.toInt(), keys listeners)) ?? ();
+        return (map listeners{$1}, keys listeners, !activity || activity_listeners{$1}) ?? ();
     }
 
     #! replaces the Program of the session; delivers \c "program-replaced" while events are delivered
@@ -213,6 +252,7 @@ class ReplEventDispatcher {
             }
             stopped = True;
             remove listeners;
+            remove activity_listeners;
             ended = remove delivery;
         }
         if (ended) {
@@ -237,7 +277,72 @@ class ReplEventDispatcher {
     }
 }
 
-#! The delivery of the events of a session while it has listeners: a subscription and the thread that reads it
+#! The live deliveries of the module, which its exit hook stops before the process waits for its threads
+/** A delivery's thread runs until it is told to stop, and a process waits for its threads before it destroys its
+    global variables and the local variables of its top-level code, whose destructors would stop it: a session kept
+    in one with a listener would keep the process from ending.
+*/
+class ReplDeliveryRegistry {
+    private {
+        #! guards the members below
+        static Mutex m();
+
+        #! the live deliveries, by ID
+        static hash<string, ReplEventDelivery> deliveries;
+
+        #! the last ID handed out
+        static int last_id = 0;
+
+        #! True once the exit hook has run: deliveries started afterwards are stopped at once
+        static bool exiting = False;
+    }
+
+    #! registers the module's exit hook; called by the module's init closure
+    /** A Program whose code may not register exit hooks (a sandbox governs it) loads the module without the hook:
+        its sessions then keep the process from ending while they have listeners, until they are closed
+    */
+    static init() {
+        try {
+            register_exit_hook(\ReplDeliveryRegistry::stopAll());
+        } catch (hash<ExceptionInfo> ex) {
+            # no hook: see above
+        }
+    }
+
+    #! registers a delivery; returns its ID, or @ref nothing if the exit hook has run, in which case the delivery
+    #! stops at once
+    static *int register(ReplEventDelivery delivery) {
+        m.lock();
+        on_exit m.unlock();
+        if (exiting) {
+            return;
+        }
+        deliveries{++last_id} = delivery;
+        return last_id;
+    }
+
+    #! deregisters a delivery that has stopped
+    static deregister(int id) {
+        m.lock();
+        on_exit m.unlock();
+        remove deliveries{id};
+    }
+
+    #! the exit hook: tells every delivery to stop, without waiting for it
+    static stopAll() {
+        list<ReplEventDelivery> l;
+        {
+            m.lock();
+            on_exit m.unlock();
+            exiting = True;
+            l = (map $1, deliveries.values()) ?? ();
+            remove deliveries;
+        }
+        map $1.requestStop(), l;
+    }
+}
+
+#! The delivery of the events of a session while it has listeners: subscriptions and the thread that reads them
 class ReplEventDelivery {
     private {
         #! guards the members below
@@ -246,44 +351,55 @@ class ReplEventDelivery {
         #! the dispatcher whose listeners are called
         ReplEventDispatcher dispatcher;
 
-        #! the queue of the subscription and of the session's own events
+        #! the queue of the subscriptions and of the session's own events
         Queue queue();
 
         #! the Program subscribed to
         Program pgm;
 
-        #! the ID of the current subscription, until the delivery is stopped
+        #! the ID of the subscription to the thread events, until the delivery is stopped
         *int sub_id;
+
+        #! the ID of the subscription to the activity events, while a listener receives them
+        *int activity_sub_id;
 
         #! the ID of the Program
         int program_id;
 
-        #! the background threads of the Program, by thread ID
+        #! the background threads of the Program, by thread ID, in the order they started
         hash<string, hash<ProgramThreadInfo>> threads;
 
-        #! True if the Program is idle
+        #! True if the Program is idle, while subscribed to its activity
         bool idle = True;
 
         #! the TID of the delivering thread
         int tid;
 
+        #! the ID of the delivery in ReplDeliveryRegistry, if registered
+        *int registry_id;
+
         #! signalled when the delivering thread ends
         Counter done(1);
     }
 
-    #! subscribes to the Program's events and starts the delivering thread
+    #! subscribes to the Program's thread events and starts the delivering thread
     constructor(ReplEventDispatcher dispatcher, Program pgm) {
         self.dispatcher = dispatcher;
         self.pgm = pgm;
         subscribeIntern();
         tid = background run();
+        registry_id = ReplDeliveryRegistry::register(self);
+        if (!exists registry_id) {
+            # the process is ending
+            requestStop();
+        }
     }
 
     #! returns the background threads, in the order they started
     list<hash<ProgramThreadInfo>> getThreads() {
         m.lock();
         on_exit m.unlock();
-        return (map threads{$1}, sort(map $1.toInt(), keys threads)) ?? ();
+        return threads ? threads.values() : ();
     }
 
     #! returns True if the Program is idle
@@ -293,6 +409,20 @@ class ReplEventDelivery {
         return idle;
     }
 
+    #! subscribes to or unsubscribes from the Program's activity events
+    setActivity(bool activity) {
+        m.lock();
+        on_exit m.unlock();
+        if (!exists sub_id || activity == exists activity_sub_id) {
+            return;
+        }
+        if (activity) {
+            subscribeActivityIntern();
+        } else {
+            pgm.unsubscribeThreadEvents(remove activity_sub_id);
+        }
+    }
+
     #! subscribes to a new Program and queues \c "program-replaced"
     setProgram(Program new_pgm) {
         m.lock();
@@ -300,10 +430,14 @@ class ReplEventDelivery {
         if (!exists sub_id) {
             return;
         }
-        pgm.unsubscribeThreadEvents(sub_id);
+        bool activity = exists activity_sub_id;
+        unsubscribeIntern();
         pgm = new_pgm;
         hash<ProgramThreadSubscription> s = subscribeIntern();
-        # processed after any event of the old subscription still in the queue, which is discarded
+        if (activity) {
+            subscribeActivityIntern();
+        }
+        # processed after any event of the old subscriptions still in the queue, which are discarded
         queue.push(<ReplDeliveryMessage>{"replaced": <ReplEvent>{"event": "program-replaced",
             "program_id": s.program_id, "running": s.threads.size(), "idle": s.idle, "threads": s.threads}});
     }
@@ -317,41 +451,66 @@ class ReplEventDelivery {
         }
     }
 
-    #! removes the subscription and ends the delivering thread; waits for it to end unless called by it
-    stop() {
-        {
-            m.lock();
-            on_exit m.unlock();
-            if (!exists sub_id) {
-                return;
-            }
-            try {
-                pgm.unsubscribeThreadEvents(sub_id);
-            } catch (hash<ExceptionInfo> ex) {
-                # the Program has been destroyed: its subscriptions have ended
-            }
-            remove sub_id;
-            queue.push(<ReplDeliveryMessage>{"stop": True});
+    #! removes the subscriptions and tells the delivering thread to end, without waiting for it
+    requestStop() {
+        m.lock();
+        on_exit m.unlock();
+        if (!exists sub_id) {
+            return;
         }
+        try {
+            unsubscribeIntern();
+        } catch (hash<ExceptionInfo> ex) {
+            # the Program has been destroyed: its subscriptions have ended
+        }
+        remove sub_id;
+        remove activity_sub_id;
+        queue.push(<ReplDeliveryMessage>{"stop": True});
+    }
+
+    #! removes the subscriptions and ends the delivering thread; waits for it to end unless called by it
+    stop() {
+        requestStop();
         if (tid != gettid()) {
             done.waitForZero();
         }
     }
 
+    #! removes the subscriptions; called with the lock held
+    private unsubscribeIntern() {
+        pgm.unsubscribeThreadEvents(sub_id);
+        if (exists activity_sub_id) {
+            pgm.unsubscribeThreadEvents(activity_sub_id);
+        }
+    }
+
     #! subscribes to the current Program's thread events; called with the lock held, or by the constructor
     private hash<ProgramThreadSubscription> subscribeIntern() {
-        hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(queue,
-            <ProgramThreadEventOptions>{"events": PTE_ALL});
+        hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(queue, <ProgramThreadEventOptions>{
+            "events": PTE_STARTED | PTE_CANCEL_REQUESTED | PTE_FINISHED | PTE_CLOSED,
+        });
         sub_id = s.id;
         program_id = s.program_id;
-        idle = s.idle;
         threads = map {$1.thread_id: $1}, s.threads;
         return s;
     }
 
+    #! subscribes to the current Program's activity events; called with the lock held
+    private subscribeActivityIntern() {
+        hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(queue,
+            <ProgramThreadEventOptions>{"events": PTE_ACTIVITY});
+        activity_sub_id = s.id;
+        idle = s.idle;
+    }
+
     #! the delivering thread: reads the queue and calls the listeners
     private run() {
-        on_exit done.dec();
+        on_exit {
+            if (exists registry_id) {
+                ReplDeliveryRegistry::deregister(registry_id);
+            }
+            done.dec();
+        }
         while (True) {
             # a Program's thread event or a message of the session
             hash<auto> msg = queue.get();
@@ -367,7 +526,8 @@ class ReplEventDelivery {
             if (!ev) {
                 continue;
             }
-            foreach code<nothing(hash<ReplEvent>)> listener in (dispatcher.getListeners()) {
+            bool activity = ev.event == "program-idle" || ev.event == "program-busy";
+            foreach code<nothing(hash<ReplEvent>)> listener in (dispatcher.getListeners(activity)) {
                 try {
                     listener(ev);
                 } catch (hash<ExceptionInfo> ex) {
@@ -386,6 +546,15 @@ class ReplEventDelivery {
         }
         if (msg instanceof hash<ProgramThreadEvent>) {
             hash<ProgramThreadEvent> pev = cast<hash<ProgramThreadEvent>>(msg);
+            if (pev.event == "ACTIVITY") {
+                # an event of a removed or replaced subscription
+                if (pev.subscription_id != activity_sub_id) {
+                    return;
+                }
+                idle = pev.idle;
+                return <ReplEvent>{"event": idle ? "program-idle" : "program-busy", "program_id": program_id,
+                    "running": threads.size(), "idle": idle};
+            }
             # an event of a replaced Program's subscription
             if (pev.subscription_id != sub_id) {
                 return;
@@ -414,28 +583,24 @@ class ReplEventDelivery {
                     remove threads{pev.thread_id};
                     event = "thread-finished";
                     break;
-                case "ACTIVITY":
-                    idle = pev.idle;
-                    event = idle ? "program-idle" : "program-busy";
-                    break;
                 default:
                     # CLOSED: the Program has been destroyed
                     return;
             }
-            hash<ReplEvent> rv = <ReplEvent>{"event": event, "program_id": program_id, "running": threads.size(),
-                "idle": idle};
-            # only thread events carry the Program's event
-            if (pev.event != "ACTIVITY") {
-                rv.thread = pev;
-            }
-            return rv;
+            return <ReplEvent>{"event": event, "program_id": program_id, "running": threads.size(),
+                "idle": currentIdleIntern(), "thread": pev};
         }
         hash<ReplDeliveryMessage> dmsg = cast<hash<ReplDeliveryMessage>>(msg);
         if (dmsg.replaced) {
             return dmsg.replaced;
         }
         return <ReplEvent>{"event": dmsg.session, "program_id": program_id, "running": threads.size(),
-            "idle": idle, "input": dmsg.input};
+            "idle": currentIdleIntern(), "input": dmsg.input};
+    }
+
+    #! returns the Program's activity state if it is known (subscribed to its activity); called with the lock held
+    private *bool currentIdleIntern() {
+        return exists activity_sub_id ? idle : NOTHING;
     }
 }
 

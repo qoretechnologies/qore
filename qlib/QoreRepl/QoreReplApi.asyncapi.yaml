@@ -460,11 +460,15 @@ components:
       description: Summary of an exception
       properties:
         err:
-          type: string
-          description: Error code; empty if it is not a string
+          oneOf:
+            - type: string
+            - type: "null"
+          description: Error code; null if it is not a string
         desc:
-          type: string
-          description: Error description; empty if it is not a string
+          oneOf:
+            - type: string
+            - type: "null"
+          description: Error description; null if it is not a string
         file:
           type: string
           description: Source of the exception
@@ -543,12 +547,21 @@ components:
               type: integer
               description: How long the thread ran in milliseconds (finished only)
             error:
-              $ref: '#/components/schemas/ThreadErrorInfo'
+              description: The exception that ended the thread (finished only); null if none
+              oneOf:
+                - $ref: '#/components/schemas/ThreadErrorInfo'
+                - type: "null"
             cleanupError:
-              $ref: '#/components/schemas/ThreadErrorInfo'
+              description: >
+                The first exception raised when the thread released its resources (finished only); null if none
+              oneOf:
+                - $ref: '#/components/schemas/ThreadErrorInfo'
+                - type: "null"
             cancelReason:
-              type: string
-              description: Reason given with the request (cancel-requested only)
+              oneOf:
+                - type: string
+                - type: "null"
+              description: Reason given with the request (cancel-requested only); null if none was given
 
     ActivityPayload:
       type: object

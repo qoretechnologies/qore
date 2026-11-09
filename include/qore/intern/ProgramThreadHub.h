@@ -37,6 +37,7 @@
 
 #include <atomic>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -144,10 +145,17 @@ public:
     DLLLOCAL void threadFinished(int64 thread_id, ProgramThreadOutcome outcome, QoreHashNode* error,
             int64 exception_count, QoreHashNode* cleanup_error);
 
-    //! publishes CANCEL_REQUESTED for a live thread; does nothing once the thread has published FINISHED
-    /** Called after a cancellation request was delivered to the thread, without the thread list's lock.
+    //! publishes CANCEL_REQUESTED for a live thread, once for each claim; does nothing once the thread has published
+    //! FINISHED
+    /** Called without the thread list's lock by the canceller after it claimed the request, and by the thread itself
+        for all of its claims before it publishes FINISHED (see QoreLifecycleCancelClaim), so a claim can be published
+        twice: the second time does nothing.
+
+        @param thread_id the thread
+        @param gen the claim's generation
+        @param reason the reason given with the request, or nullptr
     */
-    DLLLOCAL void cancelRequested(int64 thread_id, const char* reason);
+    DLLLOCAL void cancelRequested(int64 thread_id, uint64_t gen, const char* reason);
 
     //! records a transition of the Program between idle and active and publishes ACTIVITY
     /** @param gen the Program's activity generation of the transition; a transition older than the last one
@@ -214,8 +222,12 @@ private:
         int64 start_mono_us;
         //! the time zone of the thread's dates: the zone of its Program when it started
         const AbstractQoreZoneInfo* zone;
+        //! the order in which the thread started in the Program
+        uint64_t start_order = 0;
         //! true once a cancellation request has been published for the thread
         bool cancel_requested = false;
+        //! the generations of the cancellation claims published for the thread
+        std::set<uint64_t> cancel_gens;
     };
 
     //! a subscription
@@ -242,6 +254,9 @@ private:
 
     //! the sequence number of the last event published
     int64 seq = 0;
+
+    //! the number of threads started, for their order
+    uint64_t start_counter = 0;
 
     //! the live background threads by thread ID
     thread_map_t threads;

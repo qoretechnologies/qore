@@ -71,6 +71,10 @@ in the documentation; the `PTE_*` constants are declared in the same file.
 
 ### Thread identity
 
+Only threads started by the `background` operator are background threads of the Program. The threads of
+`call_async()` and of thread pools are not registered in the Program (their `Future` or pool reports their end) and
+call its code as callbacks do: they make the Program active, which `ACTIVITY` reports.
+
 TIDs are reused (`QoreThreadList::get()` scans for free entries once the array has been used), so each background
 thread also gets a process-unique `thread_id` (64-bit, from a global atomic counter) when it is created. Events and
 snapshot entries carry both. `parent_tid` and `parent_thread_id` identify the thread that ran `background`
@@ -131,7 +135,7 @@ teardown steps that append to the same `ExceptionSink`:
 | `COMPLETED` | no exception; includes a thread that caught a cancellation and returned normally |
 | `EXITED` | the thread called `thread_exit` |
 | `CANCELLED` | the first exception is `THREAD-CANCELLED` |
-| `INTERRUPTED` | the first exception is `PROGRAM-INTERRUPTED` or `SANDBOX-TIMEOUT` |
+| `INTERRUPTED` | the first exception is `PROGRAM-INTERRUPTED`, or a sandbox limit ended the thread (`SANDBOX-TIMEOUT`, `SANDBOX-MEMORY-LIMIT`) |
 | `EXCEPTION` | any other exception |
 | `START_FAILED` | the entry handler failed |
 
@@ -159,19 +163,31 @@ hub (see below), not to the Program, until it has published.
 `CANCEL_REQUESTED` is published when a request is delivered to a background thread of the Program while its code
 runs, from `Program::cancelThread()`, `Program::cancelThreads()` (including threads caught by the cancellation wave
 as they start) and `cancel_thread()` / `qore_cancel_thread()`. "Requested" never means "terminated": the outcome is
-reported by `FINISHED`.
+reported by `FINISHED`. Each request is published once, and always before the thread's `FINISHED`.
 
-- The thread records its hub and `thread_id` in its `ThreadEntry` (`lifecycle_hub`, `lifecycle_thread_id`) under
-  `thread_list.lck` after publishing `STARTED` (`QoreThreadList::setLifecycleHub()`), and clears them when its code
-  has ended, right after its outcome is taken (`clearLifecycleHub()`). `QoreThreadList::cancelThread()` references
-  the hub under the lock when the request is new (the `QCR_THREAD_CANCEL` bit was not set) and publishes after
-  releasing it, so the request is published once: further requests while one is pending publish nothing, and a
-  request after `clear_thread_cancel()` publishes again.
-- A request made before the hub was set (by a cancellation wave in `startThread()`, or by a canceller that had the
-  TID from the starting thread) is found pending by `setLifecycleHub()` and published by the thread itself, right
-  after its `STARTED`.
-- A canceller that publishes after the thread's `FINISHED` finds no live record and publishes nothing; the hub lock
-  orders the two, so a `CANCEL_REQUESTED` is never delivered after the thread's `FINISHED`.
+- **Claims.** The thread records its hub, `thread_id` and Program ID in its `ThreadEntry` (`lifecycle_hub`,
+  `lifecycle_thread_id`, `lifecycle_pgm_id`) under `thread_list.lck` after publishing `STARTED`
+  (`QoreThreadList::setLifecycleHub()`), and clears them when its code has ended, right after its outcome is taken
+  (`clearLifecycleHub()`). `QoreThreadList::cancelThread()` claims a new request (the `QCR_THREAD_CANCEL` bit was
+  not set) under the lock: it gives it the thread's next claim generation and records the claim
+  (`QoreLifecycleCancelClaim`: generation and reason) in the entry. Further requests while one is pending claim
+  nothing; a request after `clear_thread_cancel()` claims again.
+- **Publication.** The canceller publishes its claim after it releases the lock, holding a reference to the hub,
+  and then removes the claim from the entry (`releaseLifecycleCancelClaim()`), so that the claims of a thread that
+  is cancelled many times do not accumulate. The thread publishes the claims made before the hub was set (a
+  cancellation wave in `startThread()`, or a canceller that had the TID from the starting thread) right after
+  `STARTED`, and the claims still in the entry when it clears the hub, before its teardown and so before
+  `FINISHED`. A canceller can therefore be preempted between releasing the lock and publishing while the thread
+  ends: the request is still published, by the thread. The hub publishes each claim generation once
+  (`ThreadRecord::cancel_gens`), so the canceller's and the thread's publications of a claim produce one event, and a
+  canceller that publishes after `FINISHED` finds no record. Publishing under `thread_list.lck` is not an option: a queue's waiters take the queue's lock and then
+  `thread_list.lck`, and the hub pushes to queues under its lock.
+- **Scope.** A request scoped to another Program (a sandboxed requester's, or another Program's
+  `cancelThreads()` while the thread runs that Program's code) applies only while the thread runs that Program's
+  code; it is not claimed, as it is not a request to end the thread's own work. `FINISHED` reports whether it ended
+  the thread.
+- **Tests.** `dbg_cancel_thread_after_end()` (DEBUG builds) makes the canceller publish after the thread has ended,
+  which otherwise happens only by chance (about 1% under load).
 
 ### Activity
 
@@ -276,16 +292,30 @@ the consumer releases the object, as for a `Socket` event queue.
 
 `QoreRepl` (`qlib/QoreRepl/QoreRepl.qc`) delegates to a `ReplEventDispatcher` (`qlib/QoreRepl/QoreReplEvents.qc`),
 created with the session. While the session has listeners, a `ReplEventDelivery` subscribes the session's Program
-with `PTE_ALL` and runs one thread that reads the subscription's queue, keeps the state of the background threads
-and calls the listeners in order, without a lock held. When the last listener is removed, the delivery
-unsubscribes and its thread ends: a process waits for its threads before it ends (the `qore` binary's interactive
-mode removes its listener when `run()` returns), so a session without listeners runs no thread, and reports its
-state from a snapshot (a subscription made and removed at once). The thread belongs to the module's
+to its thread events (`STARTED`, `CANCEL_REQUESTED`, `FINISHED`, `CLOSED`) and runs one thread that reads the
+subscription's queue, keeps the state of the background threads (in the order they started) and calls the
+listeners in order, without a lock held. `ACTIVITY` is subscribed to in a second subscription to the same queue
+only while a listener asked for activity events (`addEventListener(listener, True)`,
+`setEventListenerActivity()`), as every call into the Program from outside makes it active and idle, which would
+otherwise wake the delivering thread for nothing; `program-busy` and `program-idle` reach only those listeners, and
+a `ReplEvent`'s `idle` is set only while the Program's activity is subscribed to. When the last listener is removed,
+the delivery unsubscribes and its thread ends, so a session without listeners runs no thread, and reports its state
+from a snapshot (a subscription made and removed at once).
+
+A process waits for its threads before it destroys its global variables and the local variables of its top-level
+code, whose destructors would stop a delivery: a session kept in one with a listener would keep the process from
+ending. The module's `init` closure therefore registers an exit hook (`register_exit_hook()`, through
+`ReplDeliveryRegistry::init()`): every live delivery is registered in `ReplDeliveryRegistry`, and the hook tells
+each to stop (`requestStop()`: unsubscribe and push the stop message, without waiting) before the process waits for
+its threads; a delivery started after the hook ran stops at once. A Program governed by a sandbox cannot register
+exit hooks; the module then loads without the hook, and its sessions keep the process from ending while they have
+listeners, until they are closed. The thread belongs to the module's
 Program, so it, a frontend's evaluation worker and any capture threads are never reported as user threads: only
 `background` threads started in the evaluated Program are.
 
 ```
-int QoreRepl::addEventListener(code<nothing(hash<ReplEvent>)> listener)
+int QoreRepl::addEventListener(code<nothing(hash<ReplEvent>)> listener, bool activity = False)
+bool QoreRepl::setEventListenerActivity(int id, bool activity)
 bool QoreRepl::removeEventListener(int id)
 list<hash<ProgramThreadInfo>> QoreRepl::getBackgroundThreads()
 bool QoreRepl::isProgramIdle()
@@ -355,17 +385,20 @@ received before each prompt.
 
 ### Other frontends
 
-- `QoreReplActionSession::setEmitter(*code<nothing(hash<auto>)> cb)` (`design/action-session-services.md`) adds a
-  REPL listener while a callback is set and emits `repl-thread` (`kind`: `started`, `cancel-requested` or
-  `finished`, the thread's identity, `running`, `notices` for the event at the session's level, and for `finished`
-  the outcome, `duration_ms` and a summary of `error`/`cleanup_error`: `err`, `desc`, `file`, `line`, without the
-  call stack), `repl-activity` (`idle`, `running`) and `repl-program-replaced`. `setEmitter()` with no callback
+- `QoreReplActionSession::setEmitter(*code<nothing(hash<auto>)> cb, bool activity = False)`
+  (`design/action-session-services.md`) adds a REPL listener while a callback is set and emits `repl-thread`
+  (`kind`: `started`, `cancel-requested` or `finished`, the thread's identity, `running`, `notices` for the event at
+  the session's level, and for `finished` the outcome, `duration_ms` and a summary of `error`/`cleanup_error`: `err`,
+  `desc`, `file`, `line`, without the call stack), `repl-program-replaced`, and `repl-activity` (`idle`, `running`)
+  only when enabled (the argument, or `setActivityEvents()`). `setEmitter()` with no callback
   removes the listener (ending the delivering thread); `close()` ends the events and closes the REPL. The callback
   is called on the delivering thread; its exceptions are ignored.
-- `QoreReplWebSocketConnection` sets an emitter when it is created and closes the session in
-  `connectionClosed()`. It sends `thread` messages (camelCase keys) as they happen and `programReplaced` on
-  `/reset`; `activity` messages, of which every evaluation makes at least two, are sent only after the client
-  enables them with `{"type": "subscribe", "activity": true}` (answered by `subscribed`). `QoreReplApi.asyncapi.yaml`
+- `QoreReplWebSocketConnection` sets an emitter in `registered()` and closes the session in `connectionClosed()`:
+  only a registered connection is closed with `connectionClosed()`, so an emitter set in the constructor would leak
+  its thread when the handshake fails. It sends `thread` messages (camelCase keys) as they happen and
+  `programReplaced` on `/reset`; `activity` messages, of which every evaluation makes at least two, are sent only
+  after the client enables them with `{"type": "subscribe", "activity": true}` (answered by `subscribed`), which
+  enables them in the session (`setActivityEvents()`). `QoreReplApi.asyncapi.yaml`
   documents the messages and operations.
 
 ## module-ncurses (`bin/qrepl`)

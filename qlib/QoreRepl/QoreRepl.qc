@@ -225,6 +225,9 @@ public class QoreRepl {
         @param listener called with each event, on a thread of the session that delivers the events in order; it
         must return quickly (a UI posts the event to its event loop), and it is called without any lock of the
         session held, so it can call the session's methods; an exception that it raises is ignored
+        @param activity @ref True to receive the Program's activity events (\c "program-busy" and
+        \c "program-idle"), which every call into the Program produces; see
+        @ref QoreRepl::QoreRepl::setEventListenerActivity() "setEventListenerActivity()"
 
         @return the ID of the listener, for @ref QoreRepl::QoreRepl::removeEventListener() "removeEventListener()"
 
@@ -241,15 +244,25 @@ repl.addEventListener(sub (hash<ReplEvent> ev) { notices.push(ev); });
         - only background threads started in the session's Program are reported: the threads of the embedding
           application, such as a worker that calls @ref QoreRepl::QoreRepl::eval() "eval()" or a thread that reads
           captured output, are not
-        - the session runs a thread that delivers the events while it has listeners; as a process waits for its
-          threads before it ends, remove the listeners with
-          @ref QoreRepl::QoreRepl::removeEventListener() "removeEventListener()" or call
-          @ref QoreRepl::QoreRepl::close() "close()" when the events are no longer needed
+        - the session runs a thread that delivers the events while it has listeners; it is stopped before the
+          process waits for its threads to end, so a session kept until then does not keep the process from ending
+          (unless the module was loaded by code that a sandbox governs, which cannot register the exit hook that
+          stops it: remove the listeners or call @ref QoreRepl::QoreRepl::close() "close()" then)
         - a listener that refers to this object keeps it alive until the listener is removed or the session is
           closed with @ref QoreRepl::QoreRepl::close() "close()"
     */
-    int addEventListener(code<nothing(hash<ReplEvent>)> listener) {
-        return dispatcher.addListener(listener);
+    int addEventListener(code<nothing(hash<ReplEvent>)> listener, bool activity = False) {
+        return dispatcher.addListener(listener, activity);
+    }
+
+    #! Sets whether a listener receives the Program's activity events (\c "program-busy" and \c "program-idle")
+    /** @param id the ID returned by @ref QoreRepl::QoreRepl::addEventListener() "addEventListener()"
+        @param activity @ref True to receive them
+
+        @return @ref True if the listener exists, @ref False if not
+    */
+    bool setEventListenerActivity(int id, bool activity) {
+        return dispatcher.setListenerActivity(id, activity);
     }
 
     #! Removes a listener added with @ref QoreRepl::QoreRepl::addEventListener() "addEventListener()"
@@ -273,8 +286,8 @@ repl.addEventListener(sub (hash<ReplEvent> ev) { notices.push(ev); });
     }
 
     #! Returns @ref True if no code runs in the session's Program
-    /** The state is reported as by @ref QoreRepl::QoreRepl::getBackgroundThreads() "getBackgroundThreads()".  An idle
-        Program can become active at any time, as when a callback runs in it, so code that needs an idle
+    /** While a listener receives activity events, the state is that of the last one delivered; otherwise it is a
+        snapshot taken when called.  An idle Program can become active at any time, as when a callback runs in it, so code that needs an idle
         Program checks again when it parses: @ref QoreRepl::QoreRepl::eval() "eval()" does
 
         @throw REPL-ERROR the session has been closed

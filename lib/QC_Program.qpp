@@ -348,7 +348,9 @@ hashdecl ProgramThreadSubscription {
     - \c "CANCEL_REQUESTED": a cancellation request has been delivered to the thread while its code runs (see
       @ref Qore::cancel_thread() "cancel_thread()", @ref Qore::Program::cancelThread() "Program::cancelThread()" and
       @ref Qore::Program::cancelThreads() "Program::cancelThreads()"); a request made while one is pending is not
-      published, and a request does not mean that the thread ends: \c "FINISHED" reports how it ended
+      published, and a request does not mean that the thread ends: \c "FINISHED" reports how it ended; a request
+      scoped to another Program (made with that Program's @ref Qore::Program::cancelThreads() "cancelThreads()" while
+      the thread runs its code) applies only to that code and is not published
     - \c "FINISHED": the thread has ended: it has left the Program and its thread-local data has been destroyed;
       published before its TID can be reused
     - \c "ACTIVITY": the Program has become idle (no thread runs its code) or active; only delivered if requested
@@ -365,7 +367,8 @@ hashdecl ProgramThreadSubscription {
       returned normally
     - \c "EXCEPTION": an exception ended the code (other than the ones below)
     - \c "CANCELLED": a \c THREAD-CANCELLED exception ended the code
-    - \c "INTERRUPTED": a \c PROGRAM-INTERRUPTED or \c SANDBOX-TIMEOUT exception ended the code
+    - \c "INTERRUPTED": a \c PROGRAM-INTERRUPTED exception ended the code, or a sandbox ended it for reaching a
+      limit (\c SANDBOX-TIMEOUT or \c SANDBOX-MEMORY-LIMIT)
     - \c "EXITED": the code called \c thread_exit
     - \c "START_FAILED": the Program's @ref Qore::Program::setThreadEntryHandler() "entry handler" raised an
       exception, so the code did not run
@@ -3634,9 +3637,10 @@ pgm.unsubscribeThreadEvents(sub.id);
     so events also carry a \c thread_id that is unique in the process, and the \c thread_id of the thread that
     started the thread (\c parent_thread_id), from which the threads started by the Program's background threads
     can be told apart.  A thread that could not be started (the \c background operator raised an exception) has no
-    events.  Threads that call the Program's code without being started by it (the thread that runs it, thread pool
-    workers, I/O callbacks) are not background threads of the Program; they make the Program active, which
-    \c "ACTIVITY" events report.
+    events.  Threads that call the Program's code without being started by it with \c background (the thread that
+    runs it, the threads of @ref Qore::call_async() "call_async()" and of thread pools, which the
+    @ref Qore::Thread::Future "Future" or pool reports, I/O callbacks) are not background threads of the Program;
+    they make the Program active, which \c "ACTIVITY" events report.
 
     @par Program Activity
     With @ref Qore::PTE_ACTIVITY "PTE_ACTIVITY", an \c "ACTIVITY" event is published when the Program becomes idle

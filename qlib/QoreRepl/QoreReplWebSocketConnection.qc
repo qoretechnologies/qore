@@ -61,9 +61,6 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
     private {
         #! Action session implementation
         QoreReplActionSession session;
-
-        #! True if the client selected \c activity messages
-        bool send_activity = False;
     }
 
     #! Creates a new REPL WebSocket connection
@@ -73,14 +70,16 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
     constructor(WebSocketHandler::WebSocketHandler handler, *hash<auto> repl_options)
             : WebSocketConnection(handler) {
         session = new QoreReplActionSession(repl_options);
-        # thread and activity events are sent as they happen, from the session's delivering thread
-        session.setEmitter(\emitEvent());
     }
 
     #! Called when the connection is registered and ready
     /** Sends session info to the client
     */
     registered() {
+        # thread and activity events are sent as they happen, from the session's delivering thread; the emitter is
+        # set once the connection is registered, as only a registered connection is closed with connectionClosed(),
+        # which ends them
+        session.setEmitter(\emitEvent());
         hash<auto> info = session.getSessionInfo();
         sendMessage({
             "type": "session",
@@ -209,8 +208,9 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
             sendError(id, "INVALID-PARAMETER", "Parameter 'activity' must be a boolean");
             return;
         }
-        send_activity = activity ?? False;
-        sendMessage({"type": "subscribed", "id": id, "activity": send_activity});
+        bool enabled = activity ?? False;
+        session.setActivityEvents(enabled);
+        sendMessage({"type": "subscribed", "id": id, "activity": enabled});
     }
 
     #! Handles an interrupt request
@@ -350,9 +350,6 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
                 }
 
                 case "repl-activity":
-                    if (!send_activity) {
-                        break;
-                    }
                     sendMessage({
                         "type": "activity",
                         "idle": data.idle,

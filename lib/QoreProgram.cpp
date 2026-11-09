@@ -456,8 +456,11 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     }
     thread_count = own;
     thread_waiting = 0;
-    // the background threads of the parent other than the forking thread do not exist in the child
-    thread_hub->forkChild(tid, ++activity_gen, !own);
+    // the background threads of the parent other than the forking thread do not exist in the child; a Program forked
+    // while it was being constructed, after it was registered, has no hub yet
+    if (thread_hub) {
+        thread_hub->forkChild(tid, ++activity_gen, !own);
+    }
     if (parse_tid != tid) {
         // a thread of the parent was parsing; the parse does not go on in the child
         parse_count = 0;

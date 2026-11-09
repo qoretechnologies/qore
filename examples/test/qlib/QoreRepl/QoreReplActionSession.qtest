@@ -100,9 +100,9 @@ class QoreReplActionSessionTest inherits QUnit::Test {
     const EventTimeout = 60s;
 
     #! creates a session with an emitter that pushes the events to the returned queue, and the test's counters
-    private Queue emitting(QoreRepl::QoreReplActionSession session) {
+    private Queue emitting(QoreRepl::QoreReplActionSession session, bool activity = False) {
         Queue q();
-        session.setEmitter(sub (hash<auto> ev) { q.push(ev); });
+        session.setEmitter(sub (hash<auto> ev) { q.push(ev); }, activity);
         list<hash<auto>> events = session.handleAction("repl-eval", {
             "code": "our Counter entered = new Counter(1); our Counter gate = new Counter(1); our *int tid;",
         });
@@ -180,8 +180,13 @@ class QoreReplActionSessionTest inherits QUnit::Test {
         QoreRepl::QoreReplActionSession session = newSession();
         on_exit session.close();
         Queue q = emitting(session);
+        # activity events are emitted only when enabled
+        int tid = start(session, "sub () {}");
+        list<hash<auto>> l = until(q, "repl-thread", "finished");
+        assertEq((), (map $1, l, $1.event == "repl-activity") ?? ());
+        assertTrue(session.setActivityEvents(True));
         session.handleAction("repl-eval", {"code": "1 + 1"});
-        list<hash<auto>> l = (map $1, until(q, "repl-activity"), $1.event == "repl-activity");
+        l = (map $1, until(q, "repl-activity"), $1.event == "repl-activity");
         assertFalse(l[0].data.idle);
         assertEq(0, l[0].data.running);
 

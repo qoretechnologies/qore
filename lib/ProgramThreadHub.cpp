@@ -35,6 +35,7 @@
 #include "qore/intern/QoreException.h"
 #include "qore/intern/qore_thread_intern.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 
@@ -104,7 +105,9 @@ ProgramThreadOutcome program_thread_get_outcome(const ExceptionSink& xsink, bool
         if (!strcmp(err, "THREAD-CANCELLED")) {
             return ProgramThreadOutcome::CANCELLED;
         }
-        if (!strcmp(err, "PROGRAM-INTERRUPTED") || !strcmp(err, "SANDBOX-TIMEOUT")) {
+        // the Program was interrupted, or a sandbox ended the thread for reaching a limit
+        if (!strcmp(err, "PROGRAM-INTERRUPTED") || !strcmp(err, "SANDBOX-TIMEOUT")
+                || !strcmp(err, "SANDBOX-MEMORY-LIMIT")) {
             return ProgramThreadOutcome::INTERRUPTED;
         }
     }
@@ -217,8 +220,18 @@ void ProgramThreadHub::publishClosedIntern(sub_list_t& released) {
         ph->setKeyValueIntern("running", static_cast<int64>(0));
         publishIntern(QORE_PTE_CLOSED, h);
     }
+    // only the interest of the subscriptions removed: a subscription being made has added its interest, and removes
+    // it when it finds the hub closed
+    int removed = 0;
+    for (const Subscription& sub : subs) {
+        if (sub.events & QORE_PTE_ACTIVITY) {
+            ++removed;
+        }
+    }
     released.swap(subs);
-    activity_subs.store(0, std::memory_order_seq_cst);
+    if (removed) {
+        activity_subs.fetch_sub(removed, std::memory_order_seq_cst);
+    }
 }
 
 void ProgramThreadHub::threadStarted(int tid, const ProgramThreadIdentity& id) {
@@ -242,18 +255,23 @@ void ProgramThreadHub::threadStarted(int tid, const ProgramThreadIdentity& id) {
 
     AutoLocker al(lck);
     assert(threads.find(id.thread_id) == threads.end());
+    rec.start_order = ++start_counter;
     threads.insert(thread_map_t::value_type(id.thread_id, std::move(rec)));
     qore_hash_private::get(**event)->setKeyValueIntern("running", static_cast<int64>(threads.size()));
     publishIntern(QORE_PTE_STARTED, *event);
 }
 
-void ProgramThreadHub::cancelRequested(int64 thread_id, const char* reason) {
+void ProgramThreadHub::cancelRequested(int64 thread_id, uint64_t gen, const char* reason) {
     ReferenceHolder<QoreHashNode> event(nullptr);
     {
         AutoLocker al(lck);
         thread_map_t::iterator i = threads.find(thread_id);
         // the thread has already published FINISHED
         if (i == threads.end()) {
+            return;
+        }
+        // the claim has been published by the canceller or by the thread
+        if (!i->second.cancel_gens.insert(gen).second) {
             return;
         }
         i->second.cancel_requested = true;
@@ -393,8 +411,18 @@ QoreHashNode* ProgramThreadHub::subscribe(Queue* queue, int64 events, uint64_t g
             int64 id = program_thread_sub_id_counter.fetch_add(1, std::memory_order_relaxed) + 1;
             subs.push_back(Subscription{id, queue, events, sub_gen});
 
+            // in the order the threads started: thread IDs are given by the starting threads, which can start
+            // them in another order
+            std::vector<const ThreadRecord*> ordered;
+            ordered.reserve(threads.size());
             for (auto& i : threads) {
-                const ThreadRecord& rec = i.second;
+                ordered.push_back(&i.second);
+            }
+            std::sort(ordered.begin(), ordered.end(), [](const ThreadRecord* a, const ThreadRecord* b) {
+                return a->start_order < b->start_order;
+            });
+            for (const ThreadRecord* recp : ordered) {
+                const ThreadRecord& rec = *recp;
                 QoreHashNode* h = new QoreHashNode(hashdeclProgramThreadInfo, nullptr);
                 qore_hash_private* ph = qore_hash_private::get(*h);
                 ph->setKeyValueIntern("tid", static_cast<int64>(rec.tid));

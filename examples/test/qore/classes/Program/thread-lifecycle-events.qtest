@@ -61,6 +61,7 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
         addTestCase("deferred cancellation", \deferredCancellation());
         addTestCase("cancellation requested once", \cancellationOnce());
         addTestCase("cancellation wave", \cancellationWave());
+        addTestCase("cancellation scoped to another Program", \cancellationOtherProgram());
         addTestCase("thread exit", \threadExit());
         addTestCase("start failure", \startFailure());
         addTestCase("cleanup error", \cleanupError());
@@ -74,6 +75,8 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
         addTestCase("activity with concurrent snapshots", \activitySnapshots());
 %ifdef QoreDebug
         addTestCase("activity publication (C++)", \activityPublication());
+        addTestCase("cancellation published after the thread ended", \lateCancelPublication());
+        addTestCase("published cancellation claims released", \cancelClaimsReleased());
 %endif
         addTestCase("unsubscribe", \unsubscribe());
         addTestCase("multiple subscriptions", \multipleSubscriptions());
@@ -327,6 +330,31 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
         assertEq(tid, child[0].parent_tid);
     }
 
+    cancellationOtherProgram() {
+        # a request scoped to another Program applies only while the thread runs that Program's code: it is not
+        # published as a request of the thread's Program; FINISHED reports how the thread ended
+        Program pgm = makeProgram("int sub run(code c) { return background c(); }");
+        Program other(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        other.parse("our Counter entered; our Counter gate; code sub waiter() { return sub () { entered.dec(); "
+            "gate.waitForZero(); }; }", "other");
+        Counter entered(1);
+        Counter gate(1);
+        on_exit if (gate.getCount()) {
+            gate.dec();
+        }
+        other.setGlobalVarValue("entered", entered);
+        other.setGlobalVarValue("gate", gate);
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        # a thread of the first Program runs the other Program's code
+        int tid = pgm.callFunction("run", other.callFunction("waiter"));
+        entered.waitForZero();
+        assertEq(1, other.cancelThreads("other"));
+        list<hash<ProgramThreadEvent>> l = until(q, "FINISHED", tid);
+        assertEq(("STARTED", "FINISHED"), (map $1.event, l));
+        assertEq("CANCELLED", l[1].outcome);
+    }
+
     threadExit() {
         Program pgm = makeProgram("int sub run() { return background sub () { thread_exit; }(); }");
         Queue q();
@@ -372,11 +400,19 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
     }
 
     snapshot() {
-        Program pgm = makeProgram("", 2, 1);
-        # the first thread keeps running after its cancellation request
-        int tid1 = pgm.callFunction("start_deferring");
-        int tid2 = pgm.callFunction("start_waiting");
+        Program pgm = makeProgram("", 1, 1);
         Counter entered = pgm.getGlobalVariable("entered");
+        Counter gate = pgm.getGlobalVariable("gate");
+        # a failed assertion must not leave the threads waiting, as the Program waits for them when it is destroyed
+        on_exit if (gate.getCount()) {
+            gate.dec();
+        }
+        # the first thread keeps running after its cancellation request; the second one is started only once the
+        # first is running, as the snapshot lists the threads in the order they published STARTED
+        int tid1 = pgm.callFunction("start_deferring");
+        entered.waitForZero();
+        entered.inc();
+        int tid2 = pgm.callFunction("start_waiting");
         entered.waitForZero();
         assertTrue(pgm.cancelThread(tid1, "before"));
         Queue q();
@@ -388,7 +424,6 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
         assertEq((gettid(), gettid()), (map $1.parent_tid, s.threads));
         assertFalse(s.idle);
         assertEq(0, q.size());
-        Counter gate = pgm.getGlobalVariable("gate");
         gate.dec();
         pgm.waitForThreads();
         list<hash<ProgramThreadEvent>> l;
@@ -666,6 +701,55 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
     }
 
 %ifdef QoreDebug
+    lateCancelPublication() {
+        # the canceller publishes after the thread has ended: the thread has published the request before its
+        # FINISHED event, and the canceller's publication adds nothing
+        Program pgm = makeProgram("", 1, 1);
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        int tid = pgm.callFunction("start_waiting");
+        Counter entered = pgm.getGlobalVariable("entered");
+        entered.waitForZero();
+        assertTrue(call_function("dbg_cancel_thread_after_end", tid, "late"));
+        list<hash<ProgramThreadEvent>> l = until(q, "FINISHED", tid);
+        assertEq(("STARTED", "CANCEL_REQUESTED", "FINISHED"), (map $1.event, l));
+        assertEq("late", l[1].cancel_reason);
+        assertEq("CANCELLED", l[2].outcome);
+        # the thread has ended (its TID was released), so nothing can follow
+        pgm.waitForThreads();
+        assertEq(0, q.size());
+    }
+
+    cancelClaimsReleased() {
+        # a thread cancelled many times keeps no claims of requests its canceller has published
+        Program pgm = makeProgram("int sub start_repeated(Queue requests, Queue cleared) { return background sub () "
+            "{ defer_thread_cancel(sub () { entered.dec(); while (requests.get()) { clear_thread_cancel(); cleared.push(1); } }); "
+            "}(); }", 1);
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        Queue requests();
+        Queue cleared();
+        int tid = pgm.callFunction("start_repeated", requests, cleared);
+        # the thread must end also when an assertion fails, as the Program waits for it when it is destroyed
+        on_exit requests.push(0);
+        Counter entered = pgm.getGlobalVariable("entered");
+        entered.waitForZero();
+        const int Requests = 20;
+        for (int i = 1; i <= Requests; ++i) {
+            assertTrue(pgm.cancelThread(tid, "request " + i));
+            assertEq(0, call_function("dbg_get_lifecycle_cancel_claim_count", tid), "request " + i);
+            # the thread clears the request, so that the next one is a new request
+            requests.push(1);
+            assertEq(1, cleared.get(EventTimeout));
+        }
+        requests.push(0);
+        list<hash<ProgramThreadEvent>> l = until(q, "FINISHED", tid);
+        list<hash<ProgramThreadEvent>> cancels = select(l, "CANCEL_REQUESTED");
+        assertEq(Requests, cancels.size());
+        assertEq((map "request " + $1, xrange(1, Requests + 1)), (map $1.cancel_reason, cancels));
+        assertEq("COMPLETED", l.last().outcome);
+    }
+
     activityPublication() {
         # a transition published after a subscription read the newer state still reaches the existing
         # subscriptions; the race cannot be made to happen from Qore code, so the hub is tested directly

@@ -146,11 +146,15 @@ nested: True True
         write(driver, DriverCode);
         string expected = strmul(Expected, 4);
         foreach string mode in (ExecModeHarness::ExecModes) {
-            # the threads' uncaught exceptions are printed on stderr, which run() returns after stdout
-            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s "
-                "%s %s", quote(lib_dir), quote(lib_dir), quote(qore_bin), mode, quote(driver), quote(ChildCode)));
-            list<string> lines = (map $1, out.split("\n"), $1 =~ /^(completed|exception|exit|cancelled|caught|nested): /);
-            assertEq(expected, lines.join("\n") + "\n", mode);
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s %s", quote(lib_dir), quote(lib_dir), quote(qore_bin),
+                mode, quote(driver), quote(ChildCode)));
+            ExecModeHarness::check_native(r);
+            # the driver prints the events on stdout; the threads' uncaught exceptions, which are expected, are
+            # printed on stderr, which is shown when the run fails
+            string run_info = sprintf("%s (rc %d); stderr:\n%s", mode, r.rc, r.stderr);
+            assertEq(0, r.rc, run_info);
+            assertEq(expected, r.stdout, run_info);
         }
     }
 }
