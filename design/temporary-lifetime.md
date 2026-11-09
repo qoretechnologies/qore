@@ -57,9 +57,55 @@ temporaries of the innermost scope of the thread.  The chain nodes hand their re
   `QoreComplexListCastOperatorNode`; a class cast gives its operand itself)
 - `ParseObjectMethodReferenceNode` (`\obj.method()`)
 
-A value read from a variable is not held: it is not a temporary, and the other modes do not keep it after the
-variable is assigned another value in the same statement.  Nor are strings, numbers, binaries and dates, which hold no
-other values, so their lifetime cannot be observed.
+A value borrowed from a variable is not held by these nodes, and a value that a read of a variable gives a
+reference of its own to is held by the variable reference itself (see [Values read from
+variables](#values-read-from-variables)).  Nor are strings, numbers, binaries and dates, which hold no other values,
+so their lifetime cannot be observed.
+
+## Values read from variables
+
+A read of a variable that gives the code a reference of its own to the value gives a temporary of the statement,
+which lives until the statement ends like any other temporary (David, 2026-11-09, qore#5638: "we cannot lose
+expression results needed to execute a statement while the statement is being evaluated").  These reads are:
+
+- a read through a reference: a local or a parameter that holds a reference (`auto v = \o;`, a `reference<T>`
+  parameter, a reference to a member of `self` or to a global), also when the variable that holds the reference is
+  closure-bound or holds a reference to another reference;
+- a read of a closure-bound local, a global or a thread-local variable, which is read under the variable's lock; a
+  local that a reference is taken of (`\o`) anywhere in its function is read this way in the whole function, also by
+  a statement that does not use the reference.
+
+So in `auto v = \o; string s = v.name() + (o = NOTHING) + mark();` the object that `v` gave is destroyed after
+`mark()` has run, also when a call later in the statement throws, whatever uses the value: the receiver of a chain,
+the operand of an operator (`!v`, `v && ...`, `v ? ... : ...`, `exists`, `instanceof`, a comparison, `keys`,
+`elements`, `??`, a slice), the source of a functional operator, the value of an assignment, an element of a
+literal, an argument of a method, closure or constructor call, or the value of a `return` statement (released before
+the `on_exit` handlers run).  An expression evaluated for each element of a `map` keeps the value that it read last
+only, as for any other temporary.
+
+The IR interpreter and native code keep the result of such a load in the temp scope of the statement until
+`DiscardTemps` (a load through a reference is owned: `qore_local_reference_eval()`, `LoadLocal`).  The AST
+interpreter holds it in the innermost `QoreStatementTempScope` (`VarRefNode::evalImpl()`,
+`QoreStatementTempScope::holdRead()`), which takes a reference of its own: the code that evaluated the variable keeps
+its reference, so a value that it keeps after the scope ends (the scope of a condition, or of an operand that is a
+statement of its own) stays valid.
+
+These reads are not held:
+
+- a value borrowed from the variable: a local that holds the value itself, and a variable that holds a weak
+  reference, which reads as its target; no mode keeps such a value after the variable is assigned another value in
+  the same statement (`o.name() + (o = NOTHING)` destroys the object before the rest of the statement runs);
+- the reads made while a reference is resolved: the lvalue expression of a reference is evaluated in the context of
+  the code that created the reference, with the temp scope of the statement suspended
+  (`QoreStatementTempScopeSuspension`, the first member of `RuntimeReferenceHelperBase`), so the variable that it
+  names and the temporaries of its keys and indexes are released when the reference is resolved, and the read through
+  the reference is held as a whole by the variable reference that read it.  The suspension also keeps a reference
+  that compiled code resolves (`qore_local_reference_eval()`, `ClosureVarValue::eval()`) from holding a value in the
+  scope of the AST statement that called the compiled code.
+
+The compiled modes still differ from each other in one case: a value read through a reference and given to a
+function or a static method as an argument is released when the call returns by the IR interpreter, which consumes
+the argument, and kept to the end of the statement by native code, as by the AST interpreter.
 
 ## IR interpreter and native code
 
@@ -115,4 +161,6 @@ released with the statement's temporaries, before the variable.
 
 `examples/test/qore/vars/temporary-lifetime/` runs every case in `temporary-lifetime-checks.qi` in this program, in a
 worker in each execution mode, as an AOT program and from a compiled module, and compares the traces with the AST
-interpreter's (`temporary-lifetime-results.qi`).
+interpreter's (`temporary-lifetime-results.qi`).  `examples/test/ir/ReferenceReadLifetime.qtest` runs the reads of
+[Values read from variables](#values-read-from-variables) in every execution mode, on the IR tier and as a qcc
+executable.

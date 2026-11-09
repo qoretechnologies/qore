@@ -918,6 +918,12 @@ sub test() {
       - every part of a chain of member accesses, element accesses, casts and method calls can use it: a weak
         reference to it, a closure created by one of its methods and a call reference to one of its methods work
         until the statement ends
+      - a value read through a reference (a variable or a parameter that holds a reference, such as \c v after
+        <tt>auto v = \\o;</tt>), or read from a global or thread-local variable or from a local variable that a
+        closure uses or that a reference is taken of, is a temporary value as well: it lives until the end of the
+        statement even if a later part of the statement assigns the variable another value, so in
+        <tt>v.name() + (o = NOTHING) + log()</tt> the object is destroyed after \c log() has run; a value read from
+        another local variable is the variable's value, which such an assignment releases at once
       - the condition of an \c if, \c while, \c do or \c for statement, the initializer and the iterator of a \c for
         statement, the list of a \c foreach statement and the value of a \c switch statement are statements of their
         own: their temporary values are destroyed before the code that they select or that follows them runs

@@ -99,8 +99,9 @@
     @par Temporary Values Live Until the End of Their Statement
     A value that an expression creates and nothing else refers to, such as the object returned by a call in a chain of
     member accesses and method calls, lives until the end of its statement instead of until the call that used it
-    returns; code that relies on such an object being destroyed earlier must assign it to a variable.  See
-    @ref temporary_lifetime.
+    returns; code that relies on such an object being destroyed earlier must assign it to a variable.  A value read
+    through a reference, or from a global, thread-local or closure-bound variable, also lives until the end of its
+    statement, even if the statement assigns the variable another value.  See @ref temporary_lifetime.
 
     @par Data Provider Types Restored From Their Descriptions Can Be Cyclic and Shared
     \c DataProvider::AbstractDataProviderType::get() restores each type of a description once, so a recursive type is

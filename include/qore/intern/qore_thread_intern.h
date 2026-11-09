@@ -1659,6 +1659,37 @@ protected:
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread is exhausted; see thread.cpp
 DLLLOCAL int check_stack(ExceptionSink* xsink);
 
+class QoreStatementTempScope;
+
+//! makes the thread have no temp scope of a statement and returns the innermost one (see QoreStatementTempScope)
+DLLLOCAL QoreStatementTempScope* qore_suspend_statement_temp_scope();
+//! makes the scope returned by qore_suspend_statement_temp_scope() the innermost temp scope of the thread again
+DLLLOCAL void qore_resume_statement_temp_scope(QoreStatementTempScope* scope);
+
+//! suspends the temp scope of the statement being executed while a reference is resolved
+/** The lvalue expression of a reference is evaluated in the context of the code that created the reference
+    (RuntimeReferenceHelperBase); a read through the reference is a read of the variable that holds the reference,
+    which the statement holds as a whole if it gives the code a reference of its own (VarRefNode::evalImpl()), so the
+    reads and the temporaries of the lvalue expression are released when the reference is resolved: they are not
+    temporaries of the statement, which the other execution modes do not keep either, as they resolve the reference
+    with no temp scope of the AST interpreter (qore_local_reference_eval())
+*/
+class QoreStatementTempScopeSuspension {
+public:
+    DLLLOCAL QoreStatementTempScopeSuspension() : scope(qore_suspend_statement_temp_scope()) {
+    }
+
+    DLLLOCAL ~QoreStatementTempScopeSuspension() {
+        qore_resume_statement_temp_scope(scope);
+    }
+
+private:
+    QoreStatementTempScope* scope;
+
+    DLLLOCAL QoreStatementTempScopeSuspension(const QoreStatementTempScopeSuspension&) = delete;
+    DLLLOCAL QoreStatementTempScopeSuspension& operator=(const QoreStatementTempScopeSuspension&) = delete;
+};
+
 class RuntimeReferenceHelperBase {
 public:
     DLLLOCAL RuntimeReferenceHelperBase(const lvalue_ref& r, ExceptionSink* n_xsink)
@@ -1691,6 +1722,8 @@ public:
     }
 
 protected:
+    //! the reference is resolved with no temp scope of a statement; constructed first, so it is restored last
+    QoreStatementTempScopeSuspension temps_suspension;
     const lvalue_ref* ref;
     ProgramThreadCountContextHelper pch;
     ObjectSubstitutionHelper osh;

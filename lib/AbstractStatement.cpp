@@ -40,14 +40,32 @@
 //! the innermost temporary scope of the thread
 static thread_local QoreStatementTempScope* current_temp_scope = nullptr;
 
+QoreStatementTempScope* qore_suspend_statement_temp_scope() {
+    QoreStatementTempScope* scope = current_temp_scope;
+    current_temp_scope = nullptr;
+    return scope;
+}
+
+void qore_resume_statement_temp_scope(QoreStatementTempScope* scope) {
+    // the scopes created while the scope was suspended have ended
+    assert(!current_temp_scope);
+    current_temp_scope = scope;
+}
+
 QoreStatementTempScope::QoreStatementTempScope(ExceptionSink* xsink) : prev(current_temp_scope), xsink(xsink) {
     current_temp_scope = this;
 }
+
+thread_local std::vector<QoreStatementTempScope::Entry> QoreStatementTempScope::spare_entries;
 
 QoreStatementTempScope::~QoreStatementTempScope() {
     release();
     assert(current_temp_scope == this);
     current_temp_scope = prev;
+    // the empty vector is left to the next scope of the thread
+    if (entries.capacity() && entries.capacity() <= SpareCapacity && !spare_entries.capacity()) {
+        entries.swap(spare_entries);
+    }
 }
 
 void QoreStatementTempScope::release() {
@@ -79,6 +97,10 @@ size_t QoreStatementTempScope::find(const void* site) {
 QoreValue QoreStatementTempScope::put(const void* site, QoreValue value) {
     size_t pos = find(site);
     if (pos == entries.size()) {
+        // the first temporary of the scope takes the vector that an ended scope left, if any
+        if (!entries.capacity() && spare_entries.capacity()) {
+            entries.swap(spare_entries);
+        }
         // a new site: nothing is changed if the vector or the index cannot grow
         entries.push_back({site, value});
         if (site_index) {
@@ -130,6 +152,18 @@ void QoreStatementTempScope::hold(const void* site, ValueOptionalRefHolder& hold
     if (hold(site, *holder, xsink)) {
         holder.clearTemp();
     }
+}
+
+void QoreStatementTempScope::holdRead(const void* site, const QoreValue& value, ExceptionSink* xsink) {
+    QoreStatementTempScope* scope = current_temp_scope;
+    if (!scope || !isObservable(value)) {
+        return;
+    }
+    // the reference is released here if the scope cannot take it
+    ValueHolder ref(value.refSelf(), xsink);
+    QoreValue replaced = scope->put(site, *ref);
+    ref.release();
+    replaced.discard(xsink);
 }
 
 bool QoreStatementTempScope::hold(const void* site, QoreValue value, ExceptionSink* xsink) {

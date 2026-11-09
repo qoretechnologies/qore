@@ -80,9 +80,10 @@ public:
     DLLLOCAL static void hold(const void* site, ValueOptionalRefHolder& holder, ExceptionSink* xsink);
 
     //! hands the value that a holder got by evaluating an expression to the innermost scope of the thread
-    /** As hold(), except that nothing is done for a variable: its value is not a temporary, and a value read from a
-        variable is not kept after the variable is assigned another value in the same statement, as in the other
-        execution modes
+    /** As hold(), except that nothing is done for a variable: a read that gives the code a reference of its own is
+        held by the variable reference itself (VarRefNode::evalImpl(), holdRead()), and a value borrowed from the
+        variable is not a temporary: it is not kept after the variable is assigned another value in the same
+        statement, as in the other execution modes
 
         @param site the expression whose value the holder has (the receiver of a chain); see hold()
     */
@@ -92,6 +93,20 @@ public:
         }
         hold(site.getInternalNode(), holder, xsink);
     }
+
+    //! gives the innermost scope of the thread a reference of its own to a value read from a variable
+    /** A read through a reference, or from a closure-bound, global or thread-local variable, gives the code a
+        reference of its own to the value: the value is a temporary of the statement, which lives until the end of
+        the statement, as the other execution modes keep the result of the load in the temp scope of the statement.
+        The caller keeps its reference; nothing is done if the value cannot be referred to after the statement (see
+        isObservable()) or if there is no scope.
+
+        @param site the variable reference read; a value read again by the same variable reference in the same scope,
+        for a later element of a map, replaces the previous one, which is released
+        @param value the value read, which the caller owns
+        @param xsink for exceptions raised by the destructor of a value replaced
+    */
+    DLLLOCAL static void holdRead(const void* site, const QoreValue& value, ExceptionSink* xsink);
 
     //! hands a value that the caller owns to the innermost scope of the thread
     /** @return true if the scope took the value; false if there is no scope, in which case the caller still owns it
@@ -122,6 +137,12 @@ private:
 
     //! the number of temporaries above which the sites are looked up in an index instead of by a scan
     static constexpr size_t IndexThreshold = 16;
+    //! the largest capacity of the vector of entries that an ended scope leaves to the next scope of the thread
+    static constexpr size_t SpareCapacity = 64;
+
+    //! the vector of entries that an ended scope left to the next scope of the thread, so that each statement that
+    //! holds a temporary does not allocate one
+    DLLLOCAL static thread_local std::vector<Entry> spare_entries;
 
     //! the enclosing scope
     QoreStatementTempScope* prev;

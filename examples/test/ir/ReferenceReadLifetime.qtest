@@ -1,0 +1,501 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ReferenceReadLifetimeTest
+
+#! Regression test (qore#5638): a value read through a reference lives until the end of the statement that read it
+/** A read that gives the code a reference of its own to the value - through a reference (a local or a parameter
+    holding a reference, also a closure-bound one, a reference to a member of \c self, to a global or to another
+    reference) or from a closure-bound local, a global or a thread-local variable - gives a temporary of the
+    statement: it lives until the statement ends, also when a later part of the statement assigns the variable
+    another value (<tt>auto v = \o; v.name() + (o = NOTHING) + mark()</tt>), as the IR, JIT, tiered and AOT modes
+    keep the result of the load in the temp scope of the statement.  The AST interpreter released the value as soon as
+    the expression that used it returned, so the object was destroyed before the rest of the statement ran.
+
+    The script reads such values as the receiver of a method call (also one followed by a call that throws), of a
+    member access and of a call reference, for a pseudo-method, in a hash literal, twice and with the conditional
+    operator, through a reference parameter, a reference to a member, a reference to a reference, a closure-bound
+    reference and a reference to a global, as the operand of the logical, conditional, comparison, \c exists,
+    \c instanceof, \c keys, slice and coalescing operators and of an assignment, as the source and an element of
+    functional operators (an expression evaluated for each element keeps the value that it read last only), from a
+    closure-bound local, a global and a thread-local variable, as an argument of a method, a closure and a
+    constructor, from a local that a reference is taken of elsewhere in its function, and in a return statement
+    (released before the \c on_exit handler runs).  It also checks the values
+    that are not held: a value borrowed from a local or read through a weak reference, which the assignment destroys
+    before the rest of the statement runs.  Each function runs twice, in every execution mode, on the IR tier of
+    tiered execution and as a qcc executable (see ExecModeOutputTest).
+*/
+class ReferenceReadLifetimeTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+%allow-weak-references
+class E {
+    public { string n; *E m; string n2 = ""; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+    string name() { return n; }
+    string other(E e) { return e.n; }
+    # a reference to a member of self
+    replaceMember() {
+        m = new E(n + "-member");
+        auto v = \m;
+        auto s = v.name() + (m = NOTHING) + mark(n + " after clear");
+    }
+}
+auto sub mark(string m) { printf("%s\n", m); }
+auto sub thrower(string m) { printf("%s\n", m); throw "THROW", m; }
+class X {
+    public { string n; }
+    constructor(E e) { n = e.n; }
+}
+string sub replaceWith(reference<auto> r, string n) { r = new E(n); return ""; }
+sub refparam(reference<auto> r, string n) { auto s = r.name() + (r = NOTHING) + mark(n + " after clear"); }
+our *E g;
+thread_local *E tl;
+
+# a method called on a value read through a reference local, whose variable a later part of the statement clears
+sub receiver() {
+    auto o = new E("receiver");
+    auto v = \o;
+    auto s = v.name() + (o = NOTHING) + mark("receiver after clear");
+}
+# the same with a call that throws after the variable is cleared
+sub receiverThrow() {
+    auto o = new E("throw");
+    auto v = \o;
+    try {
+        auto s = v.name() + (o = NOTHING) + thrower("throw raises");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("throw caught %s\n", ex.err);
+    }
+}
+# the other chains: a member, a member of the member, a call reference, a pseudo-method, a hash literal
+sub chains() {
+    auto o = new E("member");
+    auto v = \o;
+    auto s = v.n + (o = NOTHING) + mark("member after clear");
+    o = new E("member-member");
+    s = v.n.size() + (o = NOTHING) + mark("member-member after clear");
+    o = new E("call-ref");
+    s = (\v.name())() + (o = NOTHING) + mark("call-ref after clear");
+    auto h = {"a": new E("pseudo")};
+    auto hv = \h;
+    s = hv.size() + (h = NOTHING) + mark("pseudo after clear");
+    o = new E("hash-literal");
+    auto hh = {"a": v.name(), "b": (o = NOTHING), "c": mark("hash-literal after clear")};
+    o = new E("twice");
+    s = v.name() + v.name() + (o = NOTHING) + mark("twice after clear");
+    o = new E("ternary");
+    s = (v ? v.name() : "") + (o = NOTHING) + mark("ternary after clear");
+}
+# a reference parameter, a reference to a member of self, a reference to a reference, a closure-bound reference
+sub references() {
+    auto o = new E("parameter");
+    refparam(\o, "parameter");
+    mark("parameter returned");
+    auto x = new E("self");
+    x.replaceMember();
+    mark("self returned");
+    o = new E("ref-to-ref");
+    auto v = \o;
+    auto w = \v;
+    auto s = w.name() + (o = NOTHING) + mark("ref-to-ref after clear");
+    o = new E("closure-bound");
+    code c = auto sub () { return v; };
+    s = v.name() + (o = NOTHING) + mark("closure-bound after clear");
+    g = new E("global-ref");
+    auto gv = \g;
+    s = gv.name() + (g = NOTHING) + mark("global-ref after clear");
+}
+# a value read through a reference as the operand of an operator
+sub operators() {
+    auto o = new E("not");
+    auto v = \o;
+    bool b = !v || (o = NOTHING) || mark("not after clear");
+    o = new E("and");
+    b = (v && (o = NOTHING)) || mark("and after clear");
+    o = new E("or");
+    b = ((v || False) && (o = NOTHING)) || mark("or after clear");
+    o = new E("condition");
+    b = (v ? (o = NOTHING) : True) || mark("condition after clear");
+    o = new E("exists");
+    b = (exists v && (o = NOTHING)) || mark("exists after clear");
+    o = new E("instanceof");
+    b = ((v instanceof E) && (o = NOTHING)) || mark("instanceof after clear");
+    o = new E("equals");
+    b = (v == NOTHING) || (o = NOTHING) || mark("equals after clear");
+    o = new E("not-equals");
+    b = ((v != NOTHING) && (o = NOTHING)) || mark("not-equals after clear");
+    o = new E("keys");
+    int n = (keys v).size() + ((o = NOTHING) ? 1 : 0) + (mark("keys after clear") ? 1 : 0);
+    o = new E("slice");
+    b = (v{"n", "n2"} && (o = NOTHING)) || mark("slice after clear");
+    o = new E("coalescing");
+    b = ((v ?? NOTHING) && (o = NOTHING)) || mark("coalescing after clear");
+    o = new E("value-coalescing");
+    b = ((v ?* NOTHING) && (o = NOTHING)) || mark("value-coalescing after clear");
+    auto x;
+    o = new E("assignment");
+    b = ((x = v) && (x = NOTHING)) || (o = NOTHING) || mark("assignment after clear");
+    o = new E("member-compare");
+    b = ((v.n == "member-compare") && (o = NOTHING)) || mark("member-compare after clear");
+}
+# a value read through a reference as the source of a functional operator and of an element of it
+sub functional() {
+    auto l = (new E("map-source"),);
+    auto v = \l;
+    int n = (map $1.n, v).size() + ((l = NOTHING) ? 1 : 0) + (mark("map-source after clear") ? 1 : 0);
+    l = (new E("elements"),);
+    n = (elements v) + ((l = NOTHING) ? 1 : 0) + (mark("elements after clear") ? 1 : 0);
+    l = (new E("foldl-1"), new E("foldl-2"));
+    bool b = ((foldl $2, v) && (l = NOTHING)) || mark("foldl after clear");
+    # an expression evaluated for each element keeps the value that it read last only
+    auto o = new E("map-0");
+    auto ov = \o;
+    list<string> names = map ov.name() + replaceWith(\o, "map-" + $1), xrange(1, 3);
+    mark("map done");
+}
+# a closure-bound local, a global and a thread-local variable read for a method call
+sub variables() {
+    auto o = new E("closure-local");
+    code c = auto sub () { return o; };
+    auto s = o.name() + (o = NOTHING) + mark("closure-local after clear");
+    g = new E("global");
+    s = g.name() + (g = NOTHING) + mark("global after clear");
+    tl = new E("thread-local");
+    s = tl.name() + (tl = NOTHING) + mark("thread-local after clear");
+}
+# a value read through a reference and given to a method, a closure or a constructor as an argument; the end of the
+# statement releases the value before the next statement runs
+sub arguments() {
+    auto o = new E("method-argument");
+    auto v = \o;
+    auto k = new E("k");
+    auto s = k.other(v) + (o = NOTHING) + mark("method-argument after clear");
+    o = new E("closure-argument");
+    code c = string sub (E e) { return e.n; };
+    s = c(v) + (o = NOTHING) + mark("closure-argument after clear");
+    o = new E("constructor-argument");
+    s = new X(v).n + (o = NOTHING) + mark("constructor-argument after clear");
+    o = new E("next");
+    s = v.name() + (o = NOTHING);
+    mark("next statement");
+}
+# a local that a reference is taken of is read with a reference of its own in the whole function
+sub referencedLocal() {
+    auto o = new E("referenced");
+    auto s = o.name() + (o = NOTHING) + mark("referenced after clear");
+    if (!o) {
+        return;
+    }
+    auto r = \o;
+}
+# a value borrowed from a local or read through a weak reference is not held: the assignment destroys the object
+# before the rest of the statement runs
+sub borrowed() {
+    auto o = new E("plain");
+    auto s = o.name() + (o = NOTHING) + mark("plain after clear");
+    o = new E("weak");
+    auto w := o;
+    s = w.name() + (o = NOTHING) + mark("weak after clear");
+}
+# a return statement releases the values that it read before the on_exit handler runs
+string sub returnRead() {
+    auto o = new E("return");
+    auto v = \o;
+    on_exit mark("return on_exit");
+    return v.name() + (o = NOTHING) + mark("return after clear");
+}
+
+for (int i = 0; i < 2; ++i) {
+    printf("-- run %d\n", i);
+    receiver();
+    receiverThrow();
+    chains();
+    references();
+    operators();
+    functional();
+    variables();
+    arguments();
+    referencedLocal();
+    borrowed();
+    returnRead();
+    mark("return returned");
+}
+';
+
+        #! the output of every mode: the value read is destroyed after the rest of the statement has run
+        const Expected = (
+            "-- run 0",
+            "receiver after clear",
+            "dtor receiver",
+            "throw raises",
+            "dtor throw",
+            "throw caught THROW",
+            "member after clear",
+            "dtor member",
+            "member-member after clear",
+            "dtor member-member",
+            "call-ref after clear",
+            "dtor call-ref",
+            "pseudo after clear",
+            "dtor pseudo",
+            "hash-literal after clear",
+            "dtor hash-literal",
+            "twice after clear",
+            "dtor twice",
+            "ternary after clear",
+            "dtor ternary",
+            "parameter after clear",
+            "dtor parameter",
+            "parameter returned",
+            "self after clear",
+            "dtor self-member",
+            "self returned",
+            "ref-to-ref after clear",
+            "dtor ref-to-ref",
+            "closure-bound after clear",
+            "dtor closure-bound",
+            "global-ref after clear",
+            "dtor global-ref",
+            "dtor self",
+            "not after clear",
+            "dtor not",
+            "and after clear",
+            "dtor and",
+            "or after clear",
+            "dtor or",
+            "condition after clear",
+            "dtor condition",
+            "exists after clear",
+            "dtor exists",
+            "instanceof after clear",
+            "dtor instanceof",
+            "equals after clear",
+            "dtor equals",
+            "not-equals after clear",
+            "dtor not-equals",
+            "keys after clear",
+            "dtor keys",
+            "slice after clear",
+            "dtor slice",
+            "coalescing after clear",
+            "dtor coalescing",
+            "value-coalescing after clear",
+            "dtor value-coalescing",
+            "assignment after clear",
+            "dtor assignment",
+            "member-compare after clear",
+            "dtor member-compare",
+            "map-source after clear",
+            "dtor map-source",
+            "elements after clear",
+            "dtor elements",
+            "foldl after clear",
+            "dtor foldl-1",
+            "dtor foldl-2",
+            "dtor map-0",
+            "dtor map-1",
+            "map done",
+            "dtor map-2",
+            "closure-local after clear",
+            "dtor closure-local",
+            "global after clear",
+            "dtor global",
+            "thread-local after clear",
+            "dtor thread-local",
+            "method-argument after clear",
+            "dtor method-argument",
+            "closure-argument after clear",
+            "dtor closure-argument",
+            "constructor-argument after clear",
+            "dtor constructor-argument",
+            "dtor next",
+            "next statement",
+            "dtor k",
+            "referenced after clear",
+            "dtor referenced",
+            "dtor plain",
+            "plain after clear",
+            "dtor weak",
+            "weak after clear",
+            "return after clear",
+            "dtor return",
+            "return on_exit",
+            "return returned",
+            "-- run 1",
+            "receiver after clear",
+            "dtor receiver",
+            "throw raises",
+            "dtor throw",
+            "throw caught THROW",
+            "member after clear",
+            "dtor member",
+            "member-member after clear",
+            "dtor member-member",
+            "call-ref after clear",
+            "dtor call-ref",
+            "pseudo after clear",
+            "dtor pseudo",
+            "hash-literal after clear",
+            "dtor hash-literal",
+            "twice after clear",
+            "dtor twice",
+            "ternary after clear",
+            "dtor ternary",
+            "parameter after clear",
+            "dtor parameter",
+            "parameter returned",
+            "self after clear",
+            "dtor self-member",
+            "self returned",
+            "ref-to-ref after clear",
+            "dtor ref-to-ref",
+            "closure-bound after clear",
+            "dtor closure-bound",
+            "global-ref after clear",
+            "dtor global-ref",
+            "dtor self",
+            "not after clear",
+            "dtor not",
+            "and after clear",
+            "dtor and",
+            "or after clear",
+            "dtor or",
+            "condition after clear",
+            "dtor condition",
+            "exists after clear",
+            "dtor exists",
+            "instanceof after clear",
+            "dtor instanceof",
+            "equals after clear",
+            "dtor equals",
+            "not-equals after clear",
+            "dtor not-equals",
+            "keys after clear",
+            "dtor keys",
+            "slice after clear",
+            "dtor slice",
+            "coalescing after clear",
+            "dtor coalescing",
+            "value-coalescing after clear",
+            "dtor value-coalescing",
+            "assignment after clear",
+            "dtor assignment",
+            "member-compare after clear",
+            "dtor member-compare",
+            "map-source after clear",
+            "dtor map-source",
+            "elements after clear",
+            "dtor elements",
+            "foldl after clear",
+            "dtor foldl-1",
+            "dtor foldl-2",
+            "dtor map-0",
+            "dtor map-1",
+            "map done",
+            "dtor map-2",
+            "closure-local after clear",
+            "dtor closure-local",
+            "global after clear",
+            "dtor global",
+            "thread-local after clear",
+            "dtor thread-local",
+            "method-argument after clear",
+            "dtor method-argument",
+            "closure-argument after clear",
+            "dtor closure-argument",
+            "constructor-argument after clear",
+            "dtor constructor-argument",
+            "dtor next",
+            "next statement",
+            "dtor k",
+            "referenced after clear",
+            "dtor referenced",
+            "dtor plain",
+            "plain after clear",
+            "dtor weak",
+            "weak after clear",
+            "return after clear",
+            "dtor return",
+            "return on_exit",
+            "return returned",
+        );
+
+        #! the results of the issue, which a wrong expected output must not hide
+        const Pinned = (
+            "receiver after clear",
+            "throw raises",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ReferenceReadLifetime", Script, (map $1 + "\n", Expected).join(""),
+            "keeps a value read through a reference until the end of the statement", Pinned, \checkOrder()) {
+    }
+
+    #! every object read through a reference in a statement is destroyed after the statement's own output
+    static list<string> checkOrder(string out) {
+        list<string> lines = out.split("\n");
+        list<string> rv = ();
+        # object -> the last line that its statement prints
+        hash<string, string> held = {
+            "throw": "throw raises",
+            "self-member": "self after clear",
+        };
+        foreach string name in (("receiver", "member", "member-member", "call-ref", "pseudo", "hash-literal", "twice",
+                "ternary", "parameter", "ref-to-ref", "closure-bound", "global-ref", "not", "and", "or", "condition",
+                "exists", "instanceof", "equals", "not-equals", "keys", "slice", "coalescing", "value-coalescing",
+                "assignment", "member-compare", "map-source", "elements", "closure-local", "global", "thread-local",
+                "method-argument", "closure-argument", "constructor-argument", "referenced", "return")) {
+            held{name} = name + " after clear";
+        }
+        foreach hash<auto> i in (held.pairIterator()) {
+            int dtor = ReferenceReadLifetimeTest::firstLine(lines, "dtor " + i.key);
+            int end = ReferenceReadLifetimeTest::firstLine(lines, i.value);
+            if (end < 0 || dtor < end) {
+                rv += sprintf("%s: destroyed at line %d, its statement ends at line %d", i.key, dtor, end);
+            }
+        }
+        # the values that are not held are destroyed before the rest of the statement runs
+        foreach string name in (("plain", "weak")) {
+            int dtor = ReferenceReadLifetimeTest::firstLine(lines, "dtor " + name);
+            int after = ReferenceReadLifetimeTest::firstLine(lines, name + " after clear");
+            if (dtor < 0 || dtor > after) {
+                rv += sprintf("%s: destroyed at line %d, after the statement at line %d", name, dtor, after);
+            }
+        }
+        # the end of the statement releases the value before the next statement runs
+        if (ReferenceReadLifetimeTest::firstLine(lines, "dtor next") > ReferenceReadLifetimeTest::firstLine(lines,
+                "next statement")) {
+            rv += "next: destroyed after the next statement";
+        }
+        # the value of a return statement is released before the on_exit handler runs
+        if (ReferenceReadLifetimeTest::firstLine(lines, "dtor return") > ReferenceReadLifetimeTest::firstLine(lines,
+                "return on_exit")) {
+            rv += "return: destroyed after the on_exit handler";
+        }
+        return rv;
+    }
+
+    #! returns the index of the first line equal to \a line, or -1 if there is none
+    static int firstLine(list<string> lines, string line) {
+        for (int i = 0; i < lines.size(); ++i) {
+            if (lines[i] == line) {
+                return i;
+            }
+        }
+        return -1;
+    }
+}

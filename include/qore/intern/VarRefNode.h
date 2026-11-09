@@ -231,6 +231,13 @@ protected:
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
+    //! reads the value of the variable without handing it to the statement
+    /** @param needs_deref set to true if the read gave the caller a reference of its own: the value was read through
+        a reference, or from a closure-bound, global or thread-local variable, which is read under the variable's
+        lock
+    */
+    DLLLOCAL QoreValue evalValue(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
     DLLLOCAL void resolve(const QoreTypeInfo* typeInfo);
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, bool is_new = false);
     DLLLOCAL VarRefNewObjectNode* globalMakeNewCall(QoreValue args);
