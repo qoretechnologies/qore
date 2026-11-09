@@ -3973,15 +3973,42 @@ static bool qore_rt_aot_path_cache_receiver_serial(const QoreTypeInfo* ti, uint6
     return false;
 }
 
-//! Makes room for an entry in a context's path cache; called with its mutex held
-/** The entries of the receivers of destroyed classes are never found again; a cache that is full evicts an entry
-    for each new one, instead of being cleared, which made a working set larger than the cache resolve every path
-    again
+//! Adds an entry to a context's path cache; called with its mutex held
+/** The entries of the receivers of destroyed classes are never found again; a cache that is full evicts its oldest
+    entry for each new one (first in, first out): clearing the full cache made a working set larger than the cache
+    resolve every path again, and evicting the entry that the map iterates first evicted the newest entries, so a live
+    working set in a cache full of dead entries found its entries in about 40% of its calls.
+
+    @param cache the cache
+    @param order the keys of the cache in the order they were added
+    @param key the key of the new entry
+    @param value its value
 */
-template <typename M>
-static void qore_rt_aot_path_cache_make_room(M& cache) {
+template <typename M, typename V>
+static void qore_rt_aot_path_cache_add(M& cache, QoreAOTPathCacheOrder& order, QoreAOTHashDeclPathCacheKey&& key,
+        V value) {
+    // another thread added the entry since the caller missed it
+    if (cache.find(key) != cache.end()) {
+        return;
+    }
+    // the memory is reserved before the cache changes
+    if (order.keys.size() < QORE_AOT_PATH_CACHE_MAX_ENTRIES) {
+        order.keys.reserve(order.keys.size() + 1);
+    }
     if (cache.size() >= QORE_AOT_PATH_CACHE_MAX_ENTRIES) {
-        cache.erase(cache.begin());
+        assert(order.keys.size() == QORE_AOT_PATH_CACHE_MAX_ENTRIES);
+        auto oldest = cache.find(*order.keys[order.next]);
+        assert(oldest != cache.end());
+        cache.erase(oldest);
+    }
+    auto r = cache.emplace(std::move(key), value);
+    assert(r.second);
+    const QoreAOTHashDeclPathCacheKey* k = &r.first->first;
+    if (order.keys.size() < QORE_AOT_PATH_CACHE_MAX_ENTRIES) {
+        order.keys.push_back(k);
+    } else {
+        order.keys[order.next] = k;
+        order.next = (order.next + 1) % QORE_AOT_PATH_CACHE_MAX_ENTRIES;
     }
 }
 
@@ -4085,8 +4112,7 @@ static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext*
 
     {
         std::lock_guard<std::mutex> lock(ctx->hashdecl_path_cache_mutex);
-        qore_rt_aot_path_cache_make_room(ctx->hashdecl_path_cache);
-        ctx->hashdecl_path_cache.emplace(std::move(key), hd);
+        qore_rt_aot_path_cache_add(ctx->hashdecl_path_cache, ctx->hashdecl_path_cache_order, std::move(key), hd);
     }
     if (!disable_front_cache) {
         front_entry.generation = ctx->hashdecl_cache_generation;
@@ -4409,8 +4435,7 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
 
     {
         std::lock_guard<std::mutex> lock(ctx->type_path_cache_mutex);
-        qore_rt_aot_path_cache_make_room(ctx->type_path_cache);
-        ctx->type_path_cache.emplace(std::move(key), type_info);
+        qore_rt_aot_path_cache_add(ctx->type_path_cache, ctx->type_path_cache_order, std::move(key), type_info);
     }
     front_entry = {ctx->hashdecl_cache_generation, epoch, type_path, receiver_type_info, type_info};
     return type_info;

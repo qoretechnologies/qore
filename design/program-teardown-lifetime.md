@@ -137,10 +137,13 @@ epoch, which a call compares at no cost, and refill an entry of an earlier epoch
 recorded the epoch first, but each method added at parse time and each class destroyed cleared every context's maps, so
 the module's generic code resolved the paths of all of its receivers again while another thread created and deleted
 Programs (calls over 300 receivers took 48% longer than without the other thread, 10% longer with the serials).  A map
-holds at most `QORE_AOT_PATH_CACHE_MAX_ENTRIES` entries, and evicts an entry for each new one once it is full: the
-entries of destroyed classes are never found again, and clearing the full map made a working set larger than the map
-resolve every path again.  `examples/test/ir/AOTPathCacheProgramReuse.qtest` declares such subclasses in Programs
-created one after another, and more subclasses in one Program than a map holds.
+holds at most `QORE_AOT_PATH_CACHE_MAX_ENTRIES` entries, and evicts its oldest entry for each new one once it is full
+(`QoreAOTContext::hashdecl_path_cache_order` and `type_path_cache_order`, a ring of pointers to the keys in the map's
+nodes): the entries of destroyed classes are never found again; clearing the full map made a working set larger than the
+map resolve every path again, and evicting the entry that the map iterates first evicted the newest ones, so a live
+working set in a map full of dead entries found its entries in about 40% of its calls (99% first in, first out).
+`examples/test/ir/AOTPathCacheProgramReuse.qtest` declares such subclasses in Programs created one after another, and
+more subclasses in one Program than a map holds.
 
 ## Thread-local variables
 
