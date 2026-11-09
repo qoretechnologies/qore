@@ -3332,6 +3332,16 @@ void QoreIRToLLVM::syncLocalsToRuntimeForHandlers(llvm::Module& module) {
         if (weak_assigned_locals.count(key)) {
             continue;
         }
+        // A local declared with a reference type lives on the runtime stack too (see readsThroughReference()): the
+        // runtime stack holds the reference that its declaration bound, and its native cache, which is never read,
+        // holds the value of its last store or NOTHING before its declaration.  Publishing the cache assigned that
+        // value to the variable before its declaration (a block of a catch, or the body of a loop in its next
+        // iteration), so that the declaration assigned the reference to the referenced type (RUNTIME-TYPE-ERROR) or
+        // through the reference it held (OBJECT-ALREADY-DELETED once its object was deleted), as LocalVarValue
+        // resolves an assignment to a variable that has a value.
+        if (readsThroughReference(local)) {
+            continue;
+        }
 
         ensureLocalCacheFresh(key, module, builder->GetInsertBlock()->getParent());
 
@@ -3419,6 +3429,11 @@ llvm::Value* QoreIRToLLVM::beginNativeHandlerSlotCache(llvm::Module& module) {
             // Like a closure-use local, a weak-assigned local that is not IR-only lives on the runtime stack, and
             // its alloca can be stale (see syncLocalsToRuntimeForHandlers()), so it is not seeded from the alloca;
             // handlers read it from the runtime stack.
+            continue;
+        }
+        if (readsThroughReference(local)) {
+            // a local declared with a reference type lives on the runtime stack, and its alloca is never read (see
+            // syncLocalsToRuntimeForHandlers()): handlers read it from the runtime stack
             continue;
         }
 
@@ -4955,6 +4970,14 @@ bool QoreIRToLLVM::canReloadLocalFromRuntime(const void* key, bool honor_reload_
         return false;
     }
     if (weak_assigned_locals.count(key)) {
+        return false;
+    }
+    // a local declared with a reference type lives on the runtime stack: every load reads it there and every store
+    // writes it there (see readsThroughReference()), so its native cache is never read, and a reload would read the
+    // referenced lvalue (qore_rt_load_local()), which raises an exception if the lvalue is gone, as for a member of
+    // a deleted object: the scope exit of a block of a loop body whose object a reference local of it refers to was
+    // deleted raised OBJECT-ALREADY-DELETED when a handler made the frame reload its local caches
+    if (readsThroughReference(var_ptr)) {
         return false;
     }
 

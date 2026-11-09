@@ -41,7 +41,11 @@ public:
     QoreValue vexp{};
     const QoreTypeInfo* typeInfo;
     QoreObject* self;
+    //! the Program of the lvalue, by address: identification only, see QoreReferenceProgramHelper
     QoreProgram* pgm;
+    //! the ID of the Program of the lvalue, which identifies it: a Program created after it was deleted can have its
+    //! address
+    qore_program_id_t pgm_id;
     const void* lvalue_id;
     const qore_class_private* cls;
     //! weak references to the reference node, which keep it allocated after its last reference is released
