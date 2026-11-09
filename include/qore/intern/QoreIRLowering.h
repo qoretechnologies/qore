@@ -293,7 +293,7 @@ public:
     //! are restored on every path, also when the code raises an exception (see the definition)
     template <typename F>
     QoreIRValue lowerWithImplicitContext(QoreIRValue element, QoreIRValue index, const QoreProgramLocation* loc,
-            QoreIRBasicBlock* loop_cleanup, std::string& error, F&& lower);
+            QoreIRBasicBlock* loop_cleanup, std::string& error, F&& lower, bool keep_value = false);
     QoreIRValue lowerMap(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSelect(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMapSelect(const QoreValue& expr, std::string& error);
@@ -408,7 +408,8 @@ private:
     bool collectLazyPipelineStages(const QoreValue& source, QoreValue& base_source,
         std::vector<LazyPipelineStage>& source_stages, std::string& error);
 
-    //! Lowers a pipeline stage with virtual $1/$# values and materializes the runtime context only for AST delegation.
+    //! Lowers a pipeline stage with virtual $1/$# values, and with the element as the implicit argument list also at
+    //! run time when the stage needs it (see the definition)
     QoreIRValue lowerLazyPipelineStage(const QoreValue& stage_expr, const QoreProgramLocation* stage_loc,
         QoreIRValue element, QoreIRValue index, std::string& error);
 

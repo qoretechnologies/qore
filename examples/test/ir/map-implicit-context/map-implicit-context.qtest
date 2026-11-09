@@ -1,0 +1,150 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of the implicit argument context and exception edges of map
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class MapImplicitContextTest
+
+#! issue #5680: map bodies run with the element as the implicit argument list, also when they raise
+/** The body of map, and of a map stage of a fused pipeline, runs with the element as the implicit argument list and
+    its index as the implicit element.  The compiled modes set them at run time only when the body had a delegated
+    operation, and inserted that after the body had been lowered, so an exception that the body raised skipped their
+    restoration: the element was released after the handler.  A body without a delegated operation did not set them,
+    and read the implicit arguments of the enclosing function: <tt>$2</tt> gave the function's second argument
+    instead of NOTHING, as did the operands that the AST interpreter evaluates at run time (new hash<K, V>(...),
+    new list<T>(...)).  In JIT and AOT code, the temporaries of a body that creates blocks (?:, a ternary, &&) were
+    released after the code that followed the statement had run, or in the wrong order, as the blocks came after
+    the blocks that follow the loop.
+
+    map-implicit-context.q runs each case and logs the release of every object, the values of the implicit
+    arguments, and the objects that were not released exactly once when the case returned.  Its output with the AST
+    interpreter is checked, and it must be the same in every other execution mode, on the IR tier and as AOT
+    executables compiled with -O0 and -O3.
+*/
+class MapImplicitContextTest inherits QUnit::Test {
+    public {
+        #! lines of the output of the AST interpreter that decide the issue
+        const AstLines = (
+            "it_map_raises: released it2; released it1; catch STAGE; after",
+            "list_map_raises: released h1; released h2; catch STAGE; after",
+            "it_map_void_raises: released it1; released it2; catch STAGE; after",
+            "no_handler: released it2; released it1; catch STAGE; after",
+            "on_error_handler: released it2; released it1; on_error; catch STAGE; after",
+            "nested_raises: released h1; released h2; catch STAGE; after",
+            "fused_it_count_raises: released it1; released it2; catch STAGE; after",
+            "fused_foreach_raises: each it1; released it2; released it1; catch STAGE; after",
+            "fused_ternary_raises: released h1; released h2; released h3; catch STAGE; after",
+            "it_map_normal: size 2; released it1; released it2; after",
+            "layout_list_and: released h1; released h2; size 2; after",
+            "layout_it_elvis: size 2; released it1; released it2; after",
+            "layout_fused_and: size 2; released h1; released h2; released h3; removed; after",
+        );
+
+        #! parts of the implicit_args line of the AST interpreter: $2 is NOTHING in every map body
+        const AstArgParts = (
+            "list $2 [null, null]",
+            "auto $2 [null, null]",
+            "it $2 [null, null]",
+            "list all [[\"x1\", null, 0], [\"x2\", null, 1]]",
+            "void [\"x2\", null, 1]",
+            "d list $2 [null, 1]",
+            "nested outer [[1, 2, null, 0], [3, 4, null, 1]]",
+            "fused take [[\"x1\", null, 0], [\"x2\", null, 1]]",
+            "fused first null",
+            "fused count 2",
+            "closure call [[\"x1\", 0], [\"x2\", 1]]",
+            "closure own [[\"own1\", \"own2\"], [\"own1\", \"own2\"]]",
+            "closure later [\"p\", \"q\"] 2",
+            "new hash [{k: \"x1\", i: 0, two: null}, {k: \"x2\", i: 1, two: null}]",
+            "new list [[[\"x1\", 0, null]], [[\"x2\", 1, null]]]",
+            "fn [\"a\", \"b\", null]",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("map implicit context", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/map-implicit-context.q";
+
+        addTestCase("AST interpreter", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executable -O0", \aotTest(), "-O0");
+        addTestCase("AOT executable -O3", \aotTest(), "-O3");
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter, which the other modes must give
+    private astTest() {
+        string out = ast();
+        list<string> lines = select out.split("\n"), $1;
+        foreach string line in (AstLines) {
+            assertTrue(inlist(line, lines), line);
+        }
+        *string args = (first $1 =~ /^implicit_args: /, lines);
+        assertTrue(exists args, "implicit_args line");
+        foreach string part in (AstArgParts) {
+            assertNeq(-1, args.find(part), part);
+        }
+        # no object outlives its case or is released twice in the AST interpreter
+        assertEq(-1, out.find("ERROR:"));
+        # every case runs three times
+        assertEq(3 * MapImplicitContextTest::caseCount(lines), lines.size());
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = ast();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, script)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, script)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("map-implicit-context-aot-");
+        string exe = dir.path + "/map-implicit-context";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, script));
+        assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
+        assertEq(ast(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+    }
+
+    #! returns the output of the script with the AST interpreter
+    private string ast() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, script));
+    }
+
+    #! returns the number of distinct cases in the output
+    private static int caseCount(list<string> lines) {
+        hash<string, bool> cases;
+        foreach string line in (lines) {
+            cases{(line =~ x/^([^:]+):/)[0]} = True;
+        }
+        return cases.size();
+    }
+}
