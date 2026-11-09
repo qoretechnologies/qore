@@ -4059,6 +4059,7 @@ void ProgramThreadCountContextHelper::restoreContext() {
     sync_runtime_config_program(td);
 
     if (thread_count_incremented) {
+        thread_count_incremented = false;
         qore_program_private::decThreadCount(*pgm, td->tid, xsink);
     }
 }
@@ -4109,6 +4110,7 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
             return;
         }
         thread_count_incremented = true;
+        count_pgm = pgm;
     }
 
     // set up thread stacks

@@ -618,26 +618,20 @@ int ObjCountRec::getDifference() {
 LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
-    // the reference's Program is kept until the lvalue has been used, not only while it is resolved
-    if (keepReferenceProgram(*lvalue_ref::get(&ref))) {
-        return;
-    }
     RuntimeReferenceHelper rh(ref, xsink);
-    if (!*xsink) {
-        doLValue(lvalue_ref::get(&ref)->vexp, for_remove);
+    if (!*xsink && !doLValue(lvalue_ref::get(&ref)->vexp, for_remove)) {
+        // the reference's Program is kept until the lvalue has been used, not only while it is resolved
+        adoptReferenceProgram(rh.takeProgramEntry());
     }
 }
 
 LValueHelper::LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
-    // see LValueHelper(const ReferenceNode&, ExceptionSink*, bool, bool)
-    if (keepReferenceProgram(*lvalue_ref::get(&ref))) {
-        return;
-    }
     RuntimeReferenceHelper rh(ref, xsink);
-    if (!*xsink) {
-        doLValue(lvalue_ref::get(&ref)->vexp, rc, for_remove);
+    if (!*xsink && !doLValue(lvalue_ref::get(&ref)->vexp, rc, for_remove)) {
+        // see LValueHelper(const ReferenceNode&, ExceptionSink*, bool, bool)
+        adoptReferenceProgram(rh.takeProgramEntry());
     }
 }
 
@@ -670,13 +664,16 @@ LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink
 }
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
-        ocvec(std::move(o.ocvec)), before(o.before), removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
+        ref_pgms(std::move(o.ref_pgms)), ocvec(std::move(o.ocvec)), before(o.before),
+        removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
         vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
         assignment_only(o.assignment_only), write_rejected(o.write_rejected),
         member_lvalue_modified(o.member_lvalue_modified), robj(o.robj),
         buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
         buffer_lvalue_value(o.buffer_lvalue_value), val(o.val), qv(o.qv), typeInfo(o.typeInfo) {
     o.qv = nullptr;
+    // the set of lvalue IDs is deleted by the new helper
+    o.lvid_set = nullptr;
     // the entries created to reach the target belong to the new helper, which removes them if its operation fails
     o.vivified.clear();
     o.buffer_lvalue = nullptr;
@@ -772,19 +769,17 @@ LValueHelper::~LValueHelper() {
         //    v ? get_type_name(*v) : "n/a");
     }
 
-    // first free any locks
-    vl.del();
-
-    if (member_lvalue && member_lvalue->write_back && member_lvalue_modified && !*vl.xsink) {
-        const qore_class_private* cls = qore_class_private::get(*member_lvalue->object->getClass());
-        if (member_lvalue->accessor_info) {
-            cls->evalMemberAccessorSet(*member_lvalue->object, member_lvalue->member.c_str(),
-                *member_lvalue->accessor_info, *member_lvalue->value, vl.xsink);
-        } else {
-            cls->evalMemberWriteGate(*member_lvalue->object, member_lvalue->member.c_str(), *member_lvalue->value,
-                QoreMemberWriteOp::Assign, vl.xsink).discard(vl.xsink);
+#ifdef DEBUG
+    // a test can hold the thread here, after it has assigned an lvalue reached through a reference
+    if (lvid_set && !*vl.xsink && (val || qv) && getType() == NT_INT) {
+        if (qore_dbg_reference_lvalue_hook_t hook = qore_dbg_reference_lvalue_hook.load()) {
+            hook(getValue().getAsBigInt());
         }
     }
+#endif
+
+    // first free any locks
+    vl.del();
 
     if (static_var_lvalue) {
         // write the value back to the storage the variable mirrors, after the object-count bookkeeping above and
@@ -796,6 +791,22 @@ LValueHelper::~LValueHelper() {
         }
         static_var_lvalue = nullptr;
         static_var_lvalue_value = QoreValue();
+    }
+
+    // the Programs of the references that the lvalue was reached through are left now that it has been used, before
+    // the member write gates and accessors, the recursive-reference scan and the release of the values that the
+    // write replaced, which run code of other Programs and of modules (a jni or python callback taking its lock)
+    ref_pgms.release(vl.xsink);
+
+    if (member_lvalue && member_lvalue->write_back && member_lvalue_modified && !*vl.xsink) {
+        const qore_class_private* cls = qore_class_private::get(*member_lvalue->object->getClass());
+        if (member_lvalue->accessor_info) {
+            cls->evalMemberAccessorSet(*member_lvalue->object, member_lvalue->member.c_str(),
+                *member_lvalue->accessor_info, *member_lvalue->value, vl.xsink);
+        } else {
+            cls->evalMemberWriteGate(*member_lvalue->object, member_lvalue->member.c_str(), *member_lvalue->value,
+                QoreMemberWriteOp::Assign, vl.xsink).discard(vl.xsink);
+        }
     }
 
     // Whether the write removed no value that a recursive set can count: then its scan can be handed to a member
@@ -843,19 +854,6 @@ LValueHelper::~LValueHelper() {
         }
         if (obj_ref) {
             robj->tDeref();
-        }
-    }
-
-    // the Programs of the references that the lvalue was reached through are left now that it has been used, and
-    // before the values that the write replaced are released, whose destructors run code of their own Programs
-    if (ref_pgm) {
-        int tid = q_gettid();
-        qore_program_private::decThreadCount(*ref_pgm, tid, vl.xsink);
-        if (ref_pgms) {
-            for (QoreProgram* p : *ref_pgms) {
-                qore_program_private::decThreadCount(*p, tid, vl.xsink);
-            }
-            delete ref_pgms;
         }
     }
 
@@ -948,13 +946,10 @@ int LValueHelper::set(const ReferenceNode& ref, bool for_remove) {
     assert(!val);
     assert(!qv);
     assert(!typeInfo);
-    // see LValueHelper(const ReferenceNode&, ExceptionSink*, bool, bool)
-    if (keepReferenceProgram(*lvalue_ref::get(&ref))) {
-        return -1;
-    }
     RuntimeReferenceHelper rh(ref, vl.xsink);
-    if (!*vl.xsink) {
-        doLValue(lvalue_ref::get(&ref)->vexp, for_remove);
+    if (!*vl.xsink && !doLValue(lvalue_ref::get(&ref)->vexp, for_remove)) {
+        // see LValueHelper(const ReferenceNode&, ExceptionSink*, bool, bool)
+        adoptReferenceProgram(rh.takeProgramEntry());
     }
     return *vl.xsink ? -1 : 0;
 }
@@ -964,19 +959,39 @@ int LValueHelper::keepReferenceProgram(const lvalue_ref& r) {
     if (!rph) {
         return -1;
     }
-    QoreProgram* p = rph.release();
-    if (!p) {
-        return 0;
-    }
-    if (!ref_pgm) {
-        ref_pgm = p;
-        return 0;
-    }
-    if (!ref_pgms) {
-        ref_pgms = new std::vector<QoreProgram*>;
-    }
-    ref_pgms->push_back(p);
+    adoptReferenceProgram(rph.release());
     return 0;
+}
+
+void QoreLValueReferencePrograms::addMore(QoreProgram* p) {
+    try {
+        if (!more) {
+            more = new std::vector<QoreProgram*>;
+        }
+        more->push_back(p);
+    } catch (...) {
+        // the entry is left, so that the Program's teardown does not wait for it
+        qore_program_private::decThreadCount(*p, q_gettid(), nullptr);
+        throw;
+    }
+}
+
+void QoreLValueReferencePrograms::release(ExceptionSink* xsink) {
+    if (!first) {
+        return;
+    }
+    int tid = q_gettid();
+    QoreProgram* p = first;
+    first = nullptr;
+    qore_program_private::decThreadCount(*p, tid, xsink);
+    if (more) {
+        std::vector<QoreProgram*>* m = more;
+        more = nullptr;
+        for (QoreProgram* mp : *m) {
+            qore_program_private::decThreadCount(*mp, tid, xsink);
+        }
+        delete m;
+    }
 }
 
 void LValueHelper::saveTemp(QoreValue val) {
@@ -1580,7 +1595,7 @@ void LValueHelper::setObjectContext(qore_object_private* obj) {
     ocvec.push_back(ObjCountRec(obj->obj));
 }
 
-int LValueHelper::doLValue(const ReferenceNode* ref, bool for_remove) {
+int LValueHelper::doLValue(const ReferenceNode* ref, bool for_remove, bool keep_program) {
     // each reference in a chain of references is resolved by a recursion here, so the stack is checked for each one:
     // a recursion that passes on a reference makes the chain as long as the recursion is deep, and resolving it at
     // the deepest call overflowed the stack instead of raising STACK-LIMIT-EXCEEDED where the frames are large
@@ -1598,14 +1613,14 @@ int LValueHelper::doLValue(const ReferenceNode* ref, bool for_remove) {
     //printd(5, "LValueHelper::doLValue() this: %p ReferenceNode: %p r->vexp: %s ti: %s\n", this, ref,
     //    r->vexp.getFullTypeName(), QoreTypeInfo::getName(r->typeInfo));
     // the lvalue of a reference of a deleted Program is freed with it: the Program is kept until the lvalue has been
-    // used
-    if (keepReferenceProgram(*r)) {
+    // used, by this helper or by the caller's RuntimeReferenceHelper, whose entry is handed over
+    if (keep_program && keepReferenceProgram(*r)) {
         return -1;
     }
     return doLValue(r->vexp, for_remove);
 }
 
-int LValueHelper::doLValue(const ReferenceNode* ref, RuntimeConfig& rc, bool for_remove) {
+int LValueHelper::doLValue(const ReferenceNode* ref, RuntimeConfig& rc, bool for_remove, bool keep_program) {
     // each reference in a chain of references is resolved by a recursion here, so the stack is checked for each one:
     // a recursion that passes on a reference makes the chain as long as the recursion is deep, and resolving it at
     // the deepest call overflowed the stack instead of raising STACK-LIMIT-EXCEEDED where the frames are large
@@ -1620,8 +1635,8 @@ int LValueHelper::doLValue(const ReferenceNode* ref, RuntimeConfig& rc, bool for
     // a reference to a reference, however it's safe to insert it multiple times;
     // the reference count for the lvalue_id object is handled elsewhere
     lvid_set->insert(r->lvalue_id);
-    // see doLValue(const ReferenceNode*, bool)
-    if (keepReferenceProgram(*r)) {
+    // see doLValue(const ReferenceNode*, bool, bool)
+    if (keep_program && keepReferenceProgram(*r)) {
         return -1;
     }
     return doLValue(r->vexp, rc, for_remove);
@@ -4009,9 +4024,12 @@ int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeI
     if (val.getType() == NT_REFERENCE) {
         ReferenceNode* ref = reinterpret_cast<ReferenceNode*>(val.v.n);
         LocalRefHelper<LocalVarValue> helper(this, *ref, lvh.vl.xsink);
-        if (!helper || lvh.doLValue(ref, for_remove)) {
+        if (!helper || lvh.doLValue(ref, for_remove, false)) {
             return -1;
         }
+        // the helper's entry into the reference's Program is kept until the lvalue has been used: the helper leaves
+        // it when it is destroyed, before the caller assigns the lvalue
+        lvh.adoptReferenceProgram(helper.takeProgramEntry());
         // Preserve no-narrow marker types; broad references must keep the resolved lvalue type.
         if (val.assigned && is_no_narrow_container_type(refTypeInfo)) {
             lvh.setTypeInfo(refTypeInfo);
@@ -4084,9 +4102,11 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
             ? refTypeInfo : nullptr;
         sl.release();
         LocalRefHelper<ClosureVarValue> helper(this, **ref, lvh.vl.xsink);
-        if (!helper || lvh.doLValue(*ref, for_remove)) {
+        if (!helper || lvh.doLValue(*ref, for_remove, false)) {
             return -1;
         }
+        // see LocalVarValue::getLValue()
+        lvh.adoptReferenceProgram(helper.takeProgramEntry());
         // Preserve no-narrow marker types; broad references must keep the resolved lvalue type.
         if (effectiveRefTypeInfo) {
             lvh.setTypeInfo(effectiveRefTypeInfo);
@@ -4132,6 +4152,7 @@ void ClosureVarValue::ref() const {
 #ifdef DEBUG
 std::atomic<ClosureVarValue::dbg_after_rescan_t> ClosureVarValue::dbg_after_rescan{nullptr};
 std::atomic<qore_dbg_closure_var_decide_hook_t> qore_dbg_closure_var_decide_hook{nullptr};
+std::atomic<qore_dbg_reference_lvalue_hook_t> qore_dbg_reference_lvalue_hook{nullptr};
 std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collect_hook{nullptr};
 #endif
 

@@ -209,17 +209,29 @@ a reference to one of its variables, which outlives the Program.  Using the refe
 (`ProgramThreadCountContextHelper::set()` crashed) or, for a reference held by a variable, resolved the freed variable.
 The reference now holds a dependency reference to its Program (`QoreProgram::depRef()`), which keeps the Program
 allocated, and its address from being given to another Program, while the reference exists, without a global lock on its
-use; a Program refuses an entry once its teardown has marked it (`qore_program_private::canEnterIntern()`).
-`RuntimeReferenceHelperBase` enters the Program with its context while the reference is resolved; `LValueHelper` enters
-it without switching to it (`QoreReferenceProgramHelper`, `qore_program_private::enterWithoutContext()`, which a parse
-in progress does not refuse, as no code of the Program runs) and keeps the entry until the lvalue has been used
-(`LValueHelper::keepReferenceProgram()`, left in the destructor once the lvalue's locks are released and before the
-values that the write replaced are released): the teardown released a variable while another thread assigned it through
-a reference held by a variable (a data race that TSan reported).  The removal through a reference held by a local or
-closure-bound variable enters it while it removes the value.  A reference to a lvalue of a Program whose teardown has
-marked it, or has ended, raises `PROGRAM-ERROR`.  It recorded the Program's ID and took a reference to it by ID for each
-use, which took the global lock of the Program registry and made a loop using references across Programs 10 to 24%
-slower.  `examples/test/qore/vars/reference-deleted-program.qtest` uses references to a thread_local, a global and a
+use; a Program refuses an entry once its teardown has marked it (`qore_program_private::canEnterIntern()`).  The
+thread stays in the Program until the lvalue has been used: the teardown released a variable while another thread
+assigned it through a reference (a data race that TSan reported).  The `LValueHelper` keeps the entries
+(`QoreLValueReferencePrograms`, which leaves them if the helper's construction throws) and leaves them in its destructor
+right after the lvalue's locks are released and the write-back of a static variable, before member write gates and
+accessors, the recursive-reference scan and the release of the values that the write replaced, which run code of other
+Programs and of modules (a jni or python callback taking its lock while another thread deletes the Program would wait
+for ever).  A reference held by a local or closure-bound variable, or a parameter, is resolved with a
+`RuntimeReferenceHelper` (`LocalRefHelper`), which enters the Program with its context; the helper leaves it when it is
+destroyed, before the caller uses the lvalue, so it hands its thread count over to the `LValueHelper`
+(`ProgramThreadCountContextHelper::takeThreadCount()`, `RuntimeReferenceHelperBase::takeProgramEntry()`,
+`LValueHelper::adoptReferenceProgram()`), as does `LValueHelper(const ReferenceNode&)`.  Entering the Program a second
+time instead made 4 threads using references held by local variables 66 to 88% slower.  A reference held by a global
+variable or an object member is resolved without a helper: the `LValueHelper` enters the Program without switching to it
+(`LValueHelper::keepReferenceProgram()`, `QoreReferenceProgramHelper`, `qore_program_private::enterWithoutContext()`,
+which a parse in progress does not refuse, as no code of the Program runs).
+`examples/test/qore/vars/reference-program-entry.qtest` holds a thread after an assignment through a reference held by a
+local variable, a closure-bound variable and a parameter, and checks that it is still in the Program; the debug build's
+`dbg_hold_reference_lvalue()` holds it.  The removal through a reference held by a local or closure-bound variable
+enters it while it removes the value.  A reference to a lvalue of a Program whose teardown has marked it, or has ended,
+raises `PROGRAM-ERROR`.  It recorded the Program's ID and took a reference to it by ID for each use, which took the
+global lock of the Program registry and made a loop using references across Programs 10 to 24% slower.
+`examples/test/qore/vars/reference-deleted-program.qtest` uses references to a thread_local, a global and a
 closure-bound local variable of a deleted Program through local, closure-bound and global variables, and writes through
 a global variable holding a reference into a Program with a parse pending, in every execution mode.
 

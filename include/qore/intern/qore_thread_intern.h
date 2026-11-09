@@ -1600,8 +1600,26 @@ public:
         return old_ctx;
     }
 
+    //! Hands the thread count that set() took in the Program over to the caller
+    /** The caller leaves the Program with qore_program_private::decThreadCount(); the context is still restored
+        when the helper is destroyed, without leaving the Program.  Used to keep the Program of a reference entered
+        until its lvalue has been used (see LValueHelper::adoptReferenceProgram()).
+
+        @return the Program entered, or nullptr if set() did not count the thread in it (it was already in it, or
+        the entry failed)
+    */
+    DLLLOCAL QoreProgram* takeThreadCount() {
+        if (!thread_count_incremented) {
+            return nullptr;
+        }
+        thread_count_incremented = false;
+        return count_pgm;
+    }
+
 protected:
     QoreProgram* old_pgm = nullptr;
+    //! the Program that set() counted the thread in, if thread_count_incremented
+    QoreProgram* count_pgm = nullptr;
     ThreadLocalProgramData* old_tlpd = nullptr;
     ProgramThreadCountContextHelper* old_ctx = nullptr;
     // frame count of tlpd when context is started
@@ -1743,6 +1761,14 @@ public:
 
     DLLLOCAL operator bool() const {
         return valid;
+    }
+
+    //! Hands the entry into the reference's Program over to the caller, which leaves it with decThreadCount()
+    /** see ProgramThreadCountContextHelper::takeThreadCount(); nullptr if the thread was not counted in it (it was
+        already in the Program, as the current Program)
+    */
+    DLLLOCAL QoreProgram* takeProgramEntry() {
+        return pch.takeThreadCount();
     }
 
 protected:
