@@ -1,0 +1,143 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+#! module for module-code-program-barrier.qtest: every probe exists as a module function and as a static method
+/** A function and a method of a module run alike when another Program calls them: in the module's Program, with the
+    module's own options, and for a sandboxed caller with the caller's restrictions as well
+*/
+
+%modern
+
+module BarrierMod {
+    version = "1.0";
+    desc = "module code Program barrier test module";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        BarrierMod::Priv::init();
+    };
+}
+
+public namespace BarrierMod {
+namespace Priv {
+    # the script path of the module's Program, which identifies the Program that code runs in
+    our *string module_path;
+
+    sub init() {
+        module_path = get_script_path();
+    }
+
+    string sub private_function() {
+        return "private";
+    }
+
+    class PrivateThing {
+    }
+
+    string sub program() {
+        return get_script_path() == module_path ? "module" : sprintf("caller %y", get_script_path());
+    }
+
+    auto sub run(code c) {
+        try {
+            return c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+#! the Program that the function runs in
+public string sub func_program() {
+    return Priv::program();
+}
+
+#! a private function of the module looked up by name
+public auto sub func_call_private() {
+    return Priv::run(auto sub () { return call_function("BarrierMod::Priv::private_function"); });
+}
+
+#! a private class of the module looked up by name
+public auto sub func_create_private() {
+    return Priv::run(auto sub () { return create_object("BarrierMod::Priv::PrivateThing").className(); });
+}
+
+#! a builtin looked up by a name that the caller chose
+public auto sub func_call_by_name(string name) {
+    return Priv::run(auto sub () { call_function(name); return "ok"; });
+}
+
+#! a class looked up by a name that the caller chose
+public auto sub func_create_by_name(string name) {
+    return Priv::run(auto sub () { return create_object(name).className(); });
+}
+
+#! a builtin looked up by name in module code that module code calls
+public auto sub func_nested(string name) {
+    return func_call_by_name(name);
+}
+
+#! the module's own thread-local data (OWN_PROGRAM_STATE)
+public auto sub func_thread_data() {
+    return Priv::run(auto sub () { save_thread_data("barrier", "function"); return get_thread_data("barrier"); });
+}
+
+#! runs code of the caller asynchronously (MODULE_OWNED)
+public auto sub func_async(code c) {
+    return Priv::run(auto sub () { return call_async(c).get(); });
+}
+
+#! calls code of the caller
+public auto sub func_callback(code c) {
+    return Priv::run(c);
+}
+
+#! returns an object that module code created
+public RWLock sub func_make_lock() {
+    return new RWLock();
+}
+
+public class Probe {
+    static string program() {
+        return Priv::program();
+    }
+
+    static auto callPrivate() {
+        return Priv::run(auto sub () { return call_function("BarrierMod::Priv::private_function"); });
+    }
+
+    static auto createPrivate() {
+        return Priv::run(auto sub () { return create_object("BarrierMod::Priv::PrivateThing").className(); });
+    }
+
+    static auto callByName(string name) {
+        return Priv::run(auto sub () { call_function(name); return "ok"; });
+    }
+
+    static auto createByName(string name) {
+        return Priv::run(auto sub () { return create_object(name).className(); });
+    }
+
+    static auto nested(string name) {
+        return Probe::callByName(name);
+    }
+
+    static auto threadData() {
+        return Priv::run(auto sub () { save_thread_data("barrier", "method"); return get_thread_data("barrier"); });
+    }
+
+    static auto async(code c) {
+        return Priv::run(auto sub () { return call_async(c).get(); });
+    }
+
+    static auto callback(code c) {
+        return Priv::run(c);
+    }
+
+    static RWLock makeLock() {
+        return new RWLock();
+    }
+}
+}

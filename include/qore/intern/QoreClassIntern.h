@@ -3731,7 +3731,7 @@ public:
 #ifdef DEBUG
         if (p) {
             if (dbg_source_program_taken_t hook = dbg_source_program_taken.load()) {
-                hook(*this, p, referenced);
+                hook(this, p, referenced);
             }
         }
 #endif
@@ -3739,10 +3739,11 @@ public:
     }
 
 #ifdef DEBUG
-    //! debug-only hook called when a call into the class's code from another Program has taken the source Program
-    /** Called before the thread enters the Program, without locks; tests delete the Program at this point
+    //! debug-only hook called when a call into user code from another Program has taken the code's Program
+    /** Called before the thread enters the Program, without locks; tests delete the Program at this point.  \a cls
+        is the class for the code of a class, or nullptr for a function (see QoreSourceProgramHolder::setVariant())
     */
-    typedef void (*dbg_source_program_taken_t)(const qore_class_private& cls, QoreProgram* pgm, bool referenced);
+    typedef void (*dbg_source_program_taken_t)(const qore_class_private* cls, QoreProgram* pgm, bool referenced);
     DLLLOCAL static std::atomic<dbg_source_program_taken_t> dbg_source_program_taken;
 #endif
 
@@ -4510,12 +4511,15 @@ protected:
         DLLLOCAL ~qore_class_private();
 };
 
-//! Holds the source Program of a class while its code runs in the calling thread
-/** The code of a class belongs to the Program that defines it, which can be deleted in another thread while a Program
-    sharing the class calls the code: the holder keeps the Program allocated (see
-    qore_class_private::getSourceProgramForCall()), and entering it (ProgramThreadCountContextHelper) fails once its
-    teardown has started.  Declared before the ProgramThreadCountContextHelper (or the CodeEvaluationHelper) that
-    enters the Program, so that the Program is released after the thread has left it.
+//! Holds the Program that user code runs in while the calling thread runs it: the source Program of a class or the
+//! Program that defined a function
+/** User code belongs to the Program that defines it, and runs in that Program when another Program calls it: the
+    methods of a class in the source Program of the class (set()), and a function in the Program that defined it
+    (setVariant()), so that a function and a method of a module behave alike at the Program barrier.  That Program can
+    be deleted in another thread while a Program sharing the code calls it: the holder keeps it allocated, and
+    entering it (ProgramThreadCountContextHelper) fails once its teardown has started.  A call within the Program, the
+    usual case, takes no reference and no lock.  Declared before the ProgramThreadCountContextHelper (or the
+    CodeEvaluationHelper) that enters the Program, so that the Program is released after the thread has left it.
 */
 class QoreSourceProgramHolder {
 public:
@@ -4545,6 +4549,13 @@ public:
         pgm = c ? c->getSourceProgramForCall(referenced, &deleted) : nullptr;
     }
 
+    //! takes the Program that defined a user variant (the code of a function); may be called once
+    /** The Program is identified by its address and ID (UserVariantBase::pgm and UserVariantBase::pgm_id), as it can
+        have been deleted: a reference is taken only if it is still registered, and \a sourceDeleted() is true if it
+        is not
+    */
+    DLLLOCAL void setVariant(const UserVariantBase* uvb);
+
     //! the Program, or nullptr if the class has no source Program (it has released the class, or it is deleted)
     DLLLOCAL QoreProgram* get() const {
         return pgm;
@@ -4573,6 +4584,21 @@ private:
 */
 DLLLOCAL QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgramHolder& holder,
         QoreProgram* explicit_pgm = nullptr);
+
+//! Returns the Program that a call of a function runs in; \a holder keeps that Program for the call
+/** A user function runs in the Program that defined it, as a method runs in the source Program of its class (see
+    qore_get_method_pgm_context()): a module function called from another Program runs in the module's Program.  A
+    function with only builtin variants runs in \a call_pgm, the Program the call is made in (its explicit Program,
+    if any, otherwise the caller's).  \a variant is the variant of the call if it is known; otherwise the Program of
+    the function's user variants is used, as all of them are defined by one Program.
+
+    @return the Program to run the call in, or nullptr with an exception raised in the holder's sink if the Program
+    that defined the function is being deleted
+
+    The holder must be declared before the helper that enters the Program returned.
+*/
+DLLLOCAL QoreProgram* qore_get_function_pgm_context(const QoreFunction* func,
+        const AbstractQoreFunctionVariant* variant, QoreSourceProgramHolder& holder, QoreProgram* call_pgm);
 
 class qore_class_private_holder {
     //! the class pointer (handle) to release, if the object was created with one

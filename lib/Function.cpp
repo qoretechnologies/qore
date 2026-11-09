@@ -1143,14 +1143,17 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             old_call_program_context = get_set_program_call_context(old_pgm);
             restore_call_program_context = true;
         }
-        // code entered in a module's Program from another Program (a method of a module class, a call reference
-        // to a method of an object that module code created, or a closure created in module code) keeps the
-        // module's Program, and so its name resolution, but runs with the caller's restrictions as well as its
-        // own, as a module function does in the caller's Program: both the functional-domain check of the call and
-        // its body see them
-        if (old_pgm && old_pgm != pgm_ctx && qore_program_is_module(pgm_ctx)) {
+        // code entered in a module's Program from another Program (a function or a method of the module, a call
+        // reference to a method of an object that module code created, or a closure created in module code) runs in
+        // the module's Program, and so resolves names in it; its runtime parse options are set at this boundary
+        // (qore_get_module_call_runtime_po_override()), once for the crossing (see hasModuleCallOverride()): its
+        // own, and for a sandboxed caller the caller's restrictions as well, which both the functional-domain check
+        // of the call and its body see.  The caller is the call's Program context, unless that names the module's
+        // Program already, otherwise the Program running on the thread
+        QoreProgram* caller_pgm = (old_pgm && old_pgm != pgm_ctx) ? old_pgm : ::getProgram();
+        if (caller_pgm && caller_pgm != pgm_ctx && qore_program_is_module(pgm_ctx)) {
             module_po_override.reset(new RuntimeParseOptionsOverrideHelper(
-                qore_get_module_call_runtime_po_override(pgm_ctx, caller_runtime_po, old_pgm)));
+                qore_get_module_call_runtime_po_override(pgm_ctx, caller_runtime_po, caller_pgm)));
         }
         set(xsink, pgm_ctx, true);
         if (*xsink) {
@@ -4771,10 +4774,17 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
         return QoreValue();
     }
 
+    // a user function runs in the Program that defined it, as a method runs in its class's (see
+    // qore_get_function_pgm_context()); the holder keeps that Program until the call has left it
+    QoreSourceProgramHolder exec_pgm_holder(xsink);
+    QoreProgram* exec_pgm = qore_get_function_pgm_context(this, variant, exec_pgm_holder, pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
-        pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
+        exec_pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
     if (*xsink) {
         return QoreValue();
     }
@@ -4787,10 +4797,17 @@ QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* v
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool defer_domain_po) const {
     const char* fname = getName();
+    // a user function runs in the Program that defined it, as a method runs in its class's (see
+    // qore_get_function_pgm_context()); the holder keeps that Program until the call has left it
+    QoreSourceProgramHolder exec_pgm_holder(xsink);
+    QoreProgram* exec_pgm = qore_get_function_pgm_context(this, variant, exec_pgm_holder, pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
-        pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
+        exec_pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
     if (*xsink) {
         return QoreValue();
     }
@@ -4813,8 +4830,15 @@ QoreValue QoreFunction::evalDynamicTmpArgs(QoreListNode* args, QoreProgram* pgm,
         ExceptionSink* xsink) const {
     const char* fname = getName();
     const AbstractQoreFunctionVariant* variant = nullptr;
+    // see evalFunction()
+    QoreSourceProgramHolder exec_pgm_holder(xsink);
+    QoreProgram* exec_pgm = qore_get_function_pgm_context(this, variant, exec_pgm_holder, pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
     ProgramCallContextHelper pcch(pgm);
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr, pgm);
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
+        exec_pgm);
     if (*xsink) {
         return QoreValue();
     }
@@ -4914,9 +4938,21 @@ QoreCallParseOptionsOverride qore_get_module_call_runtime_po_override(const Qore
     QoreCallParseOptionsOverride o;
     o.mask = get_user_variant_runtime_po_override_mask();
     const QoreParseOptions& own_po = module_pgm->getParseOptions();
-    o.value = keep_module_own_access_parse_options(qore_compose_module_call_parse_options(own_po, caller_po),
-        module_pgm);
     o.replace = get_module_own_access_parse_options();
+    // this is the boundary of every call into module code from another Program and of every call of module code by
+    // module code, for functions and methods alike: the record of the caller's restrictions for the Programs that
+    // module code creates (qore#5669) is set here for every caller, before the decision below
+    QoreParseOptions composed = keep_module_own_access_parse_options(
+        qore_compose_module_call_parse_options(own_po, caller_po), module_pgm);
+    // a module is a capability: once it is loaded, any caller can use it, and its code runs with its own options;
+    // only the sandbox governs it at run time.  For a sandboxed caller, the caller's restrictions are part of its
+    // sandbox: the module code also runs with them (the restricting options of both and only the explicitly-allowed
+    // options that both have)
+    if ((composed & o.mask) == (own_po & o.mask) || !runtime_module_call_inherits_caller_restrictions(caller_pgm)) {
+        o.value = own_po;
+        return o;
+    }
+    o.value = composed;
     // the restricting options that the module has only because its caller has them
     o.caller_restrictions = o.value & o.mask & ~own_po & ~QoreParseOptions::POSITIVE_OPTIONS;
     if (o.caller_restrictions) {
@@ -4930,7 +4966,8 @@ void qore_get_user_call_runtime_po_override(const QoreProgram* exec_pgm, const U
         const QoreParseOptions& caller_po, const QoreProgram* caller_pgm, QoreCallParseOptionsOverride& o) {
     bool module_code = qore_program_is_module(uvb->pgm);
     if (exec_pgm && exec_pgm != uvb->pgm) {
-        // the code runs in another Program, so its caller restrictions all apply: a module function runs in its
+        // the code runs in another Program, so its caller restrictions all apply: this is user code whose Program has
+        // released it (see qore_get_method_pgm_context() and qore_get_function_pgm_context()), which runs in its
         // caller's Program, whose state it would change
         o = QoreCallParseOptionsOverride();
         o.mask = get_user_variant_runtime_po_override_mask();
@@ -7267,10 +7304,13 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
     if (!uveh) {
         return QoreValue();
     }
-    QoreProgram* exec_pgm = uveh.getProgram();
-    QoreCallParseOptionsOverride po_o;
-    qore_get_user_call_runtime_po_override(exec_pgm, this, caller_po, caller_pgm, po_o);
-    RuntimeParseOptionsOverrideHelper po_override(po_o);
+    // a call that entered a module's Program from another Program has the override of the crossing already
+    std::optional<RuntimeParseOptionsOverrideHelper> po_override;
+    if (!ceh || !ceh->hasModuleCallOverride()) {
+        QoreCallParseOptionsOverride po_o;
+        qore_get_user_call_runtime_po_override(uveh.getProgram(), this, caller_po, caller_pgm, po_o);
+        po_override.emplace(po_o);
+    }
 
     // This is a normal function/method call, not a closure invocation.  If the
     // caller is a closure body, do not let its captured LocalVar* map shadow this
@@ -7299,10 +7339,13 @@ QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreC
     if (!uveh) {
         return QoreValue();
     }
-    QoreProgram* exec_pgm = uveh.getProgram();
-    QoreCallParseOptionsOverride po_o;
-    qore_get_user_call_runtime_po_override(exec_pgm, this, caller_po, caller_pgm, po_o);
-    RuntimeParseOptionsOverrideHelper po_override(po_o);
+    // a call that entered a module's Program from another Program has the override of the crossing already
+    std::optional<RuntimeParseOptionsOverrideHelper> po_override;
+    if (!ceh.hasModuleCallOverride()) {
+        QoreCallParseOptionsOverride po_o;
+        qore_get_user_call_runtime_po_override(uveh.getProgram(), this, caller_po, caller_pgm, po_o);
+        po_override.emplace(po_o);
+    }
 
     CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass(), ref_obj);
 

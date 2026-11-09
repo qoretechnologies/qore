@@ -17015,7 +17015,8 @@ static QoreValue f_dbg_continue_program_teardown(const QoreListNode* params, Run
 
 namespace {
 //! holds the thread that calls the code of a class from another Program after it has taken the class's Program
-/** See qore_class_private::dbg_source_program_taken; the thread holds a reference to the Program, which can be
+/** See qore_class_private::dbg_source_program_taken (the code of a class, or of a function: see
+    QoreSourceProgramHolder::setVariant()); the thread holds a reference to the Program, which can be
     deleted while it is held
 */
 struct SourceProgramHold {
@@ -17037,7 +17038,7 @@ SourceProgramHold& source_program_hold() {
     return *h;
 }
 
-void dbg_hold_source_program_taken(const qore_class_private& cls, QoreProgram* pgm, bool referenced) {
+void dbg_hold_source_program_taken(const qore_class_private* cls, QoreProgram* pgm, bool referenced) {
     SourceProgramHold& h = source_program_hold();
     std::unique_lock<std::mutex> l(h.m);
     if (!h.pgm || pgm != h.pgm || h.held) {

@@ -4821,12 +4821,32 @@ QoreParseOptions runtime_get_effective_parse_options_for(const QoreProgram* pgm)
 
 QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOptions& po) {
     ThreadData* td = thread_data.get();
-    // only code running in the module's own Program reaches only the module's own state: a module function runs in
-    // its caller's Program, and code of another Program can run while the module's override is active
+    // only code running in the module's own Program reaches only the module's own state: code of another Program
+    // can run while the module's override is active (a callback of the caller, or user code whose Program has
+    // released it, which runs in its caller's Program)
     if (!td->runtime_po_module_pgm || td->runtime_po_module_pgm != td->current_pgm) {
         return po;
     }
     return po & ~td->runtime_po_caller_restrictions;
+}
+
+bool runtime_module_call_inherits_caller_restrictions(const QoreProgram* caller_pgm) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // module code running with the restrictions of a sandboxed caller passes them on
+    if (td->runtime_po_module_pgm) {
+        return true;
+    }
+    // a thread that runs for sandboxed code
+    for (const QoreSandboxContext* ctx : {td->sandbox_context, td->inherited_sandbox_context}) {
+        if (ctx && (ctx->manager || ctx->policy_manager)) {
+            return true;
+        }
+    }
+    return qore_program_is_sandboxed(caller_pgm)
+        || (td->current_pgm != caller_pgm && qore_program_is_sandboxed(td->current_pgm));
 }
 
 qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* caller_pgm) {

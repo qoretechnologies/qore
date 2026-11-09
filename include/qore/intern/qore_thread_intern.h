@@ -456,6 +456,17 @@ DLLLOCAL QoreParseOptions runtime_get_effective_parse_options_for(const QoreProg
 */
 DLLLOCAL QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOptions& po);
 
+//! returns true if module code called from \a caller_pgm runs with the restrictions of its caller
+/** Module code runs with its own Program's options, and only the sandbox (the SandboxManager of its callers) governs
+    it at run time, unless the calling context is sandboxed: then it also runs with the restrictions of its caller
+    (see qore_get_module_call_runtime_po_override()).  The calling context is sandboxed if:
+    - \a caller_pgm or the Program running on the thread is sandboxed (qore_program_is_sandboxed()),
+    - the thread runs for sandboxed code: it inherited or applied a captured sandbox (a thread that sandboxed code
+      started, a pool task or an asynchronous operation submitted by it), or
+    - module code already runs with the restrictions of a sandboxed caller, which pass on to the module code it calls
+*/
+DLLLOCAL bool runtime_module_call_inherits_caller_restrictions(const QoreProgram* caller_pgm);
+
 //! returns the ID of the application Program that module code calling from \a caller_pgm runs for
 /** If module code already runs for an application with that application's restrictions, it is that application;
     otherwise it is \a caller_pgm, or 0 if there is none

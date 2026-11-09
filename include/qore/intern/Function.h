@@ -602,6 +602,12 @@ public:
         return caller_runtime_po;
     }
 
+    //! returns true if the call entered a module's Program from another Program and set its runtime parse options
+    //! override (see qore_get_module_call_runtime_po_override()), which is computed once for the crossing
+    DLLLOCAL bool hasModuleCallOverride() const {
+        return static_cast<bool>(module_po_override);
+    }
+
     DLLLOCAL virtual const AbstractStatement* getStatement() const override {
         return stmt;
     }

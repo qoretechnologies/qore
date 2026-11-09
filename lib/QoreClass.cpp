@@ -141,6 +141,66 @@ QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgram
     return (nspgm && nspgm != ::getProgram()) ? qore_check_pgm_context(nspgm) : nullptr;
 }
 
+void QoreSourceProgramHolder::setVariant(const UserVariantBase* uvb) {
+    assert(!pgm);
+    assert(uvb);
+    QoreProgram* p = uvb->pgm;
+    if (!p) {
+        return;
+    }
+    // the current Program, and a Program that this thread deletes, which runs its code while it deletes its data
+    // (destructors, for example) without a reference, as its last one can have been released, are allocated; the ID
+    // tells the variant's Program from a later one at the same address
+    if ((p == ::getProgram() || qore_program_torn_down_by_current_thread(p)) && p->getProgramId() == uvb->pgm_id) {
+        pgm = p;
+        return;
+    }
+    pgm = qore_program_private::getReferencedProgram(p, uvb->pgm_id);
+    if (!pgm) {
+        // the Program has been deleted, or its last reference has been released and another thread deletes it
+        deleted = true;
+        return;
+    }
+    referenced = true;
+#ifdef DEBUG
+    if (qore_class_private::dbg_source_program_taken_t hook = qore_class_private::dbg_source_program_taken.load()) {
+        hook(nullptr, pgm, referenced);
+    }
+#endif
+}
+
+QoreProgram* qore_get_function_pgm_context(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
+        QoreSourceProgramHolder& holder, QoreProgram* call_pgm) {
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    if (!variant && func->hasUser()) {
+        // the variant is resolved when the call is made: all user variants of a function are defined by one Program
+        QoreFunctionIterator i(*func);
+        while (i.next()) {
+            if ((uvb = i.getVariant()->getUserVariantBase())) {
+                break;
+            }
+        }
+    }
+    if (!uvb) {
+        // builtin code has no Program of its own; it runs in the Program of the call
+        return call_pgm;
+    }
+    holder.setVariant(uvb);
+    if (QoreProgram* pgm = holder.get()) {
+        return qore_check_pgm_context(pgm);
+    }
+    // the Program that defined the function is being deleted in another thread: its code cannot run, as when the
+    // call enters a Program whose teardown has started
+    if (holder.sourceDeleted()) {
+        if (ExceptionSink* xsink = holder.getExceptionSink()) {
+            xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and therefore "
+                "cannot be accessed at runtime");
+        }
+        return nullptr;
+    }
+    return call_pgm;
+}
+
 QoreValue qore_method_private::evalNormalVariant(QoreObject* self, RuntimeConfig& rc,
         const QoreExternalMethodVariant* ev, const QoreListNode* args, ExceptionSink* xsink,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation,
@@ -3582,8 +3642,8 @@ int qore_class_private::runtimeCheckInstantiateClassByName(const QoreClass& qc, 
     if (pgm) {
         if (pgm == ::getProgram()) {
             // the code runs in the Program: its network and filesystem options are those of the code itself, which
-            // the effective runtime parse options hold and are checked below - those of a module whose function runs
-            // in its caller's Program are the module's own (see get_module_own_access_parse_options())
+            // the effective runtime parse options hold and are checked below - those of module code running for a
+            // sandboxed caller are the module's own (see get_module_own_access_parse_options())
             if (!qore_parse_options_allow_domain(pgm->getParseOptions() & ~get_module_own_access_parse_options(),
                     qc.priv->domain)) {
                 xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "

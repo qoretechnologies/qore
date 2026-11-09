@@ -1671,67 +1671,72 @@ public namespace MyNamespace {
 
     @subsection user_module_runtime_context Module Code at Run Time
 
-    Code in a user module runs with the restrictions of the code that calls it as well as its own, in every
-    @ref execution_modes "execution mode", but where it runs depends on the kind of code:
-    - a module <b>function</b> runs in the @ref Qore::Program "Program" that calls it, so the names that it resolves at
-      run time by name, with @ref Qore::call_function() "call_function()" or
-      @ref Qore::create_object() "create_object()", for example, are resolved in the calling @ref Qore::Program "Program", where only the module's
-      @ref mod_public "exported" names exist, and the @ref thread_local_data_family "thread-local data" that it uses is
-      the calling @ref Qore::Program "Program's"
-    - a <b>method</b> of a class defined in the module, and a @ref closure "closure" created in module code, run in the
-      module's own @ref Qore::Program "Program", so the names that they resolve at run time are those of the module,
-      including its private names, and the thread-local data that they use is the module's own
-
-    A module function that needs to look up a private name of its module at run time must therefore either have that
-    name exported with the <b><tt>public</tt></b> keyword or refer to it directly: a direct call, a
-    @ref call_reference "call reference" or a <tt>new</tt> expression in module code is resolved when the module is
-    parsed and so always refers to the module's own definition.
+    Code in a user module runs in the module's own @ref Qore::Program "Program" in every
+    @ref execution_modes "execution mode", whatever the kind of code: a module <b>function</b>, a <b>method</b> of a
+    class defined in the module (static or not) and a @ref closure "closure" created in module code alike.  When code
+    of another @ref Qore::Program "Program" calls it, the call crosses the %Program barrier, as a call into any other
+    %Program's code does.  So module code:
+    - resolves the names that it looks up at run time by name, with @ref Qore::call_function() "call_function()",
+      @ref Qore::create_object() "create_object()", @ref Qore::load_module() "load_module()" or the reflection API, for
+      example, in the module's %Program, where its private names exist as well as its exported ones
+    - uses the module's own @ref thread_local_data_family "thread-local data"
+    - creates objects that belong to the module's %Program
 
     @par Example:
     @code{.py}
 public namespace MyModule {
-class Helper {
-}
-
 string sub private_func() {
     return "private";
 }
 
 public string sub lookup_by_name() {
-    # raises NO-FUNCTION: the name is resolved in the calling Program, where private_func() does not exist
+    # works: a module function runs in the module's Program, where private_func() exists
     return call_function("MyModule::private_func");
-}
-
-public string sub direct() {
-    # works: the direct call is resolved when the module is parsed
-    return private_func();
 }
 
 public class Lookup {
     static string byName() {
-        # works: a method runs in the module's Program, where private_func() exists
+        # works: a method runs in the module's Program as well
         return call_function("MyModule::private_func");
     }
 }
 }
     @endcode
 
-    The restrictions of the network and of the filesystem (@ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" and
-    @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM") are not inherited: module code has its own
-    @ref Qore::Program "Program's" options for them, and its network and filesystem access is governed by the
-    @ref Qore::SandboxManager "SandboxManager" of the @ref Qore::Program "Program" that it runs for (see
-    @ref sandbox_po_limitations).
+    A module is a capability: once it is loaded, any code that imports it can use its functions, classes and methods,
+    and module code runs with its own @ref Qore::Program "Program's" options.  At run time, it is governed by the
+    @ref Qore::SandboxManager "SandboxManager" of the code that calls it: its filesystem and network policy, its
+    resource limits and its interrupts apply to module code as they apply to the caller (see @ref sandboxing).  What a
+    module may use is decided when it is loaded: a user module inherits the restrictions of the
+    @ref Qore::Program "Program" that loads it first, and cannot be loaded by it if its code uses functionality that
+    those restrictions forbid (see @ref module_parse_option_masks).
 
-    The caller's restrictions also apply to the module code that a module function or method calls and to a
-    @ref call_reference "call reference" to a method of an object that module code created.  They only ever narrow
-    what the code may do: an explicitly-allowed option such as @ref Qore::PO_ALLOW_INJECTION "PO_ALLOW_INJECTION" or
-    @ref Qore::PO_ALLOW_DEBUGGER "PO_ALLOW_DEBUGGER" applies only if both the caller and the module have it, module
-    code keeps the restrictions of its own @ref Qore::Program "Program", and the code of another
-    @ref Qore::Program "Program" that module code runs (with @ref Qore::Program::run() "Program::run()", for example)
-    keeps that @ref Qore::Program "Program's" restrictions.  The module's \c init and \c del closures run with the
-    module's own options.  Some builtins that act only on the module's own state or on the calling thread, or that
-    run the module's own code asynchronously, are checked differently when module code calls them; see
-    @ref OWN_PROGRAM_STATE, @ref CURRENT_THREAD_ONLY and @ref MODULE_OWNED.
+    The restrictions of a caller that is sandboxed (code of a @ref Qore::Program "Program" with a
+    @ref Qore::SandboxManager "SandboxManager", or that sandboxed code created, and threads, pool tasks and
+    asynchronous operations that run for sandboxed code) are part of its sandbox: module code that a sandboxed caller
+    calls also runs with the caller's restrictions, in every execution mode.  They also apply to the module code that
+    such code calls and to a @ref call_reference "call reference" to a method of an object that module code created,
+    and they only ever narrow what the code may do: an explicitly-allowed option such as
+    @ref Qore::PO_ALLOW_INJECTION "PO_ALLOW_INJECTION" or @ref Qore::PO_ALLOW_DEBUGGER "PO_ALLOW_DEBUGGER" applies only
+    if both the sandboxed caller and the module have it, and module code keeps the restrictions of its own
+    @ref Qore::Program "Program".  The restrictions of the network and of the filesystem
+    (@ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" and @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM") are never inherited:
+    module code has its own @ref Qore::Program "Program's" options for them, and the
+    @ref Qore::SandboxManager "SandboxManager" governs its network and filesystem access (see
+    @ref sandbox_po_limitations).  Some builtins that act only on the module's own state or on the calling thread, or
+    that run the module's own code asynchronously, are checked differently when module code calls them for a sandboxed
+    caller; see @ref OWN_PROGRAM_STATE, @ref CURRENT_THREAD_ONLY and @ref MODULE_OWNED.
+
+    The restrictions of a caller that is not sandboxed restrict only the caller's own code.  Parse options alone are
+    not a run-time boundary for module code: a @ref Qore::Program "Program" that is restricted only by its parse options
+    and can import modules can use every module that another %Program has loaded already, with all of the functionality
+    that the module's code uses, including the names that it resolves at run time on the caller's behalf.  To keep code
+    from reaching functionality through modules, give its %Program a @ref Qore::SandboxManager "SandboxManager", or
+    @ref Qore::PO_NO_MODULES "PO_NO_MODULES" so that it cannot import modules at all.
+
+    The code of another @ref Qore::Program "Program" that module code runs (a callback of its caller, or code that it
+    runs with @ref Qore::Program::run() "Program::run()", for example) runs in that %Program with that
+    %Program's restrictions.  The module's \c init and \c del closures run with the module's own options.
 
     The @ref background "background" operator in module code is checked against the module's own options when the
     module is parsed, so module code can start threads for a caller with
@@ -1739,10 +1744,10 @@ public class Lookup {
     governed by the caller's @ref Qore::SandboxManager "SandboxManager", whose thread limit bounds their number (see
     @ref sandbox_po_threads).  A module that runs its callers' code asynchronously should use
     @ref Qore::call_async() "call_async()" or @ref Qore::AsyncIoController "AsyncIoController", which apply the
-    caller's restrictions (see @ref MODULE_OWNED) and its sandbox, or a @ref Qore::Thread::ThreadPool "ThreadPool",
-    which applies the sandbox of the code that submits each task; the threads of a pool count against the thread limit
-    of the sandbox of the %Program that created it, which for module code is the sandbox of the %Program that loaded
-    the module first, if it has one.
+    restrictions of a sandboxed caller (see @ref MODULE_OWNED) and its sandbox, or a
+    @ref Qore::Thread::ThreadPool "ThreadPool", which applies the sandbox of the code that submits each task; the
+    threads of a pool count against the thread limit of the sandbox of the %Program that created it, which for module
+    code is the sandbox of the %Program that loaded the module first, if it has one.
 
     @subsection module_parse_option_masks Module Restrictions and Parse Option Masks
 
@@ -1755,8 +1760,11 @@ public class Lookup {
     is reported with it (see @ref aot_module_source_fallback).  A module that another
     @ref Qore::Program "Program" has loaded already
     is not checked against the restrictions of a @ref Qore::Program "Program" that imports it: it is a capability that
-    the host gave the @ref Qore::Program "Program", and its code runs with the restrictions of its callers as well as
-    its own (see @ref user_module_runtime_context).
+    the host gave the @ref Qore::Program "Program", and its code runs with its own options, and for a sandboxed caller
+    with the caller's restrictions as well (see @ref user_module_runtime_context).  Restrictions of parse options
+    alone are therefore not a run-time boundary for module code: a host that runs code that must not reach the
+    functionality of modules through their code gives its %Program a @ref Qore::SandboxManager "SandboxManager" or
+    @ref Qore::PO_NO_MODULES "PO_NO_MODULES".
 
     A @ref thread_local "thread_local" variable declared in a user module does not count as thread control:
     a module that keeps per-thread state can be loaded by code with @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL".

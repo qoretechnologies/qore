@@ -228,10 +228,13 @@ Network and filesystem access are governed by the `SandboxManager` alone for mod
 module code does not inherit `PO_NO_NETWORK` or `PO_NO_FILESYSTEM` from its caller
 (`get_module_own_access_parse_options()` in `lib/Function.cpp`; a module that a host gave a
 Program is a capability it granted, and Qorus enforces the restrictions of sandboxed users with
-`SandboxManager` configuration).  A user module function runs in its caller's Program, so a C++
-builtin that reads `getProgram()->getParseOptions()` there sees the caller's static options and
-refuses what the `SandboxManager` governs; for network and filesystem access, rely on the
-`SandboxManager` check.
+`SandboxManager` configuration).  User module code (functions, methods and closures alike) runs
+in the module's own Program, so a C++ builtin that reads `getProgram()->getParseOptions()` there
+sees the module's static options, and only a sandboxed caller's restrictions reach module code,
+through the effective runtime options (`qore_get_module_call_runtime_po_override()`); for network
+and filesystem access, rely on the `SandboxManager` check.  Parse options alone are not a run-time
+boundary for module code: a caller that is restricted only by its parse options can use every
+module it imports with all the functionality the module's code uses.
 
 #### The policy barrier: a sanctioned exception to inheritance
 

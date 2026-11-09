@@ -10794,13 +10794,26 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
 }
 
 //! returns the Program a user function runs in when it is called from the current context
-/** This is the Program an AST call runs the function in (see FunctionCallNode::evalImpl() and
-    UserVariantExecHelper): the call's explicit Program, if any, otherwise the Program the caller runs in.  A function
-    defined in another Program, such as a module function called from a script, runs in the caller's Program and
-    with its restrictions (see QoreRtUserCallOverrideHelper), not in the Program that defined it.
+/** A user function runs in the Program that defined it, as an AST call runs it (see QoreFunction::evalFunction() and
+    qore_get_function_pgm_context()), and as a method runs in the source Program of its class: a module function
+    called from a script runs in the module's Program.  \a holder keeps that Program until the thread has left it, as
+    it can be deleted in another thread; it must be declared before the ProgramThreadCountContextHelper that enters the
+    Program.  If the variant has no Program, the call runs in its explicit Program, otherwise in the caller's.
+
+    @return the Program, or nullptr with an exception raised in \a xsink if the Program that defined the function is
+    being deleted
 */
 static QoreProgram* qore_rt_function_execution_program(QoreProgram* explicit_pgm, QoreProgram* caller_pgm,
-        const UserVariantBase* uvb) {
+        const UserVariantBase* uvb, QoreSourceProgramHolder& holder, ExceptionSink* xsink) {
+    holder.setVariant(uvb);
+    if (QoreProgram* pgm = holder.get()) {
+        return pgm;
+    }
+    if (holder.sourceDeleted()) {
+        xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and therefore "
+            "cannot be accessed at runtime");
+        return nullptr;
+    }
     if (explicit_pgm) {
         return explicit_pgm;
     }
@@ -10831,36 +10844,17 @@ private:
     }
 };
 
-//! Holds a reference to the Program of a variant taken with qore_rt_method_execution_program()
-class QoreRtVariantProgramHolder {
-public:
-    DLLLOCAL QoreRtVariantProgramHolder(ExceptionSink* xsink) : xsink(xsink) {
-    }
-
-    DLLLOCAL ~QoreRtVariantProgramHolder() {
-        if (pgm) {
-            pgm->deref(xsink);
-        }
-    }
-
-    QoreRtVariantProgramHolder(const QoreRtVariantProgramHolder&) = delete;
-    QoreRtVariantProgramHolder& operator=(const QoreRtVariantProgramHolder&) = delete;
-
-    QoreProgram* pgm = nullptr;
-    ExceptionSink* xsink;
-};
-
 //! Returns the Program that a method runs in, as for the calls made without native code
 /** \a holder keeps the source Program of the class until the thread has left it, as it can be deleted in another
     thread (see qore_get_method_pgm_context()).  If the method does not switch to it, the method runs in the Program of
-    its variant, as UserVariantExecHelper::getExecutionProgram() does; that Program is taken by ID with a reference in
-    \a vholder, as it can be deleted as well.  Both holders must be declared before the ProgramThreadCountContextHelper
-    that enters the Program.
+    its variant, as UserVariantExecHelper::getExecutionProgram() does; \a vholder keeps that Program, as it can be
+    deleted as well (see QoreSourceProgramHolder::setVariant(), which a function call uses too).  Both holders must be
+    declared before the ProgramThreadCountContextHelper that enters the Program.
 
     @return the Program, or nullptr with an exception raised in \a xsink
 */
 static QoreProgram* qore_rt_method_execution_program(const QoreMethod* method, const UserVariantBase* uvb,
-        QoreSourceProgramHolder& holder, QoreRtVariantProgramHolder& vholder, ExceptionSink* xsink) {
+        QoreSourceProgramHolder& holder, QoreSourceProgramHolder& vholder, ExceptionSink* xsink) {
     const QoreClass* qc = method ? method->getClass() : nullptr;
     if (qc) {
         QoreProgram* pgm = qore_get_method_pgm_context(*qc, holder);
@@ -10868,23 +10862,15 @@ static QoreProgram* qore_rt_method_execution_program(const QoreMethod* method, c
             return pgm;
         }
     }
-    QoreProgram* pgm = uvb->pgm;
-    if (!pgm) {
-        return pgm;
+    if (!uvb->pgm) {
+        return nullptr;
     }
-    // the current Program, and a Program that this thread deletes, which runs the code of its classes (destructors)
-    // without a reference, as its last one can have been released, are allocated; the ID tells the variant's Program
-    // from a later one at the same address
-    if ((pgm == getProgram() || qore_program_torn_down_by_current_thread(pgm))
-            && pgm->getProgramId() == uvb->pgm_id) {
-        return pgm;
-    }
-    vholder.pgm = qore_program_private::getReferencedProgram(pgm, uvb->pgm_id);
-    if (!vholder.pgm) {
+    vholder.setVariant(uvb);
+    if (vholder.sourceDeleted()) {
         xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and therefore "
             "cannot be accessed at runtime");
     }
-    return vholder.pgm;
+    return vholder.get();
 }
 
 // --- Fast call parameter instantiation helper ---
@@ -11083,7 +11069,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     // Capture caller's program before ptcch switch, for QoreJITStackLocation.
     // See qore_rt_call_static_method_direct for the rationale.
     QoreProgram* caller_pgm = getProgram();
-    QoreProgram* exec_pgm = qore_rt_function_execution_program(pgm, caller_pgm, uvb);
+    QoreSourceProgramHolder exec_pgm_holder(xsink);
+    QoreProgram* exec_pgm = qore_rt_function_execution_program(pgm, caller_pgm, uvb, exec_pgm_holder, xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
 
     // Set up program thread context (only if program differs from caller's program, or if the caller's program is
     // current but not entered and has thread entry handlers to run)
@@ -11534,7 +11524,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
 
     // Capture caller's program before ptcch switch.
     QoreProgram* caller_pgm = getProgram();
-    QoreProgram* exec_pgm = qore_rt_function_execution_program(nullptr, caller_pgm, uvb);
+    QoreSourceProgramHolder exec_pgm_holder(xsink);
+    QoreProgram* exec_pgm = qore_rt_function_execution_program(nullptr, caller_pgm, uvb, exec_pgm_holder, xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
 
     // Set up program thread context
     ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
@@ -11662,8 +11656,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
     // and callee programs are the same, but keep the pattern consistent).
     QoreProgram* caller_pgm = getProgram();
 
-    // Set up program thread context: a recursive call runs where its caller runs, as an AST call does
-    QoreProgram* exec_pgm = qore_rt_function_execution_program(nullptr, caller_pgm, uvb);
+    // Set up program thread context: a recursive call runs in the Program that defined the function, which is the
+    // one its caller runs in
+    QoreSourceProgramHolder exec_pgm_holder(xsink);
+    QoreProgram* exec_pgm = qore_rt_function_execution_program(nullptr, caller_pgm, uvb, exec_pgm_holder, xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
     ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
     if (*xsink) {
         return toBits(QoreValue());
@@ -11933,7 +11932,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
     // Capture caller's program before ptcch switch.
     QoreProgram* caller_pgm = getProgram();
     QoreSourceProgramHolder exec_pgm_holder(xsink);
-    QoreRtVariantProgramHolder exec_variant_pgm_holder(xsink);
+    QoreSourceProgramHolder exec_variant_pgm_holder(xsink);
     QoreProgram* exec_pgm = qore_rt_method_execution_program(method, uvb, exec_pgm_holder, exec_variant_pgm_holder,
         xsink);
 
@@ -15820,7 +15819,12 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
 
         // Capture caller's program before ptcch switch.
         QoreProgram* caller_pgm = getProgram();
-        QoreProgram* exec_pgm = qore_rt_function_execution_program(target.pgm, caller_pgm, uvb);
+        QoreSourceProgramHolder exec_pgm_holder(xsink);
+        QoreProgram* exec_pgm = qore_rt_function_execution_program(target.pgm, caller_pgm, uvb, exec_pgm_holder,
+            xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
 
         // Set up program thread context (only if program differs from caller's program, or if the caller's program
         // is current but not entered and has thread entry handlers to run)
@@ -17503,7 +17507,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     // Capture caller's program before ptcch switch.
     QoreProgram* caller_pgm = getProgram();
     QoreSourceProgramHolder exec_pgm_holder(xsink);
-    QoreRtVariantProgramHolder exec_variant_pgm_holder(xsink);
+    QoreSourceProgramHolder exec_variant_pgm_holder(xsink);
     QoreProgram* exec_pgm = qore_rt_method_execution_program(method, uvb, exec_pgm_holder, exec_variant_pgm_holder,
         xsink);
 
@@ -18971,7 +18975,7 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
     // current_pgm at push time.
     QoreProgram* caller_pgm = getProgram();
     QoreSourceProgramHolder exec_pgm_holder(xsink);
-    QoreRtVariantProgramHolder exec_variant_pgm_holder(xsink);
+    QoreSourceProgramHolder exec_variant_pgm_holder(xsink);
     QoreProgram* exec_pgm = qore_rt_method_execution_program(method, uvb, exec_pgm_holder, exec_variant_pgm_holder,
         xsink);
 

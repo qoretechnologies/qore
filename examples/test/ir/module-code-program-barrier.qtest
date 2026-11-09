@@ -1,0 +1,165 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class ModuleCodeProgramBarrierTest
+
+#! Module functions and methods behave alike at the Program barrier, and only the sandbox governs module code
+/** A module function called from another Program ran in its caller's Program, while a method of a module class ran in
+    the module's Program, so the two resolved names at run time in different Programs and used different thread-local
+    data.  Both now run in the module's Program, as all released versions of Qore before 2026 ran them.
+
+    A module is a capability: once loaded, any caller can use it, and its code runs with its own options.  Only a
+    sandboxed caller's restrictions apply to module code (they are part of its sandbox); a caller restricted only by
+    its parse options restricts its own code.  Each probe runs as a module function and as a static method, from a
+    Program without restrictions, from one restricted by parse options only, from a sandboxed one with the same
+    restrictions, and from the main Program, with the source module and with the module AOT-compiled with
+    <tt>--compile-module</tt>, in every execution mode and as an AOT-compiled script, against the expected output of
+    the source module with the AST interpreter.
+*/
+class ModuleCodeProgramBarrierTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        TmpDir tmp("qore-module-code-program-barrier-");
+        string src_dir;
+        string qmod_dir;
+
+        #! the output of the source module with the AST interpreter
+        const ExpectedOutput = "unrestricted: function program: \"module\"
+unrestricted: method program: \"module\"
+unrestricted: function private function by name: \"private\"
+unrestricted: method private function by name: \"private\"
+unrestricted: function private class by name: \"PrivateThing\"
+unrestricted: method private class by name: \"PrivateThing\"
+unrestricted: function builtin by caller's name: \"ok\"
+unrestricted: method builtin by caller's name: \"ok\"
+unrestricted: function class by caller's name: \"Mutex\"
+unrestricted: method class by caller's name: \"Mutex\"
+unrestricted: function nested module code: \"ok\"
+unrestricted: method nested module code: \"ok\"
+unrestricted: function own thread data: \"function\"
+unrestricted: method own thread data: \"method\"
+unrestricted: function async caller code: \"async\"
+unrestricted: method async caller code: \"async\"
+unrestricted: function callback: \"ok\"
+unrestricted: method callback: \"ok\"
+unrestricted: function object call reference: \"readers: 0\"
+unrestricted: method object call reference: \"readers: 0\"
+unrestricted: function call reference: \"module\"
+unrestricted: function call_function: \"module\"
+restricted by parse options: function program: \"module\"
+restricted by parse options: method program: \"module\"
+restricted by parse options: function private function by name: \"private\"
+restricted by parse options: method private function by name: \"private\"
+restricted by parse options: function private class by name: \"PrivateThing\"
+restricted by parse options: method private class by name: \"PrivateThing\"
+restricted by parse options: function builtin by caller's name: \"ok\"
+restricted by parse options: method builtin by caller's name: \"ok\"
+restricted by parse options: function class by caller's name: \"Mutex\"
+restricted by parse options: method class by caller's name: \"Mutex\"
+restricted by parse options: function nested module code: \"ok\"
+restricted by parse options: method nested module code: \"ok\"
+restricted by parse options: function own thread data: \"function\"
+restricted by parse options: method own thread data: \"method\"
+restricted by parse options: function async caller code: \"async\"
+restricted by parse options: method async caller code: \"async\"
+restricted by parse options: function callback: \"INVALID-FUNCTION-ACCESS\"
+restricted by parse options: method callback: \"INVALID-FUNCTION-ACCESS\"
+restricted by parse options: function object call reference: \"readers: 0\"
+restricted by parse options: method object call reference: \"readers: 0\"
+restricted by parse options: function call reference: \"module\"
+restricted by parse options: function call_function: \"module\"
+sandboxed: function program: \"module\"
+sandboxed: method program: \"module\"
+sandboxed: function private function by name: \"private\"
+sandboxed: method private function by name: \"private\"
+sandboxed: function private class by name: \"PrivateThing\"
+sandboxed: method private class by name: \"PrivateThing\"
+sandboxed: function builtin by caller's name: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: method builtin by caller's name: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: function class by caller's name: \"CREATE-OBJECT-ERROR\"
+sandboxed: method class by caller's name: \"CREATE-OBJECT-ERROR\"
+sandboxed: function nested module code: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: method nested module code: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: function own thread data: \"function\"
+sandboxed: method own thread data: \"method\"
+sandboxed: function async caller code: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: method async caller code: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: function callback: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: method callback: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: function object call reference: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: method object call reference: \"INVALID-FUNCTION-ACCESS\"
+sandboxed: function call reference: \"module\"
+sandboxed: function call_function: \"module\"
+main: function program: \"module\"
+main: method program: \"module\"
+main: function private function by name: \"private\"
+main: method private function by name: \"private\"
+";
+    }
+
+    constructor() : QUnit::Test("ModuleCodeProgramBarrierTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        src_dir = get_script_dir() + "/module-code-program-barrier";
+        qmod_dir = tmp.path + "/qmod";
+        mkdir(qmod_dir);
+
+        addTestCase("module functions and methods run in the module's Program, and only the sandbox governs module "
+            "code, in every mode", \testBarrier());
+
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+    }
+
+    private compileModule() {
+        string qmod_path = qmod_dir + "/BarrierMod.qmod";
+        if (is_file(qmod_path)) {
+            return;
+        }
+        string out = backquote(sprintf("%s %s -b --compile-module --output %s %s 2>&1", env(), qore_bin, qmod_path,
+            src_dir + "/BarrierMod.qm"));
+        assertTrue(is_file(qmod_path), sprintf("compiled BarrierMod.qmod: %s", out));
+    }
+
+    private hash<ExecModeHarness::ModeRunResult> runScript(string module_dir, string mode) {
+        return ExecModeHarness::run_command(sprintf("%s QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s",
+            env(), module_dir, qore_bin, mode, src_dir + "/barrier.q"));
+    }
+
+    testBarrier() {
+        compileModule();
+        hash<ExecModeHarness::ModeRunResult> reference = runScript(src_dir, "ast");
+        assertEq(ExpectedOutput, reference.out, "source module, ast");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = runScript(src_dir, mode);
+            assertEq(ExpectedOutput, r.out, sprintf("source module, %s", mode));
+            r = runScript(qmod_dir, mode);
+            assertEq(ExpectedOutput, r.out, sprintf("AOT module, %s", mode));
+        }
+
+        # the script compiled with AOT, with the AOT module
+        string bin = tmp.path + "/barrier";
+        string out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --compile --output %s %s 2>&1", env(), qmod_dir,
+            qore_bin, bin, src_dir + "/barrier.q"));
+        assertTrue(is_file(bin), sprintf("compiled the script: %s", out));
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s QORE_MODULE_DIR=%s %s", env(),
+            qmod_dir, bin));
+        assertEq(ExpectedOutput, r.out, "AOT script and module");
+    }
+}
