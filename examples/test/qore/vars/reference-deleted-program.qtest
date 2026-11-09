@@ -38,7 +38,8 @@ const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
 ExecMode mode = Modes{ARGV[0]};
 
 # each use of a reference is made by a function of its own, and the caller handles the exception it raises; use()
-# also reads the references itself and handles the exception
+# also reads the references itself, in a local variable, in an expression and as an argument, and handles the
+# exception
 
 #! reads the lvalue of a reference held by a local variable (a parameter)
 auto sub read_local(reference r) {
@@ -147,6 +148,17 @@ sub use(string kind, string label, reference r) {
         }
     } catch (hash<ExceptionInfo> ex) {
         report_error(label + ", read here in a global variable", ex);
+    }
+    # the reads in an expression and as an argument of a builtin function
+    try {
+        report(label + ", read here in an expression", (r ?? 0) + 1);
+    } catch (hash<ExceptionInfo> ex) {
+        report_error(label + ", read here in an expression", ex);
+    }
+    try {
+        printf("%s, read here as an argument: %y\n", label, r);
+    } catch (hash<ExceptionInfo> ex) {
+        report_error(label + ", read here as an argument", ex);
     }
 }
 
@@ -272,6 +284,8 @@ printf("done\n");
             "thread_local of a live Program, written in a global variable: \"ok\"\n"
             "thread_local of a live Program, read here in a local variable: 13\n"
             "thread_local of a live Program, read here in a global variable: 13\n"
+            "thread_local of a live Program, read here in an expression: 14\n"
+            "thread_local of a live Program, read here as an argument: 13\n"
             "thread_local of a live Program: 13\n"
             "thread_local of a deleted Program, read in a local variable: PROGRAM-ERROR\n"
             "thread_local of a deleted Program, written in a local variable: PROGRAM-ERROR\n"
@@ -281,6 +295,8 @@ printf("done\n");
             "thread_local of a deleted Program, written in a global variable: PROGRAM-ERROR\n"
             "thread_local of a deleted Program, read here in a local variable: PROGRAM-ERROR\n"
             "thread_local of a deleted Program, read here in a global variable: PROGRAM-ERROR\n"
+            "thread_local of a deleted Program, read here in an expression: PROGRAM-ERROR\n"
+            "thread_local of a deleted Program, read here as an argument: PROGRAM-ERROR\n"
             "global of a live Program, read in a local variable: 5\n"
             "global of a live Program, written in a local variable: \"ok\"\n"
             "global of a live Program, read in a closure: 11\n"
@@ -289,6 +305,8 @@ printf("done\n");
             "global of a live Program, written in a global variable: \"ok\"\n"
             "global of a live Program, read here in a local variable: 13\n"
             "global of a live Program, read here in a global variable: 13\n"
+            "global of a live Program, read here in an expression: 14\n"
+            "global of a live Program, read here as an argument: 13\n"
             "global of a live Program: 13\n"
             "global of a deleted Program, read in a local variable: PROGRAM-ERROR\n"
             "global of a deleted Program, written in a local variable: PROGRAM-ERROR\n"
@@ -298,6 +316,8 @@ printf("done\n");
             "global of a deleted Program, written in a global variable: PROGRAM-ERROR\n"
             "global of a deleted Program, read here in a local variable: PROGRAM-ERROR\n"
             "global of a deleted Program, read here in a global variable: PROGRAM-ERROR\n"
+            "global of a deleted Program, read here in an expression: PROGRAM-ERROR\n"
+            "global of a deleted Program, read here as an argument: PROGRAM-ERROR\n"
             "local of a live Program, read in a local variable: 1\n"
             "local of a live Program, written in a local variable: \"ok\"\n"
             "local of a live Program, read in a closure: 11\n"
@@ -306,6 +326,8 @@ printf("done\n");
             "local of a live Program, written in a global variable: \"ok\"\n"
             "local of a live Program, read here in a local variable: 12\n"
             "local of a live Program, read here in a global variable: 13\n"
+            "local of a live Program, read here in an expression: 13\n"
+            "local of a live Program, read here as an argument: 12\n"
             "local of a deleted Program, read in a local variable: PROGRAM-ERROR\n"
             "local of a deleted Program, written in a local variable: PROGRAM-ERROR\n"
             "local of a deleted Program, read in a closure: PROGRAM-ERROR\n"
@@ -314,6 +336,8 @@ printf("done\n");
             "local of a deleted Program, written in a global variable: PROGRAM-ERROR\n"
             "local of a deleted Program, read here in a local variable: PROGRAM-ERROR\n"
             "local of a deleted Program, read here in a global variable: PROGRAM-ERROR\n"
+            "local of a deleted Program, read here in an expression: PROGRAM-ERROR\n"
+            "local of a deleted Program, read here as an argument: PROGRAM-ERROR\n"
             "written in a global variable while a parse is pending: \"ok\"\n"
             "read by the Program after the commit: 3\n"
             "done\n";
