@@ -294,6 +294,8 @@ public:
     QoreIRIteratorNextInstruction* emitSelectorIteratorNext(const LazySelectorSource& src, QoreIRValue iter,
         QoreIRBasicBlock* exit_block, QoreIRBasicBlock* body_block, QoreIRBasicBlock* exception_target,
         std::string& error);
+    //! Returns true if evaluating the selector \a selector (or the bounds of a range) can create a node temp
+    static bool selectorMayCreateTemp(const QoreValue& selector);
     //! Returns the QoreIRListSelectorFlag flags of the iterator of a lazy list of selectors
     static int64_t selectorIteratorFlags(const LazySelectorSource& src);
     //! Fills the handler of a selector of a remove or delete expression with a list of selectors that raised an

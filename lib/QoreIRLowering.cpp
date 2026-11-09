@@ -11225,6 +11225,22 @@ QoreIRValue QoreIRLowering::lowerSourceIterator(const QoreValue& expr, const Laz
         : withExceptionTarget(builder.createIteratorCreate(source, nullptr, loc))->result;
 }
 
+//! Returns true if evaluating \a expr can create a node temp: a value that is not an int, or an intermediate temp
+static bool qore_ir_int_expr_may_create_temp(const QoreValue& expr) {
+    const QoreTypeInfo* ti = getExprTypeInfo(expr);
+    if (ti != bigIntTypeInfo && ti != softBigIntTypeInfo) {
+        return true;
+    }
+    return expressionMayCreateIntermediateNodeTemp(expr);
+}
+
+bool QoreIRLowering::selectorMayCreateTemp(const QoreValue& selector) {
+    if (auto* range = dynamic_cast<const QoreRangeOperatorNode*>(selector.getInternalNode())) {
+        return qore_ir_int_expr_may_create_temp(range->getLeft()) || qore_ir_int_expr_may_create_temp(range->getRight());
+    }
+    return qore_ir_int_expr_may_create_temp(selector);
+}
+
 QoreIRIteratorNextInstruction* QoreIRLowering::emitSelectorIteratorNext(const LazySelectorSource& src,
         QoreIRValue iter, QoreIRBasicBlock* exit_block, QoreIRBasicBlock* body_block,
         QoreIRBasicBlock* exception_target, std::string& error) {
@@ -11259,17 +11275,13 @@ QoreIRIteratorNextInstruction* QoreIRLowering::emitSelectorIteratorNext(const La
         error = "IR builder failed to create blocks for a lazy list of selectors";
         return nullptr;
     }
-    // test_blocks[i] tests if selector i is needed; the last selector needs no test
-    std::vector<QoreIRBasicBlock*> test_blocks;
     std::vector<QoreIRBasicBlock*> selector_blocks;
     for (size_t i = 0; i < count; ++i) {
         QoreIRBasicBlock* selector = createBlock("selectors.eval");
-        QoreIRBasicBlock* test = i + 1 < count ? createBlock("selectors.test") : selector;
-        if (!selector || !test) {
+        if (!selector) {
             error = "IR builder failed to create blocks for a lazy list of selectors";
             return nullptr;
         }
-        test_blocks.push_back(test);
         selector_blocks.push_back(selector);
     }
 
@@ -11284,10 +11296,6 @@ QoreIRIteratorNextInstruction* QoreIRLowering::emitSelectorIteratorNext(const La
         QoreIRBasicBlock* prev = next_block;
         func->moveBlockAfter(need_block, prev);
         prev = need_block;
-        for (size_t i = 0; i + 1 < count; ++i) {
-            func->moveBlockAfter(test_blocks[i], prev);
-            prev = test_blocks[i];
-        }
         for (QoreIRBasicBlock* selector : selector_blocks) {
             func->moveBlockAfter(selector, prev);
             prev = selector;
@@ -11295,18 +11303,15 @@ QoreIRIteratorNextInstruction* QoreIRLowering::emitSelectorIteratorNext(const La
         func->moveBlockAfter(done_block, prev);
     }
 
-    // the iterator says which selector it needs, or -1 when it has given every value
+    // the iterator says which selector it needs, or -1 when it has given every value: one switch
     builder.setBlock(need_block);
     QoreIRValue pending = builder.createSelectorIteratorPending(iter, loc)->result;
-    QoreIRValue zero = builder.createConstInt(0, loc)->result;
-    QoreIRValue none = builder.createBinaryOp(QoreIROpcode::LtInt, pending, zero, loc)->result;
-    builder.createBranchIf(none, done_block, test_blocks[0], loc);
-    for (size_t i = 0; i + 1 < count; ++i) {
-        builder.setBlock(test_blocks[i]);
-        QoreIRValue index = builder.createConstInt(static_cast<int64_t>(i), loc)->result;
-        QoreIRValue is_index = builder.createBinaryOp(QoreIROpcode::EqInt, pending, index, loc)->result;
-        builder.createBranchIf(is_index, selector_blocks[i], test_blocks[i + 1], loc);
+    std::vector<QoreIRSwitchCase> cases;
+    cases.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        cases.push_back({static_cast<int64_t>(i), selector_blocks[i]});
     }
+    builder.createSwitchInt(pending, done_block, cases, loc);
 
     // every value has been given: the iterator is released, as an exhausted IteratorNext releases its iterator
     builder.setBlock(done_block);
@@ -11333,8 +11338,12 @@ QoreIRIteratorNextInstruction* QoreIRLowering::emitSelectorIteratorNext(const La
     for (size_t i = 0; i < count; ++i) {
         builder.setBlock(selector_blocks[i]);
         // the temps of the selector are released when it has been given to the iterator, as the AST interpreter
-        // releases the selector's value when it has read the element (QoreFunctionalSquareBracketsComplexOperator)
-        builder.createPushTempMark(nullptr);
+        // releases the selector's value when it has read the element (QoreFunctionalSquareBracketsComplexOperator);
+        // a selector whose int values create no temp needs no temp scope
+        const bool temp_scope = selectorMayCreateTemp(src.selectors[i]);
+        if (temp_scope) {
+            builder.createPushTempMark(nullptr);
+        }
         int64_t flags = 0;
         std::vector<QoreIRValue> selector_values;
         if (auto* range = dynamic_cast<const QoreRangeOperatorNode*>(src.selectors[i].getInternalNode())) {
@@ -11363,11 +11372,15 @@ QoreIRIteratorNextInstruction* QoreIRLowering::emitSelectorIteratorNext(const La
             selector_values = {index};
         }
         if (blockHasTerminator(builder.getBlock())) {
-            builder.abandonTempScope();
+            if (temp_scope) {
+                builder.abandonTempScope();
+            }
             continue;
         }
         withExceptionTarget(builder.createSelectorIteratorFeed(iter, flags, selector_values, loc));
-        withExceptionTarget(builder.createDiscardTemps(nullptr));
+        if (temp_scope) {
+            withExceptionTarget(builder.createDiscardTemps(nullptr));
+        }
         builder.createBranch(next_block, loc);
     }
     return next_inst;
@@ -19681,10 +19694,11 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     auto lower_fold_expr = [&](QoreIRValue accum_val, QoreIRValue element_val) -> QoreIRValue {
         assert(root.fold_expr);
 
-        QoreIRValue argv_list = builder.createEmptyList(loc)->result;
-        builder.createListAppend(argv_list, accum_val, loc);
-        builder.createListAppend(argv_list, element_val, loc);
-        QoreIRValue old_argv = builder.createSetImplicitArgv(argv_list, loc)->result;
+        // $1 and $2 are the virtual implicit arguments of the IR-lowered expression; the runtime argument list is
+        // installed only when delegated AST code can observe it, as lowerFoldlNative() does
+        QoreIRBasicBlock* setup_block = builder.getBlock();
+        size_t setup_position = setup_block->instructions.size();
+        int saved_ast_count = ast_delegate_count;
 
         VirtualImplicitContext saved = virtual_implicit;
         virtual_implicit.arg0 = accum_val;
@@ -19695,7 +19709,11 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         QoreIRValue fold_result = lowerExpression(*root.fold_expr, error);
 
         virtual_implicit = saved;
-        builder.createPopImplicitArg(old_argv, loc);
+        if (fold_result.isValid() && ast_delegate_count > saved_ast_count) {
+            QoreIRValue old_argv = insertFoldImplicitArgvSetup(setup_block, setup_position, accum_val, element_val,
+                loc);
+            builder.createPopImplicitArg(old_argv, loc);
+        }
 
         return fold_result;
     };
