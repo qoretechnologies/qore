@@ -86,6 +86,12 @@
     lookup delayed every accept, and \c source (the peer's IP address) is set as before.  Socket::getPeerInfo()
     still resolves the hostname on request.
 
+    @par Restricted Importers Cannot Change Module Public Variables
+    Sandboxed code and code in a %Program with \c PO_NO_PROCESS_CONTROL set (also set by \c PO_NO_EXTERNAL_ACCESS
+    and \c PO_LOCKDOWN) can read but no longer change a trusted module's public variables, which every importer
+    shares: a change raises \c MODULE-VARIABLE-READ-ONLY, and such code must call a function or method that the module
+    exports to set the value; see @ref module_public_variables.
+
     @par Modules May Not Declare Public thread_local Variables
     A user module that declares a <tt>public thread_local</tt> variable no longer loads: the declaration raises a
     \c MODULE-PUBLIC-THREAD-LOCAL parse exception, also when the module is compiled with \c qcc.  A module's public

@@ -538,12 +538,35 @@ QoreValue ReferenceNode::doEval(ExceptionSink* xsink) const {
 }
 
 QoreValue ReferenceNode::doEval(RuntimeConfig& rc, ExceptionSink* xsink) const {
-    LValueHelper lvh(*this, rc, xsink);
-    if (!lvh) {
-        return QoreValue();
+    ValueHolder val(xsink);
+    bool by_value = false;
+    {
+        // the value is only read: a read-only variable that the reference names can be read through it (qore#5664)
+        LValueHelper lvh(*this, rc, xsink, LValueHelper::ReadAccess());
+        if (!lvh) {
+            if (!lvh.isReadByValue()) {
+                return QoreValue();
+            }
+            assert(!*xsink);
+            by_value = true;
+        } else {
+            // issue 3523: evaluate in case the value is a reference
+            val = lvh.getReferencedValue();
+        }
     }
-    // issue 3523: evaluate in case the value is a reference
-    ValueHolder val(lvh.getReferencedValue(), xsink);
+    if (by_value) {
+        // an element or member of a variable that the reference cannot write, whose lvalue would be changed by
+        // resolving it: the reference's expression is evaluated, in the context where the reference was created
+        // (the lock of the helper above is released, as the evaluation locks the variable again)
+        RuntimeReferenceHelper rh(*this, xsink);
+        if (!rh) {
+            return QoreValue();
+        }
+        val = priv->vexp.eval(xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
     // the value here must always require a dereference
     return val->needsEval() ? val->eval(xsink) : val.release();
 }

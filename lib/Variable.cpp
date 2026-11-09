@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreStatementTemps.h"
 
 #include "qore/intern/RuntimeConfig.h"
@@ -458,13 +459,92 @@ static const QoreTypeInfo* get_no_narrow_lvalue_type(const QoreTypeInfo* ti) {
     return ti;
 }
 
+void Var::setTrustedModuleVarImport(QoreProgram* importer, const char* module_name, const std::string& ns_path) {
+    assert(is_ref);
+    assert(importer);
+    assert(!module_import);
+    if (!module_name) {
+        module_name = parseGetVar()->getModuleName();
+    }
+    std::string path;
+    // the root namespace's path is "::"; a variable there is named by its name alone
+    if (ns_path.size() > 2 && !ns_path.compare(0, 2, "::")) {
+        path.assign(ns_path, 2, std::string::npos);
+        path += "::";
+    }
+    path += name;
+    module_import.reset(new ModuleVarImport{importer, module_name ? module_name : "", std::move(path)});
+}
+
+bool Var::moduleVarWriteRestricted() const {
+    assert(module_import);
+    const QoreProgram& importer = *module_import->importer;
+    if (qore_program_private::restrictsModuleVarWrites(importer)) {
+        return true;
+    }
+    // code that a sandbox governs through its callers is sandboxed as well, such as the code of a Program that
+    // sandboxed code created; the code of a library module acts for its callers, as the module's own code does
+    if (qore_program_private::isLibraryModuleProgram(importer)) {
+        return false;
+    }
+    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+    return (bool)governing;
+}
+
+bool Var::refWriteRefused(bool check_import) const {
+    assert(is_ref);
+    return val.v.isReadOnly() || (check_import && module_import && moduleVarWriteRestricted());
+}
+
+int Var::checkModuleVarWrite(ExceptionSink* xsink) const {
+    if (!moduleVarWriteRestricted()) {
+        return 0;
+    }
+    const char* mod = module_import->module_name.c_str();
+    xsink->raiseException("MODULE-VARIABLE-READ-ONLY", "cannot change public variable '%s' of module '%s': "
+        "sandboxed code, and code in a Program with PO_NO_PROCESS_CONTROL set, can read a public variable of a module "
+        "but not change it, because every Program that imports the module shares the variable; to let importers "
+        "change the value, the module must export a public function or method that sets it",
+        module_import->path.c_str(), *mod ? mod : "<unknown>");
+    return -1;
+}
+
 int Var::getLValue(LValueHelper& lvh, bool for_remove) const {
+    return getLValueIntern(lvh, for_remove, true);
+}
+
+int Var::getLValueIntern(LValueHelper& lvh, bool for_remove, bool check_import) const {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
 
     if (is_ref) {
-        if (val.v.write(lvh.vl.xsink))
-            return -1;
-        return val.v.getPtr()->getLValue(lvh, for_remove);
+        // only the reference that the code names is checked for a trusted module's variable: it belongs to the
+        // code's Program, and a reference that it refers to in turn can belong to a Program that no longer exists
+        // (qore#5664)
+        switch (lvh.getReadAccess()) {
+            case LValueHelper::RA_VAR:
+                // a reference that only reads the variable needs no write access (see LValueHelper::ReadAccess)
+                if (lvh.tracksWriteProtection() && refWriteRefused(check_import)) {
+                    lvh.setWriteProtected();
+                }
+                break;
+            case LValueHelper::RA_ELEMENT:
+                // resolving an element or member could change the variable: the reference's expression is read
+                // instead (see ReferenceNode::doEval())
+                if (refWriteRefused(check_import)) {
+                    lvh.setReadByValue();
+                    return -1;
+                }
+                break;
+            case LValueHelper::RA_NONE:
+                if (val.v.write(lvh.vl.xsink)) {
+                    return -1;
+                }
+                if (check_import && module_import && checkModuleVarWrite(lvh.vl.xsink)) {
+                    return -1;
+                }
+                break;
+        }
+        return val.v.getPtr()->getLValueIntern(lvh, for_remove, false);
     }
 
     if (!is_thread_local) {
@@ -480,12 +560,21 @@ int Var::getLValue(LValueHelper& lvh, bool for_remove) const {
 }
 
 void Var::remove(LValueRemoveHelper& lvrh) {
+    removeIntern(lvrh, true);
+}
+
+void Var::removeIntern(LValueRemoveHelper& lvrh, bool check_import) {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
 
     if (is_ref) {
-        if (val.v.write(lvrh.getExceptionSink()))
+        if (val.v.write(lvrh.getExceptionSink())) {
             return;
-        val.v.getPtr()->remove(lvrh);
+        }
+        // see getLValueIntern()
+        if (check_import && module_import && checkModuleVarWrite(lvrh.getExceptionSink())) {
+            return;
+        }
+        val.v.getPtr()->removeIntern(lvrh, false);
         return;
     }
 
@@ -628,6 +717,22 @@ LValueHelper::LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, Exceptio
     }
 }
 
+LValueHelper::LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, ReadAccess)
+        : vl(xsink), read_access(RA_VAR) {
+    RuntimeReferenceHelper rh(ref, xsink);
+    if (!*xsink) {
+        doLValue(lvalue_ref::get(&ref)->vexp, rc, false);
+    }
+}
+
+LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadAccess, bool for_remove)
+        : vl(xsink), read_access(RA_VAR), track_write_protection(true) {
+    RuntimeReferenceHelper rh(ref, xsink);
+    if (!*xsink) {
+        doLValue(lvalue_ref::get(&ref)->vexp, for_remove);
+    }
+}
+
 LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
@@ -659,7 +764,11 @@ LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
         ocvec(std::move(o.ocvec)), before(o.before), removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
         vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
-        assignment_only(o.assignment_only), write_rejected(o.write_rejected),
+        assignment_only(o.assignment_only), read_access(o.read_access),
+        track_write_protection(o.track_write_protection),
+        write_protected(o.write_protected),
+        read_by_value(o.read_by_value),
+        write_rejected(o.write_rejected),
         member_lvalue_modified(o.member_lvalue_modified), robj(o.robj),
         buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
         buffer_lvalue_value(o.buffer_lvalue_value), val(o.val), qv(o.qv), typeInfo(o.typeInfo) {
@@ -1626,6 +1735,10 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
         }
     } else {
         assert(ntype == NT_OPERATOR);
+        // resolving an element or member can change the variable that holds it (see read_access)
+        if (read_access == RA_VAR) {
+            read_access = RA_ELEMENT;
+        }
         const QoreSquareBracketsOperatorNode* op =
             dynamic_cast<const QoreSquareBracketsOperatorNode*>(n.getInternalNode());
         if (op) {
@@ -1739,6 +1852,10 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
         }
     } else {
         assert(ntype == NT_OPERATOR);
+        // resolving an element or member can change the variable that holds it (see read_access)
+        if (read_access == RA_VAR) {
+            read_access = RA_ELEMENT;
+        }
         const QoreSquareBracketsOperatorNode* op =
             dynamic_cast<const QoreSquareBracketsOperatorNode*>(n.getInternalNode());
         if (op) {

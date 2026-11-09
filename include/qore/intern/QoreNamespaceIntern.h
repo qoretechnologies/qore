@@ -723,7 +723,19 @@ public:
     }
 
     DLLLOCAL void scanMergeCommittedNamespace(const qore_ns_private& mns, QoreModuleContext& qmc) const;
-    DLLLOCAL void copyMergeCommittedNamespace(const qore_ns_private& mns);
+    //! Merges the exported declarations of a module's namespace into this namespace of an importing Program
+    /** @param mns the module's namespace
+        @param module_var_importer the importing Program if the module is trusted, whose references to the module's
+        public variables are then read-only when it is restricted (qore#5664), otherwise nullptr
+    */
+    DLLLOCAL void copyMergeCommittedNamespace(const qore_ns_private& mns, QoreProgram* module_var_importer);
+
+    //! Marks the references to trusted modules' public variables that a new Program got with this namespace
+    /** Called for each namespace of a new Program's root namespace copied from \a src_pgm (qore#5664)
+        @param importer the new Program
+        @param src_trusted_module true if the namespace was copied from the Program of a trusted module
+    */
+    DLLLOCAL void markCopiedModuleVarImports(QoreProgram* importer, bool src_trusted_module);
 
     DLLLOCAL int parseInitGlobalVars();
 
@@ -2474,9 +2486,16 @@ public:
         // always set the module public flag to true in the root namespace
         pub = true;
 
+        // the references to trusted modules' public variables that the copy made are read-only in a restricted
+        // Program, as when it imports the modules (qore#5664)
+        markCopiedModuleVarImportsFrom(old.pgm);
+
         // rebuild root indexes - only for committed objects
         rebuildAllIndexes();
     }
+
+    //! Marks the references to trusted modules' public variables in this new root namespace copied from \a src_pgm
+    DLLLOCAL void markCopiedModuleVarImportsFrom(const QoreProgram* src_pgm);
 
     DLLLOCAL ~qore_root_ns_private() {
     }
@@ -2541,6 +2560,12 @@ public:
         Var* var = tns.var_list.import(v, xsink, readonly, import_as);
         if (!var) {
             return;
+        }
+        // a trusted module's public variable that the source Program imported stays read-only in this Program when
+        // it is restricted, whatever the source Program allows (qore#5664)
+        if (v->isTrustedModuleVarImport()) {
+            assert(pgm);
+            var->setTrustedModuleVarImport(pgm, *v, tns.path);
         }
         varmap.update(var->getName(), &tns, var);
     }
@@ -3115,9 +3140,13 @@ public:
         ns.priv->scanMergeCommittedNamespace(*(mns.priv), qmc);
     }
 
+    //! Merges the exported declarations of a module's root namespace into the root namespace of an importing Program
     DLLLOCAL static void copyMergeCommittedNamespace(RootQoreNamespace& ns, const RootQoreNamespace& mns) {
-        ns.priv->copyMergeCommittedNamespace(*(mns.priv));
+        ns.rpriv->copyMergeCommittedModuleNamespace(*mns.rpriv);
     }
+
+    //! Merges a module's root namespace into this root namespace; see copyMergeCommittedNamespace()
+    DLLLOCAL void copyMergeCommittedModuleNamespace(const qore_root_ns_private& mns);
 
     DLLLOCAL static Var* runtimeFindGlobalVar(const RootQoreNamespace& rns, const char* vname, const qore_ns_private*& vns) {
         return rns.rpriv->runtimeFindGlobalVar(vname, vns);

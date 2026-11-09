@@ -1513,6 +1513,40 @@ public:
     */
     DLLLOCAL QoreSandboxManager* getSandboxManagerRef();
 
+    //! Returns true if the Program's code may not change the public variables of trusted modules (qore#5664)
+    /** A module's public variable is one variable that every importer shares, so a sandboxed Program, and a
+        Program that may not control the process (\c PO_NO_PROCESS_CONTROL), may only read it.  The Program of a
+        library module is not restricted by its parse options, which it inherits from the Program that loaded it
+        first, but only by a sandbox manager, which it never has.
+
+        Decided when the variable is written, as the sandbox manager and the parse options can be set after the
+        code that writes it was parsed and the module imported; reads never call it.  The code of a Program that is
+        not a library module is also restricted while a sandbox governs it through its callers (see
+        Var::checkModuleVarWrite()).
+    */
+    DLLLOCAL static bool restrictsModuleVarWrites(const QoreProgram& pgm) {
+        const qore_program_private* pp = pgm.priv;
+        if (pp->sandbox_manager.load(std::memory_order_acquire)) {
+            return true;
+        }
+        return !pp->library_module && pp->pwo.parse_options.hasAny(QoreParseOptions(PO_NO_PROCESS_CONTROL));
+    }
+
+    //! Returns true if the Program is the Program of a library module (see QoreModuleManager::isTrustedModulePath())
+    DLLLOCAL static bool isLibraryModuleProgram(const QoreProgram& pgm) {
+        return pgm.priv->library_module;
+    }
+
+    //! Returns true if the Program is the Program of a trusted module (see restrictsModuleVarWrites())
+    /** A module whose Program has a sandbox manager is the module of a tenant, which only that tenant can import
+        (see QoreModuleManager::mayUseTenantModule()), so its variables are not shared with other importers
+    */
+    DLLLOCAL static bool isTrustedModuleProgram(const QoreProgram& pgm) {
+        const qore_program_private* pp = pgm.priv;
+        return pp->pwo.parse_options.hasAny(QoreParseOptions(PO_IN_MODULE))
+            && !pp->sandbox_manager.load(std::memory_order_acquire);
+    }
+
     DLLLOCAL void waitForTerminationAndClear(ExceptionSink* xsink);
 
     // called when the program's ref count = 0 (but the dc count may not go to 0 yet)

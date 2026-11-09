@@ -150,7 +150,39 @@ private:
     bool pub;                           // is this global var public (valid and set for modules only)
     mutable bool finalized;             // has this var already been cleared during Program destruction?
     bool is_thread_local;               // is this a thread_local var?
+
+    //! What a reference to a trusted module's public variable records about the import (qore#5664)
+    struct ModuleVarImport {
+        //! the Program whose namespace holds the reference: the importer
+        /** The reference is one of the Program's global variables, so the Program outlives every write that its
+            code makes through it; a reference that another Program holds to this one (see Var(Var*, ...)) is
+            written through without reading this pointer (see getLValueIntern())
+        */
+        QoreProgram* importer;
+        //! the name of the module that declares the variable
+        std::string module_name;
+        //! the namespace path of the variable in the importer, ex: \c "MyModule::value"
+        std::string path;
+    };
+    //! Set on a reference to a public variable of a trusted module, or to such a reference, and never changed
+    /** Set before the reference is published in its Program's namespace; a write through the reference is refused
+        when the importer is sandboxed or restricted from controlling the process at the time of the write; see
+        checkModuleVarWrite().  Reads never look at it.
+    */
+    std::unique_ptr<ModuleVarImport> module_import;
+
     DLLLOCAL void del(ExceptionSink* xsink);
+
+    //! Returns the lvalue of the variable; \a check_import is false for the target of a reference
+    DLLLOCAL int getLValueIntern(LValueHelper& lvh, bool for_remove, bool check_import) const;
+    //! Removes the variable's value; \a check_import is false for the target of a reference
+    DLLLOCAL void removeIntern(LValueRemoveHelper& lvrh, bool check_import);
+    //! Raises \c MODULE-VARIABLE-READ-ONLY and returns -1 if the importer may not write the module's variable
+    DLLLOCAL int checkModuleVarWrite(ExceptionSink* xsink) const;
+    //! Returns true if the code of the importer may not write the module's variable now
+    DLLLOCAL bool moduleVarWriteRestricted() const;
+    //! Returns true if this reference may not be written; see getLValueIntern()
+    DLLLOCAL bool refWriteRefused(bool check_import) const;
 
     // not implemented
     Var(const Var&) = delete;
@@ -374,6 +406,31 @@ public:
 
     DLLLOCAL bool isPublic() const {
         return pub;
+    }
+
+    //! Returns the variable that this reference refers to directly
+    DLLLOCAL Var* getRefTarget() const {
+        assert(is_ref);
+        return val.v.getPtr();
+    }
+
+    //! Returns true if this is a reference to a trusted module's public variable (or to such a reference)
+    DLLLOCAL bool isTrustedModuleVarImport() const {
+        return (bool)module_import;
+    }
+
+    //! Records that this reference imports a trusted module's public variable into \a importer (qore#5664)
+    /** Must be called before the reference is published in the importer's namespace
+        @param importer the Program whose namespace holds this reference
+        @param module_name the name of the module that declares the variable, or nullptr if unknown
+        @param ns_path the namespace path of the variable in the importer (\c "" or \c "::" for the root namespace)
+    */
+    DLLLOCAL void setTrustedModuleVarImport(QoreProgram* importer, const char* module_name, const std::string& ns_path);
+
+    //! Records that this reference imports into \a importer the same module variable as \a src
+    DLLLOCAL void setTrustedModuleVarImport(QoreProgram* importer, const Var& src, const std::string& ns_path) {
+        assert(src.module_import);
+        setTrustedModuleVarImport(importer, src.module_import->module_name.c_str(), ns_path);
     }
 
     DLLLOCAL void setPublic() {
@@ -619,6 +676,31 @@ private:
     };
     std::unique_ptr<MemberLValue> member_lvalue;
     bool assignment_only = false;
+public:
+    //! how a helper made with ReadAccess resolves the lvalue
+    enum read_access_e : uint8_t {
+        //! for writing: the default
+        RA_NONE = 0,
+        //! only to read the variable that a reference names directly
+        RA_VAR = 1,
+        //! only to read an element or member of a variable that a reference names
+        RA_ELEMENT = 2,
+    };
+private:
+    //! set while the helper only reads the lvalue that a reference names (see ReadAccess)
+    /** A read-only import, such as a sandboxed Program's import of a trusted module's public variable, can then be
+        read through a reference.  Resolving an element or member of such a variable could change it (it can create
+        a missing hash key or copy a shared container), so the reference's expression is then read instead (see
+        setReadByValue())
+    */
+    read_access_e read_access = RA_NONE;
+    //! set when the caller needs isWriteProtected(): only then is the variable that a reference names checked
+    bool track_write_protection = false;
+    //! set with read_access when the variable read could not have been written; see isWriteProtected()
+    bool write_protected = false;
+    //! set when the lvalue of an element or member of a write-protected variable was not resolved; see
+    //! isReadByValue()
+    bool read_by_value = false;
     //! set when the lvalue rejected the value an operation converted for it; see ~LValueHelper()
     bool write_rejected = false;
     bool member_lvalue_modified = false;
@@ -654,7 +736,55 @@ public:
     DLLLOCAL LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false,
         bool for_assignment = false);
 
+    //! tag for the constructor that only reads the value of a reference
+    struct ReadAccess {};
+
+    //! Resolves a reference only to read its value (see ReferenceNode::doEval())
+    /** The helper must not be used to change the lvalue: a variable that the reference names directly is resolved
+        without the checks for writing it (a read-only import, a trusted module's public variable in a sandboxed
+        importer), which still apply to a variable whose element or member the reference names
+    */
+    DLLLOCAL LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, ReadAccess);
+    //! Resolves a reference only to read its value, without creating a missing value when \a for_remove is true
+    /** isWriteProtected() then tells whether the variable that the reference names could have been written
+    */
+    DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadAccess, bool for_remove);
+
     DLLLOCAL LValueHelper(ExceptionSink* xsink, bool for_assignment = false);
+
+    //! Returns how the helper resolves the lvalue (see ReadAccess)
+    DLLLOCAL read_access_e getReadAccess() const {
+        return read_access;
+    }
+
+    //! Returns true if the caller needs isWriteProtected()
+    DLLLOCAL bool tracksWriteProtection() const {
+        return track_write_protection;
+    }
+
+    //! Records that the variable read could not have been written (see ReadAccess)
+    DLLLOCAL void setWriteProtected() {
+        assert(read_access == RA_VAR);
+        write_protected = true;
+    }
+
+    //! Records that the lvalue of an element or member was not resolved, as its variable is write-protected
+    /** The resolution fails with no exception; the caller reads the reference's expression instead
+    */
+    DLLLOCAL void setReadByValue() {
+        assert(read_access == RA_ELEMENT);
+        read_by_value = true;
+    }
+
+    //! Returns true if the reference has to be read by evaluating its expression (see setReadByValue())
+    DLLLOCAL bool isReadByValue() const {
+        return read_by_value;
+    }
+
+    //! Returns true if the variable read through a reference could not have been written through it
+    DLLLOCAL bool isWriteProtected() const {
+        return write_protected;
+    }
 
     DLLLOCAL LValueHelper(LValueHelper&& o);
 

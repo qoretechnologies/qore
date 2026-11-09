@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include <qore/QoreRWLock.h>
+#include <optional>
 #include <unordered_set>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -3503,28 +3504,57 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                 if (QoreTypeInfo::outputSuperSetOf(ti, u.ti)) {
                     // issue #2891: do not create a value in the source reference if none already exists
                     // do not process if there is no type restriction
-                    LValueHelper lvh(*r, xsink, true);
-                    //printd(5, "lvh: %d *xsink: %d\n", (bool)lvh, (bool)*xsink);
-                    if (lvh) {
+                    // the value read from the lvalue is assigned back to the same lvalue in order to apply the
+                    // reference's type restriction (which can fold container value types); remember the node so
+                    // that the recursive-reference scan can be skipped when nothing changed.  Every path that
+                    // replaces the value hands the old one to LValueHelper::saveTemp(), which defers the
+                    // dereference to the helper's destructor, so this pointer is still backed by a live reference
+                    // at the comparison below and its address cannot have been reused
+                    auto assign_back = [target_ti = u.ti](LValueHelper& lvh) {
                         QoreValue val = lvh.getReferencedValue();
-                        if (!val.isNothing()) {
-                            // the value read from the lvalue is assigned back to the same lvalue in order to apply
-                            // the reference's type restriction (which can fold container value types); remember the
-                            // node so that the recursive-reference scan can be skipped when nothing changed.  Every
-                            // path that replaces the value hands the old one to LValueHelper::saveTemp(), which
-                            // defers the dereference to the helper's destructor, so this pointer is still backed by
-                            // a live reference at the comparison below and its address cannot have been reused
-                            const AbstractQoreNode* orig = val.getInternalNode();
-                            lvh.setTypeInfo(u.ti);
-                            //printd(5, "ref assign '%s' to '%s'\n", QoreTypeInfo::getName(val.getTypeInfo()), QoreTypeInfo::getName(u.ti));
-                            if (!lvh.assign(val, "<reference>") && orig
-                                && lvh.getInternalNode() == orig) {
-                                // the identical node is still in place, so the set of objects reachable from the
-                                // lvalue cannot have changed; skip the cycle scan, which would otherwise walk the
-                                // entire reachable object graph on every reference argument binding
-                                lvh.suppressObjectScan();
+                        if (val.isNothing()) {
+                            return;
+                        }
+                        const AbstractQoreNode* orig = val.getInternalNode();
+                        lvh.setTypeInfo(target_ti);
+                        if (!lvh.assign(val, "<reference>") && orig && lvh.getInternalNode() == orig) {
+                            // the identical node is still in place, so the set of objects reachable from the
+                            // lvalue cannot have changed; skip the cycle scan, which would otherwise walk the
+                            // entire reachable object graph on every reference argument binding
+                            lvh.suppressObjectScan();
+                        }
+                    };
+                    // the variable is resolved for reading first: one that the reference cannot write, such as a
+                    // read-only import, is left as it is when its value already has the reference's type
+                    // (qore#5664)
+                    std::optional<LValueHelper> lvh;
+                    lvh.emplace(*r, xsink, LValueHelper::ReadAccess(), true);
+                    if ((*lvh && lvh->isWriteProtected()) || (!*lvh && lvh->isReadByValue())) {
+                        bool needs_write;
+                        {
+                            ValueHolder val(xsink);
+                            if (*lvh) {
+                                val = lvh->getReferencedValue();
+                                // the variable's lock is released before it is resolved again
+                                lvh.reset();
+                            } else {
+                                // an element or member of such a variable is read by value
+                                lvh.reset();
+                                val = r->eval(xsink);
+                            }
+                            needs_write = !*xsink && !val->isNothing()
+                                && !QoreTypeInfo::outputSuperSetOf(u.ti, val->getFullTypeInfo());
+                        }
+                        if (needs_write && !*xsink) {
+                            // the value has to be changed: resolving the variable for writing raises the exception
+                            // that says why it cannot be, unless it has become writable in the meantime
+                            lvh.emplace(*r, xsink, true);
+                            if (*lvh) {
+                                assign_back(*lvh);
                             }
                         }
+                    } else if (*lvh) {
+                        assign_back(*lvh);
                     }
                     // the type of the reference has been accepted at this point, so this is never a type mismatch:
                     // an exception raised above, including one raised while resolving the lvalue, such as

@@ -188,6 +188,43 @@ list<int> l1(1);
 
     When defining a @ref user_modules "user module", the \b our keyword can be preceded by @ref mod_public "public", which means that the global variable will be available (imported) in the @ref Qore::Program "Program" object importing the module.  See @ref mod_public "public" for more information.
 
+    @subsection module_public_variables Module Public Variables Are Read-Only for Restricted Importers
+    A module's public variable is one variable that every @ref Qore::Program "Program" importing the module shares.
+    Code that is sandboxed (code in a @ref Qore::Program "Program" with a @ref Qore::SandboxManager "SandboxManager",
+    or code that such code calls, such as the code of a @ref Qore::Program "Program" that sandboxed code created), and
+    code in a @ref Qore::Program "Program" with @ref Qore::PO_NO_PROCESS_CONTROL set (which also
+    @ref Qore::PO_NO_EXTERNAL_ACCESS and @ref Qore::PO_LOCKDOWN set), can read the public variables of a trusted
+    module but cannot change them.  Every form of write raises a \c MODULE-VARIABLE-READ-ONLY exception and leaves the
+    variable unchanged: assignment, compound assignment, \c ++ and \c --, @ref push "push", @ref pop "pop",
+    @ref shift "shift", @ref unshift "unshift", @ref splice "splice", @ref extract "extract", @ref remove "remove",
+    @ref delete "delete", writes to an element or member of the variable, and writes through a
+    @ref lvalue_references "reference" or a closure created in such code.  The rule is checked when the variable is
+    written, so it also applies when the sandbox manager or the parse option is set after the code was parsed or the
+    module imported.
+
+    A trusted module is one that is not a tenant's own module: a module from the module path, or one that trusted
+    code loaded.  The module's own code, and the code of other library modules, can still change its variables, as
+    can importers that are neither sandboxed nor restricted; a module that lets its importers change a value exports a
+    public function or method that sets it, and so decides what its callers may change:
+    @code{.py}
+public namespace MyModule {
+    # every importer can read it; restricted importers cannot change it
+    public our int limit;
+
+    # the module checks what its callers set
+    public sub set_limit(int v) {
+        if (v < 0) {
+            throw "LIMIT-ERROR", sprintf("invalid limit %d", v);
+        }
+        limit = v;
+    }
+}
+    @endcode
+
+    Reading the variable directly or through a reference to it is always allowed.
+
+    @since %Qore 3.0
+
     @section thread_local_variables Thread-Local Global Variables
 
     @subsection thread_local The "thread_local" Keyword

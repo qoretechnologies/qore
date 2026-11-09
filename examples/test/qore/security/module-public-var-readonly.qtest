@@ -1,0 +1,467 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - global variable writes in JIT and qcc-compiled native code, sandbox manager governance
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class ModulePublicVarReadOnlyTest
+
+#! Restricted importers may read but not change a trusted module's public variables (qore#5664)
+/** A module's public variable is one variable that every Program importing the module shares.  Sandboxed code, and
+    code in a Program with PO_NO_PROCESS_CONTROL set, can read it but every form of write raises
+    MODULE-VARIABLE-READ-ONLY and leaves it unchanged; the module's own code, trusted importers and a setter function
+    that the module exports keep write access.
+
+    Every scenario runs in a child process in each execution mode, with the module from source and compiled with
+    qcc; a writer script compiled with qcc checks the writes of native code.
+*/
+class ModulePublicVarReadOnlyTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    #! the exception code of the refusal
+    const ErrCode = "MODULE-VARIABLE-READ-ONLY";
+
+    #! the execution modes
+    const ExecModes = ("ast", "ir", "jit", "tiered");
+
+    #! the initial state of the module's variables, as OurVarMod::state() gives it
+    const InitialState = "1|[1, 2, 3]|{a: 1, b: 2}|abc|1";
+
+    #! every form of write, each the body of a function of the writer source
+    const WriteForms = {
+        "assign": "OurVarMod::i = 99;",
+        "add-assign": "OurVarMod::i += 5;",
+        "mul-assign": "OurVarMod::i *= 2;",
+        "post-incr": "OurVarMod::i++;",
+        "pre-incr": "++OurVarMod::i;",
+        "post-decr": "OurVarMod::i--;",
+        "pre-decr": "--OurVarMod::i;",
+        "push": "push OurVarMod::l, 9;",
+        "pop": "pop OurVarMod::l;",
+        "shift": "shift OurVarMod::l;",
+        "unshift": "unshift OurVarMod::l, 0;",
+        "splice": "splice OurVarMod::l, 0, 1;",
+        "extract": "extract OurVarMod::l, 0, 1;",
+        "list-add": "OurVarMod::l += 4;",
+        "remove": "remove OurVarMod::i;",
+        "delete": "delete OurVarMod::h;",
+        "remove-key": "remove OurVarMod::h.a;",
+        "delete-key": "delete OurVarMod::h.a;",
+        "hash-elem": "OurVarMod::h.c = 3;",
+        "list-elem": "OurVarMod::l[0] = 9;",
+        "member": "OurVarMod::o.x = 9;",
+        "string-add": "OurVarMod::s += \"x\";",
+        "regex-subst": "OurVarMod::s =~ s/a/x/;",
+        "typed-ref": "reference<int> r = \\OurVarMod::i; r = 7;",
+        "untyped-ref": "reference r = \\OurVarMod::i; r = 7;",
+        "ref-arg": "set_ref(\\OurVarMod::i);",
+        "elem-ref": "reference r = \\OurVarMod::h.a; r = 9;",
+        "foreach-ref": "foreach int x in (\\OurVarMod::l) { x = 0; }",
+        "closure": "code c = sub () { OurVarMod::i = 10; }; c();",
+        # a reference created in the restricted code, written by a function of the trusted host
+        "host-ref": "host_write(\\OurVarMod::i);",
+    };
+
+    #! every form of read, with the value it gives
+    const ReadForms = {
+        "read": ("return OurVarMod::i;", "1"),
+        "read-list-elem": ("return OurVarMod::l[1];", "2"),
+        "read-member": ("return OurVarMod::o.x;", "1"),
+        "read-elements": ("return elements OurVarMod::l;", "3"),
+        "read-foreach": ("int t = 0; foreach int x in (OurVarMod::l) { t += x; } return t;", "6"),
+        "read-typed-ref": ("reference<int> r = \\OurVarMod::i; return r;", "1"),
+        "read-untyped-ref": ("reference r = \\OurVarMod::i; return r;", "1"),
+        "read-elem-ref": ("reference r = \\OurVarMod::h.b; return r;", "2"),
+        "read-member-ref": ("reference r = \\OurVarMod::o.x; return r;", "1"),
+        "read-ref-arg": ("return get_ref(\\OurVarMod::i);", "1"),
+    };
+
+    #! the restricted contexts that run every form of write and read
+    const RestrictedContexts = (
+        # a Program with a sandbox manager, set before the code is parsed
+        "sandbox",
+        # the sandbox manager set after the code was parsed and the module imported
+        "sandbox-after",
+        # a Program with PO_NO_PROCESS_CONTROL
+        "no-pc",
+        # PO_NO_PROCESS_CONTROL set after the code was parsed and the module imported
+        "no-pc-after",
+        # a Program with PO_LOCKDOWN, which cannot load modules: the host imports the variables
+        "lockdown",
+    );
+
+    constructor() : QUnit::Test("module public variables are read-only for restricted importers", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("restricted importers cannot change a module's public variables in any execution mode",
+            \sourceTest());
+        addTestCase("restricted importers cannot change the public variables of a module compiled with qcc",
+            \aotModuleTest());
+        addTestCase("qcc-compiled restricted code cannot change a module's public variables", \aotWriterTest());
+        set_return_value(main());
+    }
+
+    sourceTest() {
+        foreach string mode in (ExecModes) {
+            TmpDir tmp("qore-module-public-var-ro-" + mode + "-");
+            writeFixtures(tmp.path);
+            checkProbe(runProbe(tmp.path, mode), getExpected(), mode);
+        }
+    }
+
+    aotModuleTest() {
+        TmpDir tmp("qore-module-public-var-ro-aot-");
+        writeFixtures(tmp.path);
+        hash<auto> rv = compile(tmp.path, "OurVarMod.qm", "OurVarMod.qmod", True);
+        if (rv.status || !is_file(tmp.path + DirSep + "OurVarMod.qmod")) {
+            testSkip(sprintf("qcc could not compile OurVarMod: %s", rv.out));
+        }
+        # the probe must load the compiled module, not its source
+        unlink(tmp.path + DirSep + "OurVarMod.qm");
+        foreach string mode in (ExecModes) {
+            checkProbe(runProbe(tmp.path, mode), getExpected(), "AOT module " + mode);
+        }
+    }
+
+    aotWriterTest() {
+        TmpDir tmp("qore-module-public-var-ro-aot-writer-");
+        writeFixtures(tmp.path);
+        hash<auto> rv = compile(tmp.path, "writer.q", "writer", False);
+        if (rv.status || !is_file(tmp.path + DirSep + "writer")) {
+            testSkip(sprintf("qcc could not compile the writer script: %s", rv.out));
+        }
+        int status;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s 2>&1",
+            libqore_dir, libqore_dir, tmp.path, tmp.path + DirSep + "writer"), \status);
+        hash<string, string> expected;
+        foreach string form in (keys WriteForms) {
+            expected{"aot." + form} = ErrCode;
+        }
+        foreach hash<auto> i in (ReadForms.pairIterator()) {
+            expected{"aot." + i.key} = i.value[1];
+        }
+        expected += {
+            "aot.state": InitialState,
+            "aot.setter": "ok",
+            "aot.setter-state": "42",
+        };
+        checkProbe(out, expected, "AOT writer");
+    }
+
+    #! returns the results that the probe script must print
+    private hash<string, string> getExpected() {
+        hash<string, string> rv;
+        foreach string ctx in (RestrictedContexts) {
+            foreach string form in (keys WriteForms) {
+                rv{ctx + "." + form} = ErrCode;
+            }
+            foreach hash<auto> i in (ReadForms.pairIterator()) {
+                rv{ctx + "." + i.key} = i.value[1];
+            }
+            # no write changed a variable
+            rv{ctx + ".state"} = InitialState;
+            # the module's own setter functions work
+            rv{ctx + ".setter"} = "ok";
+            rv{ctx + ".setter-state"} = "42:[1, 2, 3, 5]";
+            # a closure that the restricted code created cannot write the variable when the trusted host calls it
+            rv{ctx + ".closure-host"} = ErrCode;
+        }
+        # a trusted importer: every write succeeds
+        foreach string form in (keys WriteForms) {
+            rv{"trusted." + form} = "ok";
+        }
+        rv += {
+            # the error names the variable and the module and says what to do instead
+            "message": "ok",
+            # the host's own writes
+            "host": "ok",
+            # a Program created by sandboxed code is sandboxed as well
+            "sandbox-child": ErrCode,
+            "sandbox-child-state": InitialState,
+            # a Program that the trusted host gives the module variable it imported
+            "import-chain": ErrCode,
+            "import-chain-ro": "ACCESS-ERROR",
+            # a trusted child of the host keeps write access
+            "trusted-import-chain": "ok",
+            # a sandboxed Program's own variable, which is not a module's
+            "own-var": "ok",
+            # the host's own variable imported into a sandboxed Program by the host
+            "host-var": "ok",
+        };
+        return rv;
+    }
+
+    private hash<auto> compile(string dir, string src, string target, bool module) {
+        int status;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s "
+            "%s-o %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, dir, qcc_bin,
+            module ? "--module --strip-source " : "", dir + DirSep + target, dir + DirSep + src), \status);
+        return {"status": status, "out": out};
+    }
+
+    private checkProbe(string out, hash<auto> expected, string mode) {
+        hash<string, string> results;
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = (line =~ x/^([a-zA-Z.-]+)=(.*)$/);
+            if (m) {
+                results{m[0]} = m[1];
+            }
+        }
+        # one comparison reports every scenario that differs, not only the first one
+        assertEq(expected, results, sprintf("%s probe output:\n%s", mode, out));
+    }
+
+    private string runProbe(string dir, string mode) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s --exec-mode=%s %s 2>&1",
+            libqore_dir, libqore_dir, dir, qore_bin, mode, dir + DirSep + "probe.q"));
+    }
+
+    #! returns the source of the restricted code: one function per form of write and read
+    private static string getWriterSource() {
+        string src = "sub set_ref(reference r) { r = 8; }\n"
+            "auto sub get_ref(reference r) { return r; }\n";
+        foreach hash<auto> i in (WriteForms.pairIterator()) {
+            src += sprintf("sub w_%s() { %s }\n", replace(i.key, "-", "_"), i.value);
+        }
+        foreach hash<auto> i in (ReadForms.pairIterator()) {
+            src += sprintf("auto sub r_%s() { %s }\n", replace(i.key, "-", "_"), i.value[0]);
+        }
+        src += "sub setter() { OurVarMod::set_i(42); OurVarMod::push_l(5); }\n"
+            "code sub get_closure() { return sub () { OurVarMod::i = 11; }; }\n";
+        return src;
+    }
+
+    private writeFixtures(string dir) {
+        write(dir, "OurVarMod.qm", ModuleSource);
+        string forms = sprintf("const WriteForms = (%s,);\nconst ReadForms = (%s,);\n",
+            (map sprintf("%y", $1), keys WriteForms).join(", "), (map sprintf("%y", $1), keys ReadForms).join(", "));
+        # the probe reads the writer source from a file of its own
+        write(dir, "writer-src.q", getWriterSource());
+        write(dir, "probe.q", "%modern\n%requires OurVarMod\n" + forms
+            + "const WriterSource = ReadOnlyFile::readTextFile(get_script_dir() + \"writer-src.q\");\n"
+            + ProbeSource);
+        write(dir, "writer.q", "%modern\n%no-process-control\n%requires OurVarMod\n" + forms
+            + "sub host_write(reference r) { r = 12; }\n" + getWriterSource() + AotWriterSource);
+    }
+
+    private write(string dir, string name, string src) {
+        File f();
+        f.open2(dir + DirSep + name, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(src);
+        f.close();
+    }
+
+    const ModuleSource = "%modern\n"
+        "module OurVarMod { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; url = \"https://qore.org\"; }\n"
+        "public namespace OurVarMod {\n"
+        "    public class Obj {\n"
+        "        public {\n"
+        "            int x = 1;\n"
+        "        }\n"
+        "    }\n"
+        "    public our int i;\n"
+        "    public our list<int> l;\n"
+        "    public our hash<auto> h;\n"
+        "    public our string s;\n"
+        "    public our Obj o;\n"
+        "    public sub reset() {\n"
+        "        i = 1;\n"
+        "        l = (1, 2, 3);\n"
+        "        h = {\"a\": 1, \"b\": 2};\n"
+        "        s = \"abc\";\n"
+        "        o = new Obj();\n"
+        "    }\n"
+        "    public string sub state() {\n"
+        "        return sprintf(\"%y|%y|%y|%s|%y\", i, l, h, s, o.x);\n"
+        "    }\n"
+        "    public sub set_i(int v) {\n"
+        "        i = v;\n"
+        "    }\n"
+        "    public sub push_l(int v) {\n"
+        "        push l, v;\n"
+        "    }\n"
+        "}\n";
+
+    # runs each form in a restricted context and prints the result
+    const ProbeSource = "sub result(string key, string value) { printf(\"%s=%s\\n\", key, value); }\n"
+        "string sub fname(string prefix, string form) { return prefix + replace(form, \"-\", \"_\"); }\n"
+        "sub host_write(reference r) { r = 12; }\n"
+        "\n"
+        "# returns \"ok\" or the exception code of calling the function\n"
+        "string sub try_call(Program p, string func) {\n"
+        "    try {\n"
+        "        p.callFunction(func);\n"
+        "    } catch (hash<ExceptionInfo> ex) {\n"
+        "        return ex.err;\n"
+        "    }\n"
+        "    return \"ok\";\n"
+        "}\n"
+        "\n"
+        "Program sub make_program(string ctx) {\n"
+        "    int po = PO_NEW_STYLE;\n"
+        "    if (ctx == \"no-pc\") {\n"
+        "        po |= PO_NO_PROCESS_CONTROL;\n"
+        "    } else if (ctx == \"lockdown\") {\n"
+        "        po |= PO_LOCKDOWN;\n"
+        "    }\n"
+        "    Program p(po);\n"
+        "    if (ctx == \"sandbox\") {\n"
+        "        p.setSandboxManager(new SandboxManager());\n"
+        "    }\n"
+        "    p.importFunction(\"host_write\");\n"
+        "    if (ctx == \"lockdown\") {\n"
+        "        # the Program cannot load modules: the host gives it the module's variables and functions\n"
+        "        map p.importGlobalVariable(\"OurVarMod::\" + $1), (\"i\", \"l\", \"h\", \"s\", \"o\");\n"
+        "        map p.importFunction(\"OurVarMod::\" + $1), (\"set_i\", \"push_l\");\n"
+        "        p.parse(WriterSource, \"writer\");\n"
+        "    } else {\n"
+        "        p.parse(\"%requires OurVarMod\\n\" + WriterSource, \"writer\");\n"
+        "    }\n"
+        "    if (ctx == \"sandbox-after\") {\n"
+        "        p.setSandboxManager(new SandboxManager());\n"
+        "    } else if (ctx == \"no-pc-after\") {\n"
+        "        p.setParseOptions(PO_NO_PROCESS_CONTROL);\n"
+        "    }\n"
+        "    return p;\n"
+        "}\n"
+        "\n"
+        "foreach string ctx in ((\"sandbox\", \"sandbox-after\", \"no-pc\", \"no-pc-after\", \"lockdown\")) {\n"
+        "    OurVarMod::reset();\n"
+        "    Program p = make_program(ctx);\n"
+        "    foreach string form in (WriteForms) {\n"
+        "        result(ctx + \".\" + form, try_call(p, fname(\"w_\", form)));\n"
+        "    }\n"
+        "    try {\n"
+        "        p.callFunction(\"get_closure\")();\n"
+        "        result(ctx + \".closure-host\", \"ok\");\n"
+        "    } catch (hash<ExceptionInfo> ex) {\n"
+        "        result(ctx + \".closure-host\", ex.err);\n"
+        "    }\n"
+        "    result(ctx + \".state\", OurVarMod::state());\n"
+        "    foreach string form in (ReadForms) {\n"
+        "        try {\n"
+        "            result(ctx + \".\" + form, sprintf(\"%y\", p.callFunction(fname(\"r_\", form))));\n"
+        "        } catch (hash<ExceptionInfo> ex) {\n"
+        "            result(ctx + \".\" + form, ex.err);\n"
+        "        }\n"
+        "    }\n"
+        "    result(ctx + \".setter\", try_call(p, \"setter\"));\n"
+        "    result(ctx + \".setter-state\", sprintf(\"%d:%y\", OurVarMod::i, OurVarMod::l));\n"
+        "}\n"
+        "\n"
+        "# a trusted importer: every form of write succeeds\n"
+        "foreach string form in (WriteForms) {\n"
+        "    OurVarMod::reset();\n"
+        "    Program p = make_program(\"trusted\");\n"
+        "    result(\"trusted.\" + form, try_call(p, fname(\"w_\", form)));\n"
+        "}\n"
+        "\n"
+        "# the message names the variable and the module and says what to do instead\n"
+        "{\n"
+        "    OurVarMod::reset();\n"
+        "    Program p = make_program(\"sandbox\");\n"
+        "    try {\n"
+        "        p.callFunction(\"w_assign\");\n"
+        "        result(\"message\", \"no exception\");\n"
+        "    } catch (hash<ExceptionInfo> ex) {\n"
+        "        bool ok = (ex.desc =~ /public variable 'OurVarMod::i' of module 'OurVarMod'/)\n"
+        "            && (ex.desc =~ /PO_NO_PROCESS_CONTROL/)\n"
+        "            && (ex.desc =~ /the module must export a public function or method that sets it/);\n"
+        "        result(\"message\", ok ? \"ok\" : ex.desc);\n"
+        "    }\n"
+        "}\n"
+        "\n"
+        "# the host's own writes\n"
+        "{\n"
+        "    OurVarMod::reset();\n"
+        "    OurVarMod::i = 5;\n"
+        "    push OurVarMod::l, 4;\n"
+        "    result(\"host\", OurVarMod::i == 5 && OurVarMod::l == (1, 2, 3, 4) ? \"ok\" : OurVarMod::state());\n"
+        "}\n"
+        "\n"
+        "# a Program created by sandboxed code is governed by its sandbox\n"
+        "{\n"
+        "    OurVarMod::reset();\n"
+        "    Program s(PO_NEW_STYLE);\n"
+        "    s.setSandboxManager(new SandboxManager());\n"
+        "    s.parse(\"sub w() {\\n\"\n"
+        "        \"    Program c(PO_NEW_STYLE);\\n\"\n"
+        "        \"    c.parse(\\\"%requires OurVarMod\\\\nsub w() { OurVarMod::i = 7; }\\\", \\\"child\\\");\\n\"\n"
+        "        \"    c.callFunction(\\\"w\\\");\\n\"\n"
+        "        \"}\\n\", \"creator\");\n"
+        "    result(\"sandbox-child\", try_call(s, \"w\"));\n"
+        "    result(\"sandbox-child-state\", OurVarMod::state());\n"
+        "}\n"
+        "\n"
+        "# the host gives the module's variable that it imported to a child Program\n"
+        "{\n"
+        "    OurVarMod::reset();\n"
+        "    Program c(PO_NEW_STYLE);\n"
+        "    c.setSandboxManager(new SandboxManager());\n"
+        "    c.importGlobalVariable(\"OurVarMod::i\", False);\n"
+        "    c.parse(\"sub w() { OurVarMod::i = 7; }\\n\", \"chain\");\n"
+        "    result(\"import-chain\", try_call(c, \"w\"));\n"
+        "    Program cr(PO_NEW_STYLE);\n"
+        "    cr.importGlobalVariable(\"OurVarMod::i\", True);\n"
+        "    cr.parse(\"sub w() { OurVarMod::i = 7; }\\n\", \"chain-ro\");\n"
+        "    result(\"import-chain-ro\", try_call(cr, \"w\"));\n"
+        "    Program t(PO_NEW_STYLE);\n"
+        "    t.importGlobalVariable(\"OurVarMod::i\", False);\n"
+        "    t.parse(\"sub w() { OurVarMod::i = 7; }\\n\", \"trusted-chain\");\n"
+        "    string r = try_call(t, \"w\");\n"
+        "    result(\"trusted-import-chain\", r == \"ok\" && OurVarMod::i != 7 ? \"unchanged\" : r);\n"
+        "}\n"
+        "\n"
+        "# the variables that are not a module's are not affected\n"
+        "our int host_var = 1;\n"
+        "{\n"
+        "    Program p(PO_NEW_STYLE);\n"
+        "    p.setSandboxManager(new SandboxManager());\n"
+        "    p.importGlobalVariable(\"host_var\");\n"
+        "    p.parse(\"our int own = 1;\\nsub w() { own = 2; }\\nsub h() { host_var = 3; }\\n\", \"own\");\n"
+        "    result(\"own-var\", try_call(p, \"w\"));\n"
+        "    string r = try_call(p, \"h\");\n"
+        "    result(\"host-var\", r == \"ok\" && host_var != 3 ? \"unchanged\" : r);\n"
+        "}\n";
+
+    # runs each form in this restricted (PO_NO_PROCESS_CONTROL) Program, compiled with qcc
+    const AotWriterSource = "sub result(string key, string value) { printf(\"%s=%s\\n\", key, value); }\n"
+        "OurVarMod::reset();\n"
+        "foreach string form in (WriteForms) {\n"
+        "    string r = \"ok\";\n"
+        "    try {\n"
+        "        call_function(\"w_\" + replace(form, \"-\", \"_\"));\n"
+        "    } catch (hash<ExceptionInfo> ex) {\n"
+        "        r = ex.err;\n"
+        "    }\n"
+        "    result(\"aot.\" + form, r);\n"
+        "}\n"
+        "result(\"aot.state\", OurVarMod::state());\n"
+        "foreach string form in (ReadForms) {\n"
+        "    try {\n"
+        "        result(\"aot.\" + form, sprintf(\"%y\", call_function(\"r_\" + replace(form, \"-\", \"_\"))));\n"
+        "    } catch (hash<ExceptionInfo> ex) {\n"
+        "        result(\"aot.\" + form, ex.err);\n"
+        "    }\n"
+        "}\n"
+        "try {\n"
+        "    OurVarMod::set_i(42);\n"
+        "    result(\"aot.setter\", \"ok\");\n"
+        "} catch (hash<ExceptionInfo> ex) {\n"
+        "    result(\"aot.setter\", ex.err);\n"
+        "}\n"
+        "result(\"aot.setter-state\", sprintf(\"%d\", OurVarMod::i));\n";
+}
