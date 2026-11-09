@@ -456,29 +456,15 @@ bool sub governed() {
 });
 
 # sandboxed code issues a module command with the path of a user module to a trusted Program that it was handed
-# (Program::issueModuleCmd()): the module is loaded as with Program::loadModule()
-run("module-cmd-into-trusted-governed", string sub () {
+# (Program::issueModuleCmd()): refused, as the module would decide what it allows by that Program's options
+run("module-cmd-into-trusted", string sub () {
     SandboxManager sm();
     sm.addFilesystemAllowedPath(dir, QSEC_READ);
     Program s = sandboxed(sm, mode);
     Program t = loader(mode);
     string name = "NpsModuleCmd" + mode.upr();
     string err = s.callFunction("module_cmd", t, write_module(dir, name));
-    if (err != "PARSE-COMMAND-ERROR") {
-        return "unexpected: " + err;
-    }
-    return t.callFunction("call", name + "::governed") ? "governed" : "not-governed";
-});
-
-# the same: the module's class is sandboxed
-run("module-cmd-into-trusted", string sub () {
-    SandboxManager sm();
-    sm.addFilesystemAllowedPath(dir, QSEC_READ);
-    Program s = sandboxed(sm, mode);
-    Program t = loader(mode);
-    string name = "NpsModuleCmdClass" + mode.upr();
-    s.callFunction("module_cmd", t, write_module(dir, name));
-    return probe_module(t, name);
+    return err == "RUNTIME-COMMAND-ERROR" ? "refused" : "unexpected: " + err;
 });
 
 # trusted code loads a user module by path into a trusted Program with Program::loadModule()

@@ -5947,16 +5947,41 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
 #define QORE_MAX_MODULE_ERROR_DESC 200
 int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd,
         ExceptionSink* xsink) {
-    // the module is loaded as with Program::loadModule() (see runTimeLoadModule()): a sandboxed caller stays the
-    // caller of the load, so that a module that it chose by path is checked and governed as one that it loads itself
-    // (issue #5659), and the target Program's parse lock is held while the module is loaded into it
-    QoreAbstractModule* mi;
-    {
-        QoreModuleLoadLockHelper aot_init_al;
-        QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
-        if (*xsink) {
+    // a sandboxed caller stays the caller of the load and of the command, which runs in the target Program below; a
+    // module that it chose by path is checked and governed as one that it loads itself (issue #5659)
+    QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    // a command issued to another Program runs there, and the module decides what it allows by that Program's
+    // parse options and sandbox: code that is not trusted would get what its own Program does not allow, such as a
+    // Python interpreter with native file access (issue #5659).  It may issue a command to another Program only if its
+    // own Program is not sandboxed and the target has every restriction that its code has
+    if (pgm && pgm != getProgram()) {
+        static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
+            & ~QoreParseOptions(QDOM_IN_MODULE);
+        if (qore_program_is_sandboxed(getProgram())) {
+            xsink->raiseException("RUNTIME-COMMAND-ERROR", new QoreStringNodeMaker("cannot issue a command for "
+                "module '%s' to another Program: sandboxed code can only issue module commands to its own Program",
+                mname));
             return -1;
         }
+        QoreParseOptions missing = runtime_get_effective_program_parse_options() & restricting
+            & ~pgm->getParseOptions();
+        if (!!missing) {
+            xsink->raiseException("RUNTIME-COMMAND-ERROR", new QoreStringNodeMaker("cannot issue a command for "
+                "module '%s' to another Program: the target Program lacks restrictions that the calling code has "
+                "(parse options 0x" QLLX ")", mname, missing.getLo()));
+            return -1;
+        }
+    }
+
+    QoreAbstractModule* mi;
+    {
+        // the module is loaded as with Program::loadModule() (see runTimeLoadModule()), with the target Program's
+        // parse lock held
+        QoreModuleLoadLockHelper aot_init_al;
         ProgramRuntimeParseContextHelper pah(xsink, pgm);
         if (*xsink) {
             return -1;

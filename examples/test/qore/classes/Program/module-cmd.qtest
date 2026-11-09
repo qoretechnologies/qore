@@ -1,0 +1,203 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Program::issueModuleCmd() to another Program (issue #5659):
+# - code that a sandbox governs, or code whose Program restricts a functional domain that the target Program does not,
+#   cannot issue a module command to another Program (the module would decide what it allows by that Program's
+#   options, so the caller could get what its own Program does not allow)
+# - a module that the target Program has loaded already is not loaded again, so the command does not wait for the
+#   target's parse lock; a module that must be loaded is loaded with the lock, which is never waited for, so two
+#   threads issuing commands to each other's Program cannot deadlock
+#
+# The test uses the json module for a feature that can be loaded; json has no parse-command handler, so a command that
+# reaches it raises PARSE-COMMAND-ERROR, which the cases that check the load path accept.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%requires json
+
+%exec-class ModuleCmdTest
+
+#! the Programs whose commits issue module commands to each other (see crossTest())
+our hash<string, Program> CmdPeers;
+#! the rendezvous of the commits before they issue the commands
+our Counter CmdSync;
+#! the rendezvous of the commits after they issued the commands
+our Counter CmdDone;
+
+#! returns the Program with the given name; imported into the committed Programs
+Program sub cmd_peer(string name) {
+    return CmdPeers{name};
+}
+
+#! waits until both commits are ready to issue their commands; imported into the committed Programs
+sub cmd_rendezvous() {
+    CmdSync.dec();
+    CmdSync.waitForZero();
+}
+
+#! waits until both commits issued their commands; imported into the committed Programs
+sub cmd_done() {
+    CmdDone.dec();
+    CmdDone.waitForZero();
+}
+
+class ModuleCmdTest inherits QUnit::Test {
+    public {
+        #! code whose static initializer issues a module command to the other Program
+        const CrossSource = "%modern
+class X {
+    public {
+        static string v = X::go();
+    }
+    static string go() {
+        cmd_rendezvous();
+        string rv;
+        try {
+            cmd_peer(get_script_name() == 'p' ? 'q' : 'p').issueModuleCmd('json', 'x');
+            rv = 'issued';
+        } catch (hash<ExceptionInfo> ex) {
+            rv = ex.err;
+        }
+        cmd_done();
+        return rv;
+    }
+}
+string sub v() {
+    return X::v;
+}
+";
+
+        #! code that is not trusted: issues a module command to a Program it is handed
+        const SandboxedSource = "%modern
+string sub module_cmd(Program p, string mod, string cmd) {
+    try {
+        p.issueModuleCmd(mod, cmd);
+        return 'issued';
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub own_cmd(string mod, string cmd) {
+    try {
+        Program::issueModuleCmd(mod, cmd);
+        return 'issued';
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+    }
+
+    constructor() : QUnit::Test("ModuleCmdTest", "1.0", \ARGV) {
+        addTestCase("a sandbox cannot issue a module command to another Program", \sandboxedTest());
+        addTestCase("restricted code cannot issue a command to a less restricted Program", \restrictedTest());
+        addTestCase("restricted code can issue a command to a Program at least as restricted", \restrictedOkTest());
+        set_return_value(main());
+    }
+
+    #! returns a sandboxed Program with the module-command helpers
+    private Program sandboxed() {
+        SandboxManager sm();
+        Program s(PO_NEW_STYLE);
+        s.setSandboxManager(sm);
+        s.parse(SandboxedSource, "sandboxed");
+        return s;
+    }
+
+    #! returns a trusted Program that can call a function by name
+    private Program trusted(int po = 0) {
+        Program t(PO_NEW_STYLE | po);
+        t.parse("%modern\nauto sub g(string n) { return call_function(n); }\n", "trusted");
+        return t;
+    }
+
+    sandboxedTest() {
+        Program s = sandboxed();
+        Program t = trusted();
+        # refused before the command reaches the module, so json need not have a handler
+        assertEq("RUNTIME-COMMAND-ERROR", s.callFunction("module_cmd", t, "json", "x"));
+        # the sandboxed code can issue a command to its own Program: json has no handler, so PARSE-COMMAND-ERROR
+        assertEq("PARSE-COMMAND-ERROR", s.callFunction("own_cmd", "json", "x"));
+    }
+
+    restrictedTest() {
+        # no sandbox governs this code, but its Program has a restriction the target lacks
+        Program r(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        r.parse(SandboxedSource, "restricted");
+        Program t = trusted();
+        assertEq("RUNTIME-COMMAND-ERROR", r.callFunction("module_cmd", t, "json", "x"));
+    }
+
+    restrictedOkTest() {
+        # the target has every restriction the caller has, so the command is allowed and reaches the module
+        Program r(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        r.parse(SandboxedSource, "restricted");
+        Program t = trusted(PO_NO_PROCESS_CONTROL | PO_NO_NETWORK);
+        assertEq("PARSE-COMMAND-ERROR", r.callFunction("module_cmd", t, "json", "x"));
+    }
+
+    alreadyLoadedTest() {
+        # json is loaded into the target first; the command then takes the fast path and reaches the module directly
+        Program t = trusted();
+        t.loadModule("json");
+        assertEq("PARSE-COMMAND-ERROR", runCmd(t, "json", "x"));
+    }
+
+    #! issues a module command and returns the exception error, or "issued"
+    private string runCmd(Program p, string mod, string cmd) {
+        try {
+            p.issueModuleCmd(mod, cmd);
+            return "issued";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    crossTest() {
+        CmdSync = new Counter(2);
+        CmdDone = new Counter(2);
+        hash<string, Program> pgms;
+        foreach string name in (("p", "q")) {
+            Program p(PO_NEW_STYLE);
+            p.importFunction("cmd_peer");
+            p.importFunction("cmd_rendezvous");
+            p.importFunction("cmd_done");
+            p.setScriptPath("/cmd/" + name);
+            # json is loaded into each Program, so that the commands do not load it (see alreadyLoadedTest())
+            p.loadModule("json");
+            CmdPeers{name} = p;
+            pgms{name} = p;
+        }
+        on_exit remove CmdPeers;
+        Counter done(2);
+        Queue results();
+        foreach string name in (keys pgms) {
+            background issueCross(pgms{name}, name, done, results);
+        }
+        assertEq(0, done.waitForZero(30s), "the commits did not finish");
+        list<string> res = sort((results.get(), results.get()));
+        assertEq(2, res.size());
+        # neither thread blocks on the other's parse lock: a command either reaches json, which has no command
+        # handler (PARSE-COMMAND-ERROR), or is refused because the other Program is being parsed (PROGRAM-ERROR)
+        foreach string r in (res) {
+            assertRegex("^[pq]:(PARSE-COMMAND-ERROR|PROGRAM-ERROR)$", r);
+        }
+    }
+
+    #! parses the cross-command code in the Program and reports its initializer's result; run in a thread of its own
+    private issueCross(Program p, string name, Counter done, Queue results) {
+        on_exit done.dec();
+        try {
+            p.parse(CrossSource, name);
+            results.push(name + ":" + p.callFunction("v"));
+        } catch (hash<ExceptionInfo> ex) {
+            results.push(name + ":" + ex.err);
+        }
+    }
+}
