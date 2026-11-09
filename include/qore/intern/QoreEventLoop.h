@@ -43,6 +43,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <sys/stat.h>
+
 #ifdef DARWIN
 #include <sys/event.h>
 #elif defined(__linux__)
@@ -105,6 +107,19 @@ struct QoreEventInfo {
     key and user data, and removing a registration polls the descriptor for the
     events of the others, removing it from the system only with the last one.
     add(), modify() and remove() manage the registration with key 0.
+
+    A regular file cannot be waited for by the system (epoll refuses it, and
+    kqueue reports one readable only before its end), and poll(2) reports it
+    always ready.  The loop does not register one with the system: it reports
+    it ready for its registered events once when it is registered, each time
+    the events or registrations of the descriptor change, and each time
+    rearmAlwaysReady() is called, as an edge-triggered descriptor would be
+    reported (see always_ready_count).  A regular file that is closed, or whose
+    number has been given to another file, is reported once with
+    QORE_EV_ERROR and then dropped from the loop.  Another descriptor that the
+    system refuses to wait for (a directory or a character device without
+    polling, which poll(2) reports ready on Linux and invalid on macOS) is
+    refused with an EVENT-LOOP-ERROR exception, as before.
 
     Usage:
     @code
@@ -214,6 +229,20 @@ loop.removeRegistration(fd, op_key, xsink);
     */
     DLLLOCAL int poll(std::vector<QoreEventInfo>& events, int timeout_ms, ExceptionSink* xsink);
 
+    //! Reports a registered regular file ready again at the next poll (see always_ready_count)
+    /** The owner of a registration calls this when it waits for the file again after it has consumed its readiness,
+        for example after it has read from it; does nothing for any other descriptor or one that is not registered
+    */
+    DLLLOCAL void rearmAlwaysReady(int fd);
+
+    //! Returns true if a regular file is registered (see always_ready_count)
+    /** A caller that has to look up the descriptor to give to rearmAlwaysReady() checks this first, so that a loop
+        without regular files pays nothing for them
+    */
+    DLLLOCAL bool hasAlwaysReady() const {
+        return always_ready_count != 0;
+    }
+
     //! Adds a timer to the event loop
     /** @param deadline_us absolute deadline in microseconds since the epoch
         @param udata user data pointer to associate with this timer
@@ -319,6 +348,49 @@ loop.removeRegistration(fd, op_key, xsink);
     DLLLOCAL size_t dbgPollBufferSize() const {
         return poll_buf.size();
     }
+
+    //! Debug-only: the number of registered regular files (see always_ready_count)
+    DLLLOCAL size_t dbgAlwaysReadyCount() const {
+        return always_ready_count;
+    }
+
+    //! Debug-only: the number of descriptors that the polls have looked at to report the armed always-ready ones
+    /** See armed_fds: a poll looks at the descriptors armed since the previous poll, not at every registration
+    */
+    DLLLOCAL size_t dbgAlwaysReadyVisits() const {
+        return dbg_always_ready_visits;
+    }
+
+    //! Debug-only: the number of entries in the list of armed always-ready descriptors (see armed_fds)
+    DLLLOCAL size_t dbgArmedListSize() const {
+        return armed_fds.size();
+    }
+
+    //! Debug-only: the number of registered regular files to report at the next poll (see armed_count)
+    DLLLOCAL size_t dbgArmedCount() const {
+        return armed_count;
+    }
+
+    //! Debug-only: the number of named pipes watched with select(2) (Darwin; always 0 on other platforms)
+    DLLLOCAL size_t dbgFifoCount() const {
+#ifdef DARWIN
+        return fifo_count;
+#else
+        return 0;
+#endif
+    }
+
+    //! Debug-only: true if the descriptor is registered as a regular file (see always_ready_count)
+    DLLLOCAL bool dbgIsAlwaysReady(int fd) const {
+        auto it = fd_map.find(fd);
+        return it != fd_map.end() && it->second.always_ready;
+    }
+
+    //! Debug-only: the number of system events that matched no registration, in every loop of the process
+    /** Such an event is left behind by a registration that was not removed from the system, which then wakes every
+        poll at once (see kernelDeleteFilters())
+    */
+    DLLLOCAL static int64_t dbgUnmatchedKernelEvents();
 #endif
 
 private:
@@ -344,13 +416,76 @@ private:
         //! A named pipe on Darwin, which is watched with select(2) instead of kqueue (see fifo_count); always false
         //! on other platforms
         bool fifo = false;
+        //! A regular file, which is always ready and is not registered with the system (see always_ready_count)
+        bool always_ready = false;
+        //! An always-ready descriptor to report at the next poll (see armed_count)
+        bool armed = false;
+        //! The descriptor, which an armed always-ready descriptor is reported with (see armed_fds)
+        int fd = -1;
+        //! The identity of an always-ready descriptor's file, to find a close or a reuse of its number
+        dev_t dev = 0;
+        ino_t ino = 0;
     };
 
+    //! How a registered descriptor is waited for
+    enum class FdWait {
+        Kernel,         //!< it is registered with the system (kqueue or epoll)
+        Fifo,           //!< a named pipe on Darwin, watched with select(2) (see fifo_count)
+        AlwaysReady,    //!< a regular file, always ready and not waited for (see always_ready_count)
+    };
+
+    //! Registers a descriptor that has no registration in the loop, and returns how it is waited for in @p wait
+    /** For a regular file, @p st is set to its status
+        @return 0 for success, -1 for error (exception raised)
+    */
+    DLLLOCAL int kernelAttach(int fd, int events, void* udata, FdWait& wait, struct stat& st, ExceptionSink* xsink);
+
+    //! Records how the descriptor of @p info is waited for; a regular file gets its identity from @p st and is armed
+    DLLLOCAL void setAttached(FdInfo& info, FdWait wait, const struct stat& st);
+
+    //! Arms or disarms an always-ready descriptor, keeping @ref armed_count
+    DLLLOCAL void setArmed(FdInfo& info, bool armed);
+
+    //! Deletes the read and write filters of a descriptor from the kqueue, each in its own call (Darwin)
+    /** kevent() with no event list stops at the first change that fails, so deleting the read filter of a descriptor
+        registered only for writing (ENOENT) in the same call left its write filter registered, and a writable socket
+        then woke every poll at once
+
+        @return true if a filter was deleted, false if the kqueue had none (the descriptor was closed, and its number
+        can belong to another file now)
+    */
+    DLLLOCAL bool kernelDeleteFilters(int fd);
+
+    //! Gives the system the events of a registered descriptor again; @p events are the union of its registrations'
+    /** @return 0 for success, -1 for error (exception raised)
+    */
+    DLLLOCAL int kernelUpdate(int fd, FdInfo& info, int events, ExceptionSink* xsink);
+
+    //! Records how the descriptor of @p info is waited for, and keeps @ref fifo_count and @ref always_ready_count
+    DLLLOCAL void setWait(FdInfo& info, FdWait wait);
+
     //! Registers the descriptor with the system; @p events are the union of its registrations' events
+    /** @return 0 for success, 1 if the system cannot wait for the descriptor (epoll refuses it with EPERM; no exception
+        is raised), -1 for error (exception raised)
+    */
     DLLLOCAL int kernelAdd(int fd, int events, void* udata, ExceptionSink* xsink);
 
     //! Changes the events of a descriptor registered with the system (adds it if the system has dropped it)
-    DLLLOCAL int kernelModify(int fd, int events, void* udata, ExceptionSink* xsink);
+    /** @return 0 for success, 1 if the system dropped the descriptor and its number belongs to a regular file now,
+        whose status is set in @p st (the registration is moved to it), -1 for error (exception raised)
+    */
+    DLLLOCAL int kernelModify(int fd, int events, void* udata, struct stat& st, ExceptionSink* xsink);
+
+    //! Adds an event for each armed always-ready descriptor to @p events and disarms it (see always_ready_count)
+    /** A descriptor whose file was closed or replaced gets an error, and is added to @ref always_ready_drops
+    */
+    DLLLOCAL void addAlwaysReadyEvents(std::vector<QoreEventInfo>& events);
+
+    //! Drops the always-ready descriptors whose close or replacement poll() has just reported
+    DLLLOCAL void dropAlwaysReady();
+
+    //! The always-ready descriptors to drop after the events of a poll have been expanded
+    std::vector<int> always_ready_drops;
 
     //! Removes a descriptor from the system
     DLLLOCAL int kernelRemove(int fd, ExceptionSink* xsink);
@@ -411,6 +546,32 @@ private:
 
     //! Map of fd -> info
     std::unordered_map<int, FdInfo> fd_map;
+
+    //! the number of always-ready descriptors (regular files) in fd_map
+    /** poll(2) reports a regular file always ready to read and to write, on Linux and on macOS: a read or a write of
+        one does not wait for anything that the system could report.  epoll refuses to wait for one (EPERM), and kqueue
+        reports one readable only before its end, so a wait for a regular file at its end, or for any regular file on
+        Linux, lasted until its timeout.  A regular file is not registered with the system.  As its readiness never
+        changes, it is reported like an edge-triggered descriptor: once when it is registered or its registrations or
+        events change, and when its owner calls rearmAlwaysReady() after consuming its readiness (see armed_count);
+        reporting it at every poll would make an owner that waits for it together with something else, without
+        reading it, spin.
+    */
+    size_t always_ready_count = 0;
+
+    //! the number of always-ready descriptors to report at the next poll; while there are any, poll() does not wait
+    size_t armed_count = 0;
+
+    //! the always-ready descriptors armed since the last poll, which poll() reports (see addAlwaysReadyEvents())
+    /** A descriptor is added when it is armed; one that was disarmed or removed since is skipped by the poll, and one
+        armed again after it was disarmed can be in the list more than once.  The poll reports the armed descriptors
+        from this list instead of looking at every registration.  The list is emptied when no descriptor is armed.
+    */
+    std::vector<int> armed_fds;
+
+    //! the number of descriptors that the polls have looked at to report the armed always-ready ones (see
+    //! dbgAlwaysReadyVisits())
+    size_t dbg_always_ready_visits = 0;
 
 #ifdef DARWIN
     int event_fd = -1;  //!< kqueue file descriptor

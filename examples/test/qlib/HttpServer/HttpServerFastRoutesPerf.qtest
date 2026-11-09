@@ -1,6 +1,9 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-parallel: exclusive - it compares the timing of two request paths, which the load of other tests changes
+# a performance test (its name has "Perf"): only the test-perf CI job runs it, on a Release build (run_tests.sh -P);
+# the other jobs exclude it (QORE_EXCLUDE_PERF_TESTS=1), as a debug build on a shared node gives no stable ratio
 
 %modern
 
@@ -9,7 +12,7 @@
 %requires HttpServer
 %requires HttpServerUtil
 
-%exec-class HttpServerFastRoutesBenchTest
+%exec-class HttpServerFastRoutesPerfTest
 
 class FastRouteBenchHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
@@ -25,7 +28,7 @@ class FastRouteBenchHandler inherits AbstractHttpRequestHandler {
     most of its advantage and fails the threshold.  The numbers are printed with -v.  See
     design/http-server-fast-routes.md.
 */
-class HttpServerFastRoutesBenchTest inherits QUnit::Test {
+class HttpServerFastRoutesPerfTest inherits QUnit::Test {
     public {
         #! the requests per path in a round
         const Requests = 1500;
@@ -49,7 +52,7 @@ class HttpServerFastRoutesBenchTest inherits QUnit::Test {
         int port;
     }
 
-    constructor() : QUnit::Test("HttpServerFastRoutesBenchTest", "1.0", \ARGV) {
+    constructor() : QUnit::Test("HttpServerFastRoutesPerfTest", "1.0", \ARGV) {
         addTestCase("fast route vs handler", \testBench());
         addTestCase("fast route vs handler, a connection per request", \testBenchNewConnection());
         set_return_value(main());

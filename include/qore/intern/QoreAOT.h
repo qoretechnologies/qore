@@ -175,8 +175,11 @@ struct QoreAOTMethodDispatchCacheEntry {
     const QoreClass* receiver_class = nullptr;
     const QoreTypeInfo* receiver_type_info = nullptr;
     const qore_class_private* class_ctx = nullptr;
-    const QoreProgram* caller_program = nullptr;
-    const QoreProgram* object_program = nullptr;
+    // Programs are identified by their never-reused IDs: a later Program can be allocated at a destroyed one's
+    // address.  The class and type pointers above are safe as keys because the destruction of a class or hashdecl
+    // increments the dispatch epoch, so no entry naming one can match after it is freed.
+    qore_program_id_t caller_program_id = 0;
+    qore_program_id_t object_program_id = 0;
     const QoreMethod* method = nullptr;
     const AbstractQoreFunctionVariant* variant = nullptr;
     QoreParseOptions parse_options;
@@ -705,14 +708,16 @@ extern "C" void qore_aot_raise_init_error(ExceptionSink* xsink, QoreStringNode* 
 
 //! C ABI bridge for `.qo`-linked statically-compiled AOT modules.
 /** Invoked by the per-module `qore_MOD_register(QoreProgram*)` entry point that
-    `qcc -c` emits into each `.qo`.  Internally delegates to
-    `ModuleManager::registerAOTStaticModule`; any exception raised by the underlying
+    `qcc -c` emits into each `.qo`, and by `qore_qoa_register_all()` of a `.qoa`.  Decodes
+    the module's metadata record (\a record, \a record_len; see QoreAOTModuleFileInfo), which
+    qcc links with the module as it has no metadata section, and delegates to
+    `QoreModuleManager::registerAOTStaticModuleIntern`; any exception raised by the underlying
     load is reported to stderr via `xsink.handleExceptions()` — there is no return
     value to signal failure yet.  The plain C function-pointer type is used instead
     of `qore_binary_module_desc_t` to keep IR emission straightforward.
 */
-extern "C" void qore_aot_register_into_program(QoreProgram* tpgm,
-        void (*desc_fn)(QoreModuleInfo&), const char* path);
+extern "C" void qore_aot_register_into_program_v2(QoreProgram* tpgm,
+        void (*desc_fn)(QoreModuleInfo&), const char* path, const uint8_t* record, uint64_t record_len);
 
 //! Returns true if \a name is registered as an AOT user module (a source Qore
 //! module compiled to .qmod binary form).  AOT user modules must be tracked in
@@ -746,6 +751,18 @@ DLLLOCAL std::string qore_aot_encode_class_ref(const QoreClass* qc, bool pseudo 
 //! Resolves a class reference emitted by qore_aot_encode_class_ref().
 DLLLOCAL const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
         const char* class_ref, bool pseudo = false);
+
+//! Finds a method of a class or of its parent classes that may not be committed yet, without an access check
+/** A method reference in an expression that is read while a module's classes are being loaded, such as the initial
+    value of a static member, names a method whose variants are not committed yet, and is read with no class context:
+    the runtime lookups (QoreClass::findStaticMethod(), QoreClass::findMethod()) see no committed method then, and
+    would refuse a private one.  The reference was resolved, with its access, when the module was compiled.
+
+    @param qc the class
+    @param name the method's name
+    @param is_static true for a static method, false for a normal one
+*/
+DLLLOCAL const QoreMethod* qore_aot_find_loading_method(const QoreClass* qc, const char* name, bool is_static);
 
 //! Clears namespace/global/static data for all registered AOT user modules.
 /** AOT user modules are loaded as binary modules, so they are skipped by

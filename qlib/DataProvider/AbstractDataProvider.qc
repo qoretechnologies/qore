@@ -3582,7 +3582,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         @return the response to the request
 
         @throw INVALID-OPERATION the data provider does not support the request API
-        @throw RUNTIME-TYPE-ERROR the request type does not accept a value of the request: a request that is not a
+        @throw TYPE-VALUE-ERROR the request type does not accept a value of the request: a request that is not a
         hash for a hash request type, a field with a value of the wrong type, or a value that is not one of a field's
         allowed values; the description gives the type details; raised by getRequestTypeWithData(), whose default
         implementation checks the request with the request type
@@ -3959,7 +3959,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         @return the request type for this provider according to any call data passed
 
         @throw INVALID-OPERATION the data provider does not support the request API
-        @throw RUNTIME-TYPE-ERROR the request type does not accept a value of the request data: data that is not a
+        @throw TYPE-VALUE-ERROR the request type does not accept a value of the request data: data that is not a
         hash for a hash request type, a field with a value of the wrong type, or a value that is not one of a field's
         allowed values; the description gives the type details; the default implementation checks the data with the
         request type, and a missing value is accepted, as the data can be partial
@@ -4572,7 +4572,10 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     }
 
     #! Returns example data for the given observable event
-    /** @param event_id the event ID of the event
+    /** Requests that a data provider makes for the example data are made once, without retries
+        (see @ref DataProviderRetryUtil::runWithoutRetries() and @ref dataprovider_retries)
+
+        @param event_id the event ID of the event
 
         @return example data for the given observable event
 
@@ -4583,28 +4586,35 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     */
     auto getExampleEventData(string event_id) {
         checkObservable();
-        if (exists (auto v = getExampleEventDataImpl(event_id))) {
-            return v;
-        }
-        if (*AbstractDataProviderType rt = getEventInfoImpl(event_id).type) {
-            return rt.getExampleValue();
-        }
+        return DataProviderRetryUtil::runWithoutRetries(auto sub () {
+            if (exists (auto v = getExampleEventDataImpl(event_id))) {
+                return v;
+            }
+            if (*AbstractDataProviderType rt = getEventInfoImpl(event_id).type) {
+                return rt.getExampleValue();
+            }
+        });
     }
 
     #! Returns example data for the record type
-    /** @return example data for the record type
+    /** Requests that a data provider makes for the example data are made once, without retries
+        (see @ref DataProviderRetryUtil::runWithoutRetries() and @ref dataprovider_retries)
+
+        @return example data for the record type
 
         @since DataProvider 3.0
     */
     hash<auto> getExampleRecordData() {
         checkRead();
-        if (exists (auto v = getExampleRecordDataImpl())) {
-            return v;
-        }
-        if (*hash<string, AbstractDataField> rt = getRecordTypeImpl()) {
-            return generateExampleData(rt);
-        }
-        return {};
+        return DataProviderRetryUtil::runWithoutRetries(hash<auto> sub () {
+            if (exists (auto v = getExampleRecordDataImpl())) {
+                return v;
+            }
+            if (*hash<string, AbstractDataField> rt = getRecordTypeImpl()) {
+                return generateExampleData(rt);
+            }
+            return {};
+        });
     }
 
     #! Returns example data for a request message in the context of the given option data
@@ -4666,7 +4676,10 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     }
 
     #! Returns example data for the given observable event in the context of the given option data
-    /** @param options option data that can be used to determine the final type
+    /** Requests that a data provider makes for the example data are made once, without retries
+        (see @ref DataProviderRetryUtil::runWithoutRetries() and @ref dataprovider_retries)
+
+        @param options option data that can be used to determine the final type
         @param event_id the event ID of the event
 
         @return example data for the given observable event in the context of the given option data
@@ -4678,16 +4691,21 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     */
     auto getExampleEventDataWithOptions(string event_id, *hash<auto> options) {
         checkObservable();
-        if (exists (auto v = getExampleEventDataWithOptionsImpl(event_id, options))) {
-            return v;
-        }
-        if (*AbstractDataProviderType rt = getEventInfoWithOptionsImpl(event_id, options).type) {
-            return rt.getExampleValue();
-        }
+        return DataProviderRetryUtil::runWithoutRetries(auto sub () {
+            if (exists (auto v = getExampleEventDataWithOptionsImpl(event_id, options))) {
+                return v;
+            }
+            if (*AbstractDataProviderType rt = getEventInfoWithOptionsImpl(event_id, options).type) {
+                return rt.getExampleValue();
+            }
+        });
     }
 
     #! Returns example data for the record type in the context of the given option data
-    /** @param options option data that can be used to determine the final type
+    /** Requests that a data provider makes for the example data are made once, without retries
+        (see @ref DataProviderRetryUtil::runWithoutRetries() and @ref dataprovider_retries)
+
+        @param options option data that can be used to determine the final type
 
         @return example data for the record type in the context of the given option data
 
@@ -4695,13 +4713,15 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     */
     hash<auto> getExampleRecordDataWithOptions(*hash<auto> options) {
         checkRead();
-        if (exists (auto v = getExampleRecordDataWithOptionsImpl(options))) {
-            return v;
-        }
-        if (*hash<string, AbstractDataField> rt = getRecordTypeWithOptionsImpl(options)) {
-            return generateExampleData(rt);
-        }
-        return {};
+        return DataProviderRetryUtil::runWithoutRetries(hash<auto> sub () {
+            if (exists (auto v = getExampleRecordDataWithOptionsImpl(options))) {
+                return v;
+            }
+            if (*hash<string, AbstractDataField> rt = getRecordTypeWithOptionsImpl(options)) {
+                return generateExampleData(rt);
+            }
+            return {};
+        });
     }
 
     #! Returns simulated response data for a request without side effects
@@ -4941,9 +4961,14 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         @return @ref True if the builder was successfully set (first call) or if the same builder is being
         re-registered; @ref False if a different builder is already registered
 
+        @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller: the builder would run on the threads of
+        other tenants and of trusted code
+
         @since DataProvider 3.5
     */
     static bool setGenericApiCallChildBuilder(code<*AbstractDataProvider(object)> builder) {
+        # a process-wide callback runs on the threads of every caller, of other tenants and of trusted code
+        AbstractDataProvider::checkNotSandboxed("set the generic API call child builder");
         if (cb_build_generic_api_call_child) {
             return cb_build_generic_api_call_child == builder;
         }
@@ -4954,10 +4979,23 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     #! Clears the registered generic API call child builder
     /** This method is primarily for testing purposes.
 
+        @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller
+
         @since DataProvider 3.5
     */
     static clearGenericApiCallChildBuilder() {
+        AbstractDataProvider::checkNotSandboxed("clear the generic API call child builder");
         delete cb_build_generic_api_call_child;
+    }
+
+    #! Throws \c DATA-PROVIDER-CALLBACK-ERROR if a sandbox governs the caller, who cannot change a process-wide callback
+    /** Uses Qore::SandboxManager::isSandboxed(), which also sees a sandbox under a policy barrier and is not restricted
+    */
+    private:internal static checkNotSandboxed(string what) {
+        if (SandboxManager::isSandboxed()) {
+            throw "DATA-PROVIDER-CALLBACK-ERROR", sprintf("code that a sandbox governs cannot %s: it would run on the "
+                "threads of other tenants and of trusted code", what);
+        }
     }
 
     #! Returns @ref True if a generic API call child builder is currently registered
@@ -6156,6 +6194,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         @note after this call, callbacks cannot be changed
     */
     static bool setDynamicValueCallbacks() {
+        AbstractDataProvider::checkNotSandboxed("lock the dynamic value callbacks");
         if (!AbstractDataProvider::checkCallbacks()) {
             return !exists cb_resolve_value;
         }
@@ -6749,6 +6788,8 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
         @note after this call, callbacks cannot be changed
     */
     static bool setDynamicValueCallbacks(code value_needs_resolution, code resolve_value) {
+        # process-wide callbacks run on the threads of every caller, of other tenants and of trusted code
+        AbstractDataProvider::checkNotSandboxed("set the dynamic value callbacks");
         if (!AbstractDataProvider::checkCallbacks()) {
             return value_needs_resolution == cb_value_needs_resolution && resolve_value == cb_resolve_value;
         }
@@ -6782,6 +6823,8 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
             *code<*AbstractDataProviderType(string, string, *hash<auto>)> resolve_type,
             *code<auto(*hash<auto>)> list_contexts,
             *code<auto(string, string, *hash<auto>)> list_values) {
+        # process-wide callbacks run on the threads of every caller, of other tenants and of trusted code
+        AbstractDataProvider::checkNotSandboxed("set the template callbacks");
         if (template_callbacks_locked) {
             return expand == cb_expand_template && resolve_type == cb_resolve_template_type
                 && list_contexts == cb_list_template_contexts && list_values == cb_list_template_values;
@@ -6800,6 +6843,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
         @since DataProvider 3.3
     */
     static clearTemplateCallbacks() {
+        AbstractDataProvider::checkNotSandboxed("clear the template callbacks");
         template_callbacks_locked = False;
         delete cb_expand_template;
         delete cb_resolve_template_type;
@@ -7385,7 +7429,8 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
                     accepted = True;
                     break;
                 } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "RUNTIME-TYPE-ERROR") {
+                    # a type that is not part of this module may still refuse a value with RUNTIME-TYPE-ERROR
+                    if (ex.err == "TYPE-VALUE-ERROR" || ex.err == "RUNTIME-TYPE-ERROR") {
                         type_error = sprintf("option %y of type %y cannot be assigned a value of type %y (value %y): "
                             "%s: %s", i.key, type.getName(), options{i.key}.type(), options{i.key}, ex.err, ex.desc);
                         continue;
@@ -7395,9 +7440,9 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
             }
             if (!accepted) {
                 if (type_error) {
-                    error("RUNTIME-TYPE-ERROR", type_error);
+                    error("OPTION-VALUE-ERROR", "%s", type_error);
                 }
-                error("RUNTIME-TYPE-ERROR", "no type information available for option %y", i.key);
+                error("OPTION-VALUE-ERROR", "no type information available for option %y", i.key);
             }
             # check allowed values
             if (i.value.allowed_values && !i.value.allowed_values_creatable) {
@@ -8867,7 +8912,10 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
             # its example.  (Returning the missing record here violated the
             # return type outside this try block, so the fallback was never
             # reached and simulating a write to an empty table failed.)
-            *hash<auto> first = searchFirstRecord({});
+            # the example record is requested once, without retries (see DataProviderRetryUtil::runWithoutRetries())
+            *hash<auto> first = DataProviderRetryUtil::runWithoutRetries(*hash<auto> sub () {
+                return searchFirstRecord({});
+            });
             if (first) {
                 return first;
             }

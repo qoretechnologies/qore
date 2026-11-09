@@ -174,8 +174,9 @@ int QoreCondition::wait2(pthread_mutex_t* m, int64 timeout_ms) {
     tmout.tv_sec = base_sec + secs + dsecs;
     tmout.tv_nsec = nsecs;
 
-    // make sure mutex is locked
-    assert(pthread_mutex_trylock(m) == EBUSY);
+    // Do not probe ownership with trylock(): it succeeds for an owned recursive mutex,
+    // adding a recursion level and preventing pthread_cond_timedwait() from releasing it.
+    // As with the untimed path, pthread_cond_timedwait() checks the mutex contract.
 
 #ifndef DEBUG
     return pthread_cond_timedwait(&c, m, &tmout);

@@ -235,6 +235,31 @@ $function$
 
 
     @section pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - fixed \c PgsqlTable::bulkInsert() on a connection of a driver other than \c pgsql (ex: \c jdbc), which ran
+      PostgreSQL's \c COPY \c FROM \c STDIN as SQL, which the driver refuses, and aborted the transaction: the rows
+      are inserted as with the other databases
+    - fixed the SQL that renames a function or a procedure (\c getRenameSql()), which gave the argument list after
+      the new name (<tt>rename to g(args)</tt>), which PostgreSQL refuses
+    - fixed @ref SqlUtil::AbstractDatabase::getSequence() "getSequence()" on a connection of the \c jdbc driver, which
+      gives the server version as a hash: the sequence was read as before PostgreSQL 10, which raised an error
+    - added support for the procedures of PostgreSQL 11 and later (@ref PgsqlSqlUtilBase::PgsqlProcedure
+      "PgsqlProcedure"), which were taken for functions, so that describing one raised \c FUNCTION-ERROR:
+      - on PostgreSQL 11 and later, functions (@ref SqlUtil::AbstractDatabase::listFunctions() "listFunctions()",
+        @ref SqlUtil::AbstractDatabase::getFunction() "getFunction()") are no longer procedures
+      - @ref SqlUtil::AbstractDatabase::getProcedure() "getProcedure()" returns the procedure of the name, else its
+        function, and @ref SqlUtil::AbstractDatabase::listProcedures() "listProcedures()" lists procedures and
+        functions, as functions were given as procedures before
+      - on PostgreSQL 11 and later, @ref SqlUtil::AbstractDatabase::makeProcedure() "makeProcedure()" and the
+        procedures of a schema description make a procedure, unless the source has a \c RETURNS clause or an \c OUT
+        or \c INOUT argument, which make a function as before
+      - earlier versions of PostgreSQL have no procedures: every routine is a function, as before, and
+        @ref PgsqlSqlUtilBase::PgsqlDatabase::hasProcedures() "PgsqlDatabase::hasProcedures()" tells which a server
+        has
+    - fixed the argument lists of functions and procedures read on a connection with \c standard_conforming_strings
+      off, in which the argument mode \c IN was replaced with a control character
+    - fixed listing functions on PostgreSQL 10 and earlier, which raised an error (column \c prokind does not
+      exist)
+      - the default mode (\c IN) of a procedure's argument is left out of its name, as for a function
     - a template table built from a description, as for each table of a schema description in
       @ref SqlUtil::Tables::populate() "Tables::populate()" and schema alignment, no longer reads the catalog three
       times (the default schema, a temporary table of its name and the tablespace of a table of its name): the default
@@ -547,6 +572,18 @@ public string sub get_pgsql_default_schema(AbstractDatasource ds) {
     # current_schema() returns NULL when search_path names no existing schema
     *string schema = ds.selectRow("select current_schema() as \"schema\"").schema;
     return schema ?? "public";
+}
+
+# returns the server version of a connection as a number that compares as PostgreSQL's server_version_num (ex:
+# 160004 for 16.4): the pgsql driver gives this number; the jdbc driver gives a hash with the major and minor version
+# numbers, which give major * 10000 + minor * 100 (ex: 160400 for 16.4), so the result is exact to the major version
+# only, which is all that it is compared with
+int sub pgsql_get_server_version_num(AbstractDatasource ds) {
+    auto version = ds.getServerVersion();
+    if (version.typeCode() == NT_HASH) {
+        return version.major_version.toInt() * 10000 + version.minor_version.toInt() * 100;
+    }
+    return version.toInt();
 }
 
 # returns an SQL expression giving a relation's name as the connection resolves it: unqualified when the
@@ -1847,7 +1884,7 @@ public class PgsqlFunction inherits SqlUtil::AbstractFunction {
 
     #! returns a string that can be used to create the function in the database
     softlist<string> getCreateSql(*hash opt) {
-        return sprintf("create%s function %s %s", opt.replace ? " or replace" : "", name, src);
+        return sprintf("create%s %s %s %s", opt.replace ? " or replace" : "", type, name, src);
     }
 
     #! returns a string that can be used to drop the function from the database
@@ -1855,7 +1892,7 @@ public class PgsqlFunction inherits SqlUtil::AbstractFunction {
         drop statement
     */
     string getDropSql(*hash opt) {
-        return sprintf("drop function %s%s", name, opt.force ? " cascade" : "");
+        return sprintf("drop %s %s%s", type, name, opt.force ? " cascade" : "");
     }
 
     #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -1868,12 +1905,26 @@ public class PgsqlFunction inherits SqlUtil::AbstractFunction {
         @param opt this argument is ignored
     */
     softlist<string> getRenameSql(string new_name, *hash opt) {
-        return sprintf("alter function %s rename to %s(%s)", name, new_name, args);
+        # RENAME TO takes the new name only: the argument list, which identifies the function, is that of the name
+        # renamed; an argument list given with the new name is ignored
+        *string bare = (new_name =~ x/^([^(]+)\(/)[0];
+        return sprintf("alter %s %s rename to %s", type, name, pgsql_get_sql_identifier(trim(bare ?? new_name)));
     }
 
     #! sets the new name of the function
     setName(string new_name) {
         name = sprintf("%s(%s)", new_name, args);
+    }
+}
+
+#! represents a PostgreSQL procedure (PostgreSQL 11 and later)
+/** A procedure is created, dropped and renamed with the \c PROCEDURE keyword; the source has no \c RETURNS clause
+
+    @since PgsqlSqlUtilBase 1.19
+*/
+public class PgsqlProcedure inherits PgsqlFunction {
+    constructor(string n, string n_src, *string a) : PgsqlFunction(n, n_src, a) {
+        type = "procedure";
     }
 }
 
@@ -2084,7 +2135,7 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         # which has only its current value since.  The sequence was described with the default attributes, as the
         # columns read from the relation (start, increment and max) did not exist in any version
         *hash<auto> row;
-        if (ds.getServerVersion() >= 100000) {
+        if (pgsql_get_server_version_num(ds) >= 100000) {
             row = ds.selectRow("select s.seqstart as start, s.seqincrement as increment, s.seqmax as max, "
                 "s.seqmin as min, s.seqcycle as cycle from pg_catalog.pg_sequence s "
                 "join pg_catalog.pg_class c on c.oid = s.seqrelid "
@@ -2177,11 +2228,64 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         return new PgsqlFunction(name, src, args);
     }
 
+    #! makes a procedure, or a function for the source of a function
+    /** Before PostgreSQL 11, which added procedures, a function was given as a procedure; the source is that of a
+        function if it has a \c RETURNS clause before its body or an \c OUT or \c INOUT argument
+    */
     private PgsqlFunction makeProcedureImpl(string name, string src, *hash opts) {
-        return makeFunctionImpl(name, src, opts);
+        PgsqlFunction f = makeFunctionImpl(name, src, opts);
+        # before PostgreSQL 11 there are no procedures
+        if (!hasProcedures() || PgsqlDatabase::isFunctionSource(f.args, f.src)) {
+            return f;
+        }
+        # PostgreSQL quotes the body of a procedure with "$procedure$", where makeFunctionImpl() quotes it with
+        # "$function$", so that the source of a procedure compares equal with its description
+        return new PgsqlProcedure(f.name, replace(f.src, "$function$", "$procedure$"), f.args);
+    }
+
+    #! returns True if the server has procedures, which PostgreSQL 11 added, with the routine kind of pg_proc
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    bool hasProcedures() {
+        return pgsql_get_server_version_num(ds) >= 110000;
+    }
+
+    #! returns True if the arguments or the source given for a procedure are those of a function
+    /** @param args the argument list
+        @param src the source after the argument list: any \c RETURNS clause, the language and the body
+
+        @return True if the source has a \c RETURNS clause before its body (\c AS), or an argument is an \c OUT or
+        \c INOUT argument
+    */
+    static bool isFunctionSource(*string args, string src) {
+        # the part before the body; the body may contain "returns"
+        string hdr = (src =~ x/^(.*?)(?:^|\s)as(?:\s|\$|')/is)[0] ?? src;
+        if (hdr =~ /(?:^|\s)returns\s/i) {
+            return True;
+        }
+        # an argument starting with OUT or INOUT (an argument named "out..." is followed by its type, not a space)
+        return args ? (args =~ /(?:^|,)\s*(?:out|inout)\s/i) : False;
     }
 
     private *AbstractFunction getFunctionImpl(string name) {
+        return getRoutineIntern(name, False);
+    }
+
+    #! returns the function or the procedure of the given name, or no value if there is none
+    /** @param name the name, optionally qualified with a schema, with an optional argument list
+        @param procedure True to look for a procedure, False for a function
+    */
+    private *AbstractFunction getRoutineIntern(string name, bool procedure) {
+        # a procedure is a routine of kind 'p'; any other kind is a function; before PostgreSQL 11, which added
+        # procedures and pg_proc.prokind, every routine is a function
+        string kind_cond;
+        if (hasProcedures()) {
+            kind_cond = procedure ? " and p.prokind = 'p'" : " and p.prokind <> 'p'";
+        } else if (procedure) {
+            return;
+        } else {
+            kind_cond = "";
+        }
         # a name without a schema is looked up in the schema the connection resolves unqualified names in, as for
         # tables, views and sequences; matching on the function name alone found the functions of every schema,
         # so the same function in two schemas was reported as two matches, or the other schema's was described
@@ -2199,15 +2303,18 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         name = pgsql_unquote_identifier(sql_fname);
 
         *hash qh;
+        # the replacement of the argument mode is an escape string (E'\\1'), which is the backreference \1 whatever
+        # the value of standard_conforming_strings; with it off, '\1' is the control character 0x01
         # try to find a unique function without arguments
         if (!fl[1]) {
             qh = ds.select("select p.proname, t1.typname return_type, a.rolname procedure_owner, l.lanname lang, "
                 "prosrc body, pg_catalog.pg_get_functiondef(p.oid) hdr, "
-                "pg_catalog.pg_get_function_identity_arguments(p.oid) args, "
+                "regexp_replace(pg_catalog.pg_get_function_identity_arguments(p.oid), '(^|, )IN ', E'\\\\1', 'g') args, "
                 "case provolatile when 'i' then 'IMMUTABLE' when 's' then 'STABLE' when 'v' then 'VOLATILE' end stability "
                 "from pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace "
                 "left join pg_type t1 on p.prorettype = t1.oid left join pg_roles a on p.proowner = a.oid "
-                "left join pg_language l on p.prolang = l.oid where p.proname = %v and n.nspname = %v", name, schema);
+                "left join pg_language l on p.prolang = l.oid where p.proname = %v and n.nspname = %v"
+                + kind_cond, name, schema);
             if (!qh.proname)
                 return;
             if (qh.proname.size() > 1)
@@ -2232,12 +2339,14 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
 
             qh = ds.selectRow("select p.proname, t1.typname return_type, a.rolname procedure_owner, l.lanname "
                 "lang, prosrc body, pg_catalog.pg_get_functiondef(p.oid) hdr, "
-                "pg_catalog.pg_get_function_identity_arguments(p.oid) args, case provolatile when 'i' then "
+                "regexp_replace(pg_catalog.pg_get_function_identity_arguments(p.oid), '(^|, )IN ', E'\\\\1', 'g') args, "
+                "case provolatile when 'i' then "
                 "'IMMUTABLE' when 's' then 'STABLE' when 'v' then 'VOLATILE' end stability from pg_proc p "
                 "join pg_catalog.pg_namespace n on n.oid = p.pronamespace "
                 "left join pg_type t1 on p.prorettype = t1.oid left join pg_roles a on p.proowner = a.oid "
                 "left join pg_language l on p.prolang = l.oid where p.proname = %v and n.nspname = %v and "
-                "pg_catalog.pg_get_function_identity_arguments(p.oid) = %v", nc, schema, args);
+                "regexp_replace(pg_catalog.pg_get_function_identity_arguments(p.oid), '(^|, )IN ', E'\\\\1', 'g') = %v"
+                + kind_cond, nc, schema, args);
             if (!qh)
                 return;
         }
@@ -2246,9 +2355,12 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         return PgsqlDatabase::processFunction(qh + {"proname": sql_fname}, native_case);
     }
 
-    #! returns the procedure (function) of the given name, or no value if there is none
+    #! returns the procedure of the given name, else the function of the given name, or no value if there is none
+    /** A function is returned when there is no procedure, as before PostgreSQL 11, which added procedures, a function
+        was given as a procedure
+    */
     private *AbstractFunction getProcedureImpl(string name) {
-        return getFunctionImpl(name);
+        return getRoutineIntern(name, True) ?? getRoutineIntern(name, False);
     }
 
     static *string getFunctionArgs(string err, reference<string> src) {
@@ -2272,12 +2384,19 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
             map row.$1 = row.$1.lwr(), ("stability");
 
         trim row.hdr;
-        # remove "create or replace function" from the beginning of hdr
-        if (row.hdr !~ /^create or replace function /i)
-            throw "FUNCTION-ERROR", sprintf("function does not begin with 'create or replace function': %y", row.hdr);
+        # remove "create or replace function" or "create or replace procedure" from the beginning of hdr
+        *string kind = (row.hdr =~ x/^create or replace (function|procedure) /i)[0];
+        if (!kind)
+            throw "FUNCTION-ERROR", sprintf("function does not begin with 'create or replace function' or 'create "
+                "or replace procedure': %y", row.hdr);
 
         # get and remove arguments
         *string args = PgsqlDatabase::getFunctionArgs("FUNCTION-ERROR", \row.hdr);
+        if (args) {
+            # PostgreSQL gives the mode of each argument of a procedure: IN is the default and is left out, as for a
+            # function
+            args = regex_subst(args, "(^|, )IN ", "$1", RE_Global);
+        }
 
         if (args) {
             # replace verbose type names with short type names
@@ -2301,6 +2420,8 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         #printf("args: %y\n", args);
         if (!native_case) {
             row.hdr =~ s/^RETURNS /returns /;
+            # a procedure has no RETURNS clause: its header starts with its language
+            row.hdr =~ s/^LANGUAGE /language /;
             row.hdr =~ s/ SETOF / setof /;
             row.hdr =~ s/\n LANGUAGE / language /;
             row.hdr =~ s/\n STABLE/ stable/;
@@ -2309,6 +2430,9 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         }
 
         string name = sprintf("%s(%s)", row.proname, args);
+        if (kind.lwr() == "procedure") {
+            return new PgsqlProcedure(name, row.hdr, args);
+        }
         return row.trigger_name ? new PgsqlTriggerFunction(name, row.hdr, row.trigger_name) : new PgsqlFunction(name, row.hdr, args);
     }
 
@@ -2326,7 +2450,7 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     private list getAlignSqlImpl(hash schema_hash, *hash opt) {
-        string drv = getDriverName();
+        list<string> drv = getDriverOptionKeys();
         list l = ();
         if (opt.start) {
             if (schemaUsesPgvector(schema_hash) && !pgExtensionExists("vector")) {
@@ -2481,24 +2605,39 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         @return a list of string function names in the schemas of the connection's \c search_path
     */
     private list<string> listFunctionsImpl() {
+        return listRoutinesIntern(False);
+    }
+
+    #! returns the functions or the procedures of the schemas of the connection's \c search_path
+    private list<string> listRoutinesIntern(bool procedure) {
+        # a procedure is a routine of kind 'p'; any other kind is a function; before PostgreSQL 11, which added
+        # procedures and pg_proc.prokind, every routine is a function
+        string kind_cond;
+        if (hasProcedures()) {
+            kind_cond = procedure ? " and p.prokind = 'p'" : " and p.prokind <> 'p'";
+        } else if (procedure) {
+            return ();
+        } else {
+            kind_cond = "";
+        }
         # the functions of the search_path schemas; this listed the functions of the "public" schema whatever the
         # connection's search_path, so the functions of any other schema could not be listed
-        string sql = sprintf("select n.nspname as schema, %s as name, pg_catalog.pg_get_function_result(p.oid) "
-            "as result_type, pg_catalog.pg_get_function_arguments(p.oid) as args,"
-            " case when p.prokind = 'a' then 'agg' when p.prokind = 'w' then 'window' when p.prorettype = 'pg_catalog.trigger'::pg_catalog.regtype then 'trigger' else 'normal' end as type"
+        string sql = sprintf("select n.nspname as schema, %s as name, "
+            "regexp_replace(pg_catalog.pg_get_function_arguments(p.oid), '(^|, )IN ', E'\\\\1', 'g') as args"
             " from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
-            " where n.nspname = any (current_schemas(false)) order by 1, 2, 4",
-            pgsql_relation_name_expr("n.nspname", "p.proname"));
+            " where n.nspname = any (current_schemas(false))%s order by 1, 2, 3",
+            pgsql_relation_name_expr("n.nspname", "p.proname"), kind_cond);
         *hash qh = ds.select(sql);
 
         return map sprintf("%s(%s)", $1.name, $1.args), qh.contextIterator();
     }
 
-    #! since PostgreSQL only supports functions, this method is identical to listFunctionsImpl()
-    /** @see listFunctionsImpl()
+    #! returns the procedures and then the functions of the schemas of the connection's \c search_path
+    /** Functions are listed as before PostgreSQL 11, which added procedures, a function was given as a procedure;
+        names are qualified as for tables; see listTablesImpl()
     */
     private list<string> listProceduresImpl() {
-        return listFunctionsImpl();
+        return listRoutinesIntern(True) + listRoutinesIntern(False);
     }
 
     #! returns a list of string sequence names in the schemas of the connection's \c search_path
@@ -3840,9 +3979,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return result;
     }
 
-    #! Overrides the default insertIntern to generate UNNEST-based SQL for bulk inserts
-    private *hash<auto> insertIntern(hash<auto> row, *reference<string> sql, *hash<auto> opt,
-            *reference<softlist<auto>> args) {
+    #! Overrides the default insert SQL with an UNNEST-based insert for bulk inserts (a hash of lists)
+    /** The SQL binds the arguments of the scalar expressions of its SELECT (insert operators, constant values) before
+        the arrays of its UNNEST, which the arguments are in, whatever the order of the columns
+    */
+    private hash<auto> getInsertSqlAndArgs(hash<auto> row) {
         # check if this is a bulk insert (any value is a list)
         bool is_bulk = False;
         foreach auto v in (row.iterator()) {
@@ -3853,12 +3994,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         }
 
         if (!is_bulk || !hasPgsqlArrayBind()) {
-            # delegate for single-row inserts or drivers without native typed-array binds
-            return AbstractTable::insertIntern(row, \sql, opt, \args);
+            # the default SQL for single-row inserts or drivers without native typed-array binds
+            return AbstractTable::getInsertSqlAndArgs(row);
         }
-
-        # check data callback options if any
-        validateOptionsIntern("OPTION-ERROR", getInsertOptions(), \opt);
 
         # ensure columns are loaded
         if (!columns) {
@@ -3951,7 +4089,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             }
         }
 
-        sql = sprintf("insert into %s (%s) select %s from unnest(%s) as u(%s)",
+        string sql = sprintf("insert into %s (%s) select %s from unnest(%s) as u(%s)",
             getSqlName(),
             (foldl $1 + "," + $2, all_col_names),
             (foldl $1 + "," + $2, select_exprs),
@@ -3959,13 +4097,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             (foldl $1 + "," + $2, (map sprintf("c%d", $1), range(unnest_col_idx))));
 
         # combine bind values: scalar %v's in SELECT come before UNNEST %v's in FROM
-        args = scalar_binds + array_binds;
-
-        if (opt.returning) {
-            return doReturningImpl(opt, \sql, args);
-        }
-
-        execData(opt, sql, args);
+        return {"sql": sql, "args": scalar_binds + array_binds};
     }
 
     #! Overrides the default doReturningImpl to return all rows for bulk operations
@@ -4271,7 +4403,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     #! Inserts a hash-of-lists row batch using the PostgreSQL COPY protocol when possible
-    /** @param data a hash of column name to list of values; each list must have the same number of elements
+    /** The COPY protocol is used with the \c pgsql driver; with another driver (ex: \c jdbc), the rows are inserted
+        as AbstractTable::bulkInsert() inserts them
+
+        @param data a hash of column name to list of values; each list must have the same number of elements
         @param opt optional insert options; if any options are passed, this method falls back to the generic
         AbstractTable::bulkInsert() implementation
 
@@ -4280,7 +4415,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         @since PgsqlSqlUtilBase 1.9
     */
     int bulkInsert(hash<auto> data, *hash<auto> opt) {
-        if (!opt || !opt.size()) {
+        # the COPY protocol is that of the pgsql driver: another driver (ex: jdbc) cannot run "COPY ... FROM STDIN"
+        # as SQL, which fails and aborts the transaction
+        if ((!opt || !opt.size()) && getDriverName() == "pgsql") {
             int rows = getCopyInsertRowCount(data);
             if (rows == 0) {
                 return 0;
@@ -6547,7 +6684,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     private setupTableImpl(hash<auto> desc, *hash<auto> opt) {
         # add trigger functions to table
-        AbstractDatabase::checkDriverOptions(\desc.functions, ds.getDriverName());
+        AbstractDatabase::checkDriverOptions(\desc.functions, getDriverOptionKeys());
 
         foreach string fn in (keys desc.functions) {
             if (desc.functions{fn}.typeCode() != NT_STRING) {

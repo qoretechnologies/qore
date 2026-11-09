@@ -77,53 +77,57 @@ module AwsTextractDataProvider {
             ),
         });
 
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AwsTextractDataProvider::AppName,
-            "path": "/detect-document-text",
-            "action": "detect-document-text",
-            "display_name": "Detect Document Text",
-            "short_desc": "Extract lines and words from a document",
-            "desc": "Calls Textract's `DetectDocumentText` API to extract the "
-                "text content of a document. Synchronous PDF and TIFF inputs must have one page. Returns "
-                "a list of `Block` objects (`PAGE`, `LINE`, `WORD`) with text, "
-                "confidence, and bounding-box geometry.\n\n"
-                "**Pass the document via one of:**\n"
-                "- `document_bytes` — raw bytes (PNG / JPEG / PDF / TIFF, max 10 MB)\n"
-                "- `document_path` — local file path (read and uploaded as bytes)\n"
-                "- `s3_bucket` + `s3_name` — S3 object reference (also limited to 10 MB)",
-            "action_code": DPAT_API,
-            "groups": ("Document Extraction",),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                AwsTextractDetectDocumentTextRequestDataType::Fields{
-                    "document_bytes", "document_path", "s3_bucket", "s3_name",
-                }, {
-                    "preselected": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                AwsTextractDetectDocumentTextRequestDataType::Fields{"s3_version",}
-            ),
-            "output_type": AwsTextractSchema::getType("DetectDocumentTextResponse"),
-        });
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(AwsTextractDataProvider::AppName, sub () {
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": AwsTextractDataProvider::AppName,
+                "path": "/detect-document-text",
+                "action": "detect-document-text",
+                "display_name": "Detect Document Text",
+                "short_desc": "Extract lines and words from a document",
+                "desc": "Calls Textract's `DetectDocumentText` API to extract the "
+                    "text content of a document. Synchronous PDF and TIFF inputs must have one page. Returns "
+                    "a list of `Block` objects (`PAGE`, `LINE`, `WORD`) with text, "
+                    "confidence, and bounding-box geometry.\n\n"
+                    "**Pass the document via one of:**\n"
+                    "- `document_bytes` — raw bytes (PNG / JPEG / PDF / TIFF, max 10 MB)\n"
+                    "- `document_path` — local file path (read and uploaded as bytes)\n"
+                    "- `s3_bucket` + `s3_name` — S3 object reference (also limited to 10 MB)",
+                "action_code": DPAT_API,
+                "groups": ("Document Extraction",),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    AwsTextractDetectDocumentTextRequestDataType::Fields{
+                        "document_bytes", "document_path", "s3_bucket", "s3_name",
+                    }, {
+                        "preselected": True,
+                    }
+                ) + DataProviderActionCatalog::getActionOptionFromFields(
+                    AwsTextractDetectDocumentTextRequestDataType::Fields{"s3_version",}
+                ),
+                "output_type": AwsTextractSchema::getType("DetectDocumentTextResponse"),
+            });
 
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AwsTextractDataProvider::AppName,
-            "path": "/analyze-document",
-            "action": "analyze-document",
-            "display_name": "Analyze Document",
-            "short_desc": "Extract tables, forms, signatures, layout, and query answers",
-            "desc": "Calls Textract's `AnalyzeDocument` API to extract text plus "
-                "structural features.  `feature_types` selects which features "
-                "to extract — pass at least one of `TABLES`, `FORMS`, "
-                "`SIGNATURES`, `LAYOUT`, `QUERIES`.\n\n"
-                "When `QUERIES` is included, also pass a `queries` list — each "
-                "query has a `Text` field with the question to ask.",
-            "action_code": DPAT_API,
-            "groups": ("Document Extraction",),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                AwsTextractSchema::getLegacyRequestType("analyze-document").getFields()),
-            "output_type": AwsTextractSchema::getType("AnalyzeDocumentResponse"),
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": AwsTextractDataProvider::AppName,
+                "path": "/analyze-document",
+                "action": "analyze-document",
+                "display_name": "Analyze Document",
+                "short_desc": "Extract tables, forms, signatures, layout, and query answers",
+                "desc": "Calls Textract's `AnalyzeDocument` API to extract text plus "
+                    "structural features.  `feature_types` selects which features "
+                    "to extract — pass at least one of `TABLES`, `FORMS`, "
+                    "`SIGNATURES`, `LAYOUT`, `QUERIES`.\n\n"
+                    "When `QUERIES` is included, also pass a `queries` list — each "
+                    "query has a `Text` field with the question to ask.",
+                "action_code": DPAT_API,
+                "groups": ("Document Extraction",),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    AwsTextractSchema::getLegacyRequestType("analyze-document").getFields()),
+                "output_type": AwsTextractSchema::getType("AnalyzeDocumentResponse"),
+            });
+            AwsTextractActions::registerNativeActions();
         });
-        AwsTextractActions::registerNativeActions();
     };
 }
 

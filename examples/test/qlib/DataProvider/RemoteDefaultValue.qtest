@@ -5,11 +5,11 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ProviderIndex
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ProviderIndex
 %requires ./RemoteDefaultFixture.qm
 
 %requires yaml
@@ -53,7 +53,7 @@ public class RemoteDefaultValueTest inherits QUnit::Test {
         assertEq({"limit": 10}, record.acceptsValue({}));
         # a mandatory field with a remote default still needs a value
         QoreDataField mandatory({"name": "id", "type": IntType, "remote_default_value": 1});
-        assertThrows("RUNTIME-TYPE-ERROR", \mandatory.acceptsValue(), NOTHING);
+        assertThrows("TYPE-VALUE-ERROR", \mandatory.acceptsValue(), NOTHING);
         # a field without one describes none
         assertNothing(new QoreDataField({"name": "x", "type": StringType}).getInfo().remote_default_value);
     }

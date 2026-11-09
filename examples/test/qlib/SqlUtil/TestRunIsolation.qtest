@@ -1,0 +1,193 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - fcntl record locks held across processes, FIFO handshakes, lock file mode under umask
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires FsUtil
+%requires QUnit
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./TestRunIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires ./FirebirdTestIsolation.qm
+
+%exec-class TestRunIsolationTest
+
+#! The names, leftovers and host locks of the database objects of test runs
+class TestRunIsolationTest inherits QUnit::Test {
+    constructor() : Test("TestRunIsolationTest", "1.0", \ARGV) {
+        addTestCase("a run's name has random characters of its own", \names());
+        addTestCase("a leftover is told by its age, whatever its host and process", \leftovers());
+        addTestCase("the host lock of a run is exclusive", \hostLock());
+        addTestCase("the passwords of datasource strings are masked in messages", \masking());
+        addTestCase("the lock file is named without the password", \lockName());
+        addTestCase("the CI cleanup prints no password", \cleanupOutput());
+        set_return_value(main());
+    }
+
+    private names() {
+        string host = TestRun::getLabel((gethostname() =~ x/^([^.]+)/)[0] ?? gethostname(), 12);
+        string a = TestRun::makeName("Some Suite!");
+        assertRegex(sprintf("^qtest_somesuite_%s_%d_[0-9]+_[a-z0-9]{6}$", host, getpid()), a);
+        # two names of the same suite, host, process and second differ
+        hash<string, bool> names = map {TestRun::makeName("x"): True}, range(20);
+        assertEq(20, names.size());
+        assertEq("x", TestRun::getLabel("!!", 4));
+        assertEq("abcd", TestRun::getLabel("A-b_C.dEF", 4));
+    }
+
+    private leftovers() {
+        date now = now_us();
+        int t = now.getEpochSeconds();
+        int age = TestRun::LeftoverAge.durationSeconds();
+        assertTrue(TestRun::isLeftover(sprintf("qtest_suite_otherhost_1_%d_abc123", t - age), now));
+        assertTrue(TestRun::isLeftover(sprintf("QTEST_SUITE_OTHERHOST_1_%d_ABC123_OTHER", t - age - 1), now));
+        assertFalse(TestRun::isLeftover(sprintf("qtest_suite_host_1_%d_abc123", t - age + 60), now));
+        # the names of runs before the random part was added
+        assertTrue(TestRun::isLeftover(sprintf("qtest_suite_host_1_%d", t - age - 1), now));
+        assertTrue(TestRun::isLeftover(sprintf("QTEST_SUITE_HOST_1_%d_OTHER", t - age - 1), now));
+        assertFalse(TestRun::isLeftover(sprintf("qtest_suite_host_1_%d", t), now));
+        # names that are not a run's
+        assertFalse(TestRun::isLeftover(sprintf("qtest_suite_host_%d", t - age - 1), now));
+        assertFalse(TestRun::isLeftover("qtest_123", now));
+        assertFalse(TestRun::isLeftover("other", now));
+    }
+
+    #! A process that holds the lock holds it exclusively, so a second run that takes it waits
+    /** The lock is checked from a process of its own, as a process does not conflict with its own locks; the
+        processes meet at FIFOs, so nothing waits for a time
+    */
+    private hostLock() {
+        if (PlatformOS == "Windows") {
+            testSkip("no FIFOs");
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string ready = dir + "/ready";
+        string done = dir + "/done";
+        system(sprintf("mkfifo %s %s", ready, done));
+        string connstr = "x:u/p@db-" + get_random_string(8);
+        string path = TestRun::getLockPath("test", connstr);
+        on_exit unlink(path);
+        string script = dir + "/holder.q";
+        File sf();
+        sf.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        sf.write(sprintf("%%modern\n%%requires %s/TestRunIsolation.qm\n"
+            "TestRun::lockHost(\"test\", %y);\n"
+            "File r(); r.open2(%y, O_WRONLY); r.write(\"held\\n\"); r.close();\n"
+            "File d(); d.open2(%y); d.readLine();\n", normalize_dir(get_script_dir()), connstr, ready, done));
+        sf.close();
+        # when the holder has ended, however it ended, the shell that runs it says so, so that a holder that fails
+        # before it holds the lock is reported instead of waited for
+        system(sprintf("sh -c '%s %s > %s/out 2>&1; echo ended > %s' &", ENV.QORE_EXECUTABLE ?? "qore", script, dir,
+            ready));
+        File r();
+        r.open2(ready);
+        string line = r.readLine(False);
+        if (line != "held") {
+            File out();
+            out.open2(dir + "/out");
+            fail("the holder ended before it held the lock: " + (out.read(-1) ?? ""));
+        }
+        # the holder holds the lock: it is told to end, also when an assertion fails, so that it does not hold the
+        # lock after the test
+        bool released;
+        code release = sub () {
+            if (released) {
+                return;
+            }
+            released = True;
+            File d();
+            d.open2(done, O_WRONLY);
+            d.write("done\n");
+            d.close();
+        };
+        on_exit release();
+        File f();
+        f.open2(path, O_RDWR);
+        # held exclusively by the other process: neither a shared nor an exclusive lock can be taken
+        assertNeq(0, f.lock(F_RDLCK));
+        assertNeq(0, f.lock(F_WRLCK));
+        release();
+        # released when the other process ends
+        f.lockBlocking(F_WRLCK);
+        f.close();
+    }
+
+    private masking() {
+        string pw = "Secret-pw-9";
+        # a datasource string that cannot be parsed (its port is not a number), as quoted in a message
+        string bad = "mysql:user/" + pw + "@db%host:12x";
+        string msg;
+        try {
+            parse_datasource(bad);
+        } catch (hash<ExceptionInfo> ex) {
+            msg = ex.desc;
+        }
+        assertNeq(-1, msg.find(pw), "the message quotes the password");
+        assertEq(-1, TestRun::maskSecrets(msg, bad).find(pw));
+        # without the datasource string: the "user/password@" form
+        assertEq(-1, TestRun::maskSecrets(msg).find(pw));
+        assertEq("x 'pgsql:u/****@db' and u/****@db2", TestRun::maskSecrets("x 'pgsql:u/p@db' and u/q@db2"));
+        # a password with an "@" is masked whole when its datasource string is given
+        string at = "oracle:scott/a@b" + pw + "@orcl";
+        assertEq(-1, TestRun::maskSecrets("error in " + at, at).find(pw));
+        # the isolation modules' messages about a datasource string mask its password
+        foreach code getter in ((\MysqlRunDatabase::getConnectionString(), \MssqlRunDatabase::getConnectionString(),
+                \FirebirdRunDatabase::getConnectionString())) {
+            string desc;
+            try {
+                getter(bad, "x");
+            } catch (hash<ExceptionInfo> ex) {
+                desc = ex.err + ": " + ex.desc;
+            }
+            assertTrue(desc.val(), "an error is raised");
+            assertEq(-1, desc.find(pw), desc);
+        }
+        string desc;
+        try {
+            OracleRunSchema::getConnectionString("oracle:user/" + pw + "@db%host:12x", "x");
+        } catch (hash<ExceptionInfo> ex) {
+            desc = ex.err + ": " + ex.desc;
+        }
+        assertTrue(desc.val(), "an error is raised");
+        assertEq(-1, desc.find(pw), desc);
+    }
+
+    private lockName() {
+        string a = TestRun::getLockPath("x", "pgsql:user/one@db%host:5432");
+        # the same database with another password: the same lock
+        assertEq(a, TestRun::getLockPath("x", "pgsql:user/two@db%host:5432"));
+        assertNeq(a, TestRun::getLockPath("x", "pgsql:user/one@db2%host:5432"));
+        # the name has no part of the password
+        assertEq(-1, a.find(MD5("pgsql:user/one@db%host:5432")));
+
+        # the file can be opened by the other users of the host, whatever the umask, so their runs wait for this one
+        string connstr = "x:u/p@db-" + get_random_string(8);
+        string path = TestRun::getLockPath("mode", connstr);
+        on_exit unlink(path);
+        int old_umask = umask(022);
+        on_exit umask(old_umask);
+        TestRun::lockHost("mode", connstr);
+        assertEq(0666, hstat(path).mode & 0777);
+    }
+
+    #! drop-test-run-leftovers.q reports a server that it cannot use with the error, whose message can quote the
+    #! datasource string
+    private cleanupOutput() {
+        string pw = "Secret-pw-9";
+        string script = normalize_dir(get_script_dir() + "/../../docker_test/drop-test-run-leftovers.q");
+        string out = backquote(sprintf("env -u QORE_DB_CONNSTR_ORACLE_SYS -u QORE_DB_CONNSTR_FREETDS "
+            "QORE_DB_CONNSTR_MYSQL='mysql:user/%s@db%%host:12x' '%s' '%s' 2>&1", pw, ENV.QORE_EXECUTABLE ?? "qore",
+            script));
+        assertRegex("MySQL: skipped: DATASOURCE-PARSE-ERROR", out);
+        assertEq(-1, out.find(pw), out);
+    }
+}

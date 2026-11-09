@@ -1,0 +1,764 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+# test-exec-mode: parent - its in-process cases check the static variables of Programs in the mode of this process
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class StaticVarReleaseTest
+
+#! what the destructors run in the Programs of the in-process cases did
+class Results {
+    public {
+        #! the reports of the destructors
+        static list<string> reports = ();
+        #! the Programs that destructors created and kept
+        static list<Program> kept = ();
+        #! the number of calls of the initializer of the evalInit case
+        static int calls = 0;
+    }
+}
+
+#! records a report of a destructor run in a Program of an in-process case
+sub svr_report(string msg) {
+    Results::reports += msg;
+}
+
+#! returns the number of the call of the initializer of the evalInit case
+int sub svr_next_call() {
+    return ++Results::calls;
+}
+
+#! keeps a Program that a destructor created
+sub svr_keep(Program p) {
+    Results::kept += p;
+}
+
+#! The static variables of a class released while a destructor that they run creates a Program sharing the class
+/** The Program that releases the last reference to the static variables of a class clears their values, which runs
+    the destructors of the objects they hold.  A Program created by such a destructor shares the class (a Program
+    inherits the public classes of the Program that creates it, and a destructor runs in the Program of its class), so
+    it referenced the variables again, and when it was deleted, it released them as the last Program sharing them and
+    deleted them while they were still being cleared: the release then read freed memory and the process crashed.
+    This happened at process exit for the static variables of a user module (when the module Programs are cleared)
+    and of the main Program, and when a Program is deleted.
+
+    The Program created by the destructor also shares the classes whose variables have been released already, before
+    Holder's (classes are cleared in name order).  Deleting it deleted their variables, as the last Program sharing
+    them, while the Program that created it still ran code that read them, and two Programs sharing a class that were
+    deleted at the same time in different threads could both delete its variables.
+
+    The exit cases run in a separate process, in each execution mode, as a crash is the failure.
+*/
+class StaticVarReleaseTest inherits QUnit::Test {
+    public {
+        #! the code of the in-process Program; the guard's destructor runs when the Program is deleted
+        const ChildSrc = "
+public class Guard {
+    destructor() {
+        Program p(PO_NEW_STYLE);
+        p.parse(\"int sub get() { return Holder::value(); } auto sub before() { return Holder::before; }\", \"guard\");
+        svr_report(sprintf(\"guard Program result: %d\", p.callFunction(\"get\")));
+        if (Holder::keep) {
+            svr_keep(p);
+        }
+    }
+}
+
+public class Holder {
+    public {
+        static int before = 1;
+        static Guard guard = new Guard();
+        static hash<auto> after = {\"a\": 1};
+        const keep = KEEP;
+    }
+
+    static int value() {
+        return 42;
+    }
+}
+
+int sub get() {
+    return Holder::value();
+}
+";
+
+        #! the code of the in-process Program whose Program created by the guard's destructor shares a class whose
+        #! static variables have been released already (Alpha)
+        /** If KEEP is set, the Program created by the guard's destructor is kept in a static variable of a class that it
+            does not share, released after Holder's, so it is deleted after the guard's destructor has returned; the
+            reader's destructor reads the variables after that
+        */
+        const SharedSrc = "
+public class Alpha {
+    public {
+        static int v = 5;
+        static hash<auto> h = {\"a\": 1};
+    }
+}
+
+public class Guard {
+    destructor() {
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse(\"int sub get() { return Holder::value(); }\", \"guard\");
+            svr_report(sprintf(\"guard Program result: %d\", p.callFunction(\"get\")));
+            if (Holder::keep) {
+                Keeper::kept = p;
+            }
+        }
+        svr_report(sprintf(\"guard read: %y %y\", Alpha::v, Alpha::h));
+    }
+}
+
+public class Holder {
+    public {
+        static int before = 1;
+        static Guard guard = new Guard();
+        static hash<auto> after = {\"a\": 1};
+        const keep = KEEP;
+    }
+
+    static int value() {
+        return 42;
+    }
+}
+
+class Keeper {
+    public {
+        static *Program kept;
+    }
+}
+
+class Reader {
+    destructor() {
+        svr_report(sprintf(\"reader read: %y %y\", Alpha::v, Holder::before));
+    }
+}
+
+class Zulu {
+    public {
+        static Reader reader = new Reader();
+    }
+}
+
+int sub get() {
+    return Holder::value();
+}
+";
+
+        #! the code of the Program whose class is shared by the Programs deleted in parallel
+        const ParallelSrc = "
+public class Holder {
+    public {
+%s    }
+}
+
+list<Program> sub make(int n) {
+    list<Program> rv = ();
+    for (int i = 0; i < n; ++i) {
+        Program p(PO_NEW_STYLE);
+        p.parse(\"int sub get() { return Holder::v0; }\", \"child\");
+        rv += p;
+    }
+    return rv;
+}
+";
+
+        #! the code of the Program deleted at the same time as the Programs sharing its class in different threads
+        /** The last one to release the static variables runs a destructor that creates a Program; the children read
+            the static variables while the Programs are deleted
+        */
+        const ParallelGuardSrc = "
+public class Guard {
+    destructor() {
+        try {
+            Program p(PO_NEW_STYLE);
+            p.parse(\"int sub get() { return Holder::value(); }\", \"guard\");
+            p.callFunction(\"get\");
+        } catch (hash<ExceptionInfo> ex) {
+            # the Program of the class can be deleted
+        }
+    }
+}
+
+public class Holder {
+    public {
+%s        static Guard guard = new Guard();
+    }
+
+    static int value() {
+        return 42;
+    }
+}
+
+list<Program> sub make(int n) {
+    list<Program> rv = ();
+    for (int i = 0; i < n; ++i) {
+        Program p(PO_NEW_STYLE);
+        p.parse(\"int sub get() { int t = 0; for (int j = 0; j < 10; ++j) { t += %s; } return t; }\", \"child\");
+        rv += p;
+    }
+    return rv;
+}
+";
+
+        #! the code of the in-process Program whose static variable's initializer fails, and that a destructor reads
+        #! after the values have been released
+        const EvalInitSrc = "
+class Obj {
+    destructor() {
+        svr_report(\"Obj destructor\");
+    }
+}
+
+public class Alpha {
+    public {
+        static *Obj o = Alpha::make();
+    }
+
+    static Obj make() {
+        int calls = svr_next_call();
+        if (calls == 1) {
+            throw \"FIRST\", \"first initialization fails\";
+        }
+        svr_report(sprintf(\"initializer ran (call %d)\", calls));
+        return new Obj();
+    }
+}
+
+class Reader {
+    destructor() {
+        svr_report(sprintf(\"reader read: %y\", Alpha::o));
+    }
+}
+
+class Zulu {
+    public {
+        static Reader reader = new Reader();
+    }
+}
+
+int sub get() {
+    return 42;
+}
+";
+
+        #! the code of the in-process Program that keeps a child Program in a static variable of a public class that the
+        #! child shares
+        const StoredChildSrc = "
+class Marker {
+    destructor() {
+        svr_report(\"marker released\");
+    }
+}
+
+public class D {
+    public {
+        static *Program p;
+        static Marker m = new Marker();
+    }
+}
+
+int sub get() {
+    D::p = new Program(PO_NEW_STYLE);
+    D::p.parse(\"int sub v() { return 41; }\", \"child\");
+    return D::p.callFunction(\"v\") + 1;
+}
+";
+
+        #! the code of the in-process Program whose child Program reads its class's static variables after it is deleted
+        const ChildReaderSrc = "
+class Marker {
+    destructor() {
+        svr_report(\"marker released\");
+    }
+}
+
+public class Shared {
+    public {
+        static int v = 5;
+        static hash<auto> h = {\"a\": 1};
+        static Marker m = new Marker();
+    }
+
+    static string hello() {
+        return \"hello\";
+    }
+}
+
+Program sub make() {
+    Program c(PO_NEW_STYLE);
+    c.loadModule(\"reflection\");
+    c.parse(\"auto sub v() { return Shared::v; } int sub tv() { int x = Shared::v; return x; } \"
+        \"auto sub rv() { return Class::forName(\\\"Shared\\\").getStaticMember(\\\"v\\\").getValue(); } \"
+        \"sub rs() { Class cls = Class::forName(\\\"Shared\\\"); cls.getStaticMember(\\\"v\\\").setValue(8); } \"
+        \"int sub w() { Shared::v = 7; return 7; } auto sub hello() { return Shared::hello(); } \"
+        \"auto sub h() { return Shared::h.a; }\", \"child\");
+    return c;
+}
+
+int sub get() {
+    return 42;
+}
+";
+
+        #! the number of static variables read by the Programs deleted with the Program of their class
+        const ParallelGuardVars = 50;
+        #! the number of iterations of the parallel deletion with the Program of the class
+        const ParallelGuardIterations = 20;
+
+        #! the number of static variables of the class shared by the Programs deleted in parallel
+        const ParallelVars = 400;
+        #! the number of Programs deleted in parallel
+        const ParallelPrograms = 4;
+        #! the number of iterations of the parallel deletion
+        const ParallelIterations = 50;
+
+        #! the output of the exit scripts
+        const ExitOutput = ("main done: 42", "guard Program result: 42");
+
+        #! the output of the exit scripts whose guard Program shares a class whose variables have been released
+        const SharedExitOutput = ("main done: 42", "guard Program result: 42", "guard read: null null",
+            "reader read: null null");
+
+        #! the output of the exit script whose destructor loads a module while the static variables are released
+        /** The constant and the static variable of the module's class added to the main Program's cleared class
+            lists are released
+        */
+        const LateLoadExitOutput = ("main done", "loaded at teardown: LateHolder", "late marker released",
+            "late marker released");
+
+        #! the output of the exit script whose Programs created by a destructor are deleted in another thread
+        /** The first is deleted while the values are released; the second, which sees the values of Zed (not released
+            yet) and not those of Alpha (released already), after its creator has been deleted
+        */
+        const XThreadExitOutput = ("guard Program result: -1", "guard p2 z: 7 a: -1", "guard done",
+            "after delete: kept 1", "main done");
+
+        #! the reports of the in-process Programs whose guard Program shares a class whose variables have been
+        #! released
+        const SharedReports = ("guard Program result: 42", "guard read: null null", "reader read: null null");
+
+        #! the code of the in-process Program whose Program created by the guard's destructor is kept in a static
+        #! variable of a public class that it shares, whose values have not been released yet (Xray)
+        /** The Program created while the values are released does not share them: it reads Xray's value before the
+            values are released, and reading Alpha's (already released) raises PROGRAM-ERROR; keeping it in Xray's
+            static variable does not keep Xray's values, nor itself, alive
+        */
+        const CycleSrc = "
+public class Alpha {
+    public {
+        static int v = 5;
+    }
+}
+
+public class Guard {
+    destructor() {
+        Program p(PO_NEW_STYLE);
+        p.parse(\"int sub get() { return Holder::value(); } *int sub xray() { return Xray::z; } string sub alpha() { try { return sprintf(\\\"%y\\\", Alpha::v); } catch (hash<ExceptionInfo> ex) { return ex.err; } }\", \"guard\");
+        svr_report(sprintf(\"guard Program: %d %y %s\", p.callFunction(\"get\"), p.callFunction(\"xray\"),
+            p.callFunction(\"alpha\")));
+        Xray::kept = p;
+    }
+}
+
+public class Holder {
+    public {
+        static Guard guard = new Guard();
+    }
+
+    static int value() {
+        return 42;
+    }
+}
+
+public class Marker {
+    destructor() {
+        svr_report(\"marker released\");
+    }
+}
+
+public class Xray {
+    public {
+        static *Program kept;
+        static int z = 7;
+        static Marker marker = new Marker();
+    }
+}
+
+int sub get() {
+    return Holder::value();
+}
+";
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("StaticVarReleaseTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+
+        addTestCase("deleted Program", \deletedProgramTest());
+        addTestCase("deleted Program; the Program created by the destructor outlives it",
+            \deletedProgramKeptTest());
+        addTestCase("deleted Program; the Program created by the destructor shares released variables",
+            \deletedProgramSharedTest());
+        addTestCase("deleted Program; the Program created by the destructor shares released variables and is "
+            "deleted afterwards", \deletedProgramSharedKeptTest());
+        addTestCase("deleted Program; the Program created by the destructor is kept in a static variable of a "
+            "class it shares", \deletedProgramCycleTest());
+        addTestCase("a static variable whose initializer failed is read after the values were released",
+            \evalInitAfterReleaseTest());
+        addTestCase("deleted Program; its child Program is kept in a static variable of a class it shares",
+            \deletedProgramStoredChildTest());
+        addTestCase("deleted Program; its child Program reads the static variables of its class afterwards",
+            \deletedProgramChildReaderTest());
+        addTestCase("Programs sharing a class deleted in parallel", \parallelDeleteTest());
+        addTestCase("Programs sharing a class deleted in parallel with the Program of the class",
+            \parallelGuardDeleteTest());
+        addTestCase("main Program at exit", \exitTest(), ("main-exit.q", ExitOutput));
+        addTestCase("user module at exit", \exitTest(), ("module-exit.q", ExitOutput));
+        addTestCase("main Program at exit; the Program created by the destructor shares released variables",
+            \exitTest(), ("main-exit-shared.q", SharedExitOutput));
+        addTestCase("user module at exit; the Program created by the destructor shares released variables",
+            \exitTest(), ("module-exit-shared.q", SharedExitOutput));
+        addTestCase("main Program at exit; a destructor loads a module whose classes are added to the cleared "
+            "class lists", \exitTest(), ("main-exit-late-load.q", LateLoadExitOutput));
+        addTestCase("main Program at exit; a child Program is kept in a static variable of a class it shares",
+            \exitTest(), ("main-exit-stored-child.q", ("main done 42", "marker released")));
+        addTestCase("AOT: main Program at exit; a child Program is kept in a static variable of a class it shares",
+            \aotExitTest(), ("main-exit-stored-child.q", ("main done 42", "marker released")));
+        addTestCase("Programs created by a destructor deleted in another thread", \exitTest(),
+            ("xthread-delete.q", XThreadExitOutput));
+        addTestCase("AOT: main Program at exit", \aotExitTest(), ("main-exit.q", ExitOutput));
+        addTestCase("AOT: main Program at exit; the Program created by the destructor shares released variables",
+            \aotExitTest(), ("main-exit-shared.q", SharedExitOutput));
+        addTestCase("AOT: main Program at exit; a destructor loads a module", \aotExitTest(),
+            ("main-exit-late-load.q", LateLoadExitOutput));
+        addTestCase("AOT: user module at exit", \aotModuleExitTest(),
+            ("module-exit.q", "StaticVarReleaseGuard", ExitOutput));
+        addTestCase("AOT: user module at exit; the Program created by the destructor shares released variables",
+            \aotModuleExitTest(), ("module-exit-shared.q", "StaticVarReleaseShared", SharedExitOutput));
+        set_return_value(main());
+    }
+
+    #! returns a Program with the guard class; the Program created by the guard's destructor is kept if keep is set
+    #! returns the qcc executable to use
+    private static string getQcc(string qore_bin) {
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        return is_file(qcc_bin) ? qcc_bin : "qcc";
+    }
+
+    private Program getProgram(bool keep, string src = ChildSrc) {
+        Program p(PO_NEW_STYLE);
+        p.importFunction("svr_report");
+        p.importFunction("svr_keep");
+        p.parse(replace(src, "KEEP", keep ? "True" : "False"), "child");
+        assertEq(42, p.callFunction("get"));
+        return p;
+    }
+
+    deletedProgramTest() {
+        Results::reports = ();
+        {
+            Program p = getProgram(False);
+            delete p;
+        }
+        assertEq(("guard Program result: 42",), Results::reports);
+        assertEq((), Results::kept);
+    }
+
+    deletedProgramKeptTest() {
+        Results::reports = ();
+        {
+            Program p = getProgram(True);
+            delete p;
+        }
+        assertEq(("guard Program result: 42",), Results::reports);
+        assertEq(1, Results::kept.size());
+        # the Program created by the destructor still shares the class; the code of the class cannot run, as its
+        # Program has been deleted
+        assertThrows("PROGRAM-ERROR", "already been deleted", sub () { Results::kept[0].callFunction("get"); });
+        # neither can its static variables be accessed: their values have been released by the Program of the class
+        # (which did not delete them, as the kept Program still shares the class; see qore_class_private::data_refs)
+        assertThrows("PROGRAM-ERROR", "cannot access static variable 'Holder::before'",
+            sub () { Results::kept[0].callFunction("before"); });
+        # deleting it releases the static variables
+        delete Results::kept[0];
+        Results::kept = ();
+        assertEq(("guard Program result: 42",), Results::reports);
+    }
+
+    deletedProgramSharedTest() {
+        Results::reports = ();
+        {
+            Program p = getProgram(False, SharedSrc);
+            delete p;
+        }
+        assertEq(SharedReports, Results::reports);
+        assertEq((), Results::kept);
+    }
+
+    deletedProgramSharedKeptTest() {
+        Results::reports = ();
+        {
+            Program p = getProgram(True, SharedSrc);
+            delete p;
+        }
+        assertEq(SharedReports, Results::reports);
+        assertEq((), Results::kept);
+    }
+
+    deletedProgramCycleTest() {
+        Results::reports = ();
+        {
+            Program p = getProgram(False, CycleSrc);
+            delete p;
+        }
+        # the kept Program and the values of Xray's static variables are released with the Program
+        assertEq(("guard Program: 42 7 PROGRAM-ERROR", "marker released"), Results::reports);
+    }
+
+    #! The Program that defines a class releases the values of its static variables when it is deleted
+    /** A child Program kept in a static variable of a public class that it shares, and so shared the values of,
+        kept the values, and itself, alive: the Program and the values were never released
+    */
+    deletedProgramStoredChildTest() {
+        Results::reports = ();
+        {
+            Program p = getProgram(False, StoredChildSrc);
+            delete p;
+        }
+        assertEq(("marker released",), Results::reports);
+    }
+
+    #! A child Program that shares the static variables of a class cannot access them once the Program that defines
+    #! the class is deleted, as it cannot call the methods of the class
+    deletedProgramChildReaderTest() {
+        Results::reports = ();
+        Program p = getProgram(False, ChildReaderSrc);
+        Program c = p.callFunction("make");
+        assertEq(5, c.callFunction("v"));
+        assertEq(5, c.callFunction("tv"));
+        assertEq(1, c.callFunction("h"));
+        assertEq("hello", c.callFunction("hello"));
+        assertEq(5, c.callFunction("rv"));
+        delete p;
+        assertEq(("marker released",), Results::reports);
+        # a read, a typed read, a read of an element and an assignment raise the error that a method call raises
+        assertThrows("PROGRAM-ERROR", "cannot access static variable 'Shared::v'",
+            sub () { c.callFunction("v"); });
+        assertThrows("PROGRAM-ERROR", "cannot access static variable 'Shared::v'",
+            sub () { c.callFunction("tv"); });
+        assertThrows("PROGRAM-ERROR", "cannot access static variable 'Shared::h'",
+            sub () { c.callFunction("h"); });
+        assertThrows("PROGRAM-ERROR", "cannot access static variable 'Shared::v'",
+            sub () { c.callFunction("w"); });
+        assertThrows("PROGRAM-ERROR", "already been deleted",
+            sub () { c.callFunction("hello"); });
+        # the C++ API: a read, which cannot raise an exception, returns no value, and an assignment raises the error
+        assertEq(NOTHING, c.callFunction("rv"));
+        assertThrows("PROGRAM-ERROR", "owns class 'Shared' has already been deleted",
+            sub () { c.callFunction("rs"); });
+        delete c;
+        assertEq(("marker released",), Results::reports);
+    }
+
+    #! A static variable whose initializer failed is not initialized by a read after the values were released
+    /** Its value stays NOTHING, as for the other variables; it was evaluated again, and its value, assigned after the
+        release, was released only when the variables were deleted
+    */
+    evalInitAfterReleaseTest() {
+        Results::reports = ();
+        Results::calls = 0;
+        {
+            Program p(PO_NEW_STYLE);
+            p.importFunction("svr_report");
+            p.importFunction("svr_next_call");
+            assertThrows("FIRST", \p.parse(), (EvalInitSrc, "evalinit"));
+            assertEq(42, p.callFunction("get"));
+            delete p;
+        }
+        assertEq(("reader read: null",), Results::reports);
+    }
+
+    #! Programs sharing a class are deleted at the same time in different threads after the Program of the class
+    /** Each thread deletes one; they are started together, and each one deletes the static variables of the class
+        if it sees no other Program sharing them
+    */
+    parallelDeleteTest() {
+        string vars = foldl $1 + $2, (map sprintf("        static int v%d = %d;\n", $1, $1), xrange(ParallelVars));
+        string src = sprintf(ParallelSrc, vars);
+        for (int i = 0; i < ParallelIterations; ++i) {
+            list<Program> children;
+            {
+                Program p(PO_NEW_STYLE);
+                p.parse(src, "parallel");
+                children = p.callFunction("make", ParallelPrograms);
+                assertEq(ParallelPrograms, children.size());
+                assertEq(0, children[0].callFunction("get"));
+                delete p;
+            }
+            # the threads wait until all have started, then delete their Programs together
+            Counter ready(ParallelPrograms);
+            Counter start(1);
+            Counter done(ParallelPrograms);
+            foreach Program child in (children) {
+                background StaticVarReleaseTest::deleteProgram(child, ready, start, done);
+            }
+            # only the threads reference the Programs now
+            children = ();
+            ready.waitForZero();
+            start.dec();
+            done.waitForZero();
+        }
+    }
+
+    #! The Program of a class and the Programs sharing it are deleted at the same time in different threads
+    /** The children read the static variables of the class and call its static method until they are deleted; the
+        last Program to release the values runs a destructor that creates a Program, which calls the method too.  The
+        method calls read the source Program of the class while the Program of the class releases it (a data race
+        before it was atomic, see TSan), and run the method's code, which belongs to the Program of the class, while
+        that Program is deleted
+    */
+    parallelGuardDeleteTest() {
+        string vars = foldl $1 + $2, (map sprintf("        static int v%d = %d;\n", $1, $1),
+            xrange(ParallelGuardVars));
+        string reads = (foldl $1 + " + " + $2, (map sprintf("Holder::v%d", $1), xrange(ParallelGuardVars)))
+            + " + Holder::value()";
+        string src = sprintf(ParallelGuardSrc, vars, reads);
+        int sum = foldl $1 + $2, xrange(ParallelGuardVars);
+        for (int i = 0; i < ParallelGuardIterations; ++i) {
+            Program p(PO_NEW_STYLE);
+            p.parse(src, "parallel");
+            list<Program> children = p.callFunction("make", ParallelPrograms);
+            assertEq((sum + 42) * 10, children[0].callFunction("get"));
+            Counter ready(ParallelPrograms + 1);
+            Counter start(1);
+            Counter done(ParallelPrograms + 1);
+            foreach Program child in (children) {
+                background StaticVarReleaseTest::runAndDeleteProgram(child, ready, start, done);
+            }
+            background StaticVarReleaseTest::deleteGuardProgram(p, ready, start, done);
+            # only the threads reference the Programs now
+            remove p;
+            children = ();
+            ready.waitForZero();
+            start.dec();
+            done.waitForZero();
+        }
+    }
+
+    #! reads the static variables in the Program, then deletes it, once all the threads have started
+    private static runAndDeleteProgram(Program p, Counter ready, Counter start, Counter done) {
+        on_exit done.dec();
+        ready.dec();
+        start.waitForZero();
+        try {
+            for (int i = 0; i < 3; ++i) {
+                p.callFunction("get");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the Program of the class can have been deleted
+            if (ex.err != "PROGRAM-ERROR") {
+                rethrow;
+            }
+        }
+        StaticVarReleaseTest::deleteSharingProgram(p);
+    }
+
+    #! deletes a Program sharing a class whose Program can have been deleted
+    /** If this deletion releases the values of the static variables, the destructor of the guard cannot run when the
+        Program of its class has been deleted
+    */
+    private static deleteSharingProgram(Program p) {
+        try {
+            delete p;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "PROGRAM-ERROR") {
+                rethrow;
+            }
+        }
+    }
+
+    #! deletes the Program of the class once all the threads deleting Programs have started
+    private static deleteGuardProgram(Program p, Counter ready, Counter start, Counter done) {
+        on_exit done.dec();
+        ready.dec();
+        start.waitForZero();
+        StaticVarReleaseTest::deleteSharingProgram(p);
+    }
+
+    #! deletes the Program once all the threads deleting Programs have started
+    private static deleteProgram(Program p, Counter ready, Counter start, Counter done) {
+        on_exit done.dec();
+        ready.dec();
+        start.waitForZero();
+        delete p;
+    }
+
+    exitTest(string script, list<string> output) {
+        string dir = get_script_dir() + "static-var-release";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string what = sprintf("%s with %s", script, mode);
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("env QORE_MODULE_DIR=%s "
+                "%s --exec-mode=%s %s", StaticVarReleaseTest::shellQuote(dir),
+                StaticVarReleaseTest::shellQuote(qore_bin), mode,
+                StaticVarReleaseTest::shellQuote(dir + DirSep + script)));
+            assertEq(0, r.rc, sprintf("%s exits normally: %s", what, r.out));
+            assertEq(output, (select r.stdout.split("\n"), $1.val()), sprintf("%s output: %s", what, r.out));
+            assertEq("", r.stderr, what + " writes nothing to stderr");
+        }
+    }
+
+    #! the exit script compiled to an executable with qcc, run with signal handling disabled
+    aotExitTest(string script, list<string> output) {
+        string dir = get_script_dir() + "static-var-release";
+        TmpDir tmp("svr-aot-");
+        string exe = tmp.path + DirSep + replace(basename(script), ".q", "");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -o %s %s",
+            StaticVarReleaseTest::shellQuote(StaticVarReleaseTest::getQcc(qore_bin)),
+            StaticVarReleaseTest::shellQuote(exe), StaticVarReleaseTest::shellQuote(dir + DirSep + script)));
+        assertEq(0, r.rc, sprintf("qcc %s: %s", script, r.out));
+        r = ExecModeHarness::run_command(sprintf("env QORE_MODULE_DIR=%s %s -b",
+            StaticVarReleaseTest::shellQuote(dir), StaticVarReleaseTest::shellQuote(exe)));
+        assertEq(0, r.rc, sprintf("%s exits normally: %s", exe, r.out));
+        assertEq(output, (select r.stdout.split("\n"), $1.val()), sprintf("%s output: %s", exe, r.out));
+        assertEq("", r.stderr, exe + " writes nothing to stderr");
+    }
+
+    #! the module compiled with qcc -m, loaded by the exit script in each execution mode
+    aotModuleExitTest(string script, string module, list<string> output) {
+        string dir = get_script_dir() + "static-var-release";
+        TmpDir tmp("svr-aot-");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -m -o %s %s",
+            StaticVarReleaseTest::shellQuote(StaticVarReleaseTest::getQcc(qore_bin)),
+            StaticVarReleaseTest::shellQuote(tmp.path + DirSep + module + ".qmod"),
+            StaticVarReleaseTest::shellQuote(dir + DirSep + module + ".qm")));
+        assertEq(0, r.rc, sprintf("qcc -m %s: %s", module, r.out));
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string what = sprintf("%s with %s and %s.qmod", script, mode, module);
+            # only the compiled module is on the module path
+            r = ExecModeHarness::run_command(sprintf("env QORE_MODULE_DIR=%s %s --exec-mode=%s %s",
+                StaticVarReleaseTest::shellQuote(tmp.path), StaticVarReleaseTest::shellQuote(qore_bin), mode,
+                StaticVarReleaseTest::shellQuote(dir + DirSep + script)));
+            assertEq(0, r.rc, sprintf("%s exits normally: %s", what, r.out));
+            assertEq(output, (select r.stdout.split("\n"), $1.val()), sprintf("%s output: %s", what, r.out));
+            assertEq("", r.stderr, what + " writes nothing to stderr");
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

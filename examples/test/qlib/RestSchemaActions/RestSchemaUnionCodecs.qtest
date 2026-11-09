@@ -2,9 +2,9 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/OpenApi3.qm
-%requires ../../../../qlib/RestSchemaActions
+%requires QUnit
+%requires OpenApi3
+%requires RestSchemaActions
 %requires json
 %exec-class UnionCodecTest
 
@@ -41,7 +41,7 @@ class UnionCodecTest inherits QUnit::Test {
             type = Serializable::deserialize(type.serialize());
             assertEq("one", type.acceptsValue("one"), kind);
             assertEq(2, type.acceptsValue(2), kind);
-            assertThrows("RUNTIME-TYPE-ERROR", sub () { type.acceptsValue("unknown"); });
+            assertThrows("TYPE-VALUE-ERROR", sub () { type.acceptsValue("unknown"); });
         }
     }
 
@@ -109,10 +109,10 @@ class UnionCodecTest inherits QUnit::Test {
                 assertEq(response, op.getResponseType().acceptsValue(response));
             }
         }
-        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+        assertThrows("TYPE-VALUE-ERROR", sub () {
             op.getResponseType().acceptsValue({"kind": "unknown", "created": 1970-01-01Z});
         }, NOTHING, "wire discriminators still reject unknown alternatives after conversion");
-        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+        assertThrows("TYPE-VALUE-ERROR", sub () {
             op.getResponseType().acceptsValue({"kind": "complete", "created": 1970-01-01Z, "extra": 1});
         }, NOTHING, "wire additionalProperties constraints remain enforced");
         assertEq({"kind": "chunk"}, op.processResponse({"kind": "chunk"}),
@@ -150,10 +150,10 @@ class UnionCodecTest inherits QUnit::Test {
         assertNothing(event.acceptsValue(NOTHING));
         hash<auto> value = {"kind": "complete", "created": 1970-01-01Z};
         assertEq(value, event.acceptsValue(value));
-        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+        assertThrows("TYPE-VALUE-ERROR", sub () {
             event.acceptsValue({"kind": "unknown", "created": 1970-01-01Z});
         }, NOTHING, "the wire contract is still enforced for an optional union");
-        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+        assertThrows("TYPE-VALUE-ERROR", sub () {
             event.acceptsValue({"kind": "complete", "created": 1970-01-01Z, "extra": 1});
         }, NOTHING, "wire additionalProperties constraints remain enforced for an optional union");
         hash<auto> request = {"body": {"event": value}};

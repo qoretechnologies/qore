@@ -4,7 +4,7 @@
 
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
+%requires QUnit
 %requires astparser
 
 %exec-class KeywordCallTest

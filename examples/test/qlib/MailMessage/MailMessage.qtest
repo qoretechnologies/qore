@@ -5,9 +5,9 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/MailMessage.qm
+%requires QUnit
+%requires Mime
+%requires MailMessage
 
 %exec-class Main
 

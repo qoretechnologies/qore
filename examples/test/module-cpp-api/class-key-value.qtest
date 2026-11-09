@@ -1,0 +1,55 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# the "cppapiuser" test module is built into the build tree and never installed, so QORE_MODULE_DIR must include the
+# build tree (run_tests.sh does this)
+
+%modern
+
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class ClassKeyValueTest
+
+#! the objects released from the key-value data of a class
+class KvResults {
+    public {
+        static list<string> released = ();
+    }
+}
+
+#! stored with key "second" by the destructor of KvFirst while the key-value data of the class is released
+class KvSecond {
+    destructor() {
+        KvResults::released += "second";
+    }
+}
+
+#! stored with key "first"; its destructor stores a KvSecond in the key-value data of the class being released
+class KvFirst {
+    destructor() {
+        KvResults::released += "first";
+        cpp_api_class_key_value_set("second", new KvSecond());
+    }
+}
+
+#! The key-value data of a class (QoreClass::setKeyValue()) is released with the class
+/** A class without static variables released by its last holder (qore_class_private::deref(), as by QoreClassHolder)
+    kept its key-value data, which was released only with the static variables.  A value that a destructor run by the
+    release stores in the key-value data is released with the class as well.
+*/
+class ClassKeyValueTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ClassKeyValueTest", "1.0", \ARGV) {
+        addTestCase("key-value data released with a class without static variables", \releaseTest());
+        set_return_value(main());
+    }
+
+    releaseTest() {
+        KvResults::released = ();
+        cpp_api_class_key_value_release("KvFirst");
+        assertEq(("first", "second"), KvResults::released);
+    }
+}

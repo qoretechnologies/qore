@@ -4,8 +4,8 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/DataProvider
+%requires QUnit
+%requires DataProvider
 
 %exec-class SoftTypeGraphTest
 
@@ -136,7 +136,7 @@ class SoftTypeGraphTest inherits QUnit::Test {
         assertEq("list<softbool>", soft_booleans.getValueType().getName(),
             "the Qore type describes the converted element type");
         assertEq((True,), soft_booleans.acceptsValue(("1",)), "the converted list accepts a soft element value");
-        assertThrows("RUNTIME-TYPE-ERROR", \booleans.acceptsValue(), (("1",),),
+        assertThrows("TYPE-VALUE-ERROR", \booleans.acceptsValue(), (("1",),),
             "the source list still rejects the value");
 
         # the kind of list is preserved: a soft list stays a soft list, an optional list stays optional

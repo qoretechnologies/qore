@@ -875,6 +875,29 @@ DLLLOCAL void qore_process_params(unsigned num_params, type_vec_t& typeList, arg
 void ensure_unique(AbstractQoreNode** v, ExceptionSink* xsink);
 void ensure_unique(QoreValue& v, ExceptionSink* xsink);
 
+//! Returns a value holding \a copy, a copy of the hash or list that \a v holds, in the representation of \a v
+/** A copy of a container held through an opaque reference (the \c \@= operator) is held through an opaque
+    reference, with a registration of its own with the opaque target registry, with the Program of the registration
+    of \a v (the current Program if \a v has none); any other copy is held as an ordinary value.  A write through an opaque reference changes the container that the reference holds: when the
+    container is shared, the reference is given a copy to change (copy-on-write), and the reference stays opaque,
+    as it does when the container is changed in place, so that whether the collector follows the edge never
+    depends on whether the container was shared.
+
+    @param v the value that the copy replaces
+    @param copy the copy, whose reference is taken by the value returned
+*/
+DLLLOCAL QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* copy);
+
+//! Replaces the node that \a v holds with a copy if it is not unique (copy-on-write), keeping the representation of \a v
+/** See qore_value_with_copy().  The value replaced is returned as it was held, for the caller to release with
+    QoreValue::discard() or LValueHelper::saveTemp(): releasing it as a plain node would leave the registration of
+    an opaque value with the opaque target registry (see design/dgc.md, "Opaque references").
+
+    @param v a value holding a node other than an object
+    @return the value replaced, or NOTHING if the node was unique
+*/
+DLLLOCAL QoreValue qore_value_copy_on_write(QoreValue& v);
+
 #ifndef HAVE_ATOLL
 #ifdef HAVE_STRTOIMAX
 static inline long long atoll(const char* str) {
@@ -962,11 +985,25 @@ typedef std::list<qore_conditional_block_exit_statement_t> block_list_t;
 
 #define DAH_TEXT(d) (d == DAH_RELEASE ? "RELEASE" : (d == DAH_ACQUIRE ? "ACQUIRE" : "NOCHANGE"))
 
+//! what an lvalue checked by check_lvalue() is used for
+enum class qore_lvalue_use_e : unsigned char {
+    //! assigned or modified in place: a cast checks the value of the lvalue inside it
+    MODIFY,
+    //! removed by the remove or delete operators: may end in a slice, but may not be a cast
+    REMOVE,
+    //! the lvalue of a reference: may not contain a cast, as the reference evaluates the variables and selectors of
+    //! its lvalue when it is made
+    REFERENCE,
+};
+
 //! checks an lvalue expression; returns 0 for OK, -1 if it is not an lvalue, -2 for an error already reported
-/** @param allow_slice true if the expression may be a slice (the remove and delete operators)
+/** @param assign true if the lvalue is assigned
+    @param use what the lvalue is used for; a cast is a converted value and not storage that can be removed, so it
+    can be the lvalue only when the lvalue is modified in place, and a step of the lvalue of an operator, but it cannot
+    be in the lvalue of a reference (issue #5640)
 */
-DLLLOCAL int check_lvalue(QoreValue n, bool assign = true, bool allow_slice = false);
-DLLLOCAL int check_lvalue(AbstractQoreNode* n, bool assign = true, bool allow_slice = false);
+DLLLOCAL int check_lvalue(QoreValue n, bool assign = true, qore_lvalue_use_e use = qore_lvalue_use_e::MODIFY);
+DLLLOCAL int check_lvalue(AbstractQoreNode* n, bool assign = true, qore_lvalue_use_e use = qore_lvalue_use_e::MODIFY);
 DLLLOCAL bool parse_is_readonly_receiver_expression(QoreValue n, int pflag);
 DLLLOCAL int check_const_method_lvalue(const QoreProgramLocation* loc, QoreValue n);
 DLLLOCAL int check_readonly_receiver_method_call(const QoreProgramLocation* loc, const char* name,
@@ -1179,6 +1216,17 @@ public:
 DLLLOCAL extern std::atomic<bool> qore_initialized;
 DLLLOCAL extern std::atomic<bool> qore_shutdown;
 DLLLOCAL extern std::atomic<bool> qore_exiting;
+
+#ifdef DEBUG
+//! Asserts that a hash, list or object being freed is not registered as the target of an opaque reference
+/** A registered target is alive because the opaque values referring to it hold references to it (see
+    qore_program_private_base::registerOpaqueTarget()); one freed while registered has had an opaque value's reference
+    released without its registration, and the teardown of the Program owning the entry reads freed memory.  Called by
+    the destructors of QoreHashNode, QoreListNode and QoreObject, which report the release that broke the rule where it
+    happens.
+*/
+DLLLOCAL void qore_debug_check_freed_node_not_opaque_target(const AbstractQoreNode* n);
+#endif
 
 DLLLOCAL extern int qore_library_options;
 DLLLOCAL extern std::atomic<int> qore_global_http2_mode;

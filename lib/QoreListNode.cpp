@@ -68,11 +68,32 @@ QoreValue& QoreListNodeEvalOptionalRefHolder::getEntryReference(size_t index) {
 // with this variant, we can edit and reuse references from "exp"
 void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
     assert(!exp || exp->reference_count() == 1);
+    tmp_source = false;
 
     if (!exp || exp->empty()) {
         val = nullptr;
         needs_deref = false;
         return;
+    }
+    // a list whose values need no evaluation (the arguments that compiled code evaluated) is used as it is: the
+    // holder takes its values over and edits it in place (see tmp_source) instead of moving them to a new list, which
+    // allocated a list and its entries for each call; the caller keeps its reference and releases the list
+    {
+        bool evaluated = true;
+        for (size_t i = 0, e = exp->size(); i < e; ++i) {
+            const QoreValue& ev = exp->retrieveEntry(i);
+            if (ev.needsEval() && ev.getType() != NT_REFERENCE && ev.getType() != NT_WEAKREF
+                    && ev.getType() != NT_WEAKREF_HASH && ev.getType() != NT_WEAKREF_LIST) {
+                evaluated = false;
+                break;
+            }
+        }
+        if (evaluated) {
+            val = exp;
+            needs_deref = false;
+            tmp_source = true;
+            return;
+        }
     }
     needs_deref = true;
     val = new QoreListNode(autoTypeInfo);
@@ -348,6 +369,9 @@ QoreListNode::QoreListNode(const QoreTypeInfo* valueTypeInfo) : QoreListNode() {
 }
 
 QoreListNode::~QoreListNode() {
+#ifdef DEBUG
+    qore_debug_check_freed_node_not_opaque_target(this);
+#endif
     delete priv;
 }
 

@@ -85,6 +85,12 @@ the real reference a plain local variable gives its object (`QoreLValue::closure
 variable), so a write to that object - by the frame, through a `\var` argument, or by another thread through a
 closure - is deferred as well.
 
+The IR storage of an object local (a body local of an object type that compiled code keeps out of the runtime stack,
+`QoreIRFunction::real_reference_locals`) gives the object it holds a real reference in the same way: it is marked
+with `setRealReference()` when stored and released with `realDeref()` (see `design/qore-jit-aot-current-state.md`).
+IR storage that does not mark its object (an `auto` local) is correct, as its reference is external to any recursive
+set, but each release of another reference to an object in a recursive set held only there is a collection decision.
+
 A deferred scan is replayed by the first dereference that finds no real reference left while other references
 remain. A constructor that writes to its members defers such a scan on the new object (its `self` holds a real
 reference), so the new object must not be dereferenced again after it has been linked into a graph, or the replay
@@ -638,8 +644,8 @@ with nothing running, which reads like a deadlock but is the restart loop failin
 ### A container that a scan finds locked
 
 A Pattern B container reports its values to a scan under its own lock, and the scan only tries that lock: blocking
-could deadlock, as the lock can be held by a thread that waits for something the scan holds (a `Queue` releases
-the values it clears under its lock, which can run any destructor). A scan that finds the lock held cannot read the
+could deadlock, as the lock can be held by a thread that waits for something the scan holds (a module's container
+can run Qore code under its lock, and a scan on the same thread can try a lock that the thread holds). A scan that finds the lock held cannot read the
 values, so it does not see the edges they make, and the dereference that made the scan has already taken the scan
 due at the object (`deferred_scan`). Skipping the values used to be all there was to it, on the assumption that a
 later scan would read them; but nothing made one due, and a cycle that only the container's values closed was never
@@ -1161,7 +1167,12 @@ The rules for `scanValues()` are the scanner rules: it tries the container's loc
 exception and calls no Qore or foreign-language code, and it releases no reference. A container
 lock that is held while the module releases values or runs Qore code can be tried by a scan on the same thread, so
 the lock that `scanValues()` tries should only be held while the container itself is changed, with the values it
-gives up released after the lock.
+gives up released after the lock. libqore's `TreeMap` and `Queue` follow the same rule (`TreeMapData::put()` and
+`TreeMapData::destructor()`; `Queue::clear()`, `Queue::setError()` and the queue's destruction take the nodes under
+the lock and release them after it with `qore_queue_private::NodeListRelease`). `TreeMap`'s scanner tries a
+`QoreRWLock`, which asserts when its own writer tries it, and `TreeMap::put()` replacing a value that the map held
+twice in a cycle released it under the lock, so the dereference's rescan on the same thread aborted debug builds; a
+destructor of a released value that used its own `TreeMap` or `Queue` blocked forever on the lock.
 
 **The virtual is on a subclass, not on `AbstractPrivateData`.** A new virtual function on `AbstractPrivateData`
 would move the vtable slots of every public subclass that has virtual functions of its own (`InputStream::read()`,
@@ -1203,8 +1214,8 @@ scan commits, and the scan then records an `rcount` above the value's references
 Each object therefore carries a removal generation besides its edge generation:
 
 - `RObject::edgesRemoved()` advances `RObject::remove_gen`; a container calls it on the holder under its lock for
-  every value it gives up that needs a scan, before the value can be released: a value released under the
-  container's lock needs the mark as much as one handed out, for the scan race above.
+  every value it gives up that needs a scan, before the value can be released: a value that the container releases
+  after its lock needs the mark as much as one handed out, for the scan race above.
 - A scan reads each object's removal generation before it follows the object's edges (`RSetHelper::startNode()`), and
   the commit records it as `scan_remove_gen` whether it assigns a new set or confirms the one in place.
 - `RSet::canDelete()` collects a set only when `RSet::removalsUnchangedSinceScan()` is true; otherwise it asks for
@@ -1214,6 +1225,14 @@ Each object therefore carries a removal generation besides its edge generation:
 - The debug check that a committed set has no `rcount` above an object's references allows the excess only when a
   member has given up a value since the scan: the count is read first, and the mark is made before the value can
   be released, so a released value is always seen with its mark.
+- The scan makes the set even when a node already has fewer references than it counted as internal before the
+  commit (`RSetHelper::countInternalReferences()`), as long as a member of the component has given up a value since
+  the scan read its removal generation; the value released can be one with no reference left, being deleted. The
+  set is never collected with those counts, and the release rescans it. Making no set instead left the container
+  and the values it still holds, which are still a cycle, in no set, so they were not collected until a later write
+  scanned them; `releasedDuringScanTest` in `dgc-handed-out-values` holds a scan with `dbg_hold_scan_walked()`
+  while a TreeMap releases a value the scan read. An excess that no removal explains is a defect of the scan: debug
+  builds assert, and release builds make no set for the component.
 
 A queue reports its values only while it counts values pushed through its object (`qore_queue_private::scan_count`)
 and keeps that object (`scan_holder`, with a weak reference) for as long, so a value taken through the C++ API,
@@ -1324,6 +1343,34 @@ held through an opaque value is registered with the target's owning `QoreProgram
 `takeNodeIntern()`. Registration counts **references, not assignments**: each copy takes its own
 reference, so each copy must take its own registration, or the first release would untrack a target
 other copies still hold.
+
+A value read through an opaque reference keeps its opaque representation, and with it one registration,
+until it is stored somewhere that converts it, so **every release of a value that can be opaque must end
+its registration with its reference**: through `QoreValue::discard()` or `takeNode()`, never by
+dereferencing the node it holds directly. IR storage that marks the object it holds with a real reference
+(the IR interpreter's slots of object locals and IR-only locals of no type, and their native caches)
+releases its value with `qore_release_real_reference_value()` for this reason: it released objects with
+`QoreObject::realDeref()` alone, so a target read into such a local stayed registered after its last
+reference was released, and the teardown of its Program read it after it had been freed. A library with
+debugging checks the rule where it is broken: a hash, list or object freed while it is still registered
+aborts (`qore_debug_check_freed_node_not_opaque_target()`).
+
+A **change through an opaque reference** to a hash or a list that is shared copies it (copy-on-write) like a
+change through an ordinary reference, and the copy is held through an opaque reference
+(`qore_value_copy_on_write()`, `qore_value_with_copy()`, used by `LValueHelper::ensureUnique()` and by a push
+in native code): a change in place keeps the reference opaque, so a copy does too, and whether the collector
+follows the edge never depends on whether the container was shared. The copy takes a registration of its own,
+with the Program of the registration it replaces (the Program making the change if there is none), so the
+teardown that breaks a cycle through the reference is the same whether or not the change copied the container,
+also when another Program's code makes the change; the value replaced is released as it was held. An lvalue path
+that makes a list or a hash of a value held through an opaque reference (`h.a[0] = 1` for an object, `h.il.x = 1`
+for a list) releases the value it replaces as it was held too (`LValueHelper::saveCurrentValue()`). A coercion that
+copies a value read through an opaque reference for an assignment (`hash<auto!>`, `list<auto!>` and the other
+container type conversions) gives an ordinary value, as any value read through an opaque reference is
+assigned with `=` as an ordinary reference, and releases the value it replaces as it was held.
+
+`examples/test/qore/misc/dgc-opaque-object-local-release.qtest` covers the locals of every kind, assignments
+with `:=` and `@=`, copy-on-write and coercions in every execution mode and in a qcc executable.
 
 `qore_program_private::clearOpaqueTargets()` then deletes every still-registered target during
 `waitForTerminationAndClear()`, next to `clearSavedObjects()` and for the same reason: deleting a

@@ -1,0 +1,26 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+#
+# Part 2 of the cases of AOTSccIncrementalDriver.qc, which describes them
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+%requires json
+%requires ../TestFileTime.qm
+
+%include AOTSccIncrementalDriver.qc
+
+%exec-class AOTSccIncrementalDriverPart2
+
+#! runs part 2 of 3 of the cases of AOTSccIncrementalDriverBase
+class AOTSccIncrementalDriverPart2 inherits AOTSccIncrementalDriverBase {
+    constructor() : AOTSccIncrementalDriverBase("AOTSccIncrementalDriverPart2", 2) {
+    }
+}

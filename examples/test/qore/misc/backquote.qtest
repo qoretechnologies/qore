@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - backquote child processes: SIGINT handling, killing the process group, output pipe closing
 
 %modern
 
@@ -71,17 +72,32 @@ class BackquoteTest inherits QUnit::Test {
         assertEq(42, rc, "backquote child should handle SIGINT");
     }
 
+    #! interrupting the sandbox of a thread in backquote() kills every process of the command
+    /** The interrupt can arrive while the command's shell is starting a process: on macOS, a SIGKILL sent to the
+        process group does not reach a process created at that moment, and backquote() sends it to the group again once
+        the shell has ended; each command starts processes until it is killed, and several commands are interrupted,
+        so that the interrupt arrives while the shell is starting a process.  The commands of the first rounds keep
+        their output open, so that backquote() is reading it when it is interrupted; the others close it, so that
+        backquote() is reading it or waiting for the process to exit.
+    */
     testInterruptKillsProcessGroup() {
         if (PlatformOS == "Windows") {
             testSkip("skipping because the test is being run on Windows");
         }
 
-        string pid_file = tmp_location() + "/backquote_pid_" + string(getpid());
-        on_exit {
-            if (is_file(pid_file)) {
-                unlink(pid_file);
-            }
+        for (int i = 1; i <= 6; ++i) {
+            interruptCommand(i, i > 3);
         }
+    }
+
+    #! runs a command in a sandboxed Program, interrupts the sandbox and checks that every process of the command ends
+    /** The processes of the command hold the write end of a FIFO open, so that end-of-file on its read end shows that
+        every one of them has exited.
+    */
+    private interruptCommand(int round, bool close_output) {
+        string fifo = sprintf("%s/backquote_pgroup_fifo_%d_%d", tmp_location(), getpid(), round);
+        assertEq(0, mkfifo(fifo), sprintf("round %d: FIFO created", round));
+        on_exit unlink(fifo);
 
         SandboxManager sm();
         Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
@@ -98,49 +114,60 @@ int sub run_backquote_rc(string cmd) {
         ", "backquote_interrupt_test");
 
         Counter done(1);
-        bool caught = False;
-        string ex_err;
+        *string ex_err;
         int rc = -999;
 
-        string cmd = "echo $$ > " + pid_file + "; sleep 30 & wait";
-        background sub() {
+        # the shell opens the FIFO on descriptor 3, which every process that it starts inherits, and writes its PID,
+        # which is the ID of its process group
+        string cmd = sprintf("exec 3> %s; %secho $$ >&3; i=0; while [ $i -lt 200 ]; do sleep 120 & i=$((i + 1)); "
+            "done; wait", fifo, close_output ? "exec >&-; " : "");
+        background sub () {
+            on_exit done.dec();
             try {
                 rc = p.callFunction("run_backquote_rc", cmd);
             } catch (hash<ExceptionInfo> ex) {
-                caught = True;
                 ex_err = ex.err;
-                rc = -1;
             }
-            done.dec();
         }();
 
-        int wait_attempts = 200;
-        while (!is_file(pid_file) && wait_attempts-- > 0) {
-            usleep(10000);
+        # blocks until the shell has opened the FIFO
+        ReadOnlyFile f(fifo);
+        int pgid;
+        # set when processes of the command are left running
+        bool left_running = False;
+        on_exit {
+            # ends the command if the test fails before interrupting it
+            if (done.getCount()) {
+                sm.requestInterrupt();
+            }
+            done.waitForZero();
+            # the processes left running hold the FIFO open, so the ID of their process group cannot have been reused
+            if (left_running) {
+                kill(-pgid, SIGKILL);
+            }
         }
-        assertTrue(is_file(pid_file), "pid file created");
 
-        string pid_str = chomp(ReadOnlyFile::readTextFile(pid_file));
-        int pgid = pid_str.toInt();
-        assertTrue(pgid > 0, "process group id captured");
+        pgid = int(f.readLine());
+        assertGt(0, pgid, sprintf("round %d: process group ID read", round));
 
         sm.requestInterrupt();
-        done.waitForZero(5s);
+        # a backstop only: the interrupt ends the wait at once
+        assertEq(0, done.waitForZero(20s), sprintf("round %d: the interrupted wait ended", round));
+        assertEq("PROGRAM-INTERRUPTED", ex_err, sprintf("round %d: backquote() raised PROGRAM-INTERRUPTED", round));
+        assertEq(-999, rc, sprintf("round %d: backquote() returned no value", round));
 
-        assertEq(-1, rc, "backquote() should return -1 on interrupt");
-        assertEq(True, caught, "backquote() call interrupted");
-        assertEq("PROGRAM-INTERRUPTED", ex_err, "backquote() raised PROGRAM-INTERRUPTED");
-
-        int krc = 0;
-        int kill_attempts = 50;
-        while (kill_attempts-- > 0) {
-            krc = kill(-pgid, 0);
-            if (krc == -1) {
-                break;
+        # end-of-file is read when every process holding the FIFO open has exited; the timeout is a hang guard, not
+        # synchronization: the processes have been killed, and the read returns when the last one has exited
+        try {
+            while (f.readBinary(1, 60s)) {
             }
-            usleep(10000);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "FILE-READ-TIMEOUT") {
+                rethrow;
+            }
+            left_running = True;
         }
-        assertEq(-1, krc, "process group should be gone");
+        assertFalse(left_running, sprintf("round %d: every process of the command has exited", round));
     }
 
     testRestrictedAccess() {

@@ -9,8 +9,9 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../build/modules/dataframe"
 
-%requires ../../../qlib/QUnit.qm
-%requires ../../../qlib/Util.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires Util
 
 %try-module dataframe
 %define NoDataFrame
@@ -63,12 +64,15 @@ class DataFrameDbiTest inherits QUnit::Test {
 
         string table = sprintf("qdfdbi%d", getpid());
         string out_table = sprintf("qdfdbo%d", getpid());
+        string key_table = sprintf("qdfdbk%d", getpid());
         on_exit {
+            execIgnore(ds, "DROP TABLE " + key_table);
             execIgnore(ds, "DROP TABLE " + out_table);
             execIgnore(ds, "DROP TABLE " + table);
             ds.close();
         }
 
+        execIgnore(ds, "DROP TABLE " + key_table);
         execIgnore(ds, "DROP TABLE " + out_table);
         execIgnore(ds, "DROP TABLE " + table);
 
@@ -78,17 +82,19 @@ class DataFrameDbiTest inherits QUnit::Test {
         ds.exec("INSERT INTO " + table + " (id, name, score) VALUES (3, 'Cy', 92.25)");
         ds.commit();
 
+        # Oracle's INTEGER is NUMBER(38): a scale-0 numeric of a precision over 18 is a decimal128 column of numbers
+        # in a columnar result, as it does not always fit in an int64; the other databases' integer is an int64
+        list<auto> ids = ds.getDriverRealName() =~ /oracle/i ? (1n, 2n, 3n) : (1, 2, 3);
         DataFrame::DataFrame df = DataFrame::DataFrame::fromQuery(ds,
             "SELECT id, name, score FROM " + table + " ORDER BY id");
         assertEq(3, df.numRows(), label + " fromQuery preserves row count");
-        assertEq((1, 2, 3), cast<list<int>>(getColumn(df, "id")), label + " fromQuery preserves dense ids");
+        assertEq(ids, getColumn(df, "id"), label + " fromQuery preserves dense ids");
         assertEq(("Ada", "Bo", "Cy"), cast<list<string>>(getColumn(df, "name")),
             label + " fromQuery preserves strings");
 
         ColumnarResult columns = ds.selectColumnar("SELECT id, name, score FROM " + table + " ORDER BY id");
         assertEq(3, columns.numRows(), label + " selectColumnar returns rows");
-        assertEq((1, 2, 3), cast<list<int>>(columns.getColumn("id").toList()),
-            label + " selectColumnar preserves dense ids");
+        assertEq(ids, columns.getColumn("id").toList(), label + " selectColumnar preserves dense ids");
 
         ds.exec("CREATE TABLE " + out_table + " (id integer, name varchar(80), score float)");
         df.toTable(ds, out_table);
@@ -98,6 +104,35 @@ class DataFrameDbiTest inherits QUnit::Test {
             "SELECT id, name, score FROM " + out_table + " ORDER BY id");
         assertEq(("Ada", "Bo", "Cy"), cast<list<string>>(getColumn(out, "name")),
             label + " toTable round-trip preserves strings");
+
+        # a bulk insert that fails raises the error of the database, not the error of a fallback statement: a
+        # database such as PostgreSQL aborts the transaction on an error, so a fallback would fail with "current
+        # transaction is aborted"
+        ds.exec("CREATE TABLE " + key_table + " (id integer primary key, name varchar(80))");
+        ds.exec("INSERT INTO " + key_table + " (id, name) VALUES (1, 'Ada')");
+        ds.commit();
+        DataFrame::DataFrame dup({"id": (2, 1), "name": ("Bo", "Ada again")});
+        *hash<ExceptionInfo> ex;
+        try {
+            dup.toTable(ds, key_table);
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        # the caller rolls back the failed write; nothing is committed in either case
+        ds.rollback();
+        assertTrue(exists ex, label + " toTable() of a duplicate key raises an exception");
+        if (ex) {
+            string err = ex.err + ": " + ex.desc;
+            assertRegex("duplicate|unique|primary key", err.lwr(),
+                label + " toTable() raises the duplicate key error of the database");
+            assertFalse(err =~ /current transaction is aborted/i,
+                label + " toTable() does not hide the error behind a fallback statement");
+        }
+        # Oracle's INTEGER column is a column of numbers, as above
+        list<auto> key_ids = getColumn(DataFrame::DataFrame::fromQuery(ds,
+            "SELECT id FROM " + key_table + " ORDER BY id"), "id");
+        assertEq(ds.getDriverRealName() =~ /oracle/i ? (1n,) : (1,), key_ids,
+            label + " the caller rolled back the failed toTable()");
     }
 
     private verifyConnstr(string label, *string connstr) {

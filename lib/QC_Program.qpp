@@ -772,6 +772,12 @@ const PO_NO_TERMINAL_IO = PO_NO_TERMINAL_IO;
 /** Examples of unavailable functionality: the @ref background "background operator" and the
     @ref thread_exit "thread_exit statement"
 
+    The option restricts the code of the Program itself and is checked when the code is parsed (and for a dynamic call
+    such as @ref Qore::call_function() "call_function()" when the call is made); module code that the
+    Program calls keeps its own options and can start threads, also threads that run the Program's code.  Such threads
+    are governed by the Program's @ref Qore::SandboxManager "SandboxManager"; to bound their number, set
+    @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()" (see @ref sandbox_po_threads)
+
     @see @ref no-thread-control "%no-thread-control"
 */
 const PO_NO_THREAD_CONTROL = PO_NO_THREAD_CONTROL;
@@ -2098,6 +2104,7 @@ pgm.importClass("MyNamespace::MyClass");
     @endcode
 
     @throw CLASS-IMPORT-ERROR Cannot import a class into the same Program object; class or namespace with this name already exists or the source class does not exist; injection indicated but @ref Qore::PO_ALLOW_INJECTION not set, or the class name or the name to import it as contains a NUL character (since %Qore 3.0)
+    @throw CLASS-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a sandbox or has parse options that restrict a functional domain; such code cannot re-export classes to the modules that a Program loads (see @ref sandbox_module_init)
     @throw ENCODING-CONVERSION-ERROR the class name could not be converted to the @ref default_encoding "default character encoding"
 
     @param reexport if @ref True "True", the imported class is marked for re-export to child Programs created when modules are required transitively from this Program — i.e. when this Program is the parent in a module-loader child-Program creation, qore_program_private::inheritParseImports() will propagate the imported class so the child's parse can resolve unqualified references to it.  Default is @ref False "False" (no re-export), which preserves the historical "imports stay local" semantic and avoids diamond conflicts with namespace-merged public classes that the host never opted to expose.
@@ -2134,6 +2141,12 @@ nothing Program::importClass(string class_name, *string import_as, *softbool inj
         if (nn->empty())
             return xsink->raiseException("CLASS-IMPORT-ERROR", "the new class name while importing class '%s' may not be empty", tmp->c_str());
     }
+    // a class re-exported to the modules that the Program loads is used by library code
+    if (reexport && qore_caller_is_untrusted()) {
+        return xsink->raiseException("CLASS-IMPORT-ERROR", "cannot import class '%s' for re-export: code that a "
+            "sandbox governs or whose functional domains are restricted cannot re-export classes to the modules "
+            "that a Program loads", tmp->c_str());
+    }
     qore_program_private::get(*p)->importClass(xsink, *qore_program_private::get(*getProgram()), tmp->c_str(),
         import_as ? nn->c_str() : nullptr, inject, static_cast<q_setpub_t>(module_visibility), reexport);
 }
@@ -2150,6 +2163,7 @@ pgm.importHashDecl("MyNamespace::MyHash");
     @endcode
 
     @throw HASHDECL-IMPORT-ERROR Cannot import a hashdecl into the same Program object; conflict with an existing definition, or the hashdecl name or the name to import it as contains a NUL character (since %Qore 3.0)
+    @throw HASHDECL-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a sandbox or has parse options that restrict a functional domain; such code cannot re-export hashdecls to the modules that a Program loads (see @ref sandbox_module_init)
     @throw ENCODING-CONVERSION-ERROR the hashdecl name could not be converted to the @ref default_encoding "default character encoding"
 
     @param reexport if @ref True "True", the imported hashdecl is marked for re-export to child Programs created when modules are required transitively from this Program — i.e. when this Program is the parent in a module-loader child-Program creation, qore_program_private::inheritParseImports() will propagate the imported hashdecl so the child's parse can resolve unqualified references to it (closest-to-root match algorithm).  Default is @ref False "False" (no re-export), which preserves the historical "imports stay local" semantic.
@@ -2183,6 +2197,12 @@ nothing Program::importHashDecl(string hashdecl_name, *string import_as, bool re
 
         if (nn->empty())
             return xsink->raiseException("HASHDECL-IMPORT-ERROR", "the new hashdecl name while importing hashdecl '%s' may not be empty", tmp->c_str());
+    }
+    // a hashdecl re-exported to the modules that the Program loads is used by library code
+    if (reexport && qore_caller_is_untrusted()) {
+        return xsink->raiseException("HASHDECL-IMPORT-ERROR", "cannot import hashdecl '%s' for re-export: code that "
+            "a sandbox governs or whose functional domains are restricted cannot re-export hashdecls to the modules "
+            "that a Program loads", tmp->c_str());
     }
     qore_program_private::get(*p)->importHashDecl(xsink, *qore_program_private::get(*getProgram()),
         tmp->c_str(), import_as ? nn->c_str() : nullptr, CSP_UNCHANGED, reexport);
@@ -3484,6 +3504,66 @@ int count = pgm.getThreadCount();
 */
 int Program::getThreadCount() [flags=CONSTANT] {
     return p->getThreadCount();
+}
+
+//! Waits until no threads or parsing operations are active in this Program
+/** @param limit timeout in milliseconds or a relative date; omitted/zero waits indefinitely, negative checks only
+    @return true when idle, false on timeout
+    @throw PROGRAM-THREAD-ERROR the calling thread is active in this Program
+    @note Cancellable and event-driven. Does not wait for final thread-local cleanup or reserve the Program
+    for parsing; callers must still handle a new thread starting before their next operation.
+    @par Example:
+    @code{.py}
+background sub () { pgm.waitForThreads(); queue.push("program-idle"); }();
+    @endcode
+    @since %Qore 3.0
+*/
+bool Program::waitForThreads(*timeout limit) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {
+    return p->waitForThreads(xsink, limit == 0 ? -1 : (limit < 0 ? 0 : limit));
+}
+
+//! Waits for a specific thread to leave this Program
+/** @param tid positive thread ID @param limit same semantics as waitForThreads()
+    @return true if the thread has left or is not active here, false on timeout
+    @throw PROGRAM-THREAD-ERROR invalid ID or self-wait
+    @note Does not join final thread-local cleanup; use thread_join() for owned process-level threads.
+    @since %Qore 3.0
+*/
+bool Program::waitForThread(int tid, *timeout limit) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {
+    if (tid <= 0 || tid > INT_MAX) {
+        xsink->raiseException("PROGRAM-THREAD-ERROR", "thread ID must be a positive native integer");
+        return false;
+    }
+    return p->waitForThreads(xsink, limit == 0 ? -1 : (limit < 0 ? 0 : limit), tid);
+}
+
+//! Requests cooperative cancellation of one of this Program's threads
+/** @param tid positive thread ID @param reason optional explanation
+    @return true if cancellation was requested, false if the thread is no longer active here
+    @throw PROGRAM-THREAD-ERROR invalid ID or self-cancellation
+    @note The request is scoped to this Program even if the thread ID is recycled. Code can catch or defer
+    cancellation; waitForThreads() observes actual completion. This method never forcibly kills a native thread.
+    @since %Qore 3.0
+*/
+bool Program::cancelThread(int tid, *string reason) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {
+    if (tid <= 0 || tid > INT_MAX) {
+        xsink->raiseException("PROGRAM-THREAD-ERROR", "thread ID must be a positive native integer");
+        return false;
+    }
+    return p->cancelThread(tid, reason ? reason->c_str() : nullptr, xsink);
+}
+
+//! Requests cooperative cancellation of all threads in this Program
+/** @param reason optional explanation @return number of registered threads receiving a request
+    @throw PROGRAM-THREAD-ERROR called from inside this Program
+    @note Includes starting threads and descendants until the Program next becomes idle, also the threads that a
+    @ref Qore::SandboxManager::createSystemThreadCall() "system thread capability" of this Program starts.
+    Cancellation can be caught or deferred; use waitForThreads() to observe completion. A later evaluation is
+    unaffected.
+    @since %Qore 3.0
+*/
+int Program::cancelThreads(*string reason) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {
+    return p->cancelThreads(xsink, reason ? reason->c_str() : nullptr);
 }
 
 //! Get @ref Qore::ProgramControl "ProgramControl"

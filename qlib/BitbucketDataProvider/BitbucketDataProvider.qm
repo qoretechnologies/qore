@@ -75,33 +75,37 @@ module BitbucketDataProvider {
             "groups": (DataProvider::AppGroup::VersionControl, DataProvider::AppGroup::DevOps),
         });
 
-        # register every action in the manifest
-        RestSchemaActionSet action_set = BitbucketSchema::getActionSet();
-        action_set.registerActions(BitbucketDataProvider::AppName);
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(BitbucketDataProvider::AppName, sub () {
+            # register every action in the manifest
+            RestSchemaActionSet action_set = BitbucketSchema::getActionSet();
+            action_set.registerActions(BitbucketDataProvider::AppName);
 
-        # register the record-based table actions; declaring the tables is only half of it, and a table no
-        # action reaches is offered to nobody
-        RestSchemaTablesDataProvider::registerRecordActions(BitbucketDataProvider::AppName,
-            "/" + BitbucketDataProvider::TablesChildName, action_set, BitbucketRecordTables::Tables,
-            BitbucketRecordTables::RecordActionIds, {
-                "groups": (BitbucketRecordTables::RecordGroup,),
-            });
+            # register the record-based table actions; declaring the tables is only half of it, and a table no
+            # action reaches is offered to nobody
+            RestSchemaTablesDataProvider::registerRecordActions(BitbucketDataProvider::AppName,
+                "/" + BitbucketDataProvider::TablesChildName, action_set, BitbucketRecordTables::Tables,
+                BitbucketRecordTables::RecordActionIds, {
+                    "groups": (BitbucketRecordTables::RecordGroup,),
+                });
 
-        # register the polling event actions
-        foreach hash<auto> i in (BitbucketEventsDataProvider::EventMap.pairIterator()) {
-            Class cls = i.value;
-            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-                "app": BitbucketDataProvider::AppName,
-                "path": "/" + BitbucketDataProvider::EventsChildName + "/" + i.key,
-                "action": i.key,
-                "display_name": cls.getConstant("DisplayName").getValue(),
-                "short_desc": cls.getConstant("ShortDesc").getValue(),
-                "desc": cls.getConstant("Desc").getValue(),
-                "action_code": DPAT_EVENT,
-                "action_val": i.key,
-                "groups": ("Events",),
-            });
-        }
+            # register the polling event actions
+            foreach hash<auto> i in (BitbucketEventsDataProvider::EventMap.pairIterator()) {
+                Class cls = i.value;
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": BitbucketDataProvider::AppName,
+                    "path": "/" + BitbucketDataProvider::EventsChildName + "/" + i.key,
+                    "action": i.key,
+                    "display_name": cls.getConstant("DisplayName").getValue(),
+                    "short_desc": cls.getConstant("ShortDesc").getValue(),
+                    "desc": cls.getConstant("Desc").getValue(),
+                    "action_code": DPAT_EVENT,
+                    "action_val": i.key,
+                    "groups": ("Events",),
+                });
+            }
+        });
     };
 }
 

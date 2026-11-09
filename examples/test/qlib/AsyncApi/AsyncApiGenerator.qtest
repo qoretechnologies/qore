@@ -31,7 +31,7 @@
 
 %requires Util
 %requires QUnit
-%requires ../../../../qlib/AsyncApi.qm
+%requires AsyncApi
 
 %exec-class AsyncApiGeneratorTest
 

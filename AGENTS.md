@@ -60,6 +60,41 @@
 - A test must end every process it starts (servers, helpers, children): on Linux, `run_tests.sh` fails a test that
   leaves processes running and kills them, as a leftover process keeps a CI job's output open and so the job running.
 - Use `QORE_TEST_OPTS` and database env vars (for example `QORE_DB_CONNSTR`) when tests need external services.
+- A test that uses `examples/test/ExecModeHarness.qm` declares `# test-exec-mode: children - <why>` when all its checks
+  run in child processes that set their own `--exec-mode` (the CI jobs that run every test in one execution mode leave
+  it out, as the default-mode jobs run the same children), or `# test-exec-mode: parent - <why>` when it also checks
+  anything in its own process (code in its own `Program`, results it computes itself, its own options given to a
+  child); `examples/test/runner/test_exec_mode_markers.py` enforces it.  Put in-process checks of a long harness test in
+  a test of their own (ex: `qore/operators/hash-value-increment-exec-modes/hash-value-increment-in-process.qtest`).
+- The Linux CI jobs run every test; the macOS job runs only the tests that declare `# test-platform: macos - <why>` (on
+  a line of its own after the `#!` and mode lines; `QORE_TEST_PLATFORM_SUBSET=macos ./run_tests.sh` runs the same
+  selection).  Declare it on a test whose checks depend on the platform: the OS-facing C++ code (files, pipes, FIFOs,
+  non-blocking I/O, sockets, DNS, HTTP/2 and HTTP/3/QUIC connections, TLS, WebSocket connections, processes, signals,
+  fork, threads and cancellation, sandboxing and file-system policy, module and dylib loading, time zones, iconv
+  encodings, stack limits), the JIT and AOT code generation and linking, the binary modules' native libraries, and
+  the database drivers that run on macOS (SQLite3); not on tests of platform-independent logic (parity matrices,
+  parsing, data provider metadata, REST schemas, SQL generation without a database), which the Linux jobs cover.  The
+  reason names the mechanism, ex: `non-blocking File I/O, descriptor redirection and poll readiness of regular files`;
+  `examples/test/runner/test_platform_markers.py` enforces the form.
+- `QORE_TEST_JOBS=<n>|auto ./run_tests.sh` runs n tests at a time (the macOS CI job runs as many as the VM has CPUs, the
+  Linux test jobs as many as their pod's CPU and memory limits allow: `qore_ci_test_jobs` in
+  `examples/test/docker_test/ci-resource-report.sh`) and prints each test's output whole when it ends.  Tests must
+  therefore not share state: listen on port 0, write under their own `make_tmp_dir()`/`TmpDir`, and use names of their
+  own for shared objects.  A test that cannot run beside others declares `# test-parallel: serial - <why>` (one at a
+  time beside the others: a test that creates fixed-name objects in a database that the run cannot have to itself, such
+  as the database of an ODBC connection) or `# test-parallel: exclusive - <why>` (alone: a test that reads the process
+  limit of the machine to reach it, such as `qore/threads/max-threads-count.qtest`, must, or the tests beside it cannot
+  fork; `examples/test/runner/test_parallel_runner.py` enforces it).  The reason names the shared resource; tests that
+  interfere only by names they share are a bug: a PostgreSQL test takes a schema of its own with
+  `examples/test/qlib/SqlUtil/PgsqlTestIsolation.qm`, a MySQL test a database of its own with `MysqlTestIsolation.qm`
+  there, an Oracle test a schema (user) of its own with `OracleTestIsolation.qm` there (given
+  `QORE_DB_CONNSTR_ORACLE_SYS`), a SQL Server test a database of its own with `MssqlTestIsolation.qm` and a Firebird
+  test (JDBC, Jaybird 6) one with `FirebirdTestIsolation.qm` there, a SQLite test a file of its own, and a Redis,
+  Memcached or MongoDB test random key prefixes or a database of its own.  A test that takes more than about two minutes
+  is split into parts: its class adds each case with `addPartCase(<part>, ...)` and each `<name>-<part>.qtest` runs one
+  part (ex: `ir/CMakeBuildHelpers.qc`); `examples/test/runner/test_split_tests.py` checks the parts.
+- The shards of a CI job are balanced by `examples/test/docker_test/test-durations.tsv`; refresh it from a green
+  pipeline with `examples/test/docker_test/update-test-durations.py <pipeline ID>` after adding long tests or shards.
 
 ## Running Tests Under valgrind
 - Disable signal handling with `-b` (`--disable-signals`), for example
@@ -77,6 +112,16 @@
 - `exit()` ends the process without the library's cleanup, and valgrind reports the memory still in use then as lost:
   a `QoreValue` holds its node pointer with a tag in the high 16 bits, which valgrind's leak scan does not recognize
   as a pointer.  A script whose leak report should mean something must end normally.
+- A forked child that ends with `_exit()` (the fork tests in `AsyncIoController/asyncio_unit_tests.qtest`, for
+  example) reports its memory as lost for the same reason, and that noise hides real errors in the children.  Run such
+  a test twice: once with `--leak-check=full --child-silent-after-fork=yes` for the parent's leaks and errors, and
+  once with `--leak-check=no` so that the children's memory errors still show (a forked child that does not exec
+  stays under valgrind; only `--child-silent-after-fork=yes` hides its output):
+  ```
+  QORE_PCRE2_NO_JIT=1 valgrind --leak-check=full --child-silent-after-fork=yes qore -b --exec-mode=ir \
+      --enable-debug <test>
+  QORE_PCRE2_NO_JIT=1 valgrind --leak-check=no qore -b --exec-mode=ir --enable-debug <test>
+  ```
 
 ## Running Tests Under ThreadSanitizer
 - Configure a build with `-fsanitize=thread` in the C, C++ and linker flags (a Debug build in its own directory, for

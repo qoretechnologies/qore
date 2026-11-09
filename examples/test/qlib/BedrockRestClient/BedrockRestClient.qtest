@@ -170,6 +170,11 @@ public class BedrockTest inherits QUnit::Test {
         addTestCase("Titan embedder round-trip",          \titanEmbedderTest());
         addTestCase("Claude models that reject a temperature", \claudeTemperatureTest());
         addTestCase("a request error carries the message of the model", \errorMessageTest());
+        addTestCase("marked blocks and tools are followed by cache points", \cachePointTest());
+        addTestCase("usage counts the input read from and written to the cache", \cacheUsageTest());
+        addTestCase("a reasoning effort asks Claude for adaptive thinking", \reasoningEffortTest());
+        addTestCase("Claude's reasoning is returned and replayed before its tool call", \reasoningReplayTest());
+        addTestCase("streamed reasoning is collected for its replay", \streamedReasoningTest());
         addTestCase("Bedrock connection metadata and provider", \connectionTest());
         addTestCase("Bedrock connection authenticated ping", \connectionPingTest());
 
@@ -211,6 +216,8 @@ public class BedrockTest inherits QUnit::Test {
         assertEq("BedrockRestClient", info.module_name);
         assertTrue(info.supports_tools);
         assertTrue(info.supports_multimodal);
+        assertTrue(info.supports_reasoning_effort, "Claude's adaptive thinking takes an effort");
+        assertTrue(f.getModelInfo("eu.anthropic.claude-opus-5-5").supports_reasoning_effort);
     }
 
     private converseChatTest() {
@@ -583,6 +590,189 @@ public class BedrockTest inherits QUnit::Test {
             # 0.0 is sent as the JSON number 0
             assertEq(0, handler.last_body.inferenceConfig.temperature, model);
         }
+    }
+
+    private cachePointTest() {
+        if (!bedrock_http) {
+            testSkip("no fake server");
+        }
+        hash<auto> ephemeral = {"type": "ephemeral"};
+        # a one-hour marker's lifetime is its cache point's
+        newProvider("eu.anthropic.claude-opus-5-5").chat((
+            <QoreLlmUtils::ChatMessage>{"role": "system", "content_parts": (
+                <QoreLlmUtils::ContentPart>{"type": "text", "text": "long-lived",
+                    "cache_control": {"type": "ephemeral", "ttl": "1h"}},
+            )},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "ping"},
+        ));
+        assertEq(({"text": "long-lived"}, {"cachePoint": {"type": "default", "ttl": "1h"}}), handler.last_body.system);
+        newProvider("eu.anthropic.claude-opus-5-5").chat((
+            <QoreLlmUtils::ChatMessage>{"role": "system", "content_parts": (
+                <QoreLlmUtils::ContentPart>{"type": "text", "text": "stable policy", "cache_control": ephemeral},
+                <QoreLlmUtils::ContentPart>{"type": "text", "text": "turn rules"},
+            )},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content_parts": (
+                <QoreLlmUtils::ContentPart>{"type": "text", "text": "catalogue", "cache_control": ephemeral},
+                <QoreLlmUtils::ContentPart>{"type": "text", "text": "this turn"},
+            )},
+        ), (
+            <QoreLlmUtils::ToolDefinition>{"name": "a", "description": "first"},
+            <QoreLlmUtils::ToolDefinition>{"name": "b", "description": "last", "cache_control": ephemeral},
+        ));
+        hash<auto> cache_point = {"cachePoint": {"type": "default"}};
+        assertEq(({"text": "stable policy"}, cache_point, {"text": "turn rules"}), handler.last_body.system,
+            "the system is cached up to its marked block");
+        assertEq(({"text": "catalogue"}, cache_point, {"text": "this turn"}),
+            handler.last_body.messages[0].content);
+        assertEq(("a", "b", NOTHING), map $1.toolSpec.name, handler.last_body.toolConfig.tools);
+        assertEq(cache_point, handler.last_body.toolConfig.tools[2], "the tools are cached up to the last");
+        # an unmarked request has no cache point, and a plain system message is still sent
+        newProvider("eu.anthropic.claude-opus-5-5").chat((
+            <QoreLlmUtils::ChatMessage>{"role": "system", "content": "policy"},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "ping"},
+        ));
+        assertEq(({"text": "policy"},), handler.last_body.system);
+        assertEq(({"text": "ping"},), handler.last_body.messages[0].content);
+    }
+
+    private cacheUsageTest() {
+        if (!bedrock_http) {
+            testSkip("no fake server");
+        }
+        hash<auto> saved_response = handler.converse_response;
+        on_exit handler.converse_response = saved_response;
+        # the counters of a cache read, as Bedrock reported them for eu.anthropic.claude-opus-5-5
+        handler.converse_response.usage = {"inputTokens": 13, "outputTokens": 4, "totalTokens": 17620,
+            "cacheReadInputTokens": 17603, "cacheWriteInputTokens": 0};
+        hash<auto> usage = newProvider().chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "ping"},))
+            .usage;
+        assertEq(17616, usage.prompt_tokens, "the whole input, as OpenAI counts it");
+        assertEq(17616, usage.input_tokens);
+        assertEq(17603, usage.prompt_tokens_details.cached_tokens);
+        assertEq(17603, usage.cache_read_input_tokens);
+        assertEq(0, usage.cache_write_input_tokens);
+        assertEq(4, usage.completion_tokens);
+        assertEq(17620, usage.total_tokens);
+        # a cache write
+        handler.converse_response.usage = {"inputTokens": 13, "outputTokens": 4, "totalTokens": 17620,
+            "cacheReadInputTokens": 0, "cacheWriteInputTokens": 17603};
+        usage = newProvider().chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "ping"},)).usage;
+        assertEq(17616, usage.prompt_tokens);
+        assertEq(0, usage.prompt_tokens_details.cached_tokens);
+        assertEq(17603, usage.cache_write_input_tokens);
+        # usage with no cache counters has none
+        handler.converse_response.usage = {"inputTokens": 12, "outputTokens": 5, "totalTokens": 17};
+        usage = newProvider().chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "ping"},)).usage;
+        assertEq(12, usage.prompt_tokens);
+        assertFalse(exists usage.prompt_tokens_details);
+        assertFalse(exists usage.cache_read_input_tokens);
+    }
+
+    private reasoningEffortTest() {
+        if (!bedrock_http) {
+            testSkip("no fake server");
+        }
+        hash<QoreLlmUtils::LlmRequestOptions> opts = <QoreLlmUtils::LlmRequestOptions>{"reasoning_effort": "high"};
+        foreach string model in (("eu.anthropic.claude-opus-5-5", "global.anthropic.claude-sonnet-5-5",
+                "anthropic.claude-haiku-5-5", "us.anthropic.claude-opus-4-6-v1", "anthropic.claude-sonnet-4-6")) {
+            newProvider(model).chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "ping"},), NOTHING,
+                opts);
+            assertEq({"thinking": {"type": "adaptive"}, "output_config": {"effort": "high"}},
+                handler.last_body.additionalModelRequestFields, model);
+        }
+        # a model that does not take adaptive thinking gets no thinking field
+        foreach string model in (("anthropic.claude-3-5-sonnet-20240620-v1:0", "amazon.nova-2-lite-v1:0",
+                "anthropic.claude-opus-4-5-20251101-v1:0")) {
+            newProvider(model).chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "ping"},), NOTHING,
+                opts);
+            assertFalse(exists handler.last_body.additionalModelRequestFields, model);
+        }
+        # an effort Claude refuses is mapped to the nearest it takes
+        newProvider("eu.anthropic.claude-opus-5-5").chat((<QoreLlmUtils::ChatMessage>{"role": "user",
+            "content": "ping"},), NOTHING, <QoreLlmUtils::LlmRequestOptions>{"reasoning_effort": "minimal"});
+        assertEq({"thinking": {"type": "adaptive"}, "output_config": {"effort": "low"}},
+            handler.last_body.additionalModelRequestFields, "minimal is the least Claude takes");
+        assertEq(BedrockRestClient::BedrockLlmProvider::getClaudeReasoningOffFields("eu.anthropic.claude-opus-5-5"),
+            BedrockRestClient::BedrockLlmProvider::getClaudeReasoningEffortFields("eu.anthropic.claude-opus-5-5",
+                "none"), "none is reasoning turned off");
+        assertEq({"thinking": {"type": "between_tools"}},
+            BedrockRestClient::BedrockLlmProvider::getClaudeReasoningEffortFields("global.anthropic.claude-sonnet-5-5",
+                "none"));
+        # turning reasoning off still wins
+        newProvider("eu.anthropic.claude-opus-5-5").chat((<QoreLlmUtils::ChatMessage>{"role": "user",
+            "content": "ping"},), NOTHING, <QoreLlmUtils::LlmRequestOptions>{"disable_reasoning": True});
+        assertEq({"thinking": {"type": "adaptive"}, "output_config": {"effort": "low"}},
+            handler.last_body.additionalModelRequestFields);
+    }
+
+    private reasoningReplayTest() {
+        if (!bedrock_http) {
+            testSkip("no fake server");
+        }
+        hash<auto> saved_response = handler.converse_response;
+        on_exit handler.converse_response = saved_response;
+        handler.converse_response = {
+            "output": {"message": {"role": "assistant", "content": (
+                {"reasoningContent": {"reasoningText": {"text": "which tool", "signature": "c2ln"}}},
+                {"reasoningContent": {"redactedContent": "ZW5j"}},
+                {"toolUse": {"toolUseId": "tu_1", "name": "lookup", "input": {"symbol": "UserApi"}}},
+            )}},
+            "stopReason": "tool_use",
+            "usage": {"inputTokens": 10, "outputTokens": 5, "totalTokens": 15},
+        };
+        BedrockRestClient::BedrockLlmProvider p = newProvider("eu.anthropic.claude-opus-5-5");
+        hash<QoreLlmUtils::ChatResponse> r = p.chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "go"},),
+            (<QoreLlmUtils::ToolDefinition>{"name": "lookup"},));
+        list<auto> blocks = (
+            {"type": "thinking", "thinking": "which tool", "signature": "c2ln"},
+            {"type": "redacted_thinking", "data": "ZW5j"},
+        );
+        assertEq(blocks, r.reasoning_blocks, "reasoning in the Anthropic Messages API's form");
+        assertEq("lookup", r.tool_calls[0].name);
+        # the follow-up replays the reasoning unchanged, before the tool call
+        handler.converse_response = saved_response;
+        p.chat((
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "go"},
+            <QoreLlmUtils::ChatMessage>{"role": "assistant", "tool_calls": r.tool_calls,
+                "reasoning_blocks": r.reasoning_blocks},
+            <QoreLlmUtils::ChatMessage>{"role": "tool", "tool_call_id": "tu_1", "content": "{}"},
+        ), (<QoreLlmUtils::ToolDefinition>{"name": "lookup"},));
+        list<auto> sent = handler.last_body.messages[1].content;
+        assertEq({"reasoningContent": {"reasoningText": {"text": "which tool", "signature": "c2ln"}}}, sent[0]);
+        assertEq({"reasoningContent": {"redactedContent": "ZW5j"}}, sent[1]);
+        assertEq("tu_1", sent[2].toolUse.toolUseId);
+        # another provider's reasoning (DeepSeek's) is not sent to Converse
+        p.chat((
+            <QoreLlmUtils::ChatMessage>{"role": "assistant", "content": "x",
+                "reasoning_blocks": ({"type": "deepseek_reasoning", "text": "r"},)},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "go"},
+        ));
+        assertEq(({"text": "x"},), handler.last_body.messages[0].content);
+    }
+
+    private streamedReasoningTest() {
+        BedrockRestClient::BedrockLlmProvider p = newProvider("eu.anthropic.claude-opus-5-5");
+        hash<auto> state = {};
+        foreach hash<auto> raw in ((
+                {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"reasoningContent": {"text": "which "}}}},
+                {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"reasoningContent": {"text": "tool"}}}},
+                # non-ASCII text survives its join unchanged
+                {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"reasoningContent": {"text": " – ok"}}}},
+                {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"reasoningContent": {"signature": "c2ln"}}}},
+                {"contentBlockStop": {"contentBlockIndex": 0}},
+                # one encrypted block in two deltas: "en" and "c", each base64 ("ZW4=", "Yw==")
+                {"contentBlockDelta": {"contentBlockIndex": 1, "delta": {"reasoningContent":
+                    {"redactedContent": "ZW4="}}}},
+                {"contentBlockDelta": {"contentBlockIndex": 1, "delta": {"reasoningContent":
+                    {"redactedContent": "Yw=="}}}},
+                {"contentBlockStop": {"contentBlockIndex": 1}},
+                {"contentBlockStop": {"contentBlockIndex": 2}},
+            )) {
+            p.updateOpenAiStreamStateFromRaw(\state, raw);
+        }
+        assertEq(({"type": "thinking", "thinking": "which tool – ok", "signature": "c2ln"},
+            {"type": "redacted_thinking", "data": "ZW5j"}), state.reasoning_blocks,
+            "each block when it stops, in order, its encrypted bytes joined; a stopped block with no reasoning adds none");
     }
 
     private errorMessageTest() {

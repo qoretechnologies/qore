@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../TestFileTime.qm
+%requires ./CMakeBuildHelpersTestBase.qm
+# catalog install reconciliation is verified by composing what it leaves installed
+%requires DataProvider
+%requires i18n
+%requires json
+
+%include CMakeBuildHelpers.qc
+
+%exec-class CMakeBuildHelpersPart1
+
+#! runs part 1 of 3 of the cases of CMakeBuildHelpersBase
+class CMakeBuildHelpersPart1 inherits CMakeBuildHelpersBase {
+    constructor() : CMakeBuildHelpersBase("CMakeBuildHelpersPart1", 1) {
+    }
+}

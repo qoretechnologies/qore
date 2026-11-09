@@ -1,15 +1,16 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - worker processes over the process module, FIFOs, and killing cancelled workers
 # Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
 
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ProviderIndex
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ProviderIndex
 
 %requires yaml
 

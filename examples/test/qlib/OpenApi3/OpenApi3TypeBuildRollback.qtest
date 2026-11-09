@@ -5,8 +5,8 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/OpenApi3.qm
+%requires QUnit
+%requires OpenApi3
 %requires json
 %exec-class OpenApi3TypeBuildRollbackTest
 
@@ -115,16 +115,16 @@ class OpenApi3TypeBuildRollbackTest inherits QUnit::Test {
     failedBuildTest() {
         OpenApi3Schema doc = document();
         *hash<ExceptionInfo> ex = getBuildException(doc, "BadNode");
-        assertEq("RUNTIME-TYPE-ERROR", ex.err, "the first build fails");
+        assertEq("TYPE-VALUE-ERROR", ex.err, "the first build fails");
         ex = getBuildException(doc, "BadNode");
-        assertEq("RUNTIME-TYPE-ERROR", ex.err, "a second build fails the same way instead of returning a partial type");
+        assertEq("TYPE-VALUE-ERROR", ex.err, "a second build fails the same way instead of returning a partial type");
         ex = NOTHING;
         try {
             cast<SchemaObject>(doc.components.schemas.BadNode).getDataType();
         } catch (hash<ExceptionInfo> ex0) {
             ex = ex0;
         }
-        assertEq("RUNTIME-TYPE-ERROR", ex.err, "the type of the schema fails too");
+        assertEq("TYPE-VALUE-ERROR", ex.err, "the type of the schema fails too");
 
         # the types the failed builds had started are built from scratch, as in a document of their own
         AbstractDataProviderType node = cast<SchemaObject>(doc.components.schemas.Node).getDataType();
@@ -139,10 +139,10 @@ class OpenApi3TypeBuildRollbackTest inherits QUnit::Test {
     mixedBuildTest() {
         OpenApi3Schema doc = document();
         AbstractDataProviderType good = cast<SchemaObject>(doc.components.schemas.Node).getDataType();
-        assertEq("RUNTIME-TYPE-ERROR", getBuildException(doc, "BadNode").err, "the failing build fails");
+        assertEq("TYPE-VALUE-ERROR", getBuildException(doc, "BadNode").err, "the failing build fails");
         AbstractDataProviderType good_again = cast<SchemaObject>(doc.components.schemas.Node).getDataType();
         assertTrue(good === good_again, "a type built before the failure is kept");
-        assertEq("RUNTIME-TYPE-ERROR", getBuildException(doc, "BadNode").err, "the failing build fails again");
+        assertEq("TYPE-VALUE-ERROR", getBuildException(doc, "BadNode").err, "the failing build fails again");
         assertTrue(good === cast<SchemaObject>(doc.components.schemas.Node).getDataType());
         AbstractDataField wrapper = doc.getFieldFromSchema("body", "the body", doc.components.schemas.Wrapper);
         assertEq(getFreshInfo(("Node", "field:Wrapper")), (structure(good.getInfo()),

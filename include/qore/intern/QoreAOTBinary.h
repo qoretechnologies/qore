@@ -328,8 +328,17 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      locations as constants in its image and stores their addresses as the runtime location, so nothing read
 //!      the table; a v9-v20 record's table is skipped.  The PC-to-location maps that AOT artifacts carried in a
 //!      trailer and in a `qore_aot_pcloc` section are no longer written or read either.
+//! v22: a class record has a class-flags byte after its base classes; bit 0 (QORE_AOT_CLASS_FLAG_PUBLIC_MEMDECL)
+//!      records a public member declaration in the class or a class it inherits, whatever the declaration holds
+//!      (members, static variables, constants or nothing), so that the class refuses undeclared members as it does
+//!      when parsed.  A v9-v21 record has no such byte: the class gets the flag only from its public members, as
+//!      before.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 21;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 22;
+//! First format version whose class records have a class-flags byte (see v22 above).
+constexpr uint16_t QORE_AOT_CLASS_FLAGS_VERSION = 22;
+//! Class-flags bit: the class has a public member declaration in its hierarchy (has_public_memdecl)
+constexpr uint8_t QORE_AOT_CLASS_FLAG_PUBLIC_MEMDECL = 0x01;
 //! First format version whose function records have no location table (see v21 above).
 constexpr uint16_t QORE_AOT_NO_LOCATION_TABLE_VERSION = 21;
 //! First format version in which a serialized background instruction can be of the helper kind.
@@ -2447,6 +2456,14 @@ struct AOTCompiledFuncWithSlots {
     std::vector<AOTStmtLocEntry> aot_stmt_locs;
 };
 
+//! Opens a file for reading only if it is a regular file; returns nullptr otherwise or if it cannot be opened
+/** The module loader reads files that it finds in the module path or next to a module (module images, dependency and
+    fingerprint files, sources) with the module manager's mutex held: opening a FIFO or a device with such a name would
+    block or read without end, so a file that is not a regular file is not opened, and one that is replaced between
+    the check and the open is refused (see ModuleManager.cpp)
+*/
+DLLLOCAL FILE* qore_open_regular_file(const char* path);
+
 //! AOT module metadata: the module's identity, its dependencies and the optional modules that were unavailable
 /** qcc stores this metadata in a section of every AOT qmod that it links, so that it is part of the image and the code
     signature covers it (see design/aot-object-files-and-module-artifacts.md "Module Metadata Section"):
@@ -2474,12 +2491,25 @@ struct QoreAOTModuleFileInfo {
     std::vector<std::string> dependencies;
     //! the %try-module requests that failed when the module was compiled, as written in the directive
     std::vector<std::string> unavailable_optional_modules;
+    //! the names of the modules the module was compiled with: every module it requires, directly or through
+    //! another module, and every module one of them re-exports; not the module itself
+    /** The module loader checks that each of them that it loads for the module is the one the module was compiled
+        against (see QoreModuleManager::checkAOTModuleDependencyFiles()); a re-exported module is not in
+        \c dependencies (see design/aot-linked-module-sources.md)
+    */
+    std::vector<std::string> compiled_with;
+    //! the module's own %prepend-module-path directories, in the order its initialization searches them
+    std::vector<std::string> prepended_module_paths;
+    //! the module's own %append-module-path directories, in the order its initialization searches them
+    std::vector<std::string> appended_module_paths;
 };
 
 //! The magic number of an AOT module metadata record: 'QAMI' little-endian
 static constexpr uint32_t QORE_AOT_MODULE_INFO_MAGIC = 0x494d4151u;
 //! The format version of AOT module metadata records
-static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 1u;
+/** version 2 added the names of the modules the module was compiled with and its own module path directories
+*/
+static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 2u;
 //! The size of the header of an AOT module metadata record: magic, version and payload size
 static constexpr size_t QORE_AOT_MODULE_INFO_HEADER_SIZE = 12;
 //! The segment of the Mach-O section holding AOT module metadata

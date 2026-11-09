@@ -499,7 +499,20 @@ Converted waits:
 | `Mutex`, `RWLock`, `Gate`, `AutoLock`, `AutoReadLock`, `AutoWriteLock`, `AutoGate`, `Condition::wait()` | `VLockCancellationPoint` |
 | `Queue`, `Counter`, `AutoSemaphore` | `QoreCondition::waitWithInterrupt()` (the redundant outer poll loops were removed) |
 | socket, TLS, HTTP/1, HTTP/2 and HTTP/3 synchronous operations | the caller waits for the async I/O controller's result on a `Queue` (`QoreCondition::waitWithInterrupt()`) |
-| process waits (`system()`, backquote child exit) | `QoreChildWait` on a `QoreCondition` |
+| process waits (`system()`, backquote child exit) | `QoreChildProcessWaiter` on a `QoreCondition` |
+
+#### Killing a command's process group
+
+A command that `system()` or backquote runs under a `SandboxManager` leads a process group of its own.
+When the wait is cancelled or interrupted, `SIGKILL` goes to the group, the leader's exit is waited for
+with `waitid(WNOWAIT)`, `SIGKILL` goes to the group again, and only then is the leader reaped
+(`qore_kill_child_process()` and the interrupted path of `qore_wait_child_process()` in
+`BackquoteNode.cpp`).  A signal sent to a process group does not reach a process that a member is
+creating with `fork()` at that moment on macOS, so the first signal can leave a new process running;
+once the leader has ended it can start no more, and its unreaped PID keeps the group ID from being
+reused, so the second signal reaches what is left of the group and no other.  `system.qtest` and
+`backquote.qtest` interrupt commands that start processes in a loop and read a FIFO that every process
+of the command holds open to end-of-file.
 
 #### Wakeup descriptor
 
@@ -790,6 +803,60 @@ It carries the `THREAD_CONTROL` functional domain, like `clear_thread_cancel()`,
 `PO_NO_THREAD_CONTROL` program cannot defer at all.  In C++, use the header-inline RAII
 `QoreCancelDeferralHelper` rather than the raw push/pop.
 
+#### Without thread control: synchronized state
+
+Code that must also run under `PO_NO_THREAD_CONTROL` (a module whose user may be sandboxed) cannot call
+`defer_thread_cancel()`.  It keeps the state its cleanup changes in **`synchronized` methods** and
+wakes its waiters with a **`Queue` push or a `Counter` decrement**: none of these is a cancellation
+point (the lock of a `synchronized` method is a `VRMutex` acquired without a `VLockCancellationPoint`,
+and `Queue::push()` and `Counter::dec()` never wait), so the cleanup completes on a cancelled
+thread.  Only the *waits* (`Queue::get()`, `Counter::waitForZero()`) are cancellation points, which
+is what the waiter wants.  The cleanup methods contain **no loop**: a loop statement is a cancellation
+point at each iteration, so on a cancelled thread it raises the cancellation again and skips the rest of
+the cleanup (a `map` expression is not one when run from source, but the code `qcc` compiles for it
+checks too, so cleanup code does not rely on it).  A waiter registers itself in a synchronized method before it waits and
+the cleanup pushes only while a waiter is registered, so no wakeup is lost and the queue does not
+grow without one:
+
+```qore
+synchronized leave(int token) {
+    remove live{token};
+    if (waiters) {
+        wake.push(True);    # not a cancellation point
+    }
+}
+
+waitOthers() {
+    while (beginWait()) {   # synchronized: false once nothing is left; registers the waiter
+        on_exit endWait();  # synchronized
+        wake.get();         # the cancellation point is the wait itself
+    }
+}
+```
+
+`WebSocketClient`'s thread accounting (`WscLibraryThreads`), its handoff of an action to a
+`connectAsync()` worker (`WscActionHandoff`, with `WscActionWaiters` recording an action that a
+cancelled thread cannot release; each thread waiting for an action waits on a Queue of its own and
+releases the recorded actions again right after it registers, so a record made before it registered
+is released by itself and a record made afterwards wakes it, even before it waits; one waiter is
+woken at a time, and a waiter that stops waiting without the action wakes the next one as it
+unregisters, so no wakeup needs a loop; the connections that a cancelled thread took are released
+by recursion instead of a loop), and the Discord heartbeat record (`DiscordHeartbeat`) use this
+pattern.  A step that releases the client's lock (e.g. a subclass's `explicitDisconnect()`) and is
+cancelled cannot take the lock again: it records its action like a cancelled `connectAsync()` caller.  `WscLibraryThreads::waitOthers()` supports a single waiter (the destructor): it pushes
+one wakeup per change while a waiter is registered.
+
+Not covered yet: a **destructor running on a cancelled thread**.  The destructors of both clients
+take Mutex locks (the handshake lock, the client lock, the heartbeat lock) before they reach this
+bookkeeping, so on a cancelled thread they stop at the first of them with `THREAD-CANCELLED`.
+
+A libqore primitive for "cleanup-only" lock acquisition that is not a cancellation point is not
+added: a `synchronized` method already is one, it cannot be held past its method (so it cannot be
+used to evade cancellation outside the method), and C++ module code takes `QoreThreadLock`
+(`pthread_mutex_t`), which is never a cancellation point.  A primitive on `Mutex` itself could not
+tell cleanup from ordinary code, so it would let any code block uninterruptibly on a contended
+lock.
+
 The deferral is only for cleanup that runs **while the cancelled code is still on the stack**.
 Cleanup the runtime runs *after* that code has returned uses the stronger rule below.
 
@@ -831,6 +898,26 @@ After teardown, `thread_list.deleteDataRelease()` releases the TID slot, whose
 `ThreadEntry::cleanup()` clears the state again.
 
 ### Program Scope: Who Can Cancel Whom?
+
+`Program::cancelThread(tid, reason)` uses the Program as an explicit target scope. It checks membership under the
+Program lock, releases that lock before entering the thread registry, and sends the Program ID with the request.
+The target's normal cancellation checkpoint rejects a request if the ID was recycled outside that scope.
+`Program::cancelThreads(reason)` also sets a cancellation wave under the Program lock: preregistered threads and
+descendants receive cancellation when they register. The wave ends when the Program's activity count reaches
+zero, so subsequent evaluations start normally. Calls from inside the target Program are rejected to avoid
+cancelling the coordinating caller itself.
+
+`Program::waitForThreads(limit)` waits on the existing Program condition for zero activity and no parse owner.
+`waitForThread(tid, limit)` waits for a specific ID to leave the Program. Thread exits and parse-owner release
+broadcast under the Program lock; cancellation wakes the same condition through the standard condition-waker
+path. The wait checks its predicate with the lock held, has one monotonic deadline, and rejects self-waits.
+It observes Program activity, not final process-level TLS teardown; `thread_join()` provides the latter guarantee.
+An idle notification does not reserve the Program or permit concurrent parsing. REPL embedders recheck before
+submitting pending work and deliver the worker's completion to their UI event queue rather than polling.
+
+Timed condition waits must not probe recursive mutex ownership with `pthread_mutex_trylock()`: success adds a
+recursion level and prevents the condition wait from releasing the mutex. The timed and untimed paths both
+delegate mutex-contract checking to the pthread condition operation.
 
 Self-cancellation (cancelling the current thread) is an error — use `throw "THREAD-CANCELLED"` directly.
 

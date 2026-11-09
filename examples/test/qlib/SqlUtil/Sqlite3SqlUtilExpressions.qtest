@@ -4,12 +4,13 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/SqlUtil
-%requires ../../../../qlib/Sqlite3SqlUtil.qm
-%requires ../../../../qlib/QUnit.qm
+%requires Util
+%requires FsUtil
+%requires Logger
+%requires DataProvider
+%requires SqlUtil
+%requires Sqlite3SqlUtil
+%requires QUnit
 
 %try-module sqlite3
 %define NoSqlite3
@@ -44,6 +45,8 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         *Datasource ds;
         *Sqlite3Table table;
         Logger logger;
+        #! the directory of the run's own database file, if the connection is to a file
+        *string tmp_dir;
     }
 
     constructor() : Test("Sqlite3ExpressionTest", "1.0", \ARGV, MyOpts) {
@@ -255,6 +258,11 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         if (table) {
             table.dropCommit();
         }
+        if (tmp_dir) {
+            remove ds;
+            remove table;
+            remove_tree(tmp_dir);
+        }
     }
 
     private Datasource getDatasource() {
@@ -264,6 +272,16 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_SQLITE3 ?? "";
         if (!connstr.val()) {
             testSkip("no DB connection");
+        }
+        hash<auto> config = parse_datasource(connstr);
+        if (config.type == "sqlite3" && config.db && config.db != ":memory:") {
+            # the run's own database file, in a directory of the run's own: tests that run at the same time do not
+            # share its tables
+            if (!tmp_dir) {
+                tmp_dir = make_tmp_dir("qore-sqlite3-expr-");
+            }
+            config.db = tmp_dir + "/" + basename(config.db);
+            connstr = make_datasource_string(config);
         }
         Datasource ds(connstr);
         if (ds.getDriverName() != "sqlite3") {
@@ -457,9 +475,12 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
             probe.getAddForeignConstraintSql("fk_dfk_probe", "parent_id", "sqlite3_dfk_probe", "id",
                 {"initially_deferred": True});
         });
-        assertFalse(probe.getAddForeignConstraintSql("fk_dfk_probe", "parent_id", "sqlite3_dfk_probe", "id",
-            {"deferrable": False}) =~ /deferrable/i,
-            "explicit portable defaults preserve existing SQL");
+        # explicit portable defaults are accepted, and the constraint is then refused only as SQLite cannot add a
+        # foreign constraint to an existing table
+        assertThrows("UNSUPPORTED", "SQLite cannot add a foreign constraint to an existing table", sub () {
+            probe.getAddForeignConstraintSql("fk_dfk_probe", "parent_id", "sqlite3_dfk_probe", "id",
+                {"deferrable": False});
+        });
     }
 
     # --- Pattern matching tests ---

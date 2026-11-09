@@ -37,7 +37,7 @@
 %requires json
 
 module BedrockRestClient {
-    version = "1.1";
+    version = "1.2";
     desc = "REST client and LLM provider for AWS Bedrock — speaks the unified "
         "Converse API across Anthropic, Llama, Mistral, "
         "Cohere, AI21, Titan, and DeepSeek-on-Bedrock model families";
@@ -136,6 +136,18 @@ hash<ChatResponse> r = p.chat((
     @endcode
 
     @section bedrockrestclientrelnotes Release Notes
+
+    @subsection bedrockrestclient_v1_2 BedrockRestClient v1.2
+    - a system block, a content block or a tool marked with \c cache_control is followed by a Converse
+      \c cachePoint, so the request is cached up to it
+    - usage counts the input read from and written to the prompt cache: the prompt and input counts are the whole
+      input, with \c prompt_tokens_details.cached_tokens, \c cache_read_input_tokens and \c cache_write_input_tokens
+    - a reasoning effort asks the Claude models that take adaptive thinking for it at that effort; \c minimal is
+      sent as \c low and \c none turns reasoning off, as Claude refuses both
+    - Claude's reasoning (\c reasoningContent) is returned in
+      @ref QoreLlmUtils::ChatResponse::reasoning_blocks "ChatResponse::reasoning_blocks", streamed or not, in the
+      Anthropic Messages API's form, and replayed unchanged before an assistant turn's content, which a tool-result
+      follow-up with adaptive thinking requires; the factory declares \c supports_reasoning_effort
 
     @subsection bedrockrestclient_v1_1 BedrockRestClient v1.1
     - initial release
@@ -719,6 +731,51 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         if (usage) {
             state.usage = normalizeUsage(usage);
         }
+        # a reasoning block is built from its deltas and kept when it stops, in order, for its replay
+        if (raw.contentBlockDelta.delta.reasoningContent.typeCode() == NT_HASH) {
+            hash<auto> delta = raw.contentBlockDelta.delta.reasoningContent;
+            string key = string(raw.contentBlockDelta.contentBlockIndex);
+            # each delta is written to its part's stream as it arrives, and each part is read once when the block
+            # stops: a long reasoning stream of many deltas costs its size, not the size of every prefix; encrypted
+            # reasoning arrives base64 on the wire and is encoded once, as the response form has it, and the signed
+            # text is replayed unchanged
+            hash<auto!> block = state.bedrock_reasoning{key} ?? {};
+            if (exists delta.redactedContent) {
+                writeReasoningPart(\block, "redacted", delta.redactedContent.typeCode() == NT_BINARY
+                    ? delta.redactedContent : parse_base64_string(delta.redactedContent));
+            } else {
+                if (exists delta.text) {
+                    writeReasoningPart(\block, "text", binary(delta.text));
+                }
+                if (exists delta.signature) {
+                    writeReasoningPart(\block, "signature", binary(delta.signature));
+                }
+            }
+            state.bedrock_reasoning{key} = block;
+        }
+        if (exists raw.contentBlockStop.contentBlockIndex) {
+            *hash<auto> block = remove state.bedrock_reasoning{string(raw.contentBlockStop.contentBlockIndex)};
+            if (exists block.redacted) {
+                block.redactedContent = make_base64_string(cast<BinaryOutputStream>(remove block.redacted).getData());
+            } else if (exists block.text || exists block.signature) {
+                hash<auto!> text = {
+                    "text": exists block.text
+                        ? binary_to_string(cast<BinaryOutputStream>(remove block.text).getData(), "UTF-8")
+                        : "",
+                };
+                if (exists block.signature) {
+                    text.signature = binary_to_string(cast<BinaryOutputStream>(remove block.signature).getData(),
+                        "UTF-8");
+                }
+                block.reasoningText = text;
+            }
+            if (*hash<auto> reasoning = BedrockLlmProvider::fromConverseReasoning(block)) {
+                if (state.reasoning_blocks.typeCode() != NT_LIST) {
+                    state.reasoning_blocks = ();
+                }
+                state.reasoning_blocks += reasoning;
+            }
+        }
         *string stop_reason = raw.messageStop.stopReason ?? raw.stopReason;
         if (stop_reason.val()) {
             state.finish_reason =
@@ -786,6 +843,64 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             streamed += {"index": idx} + tool_call;
         }
         return streamed;
+    }
+
+    #! Writes a delta of a streamed reasoning block to the stream of its part (\c text, \c signature or \c redacted)
+    private:internal static writeReasoningPart(reference<hash<auto!>> block, string part, binary data) {
+        if (!block{part}) {
+            block{part} = new BinaryOutputStream();
+        }
+        cast<BinaryOutputStream>(block{part}).write(data);
+    }
+
+    #! Returns a Converse reasoning block in the Anthropic Messages API's form
+    /** The form @ref QoreLlmUtils::ChatResponse::reasoning_blocks "ChatResponse::reasoning_blocks" carries Claude's
+        reasoning in, as AnthropicRestClient does: \c thinking with its text and signature, or
+        \c redacted_thinking with its encrypted data.
+
+        @param reasoning the \c reasoningContent of a Converse content block
+        @return the block, or @ref nothing for no reasoning
+
+        @since BedrockRestClient 1.2
+    */
+    static *hash<auto> fromConverseReasoning(*hash<auto> reasoning) {
+        if (!reasoning) {
+            return NOTHING;
+        }
+        if (exists reasoning.redactedContent) {
+            return {"type": "redacted_thinking", "data": reasoning.redactedContent};
+        }
+        if (reasoning.reasoningText.typeCode() == NT_HASH) {
+            hash<auto!> rv = {"type": "thinking", "thinking": reasoning.reasoningText.text ?? ""};
+            if (exists reasoning.reasoningText.signature) {
+                rv.signature = reasoning.reasoningText.signature;
+            }
+            return rv;
+        }
+        return NOTHING;
+    }
+
+    #! Returns a reasoning block in the Anthropic Messages API's form as a Converse content block
+    /** @param block a block of @ref QoreLlmUtils::ChatMessage::reasoning_blocks "ChatMessage::reasoning_blocks"
+        @return the Converse \c reasoningContent block, or @ref nothing for a block of another provider's form
+
+        @since BedrockRestClient 1.2
+    */
+    static *hash<auto> toConverseReasoning(auto block) {
+        if (block.typeCode() != NT_HASH) {
+            return NOTHING;
+        }
+        if (block.type == "redacted_thinking" && exists block.data) {
+            return {"reasoningContent": {"redactedContent": block.data}};
+        }
+        if (block.type == "thinking") {
+            hash<auto!> text = {"text": block.thinking ?? ""};
+            if (exists block.signature) {
+                text.signature = block.signature;
+            }
+            return {"reasoningContent": {"reasoningText": text}};
+        }
+        return NOTHING;
     }
 
     #! Maps a Converse stop reason to an OpenAI finish reason
@@ -861,6 +976,43 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         return NOTHING;
     }
 
+    #! Returns the \c additionalModelRequestFields that ask a Claude model for adaptive thinking at an effort
+    /** Converse carries Claude's thinking controls as the Messages API's own fields: \c thinking \c "adaptive"
+        and \c output_config.effort, as AnthropicRestClient maps
+        @ref QoreLlmUtils::LlmRequestOptions::reasoning_effort "LlmRequestOptions::reasoning_effort".  Claude
+        Opus 5.5 takes them, as measured for the lowest effort (@ref getClaudeReasoningOffFields()); the models that
+        take adaptive thinking are the Claude 5 models and Claude Opus 4.6 to 4.8 and Claude Sonnet 4.6.
+
+        Claude takes the efforts \c low, \c medium, \c high, \c xhigh and \c max (measured on Bedrock on 2026-11-07
+        with \c eu.anthropic.claude-opus-5-5; \c minimal and \c none are refused with "unknown variant"): \c none is
+        reasoning turned off (@ref getClaudeReasoningOffFields()), and \c minimal is \c low, the least it takes.
+
+        @param model_id the model ID or inference profile ID
+        @param effort the reasoning effort
+
+        @return the \c additionalModelRequestFields, or @ref nothing for a model that does not take adaptive thinking
+
+        @since BedrockRestClient 1.2
+    */
+    static *hash<auto> getClaudeReasoningEffortFields(string model_id, string effort) {
+        string id = model_id.lwr();
+        if (id !~ /^([a-z-]+\.)?anthropic\.claude-/) {
+            return NOTHING;
+        }
+        if (effort == "none") {
+            return getClaudeReasoningOffFields(model_id);
+        }
+        if (effort == "minimal") {
+            effort = "low";
+        }
+        id = regex_subst(id, "^([a-z-]+\\.)?anthropic\\.", "");
+        id = regex_subst(id, "-v[0-9]+(:[0-9]+)?$", "");
+        if (id =~ /^claude-((opus|sonnet|haiku|fable|mythos)-5(-[0-9])?|mythos-preview|opus-4-[6-8]|sonnet-4-6)(-[0-9]{8})?$/) {
+            return {"thinking": {"type": "adaptive"}, "output_config": {"effort": effort}};
+        }
+        return NOTHING;
+    }
+
     string getBedrockModelId(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
         return getRequestModel(opts);
     }
@@ -881,13 +1033,29 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
 
         foreach hash<QoreLlmUtils::ChatMessage> msg in (messages) {
             if (msg.role == "system") {
-                if (msg.content.val()) {
+                if (msg.content_parts) {
+                    foreach hash<QoreLlmUtils::ContentPart> part in (msg.content_parts) {
+                        if (part.type == "text" && part.text.val()) {
+                            push system_blocks, {"text": part.text};
+                            addCachePoint(\system_blocks, part.cache_control);
+                        }
+                    }
+                } else if (msg.content.val()) {
                     push system_blocks, {"text": msg.content};
                 }
                 continue;
             }
 
             list<hash<auto>> content_blocks = ();
+            # an assistant turn's reasoning leads its content and is replayed unchanged: Claude verifies the
+            # signature of each block and refuses a tool-result follow-up that dropped them
+            if (msg.role == "assistant" && msg.reasoning_blocks) {
+                foreach auto reasoning_block in (msg.reasoning_blocks) {
+                    if (*hash<auto> block = BedrockLlmProvider::toConverseReasoning(reasoning_block)) {
+                        push content_blocks, block;
+                    }
+                }
+            }
             if (msg.role == "tool") {
                 push content_blocks, {
                     "toolResult": {
@@ -922,7 +1090,10 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                         };
                     } else if (part.type == "text" && part.text.val()) {
                         push content_blocks, {"text": part.text};
+                    } else {
+                        continue;
                     }
+                    addCachePoint(\content_blocks, part.cache_control);
                 }
             } else if (msg.content.val()) {
                 push content_blocks, {"text": msg.content};
@@ -978,12 +1149,18 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                         },
                     },
                 };
+                addCachePoint(\tool_specs, td.cache_control);
             }
             body.toolConfig = {"tools": tool_specs};
         }
 
         if (getRequestReasoningOff(opts)) {
             *hash<auto> fields = getClaudeReasoningOffFields(getBedrockModelId(opts));
+            if (fields) {
+                body.additionalModelRequestFields = fields;
+            }
+        } else if (*string effort = getRequestReasoningEffort(opts)) {
+            *hash<auto> fields = getClaudeReasoningEffortFields(getBedrockModelId(opts), effort);
             if (fields) {
                 body.additionalModelRequestFields = fields;
             }
@@ -1046,6 +1223,7 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> out_msg = body.output.message ?? {};
         list<string> text_parts = ();
         *list<hash<QoreLlmUtils::ChatToolCall>> tool_calls;
+        *list<auto> reasoning_blocks;
         foreach hash<auto> block in (out_msg.content ?? ()) {
             if (block.text.val()) {
                 push text_parts, block.text;
@@ -1058,6 +1236,11 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                     "name": block.toolUse.name,
                     "arguments": block.toolUse.input ?? {},
                 };
+            } else if (*hash<auto> reasoning = BedrockLlmProvider::fromConverseReasoning(block.reasoningContent)) {
+                if (!reasoning_blocks) {
+                    reasoning_blocks = ();
+                }
+                push reasoning_blocks, reasoning;
             }
         }
         return <QoreLlmUtils::ChatResponse>{
@@ -1067,6 +1250,7 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 tool_calls),
             "content": text_parts ? text_parts.join("") : NOTHING,
             "tool_calls": tool_calls,
+            "reasoning_blocks": reasoning_blocks,
             "usage": normalizeUsage(body.usage),
             "raw": body,
         };
@@ -1084,13 +1268,22 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     }
 
     #! Maps Bedrock \c usage to the OpenAI-style counters
+    /** Converse reports the input it read from and wrote to the prompt cache apart from \c inputTokens, which
+        counts only the rest (measured on Bedrock on 2026-11-07 with \c eu.anthropic.claude-opus-5-5: 13 input
+        tokens, 17603 written, then 13 input tokens, 17603 read; \c totalTokens 17620 both times).  The prompt and
+        input counts here are the whole input, as OpenAI counts it; @c prompt_tokens_details.cached_tokens and
+        @c cache_read_input_tokens are what was read from the cache, and @c cache_write_input_tokens what was written
+        to it.
+    */
     private:internal hash<auto> normalizeUsage(*hash<auto> usage) {
         if (!usage) {
             return {};
         }
-        int prompt_tokens = usage.inputTokens ?? 0;
+        int cache_read = usage.cacheReadInputTokens ?? 0;
+        int cache_write = usage.cacheWriteInputTokens ?? 0;
+        int prompt_tokens = (usage.inputTokens ?? 0) + cache_read + cache_write;
         int completion_tokens = usage.outputTokens ?? 0;
-        return {
+        hash<auto!> rv = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": usage.totalTokens
@@ -1098,6 +1291,32 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             "input_tokens": prompt_tokens,
             "output_tokens": completion_tokens,
         };
+        if (exists usage.cacheReadInputTokens || exists usage.cacheWriteInputTokens) {
+            rv += {
+                "prompt_tokens_details": {"cached_tokens": cache_read},
+                "cache_read_input_tokens": cache_read,
+                "cache_write_input_tokens": cache_write,
+            };
+        }
+        return rv;
+    }
+
+    #! Adds a cache point after the last block when the block it follows is marked for the prompt cache
+    /** A block or tool marked with \c cache_control (as the Anthropic Messages API marks it) is followed by a
+        Converse \c cachePoint, so the request is cached up to it.
+
+        @param blocks the system blocks, content blocks or tool specifications being built
+        @param cache_control the marker of the block just added
+    */
+    private:internal static addCachePoint(reference<list<hash<auto>>> blocks, *hash<auto> cache_control) {
+        if (cache_control) {
+            hash<auto!> cache_point = {"type": "default"};
+            # a marker's lifetime (\c "5m" or \c "1h") is the cache point's
+            if (cache_control.ttl.val()) {
+                cache_point.ttl = cache_control.ttl;
+            }
+            push blocks, {"cachePoint": cache_point};
+        }
     }
 
     #! Maps Bedrock \c stopReason values to the QoreLlmUtils stop-reason vocabulary
@@ -1228,6 +1447,8 @@ public class BedrockLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvide
             "supports_tools": True,
             "supports_structured_output": False,  # no native response_format in Converse
             "supports_multimodal": True,
+            # Claude's adaptive thinking at an effort (getClaudeReasoningEffortFields())
+            "supports_reasoning_effort": True,
         };
     }
     #! Returns the provider's information for a model

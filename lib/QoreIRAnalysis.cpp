@@ -577,6 +577,484 @@ const LocalVar* qore_ir_get_written_local(
     }
 }
 
+// the operation of an instruction: an Invoke (an operation that can raise in a try block) performs its invoke_opcode
+static QoreIROpcode qore_ir_release_class_opcode(const QoreIRInstruction* inst) {
+    return inst->opcode == QoreIROpcode::Invoke
+        ? static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode : inst->opcode;
+}
+
+// returns true for an operation whose first operand the AST interpreter holds as a receiver until the end of the
+// statement (QoreStatementTempScope::holdReceiver(): QoreDotEvalOperatorNode, QoreCastOperatorNode,
+// QoreHashObjectDereferenceOperatorNode, QoreSquareBracketsOperatorNode); a slice
+// (QoreSquareBracketsRangeOperatorNode) releases its sequence when it returns, as an operator releases an operand
+static bool qore_ir_opcode_holds_receiver(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject:
+        case QoreIROpcode::CastAny:
+        case QoreIROpcode::CastList:
+        case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastObject:
+        case QoreIROpcode::CastEnum:
+        case QoreIROpcode::CastComplexHash:
+        case QoreIROpcode::HashKeyAccess:
+        case QoreIROpcode::HashKeyAccessInt:
+        case QoreIROpcode::HashKeyAccessHash:
+        case QoreIROpcode::HashKeyAccessHashGuarded:
+        case QoreIROpcode::HashDerefDynamic:
+        case QoreIROpcode::ListIndexAccess:
+        case QoreIROpcode::ListIndexDynamic:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// returns true for an operation that builds a list or a hash of its operands, which the AST interpreter builds
+// element by element, so an exception releases the elements built with the container, first element first
+static bool qore_ir_opcode_builds_container(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::MakeList:
+        case QoreIROpcode::MakeHash:
+        case QoreIROpcode::MakeHashConstKeys:
+        case QoreIROpcode::NewComplexList:
+        case QoreIROpcode::NewComplexHash:
+        case QoreIROpcode::NewHashDecl:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// documented in QoreIRAnalysis.h
+void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vector<uint32_t>& groups) {
+    groups.assign(static_cast<size_t>(func.max_value_id) + 1, 0);
+    std::vector<uint32_t> uses(groups.size(), 0);
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            // the release of a temporary once it has been used is not a use of it (see ReleaseOwnedTemp)
+            if (inst->opcode == QoreIROpcode::ReleaseOwnedTemp) {
+                continue;
+            }
+            qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                if (operand.isValid() && operand.id < uses.size()) {
+                    ++uses[operand.id];
+                }
+            });
+        }
+    }
+    auto set_class = [&](QoreIRValue operand, uint32_t cls) {
+        // a value used more than once is released on its own: it has no one place to be released with
+        if (operand.isValid() && operand.id < groups.size() && uses[operand.id] == 1) {
+            groups[operand.id] = cls;
+        }
+    };
+    uint32_t serial = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            const QoreIRInstruction* inst = inst_ptr.get();
+            ++serial;
+            // the serial is a class of its own for each instruction, as the first serial is 1 and the receiver class
+            // is beyond the number of instructions of any function
+            assert(serial < QORE_IR_RELEASE_RECEIVER);
+            int arg_start = qore_ir_call_arg_start(inst);
+            if (arg_start >= 0) {
+                // the operands before the arguments are the receiver: the object of a method call, or the callable
+                // of a call through a call reference (CallReferenceCallNode holds it as a receiver)
+                for (size_t i = 0; i < inst->operands.size(); ++i) {
+                    set_class(inst->operands[i], i < static_cast<size_t>(arg_start) ? QORE_IR_RELEASE_RECEIVER
+                        : serial + 1);
+                }
+                continue;
+            }
+            QoreIROpcode op = qore_ir_release_class_opcode(inst);
+            if (qore_ir_opcode_builds_container(op)) {
+                for (const QoreIRValue& operand : inst->operands) {
+                    set_class(operand, serial + 1);
+                }
+            } else if (qore_ir_opcode_holds_receiver(op) && !inst->operands.empty()) {
+                set_class(inst->operands[0], QORE_IR_RELEASE_RECEIVER);
+            }
+        }
+    }
+    // the value of a Phi in an argument list (f(new T(), x ?? new T(), thr())) is the incoming value that it takes
+    // or references, which an engine can keep in the incoming value's slot, so an incoming value released on its own
+    // is released with the Phi's list; a Phi incoming to another Phi gets its class in a later round
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (const auto& block : func.blocks) {
+            for (const auto& inst_ptr : block->instructions) {
+                if (inst_ptr->opcode != QoreIROpcode::Phi || !inst_ptr->result.isValid()
+                        || inst_ptr->result.id >= groups.size()) {
+                    continue;
+                }
+                uint32_t cls = groups[inst_ptr->result.id];
+                if (!cls || cls == QORE_IR_RELEASE_RECEIVER) {
+                    continue;
+                }
+                for (const auto& inc : static_cast<const QoreIRPhiInstruction*>(inst_ptr.get())->incoming) {
+                    if (inc.value.isValid() && inc.value.id < groups.size() && !groups[inc.value.id]) {
+                        groups[inc.value.id] = cls;
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// documented in QoreIRAnalysis.h
+bool qore_ir_order_exception_release(const std::vector<uint32_t>& groups, const uint32_t* ids, size_t count,
+        std::vector<size_t>& order) {
+    order.clear();
+    if (count < 2) {
+        if (count) {
+            order.push_back(0);
+        }
+        return false;
+    }
+    // the class of each temporary, and the position of the first temporary of each argument list
+    std::vector<uint32_t> cls(count, 0);
+    std::unordered_map<uint32_t, size_t> first;
+    for (size_t i = 0; i < count; ++i) {
+        uint32_t c = ids[i] < groups.size() ? groups[ids[i]] : 0;
+        cls[i] = c;
+        if (c && c != QORE_IR_RELEASE_RECEIVER) {
+            first.emplace(c, i);
+        }
+    }
+    // the position of the list that each temporary is released with: its own for a temporary released on its own
+    std::vector<size_t> list_pos(count);
+    order.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        list_pos[i] = cls[i] && cls[i] != QORE_IR_RELEASE_RECEIVER ? first[cls[i]] : i;
+        if (cls[i] != QORE_IR_RELEASE_RECEIVER) {
+            order.push_back(i);
+        }
+    }
+    // the lists last started first, each first registered first
+    std::stable_sort(order.begin(), order.end(), [&list_pos](size_t a, size_t b) {
+        return list_pos[a] != list_pos[b] ? list_pos[a] > list_pos[b] : a < b;
+    });
+    // then the receivers, last registered first
+    for (size_t i = count; i > 0; --i) {
+        if (cls[i - 1] == QORE_IR_RELEASE_RECEIVER) {
+            order.push_back(i - 1);
+        }
+    }
+    for (size_t i = 0; i < count; ++i) {
+        if (order[i] != count - 1 - i) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// documented in QoreIRAnalysis.h
+bool qore_ir_find_local_reads_overwritten_before_use(const QoreIRFunction& func,
+        std::unordered_set<uint32_t>& result) {
+    result.clear();
+    struct Position {
+        size_t block;
+        size_t index;
+    };
+    struct Read {
+        const LocalVar* local;
+        Position def;
+        std::vector<Position> uses;
+    };
+    size_t check_count = 0;
+    const char* operation = "IR overwritten local read analysis";
+
+    std::unordered_map<const QoreIRBasicBlock*, size_t> block_ids;
+    block_ids.reserve(func.blocks.size());
+    for (size_t b = 0; b < func.blocks.size(); ++b) {
+        block_ids.emplace(func.blocks[b].get(), b);
+    }
+
+    // the values read from a variable (LoadLocal and StoreLocal results)
+    std::unordered_map<uint32_t, Read> reads;
+    // the reads that a value can be: a read itself, or a guard or a Phi of reads
+    std::unordered_map<uint32_t, std::vector<uint32_t>> read_values;
+    std::vector<const QoreIRInstruction*> forwarders;
+    // the writes of each variable
+    std::unordered_map<const LocalVar*, std::vector<Position>> writes;
+    // the instructions that can write any variable through a reference (only in a function that creates one)
+    std::vector<Position> any_writes;
+    bool creates_reference = false;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::CreateParseRef
+                    || (inst->opcode == QoreIROpcode::Invoke
+                        && static_cast<const QoreIRInvokeInstruction*>(inst.get())->invoke_opcode
+                            == QoreIROpcode::CreateParseRef)) {
+                creates_reference = true;
+            }
+        }
+    }
+    for (size_t b = 0; b < func.blocks.size(); ++b) {
+        const auto& insts = func.blocks[b]->instructions;
+        for (size_t i = 0; i < insts.size(); ++i) {
+            if (qore_ir_analysis_cancelled(check_count, operation)) {
+                goto cancelled;
+            }
+            const QoreIRInstruction* inst = insts[i].get();
+            const LocalVar* written = qore_ir_get_written_local(inst);
+            if (written) {
+                writes[written].push_back({b, i});
+            }
+            // in a function that creates a reference, a write to a local that holds one writes the referenced
+            // variable, and a call can write any variable through one
+            if (creates_reference && (written || qore_ir_call_arg_start(inst) >= 0
+                    || qore_ir_instruction_may_invalidate_caller_caches(func, inst))) {
+                any_writes.push_back({b, i});
+            }
+            if (!inst->result.isValid()) {
+                continue;
+            }
+            switch (inst->opcode) {
+                case QoreIROpcode::LoadLocal:
+                case QoreIROpcode::StoreLocal: {
+                    const LocalVar* local = static_cast<const QoreIRLocalInstruction*>(inst)->local;
+                    if (local) {
+                        reads.emplace(inst->result.id, Read{local, {b, i}, {}});
+                        read_values[inst->result.id].push_back(inst->result.id);
+                    }
+                    break;
+                }
+                case QoreIROpcode::GuardType:
+                case QoreIROpcode::GuardNotNothing:
+                case QoreIROpcode::Phi:
+                    forwarders.push_back(inst);
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+    // the reads that guards and Phis forward, until no more are found (a Phi can come before an operand's
+    // definition in a loop)
+    for (bool changed = true; changed;) {
+        changed = false;
+        for (const QoreIRInstruction* fwd : forwarders) {
+            if (qore_ir_analysis_cancelled(check_count, operation)) {
+                goto cancelled;
+            }
+            size_t count = fwd->opcode == QoreIROpcode::Phi ? fwd->operands.size()
+                : std::min<size_t>(fwd->operands.size(), 1);
+            for (size_t o = 0; o < count; ++o) {
+                auto it = read_values.find(fwd->operands[o].id);
+                if (it == read_values.end() || fwd->operands[o].id == fwd->result.id) {
+                    continue;
+                }
+                std::vector<uint32_t> add = it->second;
+                std::vector<uint32_t>& target = read_values[fwd->result.id];
+                for (uint32_t r : add) {
+                    if (std::find(target.begin(), target.end(), r) == target.end()) {
+                        target.push_back(r);
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+    // the uses of each read, directly or through a guard or a Phi
+    for (size_t b = 0; b < func.blocks.size(); ++b) {
+        const auto& insts = func.blocks[b]->instructions;
+        for (size_t i = 0; i < insts.size(); ++i) {
+            const QoreIRInstruction* inst = insts[i].get();
+            bool forwards = inst->opcode == QoreIROpcode::GuardType || inst->opcode == QoreIROpcode::GuardNotNothing
+                || inst->opcode == QoreIROpcode::Phi;
+            if (!qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                        // the use of a guard or a Phi is counted at the uses of its value
+                        if (forwards) {
+                            return;
+                        }
+                        auto it = read_values.find(operand.id);
+                        if (it == read_values.end()) {
+                            return;
+                        }
+                        for (uint32_t r : it->second) {
+                            reads[r].uses.push_back({b, i});
+                        }
+                    }, &check_count, operation)) {
+                goto cancelled;
+            }
+        }
+    }
+    {
+        // the successors of each block, with the handlers of its instructions
+        std::vector<std::vector<size_t>> successors(func.blocks.size());
+        for (size_t b = 0; b < func.blocks.size(); ++b) {
+            auto add = [&](QoreIRBasicBlock* succ) {
+                auto it = block_ids.find(succ);
+                if (it != block_ids.end() && std::find(successors[b].begin(), successors[b].end(), it->second)
+                        == successors[b].end()) {
+                    successors[b].push_back(it->second);
+                }
+            };
+            const auto& insts = func.blocks[b]->instructions;
+            if (!insts.empty()) {
+                qore_ir_visit_successors(*insts.back(), add);
+            }
+            for (const auto& inst : insts) {
+                if (inst->exception_target) {
+                    add(inst->exception_target);
+                }
+            }
+        }
+        // the blocks visited by the path searches; above the budget, a path is assumed to exist
+        size_t search_budget = 1u << 22;
+        // the search that last visited each block, so that a search does not reset the vector
+        std::vector<uint32_t> visited(func.blocks.size(), 0);
+        uint32_t search = 0;
+        std::vector<size_t> stack;
+        // true if a path from the end of block from (through its successors) reaches block to without entering block
+        // avoid, which is the block of the read: a path through it executes the read again, giving a new value; the
+        // block of the read is reached itself when it is the target
+        auto reaches_avoiding = [&](size_t from, size_t to, size_t avoid) -> bool {
+            ++search;
+            stack.assign(successors[from].begin(), successors[from].end());
+            while (!stack.empty()) {
+                if (!search_budget) {
+                    return true;
+                }
+                --search_budget;
+                size_t b = stack.back();
+                stack.pop_back();
+                if (b == to) {
+                    return true;
+                }
+                if (b == avoid || visited[b] == search) {
+                    continue;
+                }
+                visited[b] = search;
+                stack.insert(stack.end(), successors[b].begin(), successors[b].end());
+            }
+            return false;
+        };
+        // true if the write can be executed between the read and a use that is not after it in its block
+        auto between_blocks = [&](const Position& def, const Position& write, const Position& use) -> bool {
+            if (write.block == def.block) {
+                // a write before the read in its block is followed by the read again; one after it is executed on
+                // every path leaving the block
+                return write.index > def.index && reaches_avoiding(def.block, use.block, def.block);
+            }
+            if (!reaches_avoiding(def.block, write.block, def.block)) {
+                return false;
+            }
+            if (write.block == use.block && write.index < use.index) {
+                return true;
+            }
+            return reaches_avoiding(write.block, use.block, def.block);
+        };
+        // the writes of each local, and the writes through a reference, by block, in instruction order (they are
+        // collected in that order), so that a write between a read and a use in one block is found by a binary search
+        using BlockWrites = std::unordered_map<size_t, std::vector<size_t>>;
+        std::unordered_map<const LocalVar*, BlockWrites> local_block_writes;
+        for (const auto& [local, positions] : writes) {
+            BlockWrites& bw = local_block_writes[local];
+            for (const Position& w : positions) {
+                bw[w.block].push_back(w.index);
+            }
+        }
+        BlockWrites any_block_writes;
+        for (const Position& w : any_writes) {
+            any_block_writes[w.block].push_back(w.index);
+        }
+        // true if one of the writes is in the block after index from and before index to
+        auto written_in = [](const BlockWrites* bw, size_t block, size_t from, size_t to) -> bool {
+            if (!bw) {
+                return false;
+            }
+            auto it = bw->find(block);
+            if (it == bw->end()) {
+                return false;
+            }
+            auto w = std::upper_bound(it->second.begin(), it->second.end(), from);
+            return w != it->second.end() && *w < to;
+        };
+        // the number of path checks made for one read with a use in another block, above which a write between is
+        // assumed (the read then takes a reference of its own, which is always correct)
+        constexpr size_t MaxPathChecksPerRead = 256;
+        for (auto& [id, read] : reads) {
+            if (qore_ir_analysis_cancelled(check_count, operation)) {
+                goto cancelled;
+            }
+            auto wi = writes.find(read.local);
+            if (wi == writes.end() && any_writes.empty()) {
+                continue;
+            }
+            auto lbw = local_block_writes.find(read.local);
+            const BlockWrites* bw = lbw == local_block_writes.end() ? nullptr : &lbw->second;
+            // the last use after the read in its block, and the uses elsewhere
+            size_t last_local_use = 0;
+            bool has_local_use = false;
+            std::vector<const Position*> other_uses;
+            for (const Position& use : read.uses) {
+                if (use.block == read.def.block && use.index > read.def.index) {
+                    if (!has_local_use || use.index > last_local_use) {
+                        last_local_use = use.index;
+                        has_local_use = true;
+                    }
+                } else {
+                    other_uses.push_back(&use);
+                }
+            }
+            bool found = has_local_use && (written_in(bw, read.def.block, read.def.index, last_local_use)
+                || written_in(&any_block_writes, read.def.block, read.def.index, last_local_use));
+            size_t checks = 0;
+            for (size_t u = 0; !found && u < other_uses.size(); ++u) {
+                const Position& use = *other_uses[u];
+                auto check = [&](const Position& write) -> bool {
+                    if (++checks > MaxPathChecksPerRead) {
+                        return true;
+                    }
+                    return between_blocks(read.def, write, use);
+                };
+                if (wi != writes.end()) {
+                    for (const Position& write : wi->second) {
+                        if (check(write)) {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if (!found) {
+                    for (const Position& write : any_writes) {
+                        if (check(write)) {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (found) {
+                result.insert(id);
+            }
+        }
+    }
+    return true;
+
+cancelled:
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if ((inst->opcode == QoreIROpcode::LoadLocal || inst->opcode == QoreIROpcode::StoreLocal)
+                    && inst->result.isValid()) {
+                result.insert(inst->result.id);
+            }
+        }
+    }
+    return false;
+}
+
 bool qore_ir_instruction_may_invalidate_caller_caches(
         const QoreIRFunction& func, const QoreIRInstruction* inst) {
     if (!inst) {
@@ -10740,6 +11218,37 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
         return 0;
     }
+    // The release of a temporary once it has been used is not a use of it (see ReleaseOwnedTemp): the lowering releases
+    // the value of a call that exists or elements consumes once the operator has run, and a call that is projected
+    // gives the operator's value instead, so there is no aggregate to release; the releases of the values that the
+    // rewrite below leaves undefined are removed at its end.  Counted as a use, the release made the call's value one
+    // with two uses, which no projection takes.
+    for (auto& [value_id, value_uses] : uses) {
+        if (qore_ir_analysis_cancelled(check_count, "IR aggregate-return release use analysis")) {
+            return 0;
+        }
+        value_uses.erase(std::remove_if(value_uses.begin(), value_uses.end(), [](const QoreIRScalarUse& use) {
+            return use.inst && use.inst->opcode == QoreIROpcode::ReleaseOwnedTemp;
+        }), value_uses.end());
+    }
+    // the values that instructions define now, of which the rewrite can leave some undefined
+    auto collect_defined_values = [&func, &check_count](std::unordered_set<uint32_t>& defined) -> bool {
+        for (const auto& block : func.blocks) {
+            for (const auto& inst : block->instructions) {
+                if (qore_ir_analysis_cancelled(check_count, "IR aggregate-return defined value analysis")) {
+                    return false;
+                }
+                if (inst && inst->result.isValid()) {
+                    defined.insert(inst->result.id);
+                }
+            }
+        }
+        return true;
+    };
+    std::unordered_set<uint32_t> defined_before_rewrite;
+    if (!collect_defined_values(defined_before_rewrite)) {
+        return 0;
+    }
     bool enable_native_scalar_projection =
         !q_env_is_set("QORE_DISABLE_AOT_NATIVE_SCALAR_PROJECTION");
 
@@ -13402,6 +13911,21 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             apply_call_projection(projection, projection.result);
             ++inst;
         }
+    }
+    // the release of the aggregate of a call that is projected (see the uses above): the rewrite left its value
+    // undefined
+    std::unordered_set<uint32_t> defined_after_rewrite;
+    if (!collect_defined_values(defined_after_rewrite)) {
+        return 0;
+    }
+    for (auto& block : func.blocks) {
+        auto& instructions = block->instructions;
+        instructions.erase(std::remove_if(instructions.begin(), instructions.end(),
+            [&](const std::unique_ptr<QoreIRInstruction>& inst) {
+                return inst && inst->opcode == QoreIROpcode::ReleaseOwnedTemp && inst->operands.size() == 1
+                    && defined_before_rewrite.count(inst->operands[0].id)
+                    && !defined_after_rewrite.count(inst->operands[0].id);
+            }), instructions.end());
     }
     return projections.size() + virtualized.size()
         + virtualized_phis.size();

@@ -183,6 +183,7 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
         addTestCase("url option tests", \urlOptionTests());
         addTestCase("connection url tests", \connectionUrlTests());
         addTestCase("sync client rate limit", \syncClientRateLimitTest());
+        addTestCase("example data rate limit", \exampleDataRateLimitTest());
 
         # Integration tests (require INSTANTLY_API_KEY or connection)
         addTestCase("child provider tests", \childProviderTests());
@@ -240,6 +241,44 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
         assertEq(200, info."response-code");
         assertEq(2, handler.requests.size());
         assertEq("Bearer test-key", handler.requests[1].authorization);
+    }
+
+    #! A rate-limited request for example data is not retried, and the fake example data is returned
+    exampleDataRateLimitTest() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        FakeInstantlyHandler handler();
+        server.setHandler("instantly", "", NOTHING, handler);
+        server.setDefaultHandler("instantly", handler);
+        string url = "http://localhost:" + port + "/api/v2";
+
+        # the example event data is requested once
+        InstantlyDataProvider::InstantlyReplyReceivedEventDataProvider watch(
+            new InstantlyRestClient::InstantlyRestClientIo({"apikey": "test-key", "url": url}));
+        handler.rate_limited = 2;
+        auto example = watch.getExampleEventData(watch.getName());
+        assertEq(InstantlyDataProvider::WEBHOOK_REPLY_RECEIVED, example.event_type);
+        assertEq(1, handler.requests.size());
+        assertEq("api/v2/leads/list", handler.requests[0].path);
+
+        # the synchronous client does not retry while retries are suppressed
+        InstantlyRestClient::InstantlyRestClient rest({"apikey": "test-key", "url": url}, True);
+        handler.requests = ();
+        handler.rate_limited = 2;
+        hash<ExceptionInfo> ex = DataProviderRetryUtil::runWithoutRetries(hash<ExceptionInfo> sub () {
+            try {
+                rest.doRequest("GET", "campaigns/c1", NOTHING);
+            } catch (hash<ExceptionInfo> ex) {
+                return ex;
+            }
+            throw "TEST-ERROR", "no exception";
+        });
+        assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+        assertEq(429, ex.arg.status_code);
+        assertEq(1, handler.requests.size());
     }
 
     #! An explicit url option is honored, and copyWithUrl() keeps the credentials

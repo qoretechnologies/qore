@@ -1,0 +1,352 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - reads after a send fails on a peer reset (EPIPE/ECONNRESET), plain and TLS
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A write that fails because the peer closed or reset the connection leaves the socket open, over TLS as for a
+    plain socket (issue #5630): the data the peer sent before it closed is still read, and the read after it returns
+    the end of the connection at once - EOF or the reset - and never waits.  The TLS write error carries the errno as
+    its argument, like a plain socket's SOCKET-SEND-ERROR.
+*/
+
+%modern
+
+%requires QUnit
+
+%exec-class TlsWriteAfterPeerResetTest
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+class TlsWriteAfterPeerResetTest inherits QUnit::Test {
+    public {
+        #! upper bound on any blocking operation; a read that blocks until it fails the test
+        const Timeout = 60s;
+
+        #! the data the client writes: larger than the socket buffers, so the write is still going when the peer
+        #! answers and resets
+        const WriteSize = 8 * 1024 * 1024;
+
+        #! what the peer answers before it resets the connection
+        const Answer = "the peer's answer";
+    }
+
+    constructor() : Test("TlsWriteAfterPeerResetTest", "1.0") {
+        addTestCase("plain: the answer is read after the write fails, then the end of the connection",
+            \plainTest());
+        addTestCase("TLS: the socket stays open after the write fails, the answer is read, then the end of the "
+            "connection", \tlsTest());
+        addTestCase("TLS: a socket kept open after a failed write is closed without a close_notify alert",
+            \tlsNoCloseNotifyAfterFailedWriteTest());
+        addTestCase("TLS server: a socket kept open after a failed write is closed without a close_notify alert",
+            \tlsServerNoCloseNotifyAfterFailedWriteTest());
+        addTestCase("TLS: a protocol error on a write closes the socket whatever errno holds",
+            \tlsProtocolErrorClosesTest());
+        set_return_value(main());
+    }
+
+    plainTest() {
+        exchange(False);
+    }
+
+    tlsTest() {
+        exchange(True);
+    }
+
+    #! Skips the test unless the library has its debugging hooks
+    private requireDebugHooks() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hooks that observe and force the TLS behaviour are only in debug builds");
+        }
+    }
+
+    #! After a write failed because of a peer reset (SSL_ERROR_SYSCALL), OpenSSL forbids SSL_shutdown(): the close of
+    #! the socket kept open sends no close_notify alert, while the close of a healthy TLS socket does
+    tlsNoCloseNotifyAfterFailedWriteTest() {
+        requireDebugHooks();
+        # a healthy connection: its close sends the alert
+        {
+            Socket listener();
+            listener.setCertificate(new SSLCertificate(CertPem));
+            listener.setPrivateKey(new SSLPrivateKey(KeyPem));
+            listener.bind("localhost:0", True);
+            listener.listen();
+            on_exit listener.close();
+            Queue accepted();
+            background sub () {
+                try {
+                    Socket conn = listener.accept(Timeout);
+                    conn.upgradeServerToSSL(Timeout);
+                    accepted.push(conn);
+                } catch (hash<ExceptionInfo> ex) {
+                    accepted.push(ex.err);
+                }
+            }();
+            Socket sock();
+            sock.connectSSL(sprintf("localhost:%d", listener.getPort()), Timeout);
+            auto conn = accepted.get(Timeout);
+            assertEq(NT_OBJECT, conn.typeCode(), sprintf("the peer accepted the connection: %y", conn));
+            int before = call_function("dbg_ssl_close_notify_count");
+            sock.close();
+            assertEq(before + 1, call_function("dbg_ssl_close_notify_count"), "a healthy close sends close_notify");
+            call_function("dbg_reset_socket", conn);
+        }
+        # a connection whose write failed because of the peer's reset: its close sends none
+        Socket sock = failedTlsWrite();
+        int before = call_function("dbg_ssl_close_notify_count");
+        sock.close();
+        assertEq(before, call_function("dbg_ssl_close_notify_count"),
+            "no close_notify is sent after a fatal write error");
+    }
+
+    #! The same on the server's side: the client resets the connection, so the server's write fails; the close of the
+    #! server's socket kept open sends no close_notify alert
+    tlsServerNoCloseNotifyAfterFailedWriteTest() {
+        requireDebugHooks();
+        Socket listener();
+        listener.setCertificate(new SSLCertificate(CertPem));
+        listener.setPrivateKey(new SSLPrivateKey(KeyPem));
+        listener.bind("localhost:0", True);
+        listener.listen();
+        on_exit listener.close();
+        Queue accepted();
+        background sub () {
+            try {
+                Socket conn = listener.accept(Timeout);
+                conn.upgradeServerToSSL(Timeout);
+                accepted.push(conn);
+            } catch (hash<ExceptionInfo> ex) {
+                accepted.push(sprintf("%s: %s", ex.err, ex.desc));
+            }
+        }();
+        Socket client();
+        client.connectSSL(sprintf("localhost:%d", listener.getPort()), Timeout);
+        auto conn = accepted.get(Timeout);
+        assertEq(NT_OBJECT, conn.typeCode(), sprintf("the server accepted the connection: %y", conn));
+        call_function("dbg_reset_socket", client);
+        hash<ExceptionInfo> ex;
+        try {
+            conn.send(strmul("w", WriteSize), Timeout);
+            fail("a write to a reset connection must fail");
+        } catch (hash<ExceptionInfo> ex1) {
+            ex = ex1;
+        }
+        assertEq("SOCKET-SSL-ERROR", ex.err, ex.desc);
+        assertTrue(conn.isOpen(), "the server's socket stays open after the write failed");
+        int before = call_function("dbg_ssl_close_notify_count");
+        conn.close();
+        assertEq(before, call_function("dbg_ssl_close_notify_count"),
+            "no close_notify is sent by the server after a fatal write error");
+    }
+
+    #! An SSL_ERROR_SSL write failure closes the socket, also when errno holds a peer-close error from before
+    tlsProtocolErrorClosesTest() {
+        requireDebugHooks();
+        Socket listener();
+        listener.setCertificate(new SSLCertificate(CertPem));
+        listener.setPrivateKey(new SSLPrivateKey(KeyPem));
+        listener.bind("localhost:0", True);
+        listener.listen();
+        on_exit listener.close();
+        Queue accepted();
+        background sub () {
+            try {
+                Socket conn = listener.accept(Timeout);
+                conn.upgradeServerToSSL(Timeout);
+                accepted.push(conn);
+            } catch (hash<ExceptionInfo> ex) {
+                accepted.push(ex.err);
+            }
+        }();
+        Socket sock();
+        sock.connectSSL(sprintf("localhost:%d", listener.getPort()), Timeout);
+        auto conn = accepted.get(Timeout);
+        on_exit if (conn.typeCode() == NT_OBJECT) {
+            call_function("dbg_reset_socket", conn);
+        }
+        call_function("dbg_force_ssl_error_ssl", sock);
+        hash<ExceptionInfo> ex;
+        try {
+            sock.send("x", Timeout);
+            fail("the forced protocol error must fail the write");
+        } catch (hash<ExceptionInfo> ex1) {
+            ex = ex1;
+        }
+        assertEq("SOCKET-SSL-ERROR", ex.err, ex.desc);
+        # the TLS library's error is reported, not a transport failure
+        assertRegex("decryption failed|bad record mac", ex.desc.lwr(), "the TLS protocol error is reported");
+        assertEq(NOTHING, ex.arg, "the stale errno is not reported as a peer close");
+        assertFalse(sock.isOpen(), "the socket is closed after a TLS protocol error");
+    }
+
+    #! Returns a TLS socket whose write failed because the peer answered and reset the connection; the socket is open
+    private Socket failedTlsWrite() {
+        Socket listener();
+        listener.setCertificate(new SSLCertificate(CertPem));
+        listener.setPrivateKey(new SSLPrivateKey(KeyPem));
+        listener.bind("localhost:0", True);
+        listener.listen();
+        on_exit listener.close();
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                Socket conn = listener.accept(Timeout);
+                conn.upgradeServerToSSL(Timeout);
+                conn.recvBinary(1024, Timeout);
+                call_function("dbg_reset_socket", conn);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }();
+        Socket sock();
+        sock.connectSSL(sprintf("localhost:%d", listener.getPort()), Timeout);
+        try {
+            sock.send(strmul("w", WriteSize), Timeout);
+            fail("a write to a reset connection must fail");
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        assertEq(0, done.waitForZero(Timeout), "the peer finished");
+        assertTrue(sock.isOpen(), "the socket stays open after the write failed");
+        return sock;
+    }
+
+    #! The peer reads a little, answers and resets the connection while the client is writing
+    private exchange(bool tls) {
+        Socket listener();
+        if (tls) {
+            listener.setCertificate(new SSLCertificate(CertPem));
+            listener.setPrivateKey(new SSLPrivateKey(KeyPem));
+        }
+        listener.bind("localhost:0", True);
+        listener.listen();
+        on_exit listener.close();
+
+        Counter done(1);
+        Queue peer_err();
+        background sub () {
+            on_exit done.dec();
+            try {
+                Socket conn = listener.accept(Timeout);
+                if (tls) {
+                    conn.upgradeServerToSSL(Timeout);
+                }
+                conn.recvBinary(1024, Timeout);
+                conn.send(Answer, Timeout);
+                # the client's data is left unread: the connection is reset
+                if (Option::HAVE_LIBRARY_DEBUGGING) {
+                    call_function("dbg_reset_socket", conn);
+                } else {
+                    conn.close();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                peer_err.push(sprintf("%s: %s", ex.err, ex.desc));
+            }
+        }();
+
+        Socket sock();
+        if (tls) {
+            sock.connectSSL(sprintf("localhost:%d", listener.getPort()), Timeout);
+        } else {
+            sock.connect(sprintf("localhost:%d", listener.getPort()), Timeout);
+        }
+        on_exit sock.close();
+
+        hash<ExceptionInfo> ex;
+        try {
+            sock.send(strmul("w", WriteSize), Timeout);
+            fail("a write to a reset connection must fail");
+        } catch (hash<ExceptionInfo> ex1) {
+            ex = ex1;
+        }
+        assertEq(0, done.waitForZero(Timeout), "the peer finished");
+        assertEq(0, peer_err.size(), sprintf("the peer did not fail: %y", peer_err.size() ? peer_err.get() : NOTHING));
+
+        string err = tls ? "SOCKET-SSL-ERROR" : "SOCKET-SEND-ERROR";
+        assertEq(err, ex.err, sprintf("the write error (%s)", ex.desc));
+        assertEq(NT_INT, ex.arg.typeCode(), "the errno is the exception argument");
+        assertTrue(ex.arg == Err::EPIPE || ex.arg == Err::ECONNRESET || ex.arg == Err::ECONNABORTED,
+            sprintf("the errno says the peer closed or reset the connection (%y)", ex.arg));
+        assertTrue(sock.isOpen(), "the socket stays open after the write failed");
+
+        # the answer was received before the reset, so it is read
+        assertEq(Answer, sock.recv(Answer.size(), Timeout), "the peer's answer is read after the failed write");
+
+        # the read after it returns the end of the connection at once; a read that waited would time out
+        *string rest;
+        *string read_err;
+        try {
+            rest = sock.recv(1, Timeout);
+        } catch (hash<ExceptionInfo> ex2) {
+            read_err = ex2.err;
+        }
+        assertNeq("SOCKET-TIMEOUT", read_err, "the read after the answer does not wait");
+        assertTrue(exists read_err || !rest,
+            sprintf("the read after the answer returns the end of the connection (got %y, %y)", rest, read_err));
+    }
+}

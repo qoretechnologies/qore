@@ -12,14 +12,14 @@
 
 %requires json
 %requires yaml
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/RestSchemaValidator.qm
-%requires ../../../../qlib/OpenApi3.qm
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/RestClient.qm
+%requires Util
+%requires Mime
+%requires QUnit
+%requires HttpServerUtil
+%requires RestSchemaValidator
+%requires OpenApi3
+%requires ConnectionProvider
+%requires RestClient
 
 %exec-class OpenApi3Test
 
@@ -4839,7 +4839,7 @@ public class OpenApi3Test inherits QUnit::Test {
                 assertTrue(fields{name}.getType() instanceof QoreUnionDataType);
                 assertEq({"profile": "regional"}, fields{name}.getType().acceptsValue({"profile": "regional"}));
                 assertEq({"inline": "eu"}, fields{name}.getType().acceptsValue({"inline": "eu"}));
-                assertThrows("RUNTIME-TYPE-ERROR", sub () { fields{name}.getType().acceptsValue("invalid"); });
+                assertThrows("TYPE-VALUE-ERROR", sub () { fields{name}.getType().acceptsValue("invalid"); });
             }
             assertNothing(fields.placement.getType().acceptsValue(NOTHING));
             assertTrue(fields.required_placement.isMandatory());
@@ -5837,7 +5837,7 @@ public class OpenApi3Test inherits QUnit::Test {
             hash<RestRequestClientInfo> request = schema.processRequest("POST", "/transcribe", {"file": accepted});
             assertRegex("^multipart/form-data; boundary=", request.content);
         }
-        assertThrows("RUNTIME-TYPE-ERROR", sub () { field.acceptsValue({"invalid": "audio"}); });
+        assertThrows("TYPE-VALUE-ERROR", sub () { field.acceptsValue({"invalid": "audio"}); });
         assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
             schema.processRequest("POST", "/transcribe", {"file": {"name": "", "content": <00>}});
         });
@@ -5845,7 +5845,7 @@ public class OpenApi3Test inherits QUnit::Test {
         auto type = op.body.schema.properties.file.getDataType();
         assertEq(<00017fff>, type.acceptsValue(<00017fff>));
         assertEq("https://example.test/audio.wav", type.acceptsValue("https://example.test/audio.wav"));
-        assertThrows("RUNTIME-TYPE-ERROR", sub () { type.acceptsValue(("invalid",)); });
+        assertThrows("TYPE-VALUE-ERROR", sub () { type.acceptsValue(("invalid",)); });
     }
 
     testMultipartArrayUnions() {
@@ -5883,7 +5883,7 @@ public class OpenApi3Test inherits QUnit::Test {
             }
             foreach auto invalid in ((), (file, file, file), ({"invalid": "file"},),
                     ("https://example.test/image.png",), ({"name": "", "content": <00>},)) {
-                assertThrows("RUNTIME-TYPE-ERROR", sub () { type.acceptsValue(invalid); });
+                assertThrows("TYPE-VALUE-ERROR", sub () { type.acceptsValue(invalid); });
             }
         }
         # Two identical array branches must still fail oneOf after file metadata is adapted.
@@ -5892,7 +5892,7 @@ public class OpenApi3Test inherits QUnit::Test {
         OpenApi3Schema ambiguous("", spec);
         path = ambiguous.paths.match("/edit");
         field = path.getOperation("post", "/edit").getRequestBodyField(path).getType().getFields().image;
-        assertThrows("RUNTIME-TYPE-ERROR", "multiple oneOf", sub () { field.acceptsValue((file,)); });
+        assertThrows("TYPE-VALUE-ERROR", "multiple oneOf", sub () { field.acceptsValue((file,)); });
     }
 
     testPathParameterValues() {
@@ -5967,7 +5967,7 @@ public class OpenApi3Test inherits QUnit::Test {
             assertEq({"text": "Hello"}, copy.acceptsValue({"text": "Hello"}));
             assertEq("Hello", copy.acceptsValue("Hello"));
             assertEq(<00017fff>, copy.acceptsValue(<00017fff>));
-            assertThrows("RUNTIME-TYPE-ERROR", sub () { copy.acceptsValue({"wrong": "value"}); });
+            assertThrows("TYPE-VALUE-ERROR", sub () { copy.acceptsValue({"wrong": "value"}); });
         }
         assertEq({"text": "Hello"}, schema.parseResponse("GET", "/audio", 200,
             "{\"text\":\"Hello\"}", {"Content-Type": "application/json; charset=utf-8"}).body);

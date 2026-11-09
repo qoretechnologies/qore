@@ -166,7 +166,7 @@ class StabilityMediaWireTest inherits QUnit::Test {
         # a value the schema refuses, a job ID that is not 64 characters long, is refused by the option's type
         {
             StabilityAiOperation operation("get-image-result", new StabilityAiRestClientIo(options));
-            assertThrows("RUNTIME-TYPE-ERROR", "\"job_id\".*requires at least 64 characters; got 21",
+            assertThrows("TYPE-VALUE-ERROR", "\"job_id\".*requires at least 64 characters; got 21",
                 sub () { operation.doRequest({"job_id": "https://wrong.example"}); });
         }
         StabilityAiDataProvider::StabilityAiDataProvider root(new StabilityAiRestClientIo(options));

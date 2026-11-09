@@ -1,6 +1,8 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - fork() while other threads start and exit, child process state after fork
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: parent - the fork cases fork the test's own process
 
 %modern
 %no-child-restrictions

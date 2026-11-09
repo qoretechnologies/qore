@@ -864,6 +864,28 @@ CONNECTING → SSL_UPGRADE → READING ⇄ WAIT_READ → CLOSED
 | `wait_read`     | Paused after callback dispatch; `continueReading()` transitions back to `reading` |
 | `closed`        | Connection closed (GOAWAY, error, or max empty reads)               |
 
+`closed` is final, in the HTTP/1.1, HTTP/2 and HTTP/3 client poll operations and in the HTTP/3 server poll operation.
+`abort()` runs on any thread (the Qore-level `abort()` method, or a close or cancel of the connection from the caller's
+thread), and the HTTP/3 client records a refused submission from the submitting thread; the I/O thread checks the
+state and then sets the next one.  The client operations set every other state with a compare-exchange that never
+replaces `CLOSED` (`setStateUnlessClosed()`, `setOpenState()` for HTTP/3), so a close between the I/O thread's check
+and its store is not undone; a plain store made the closed connection ready again, and it took requests and was never
+closed by the I/O controller.  The HTTP/1.1 client operation also writes its `current_op` and `send_op` pointers with
+`op_lock` held and nulls them before it releases them, as `abort()` and `getOutput()` reference them from other
+threads; the WebSocket client and the HTTP server keep-alive and accept operations do the same for their inner
+operations and accepted socket, and `abort()` only aborts the inner operations, with a reference of its own, and never
+releases them.  The WebSocket client's close code and reason are changed under a lock, and an `abort()`'s are kept.
+An HTTP server keep-alive operation that was closed is not made idle again by `resetForIdle()`, and a connection that
+an accept operation accepts after an `abort()` is closed.  The same rule holds for the WebSocket client operation (a close handshake does not leave `CLOSED` or
+`ERROR`) and for the HTTP server idle, keep-alive and accept operations (an aborted one reports no data, reads no
+request header and starts no TLS handshake): their I/O thread sets the next state with a compare-exchange from the
+state it found.  The HTTP/3 and HTTP/2 server operations and the HTTP server WebSocket operation set every state with
+their lock held (`op_lock`, `m`), as `abort()` does, so their I/O thread cannot interleave with it (the HTTP/2 server's
+state is atomic, as its accessors read it without the lock); the HTTP/3
+server's `getOutput()` does not reopen an operation that `abort()` closed.  In debug builds, `dbg_poll_close_before_open_state()` closes an
+operation on its I/O thread right before a given state store (or, for the HTTP/1.1 client, while it releases its
+operation), which makes the race deterministic in tests.
+
 **Callback dispatch pattern:**
 
 1. `continuePoll()` calls `current_op.getOutput()` to get completed responses.
@@ -1293,18 +1315,24 @@ The fix clears `O_NONBLOCK` via `fcntl(F_SETFL)` on every accepted fd immediatel
 `accept()` returns. The second `fcntl` return value is unchecked — failure is essentially
 impossible on a just-accepted fd and non-critical.
 
-### macOS kqueue Closed-fd Detection
+### Closing a Socket While It Is Polled
 
-File: `lib/QoreSocket.cpp`
+Files: `include/qore/intern/qore_socket_private.h`, `lib/AsyncIoControllerPriv.cpp`
 
-On macOS, closing a monitored fd removes its kqueue registration without delivering an event.
-If a socket is closed by another thread while the I/O thread is blocked in `kevent()`,
-`kevent()` may return 0 (timeout) with no events for the closed fd. The fix scans all
-monitored fds after `kevent()` returns and reports `SOCK_POLLERR` for any fd that has become
-invalid (`fcntl(F_GETFD)` returns `EBADF`).
+On macOS, closing a descriptor that a kqueue monitors removes its registration without delivering an event, and on
+every platform a descriptor number that is closed while it is registered can be reused by another file or socket.
+So the I/O thread never waits on a descriptor that a close can release:
 
-**Caller contract**: This means `Socket::poll()` may return results even when `kevent()`
-returned 0 events. All callers handle this correctly:
+- while a socket's descriptor is registered in an event loop, the async I/O controller holds it open through
+  `AbstractPollableIoObjectBase::holdPollableDescriptor()`; a close in another thread meanwhile finds the hold, so
+  `close_and_reset_locked()` sets `close_on_release` instead of closing the descriptor, and the descriptor is closed
+  when the last hold is released;
+- `close_internal()` always calls `::shutdown(sock, SHUT_RDWR)` before it releases the descriptor, so the descriptor
+  that the event loop still monitors becomes readable with an end of file or an error, which wakes the waiting
+  `kevent()`, `epoll_wait()` or `poll()` call; the waiter then finds the socket closed and reports `SOCK_POLLERR`.
+
+**Caller contract**: a wait on a socket that another thread closes ends with a result for that socket (an error or
+an end of file), not with a timeout.  All callers handle this:
 - `AsyncSocketIoController` builds a `ready_sockets` presence map from the poll result list.
   A socket with `SOCK_POLLERR` is correctly treated as "ready", and `continuePoll()` detects
   the error state.
@@ -1330,8 +1358,8 @@ Known failure modes include:
   before the I/O thread's Phase 1 snapshot captures the accept operation, the accept may not be
   polled in time. Combined with macOS `O_NONBLOCK` inheritance on accepted sockets, this can
   produce invalid TLS handshakes. The required controls are (1) `waitForProcessing()` for
-  deterministic readiness, (2) clearing `O_NONBLOCK` on accepted fds, and (3) kqueue closed-fd
-  detection. Callers that need to connect immediately after submitting accept operations should use
+  deterministic readiness, (2) clearing `O_NONBLOCK` on accepted fds, and (3) the hold and the
+  shutdown that wake a wait on a socket that is closed (see "Closing a Socket While It Is Polled"). Callers that need to connect immediately after submitting accept operations should use
   `waitForProcessing()` rather than `waitReady()`.
 - **Callback dispatch ordering** (client-side): Stream callbacks are dispatched in the order responses
   complete (FIFO from `completed_responses` deque), not in submission order. Callers must not assume

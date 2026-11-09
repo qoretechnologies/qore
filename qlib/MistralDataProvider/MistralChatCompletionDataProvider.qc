@@ -34,18 +34,51 @@ public class MistralChatCompletionDataProvider inherits MistralDataProviderCommo
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
-        static MistralChatCompletionRequestDataType RequestType =
-            new MistralChatCompletionRequestDataType();
-        static MistralChatCompletionResponseDataType ResponseType =
-            new MistralChatCompletionResponseDataType();
+    }
+
+    private {
+        #! The request type, built on first use; see requestType()
+        static *MistralChatCompletionRequestDataType request_type;
+        #! The ID of the request type's builder; see requestType()
+        static int request_type_id = DataProviderActionCatalog::registerLazyValue(
+            \MistralChatCompletionDataProvider::buildRequestType());
+        #! The response type, built on first use; see responseType()
+        static *MistralChatCompletionResponseDataType response_type;
+        #! The ID of the response type's builder; see responseType()
+        static int response_type_id = DataProviderActionCatalog::registerLazyValue(
+            \MistralChatCompletionDataProvider::buildResponseType());
+    }
+
+    #! Returns the request type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static MistralChatCompletionRequestDataType requestType() {
+        return request_type ?? (request_type = DataProviderActionCatalog::getLazyValue(request_type_id));
+    }
+
+    #! Builds the request type; see requestType()
+    private static MistralChatCompletionRequestDataType buildRequestType() {
+        return new MistralChatCompletionRequestDataType();
+    }
+
+    #! Returns the response type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static MistralChatCompletionResponseDataType responseType() {
+        return response_type ?? (response_type = DataProviderActionCatalog::getLazyValue(response_type_id));
+    }
+
+    #! Builds the response type; see responseType()
+    private static MistralChatCompletionResponseDataType buildResponseType() {
+        return new MistralChatCompletionResponseDataType();
     }
 
     constructor(RestClientIo::RestClientIo rest) : MistralDataProviderCommon(rest) {}
     constructor(*hash<auto> options) : MistralDataProviderCommon(options) {}
 
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
-    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return requestType(); }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return responseType(); }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {

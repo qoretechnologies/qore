@@ -1,0 +1,95 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class UndeclaredMemberErrorTest
+
+#! Tests the parse error for a reference to an undeclared member: one error for one reference
+/** A reference to an undeclared member in a class that declares its members (with a public member declaration in
+    the class or in a class it inherits) is an illegal access; in a class that does not declare its members it is an
+    error only if types are required (%require-types, included in %modern), as the member has no type.  The parser
+    reported both errors for one reference in a class that declares its members when types were required.
+*/
+class UndeclaredMemberErrorTest inherits QUnit::Test {
+    public {
+        #! the error of an illegal access
+        const Illegal = "illegal access to unknown member '%s' in class '%s' which has a public member list (or "
+            "inherited public member list)";
+        #! the error of a member with no type
+        const NoType = "member '%s' of class '%s' referenced has no type information because it was not declared in "
+            "a public or private member list, but parse options require type information for all declarations";
+
+        #! classes: members and static variables, members only, static variables only, and no declaration
+        const Classes = "class KBoth { public { auto m; static auto sm; } }
+class KMembers { public { auto m; } }
+class KStatic { public { static auto sm; } }
+class KNone { private { auto p; } }
+";
+    }
+
+    constructor() : QUnit::Test("UndeclaredMemberError", "1.0") {
+        addTestCase("a subclass of a class that declares its members", \testSubclass());
+        addTestCase("a class that declares its members", \testClass());
+        addTestCase("access from outside the class", \testOutside());
+        addTestCase("a class that does not declare its members", \testUndeclared());
+        addTestCase("without required types", \testNoRequireTypes());
+        set_return_value(main());
+    }
+
+    testSubclass() {
+        foreach string base in ("KBoth", "KMembers", "KStatic") {
+            # the order in which the methods are parsed is not part of the test
+            assertEq(sort((sprintf(Illegal, "zz", "S"), sprintf(Illegal, "yy", "S"))),
+                sort(parseErrors(PO_MODERN, sprintf("class S inherits %s { f() { self.zz = 1; } g() { auto x = "
+                    "self.yy; } }", base))), base);
+        }
+    }
+
+    testClass() {
+        assertEq((sprintf(Illegal, "zz", "K"),), parseErrors(PO_MODERN,
+            "class K { public { auto m; static auto sm; } f() { self.zz = 1; } }"));
+    }
+
+    testOutside() {
+        foreach string c in ("KBoth", "KMembers", "KStatic") {
+            assertEq((sprintf(Illegal, "zz", c),), parseErrors(PO_MODERN, sprintf("%s k(); k.zz = 1;", c)), c);
+        }
+    }
+
+    testUndeclared() {
+        assertEq((sprintf(NoType, "zz", "S"),), parseErrors(PO_MODERN,
+            "class S inherits KNone { f() { self.zz = 1; } }"));
+        assertEq((sprintf(NoType, "zz", "KNone"),), parseErrors(PO_MODERN, "KNone k(); k.zz = 1;"));
+    }
+
+    testNoRequireTypes() {
+        int po = PO_MODERN & ~PO_REQUIRE_TYPES;
+        assertEq((sprintf(Illegal, "zz", "S"),), parseErrors(po, "class S inherits KBoth { f() { self.zz = 1; } }"));
+        # a class that does not declare its members accepts any member
+        assertEq((), parseErrors(po, "class S inherits KNone { f() { self.zz = 1; } }"));
+    }
+
+    #! returns the descriptions of the parse exceptions raised for the code, which follows the classes
+    private list<string> parseErrors(int po, string code) {
+        Program p(po);
+        try {
+            p.parse(Classes + code, "undeclared-member");
+        } catch (hash<ExceptionInfo> ex) {
+            list<string> rv = ();
+            *hash<ExceptionInfo> e = ex;
+            while (e) {
+                assertEq("PARSE-EXCEPTION", e.err);
+                rv += e.desc;
+                e = e.next;
+            }
+            return rv;
+        }
+        return ();
+    }
+}

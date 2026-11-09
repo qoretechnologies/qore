@@ -38,6 +38,7 @@
 %requires(reexport) RestClient >= 1.3.1
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
+%requires DataProvider
 
 module SendCloudRestClient {
     version = "1.0";
@@ -259,7 +260,7 @@ public class SendCloudRestClientBase {
     }
 
     #! Computes the retry delay for a 429 response based on headers or a default
-    /** @param info the response info hash returned by @ref RestClient::RestClient::doRequest()
+    /** @param info a hash with the response headers, with lower-case names, in the \c headers key
         @param default_delay the default delay to fall back on when no header is supplied
 
         @return the delay before the next retry attempt
@@ -318,6 +319,8 @@ public class SendCloudRestClientBase {
     - Exponential backoff otherwise: 1s, 2s, 4s, 8s, 16s, 30s, 30s… with jitter
     - Maximum single retry delay: 30 seconds
     - Maximum total retry time: 75 seconds
+    - No retry while @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed" in the
+      calling thread, as while a data provider requests example data: the first 429 response is returned or raised
 */
 public class SendCloudRestClient inherits RestClient::RestClient, SendCloudRestClientBase {
     #! creates the object with the given options
@@ -359,7 +362,10 @@ SendCloudRestClient sendcloud({"public_key": "pub-key", "secret_key": "sec-key"}
 
         The method honors the \c Retry-After header when present and otherwise backs off
         exponentially (1s, 2s, 4s, …, capped at 30s per attempt) with a small jitter,
-        for up to 75 seconds total before giving up and returning the 429 response.
+        for up to 75 seconds total before giving up and raising the 429 error (or returning the 429 response, if
+        error responses are passed through).  The 429 error is raised (or returned) at once while
+        @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed" in the calling thread,
+        as while a data provider requests example data.
     */
     hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info, softbool decode_errors = True,
             *hash<auto> hdr) {
@@ -367,32 +373,62 @@ SendCloudRestClient sendcloud({"public_key": "pub-key", "secret_key": "sec-key"}
         date current_delay = InitialRetryDelay;
 
         while (True) {
-            hash<auto> response = RestClient::doRequest(m, path, body, \info, decode_errors, hdr);
-
-            if (info.response_code != 429) {
+            # a 429 response is raised as an error, or returned if errors are passed through
+            *hash<auto> response;
+            *hash<ExceptionInfo> error;
+            # the status code and headers of the response
+            *int status;
+            *hash<auto> response_headers;
+            try {
+                response = RestClient::doRequest(m, path, body, \info, decode_errors, hdr);
+                status = info."response-code";
+                response_headers = info."response-headers";
+            } catch (hash<ExceptionInfo> ex) {
+                # the synchronous client raises an error status as HTTP-CLIENT-RECEIVE-ERROR, with the status code
+                # and the response headers in the exception argument
+                status = info."response-code" ?? ex.arg.status_code;
+                if ((ex.err != "REST-RESPONSE-ERROR" && ex.err != "HTTP-CLIENT-RECEIVE-ERROR") || status != 429) {
+                    rethrow;
+                }
+                response_headers = info."response-headers" ?? ex.arg;
+                error = ex;
+            }
+            if (status != 429) {
                 return response;
             }
 
             date elapsed = now_us() - start_time;
-            if (elapsed >= MaxRetryTime) {
-                # Max retry time exceeded, return the 429 error
-                return response;
-            }
-
-            date retry_delay = SendCloudRestClientBase::getRetryDelay(info, current_delay);
-
+            date retry_delay = SendCloudRestClientBase::getRetryDelay({"headers": response_headers}, current_delay);
             # Cap the wait so we do not exceed the total retry budget
             if (elapsed + retry_delay > MaxRetryTime) {
                 retry_delay = MaxRetryTime - elapsed;
-                if (retry_delay <= 0s) {
-                    return response;
+            }
+            # nothing is retried while a data provider requests example data in this thread (see
+            # DataProvider::DataProviderRetryUtil::runWithoutRetries())
+            if (retry_delay <= 0s || DataProvider::DataProviderRetryUtil::retriesSuppressed()) {
+                # the maximum retry time has been exceeded, or retries are suppressed; the 429 error is returned or
+                # raised
+                if (error) {
+                    throw error.err, error.desc, error.arg;
                 }
+                return response;
             }
 
-            sleep(retry_delay);
+            waitForRateLimit(retry_delay);
 
             current_delay = SendCloudRestClientBase::nextBackoff(current_delay);
         }
+    }
+
+    #! Waits before a rate-limited request is made again
+    /** Called by @ref doRequest() after a rate-limited response (HTTP 429) before the request is made again; not
+        called while @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed".  A
+        subclass can override it, for example a test that records the waits instead of waiting.
+
+        @param delay the time to wait
+    */
+    private waitForRateLimit(date delay) {
+        usleep(delay);
     }
 }
 

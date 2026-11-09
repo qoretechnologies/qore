@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - non-blocking File reads/writes on full pipes, EAGAIN waits, cancellation, stdio streams
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # Reads and writes of a File, and the output of print(), printf() and of unhandled exceptions, wait for the

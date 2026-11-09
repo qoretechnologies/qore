@@ -1,0 +1,290 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires MssqlSqlUtilBase
+%requires ./TestRunIsolation.qm
+%requires ./MssqlTestIsolation.qm
+
+%exec-class MssqlTriggersTest
+
+#! The triggers of a table on SQL Server, with the freetds driver and the jdbc driver
+/** The triggers of a table were not read from the database, so an alignment created each trigger of the template
+    again, which failed as it existed (server message 2714), also for the automatic triggers of a data schema
+*/
+class MssqlTriggersTest inherits QUnit::Test {
+    constructor() : Test("MssqlTriggersTest", "1.0", \ARGV) {
+        addTestCase("triggers with the freetds driver", \freetdsTriggers());
+        addTestCase("triggers with the jdbc driver", \jdbcTriggers());
+        addTestCase("the source of a trigger from its definition", \triggerSource());
+        addTestCase("the SQL that drops a trigger", \dropSql());
+        addTestCase("triggers of a table in another schema with the freetds driver", \freetdsSchemaTriggers());
+        addTestCase("triggers of a table in another schema with the jdbc driver", \jdbcSchemaTriggers());
+        addTestCase("encrypted triggers and names that are not identifiers with the freetds driver",
+            \freetdsOtherTriggers());
+        addTestCase("encrypted triggers and names that are not identifiers with the jdbc driver",
+            \jdbcOtherTriggers());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        MssqlRunDatabase::teardown();
+    }
+
+    private freetdsTriggers() {
+        checkTriggers("QORE_DB_CONNSTR_FREETDS");
+    }
+
+    private jdbcTriggers() {
+        checkTriggers("QORE_DB_CONNSTR_JDBC_MSSQL");
+    }
+
+    #! returns the description of the test table with a trigger that sets the column "v" to the given value
+    private static hash<auto> desc(string name, string value) {
+        return {
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "v": {"native_type": "varchar", "size": 20},
+            },
+            "primary_key": {"name": "pk_" + name, "columns": ("id",)},
+            "triggers": {
+                "trg_" + name: sprintf("ON %s\nAFTER INSERT\nAS\nBEGIN\n  SET NOCOUNT ON;\n"
+                    "  UPDATE t SET t.v = '%s' FROM %s t INNER JOIN inserted i ON t.id = i.id;\nEND", name, value,
+                    name),
+            },
+        };
+    }
+
+    private checkTriggers(string var) {
+        Datasource ds = datasource(var);
+        on_exit ds.rollback();
+        Database db(ds);
+        string name = TestRun::makeName("mssql_trg");
+        string trigger = "trg_" + name;
+        db.makeTable(name, desc(name, "one")).create();
+        ds.commit();
+        on_exit {
+            ds.rollback();
+            ds.exec("drop table " + name);
+            ds.commit();
+        }
+
+        AbstractTable t = db.getTable(name);
+        # the trigger is read from the database
+        assertEq((trigger,), t.getTriggers().keys());
+        # and the table is aligned to its description with no change
+        assertEq((), t.getAlignSql(db.makeTable(name, desc(name, "one"))));
+
+        # a changed trigger is dropped and created
+        list<auto> sql = t.getAlignSql(db.makeTable(name, desc(name, "two")));
+        assertEq(2, sql.size());
+        assertRegex("^drop trigger ", sql[0]);
+        assertRegex("^create trigger ", sql[1]);
+        map ds.execRaw($1), sql;
+        ds.commit();
+        t = db.getTable(name);
+        t.insert({"id": 1});
+        ds.commit();
+        assertEq("two", t.selectRow({"where": {"id": 1}}).v);
+        assertEq((), t.getAlignSql(db.makeTable(name, desc(name, "two"))));
+
+        # a trigger that the template does not have is dropped
+        hash<auto> h = desc(name, "two");
+        remove h.triggers;
+        sql = t.getAlignSql(db.makeTable(name, h));
+        assertEq(1, sql.size());
+        assertRegex("^drop trigger ", sql[0]);
+    }
+
+    #! the source of a trigger is its definition after the trigger's name, as SQL Server keeps it
+    private triggerSource() {
+        foreach hash<auto> i in ({
+                "create trigger trg_a ON t AFTER INSERT AS BEGIN SET NOCOUNT ON; END": "trg_a",
+                "CREATE TRIGGER [trg a] ON t AFTER INSERT AS BEGIN SET NOCOUNT ON; END": "trg a",
+                "  create\r\ntrigger dbo.trg_a\r\nON t AFTER INSERT AS BEGIN SET NOCOUNT ON; END": "trg_a",
+                "create or alter trigger [dbo].[trg]]a] ON t AFTER INSERT AS BEGIN SET NOCOUNT ON; END": "trg]a",
+            }.pairIterator()) {
+            assertEq("ON t AFTER INSERT AS BEGIN SET NOCOUNT ON; END",
+                replace(replace(MssqlTable::getTriggerSource(i.key), "\r\n", " "), "\n", " "), i.value);
+        }
+        # comments before the definition
+        assertEq("ON t AFTER INSERT AS BEGIN SET NOCOUNT ON; END",
+            MssqlTable::getTriggerSource("-- the trigger\n/* of t\n */ create trigger trg_a ON t AFTER INSERT AS BEGIN "
+                "SET NOCOUNT ON; END"));
+        assertEq("ON t AFTER INSERT AS BEGIN SET NOCOUNT ON; END",
+            MssqlTable::getTriggerSource("/* a */\n-- b\ncreate trigger trg_a ON t AFTER INSERT AS BEGIN SET NOCOUNT ON; END"));
+        # a definition that is not one of a trigger is kept as it is
+        assertEq("select 1", MssqlTable::getTriggerSource("select 1"));
+    }
+
+    #! a trigger is dropped in the schema of its table; dropping it in the default schema failed, or dropped the trigger of
+    #! that name in the default schema
+    private dropSql() {
+        MssqlTrigger t("trg_a", "ON t AFTER INSERT AS BEGIN SET NOCOUNT ON; END");
+        assertEq(("drop trigger s1.trg_a",), t.getDropSql("s1.t"));
+        assertEq(("drop trigger [my schema].trg_a",), t.getDropSql("[my schema].t"));
+        assertEq(("drop trigger trg_a",), t.getDropSql("t"));
+        # a name that cannot be an SQL identifier is given in a string literal
+        MssqlTrigger o("trg%a'b", "ON t AFTER INSERT AS BEGIN SET NOCOUNT ON; END");
+        assertEq(("exec sp_executesql N'drop trigger [s1].[trg%a''b]'",), o.getDropSql("s1.t"));
+        assertEq(("exec sp_executesql N'drop trigger [my schema].[trg%a''b]'",), o.getDropSql("[my schema].t"));
+        # brackets in the name are doubled; a long name is given whole (QUOTENAME() gives NULL for more than 128
+        # characters)
+        string long_name = "trg%]" + strmul("x", 130);
+        MssqlTrigger lt(long_name, "ON t AFTER INSERT AS BEGIN SET NOCOUNT ON; END");
+        assertEq(("exec sp_executesql N'drop trigger [s1].[trg%]]" + strmul("x", 130) + "]'",), lt.getDropSql("s1.t"));
+        # an unreadable trigger is never equal to another, and cannot be created
+        MssqlTrigger u("trg_a", "", True);
+        assertThrows("TRIGGER-ERROR", "trg_a.*cannot be read", \u.getCreateSql(), "dbo.t");
+        assertFalse(u.equal(new MssqlTrigger("trg_a", "")));
+        assertFalse((new MssqlTrigger("trg_a", "")).equal(u));
+        assertTrue(t.equal(new MssqlTrigger("trg_a", "ON t AFTER INSERT AS BEGIN SET NOCOUNT ON; END")));
+    }
+
+    private freetdsSchemaTriggers() {
+        checkSchemaTriggers("QORE_DB_CONNSTR_FREETDS");
+    }
+
+    private jdbcSchemaTriggers() {
+        checkSchemaTriggers("QORE_DB_CONNSTR_JDBC_MSSQL");
+    }
+
+    #! a table in another schema, with a trigger of the name of a trigger of a table in the default schema
+    private checkSchemaTriggers(string var) {
+        Datasource ds = datasource(var);
+        on_exit ds.rollback();
+        Database db(ds);
+        string schema = TestRun::makeName("s");
+        string name = TestRun::makeName("mssql_strg");
+        string trigger = "trg_" + name;
+        ds.execRaw("create schema " + schema);
+        ds.commit();
+        on_exit {
+            ds.rollback();
+            ds.execRaw("drop schema " + schema);
+            ds.commit();
+        }
+        # the table and its trigger in the default schema
+        db.makeTable(name, desc(name, "default")).create();
+        ds.commit();
+        on_exit {
+            ds.rollback();
+            ds.exec("drop table " + name);
+            ds.commit();
+        }
+        # the table and a trigger of the same name in the other schema; SqlUtil creates a table in the connection's
+        # default schema, so it is created here
+        string qname = schema + "." + name;
+        ds.execRaw(sprintf("create table %s (id bigint not null, v varchar(20))", qname));
+        ds.execRaw(sprintf("create trigger %s.%s ON %s AFTER INSERT AS BEGIN SET NOCOUNT ON; END", schema, trigger,
+            qname));
+        ds.commit();
+        on_exit {
+            ds.rollback();
+            ds.exec("drop table " + qname);
+            ds.commit();
+        }
+        assertEq(2, ds.selectRow("select count(*) as c from sys.triggers where name = %v", trigger).c);
+
+        AbstractTable t = db.getTable(qname);
+        assertEq((trigger,), t.getTriggers().keys());
+        # the trigger is dropped in the table's schema
+        list<auto> sql = t.getAlignSql(db.makeTable(qname, {"columns": {
+            "id": {"qore_type": Type::Int, "notnull": True},
+            "v": {"native_type": "varchar", "size": 20},
+        }}));
+        assertEq(("drop trigger " + schema + "." + trigger,), sql);
+        map ds.execRaw($1), sql;
+        ds.commit();
+        assertEq(0, ds.selectRow("select count(*) as c from sys.triggers tr join sys.tables t on t.object_id = "
+            "tr.parent_id join sys.schemas s on s.schema_id = t.schema_id where tr.name = %v and s.name = %v",
+            trigger, schema).c);
+        # the trigger of the table in the default schema is still there
+        assertEq(1, ds.selectRow("select count(*) as c from sys.triggers where name = %v", trigger).c);
+    }
+
+    private freetdsOtherTriggers() {
+        checkOtherTriggers("QORE_DB_CONNSTR_FREETDS");
+    }
+
+    private jdbcOtherTriggers() {
+        checkOtherTriggers("QORE_DB_CONNSTR_JDBC_MSSQL");
+    }
+
+    #! an encrypted trigger, whose definition cannot be read, is replaced by the trigger of the template, which failed as
+    #! it existed (server message 2714); a trigger whose name cannot be an SQL identifier is dropped
+    private checkOtherTriggers(string var) {
+        Datasource ds = datasource(var);
+        on_exit ds.rollback();
+        Database db(ds);
+        string name = TestRun::makeName("mssql_otrg");
+        string trigger = "trg_" + name;
+        hash<auto> h = desc(name, "one");
+        db.makeTable(name, h).create();
+        ds.commit();
+        on_exit {
+            ds.rollback();
+            ds.exec("drop table " + name);
+            ds.commit();
+        }
+        # the trigger is replaced by an encrypted one
+        ds.execRaw("drop trigger " + trigger);
+        ds.execRaw(sprintf("create trigger %s ON %s WITH ENCRYPTION AFTER INSERT AS BEGIN SET NOCOUNT ON; END",
+            trigger, name));
+        ds.commit();
+        AbstractTable t = db.getTable(name);
+        assertEq((trigger,), t.getTriggers().keys());
+        assertTrue(t.getTriggers(){trigger}.unreadable);
+        list<auto> sql = t.getAlignSql(db.makeTable(name, h));
+        assertEq(2, sql.size());
+        assertRegex("^drop trigger ", sql[0]);
+        assertRegex("^create trigger ", sql[1]);
+        map ds.execRaw($1), sql;
+        ds.commit();
+        t = db.getTable(name);
+        assertFalse(t.getTriggers(){trigger}.unreadable);
+        assertEq((), t.getAlignSql(db.makeTable(name, h)));
+
+        # a trigger with a name that cannot be an SQL identifier, created outside SqlUtil
+        string odd = "trg%" + name;
+        # created with the name in a string literal, which no driver reads as SQL
+        ds.execRaw(sprintf("exec sp_executesql N'create trigger [%s] ON %s AFTER UPDATE AS BEGIN SET NOCOUNT ON; END'",
+            odd, name));
+        ds.commit();
+        t = db.getTable(name);
+        assertEq(2, t.getTriggers().size());
+        sql = t.getAlignSql(db.makeTable(name, h));
+        assertEq(1, sql.size());
+        map ds.execRaw($1), sql;
+        ds.commit();
+        assertEq((trigger,), db.getTable(name).getTriggers().keys());
+    }
+
+    #! returns the datasource of the run's database on SQL Server, or skips the test case if there is none
+    private Datasource datasource(string var) {
+        if (!ENV{var}.val()) {
+            testSkip(var + " is not set");
+        }
+        try {
+            Datasource ds(ENV{var});
+            ds.open();
+            if (MssqlDatabase::isSybase(ds)) {
+                testSkip("the database is Sybase, not SQL Server");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "TEST-SKIPPED-EXCEPTION") {
+                rethrow;
+            }
+            testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
+        }
+        Datasource ds(MssqlRunDatabase::getConnectionString(ENV{var}, "MssqlTriggers"));
+        ds.open();
+        return ds;
+    }
+}

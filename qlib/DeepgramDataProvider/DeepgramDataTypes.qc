@@ -56,7 +56,7 @@ public class DeepgramAudioFileDataType inherits DataProvider::QoreUnionDataType 
         @return the file hash; raw binary is wrapped as \c {"name": RawAudioName, "content": value}
         before the file validation runs (which base64-encodes the content)
 
-        @throw RUNTIME-TYPE-ERROR value is neither a file value nor binary
+        @throw TYPE-VALUE-ERROR value is neither a file value nor binary
     */
     auto acceptsValue(auto value) {
         if (value.typeCode() == NT_BINARY) {

@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-parallel: exclusive - it starts threads until the process limit is reached: no test beside it could fork
 
 # Creates threads until Qore refuses to create another one (THREAD-CREATION-FAILURE), so it runs as many threads as
 # Qore allows (MAX_QORE_THREADS, 8192 on Linux).  Under valgrind, give valgrind room for all of them, or valgrind

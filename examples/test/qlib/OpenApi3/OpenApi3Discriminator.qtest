@@ -2,8 +2,8 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/OpenApi3.qm
+%requires QUnit
+%requires OpenApi3
 %requires json
 %exec-class DiscriminatorTest
 
@@ -56,7 +56,7 @@ class DiscriminatorTest inherits QUnit::Test {
         }
         foreach auto value in ({}, {"role": NULL}, {"role": 0}, {"role": "unknown"},
                 {"role": "user", "content": "text", "call_id": "wrong branch"}, NULL, ()) {
-            assertThrows("RUNTIME-TYPE-ERROR", sub () { type.acceptsValue(value); });
+            assertThrows("TYPE-VALUE-ERROR", sub () { type.acceptsValue(value); });
         }
         foreach hash<auto> value in ({"role": "user"}, {"role": "tool", "content": "result"}) {
             assertThrows("MISSING-VALUE-ERROR", sub () { type.acceptsValue(value); });
@@ -83,10 +83,10 @@ class DiscriminatorTest inherits QUnit::Test {
             assertEq({"role": "user", "content": "hello"}, type.acceptsValue({"role": "user", "content": "hello"}));
             assertThrows("MISSING-VALUE-ERROR", sub () { type.acceptsValue({"role": "tool", "content": "x"}); },
                 NOTHING, "the discriminator selects Tool, whose call_id is absent");
-            assertThrows("RUNTIME-TYPE-ERROR", sub () { type.acceptsValue({"role": "unknown"}); });
+            assertThrows("TYPE-VALUE-ERROR", sub () { type.acceptsValue({"role": "unknown"}); });
         }
-        assertThrows("RUNTIME-TYPE-ERROR", sub () { mandatory.acceptsValue(NOTHING); });
-        assertThrows("RUNTIME-TYPE-ERROR", sub () { required.acceptsValue(NOTHING); });
+        assertThrows("TYPE-VALUE-ERROR", sub () { mandatory.acceptsValue(NOTHING); });
+        assertThrows("TYPE-VALUE-ERROR", sub () { required.acceptsValue(NOTHING); });
     }
 
     private mappingCycleTest() {
@@ -143,7 +143,7 @@ class DiscriminatorTest inherits QUnit::Test {
         foreach QoreUnionDataType type in (original, restored, renamed) {
             assertEq({"role": "user", "content": "hello"},
                 type.acceptsValue({"role": "user", "content": "hello"}));
-            assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            assertThrows("TYPE-VALUE-ERROR", sub () {
                 type.acceptsValue({"role": "Customer Text", "content": "hello"});
             });
         }
@@ -164,7 +164,7 @@ class DiscriminatorTest inherits QUnit::Test {
                 assertEq(value, type.acceptsValue(value));
                 assertEq(("kind", "name"), sort(keys type.getFields()));
                 foreach auto invalid in ({"name": "Invoice 42"}, {"kind": "unknown", "name": "Invoice 42"}) {
-                    assertThrows("RUNTIME-TYPE-ERROR", sub () { type.acceptsValue(invalid); });
+                    assertThrows("TYPE-VALUE-ERROR", sub () { type.acceptsValue(invalid); });
                 }
             }
             assertEq("Invoice 42", doc.resolveSchemaObject("escaped", "#/components/schemas/A~0B", {}).getDataType()

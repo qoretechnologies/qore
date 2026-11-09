@@ -765,6 +765,19 @@ public:
 
     DLLLOCAL void saveTemp(QoreValue n);
 
+    //! Saves the value that the lvalue holds, which the caller then overwrites, for release after the locks
+    /** The value is released as it is held: a value stored in a container can be held through an opaque reference,
+        whose registration with the opaque target registry ends with its reference (see design/dgc.md, "Opaque
+        references"); a variable holds its node as an ordinary reference
+    */
+    DLLLOCAL void saveCurrentValue() {
+        if (qv) {
+            saveTemp(*qv);
+        } else {
+            saveTemp(getValue().getInternalNode());
+        }
+    }
+
     DLLLOCAL void saveTempRef(QoreValue& n);
 
     DLLLOCAL int doLValue(const QoreValue& exp, bool for_remove);
@@ -773,8 +786,12 @@ public:
     //! @param steps array of LVPathStep describing the navigation
     //! @param num_steps number of steps in the array
     //! @param for_remove true if navigating for a remove operation
+    //! @param remove_root true for the remove or delete of the root variable itself (a path of one step): a global,
+    //! thread_local or static class variable holding a reference then gives its own value, as Var::remove() and
+    //! StaticClassVarRefNode::remove() do in the AST interpreter, instead of the referenced lvalue
     //! @return 0 on success, -1 on error (exception raised in vl.xsink)
-    DLLLOCAL int navigatePath(const struct LVPathStep* steps, uint32_t num_steps, bool for_remove);
+    DLLLOCAL int navigatePath(const struct LVPathStep* steps, uint32_t num_steps, bool for_remove,
+            bool remove_root = false);
 
     DLLLOCAL int doLValue(const ReferenceNode* ref, bool for_remove);
     DLLLOCAL int doLValue(const QoreValue& exp, RuntimeConfig& rc, bool for_remove);
@@ -952,11 +969,20 @@ public:
         AbstractQoreNode* current_value = getNodeValue();
         assert(current_value && current_value->getType() != NT_OBJECT);
 
-        if (!current_value->is_unique()) {
-            AbstractQoreNode* old = current_value;
-            assignNodeIntern(current_value->realCopy());
-            saveTemp(old);
+        if (current_value->is_unique()) {
+            return;
         }
+        if (qv) {
+            // a value stored in a container can be held through an opaque reference: the copy keeps its
+            // representation, and the value replaced is released as it is held (see qore_value_copy_on_write())
+            saveTemp(qore_value_copy_on_write(*qv));
+            return;
+        }
+        // a variable holds its node as an ordinary reference (QoreLValue never holds an opaque value)
+        assert(!val->getValue().isOpaque());
+        AbstractQoreNode* old = current_value;
+        assignNodeIntern(current_value->realCopy());
+        saveTemp(old);
     }
 
     DLLLOCAL int64 getAsBigInt() const;

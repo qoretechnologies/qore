@@ -1,8 +1,9 @@
 #!/usr/bin/env qore
+# test-platform: macos - PCRE2 JIT compilation (executable memory mapping) versus the interpreter
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires ../../../../../qlib/QUnit.qm
+%requires QUnit
 %exec-class RegexJitControlTest
 
 class RegexJitControlTest inherits QUnit::Test {

@@ -6,11 +6,11 @@
 %allow-injection
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/DataProvider
+%requires Util
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires DataProvider
 
 %requires reflection
 
@@ -1675,13 +1675,13 @@ public class DataProviderTest inherits QUnit::Test {
         }
 
         # invalid values are rejected server-side (backstop)
-        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+        assertThrows("TYPE-VALUE-ERROR", sub () {
             AbstractDataProviderTypeMap."email".acceptsValue("not-an-email");
         });
-        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+        assertThrows("TYPE-VALUE-ERROR", sub () {
             AbstractDataProviderTypeMap."ipv4".acceptsValue("999.0.0.1");
         });
-        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+        assertThrows("TYPE-VALUE-ERROR", sub () {
             AbstractDataProviderTypeMap."uuid".acceptsValue("not-a-uuid");
         });
 
@@ -1738,10 +1738,10 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq(good, reqt.acceptsValue(good), "a well-formed request is accepted");
 
         # the exact values the design doc calls out as rejected must be rejected here too
-        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+        assertThrows("TYPE-VALUE-ERROR", "not a valid", sub () {
             reqt.acceptsValue({"email": "Contact Name <a@b.com>"});
         }, NOTHING, "RFC-5322 display-name form is rejected on a request field");
-        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+        assertThrows("TYPE-VALUE-ERROR", "not a valid", sub () {
             reqt.acceptsValue({"email": "a@b.com,c@d.com"});
         }, NOTHING, "a comma-joined address list is rejected on a request field");
 
@@ -2558,18 +2558,18 @@ public class DataProviderTest inherits QUnit::Test {
         };
         assertThrows("MISSING-VALUE-ERROR", \t1.acceptsValue(), h2);
         assertThrows("MISSING-VALUE-ERROR", \t2.acceptsValue(), h1);
-        assertThrows("RUNTIME-TYPE-ERROR", \t1.acceptsValue(), 1);
-        assertThrows("RUNTIME-TYPE-ERROR", \t2.acceptsValue(), 1);
-        assertThrows("RUNTIME-TYPE-ERROR", \t3.acceptsValue(), 1);
+        assertThrows("TYPE-VALUE-ERROR", \t1.acceptsValue(), 1);
+        assertThrows("TYPE-VALUE-ERROR", \t2.acceptsValue(), 1);
+        assertThrows("TYPE-VALUE-ERROR", \t3.acceptsValue(), 1);
         assertEq(h1, t1.acceptsValue(h1));
         assertEq(h2, t2.acceptsValue(h2));
         assertEq(h1, t3.acceptsValue(h1));
         assertEq(h2, t3.acceptsValue(h2));
         assertEq(<StatInfo>{"size": 1}, t3.acceptsValue(<StatInfo>{"size": 1}));
-        assertThrows("RUNTIME-TYPE-ERROR", \t1.acceptsValue(), h2 + {"a": "string"});
-        assertThrows("RUNTIME-TYPE-ERROR", \t2.acceptsValue(), h1 + {"b": "string"});
-        assertThrows("RUNTIME-TYPE-ERROR", \t1.acceptsValue(), {"a": 1});
-        assertThrows("RUNTIME-TYPE-ERROR", \t2.acceptsValue(), {"b": 2});
+        assertThrows("TYPE-VALUE-ERROR", \t1.acceptsValue(), h2 + {"a": "string"});
+        assertThrows("TYPE-VALUE-ERROR", \t2.acceptsValue(), h1 + {"b": "string"});
+        assertThrows("TYPE-VALUE-ERROR", \t1.acceptsValue(), {"a": 1});
+        assertThrows("TYPE-VALUE-ERROR", \t2.acceptsValue(), {"b": 2});
         t1.setDefaultOtherFieldType(new QoreIntDataType());
         t2.setDefaultOtherFieldType(new QoreIntDataType());
         h1 += {"b": 2};
@@ -4606,7 +4606,7 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq("*hash<auto>", restored.getName());
         assertEq({"a": 1}, restored.acceptsValue({"a": 1}));
         assertNothing(restored.acceptsValue(NOTHING));
-        assertThrows("RUNTIME-TYPE-ERROR", \restored.acceptsValue(), "string",
+        assertThrows("TYPE-VALUE-ERROR", \restored.acceptsValue(), "string",
             "the restored type keeps the described base type");
         # the described path is kept, so that the restored type has the presentation identity of the described one
         assertEq(unregistered, restored.getPath(), "a structurally restored type keeps the described path");
@@ -4858,7 +4858,7 @@ public class DataProviderTest inherits QUnit::Test {
                 ),
             });
             assertEq(("one",), f.acceptsValue(("one",)));
-            assertThrows("RUNTIME-TYPE-ERROR", \f.acceptsValue(), ("three",));
+            assertThrows("TYPE-VALUE-ERROR", \f.acceptsValue(), ("three",));
             assertThrows("FIELD-VALUE-ERROR", \f.acceptsValue(), (("three",),));
         }
 
@@ -4867,58 +4867,58 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq(1737461067, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
             assertEq(1737461067, t.acceptsValue(1737461067));
             assertNothing(t.getDefaultValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NOTHING);
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), True);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), NOTHING);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), NULL);
             t = t.getOrNothingType();
             assertEq(1737461067, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
             assertEq(1737461067, t.acceptsValue(1737461067));
             assertNothing(t.getDefaultValue());
             assertNothing(t.acceptsValue(NOTHING));
             assertNothing(t.acceptsValue(NULL));
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), True);
             t = AbstractDataProviderTypeMap."*unixts";
             assertEq(1737461067, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
             assertEq(1737461067, t.acceptsValue(1737461067));
             assertNothing(t.getDefaultValue());
             assertNothing(t.acceptsValue(NOTHING));
             assertNothing(t.acceptsValue(NULL));
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), True);
             t = t.getMandatoryType();
             assertEq(1737461067, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
             assertEq(1737461067, t.acceptsValue(1737461067));
             assertNothing(t.getDefaultValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NOTHING);
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), True);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), NOTHING);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), NULL);
             t = AbstractDataProviderTypeMap.unixtsms;
             assertEq(1737461067123, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
             assertEq(1737461067123, t.acceptsValue(1737461067123));
             assertNothing(t.getDefaultValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NOTHING);
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), True);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), NOTHING);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), NULL);
             t = t.getOrNothingType();
             assertEq(1737461067123, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
             assertEq(1737461067123, t.acceptsValue(1737461067123));
             assertNothing(t.getDefaultValue());
             assertNothing(t.acceptsValue(NOTHING));
             assertNothing(t.acceptsValue(NULL));
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), True);
             t = AbstractDataProviderTypeMap."*unixtsms";
             assertEq(1737461067123, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
             assertEq(1737461067123, t.acceptsValue(1737461067123));
             assertNothing(t.getDefaultValue());
             assertNothing(t.acceptsValue(NOTHING));
             assertNothing(t.acceptsValue(NULL));
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), True);
             t = t.getMandatoryType();
             assertEq(1737461067123, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
             assertEq(1737461067123, t.acceptsValue(1737461067123));
             assertNothing(t.getDefaultValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NOTHING);
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), True);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), NOTHING);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), NULL);
         }
 
         {
@@ -4934,14 +4934,14 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq("list<string>", list_rt.getName());
             assertEq("string", list_rt.getElementType().getName());
             assertEq(("a", "b"), list_rt.acceptsValue(("a", "b")));
-            assertThrows("RUNTIME-TYPE-ERROR", \list_rt.acceptsValue(), (1,));
+            assertThrows("TYPE-VALUE-ERROR", \list_rt.acceptsValue(), (1,));
 
             AbstractDataProviderType hash_type = AbstractDataProviderType::get("hash<string, bool>");
             AbstractDataProviderType hash_rt = AbstractDataProviderType::get(hash_type.getInfo());
             assertEq("hash<string, bool>", hash_rt.getName());
             assertEq("bool", hash_rt.getElementType().getName());
             assertEq({"enabled": True}, hash_rt.acceptsValue({"enabled": True}));
-            assertThrows("RUNTIME-TYPE-ERROR", \hash_rt.acceptsValue(), {"enabled": "yes"});
+            assertThrows("TYPE-VALUE-ERROR", \hash_rt.acceptsValue(), {"enabled": "yes"});
         }
 
         {
@@ -4963,7 +4963,7 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq(t.getName(), rt.getName());
             assertEq(("a", "b"), t.acceptsValue(("a", "b")));
             assertEq(({"a": 1},), t.acceptsValue(({"a": 1},)));
-            assertThrows("RUNTIME-TYPE-ERROR", "union type", \t.acceptsValue(), (1,));
+            assertThrows("TYPE-VALUE-ERROR", "union type", \t.acceptsValue(), (1,));
 
             t = AbstractDataProviderType::get("*list<string>|*list<hash>");
             assertFalse(t.isMandatory());
@@ -4979,7 +4979,7 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq("QoreUnionDataType", ltrt.getElementType().className());
             assertEq(("a", 1), lt.acceptsValue(("a", 1)));
             assertEq(("a", 1), ltrt.acceptsValue(("a", 1)));
-            assertThrows("RUNTIME-TYPE-ERROR", \ltrt.acceptsValue(), (True,));
+            assertThrows("TYPE-VALUE-ERROR", \ltrt.acceptsValue(), (True,));
         }
 
         {
@@ -5012,9 +5012,9 @@ public class DataProviderTest inherits QUnit::Test {
 
         {
             QoreNumberDataType type();
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), "1");
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), NOTHING);
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), "1");
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), NOTHING);
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), NULL);
 
             AbstractDataProviderType type1 = type.getSoftType();
             assertEq("softnumber", type1.getName());
@@ -5024,7 +5024,7 @@ public class DataProviderTest inherits QUnit::Test {
 
         {
             QoreNumberOrNothingDataType type();
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), "1");
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), "1");
 
             AbstractDataProviderType type1 = type.getSoftType();
             assertEq("*softnumber", type1.getName());
@@ -5038,14 +5038,14 @@ public class DataProviderTest inherits QUnit::Test {
             QoreSoftNumberDataType num1({"number.format": ".,"});
             assertEq(1234.56n, num1.acceptsValue("1.234,56"));
             # NULL and NOTHING are treated the same for soft types - both reject without qore.no_null
-            assertThrows("RUNTIME-TYPE-ERROR", \num1.acceptsValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \num1.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \num1.acceptsValue());
+            assertThrows("TYPE-VALUE-ERROR", \num1.acceptsValue(), NULL);
         }
 
         {
             QoreSoftNumberDataType num1({"qore.no_null": True});
-            assertThrows("RUNTIME-TYPE-ERROR", \num1.acceptsValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \num1.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \num1.acceptsValue());
+            assertThrows("TYPE-VALUE-ERROR", \num1.acceptsValue(), NULL);
         }
 
         {
@@ -5064,9 +5064,9 @@ public class DataProviderTest inherits QUnit::Test {
 
         {
             QoreBinaryDataType type();
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), "1");
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), NOTHING);
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), "1");
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), NOTHING);
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), NULL);
 
             AbstractDataProviderType type1 = type.getSoftType();
             assertEq("softbinary", type1.getName());
@@ -5076,7 +5076,7 @@ public class DataProviderTest inherits QUnit::Test {
 
         {
             QoreBinaryOrNothingDataType type();
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), "1");
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), "1");
 
             AbstractDataProviderType type1 = type.getSoftType();
             assertEq("*softbinary", type1.getName());
@@ -5089,14 +5089,14 @@ public class DataProviderTest inherits QUnit::Test {
         {
             QoreSoftBinaryDataType bin1();
             assertEq(<3132>, bin1.acceptsValue("12"));
-            assertThrows("RUNTIME-TYPE-ERROR", \bin1.acceptsValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \bin1.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \bin1.acceptsValue());
+            assertThrows("TYPE-VALUE-ERROR", \bin1.acceptsValue(), NULL);
         }
 
         {
             QoreSoftBinaryDataType bin1({"qore.no_null": True});
-            assertThrows("RUNTIME-TYPE-ERROR", \bin1.acceptsValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \bin1.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \bin1.acceptsValue());
+            assertThrows("TYPE-VALUE-ERROR", \bin1.acceptsValue(), NULL);
         }
 
         {
@@ -5109,9 +5109,9 @@ public class DataProviderTest inherits QUnit::Test {
 
         {
             QoreIntDataType type();
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), "1");
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), NOTHING);
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), "1");
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), NOTHING);
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), NULL);
 
             AbstractDataProviderType type1 = type.getSoftType();
             assertEq("softint", type1.getName());
@@ -5121,7 +5121,7 @@ public class DataProviderTest inherits QUnit::Test {
 
         {
             QoreIntOrNothingDataType type();
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), "1");
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), "1");
 
             AbstractDataProviderType type1 = type.getSoftType();
             assertEq("*softint", type1.getName());
@@ -5134,15 +5134,15 @@ public class DataProviderTest inherits QUnit::Test {
         {
             QoreSoftIntDataType int1();
             assertEq(1234, int1.acceptsValue("1234"));
-            assertThrows("RUNTIME-TYPE-ERROR", \int1.acceptsValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \int1.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \int1.acceptsValue());
+            assertThrows("TYPE-VALUE-ERROR", \int1.acceptsValue(), NULL);
         }
 
         {
             QoreSoftIntDataType int1({"qore.no_null": True});
             assertEq(1234, int1.acceptsValue("1234"));
-            assertThrows("RUNTIME-TYPE-ERROR", \int1.acceptsValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \int1.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \int1.acceptsValue());
+            assertThrows("TYPE-VALUE-ERROR", \int1.acceptsValue(), NULL);
         }
 
         {
@@ -5156,9 +5156,9 @@ public class DataProviderTest inherits QUnit::Test {
         {
             QoreUnsignedByteDataType type();
             assertEq("ubyte", type.getName());
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), "1");
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), NOTHING);
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), "1");
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), NOTHING);
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), NULL);
             assertEq(0, type.acceptsValue(-1));
             assertEq(255, type.acceptsValue(23432434));
 
@@ -5172,7 +5172,7 @@ public class DataProviderTest inherits QUnit::Test {
         {
             QoreUnsignedByteOrNothingDataType type();
             assertEq("*ubyte", type.getName());
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), "1");
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), "1");
             assertNothing(type.acceptsValue(NOTHING));
             assertNothing(type.acceptsValue(NULL));
             assertEq(0, type.acceptsValue(-1));
@@ -5190,8 +5190,8 @@ public class DataProviderTest inherits QUnit::Test {
         {
             QoreSoftUnsignedByteDataType int1({"qore.no_null": True});
             assertEq(255, int1.acceptsValue("1234"));
-            assertThrows("RUNTIME-TYPE-ERROR", \int1.acceptsValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \int1.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \int1.acceptsValue());
+            assertThrows("TYPE-VALUE-ERROR", \int1.acceptsValue(), NULL);
         }
 
         {
@@ -5205,9 +5205,9 @@ public class DataProviderTest inherits QUnit::Test {
         {
             QoreSignedByteDataType type();
             assertEq("byte", type.getName());
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), "1");
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), NOTHING);
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), "1");
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), NOTHING);
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), NULL);
             assertEq(-127, type.acceptsValue(-1000));
             assertEq(128, type.acceptsValue(23432434));
 
@@ -5221,7 +5221,7 @@ public class DataProviderTest inherits QUnit::Test {
         {
             QoreSignedByteOrNothingDataType type();
             assertEq("*byte", type.getName());
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), "1");
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), "1");
             assertNothing(type.acceptsValue(NOTHING));
             assertNothing(type.acceptsValue(NULL));
             assertEq(-127, type.acceptsValue(-1000));
@@ -5239,8 +5239,8 @@ public class DataProviderTest inherits QUnit::Test {
         {
             QoreSoftSignedByteDataType int1({"qore.no_null": True});
             assertEq(128, int1.acceptsValue("1234"));
-            assertThrows("RUNTIME-TYPE-ERROR", \int1.acceptsValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \int1.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \int1.acceptsValue());
+            assertThrows("TYPE-VALUE-ERROR", \int1.acceptsValue(), NULL);
         }
 
         {
@@ -5253,9 +5253,9 @@ public class DataProviderTest inherits QUnit::Test {
 
         {
             QoreBoolDataType type();
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), "1");
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), NOTHING);
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), "1");
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), NOTHING);
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), NULL);
 
             AbstractDataProviderType type1 = type.getSoftType();
             assertEq("softbool", type1.getName());
@@ -5265,7 +5265,7 @@ public class DataProviderTest inherits QUnit::Test {
 
         {
             QoreBoolOrNothingDataType type();
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), "1");
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), "1");
 
             AbstractDataProviderType type1 = type.getSoftType();
             assertEq("*softbool", type1.getName());
@@ -5277,23 +5277,23 @@ public class DataProviderTest inherits QUnit::Test {
 
         {
             QoreBoolDataType bool1();
-            assertThrows("RUNTIME-TYPE-ERROR", \bool1.acceptsValue(), "1");
-            assertThrows("RUNTIME-TYPE-ERROR", \bool1.acceptsValue(), NOTHING);
-            assertThrows("RUNTIME-TYPE-ERROR", \bool1.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \bool1.acceptsValue(), "1");
+            assertThrows("TYPE-VALUE-ERROR", \bool1.acceptsValue(), NOTHING);
+            assertThrows("TYPE-VALUE-ERROR", \bool1.acceptsValue(), NULL);
         }
 
         {
             QoreSoftBoolDataType bool1();
             assertEq(True, bool1.acceptsValue("1234"));
-            assertThrows("RUNTIME-TYPE-ERROR", \bool1.acceptsValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \bool1.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \bool1.acceptsValue());
+            assertThrows("TYPE-VALUE-ERROR", \bool1.acceptsValue(), NULL);
         }
 
         {
             QoreSoftBoolDataType bool1({"qore.no_null": True});
             assertEq(True, bool1.acceptsValue("1234"));
-            assertThrows("RUNTIME-TYPE-ERROR", \bool1.acceptsValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \bool1.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \bool1.acceptsValue());
+            assertThrows("TYPE-VALUE-ERROR", \bool1.acceptsValue(), NULL);
         }
 
         {
@@ -5306,9 +5306,9 @@ public class DataProviderTest inherits QUnit::Test {
 
         {
             QoreFloatDataType type();
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), "1");
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), NOTHING);
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), "1");
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), NOTHING);
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), NULL);
 
             AbstractDataProviderType type1 = type.getSoftType();
             assertEq("softfloat", type1.getName());
@@ -5318,7 +5318,7 @@ public class DataProviderTest inherits QUnit::Test {
 
         {
             QoreFloatOrNothingDataType type();
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), "1");
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), "1");
 
             AbstractDataProviderType type1 = type.getSoftType();
             assertEq("*softfloat", type1.getName());
@@ -5331,15 +5331,15 @@ public class DataProviderTest inherits QUnit::Test {
         {
             QoreSoftFloatDataType float1();
             assertEq(1234.0, float1.acceptsValue("1234"));
-            assertThrows("RUNTIME-TYPE-ERROR", \float1.acceptsValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \float1.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \float1.acceptsValue());
+            assertThrows("TYPE-VALUE-ERROR", \float1.acceptsValue(), NULL);
         }
 
         {
             QoreSoftFloatDataType float1({"qore.no_null": True});
             assertEq(1234.0, float1.acceptsValue("1234"));
-            assertThrows("RUNTIME-TYPE-ERROR", \float1.acceptsValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \float1.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \float1.acceptsValue());
+            assertThrows("TYPE-VALUE-ERROR", \float1.acceptsValue(), NULL);
         }
 
         {
@@ -5359,9 +5359,9 @@ public class DataProviderTest inherits QUnit::Test {
 
             {
                 QoreDateDataType type();
-                assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), "1");
-                assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), NOTHING);
-                assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), NULL);
+                assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), "1");
+                assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), NOTHING);
+                assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), NULL);
 
                 AbstractDataProviderType type1 = type.getSoftType();
                 assertEq("softdate", type1.getName());
@@ -5370,7 +5370,7 @@ public class DataProviderTest inherits QUnit::Test {
 
             {
                 QoreDateOrNothingDataType type();
-                assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), "1");
+                assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), "1");
 
                 AbstractDataProviderType type1 = type.getSoftType();
                 assertEq("*softdate", type1.getName());
@@ -5383,14 +5383,14 @@ public class DataProviderTest inherits QUnit::Test {
                 QoreSoftDateDataType date1(date_opts);
                 assertEq(2019-09-13T05:00:00Z, date1.acceptsValue("13.09.2019"));
                 assertEq(1970-01-01Z, date1.acceptsValue(0));
-                assertThrows("RUNTIME-TYPE-ERROR", \date1.acceptsValue());
-                assertThrows("RUNTIME-TYPE-ERROR", \date1.acceptsValue(), NULL);
+                assertThrows("TYPE-VALUE-ERROR", \date1.acceptsValue());
+                assertThrows("TYPE-VALUE-ERROR", \date1.acceptsValue(), NULL);
             }
 
             {
                 QoreSoftDateDataType date1({"qore.no_null": True});
-                assertThrows("RUNTIME-TYPE-ERROR", \date1.acceptsValue());
-                assertThrows("RUNTIME-TYPE-ERROR", \date1.acceptsValue(), NULL);
+                assertThrows("TYPE-VALUE-ERROR", \date1.acceptsValue());
+                assertThrows("TYPE-VALUE-ERROR", \date1.acceptsValue(), NULL);
             }
 
             {
@@ -5404,27 +5404,27 @@ public class DataProviderTest inherits QUnit::Test {
         {
             QoreSoftStringDataType str1();
             assertEq("123", str1.acceptsValue(123));
-            assertThrows("RUNTIME-TYPE-ERROR", \str1.acceptsValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \str1.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \str1.acceptsValue());
+            assertThrows("TYPE-VALUE-ERROR", \str1.acceptsValue(), NULL);
         }
 
         {
             QoreSoftStringDataType str({"qore.no_null": True});
-            assertThrows("RUNTIME-TYPE-ERROR", \str.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \str.acceptsValue(), NULL);
         }
 
         {
             QoreSoftStringDataType str({"string.encoding": "iso-8859-1"});
             assertEq("ISO-8859-1", str.acceptsValue("hi").encoding());
             assertEq("", str.acceptsValue(""));
-            assertThrows("RUNTIME-TYPE-ERROR", \str.acceptsValue());
+            assertThrows("TYPE-VALUE-ERROR", \str.acceptsValue());
         }
 
         {
             QoreStringDataType str1();
-            assertThrows("RUNTIME-TYPE-ERROR", \str1.acceptsValue(), 123);
-            assertThrows("RUNTIME-TYPE-ERROR", \str1.acceptsValue());
-            assertThrows("RUNTIME-TYPE-ERROR", \str1.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \str1.acceptsValue(), 123);
+            assertThrows("TYPE-VALUE-ERROR", \str1.acceptsValue());
+            assertThrows("TYPE-VALUE-ERROR", \str1.acceptsValue(), NULL);
 
             AbstractDataProviderType type1 = str1.getSoftType();
             assertEq("softstring", type1.getName());
@@ -5433,7 +5433,7 @@ public class DataProviderTest inherits QUnit::Test {
 
         {
             QoreStringOrNothingDataType str2();
-            assertThrows("RUNTIME-TYPE-ERROR", \str2.acceptsValue(), 123);
+            assertThrows("TYPE-VALUE-ERROR", \str2.acceptsValue(), 123);
             assertNothing(str2.acceptsValue());
             assertNothing(str2.acceptsValue(NULL));
 
@@ -5482,7 +5482,7 @@ public class DataProviderTest inherits QUnit::Test {
             }
             # an opacity outside 0 - 1 is rejected, not clamped
             foreach auto a in ((-0.1, 1.5, 255, -1, 2)) {
-                assertThrows("RUNTIME-TYPE-ERROR", "requires a value of at (least 0|most 1)", \rgb.acceptsValue(),
+                assertThrows("TYPE-VALUE-ERROR", "requires a value of at (least 0|most 1)", \rgb.acceptsValue(),
                     {"r": 1, "b": 2, "g": 3, "a": a}, sprintf("a: %y", a));
             }
             # the color components are integers from 0 - 255
@@ -5499,8 +5499,8 @@ public class DataProviderTest inherits QUnit::Test {
                     hash<auto> color = {};
                     color += {"r": 1, "g": 2, "b": 3};
                     color{c} = v;
-                    assertThrows("RUNTIME-TYPE-ERROR", \rgb.acceptsValue(), color, sprintf("%s: %y", c, v));
-                    assertThrows("RUNTIME-TYPE-ERROR", \rgb.acceptsValue(), color + {"a": 0.5}, sprintf("%s: %y", c,
+                    assertThrows("TYPE-VALUE-ERROR", \rgb.acceptsValue(), color, sprintf("%s: %y", c, v));
+                    assertThrows("TYPE-VALUE-ERROR", \rgb.acceptsValue(), color + {"a": 0.5}, sprintf("%s: %y", c,
                         v));
                 }
                 # the field describes its range
@@ -5509,12 +5509,12 @@ public class DataProviderTest inherits QUnit::Test {
                 assertEq(<DataTypeConstraintInfo>{"minimum": 0, "maximum": 255}, f.getType().getConstraints(), c);
                 # a type restored from its description enforces the range
                 AbstractDataProviderType restored = AbstractDataProviderType::get(f.getType().getInfo());
-                assertThrows("RUNTIME-TYPE-ERROR", \restored.acceptsValue(), 256, c);
+                assertThrows("TYPE-VALUE-ERROR", \restored.acceptsValue(), 256, c);
                 assertEq(255, restored.acceptsValue(255), c);
             }
             hash<auto> h = {"r": 1, "b": 2, "g": 3, "a": 1};
             h.x = 3;
-            assertThrows("RUNTIME-TYPE-ERROR", \rgb.acceptsValue(), h);
+            assertThrows("TYPE-VALUE-ERROR", \rgb.acceptsValue(), h);
 
             # the opacity field describes its range and default
             AbstractDataField a = rgb.getFields().a;
@@ -5527,7 +5527,7 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq(<DataTypeConstraintInfo>{"minimum": 0, "maximum": 1}, a.getType().getConstraints());
             # a type restored from its description enforces the range
             AbstractDataProviderType restored = AbstractDataProviderType::get(rgb.getFields().a.getType().getInfo());
-            assertThrows("RUNTIME-TYPE-ERROR", \restored.acceptsValue(), 1.5);
+            assertThrows("TYPE-VALUE-ERROR", \restored.acceptsValue(), 1.5);
             assertEq(0.5, restored.acceptsValue(0.5));
 
             # the "or nothing" type follows the same rules
@@ -5536,22 +5536,22 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq({"r": 1, "b": 2, "g": 3, "a": 1.0}, rgb_or_nothing.acceptsValue({"r": 1, "b": 2, "g": 3}));
             assertEq({"r": 1, "b": 2, "g": 3, "a": 1.0}, rgb_or_nothing.acceptsValue({"r": 1, "b": 2, "g": 3,
                 "a": NULL}));
-            assertThrows("RUNTIME-TYPE-ERROR", \rgb_or_nothing.acceptsValue(), {"r": 1, "b": 2, "g": 3, "a": 255});
-            assertThrows("RUNTIME-TYPE-ERROR", \rgb_or_nothing.acceptsValue(), {"r": 256, "b": 2, "g": 3});
+            assertThrows("TYPE-VALUE-ERROR", \rgb_or_nothing.acceptsValue(), {"r": 1, "b": 2, "g": 3, "a": 255});
+            assertThrows("TYPE-VALUE-ERROR", \rgb_or_nothing.acceptsValue(), {"r": 256, "b": 2, "g": 3});
         }
 
         {
             QoreHashDataType hash1(new Type("hash<string, bool>"));
             assertEq({"a": True}, hash1.acceptsValue({"a": True}));
             assertTrue(BoolType.isEqual(hash1.getFieldType("xxx").getValueType()));
-            assertThrows("RUNTIME-TYPE-ERROR", \hash1.acceptsValue(), {"a": 1});
-            assertThrows("RUNTIME-TYPE-ERROR", \hash1.acceptsValue());
+            assertThrows("TYPE-VALUE-ERROR", \hash1.acceptsValue(), {"a": 1});
+            assertThrows("TYPE-VALUE-ERROR", \hash1.acceptsValue());
         }
 
         {
             QoreHashDataType hash2(new Type("*hash<string, bool>"));
             assertTrue(BoolType.isEqual(hash2.getFieldType("xxx").getValueType()));
-            assertThrows("RUNTIME-TYPE-ERROR", \hash2.acceptsValue(), {"a": 1});
+            assertThrows("TYPE-VALUE-ERROR", \hash2.acceptsValue(), {"a": 1});
             assertNothing(hash2.acceptsValue());
             assertNothing(hash2.acceptsValue(NULL));
 
@@ -5582,7 +5582,7 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq("string", fields.getFields().key1.getInputInfo().type.name);
             assertEq("key1", fields.getFields().key1.getInfo().name);
             assertEq("string", fields.getFields().key1.getInfo().type.name);
-            assertThrows("RUNTIME-TYPE-ERROR", \fields.getFields().key1.acceptsValue(), 1);
+            assertThrows("TYPE-VALUE-ERROR", \fields.getFields().key1.acceptsValue(), 1);
 
             HashDataType type1 = fields.getSoftType();
             assertTrue(type1.getFields().key1 instanceof QoreDataField);
@@ -5613,22 +5613,22 @@ public class DataProviderTest inherits QUnit::Test {
 
         {
             QoreDataType t(SoftStringType);
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), NULL);
         }
 
         {
             QoreDataType t(SoftStringType, {"qore.no_null": True});
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NULL);
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), NULL);
         }
 
         {
             ListDataType t(IntType);
             assertEq("list<int>", t.getName());
             assertEq("list<int>", t.getValueType().getName());
-            assertThrows("RUNTIME-TYPE-ERROR", "list.*integer", \t.acceptsValue(), 1);
-            assertThrows("RUNTIME-TYPE-ERROR", "expects.*got type 'integer'", \t.acceptsValue(), (1,));
-            assertThrows("RUNTIME-TYPE-ERROR", "int.*string", \t.acceptsValue(), (("a",),));
-            assertThrows("RUNTIME-TYPE-ERROR", "expects|got no value", \t.acceptsValue(), (NULL,));
+            assertThrows("TYPE-VALUE-ERROR", "list.*integer", \t.acceptsValue(), 1);
+            assertThrows("TYPE-VALUE-ERROR", "expects.*got type 'integer'", \t.acceptsValue(), (1,));
+            assertThrows("TYPE-VALUE-ERROR", "int.*string", \t.acceptsValue(), (("a",),));
+            assertThrows("TYPE-VALUE-ERROR", "expects|got no value", \t.acceptsValue(), (NULL,));
             assertEq((1,), t.acceptsValue((1,)));
         }
 
@@ -5636,10 +5636,10 @@ public class DataProviderTest inherits QUnit::Test {
             ListDataType t(AbstractDataProviderType::get("int"));
             assertEq("list<int>", t.getName());
             assertEq("list<int>", t.getValueType().getName());
-            assertThrows("RUNTIME-TYPE-ERROR", "list.*integer", \t.acceptsValue(), 1);
-            assertThrows("RUNTIME-TYPE-ERROR", "expects.*got type 'integer'", \t.acceptsValue(), (1,));
-            assertThrows("RUNTIME-TYPE-ERROR", "int.*string", \t.acceptsValue(), (("a",),));
-            assertThrows("RUNTIME-TYPE-ERROR", "expects|got no value", \t.acceptsValue(), (NULL,));
+            assertThrows("TYPE-VALUE-ERROR", "list.*integer", \t.acceptsValue(), 1);
+            assertThrows("TYPE-VALUE-ERROR", "expects.*got type 'integer'", \t.acceptsValue(), (1,));
+            assertThrows("TYPE-VALUE-ERROR", "int.*string", \t.acceptsValue(), (("a",),));
+            assertThrows("TYPE-VALUE-ERROR", "expects|got no value", \t.acceptsValue(), (NULL,));
             assertEq((1,), t.acceptsValue((1,)));
         }
 
@@ -5647,7 +5647,7 @@ public class DataProviderTest inherits QUnit::Test {
             SoftListDataType t(StringType);
             assertEq("softlist<string>", t.getName());
             assertEq("softlist<string>", t.getValueType().getName());
-            assertThrows("RUNTIME-TYPE-ERROR", "integer.*string", \t.acceptsValue(), 1);
+            assertThrows("TYPE-VALUE-ERROR", "integer.*string", \t.acceptsValue(), 1);
             assertEq(("a",), t.acceptsValue(("a",)));
             assertEq(("a",), t.acceptsValue("a"));
         }
@@ -5656,7 +5656,7 @@ public class DataProviderTest inherits QUnit::Test {
             SoftListDataType t(AbstractDataProviderType::get("string"));
             assertEq("softlist<string>", t.getName());
             assertEq("softlist<string>", t.getValueType().getName());
-            assertThrows("RUNTIME-TYPE-ERROR", "integer.*string", \t.acceptsValue(), 1);
+            assertThrows("TYPE-VALUE-ERROR", "integer.*string", \t.acceptsValue(), 1);
             assertEq(("a",), t.acceptsValue(("a",)));
             assertEq(("a",), t.acceptsValue("a"));
         }
@@ -5664,14 +5664,14 @@ public class DataProviderTest inherits QUnit::Test {
         {
             QoreListDataType t(new Type("softlist<int>"));
             assertEq((1,), t.acceptsValue(1));
-            assertThrows("RUNTIME-TYPE-ERROR", "NULL", \t.acceptsValue(), ((NULL,),));
+            assertThrows("TYPE-VALUE-ERROR", "NULL", \t.acceptsValue(), ((NULL,),));
             assertEq((1,), t.acceptsValue((1,)));
         }
 
         {
             QoreListDataType t(new Type("softlist<string>"));
             assertEq(("a",), t.acceptsValue("a"));
-            assertThrows("RUNTIME-TYPE-ERROR", "NULL", \t.acceptsValue(), ((NULL,),));
+            assertThrows("TYPE-VALUE-ERROR", "NULL", \t.acceptsValue(), ((NULL,),));
             assertEq(("a",), t.acceptsValue(("a",)));
         }
     }

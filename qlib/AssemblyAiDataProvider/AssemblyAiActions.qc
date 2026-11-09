@@ -34,7 +34,6 @@ public class AssemblyAiActions {
         @return all schema actions and the submit-and-wait helper
     */
     static list<hash<DataProviderActionInfo>> getActionInfoList(string app = AppName) {
-        AssemblyAiTranscribeDataProvider::initializeTypes();
         list<hash<DataProviderActionInfo>> result = ();
         foreach RestSchemaActionSet set in (AssemblyAiSchema::getActionSets().iterator()) {
             foreach hash<DataProviderActionInfo> action in (set.getActionInfoList(app)) {
@@ -53,8 +52,8 @@ public class AssemblyAiActions {
             "action_code": DPAT_API, "mutates_state": True,
             "groups": ("Transcription",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                AssemblyAiTranscribeRequestDataType::Fields),
-            "output_type": AssemblyAiTranscribeDataProvider::ResponseType,
+                AssemblyAiTranscribeDataProvider::requestType().getFields()),
+            "output_type": AssemblyAiTranscribeDataProvider::responseType(),
         };
         return result;
     }

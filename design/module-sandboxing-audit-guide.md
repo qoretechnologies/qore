@@ -80,12 +80,91 @@ The exception has strict boundaries:
 Module resources should therefore be stored beside the module and read during initialization. Modules must not defer resource
 file reads until an action or method is invoked.
 
+#### Module initialization: library code from the module path
+
+A module found in a directory of the process-wide module path (`QORE_MODULE_DIR` and the standard module directories,
+fixed when the library is initialized; `QoreModuleManager::isTrustedModulePath()`) is library code. Its initialization
+(class static initializers, global and constant initializers, the `init` closure) runs under a
+`QoreModuleInitSandboxBarrierHelper`: sandbox resolution for every purpose (interrupts, limits, policy, provenance)
+does not look beyond the code that loads the module, so the initialization belongs to no sandbox, also when sandboxed
+or restricted code loads the module first, and what it creates (objects, callbacks, catalog and registry entries,
+threads) carries no tenant's sandbox. A Program entered during the initialization that has a sandbox manager of its
+own still governs its code. A source module's Program does not take the loading Program's manager, nor what code that
+is not trusted chose (see below). Every later call into the module is governed by its caller.
+
+A module loaded by path, or through a Program's own `%prepend-module-path` / `%append-module-path`, is chosen by its
+caller: it is initialized under the loader's sandbox, and a source module's Program keeps the loader's manager.
+
+Code that is not trusted (`qore_caller_is_untrusted()`: sandboxed, or with restricting runtime parse options, or
+library code that such code loaded, while it is initialized) cannot change which modules are library code, nor which
+modules library code gets:
+
+- the directories of library code are recorded once by `QoreModuleManager::init()` (`trusted_module_dirs`, as
+  configured and canonical, immutable and read without a lock); `isTrustedModulePath()` and `findTrustedModule()` read
+  only that record. A directory added later is searched but holds no library code, and such code cannot add one: an
+  unquoted `%append-module-path` is a parse error (`mayChangeModulePath()`), and `addModuleDir()` /
+  `addModuleDirList()` ignore it;
+- trust is decided once, and the module is loaded from the path that was checked (the canonical path unless the name
+  given is under a directory as configured); the decision is recorded on the module (`QoreAbstractModule::isTrusted()`,
+  through the thread-local load frame that `QoreModuleManager::addModule()` reads) and used by `addToProgramImpl()`;
+- the barrier records whether the loader is trusted and its sandbox; while library code that code that is not
+  trusted loaded is initialized, its loads are checked as that code's own, and a module that is not library code is
+  initialized under a lift (the barrier is set aside, so the module is governed by the loader's sandbox, and its
+  Program takes that sandbox, `inherit_module_sandbox_manager()`);
+- a library module's Program is marked (`qore_program_private::library_module`); one loaded by code that is not
+  trusted does not inherit that code's module path lists (source loaders, `inheritAOTModulePathLists()`), so its
+  `%requires`, `%try-module` and `%try-child-module` resolve through library code's own paths, and inherits only the
+  defines that the loading Program's host set (`source_defines` holds the others: `%define` in source and
+  `Program::define()` by code that is not trusted); such code cannot mark imports for re-export
+  (`Program::importClass()`, `Program::importHashDecl()`), so `inheritParseImports()` carries only the host's;
+- a library module that such code loads into a Program container of its own is not library code (the container's code
+  and defines shape it); a container load that is not private cannot have a library module's name.
+
+Feature names are process-wide (`QoreModuleManager::map`), so a module that such code chose is fenced off in both
+orders (`QoreModuleManager::checkShadowingLoad()`):
+
+- such code cannot load a module from outside the directories of library code (by path, through its own module
+  paths, or from source) under the name of a library module (`findTrustedModule()`, which looks for every form that
+  the module search loads, with no pattern matching); the load raises `LOAD-MODULE-ERROR`;
+- a module that such code did load from outside them is marked when it is registered
+  (`QoreAbstractModule::isTenantChosen()`, with the loader's sandbox as `tenantOwner()`, a reference, and, for code
+  with no sandbox, its Program as `tenantOwnerProgramId()`), and `loadModuleIntern()` gives it only to code that is
+  not trusted and has the same sandbox, or the same Program (`mayUseTenantModule()`); never to library code while it
+  is initialized or while a library module's children are attached (`attachChildModules()` sets a barrier for a
+  library parent), so a module that a tenant loaded first does not satisfy a library module's `%requires`,
+  `%try-module` or `%try-child-module`; a request from other code, a reload included, raises `LOAD-MODULE-ERROR`.
+
+Two more rules close the remaining routes:
+
+- every define of a Program that code that is not trusted creates is in its `source_defines`, and a child Program
+  copies its parent's `source_defines`, so neither a child Program nor a Program built by a tenant passes its defines
+  (parse option defines included) to library code;
+- `mayChangeModulePath()` allows an unquoted `%append-module-path` in a library module's own source
+  (`qore_program_private::library_module`), whoever loads it first: the rule depends on the source being parsed. The
+  directory it adds is searched but holds no library code; an application whose modules must be library code puts
+  their directories in `QORE_MODULE_DIR` or adds them with `ModuleManager::addModuleDir()` before `qore_init()` (Qorus
+  adds `$OMQ_DIR/qlib` and `$OMQ_DIR/user/modules` that way in `exec/qorus_lib.cpp`; its unquoted directives only
+  repeat them as a fallback);
+- a load into a library module's Program (a run-time `load_module()` in library code) never takes a module that a
+  tenant chose, and `runTimeLoadModule()` skips its committed-feature fast paths for such a target, so a module that
+  a tenant's call put there cannot reach other callers.
+
+What this means for an audit:
+
+- a module's initialization may build shared state (registries, factories, types, worker capabilities) without
+  running into its first loader's sandbox, and must therefore not use input that the loading code controls: no I/O
+  whose target comes from caller data or from parse defines, only the module's own files and the process environment;
+- the loader's parse options still restrict the module, and the loader's call time limits still count the
+  initialization;
+- the read-only module resource exception below matters only for modules that are not library code.
+
 #### How the active manager is resolved (program-context propagation)
 
 A Qore-language (`.qm`) module executes its functions/methods in the **module's own**
-`QoreProgram`. Source-module Programs inherit the importing Program's `SandboxManager`, so
-source constants and other initialization execute under the same policy. Compiled modules
-can have shared module Programs and therefore cannot retain one importing user's manager.
+`QoreProgram`. A source module that a caller loaded by path inherits the importing Program's `SandboxManager`, so
+its constants and other initialization execute under the same policy; a module from the module path does not (see
+above). Compiled modules can have shared module Programs and therefore cannot retain one importing user's
+manager.
 
 Every `QoreSandboxManagerHelper` names its purpose; the no-argument constructor is deprecated, because the two
 purposes resolve differently inside a system-policy capability (`SandboxManager::createSystemPolicyCall()`, which
@@ -188,6 +267,36 @@ The barrier cannot lift object or callback provenance. Trusted resource operatio
 capability enters that registration Program, masks pre-existing filesystem/network policy for its operation, and
 preserves interruption and thread accounting. A tenant callback invoked inside it reactivates its own provenance.
 The callback must validate its arguments and avoid granting arbitrary file, network, or callback execution access.
+
+##### Work done for sandboxed callers on a trusted thread
+
+A system-policy capability masks filesystem and network policy only: what trusted code creates while it serves a
+sandboxed caller still keeps the caller's sandbox, interrupts included, and a thread it starts there inherits the
+sandbox and counts against the sandbox's thread limit. Shared state built for every caller (a schema type, a catalog
+entry) therefore cannot be built on the caller's thread. `SandboxManager::createSystemThreadCall()` returns a
+capability, created during a module's initialization only, that starts a fixed callback in a new thread of the
+module's Program that no sandbox governs: the sandbox's interrupts and limits do not reach it, and it is not counted
+against them. The capability takes no arguments; work reaches the thread only through the module's own state (a
+queue the module created during its initialization), and the thread may run only operations the module fixed during
+its initialization (for example, the registrations that trusted modules made), never code supplied by the caller. No
+such thread starts once the exit hooks have started; the module stops it from its exit hook. The DataProvider catalog
+worker is the reference user (`design/data-provider-rest-schema-apps.md`).
+
+**Store a capability where no other code can read it.** Anyone who can read a `createSystemThreadCall()` or
+`createSystemPolicyCall()` capability can use it, and Qore's `private` members are visible to subclasses: a sandboxed
+`class Evil inherits TrustedClass` can read and call a capability kept in a `private` static member, and assign the
+state that the trusted thread trusts (its queue, its flags, its TID). Keep capabilities, and all state that a
+trusted thread or a trusted decision relies on, in `private:internal` members (not visible to subclasses), never in
+public or `private` members or in global variables. Audit every trusted class that sandboxed code can subclass for
+such state.
+
+Reflection applies the same member access to code that a sandbox governs (also under a policy barrier) and to code
+whose parse options restrict a functional domain, so neither can read such a member through the `reflection` module
+either. Trusted code that restricts no domain keeps full access to every member through reflection (debuggers and
+serializers need it): `private:internal` keeps state from sandboxed and restricted code, not from trusted code. A
+trusted thread that a capability starts must therefore also check that it was started for the module's own reason:
+the DataProvider catalog worker runs only when the catalog reserved its start, and ends at once otherwise
+(`design/data-provider-rest-schema-apps.md`).
 
 ##### Methods that a sandboxed subclass inherits from a trusted class
 
@@ -593,6 +702,46 @@ if (!buf) {
 Code that runs too long is stopped by the time limits or by an interrupt (`requestInterrupt()`), which a module
 honors by checking for cancellation and waiting interruptibly (see the interrupt sections of this guide).
 
+#### Threads started for restricted callers
+
+`PO_NO_THREAD_CONTROL` (and the other thread parse options) restrict the code of the Program that has them, and are
+checked when that code is parsed. Module code keeps its own parse options, so a module can start threads for a caller
+that may not start threads itself, including threads that run the caller's own closures or the methods that the
+caller's subclass overrides (pollers, server handlers, WebSocket event callbacks, logger appenders). A restricted
+Program can therefore cause concurrent execution through module code. What bounds and governs those threads:
+
+- A thread started on behalf of a sandboxed caller (`background`, `q_start_thread()`, `call_async()`,
+  `parallel_map()`, `parallel_foreach()`) inherits the caller's `QoreSandboxManager`: filesystem and network policy,
+  interrupts, cancellation scope and the thread limit (see
+  [thread-sandbox-inheritance.md](thread-sandbox-inheritance.md)).
+- `SandboxManager::setMaxThreads()` bounds how many threads are started on behalf of sandboxed code. A sandbox has no
+  thread limit unless the host sets one, so hosts that run sandboxed code must set it. The threads of a `ThreadPool`
+  count against the sandbox of the Program that created the pool; a module's Program has the sandbox of the Program
+  that loaded the module first, so the pools of a module first loaded by sandboxed code are counted, while a pool
+  created by a Program without a sandbox manager (for example a module first loaded by trusted code) serves every
+  caller and is not limited.
+- A user module first loaded by a restricted Program inherits its restrictions and cannot use `background`; module
+  threads for restricted callers come from modules the host loaded already or loads with a parse option mask.
+- Builtins with the `MODULE_OWNED` flag (`call_async()`, `parallel_map()`, `parallel_foreach()`,
+  `AsyncIoController::addTimer()` / `submitTask()`, `defer_thread_cancel()`) refuse to run the code of a caller that
+  may not control threads. The `background` operator in module code is not checked at run time: a run-time refusal
+  would break every module that runs its callers' code on its own threads, while the sandbox already governs those
+  threads.
+
+Guidance for module authors:
+
+- Run caller-supplied code asynchronously through the documented mechanisms: `call_async()` or `AsyncIoController`
+  (which apply the caller's restrictions and sandbox), a `ThreadPool` (which applies the submitter's sandbox per
+  task; its threads count against the sandbox of the Program that created it), or `q_start_thread()` in C++
+  (which inherits the starter's sandbox). Never start a native thread
+  (`pthread_create`, `std::thread`) that runs Qore code without the sandbox handling described in
+  [thread-sandbox-inheritance.md](thread-sandbox-inheritance.md).
+- A thread that serves many callers must not inherit the sandbox of the caller that happened to start it: start it
+  with `QTF_NO_SANDBOX_INHERIT` and apply each submitter's capture around its work (`QoreSandboxCapture` /
+  `QoreSandboxCaptureHelper`).
+- Expect `THREAD-CREATION-FAILURE` when starting a thread for a sandboxed caller and let it reach the caller, which
+  can handle it; do not retry in a loop.
+
 ### 3.2 Audit Checklist - Resource Consumption
 
 #### C++ Modules
@@ -601,7 +750,7 @@ honors by checking for cancellation and waiting interruptibly (see the interrupt
 |-----------------|---------|
 | Tight loops that never check for an interrupt | Cannot be interrupted |
 | `sleep()`, blocking syscalls | Cannot be interrupted unless the wait is interruptible |
-| `pthread_create` | May bypass thread limits |
+| `pthread_create`, `std::thread` | Bypasses the thread limit and sandbox inheritance; use `q_start_thread()` |
 | Large `malloc()` / `realloc()` buffers for a caller | Not counted against the memory limit; use `q_sb_malloc()` |
 | Native recursion over untrusted data | May exhaust the stack; call `q_check_stack()` |
 
@@ -609,7 +758,8 @@ honors by checking for cancellation and waiting interruptibly (see the interrupt
 
 | Pattern to Find | Concern |
 |-----------------|---------|
-| `background` statements | Thread creation |
+| `background` operator | Thread creation; counted against the caller's sandbox thread limit and governed by its sandbox, also for callers with `PO_NO_THREAD_CONTROL` |
+| `background` running caller-supplied code | Runs a restricted caller's code concurrently; prefer `call_async()` / `AsyncIoController` (`MODULE_OWNED` checks) where the caller's restrictions must apply |
 
 ### 3.3 Implementation Pattern - Resource Awareness
 

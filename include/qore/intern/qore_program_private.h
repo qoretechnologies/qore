@@ -62,6 +62,7 @@ class QoreSandboxManager;
 #include <atomic>
 #include <cerrno>
 #include <cstdarg>
+#include <functional>
 #include <map>
 #include <tuple>
 #include <mutex>
@@ -479,10 +480,14 @@ public:
     QoreCondition pcond;
     ptid_map_t tidmap;           // map of tids -> thread count in program object
     unsigned thread_count = 0;   // number of threads currently running in this Program
+    // A cancellation wave includes preregistered workers and descendants until the Program becomes idle.
+    bool cancel_new_threads = false;
     //! the references released by threads that deleted this Program while running its code: tid -> count
-    /** A thread that deletes the Program while it runs the Program's code cannot wait for itself to leave that code,
-        so the Program is kept until it has left it: the last of these threads to leave the code clears the Program,
-        and each releases its references then (see deferDerefIfRunning() and decThreadCount())
+    /** A thread that deletes the Program while it runs the Program's code, or while it holds its parse lock (code
+        that the parse commit runs, a constant initializer for example), cannot wait for itself to leave that code or
+        to release that lock, so the Program is kept until it has done both: the last of these threads to do so clears
+        the Program, and each releases its references then (see deferDerefIfRunning(), decThreadCount() and
+        unlockParsing())
     */
     ptid_map_t deferred_derefs;
     unsigned thread_waiting = 0; // number of threads waiting on all threads to terminate or parsing to complete
@@ -538,6 +543,12 @@ public:
         unavailable; see QoreAOTModuleFileInfo
     */
     std::vector<std::string> unavailable_try_modules;
+
+    //! the files that %include directives opened while this Program was parsed, by their real paths, without duplicates
+    /** qcc lists them in the depfile of an AOT module, with which an incremental build and the module loader decide
+        whether the module is out of date with its sources (see design/aot-linked-module-sources.md)
+    */
+    strset_t included_files;
 
     struct ModuleParseCommand {
         std::string module;
@@ -622,6 +633,28 @@ public:
     /** nullptr when the Program does not inherit it (PO_NO_INHERIT_PROGRAM_DATA); see copyExternalData()
     */
     QoreProgram* ext_parent = nullptr;
+
+    //! set once the background JIT compiler takes no more work that refers to this Program
+    /** Set when the Program waits for the background compiles of its code before its data is deleted
+        (QoreJIT::waitForBgCompileQueue()): a compile requested afterwards, by a Program sharing one of its classes, for
+        example, would lower code and read data of the Program while they are deleted.  Guarded by the JIT's queue lock.
+    */
+    bool bg_compile_closed = false;
+
+#ifdef DEBUG
+    //! the points in waitForTerminationAndClear() where dbg_teardown_hook is called
+    enum class DbgTeardownPoint {
+        //! after the cleanup callback and before the Program is marked as being torn down by the thread; no lock is
+        //! held, and the hook can wait
+        AfterCleanupCallback,
+        //! the Program is marked, and the thread waits for the threads that entered it to leave; the Program's lock
+        //! is held, and the hook must not wait
+        BeforeFinalWait,
+    };
+    //! debug-only hook called while a Program is torn down, before its data is deleted
+    typedef void (*dbg_teardown_hook_t)(QoreProgram* pgm, DbgTeardownPoint point);
+    DLLLOCAL static std::atomic<dbg_teardown_hook_t> dbg_teardown_hook;
+#endif
 
     //! set once the Program's constructor has run to completion
     /** QoreProgram::priv is published, and the Program's namespace tree is created and owned by the
@@ -733,6 +766,9 @@ public:
         auto i = shard.targets.find(n);
         if (i == shard.targets.end()) {
             shard.targets.insert(opaque_target_map_t::value_type(n, OpaqueTargetInfo{pgm, 1}));
+#ifdef DEBUG
+            opaque_target_count.fetch_add(1);
+#endif
         } else {
             ++i->second.count;
         }
@@ -752,11 +788,38 @@ public:
         }
         if (!--i->second.count) {
             shard.targets.erase(i);
+#ifdef DEBUG
+            opaque_target_count.fetch_sub(1);
+#endif
         }
     }
 
+    //! Returns the Program that \a n is registered with as the target of an opaque reference, or nullptr if none
+    DLLLOCAL static QoreProgram* getOpaqueTargetProgram(const AbstractQoreNode* n);
+
+    //! Registers \a n, which exactly one opaque value refers to, with \a pgm
+    /** Used for the copy that replaces a container held through an opaque reference (see qore_value_with_copy()):
+        the copy is registered with the Program of the registration it replaces, so the teardown of the same
+        Program breaks a cycle through the reference whether or not the change copied the container.  An entry made
+        for \a n with another Program by the opaque value's constructor is given to \a pgm; with none, one is made.
+
+        @param n the target of the only opaque reference to it
+        @param pgm the Program responsible for breaking a cycle through this target at teardown
+    */
+    DLLLOCAL static void setOpaqueTargetProgram(AbstractQoreNode* n, QoreProgram* pgm);
+
     //! Breaks every cycle held up by an opaque reference created in this Program
     DLLLOCAL void clearOpaqueTargets(ExceptionSink* xsink);
+
+#ifdef DEBUG
+    //! the number of targets in the registry, so that a check of a freed node takes no lock while there are none
+    DLLLOCAL static std::atomic<size_t> opaque_target_count;
+
+    //! Returns true if \a n is registered as the target of an opaque reference
+    /** For qore_debug_check_freed_node_not_opaque_target()
+    */
+    DLLLOCAL static bool isOpaqueTarget(const AbstractQoreNode* n);
+#endif
 
     //! Records an IR fallback event for later reporting
     DLLLOCAL void recordIRFallback(const std::string& reason) const {
@@ -888,6 +951,13 @@ public:
 
     // define map
     dmap_t dmap;
+
+    //! the defines in dmap that were not set by the Program's host: defined in its source with %define, or with
+    //! Program::define() by code that is not trusted (see qore_caller_is_untrusted())
+    /** They do not shape library code that code that is not trusted loads (see inheritParseDefines()); guarded like
+        dmap
+    */
+    std::set<std::string> source_defines;
 
     struct source_parse_define_t {
         std::string source_file;
@@ -1134,6 +1204,16 @@ public:
         }
     }
 
+    //! Records a file that a %include directive opened while the Program was parsed
+    DLLLOCAL void addIncludedFile(const char* path) {
+        QoreString resolved;
+        if (q_realpath(QoreString(path), resolved)) {
+            included_files.insert(path);
+        } else {
+            included_files.insert(resolved.c_str());
+        }
+    }
+
     DLLLOCAL void addModuleParseCommand(const char* mod, const QoreString& cmd) {
         module_parse_commands.push_back(ModuleParseCommand{mod ? mod : "", cmd.c_str()});
     }
@@ -1336,6 +1416,17 @@ private:
 
 class qore_program_private : public qore_program_private_base {
 public:
+    //! set when the exit hooks of the Program have started to run; guarded by the exit hook registry's lock
+    /** No hook can be registered for the Program afterwards (see qore_register_exit_hook())
+    */
+    bool exit_hooks_closed = false;
+
+    //! set for the Program of a module that is library code (see QoreModuleManager::isTrustedModulePath())
+    /** What such a Program has is library code's own (its parse defines, its module path directives) or was
+        filtered when it was created, so the library modules that it loads inherit it whoever loads it first
+    */
+    bool library_module = false;
+
     //! Returns true if a debugger is currently attached to this program
     DLLLOCAL bool hasDebuggerAttached() const {
         return dpgm.load(std::memory_order_relaxed) != nullptr;
@@ -1449,17 +1540,32 @@ public:
         AutoLocker al(plock);
 
         assert(thread_count > 0);
-        if (!--thread_count && thread_waiting)
+        --thread_count;
+        if (!thread_count) {
+            cancel_new_threads = false;
+        }
+        if (thread_waiting) {
             pcond.broadcast();
+        }
     }
 
     // called from the new thread once the thread has been started (after preregisterNewThread())
-    DLLLOCAL void registerNewThread(int tid) {
+    DLLLOCAL bool registerNewThread(int tid) {
         // grab program-level lock
         AutoLocker al(plock);
 
         assert(thread_count);
         ++tidmap[tid];
+        return cancel_new_threads;
+    }
+
+    //! Returns true if a cancellation of the Program's threads (cancelThreads()) is in progress
+    /** A thread that the Program counts already when it asks is part of the wave: either the wave's snapshot has it,
+        or the wave cannot end before the thread does, as the Program is not idle
+    */
+    DLLLOCAL bool cancellingNewThreads() {
+        AutoLocker al(plock);
+        return cancel_new_threads;
     }
 
     /*
@@ -1532,17 +1638,20 @@ public:
         assert(i != tidmap.end());
         if (!--i->second) {
             tidmap.erase(i);
-            ptid_map_t::iterator di = deferred_derefs.find(tid);
-            if (di != deferred_derefs.end()) {
-                derefs = di->second;
-                deferred_derefs.erase(di);
-                clear = deferred_derefs.empty();
+            // a thread that still holds the parse lock releases its deferred references when it releases the lock
+            if (parse_tid != tid) {
+                derefs = takeDeferredDerefs(tid, clear);
             }
         }
 
         assert(thread_count > 0);
-        if (!--thread_count && thread_waiting)
+        if (!--thread_count) {
+            cancel_new_threads = false;
+        }
+        // Wake individual-thread waiters as well as whole-Program waiters.
+        if (thread_waiting) {
             pcond.broadcast();
+        }
         return derefs;
     }
 
@@ -1556,11 +1665,29 @@ public:
     DLLLOCAL bool deferDerefIfRunning() {
         int tid = q_gettid();
         AutoLocker al(plock);
-        if (tidmap.find(tid) == tidmap.end()) {
+        // a thread that holds the parse lock (the parse commit runs code) cannot wait for itself to release it either
+        if (tidmap.find(tid) == tidmap.end() && parse_tid != tid) {
             return false;
         }
         ++deferred_derefs[tid];
         return true;
+    }
+
+    //! Takes the references that the given thread deferred when it deleted the Program; called with plock held
+    /** @param tid the thread, which neither runs the Program's code nor holds its parse lock anymore
+        @param clear set to true if no other thread has deferred references, so the thread must clear the Program
+
+        @return the number of references that the thread must release
+    */
+    DLLLOCAL unsigned takeDeferredDerefs(int tid, bool& clear) {
+        ptid_map_t::iterator di = deferred_derefs.find(tid);
+        if (di == deferred_derefs.end()) {
+            return 0;
+        }
+        unsigned derefs = di->second;
+        deferred_derefs.erase(di);
+        clear = deferred_derefs.empty();
+        return derefs;
     }
 
     // gets a list of all thread IDs using this Program
@@ -1618,17 +1745,31 @@ public:
         return 0;
     }
 
-    DLLLOCAL void unlockParsing() {
+    //! Releases the parse lock
+    /** @param clear set to true if the thread must clear the Program, as the last thread that deleted it while it
+        held the parse lock
+
+        @return the number of references that the thread released when it deleted the Program while it held the parse
+        lock and must release now; 0 if it did not delete the Program, or if it still runs the Program's code (it then
+        releases them when it leaves it; see decThreadCount())
+    */
+    DLLLOCAL unsigned unlockParsing(bool& clear) {
         // grab program-level lock
         AutoLocker al(plock);
-        assert(parse_tid == q_gettid());
+        int tid = q_gettid();
+        assert(parse_tid == tid);
         assert(parse_count > 0);
+        unsigned derefs = 0;
         if (!(--parse_count)) {
             parse_tid = -1;
             if (thread_waiting) {
                 pcond.broadcast();
             }
+            if (tidmap.find(tid) == tidmap.end()) {
+                derefs = takeDeferredDerefs(tid, clear);
+            }
         }
+        return derefs;
     }
 
     DLLLOCAL bool parsingLocked() const {
@@ -1638,9 +1779,14 @@ public:
     // called only with plock held
     DLLLOCAL void waitForAllThreadsToTerminateIntern() {
         int tid = q_gettid();
+        // the thread would wait for itself: a deletion while it holds the parse lock is deferred until it releases it
+        // (see deferDerefIfRunning())
+        assert(parse_tid != tid);
 
+        // the calling thread does not wait for itself: all of its entries are discounted, as it can be in the
+        // Program's code more than once (nested calls)
         ptid_map_t::iterator i = tidmap.find(tid);
-        unsigned adj = (i != tidmap.end() ? 1 : 0);
+        unsigned adj = (i != tidmap.end() ? i->second : 0);
 
         while ((thread_count - adj) || parse_count) {
             ++thread_waiting;
@@ -2806,6 +2952,7 @@ public:
         if (i != dmap.end()) {
             i->second.discard(xsink);
             dmap.erase(i);
+            source_defines.erase(name);
             return true;
         }
         return false;
@@ -2850,7 +2997,8 @@ public:
         return 0;
     }
 
-    DLLLOCAL void parseDefine(const QoreProgramLocation* loc, const char* str, QoreValue val) {
+    //! a define set by the Program's host, or, with \a source, defined in its source
+    DLLLOCAL void parseDefine(const QoreProgramLocation* loc, const char* str, QoreValue val, bool source = false) {
         PreParseHelper pph(this);
 
         if (checkDefine(loc, str, parseSink))
@@ -2858,16 +3006,28 @@ public:
 
         recordSourceParseDefine(loc, str, val);
         setDefine(str, val, parseSink);
+        if (source) {
+            source_defines.insert(str);
+        } else {
+            source_defines.erase(str);
+        }
     }
 
+    //! a define set with Program::define(): by the Program's host unless the caller is not trusted
     DLLLOCAL void runTimeDefine(const char* str, QoreValue val, ExceptionSink* xsink) {
         const QoreProgramLocation* loc = get_runtime_location();
 
         if (checkDefine(loc, str, xsink))
             return;
 
+        const bool untrusted = qore_caller_is_untrusted();
         AutoLocker al(plock);
         setDefine(str, val, xsink);
+        if (untrusted) {
+            source_defines.insert(str);
+        } else {
+            source_defines.erase(str);
+        }
     }
 
     DLLLOCAL ResolvedCallReferenceNode* runtimeGetCallReference(const char* name, ExceptionSink* xsink) {
@@ -3380,8 +3540,8 @@ public:
     }
 
     // called from the new thread once the thread has been started (after preregisterNewThread())
-    DLLLOCAL static void registerNewThread(QoreProgram& pgm, int tid) {
-        pgm.priv->registerNewThread(tid);
+    DLLLOCAL static bool registerNewThread(QoreProgram& pgm, int tid) {
+        return pgm.priv->registerNewThread(tid);
     }
 
     DLLLOCAL static void runtimeImportSystemClasses(QoreProgram& pgm, ExceptionSink* xsink) {
@@ -3403,6 +3563,22 @@ public:
     DLLLOCAL static void runtimeImportSystemApi(QoreProgram& pgm, ExceptionSink* xsink) {
         pgm.priv->runtimeImportSystemApi(xsink);
     }
+
+    //! Runs \a f while the given Programs cannot be destroyed, if all of them still have references
+    /** The Programs are looked up by ID in the registry under its read lock, which is held while \a f runs, so that
+        \a f can use their private data; a Program leaves the ID registry when its last reference is released, and
+        the ID also tells a Program from a later one at the same address
+
+        @return the return value of \a f, or false if a Program has no reference anymore
+    */
+    //! Returns a reference to the Program with the given address and ID, or nullptr if it has no reference anymore
+    /** The Program is not dereferenced unless it is found in the ID registry; the caller releases the reference with
+        deref()
+    */
+    DLLLOCAL static QoreProgram* getReferencedProgram(const QoreProgram* p, qore_program_id_t id);
+
+    DLLLOCAL static bool runWithRegisteredPrograms(
+            const std::vector<std::pair<const QoreProgram*, qore_program_id_t>>& pgms, const std::function<bool()>& f);
 
     DLLLOCAL static qore_program_private* get(QoreProgram& pgm) {
         return pgm.priv;
@@ -3429,9 +3605,17 @@ public:
         return pgm.priv->lockParsing(xsink);
     }
 
-    DLLLOCAL static void unlockParsing(QoreProgram& pgm) {
-        pgm.priv->unlockParsing();
-    }
+    //! Releases the parse lock; clears and dereferences a Program deleted while the thread held it
+    /** @param pgm the Program
+        @param xsink exceptions raised while the Program is cleared are appended here; if null, they are handled
+
+        The caller must not use \a pgm afterwards unless it holds a reference to it
+    */
+    DLLLOCAL static void unlockParsing(QoreProgram& pgm, ExceptionSink* xsink = nullptr);
+
+    //! Clears (if \a clear) and dereferences a Program deleted by the current thread while it ran its code or held its
+    //! parse lock, once it has left the code and released the lock
+    DLLLOCAL static void releaseDeferredDerefs(QoreProgram& pgm, unsigned derefs, bool clear, ExceptionSink* xsink);
 
     DLLLOCAL static int incThreadCount(QoreProgram& pgm, ExceptionSink* xsink) {
         return pgm.priv->incThreadCount(xsink);
@@ -3570,9 +3754,10 @@ public:
         return pgm->priv->runTimeIsDefined(name);
     }
 
+    //! a define in the Program's source (%define)
     DLLLOCAL static void parseDefine(QoreProgram* pgm, const QoreProgramLocation* loc, const char* str,
             QoreValue val) {
-        pgm->priv->parseDefine(loc, str, val);
+        pgm->priv->parseDefine(loc, str, val, true);
     }
 
     DLLLOCAL static const std::vector<source_parse_define_t>& getSourceParseDefineRecords(QoreProgram* pgm) {
@@ -3618,8 +3803,12 @@ public:
         match the child's, this is idempotent for those entries; user-set entries
         propagate as intended.
      */
-    DLLLOCAL static void inheritParseDefines(QoreProgram& child, QoreProgram& parent) {
+    //! with \a host_only, only the defines that the parent's host set (see source_defines)
+    DLLLOCAL static void inheritParseDefines(QoreProgram& child, QoreProgram& parent, bool host_only = false) {
         for (const auto& i : parent.priv->dmap) {
+            if (host_only && parent.priv->source_defines.find(i.first) != parent.priv->source_defines.end()) {
+                continue;
+            }
             QoreValue val = i.second.refSelf();
             child.priv->setDefine(i.first.c_str(), val, child.priv->parseSink);
         }
@@ -3682,6 +3871,19 @@ public:
         @since %Qore 3.0
      */
     DLLLOCAL static void inheritModulePathLists(QoreProgram& child, QoreProgram& parent);
+
+    //! Returns the module search-path lists that resolve modules for \a pgm in this thread
+    /** These are the lists of \a pgm, with the directories of the AOT modules whose dependencies this thread is
+        resolving for \a pgm (see QoreModulePathScope): the prepended directories of the innermost such module first
+        and the appended directories of the outermost first, as nested source modules inherit them.  Without such
+        a module, they are the lists of \a pgm.
+
+        @param pgm the Program, or nullptr for none
+        @param prepended receives the directories searched before the module path, without duplicates
+        @param appended receives the directories searched after the module path, without duplicates
+     */
+    DLLLOCAL static void getEffectiveModulePathLists(const QoreProgram* pgm, std::vector<std::string>& prepended,
+            std::vector<std::string>& appended);
 
     DLLLOCAL static void runTimeDefine(QoreProgram* pgm, const char* str, QoreValue val, ExceptionSink* xsink) {
         pgm->priv->runTimeDefine(str, val, xsink);
@@ -4692,6 +4894,29 @@ class RuntimeConfig;
 //! current Program.  Single definition in ql_misc.cpp; also called from ql_object.cpp.
 DLLLOCAL QoreProgram* q_get_runtime_call_program(RuntimeConfig& runtime_cfg);
 
+//! Makes the module loader find modules for a Program with an AOT module's own module path directories
+/** While an AOT module's dependencies are loaded and checked, before the module is mapped, its own Program does not
+    exist yet; its initialization creates it with the module's own %prepend-module-path and %append-module-path
+    directories around the lists of the Program loading it (inheritAOTModulePathLists() in QoreAOTRuntime.cpp), as a
+    source module's Program has them.  So that its dependencies are the modules that Program, or the module's
+    source, would find, this scope adds the directories, which qcc writes in the module's metadata, to the lists of
+    the loading Program for this thread (see qore_program_private::getEffectiveModulePathLists()), also for the
+    Programs of the source modules loaded in it, which inherit them.  Scopes nest for a dependency's dependencies.
+*/
+class QoreModulePathScope {
+public:
+    //! Adds \a prepended and \a appended to the lists of \a pgm for this thread until destroyed
+    /** the lists must outlive the scope
+    */
+    DLLLOCAL QoreModulePathScope(const QoreProgram* pgm, const std::vector<std::string>& prepended,
+            const std::vector<std::string>& appended);
+
+    DLLLOCAL ~QoreModulePathScope();
+
+    QoreModulePathScope(const QoreModulePathScope&) = delete;
+    QoreModulePathScope& operator=(const QoreModulePathScope&) = delete;
+};
+
 //! returns the structured parse diagnostics collected on the Program serialized as a JSON array;
 //! exported so the standalone interpreter (--diag-format=json) can emit them
 DLLEXPORT std::string qore_get_parse_diagnostics_json(QoreProgram& pgm);
@@ -4699,5 +4924,48 @@ DLLEXPORT std::string qore_get_parse_diagnostics_json(QoreProgram& pgm);
 //! renders the collected parse diagnostics as human-readable code frames; exported so the standalone
 //! interpreter (--code-frames) can render them.  Returns the number of error diagnostics rendered.
 DLLEXPORT unsigned qore_render_parse_diagnostic_frames(QoreProgram& pgm, const char* source_text, FILE* os);
+
+//! Registers code that the library calls before it waits for threads to end; see Qore::register_exit_hook()
+/** @return the hook's ID, or -1 if an exception was raised: the code is sandboxed, or the hooks of the process have
+    run already
+*/
+DLLLOCAL int64 qore_register_exit_hook(const ResolvedCallReferenceNode* code, ExceptionSink* xsink);
+
+//! Removes an exit hook that the current Program registered; returns true if it was removed
+DLLLOCAL bool qore_deregister_exit_hook(int64 id, ExceptionSink* xsink);
+
+//! Runs the exit hooks of a Program, or all exit hooks if pgm is null, in the reverse order of their registration
+/** Called before the library waits for the threads of the process (pgm is null; no hook can be registered
+    afterwards), or for the threads of a Program being deleted.  The hooks are taken out of the registry one at a time,
+    so that a Program deleted by a hook, or by another thread meanwhile, runs its own hooks then.  Each hook runs once;
+    an exception it raises is reported, and the next hook runs.
+*/
+DLLLOCAL void qore_run_exit_hooks(QoreProgram* pgm);
+
+//! Returns true if the exit hooks of the process have started to run
+DLLLOCAL bool qore_exit_hooks_started();
+
+//! Starts a callback in a new thread of a Program that no sandbox governs; see SandboxManager::createSystemThreadCall()
+/** The thread does not inherit the sandbox of the starting code and does not count against its limits.  Refused,
+    with SANDBOX-CAPABILITY-ERROR, once the exit hooks of the process have started, so that every such thread is
+    started before the hooks that stop it run
+
+    @return the TID of the new thread, or -1 if an exception was raised
+*/
+DLLLOCAL int qore_start_system_thread(const ResolvedCallReferenceNode* code, QoreProgram* pgm, ExceptionSink* xsink);
+
+#ifdef DEBUG
+//! Makes the next \a count system thread starts fail after the start was reserved (debug builds, for tests)
+DLLLOCAL void qore_dbg_fail_next_system_thread_starts(int count);
+
+//! Returns the number of system thread starts reserved and not released (debug builds, for tests)
+DLLLOCAL int qore_dbg_system_threads_starting();
+#endif
+
+//! Releases the exit hooks of a Program without running them; called when the Program is destroyed
+/** A Program that is cleared runs its hooks first (see qore_run_exit_hooks()), so this releases only the hooks of a
+    Program destroyed without being cleared
+*/
+DLLLOCAL void qore_drop_exit_hooks(QoreProgram* pgm);
 
 #endif

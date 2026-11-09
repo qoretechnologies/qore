@@ -33,6 +33,7 @@
 #include <qore/QoreHttpClientObject.h>
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/ql_lib.h"
+#include "qore/intern/qore_program_private.h"
 #include "qore/intern/ExecArgList.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreHashNodeIntern.h"
@@ -566,6 +567,72 @@ abort();
 nothing abort() [dom=PROCESS] {
    threads_initialized = false;
    abort();
+}
+
+//! Registers code that the library calls before it waits for background threads to end
+/** The library waits for every background thread to end before a program ends (also when the main thread of the
+    @c qore binary has returned), and for the threads of a @ref Qore::Program "Program" before the Program is
+    deleted.  A thread that runs until it is told to stop, such as a worker waiting on a queue, would keep the
+    process or the Program from ending; an exit hook tells it to stop.
+
+    The hooks run:
+    - before the library waits for the threads of the process: every hook registered, once, in the reverse order of
+      their registration; no hook can be registered afterwards
+    - before a @ref Qore::Program "Program" waits for its threads when it is deleted: the hooks that its code
+      registered; its code can register no hook afterwards
+
+    A hook runs in the Program of the code that registered it, without the sandbox policy of the code that ends the
+    Program (see @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()").  An
+    exception that a hook raises is reported as an unhandled exception, and the next hook runs; when the hooks run as
+    the @c qore binary ends, a reported exception makes its exit status 3 if it would otherwise be 0, as any unhandled
+    exception raised while a program ends does.  A hook that does not return keeps the process from ending.
+
+    A module registers its hook in its \c init closure, and its \c del closure releases what the hook stopped (see
+    @ref user_module_exit_hooks).
+
+    @param hook the code to call; it takes no arguments
+
+    @return the hook's ID, for deregister_exit_hook()
+
+    @par Example:
+    @code{.py}
+# a worker that runs until it is told to stop
+Queue jobs();
+background sub () { while (auto job = jobs.get()) { job(); } }();
+# the worker stops before the library waits for it
+register_exit_hook(sub () { jobs.push(NOTHING); });
+    @endcode
+
+    @throw EXIT-HOOK-ERROR a sandbox governs the code that calls this function; or the hooks of the process have
+    started to run; or the hooks of the current Program have started to run, because it is being deleted
+
+    @see deregister_exit_hook()
+
+    @since %Qore 3.0
+ */
+int register_exit_hook(code hook) [dom=PROCESS] {
+    return qore_register_exit_hook(hook, xsink);
+}
+
+//! Removes an exit hook that the current Program registered
+/** @param id the ID returned by register_exit_hook()
+
+    @return @ref True if the hook was removed; @ref False if no hook of the current Program has the ID given, or it has
+    run already
+
+    @par Example:
+    @code{.py}
+int id = register_exit_hook(\stop_worker());
+# the worker was stopped otherwise
+deregister_exit_hook(id);
+    @endcode
+
+    @see register_exit_hook()
+
+    @since %Qore 3.0
+ */
+bool deregister_exit_hook(softint id) [flags=NAMED_ARGS;dom=PROCESS] {
+    return qore_deregister_exit_hook(id, xsink);
 }
 
 //! Replaces the current process image with another; this function does not return
@@ -1592,6 +1659,19 @@ list<hash<auto>> l = getaddrinfo("localhost");
     @throw QOREADDRINFO-GETINFO-ERROR nodename nor servname provided, or not known, or the node or service name
     contains a NUL character
 
+    @par Name lookup errors
+    A \c QOREADDRINFO-GETINFO-ERROR exception raised for the answer of the resolver has a hash argument with the key
+    \c status, the resolver's status: \c "ENOTFOUND" (the name does not exist), \c "ENODATA" (the name has no address
+    of the requested family), \c "EBADNAME" (the name is not a valid name), \c "ENONAME" (the name is not a numeric
+    address, with \c AI_NUMERICHOST) and \c "ESERVICE" (the service is not known) are definite answers, which another
+    lookup gives again; others, such as \c "ETIMEOUT", \c "ESERVFAIL", \c "EREFUSED" and \c "ECONNREFUSED" (no DNS
+    server answered, or one failed), can be temporary.  A lookup of both address families (\c AF_UNSPEC) fails with
+    \c "ENOTFOUND" or \c "ENODATA" only if the answers for both families are definite; if one is not, the lookup
+    fails with its status.  A single-label name (one without a dot), which is also looked up with the search domains
+    of the host, fails with \c "ESERVFAIL" or \c "EREFUSED" if the DNS server failed or refused the name itself,
+    though a search domain gave a definite answer.  An error that is not an answer of the resolver, such as a
+    resolver that could not be initialized, has no \c status.
+
     @note A localhost name (\c "localhost" or a name ending in \c ".localhost"; RFC 6761) resolves to the addresses
     that the hosts file gives it, as with the system resolver; in an address family that the hosts file does not give
     the name, and when the hosts file does not have the name, it resolves to the loopback address (\c 127.0.0.1 or
@@ -1634,6 +1714,10 @@ list<hash<auto>> l = f.get();
     @endcode
 
     @throw ASYNC-IO-ERROR the lookup could not be submitted to the global async I/O controller
+
+    @par Name lookup errors
+    The Future raises a \c QOREADDRINFO-GETINFO-ERROR exception for an answer of the resolver with the same argument
+    as @ref Qore::getaddrinfo() "getaddrinfo()": a hash with the resolver's \c status
 
     @since %Qore 3.0
  */

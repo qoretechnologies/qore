@@ -87,85 +87,89 @@ module GitHubDataProvider {
             "groups": (DataProvider::AppGroup::VersionControl, DataProvider::AppGroup::DevOps),
         });
 
-        # register every action in the manifest
-        RestSchemaActionSet action_set = GitHubSchema::getActionSet();
-        action_set.registerActions(GitHubDataProvider::AppName);
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(GitHubDataProvider::AppName, sub () {
+            # register every action in the manifest
+            RestSchemaActionSet action_set = GitHubSchema::getActionSet();
+            action_set.registerActions(GitHubDataProvider::AppName);
 
-        # register the record-based table actions; the IDs are those of the TypeScript application this
-        # module replaces, so a workflow that already calls them keeps working
-        {
-            string scope_desc = "; the `issues`, `pulls` and `releases` tables are each scoped to one "
-                "repository, given by the `owner` and `repo` options, while `repositories` spans every "
-                "owner the credential can see";
-            string search_desc = sprintf("Search for matching records in the given table in app %y",
-                GitHubDataProvider::AppName);
-            string single_desc = sprintf("Search for a single matching record in the given table in app %y",
-                GitHubDataProvider::AppName);
-            string create_desc = sprintf("Create new records in the given table in app %y",
-                GitHubDataProvider::AppName);
-            # kept under 80 characters, because a short description is shown where there is no room for
-            # more; the full explanation belongs in "desc"
-            string update_short = sprintf("Update matching records in the given table in app %y",
-                GitHubDataProvider::AppName);
-            string update_desc = sprintf("Updates every record in the given table in app %y matching the "
-                "search criteria", GitHubDataProvider::AppName);
-            string delete_short = sprintf("Delete matching records in the given table in app %y",
-                GitHubDataProvider::AppName);
+            # register the record-based table actions; the IDs are those of the TypeScript application this
+            # module replaces, so a workflow that already calls them keeps working
+            {
+                string scope_desc = "; the `issues`, `pulls` and `releases` tables are each scoped to one "
+                    "repository, given by the `owner` and `repo` options, while `repositories` spans every "
+                    "owner the credential can see";
+                string search_desc = sprintf("Search for matching records in the given table in app %y",
+                    GitHubDataProvider::AppName);
+                string single_desc = sprintf("Search for a single matching record in the given table in app %y",
+                    GitHubDataProvider::AppName);
+                string create_desc = sprintf("Create new records in the given table in app %y",
+                    GitHubDataProvider::AppName);
+                # kept under 80 characters, because a short description is shown where there is no room for
+                # more; the full explanation belongs in "desc"
+                string update_short = sprintf("Update matching records in the given table in app %y",
+                    GitHubDataProvider::AppName);
+                string update_desc = sprintf("Updates every record in the given table in app %y matching the "
+                    "search criteria", GitHubDataProvider::AppName);
+                string delete_short = sprintf("Delete matching records in the given table in app %y",
+                    GitHubDataProvider::AppName);
 
-            RestSchemaTablesDataProvider::registerRecordActions(GitHubDataProvider::AppName,
-                "/" + GitHubDataProvider::TablesChildName, action_set, GitHubRecordTables::Tables,
-                GitHubRecordTables::RecordActionIds, {
-                    "groups": (GitHubRecordTables::RecordGroup,),
-                }, {
-                    "search": {
-                        "short_desc": search_desc,
-                        "desc": search_desc + scope_desc,
-                    },
-                    "search-single": {
-                        "short_desc": single_desc,
-                        "desc": single_desc + scope_desc,
-                    },
-                    "create": {
-                        "short_desc": create_desc,
-                        "desc": create_desc + ".\n\nGitHub's collection endpoints lag its writes by a few "
-                            "seconds, so a record created here is **not** in what a search returns "
-                            "immediately afterwards; use what this action returned rather than reading it "
-                            "back",
-                    },
-                    "delete": {
-                        "short_desc": delete_short,
-                        "desc": "Deletes every record in the given table matching the search criteria.\n\n"
-                            "Only the **Repositories** table can be deleted from: GitHub closes an issue or "
-                            "a pull request rather than removing it, and offers no delete for a release.\n\n"
-                            "**Deleting a repository cannot be undone.** GitHub keeps no trash for one; "
-                            "recovering it means asking GitHub Support within 90 days. This needs the "
-                            "`delete_repo` scope, which this connection requests by default.",
-                    },
-                    "update": {
-                        "short_desc": update_short,
-                        "desc": update_desc + ".\n\nGitHub identifies an issue or a pull request by its "
-                            "`number` within the repository, so a search naming one changes exactly that "
-                            "record; any other search reads the table first and updates every record it "
-                            "matches",
-                    },
+                RestSchemaTablesDataProvider::registerRecordActions(GitHubDataProvider::AppName,
+                    "/" + GitHubDataProvider::TablesChildName, action_set, GitHubRecordTables::Tables,
+                    GitHubRecordTables::RecordActionIds, {
+                        "groups": (GitHubRecordTables::RecordGroup,),
+                    }, {
+                        "search": {
+                            "short_desc": search_desc,
+                            "desc": search_desc + scope_desc,
+                        },
+                        "search-single": {
+                            "short_desc": single_desc,
+                            "desc": single_desc + scope_desc,
+                        },
+                        "create": {
+                            "short_desc": create_desc,
+                            "desc": create_desc + ".\n\nGitHub's collection endpoints lag its writes by a few "
+                                "seconds, so a record created here is **not** in what a search returns "
+                                "immediately afterwards; use what this action returned rather than reading it "
+                                "back",
+                        },
+                        "delete": {
+                            "short_desc": delete_short,
+                            "desc": "Deletes every record in the given table matching the search criteria.\n\n"
+                                "Only the **Repositories** table can be deleted from: GitHub closes an issue or "
+                                "a pull request rather than removing it, and offers no delete for a release.\n\n"
+                                "**Deleting a repository cannot be undone.** GitHub keeps no trash for one; "
+                                "recovering it means asking GitHub Support within 90 days. This needs the "
+                                "`delete_repo` scope, which this connection requests by default.",
+                        },
+                        "update": {
+                            "short_desc": update_short,
+                            "desc": update_desc + ".\n\nGitHub identifies an issue or a pull request by its "
+                                "`number` within the repository, so a search naming one changes exactly that "
+                                "record; any other search reads the table first and updates every record it "
+                                "matches",
+                        },
+                    });
+            }
+
+            # register the webhook event actions
+            foreach hash<auto> i in (GitHubEventsDataProvider::EventMap.pairIterator()) {
+                Class cls = i.value;
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": GitHubDataProvider::AppName,
+                    "path": "/" + GitHubDataProvider::EventsChildName + "/" + i.key,
+                    "action": i.key,
+                    "display_name": cls.getConstant("DisplayName").getValue(),
+                    "short_desc": cls.getConstant("ShortDesc").getValue(),
+                    "desc": cls.getConstant("Desc").getValue(),
+                    "action_code": DPAT_EVENT,
+                    "action_val": i.key,
+                    "groups": ("Events",),
                 });
-        }
-
-        # register the webhook event actions
-        foreach hash<auto> i in (GitHubEventsDataProvider::EventMap.pairIterator()) {
-            Class cls = i.value;
-            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-                "app": GitHubDataProvider::AppName,
-                "path": "/" + GitHubDataProvider::EventsChildName + "/" + i.key,
-                "action": i.key,
-                "display_name": cls.getConstant("DisplayName").getValue(),
-                "short_desc": cls.getConstant("ShortDesc").getValue(),
-                "desc": cls.getConstant("Desc").getValue(),
-                "action_code": DPAT_EVENT,
-                "action_val": i.key,
-                "groups": ("Events",),
-            });
-        }
+            }
+        });
     };
 }
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - server-sent event framing read from TCP sockets by Socket::readServerSentEvent()
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 #
 # A server-sent event stream is framed as the WHATWG HTML event stream format requires, by every reader: one leading
@@ -126,6 +127,8 @@ class SseStreamFramingTest inherits QUnit::Test {
         Counter served = serve(True);
         on_exit served.waitForZero(30s);
         HttpClientIo::HttpClientConnectionManager mgr();
+        # the connection stays in the pool after the stream ends; the server waits for the client to close it
+        on_exit mgr.closeAll();
         HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + port);
         on_exit {
             try {
@@ -149,6 +152,8 @@ class SseStreamFramingTest inherits QUnit::Test {
         Counter served = serve(True);
         on_exit served.waitForZero(30s);
         HttpClientIo::HttpClientConnectionManager mgr();
+        # the connection stays in the pool after the stream ends; the server waits for the client to close it
+        on_exit mgr.closeAll();
         HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming("http://127.0.0.1:" + port, "GET",
             "/", {"Accept": MimeTypeSse});
         on_exit {

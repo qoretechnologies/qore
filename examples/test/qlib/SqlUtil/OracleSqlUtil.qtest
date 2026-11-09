@@ -5,13 +5,19 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %prepend-module-path "${SCRIPT_DIR}"
+# qlib-requires-by-path: the test runs the AOT-compiled modules; by name, a module not built would load its source
 %requires ../../../../qlib/Util.qmod
+# qlib-requires-by-path: the test runs the AOT-compiled modules; by name, a module not built would load its source
 %requires ../../../../qlib/Logger.qmod
+# qlib-requires-by-path: the test runs the AOT-compiled modules; by name, a module not built would load its source
 %requires ../../../../qlib/DataProvider/DataProvider.qmod
+# qlib-requires-by-path: the test runs the AOT-compiled modules; by name, a module not built would load its source
 %requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+# qlib-requires-by-path: the test runs the AOT-compiled modules; by name, a module not built would load its source
 %requires ../../../../qlib/OracleSqlUtil.qmod
 
 %requires ./SqlUtilTestBase.qm
+%requires ./OracleTestIsolation.qm
 
 %try-module oracle
 %define NoOracle
@@ -1598,6 +1604,8 @@ class OracleTest inherits SqlTestBase {
     Datasource getDatasource() {
         if (!m_options.connstr)
             m_options.connstr = ENV.QORE_DB_CONNSTR_ORACLE;
+        # the run's own schema: tests that run at the same time do not share the objects of this one
+        m_options.connstr = OracleRunSchema::getConnectionString(m_options.connstr, "OracleSqlUtil");
         Datasource ds(m_options.connstr);
         if (ds.getDriverName() != "oracle")
             throw "ORACLE-ERROR", sprintf("cannot execute the oracle tests on a connection using driver %y", ds.getDriverName());

@@ -52,7 +52,7 @@ public class DescribedDataField inherits QoreDataField {
         description gives, if any
 
         @throw QORE-DATA-FIELD-ERROR missing or invalid key \c "type"
-        @throw RUNTIME-TYPE-ERROR the example value or the default value is not accepted by the type
+        @throw TYPE-VALUE-ERROR the example value or the default value is not accepted by the type
     */
     constructor(hash<auto> h) : QoreDataField(h) {
     }

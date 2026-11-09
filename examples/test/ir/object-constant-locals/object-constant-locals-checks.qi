@@ -21,11 +21,6 @@
 */
 const OclEntriesFunc = "dbg_get_ir_instantiated_local_entries";
 
-#! an object, which a local keeps on the runtime stack so that its destructor runs when its block is left
-class OclThing {
-    int get() { return 1; }
-}
-
 #! returns the number of locals on the runtime stack, and the function's result
 hash<string, int> sub ocl_stderr(int n) {
     string text = "value " + n;
@@ -70,9 +65,17 @@ hash<string, int> sub ocl_stdout(int n) {
 }
 
 #! a function that does keep a local on the runtime stack: shows that the counter reads this function's frame
-hash<string, int> sub ocl_object(int n) {
-    OclThing thing();
-    int sum = n + thing.get();
+/** An on_exit handler reads its locals through the runtime stack (the analysis walks the handler's AST), so the local
+    that the handler reads stays there.  (An object local is no longer such a local: the IR keeps it in its own storage
+    and marks its object with a real reference, see QoreIRFunction::real_reference_locals.)
+*/
+hash<string, int> sub ocl_kept(int n) {
+    int sum = n + 1;
+    on_exit {
+        if (sum < 0) {
+            stderr.printf("negative\n");
+        }
+    }
     stderr.printf("");
     int entries = 0;
     if (Option::HAVE_LIBRARY_DEBUGGING) {
@@ -86,7 +89,7 @@ hash<string, int> sub ocl_results() {
     hash<string, int> c = ocl_control(5);
     hash<string, int> e = ocl_stderr(5);
     hash<string, int> o = ocl_stdout(4);
-    hash<string, int> t = ocl_object(2);
+    hash<string, int> t = ocl_kept(2);
     return {
         "control-entries": c.entries,
         "control-result": c.result,
@@ -94,7 +97,7 @@ hash<string, int> sub ocl_results() {
         "stderr-result": e.result,
         "stdout-entries": o.entries,
         "stdout-result": o.result,
-        "object-entries": t.entries,
-        "object-result": t.result,
+        "kept-entries": t.entries,
+        "kept-result": t.result,
     };
 }

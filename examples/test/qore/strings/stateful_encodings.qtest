@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - stateful encoding shift sequences at the end of data, decoded by Apple libiconv
 
 # Copyright 2026 Qore Technologies, s.r.o.
 

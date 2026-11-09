@@ -2,8 +2,8 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/DataProvider
+%requires QUnit
+%requires DataProvider
 %exec-class NullableFieldsTest
 
 class NullableFieldsTest inherits QUnit::Test {
@@ -48,7 +48,7 @@ class NullableFieldsTest inherits QUnit::Test {
         # a mandatory field with choices still refuses no value
         QoreDataField mandatory("status", "A status", AbstractDataProviderTypeMap."string");
         mandatory.setAllowedValues(("open", "closed"));
-        assertThrows("RUNTIME-TYPE-ERROR", \mandatory.acceptsValue(), NOTHING);
+        assertThrows("TYPE-VALUE-ERROR", \mandatory.acceptsValue(), NOTHING);
     }
     private typeChoicesTest() {
         list<hash<AllowedValueInfo>> choices = (<AllowedValueInfo>{"value": "open"}, <AllowedValueInfo>{"value": "closed"});
@@ -58,6 +58,6 @@ class NullableFieldsTest inherits QUnit::Test {
         assertEq("closed", optional.acceptsValue("closed"));
         assertThrows("TYPE-VALUE-ERROR", "does not accept value \"bogus\"", \optional.acceptsValue(), "bogus");
         QoreDataType mandatory(<QoreTypeInfo>{"type": new Type("string"), "allowed_values": choices});
-        assertThrows("RUNTIME-TYPE-ERROR", \mandatory.acceptsValue(), NOTHING);
+        assertThrows("TYPE-VALUE-ERROR", \mandatory.acceptsValue(), NOTHING);
     }
 }

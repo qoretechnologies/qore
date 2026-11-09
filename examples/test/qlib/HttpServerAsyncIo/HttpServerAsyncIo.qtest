@@ -1,13 +1,14 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - async accept and keep-alive poll operations, header timeouts, stop during a TLS handshake
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/AsyncSocketIo
-%requires ../../../../qlib/HttpServerAsyncIo
+%requires QUnit
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
 %requires ../../TestCertificates.qm
 
 %exec-class HttpServerAsyncIoTest
@@ -278,6 +279,20 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         addTestCase("persistent queue replacement survives delayed cleanup",
             \persistentQueueReplacementTest());
         addTestCase("HttpAcceptPollOperation HTTP/2 mode test", \acceptPollHttp2ModeTest());
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("an aborted idle operation does not report data available", \abortedIdleTest());
+            addTestCase("an aborted keep-alive operation does not read a request header", \abortedKeepAliveTest());
+            addTestCase("an aborted accept operation does not start the TLS handshake", \abortedAcceptTest());
+            addTestCase("a keep-alive operation aborted while its header operation is released",
+                \abortedKeepAliveReleaseTest());
+            addTestCase("an accept operation aborted while its accept operation is released",
+                \abortedAcceptReleaseTest());
+            addTestCase("an aborted idle operation keeps its close when it finds its connection closed", \abortedIdleEofTest());
+            addTestCase("an aborted keep-alive operation is not made idle again", \abortedKeepAliveResetTest());
+            addTestCase("a keep-alive operation aborted after its header phase started reads no more",
+                \abortedKeepAliveHeaderPhaseTest());
+            addTestCase("a connection accepted after an abort is closed", \abortedPlainAcceptTest());
+        }
         addTestCase("addListener with named arguments", \addListenerNamedArgsTest());
         # Binary search: comment out tests to find the hanging one
         addTestCase("concurrent addListener/removeListener", \concurrentListenerTest());
@@ -631,6 +646,212 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         client.close();
         accepted.close();
         server.close();
+    }
+
+    #! Returns a connected pair: the client socket and the accepted one; data sent by the client is readable on the
+    #! accepted one before this returns, when @a data is given
+    private list<Socket> socketPair(*string data) {
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        Socket client();
+        client.connect("127.0.0.1:" + server.getSocketInfo().port);
+        Socket accepted = server.accept(5s);
+        server.close();
+        if (data) {
+            client.send(data);
+            assertTrue(accepted.isDataAvailable(5s), "the data arrived");
+        }
+        return (client, accepted);
+    }
+
+    #! An HTTP idle operation is aborted (as by another thread) right before it reports the data that arrived: it
+    #! stays closed
+    abortedIdleTest() {
+        list<Socket> sp = socketPair("x");
+        on_exit map $1.close(), sp;
+        HttpIdlePollOperation op(sp[1], 30s);
+        # disarms the hook if it did not fire
+        on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
+        call_function("dbg_poll_close_before_open_state", op, "data-available");
+        op.continuePoll();
+        *bool closed = call_function("dbg_poll_wait_close_before_open_state", 0);
+        assertTrue(exists closed, "the hook fired");
+        assertTrue(closed, "the state store left the operation closed");
+        assertEq("closed", op.getState());
+    }
+
+    #! An HTTP keep-alive operation is aborted (as by another thread) right before it starts reading the request
+    #! header that is arriving: it stays closed and reads nothing
+    abortedKeepAliveTest() {
+        list<Socket> sp = socketPair("GET / HTTP/1.1\r\n");
+        on_exit map $1.close(), sp;
+        HttpKeepAlivePollOperation op(sp[1], 30000);
+        # disarms the hook if it did not fire
+        on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
+        call_function("dbg_poll_close_before_open_state", op, "header-reading");
+        assertNothing(op.continuePoll(), "the aborted operation does not read the header");
+        *bool closed = call_function("dbg_poll_wait_close_before_open_state", 0);
+        assertTrue(exists closed, "the hook fired");
+        assertTrue(closed, "the state store left the operation closed");
+        assertEq("closed", op.getState());
+        assertEq("idle", op.getPhase(), "the operation did not enter the header phase");
+    }
+
+    #! An HTTP accept operation is aborted (as by another thread) right before it starts the TLS handshake of the
+    #! accepted connection: it stays complete and does not start the handshake
+    abortedAcceptTest() {
+        # a plain listener: the operation itself starts the TLS handshake of the accepted connection
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        on_exit server.close();
+        HttpAcceptPollOperation op(server, True, CertPem, KeyPem, SSL_VERIFY_NONE, True, "auto");
+        # the connection is waiting to be accepted before the operation polls
+        Socket client();
+        client.connect("127.0.0.1:" + server.getSocketInfo().port);
+        on_exit client.close();
+        # disarms the hook if it did not fire
+        on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
+        call_function("dbg_poll_close_before_open_state", op, "ssl-handshake");
+        # the first cycle starts the accept and asks for the listener's readiness, which the waiting connection
+        # already gives: the accept completes in the next cycle, whose next step is the TLS handshake
+        *hash<SocketPollInfo> pi = op.continuePoll();
+        if (pi) {
+            pi = op.continuePoll();
+        }
+        assertNothing(pi, "the aborted operation does not start the handshake");
+        *bool closed = call_function("dbg_poll_wait_close_before_open_state", 0);
+        assertTrue(exists closed, "the hook fired");
+        assertTrue(closed, "the state store left the operation complete");
+        assertEq("complete", op.getState());
+    }
+
+    #! An HTTP idle operation is aborted (as by another thread) right before it reports that its connection is closed:
+    #! the abort's close is kept, not replaced by the I/O thread's
+    abortedIdleEofTest() {
+        list<Socket> sp = socketPair();
+        on_exit map $1.close(), sp;
+        HttpIdlePollOperation op(sp[1], 30s);
+        # the connection is closed: the next cycle reports it
+        sp[1].close();
+        # disarms the hook if it did not fire
+        on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
+        call_function("dbg_poll_close_before_open_state", op, "peer-closed");
+        op.continuePoll();
+        *bool kept = call_function("dbg_poll_wait_close_before_open_state", 0);
+        assertTrue(exists kept, "the hook fired");
+        assertTrue(kept, "the abort's close was not replaced");
+        assertEq("closed", op.getState());
+    }
+
+    #! An aborted HTTP keep-alive operation is not made idle again by resetForIdle()
+    abortedKeepAliveResetTest() {
+        list<Socket> sp = socketPair();
+        on_exit map $1.close(), sp;
+        HttpKeepAlivePollOperation op(sp[1], 30000);
+        op.abort();
+        op.resetForIdle();
+        assertEq("closed", op.getState(), "the aborted operation stays closed");
+        assertTrue(op.goalReached());
+    }
+
+    #! An HTTP keep-alive operation is aborted (as by another thread) right after its header phase started: it reads no
+    #! more and reports no poll info
+    abortedKeepAliveHeaderPhaseTest() {
+        list<Socket> sp = socketPair("GET / HTTP/1.1\r\n");
+        on_exit map $1.close(), sp;
+        HttpKeepAlivePollOperation op(sp[1], 30000);
+        # disarms the hook if it did not fire
+        on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
+        call_function("dbg_poll_close_before_open_state", op, "header-op-created");
+        assertNothing(op.continuePoll(), "the aborted operation reads no more");
+        *bool closed = call_function("dbg_poll_wait_close_before_open_state", 0);
+        assertTrue(exists closed, "the hook fired");
+        assertTrue(closed, "the operation was aborted");
+        assertEq("closed", op.getState());
+    }
+
+    #! A plain (non-TLS) accept operation is aborted (as by another thread) after its inner accept completed and before
+    #! it recorded the accepted connection: the connection is closed, not handed over open
+    abortedPlainAcceptTest() {
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        on_exit server.close();
+        HttpAcceptPollOperation op(server, False);
+        Socket client();
+        client.connect("127.0.0.1:" + server.getSocketInfo().port);
+        on_exit client.close();
+        # disarms the hook if it did not fire
+        on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
+        call_function("dbg_poll_close_before_open_state", op, "accept-complete");
+        # the first cycle starts the accept and asks for the listener's readiness, which the waiting connection
+        # already gives: the accept completes in the next cycle
+        *hash<SocketPollInfo> pi = op.continuePoll();
+        if (pi) {
+            pi = op.continuePoll();
+        }
+        assertNothing(pi);
+        *bool closed = call_function("dbg_poll_wait_close_before_open_state", 0);
+        assertTrue(exists closed, "the hook fired");
+        assertTrue(closed, "the connection accepted after the abort was closed");
+        assertEq("complete", op.getState());
+    }
+
+    #! A keep-alive operation is aborted (as by another thread) while resetForIdle() releases its header operation:
+    #! abort() takes its own reference to the operation, so it never uses a released one
+    /** The debug hook aborts the operation right after the header operation was taken from it for its release; the
+        pointer is nulled with the lock held before the reference is released, so the abort() finds no operation
+        (valgrind reports the use of a released one when the order is reversed).
+    */
+    abortedKeepAliveReleaseTest() {
+        list<Socket> sp = socketPair("GET / HTTP/1.1\r\n");
+        on_exit map $1.close(), sp;
+        HttpKeepAlivePollOperation op(sp[1], 30000);
+        # the header phase starts: the header operation exists, and waits for the rest of the header
+        assertFalse(op.goalReached());
+        op.continuePoll();
+        assertEq("header", op.getPhase(), "the operation reads the request header");
+        # disarms the hook if it did not fire
+        on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
+        call_function("dbg_poll_close_before_open_state", op, "release-header-op");
+        op.resetForIdle();
+        *bool closed = call_function("dbg_poll_wait_close_before_open_state", 0);
+        assertTrue(exists closed, "the hook fired");
+        assertTrue(closed, "the operation was aborted");
+    }
+
+    #! An accept operation is aborted (as by another thread) while its I/O thread releases the accept operation to
+    #! start the TLS handshake: abort() takes its own references, so it never uses a released operation
+    /** The debug hook aborts the operation right after the accept operation was taken from it for its release; the
+        pointers are nulled with the lock held before the references are released, so the abort() finds no operation
+        (valgrind reports the use of a released one when the order is reversed).
+    */
+    abortedAcceptReleaseTest() {
+        # a plain listener: the operation itself starts the TLS handshake of the accepted connection
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        on_exit server.close();
+        HttpAcceptPollOperation op(server, True, CertPem, KeyPem, SSL_VERIFY_NONE, True, "auto");
+        Socket client();
+        client.connect("127.0.0.1:" + server.getSocketInfo().port);
+        on_exit client.close();
+        # disarms the hook if it did not fire
+        on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
+        call_function("dbg_poll_close_before_open_state", op, "release-current-op");
+        # the first cycle starts the accept and asks for the listener's readiness, which the waiting connection
+        # already gives: the accept completes in the next cycle, which releases the accept operation
+        *hash<SocketPollInfo> pi = op.continuePoll();
+        if (pi) {
+            pi = op.continuePoll();
+        }
+        assertNothing(pi, "the aborted operation does not start the handshake");
+        *bool closed = call_function("dbg_poll_wait_close_before_open_state", 0);
+        assertTrue(exists closed, "the hook fired");
+        assertTrue(closed, "the operation was aborted");
+        assertEq("complete", op.getState());
     }
 
     controllerStartStopTest() {

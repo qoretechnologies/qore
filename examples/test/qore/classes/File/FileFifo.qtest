@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - named pipe EOF reporting with poll/kqueue/select, descriptors above FD_SETSIZE, PIPE_BUF
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # Reads and waits on named pipes (FIFOs) see the end of the pipe once its writers have closed, and a closed reader

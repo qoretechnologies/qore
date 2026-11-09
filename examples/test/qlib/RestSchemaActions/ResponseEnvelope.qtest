@@ -79,7 +79,7 @@ class EnvelopeTest inherits QUnit::Test {
         for (int round = 0; round < 3; ++round) {
             assertEq(response, response_type.acceptsValue(response));
             assertEq(request, request_type.acceptsValue(request));
-            assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            assertThrows("TYPE-VALUE-ERROR", sub () {
                 response_type.acceptsValue({"direct": {"secret": "s"}});
             });
             response_type = Serializable::deserialize(response_type.serialize());

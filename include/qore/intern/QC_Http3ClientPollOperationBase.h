@@ -254,6 +254,19 @@ public:
         return s == H3State::READING || s == H3State::WAIT_READ;
     }
 
+    //! Sets the state of the open connection (READING or WAIT_READ) unless it was closed meanwhile; I/O thread only
+    /** H3State::CLOSED is final.  Other threads close the operation too: a submitting thread records a refused
+        submission with setSubmitError(), and abort() runs on any thread.  Such a close can happen while the I/O
+        thread is between its check of the state and its store of the next one, so the store is a compare-exchange
+        that never replaces H3State::CLOSED: a plain store would make the closed connection ready again, and it
+        would take requests and never be closed by the I/O controller (see needsCloseOnComplete()).
+
+        @param s the new state: H3State::READING or H3State::WAIT_READ
+        @param site where the state is set, for the debug hook (see PollStateCloseHook)
+    */
+    DLLLOCAL void setOpenState(H3State s, const char* site);
+
+
     //! Can be called from any thread: the error is set by the I/O thread under the stream lock
     DLLLOCAL bool hasError() const {
         AutoLocker al(stream_lock);

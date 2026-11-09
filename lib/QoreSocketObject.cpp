@@ -3058,9 +3058,9 @@ static int qore_socket_object_exec_quic_flush(QoreSocketObject* s, int64_t sessi
     return qore_socket_object_exec_poll_no_output(s, poller.release(), -1, owner_name, "done", xsink);
 }
 
-static int qore_socket_object_exec_shutdown(QoreSocketObject* s, ExceptionSink* xsink) {
+static int qore_socket_object_exec_shutdown(QoreSocketObject* s, ExceptionSink* xsink, bool write_only = false) {
     s->ref();
-    SocketShutdownPollOperation* shutdown_poller = new SocketShutdownPollOperation(s);
+    SocketShutdownPollOperation* shutdown_poller = new SocketShutdownPollOperation(s, write_only);
     ReferenceHolder<SocketPollOperationBase> poller(shutdown_poller, xsink);
     if (*xsink) {
         return -1;
@@ -5383,6 +5383,10 @@ int QoreSocketObject::shutdown() {
     return rc;
 }
 
+int QoreSocketObject::shutdownWrite(ExceptionSink* xsink) {
+    return qore_socket_object_exec_shutdown(this, xsink, true);
+}
+
 int QoreSocketObject::shutdownSSL(ExceptionSink* xsink) {
     return qore_socket_object_exec_shutdown_ssl(this, xsink);
 }
@@ -6177,12 +6181,6 @@ int QoreSocketObject::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold
     return 0;
 }
 
-#ifdef DARWIN
-void QoreSocketObject::setPollNotifyFd(int fd) {
-    qore_socket_private::get(*priv->socket)->poll_notify_fd.store(fd, std::memory_order_release);
-}
-#endif
-
 int QoreSocketObject::getSocket() {
     return priv->socket->getSocket();
 }
@@ -6210,6 +6208,14 @@ void QoreSocketObject::dbgCloseAtNextSslIo() {
             fprintf(stderr, "dbgCloseAtNextSslIo(): cannot start the closing thread: %s\n", e.what());
         }
     });
+}
+
+void QoreSocketObject::dbgResetOnClose() {
+    qore_socket_private::get(*priv->socket)->dbg_abortive_close.store(true, std::memory_order_release);
+}
+
+void QoreSocketObject::dbgForceSslErrorSslAtNextWrite() {
+    qore_socket_private::get(*priv->socket)->dbg_force_ssl_error_ssl.store(true, std::memory_order_release);
 }
 
 QoreHashNode* QoreSocketObject::dbgGetStreamRecordCounts(int64_t session_id, ExceptionSink* xsink) {

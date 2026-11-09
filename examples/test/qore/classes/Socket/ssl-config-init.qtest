@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - OpenSSL config loading and a native driver linked to libqore (deployment target, rpath)
 
 /** ssl-config-init.qtest
 

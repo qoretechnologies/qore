@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
 
 %modern
 
@@ -11,12 +12,17 @@
 
 %exec-class ProgramDeleteRunningTest
 
-#! A Program deleted while the current thread runs its code (issue #5538)
+#! A Program deleted while the current thread runs its code (issue #5538) or holds its parse lock
 /** A Program deleted while another thread runs its code is kept until that thread has left the code: the deleting
     thread waits for it.  The current thread cannot wait for itself, and its deletion cleared the Program at once, so
     the code that it ran then used the cleared Program and crashed when it returned.  The Program is now kept until
     the current thread has left its code too, and is cleared then: the child's global object is destroyed after the
     last call into the child returns and before the caller continues.
+
+    The same holds for a Program deleted by code that its own parse commit runs (a constant initializer): the thread
+    holds the Program's parse lock, and the deletion waited for the parse lock to be released, which the thread could
+    not do, so it deadlocked.  The Program is now kept until the thread has released the parse lock, and is cleared
+    then.
 
     Each script runs in a separate process, in each execution mode and compiled ahead of time, as a crash is the
     failure.
@@ -38,6 +44,27 @@ our *Program child = new Program(PO_NEW_STYLE);
 child.parse(ReadOnlyFile::readTextFile(get_script_dir() + \"/child.q\"), \"child\");
 # creates the child's global object
 child.run();
+";
+
+        #! The child's constant object, whose destructor shows when the child is cleared, for the parse scripts
+        const ChildConst = "class D {
+    destructor() {
+        printf(\"child data destroyed\\n\");
+    }
+}
+const Data = new D();
+";
+
+        #! The start of each parse script: the child gets a function of the parent that deletes it
+        const ParseParentStart = "%modern
+our *Program child = new Program(PO_NEW_STYLE);
+int sub killit() {
+    printf(\"deleting child\\n\");
+    delete child;
+    printf(\"deleted: %y\\n\", exists child);
+    return 1;
+}
+child.importFunction(\"killit\");
 ";
 
         #! The deleting class of the parent
@@ -189,6 +216,35 @@ printf(\"done\\n\");
                 "output": ("deleting child", "deleted: False", "run returns", "background returns",
                     "child data destroyed", "run: 5", "done"),
             },
+            # the parse commit of the child runs a constant initializer, which deletes the child through the parent:
+            # the thread holds the child's parse lock and cannot wait for itself to release it, so the child is kept
+            # until the parse has finished and is cleared then
+            "parse": {
+                "child": ChildConst + "const X = killit();\nint sub get() { return X; }\n",
+                "parent": ParseParentStart + "try {
+    child.parse(ReadOnlyFile::readTextFile(get_script_dir() + \"/child.q\"), \"child\");
+    printf(\"parsed\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s: %s\\n\", ex.err, ex.desc);
+}
+printf(\"done: %y\\n\", exists child);
+",
+                "output": ("deleting child", "deleted: False", "child data destroyed", "parsed", "done: False"),
+            },
+            # the same with the commit separate from the parse
+            "parse-commit": {
+                "child": ChildConst + "const X = killit();\nint sub get() { return X; }\n",
+                "parent": ParseParentStart + "try {
+    child.parsePending(ReadOnlyFile::readTextFile(get_script_dir() + \"/child.q\"), \"child\");
+    child.parseCommit();
+    printf(\"parsed\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s: %s\\n\", ex.err, ex.desc);
+}
+printf(\"done: %y\\n\", exists child);
+",
+                "output": ("deleting child", "deleted: False", "child data destroyed", "parsed", "done: False"),
+            },
         };
     }
 
@@ -212,7 +268,7 @@ printf(\"done\\n\");
         }
 
         foreach hash<auto> i in (Scripts.pairIterator()) {
-            addTestCase("a Program deleted while the current thread runs its code: " + i.key, \testScript(),
+            addTestCase("a Program deleted while the current thread runs its code or parses it: " + i.key, \testScript(),
                 (i.key, i.value.child, i.value.parent, i.value.output));
         }
         set_return_value(main());

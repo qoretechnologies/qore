@@ -85,6 +85,21 @@ public:
     */
     DLLEXPORT virtual void complete(ExceptionSink* xsink) {}
 
+    //! Called on the I/O thread when the operation fails with an exception argument
+    /** The default implementation discards the argument and calls executeError().  It is declared after the other
+        virtual methods, so that adding it did not change the virtual table offsets of the methods declared before it
+
+        @param err error string
+        @param desc error description
+        @param arg the exception argument; the action takes ownership of the reference
+        @param xsink exception sink
+    */
+    DLLEXPORT virtual void executeErrorArg(const char* err, const char* desc, QoreValue arg,
+            ExceptionSink* xsink) {
+        arg.discard(xsink);
+        executeError(err, desc, xsink);
+    }
+
     //! Sets the HTTP client event sink of the request that this action completes
     /** The sink reports the protocol events of one request to the event queue configured on the
         HTTPClient object that issued it.  It is attached to the action because the action has exactly
@@ -159,6 +174,11 @@ public:
     DLLEXPORT void executeError(const char* err, const char* desc,
             ExceptionSink* xsink) override {
         promise->setError(err, desc, QoreValue(), xsink);
+    }
+
+    DLLEXPORT void executeErrorArg(const char* err, const char* desc, QoreValue arg,
+            ExceptionSink* xsink) override {
+        promise->setError(err, desc, arg, xsink);
     }
 
     DLLEXPORT void cleanup(ExceptionSink* xsink) override {
@@ -241,6 +261,18 @@ public:
             ExceptionSink* xsink) override {
         for (auto* action : actions) {
             action->executeError(err, desc, xsink);
+        }
+    }
+
+    DLLEXPORT void executeErrorArg(const char* err, const char* desc, QoreValue arg,
+            ExceptionSink* xsink) override {
+        if (actions.empty()) {
+            arg.discard(xsink);
+            return;
+        }
+        for (size_t i = 0; i < actions.size(); ++i) {
+            // all but the last get a new reference; the last takes this one
+            actions[i]->executeErrorArg(err, desc, i < actions.size() - 1 ? arg.refSelf() : arg, xsink);
         }
     }
 

@@ -341,7 +341,7 @@ softstring MyNamespace::MyClass::myMethod(softint i) {
     A bare name in a method then refers to the first of: a local variable of the method (or of a closure in it), a
     member, constant, static variable or method of the class, a top-level local variable of the program (which has
     global scope, see @ref threading_and_variables), and a global variable, constant or function.
-    Class members, class constants, and static class variables can only be declared in an in-line class definition (the first example above). If a class has at least one public member declared (or inherits a class with at least one public member declared), then only those members declared as public can be accessed from outside the class, and from within the class only members explicitly declared can be accessed as well (unless the class also defines a memberGate() method). In this way typographical errors in member names can be caught (at parse time if types are declared).\n\n
+    Class members, class constants, and static class variables can only be declared in an in-line class definition (the first example above). If a class has a public member declaration (a <tt>public</tt> block, even an empty one or one that declares only constants or static class variables), or inherits a class with one, then only those members declared as public can be accessed from outside the class, and from within the class only members explicitly declared can be accessed as well (unless the class also defines a memberGate() method). In this way typographical errors in member names can be caught (at parse time if types are declared).\n\n
     In a class hierarchy, base class constructor methods can be explicitly specified using a special syntax unique to subclass constructor methods. Please see @ref inheritance for more information.\n\n
     It's possible to write purely object-oriented scripts/programs in %Qore by defining an application class and using the \c "-x" or \c "--exec-class" command-line arguments to tell %Qore to instantiate the class instead of doing normal top-level execution (in fact, the \c "--exec-class" argument disallows the use of top-level statements entirely). For more information, please see @ref command_line_processing and @ref parse_directives.
 
@@ -559,10 +559,37 @@ class Test {
 
     @note Static class variables cannot have the same name as class constants.
 
+    @par Static Class Variables Shared by Programs
+    The static class variables of a public class are shared by the @ref Qore::Program "Program" objects that inherit
+    the class.  Their values are released, and the destructors of the objects they hold run, when the program that
+    defines the class releases them, when its data is cleared at exit or when it is deleted, even if other programs
+    still share them: the code of the class cannot run once its program has been deleted, and reading or assigning
+    the variables from another program afterwards raises a \c PROGRAM-ERROR exception, as calling the methods of the
+    class does.  Code of the program that defines the class (a destructor run while the values are released, for
+    example) sees \c NOTHING in the variables whose values have been released.  A program that inherits the class
+    from another program, and outlives the program that defines it, must therefore not use its static variables
+    afterwards.  If no program sharing the values is the one that defines the class, the last of them to release
+    them releases them.\n\n
+    A program created while a program's data is cleared (by such a destructor, for example) inherits that program's
+    public classes, but does not share the values of their static variables: it sees them until they are released,
+    and reading or assigning them afterwards raises a \c PROGRAM-ERROR exception.\n\n
+    A program stored in a static variable of a public class that it shares is released with the values, so it does
+    not keep itself alive:
+    @code{.py}
+public class D {
+    public {
+        static *Program p;
+    }
+}
+
+# the program shares D's static variables, and is deleted when this program is deleted
+D::p = new Program(PO_NEW_STYLE);
+    @endcode
+
     @section class_members Class Members
 
     @subsection public_members Public Member Declarations
-    If a class has at least one public member declared (or inherits a class with at least one public member declared), then only those members declared as public can be accessed from outside the class, and from within the class only members explicitly declared can be accessed as well (unless the class also defines a @ref memberGate_methods "memberGate() method"). In this way typographical errors in member names can be caught (at parse time if types are declared).
+    If a class has a public member declaration (a <tt>public</tt> block, even an empty one or one that declares only constants or static class variables), or inherits a class with one, then only those members declared as public can be accessed from outside the class, and from within the class only members explicitly declared can be accessed as well (unless the class also defines a @ref memberGate_methods "memberGate() method"). In this way typographical errors in member names can be caught (at parse time if types are declared).
 
     @subsection private_members Private Members
     Members declared <b><tt>private</tt></b> can only be accessed within the class hierarchy; trying to access private members form outside the class hierarchy will result in either a parse or runtime exception, depending on when the illegal access is caught.  This access modifier, when used without any modifiers, is equivalent to <tt><b>private:hierarchy</b></tt> and is functionally identical to C++'s \a protected access modifier.\n\n

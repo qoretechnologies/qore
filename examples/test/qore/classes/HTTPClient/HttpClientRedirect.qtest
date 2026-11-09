@@ -30,13 +30,13 @@
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires ../../../../../qlib/QUnit.qm
-%requires ../../../../../qlib/Util.qm
-%requires ../../../../../qlib/Mime.qm
-%requires ../../../../../qlib/Logger.qm
-%requires ../../../../../qlib/HttpServerUtil.qm
-%requires ../../../../../qlib/HttpServer.qm
-%requires ../../../../../qlib/AsyncSocketIo
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires AsyncSocketIo
 %requires ../../../TestCertificates.qm
 
 %exec-class HttpClientRedirectTest
@@ -92,6 +92,8 @@ class RedirectPeer inherits AbstractHttpRequestHandler {
         Counter block();
         #! Signaled when a request to a "/block" target arrives
         Queue blocked();
+        #! Notified when a request to a "/block" target arrives, so that a poll on the client thread wakes up for it
+        EventNotifier blocked_notifier();
     }
 
     private {
@@ -140,6 +142,7 @@ class RedirectPeer inherits AbstractHttpRequestHandler {
         }
         if (cx.raw_path =~ /^\/block/) {
             blocked.push(cx.raw_path);
+            blocked_notifier.notify();
             block.waitForZero();
         }
         # /chain/<n>: redirect n times
@@ -161,6 +164,138 @@ class RedirectPeer inherits AbstractHttpRequestHandler {
             return rv;
         }
         return makeResponse({"Content-Type": "text/plain"}, 200, binary(sprintf("%s %s", hdr.method, cx.raw_path)));
+    }
+}
+
+#! A plaintext HTTP/1.1 server that closes a connection whose first byte starts a TLS handshake
+/** Each connection serves requests until it is closed: \c /to-https is answered with a redirect to the same host and
+    port with the \c https scheme, and any other request with 404.  The request lines received are recorded.  A
+    connection that starts with a TLS record (\c 0x16) is closed at once, so a TLS handshake fails immediately instead
+    of waiting for a timeout, as with a plaintext server that waits for the rest of a request.
+*/
+class TlsResettingPeer {
+    public {
+        const Timeout = 30s;
+    }
+
+    private {
+        Socket listener();
+        int port;
+        #! the request lines received on plaintext connections
+        list<string> requests = ();
+        #! the number of connections that started a TLS handshake
+        int tls_handshakes = 0;
+        #! the open connections, closed by stop()
+        hash<string, Socket> conns;
+        int next_id = 0;
+        bool stopped;
+        Mutex m();
+        Counter running(1);
+    }
+
+    constructor() {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background serve();
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    list<string> getRequests() {
+        AutoLock al(m);
+        return requests;
+    }
+
+    int getTlsHandshakes() {
+        AutoLock al(m);
+        return tls_handshakes;
+    }
+
+    clear() {
+        AutoLock al(m);
+        requests = ();
+        tls_handshakes = 0;
+    }
+
+    #! closes the listener and the open connections and waits for the server threads to end
+    stop() {
+        {
+            AutoLock al(m);
+            stopped = True;
+            map $1.close(), conns.iterator();
+        }
+        listener.close();
+        running.waitForZero();
+    }
+
+    private serve() {
+        on_exit running.dec();
+        while (True) {
+            Socket s;
+            try {
+                s = listener.accept();
+            } catch (hash<ExceptionInfo> ex) {
+                # the listener was closed
+                return;
+            }
+            string id;
+            {
+                AutoLock al(m);
+                if (stopped) {
+                    s.close();
+                    return;
+                }
+                id = string(++next_id);
+                conns{id} = s;
+                running.inc();
+            }
+            background handle(s, id);
+        }
+    }
+
+    private handle(Socket s, string id) {
+        on_exit {
+            {
+                AutoLock al(m);
+                remove conns{id};
+            }
+            s.close();
+            running.dec();
+        }
+        try {
+            binary first = s.recvBinary(1, Timeout);
+            if (first == <16>) {
+                # a TLS handshake record: the connection is closed at once
+                AutoLock al(m);
+                ++tls_handshakes;
+                return;
+            }
+            string head = first.toString();
+            while (True) {
+                while (head !~ /\r\n\r\n/) {
+                    head += s.recv(-1, Timeout);
+                }
+                int end = head.find("\r\n\r\n") + 4;
+                string req = head.substr(0, end);
+                head = head.substr(end);
+                string line = req.substr(0, req.find("\r\n"));
+                {
+                    AutoLock al(m);
+                    requests += line;
+                }
+                if (line =~ /^GET \/to-https /) {
+                    s.send(sprintf("HTTP/1.1 302 Found\r\nLocation: https://127.0.0.1:%d/https-target\r\n"
+                        "Content-Length: 0\r\n\r\n", port));
+                } else {
+                    s.send("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the connection was closed by the client or by stop()
+        }
     }
 }
 
@@ -700,13 +835,22 @@ public class HttpClientRedirectTest inherits QUnit::Test {
         HTTPClient hc({"url": url_a});
         AbstractPollOperation op = hc.startPollSendRecv("GET", "/to-block");
         *hash<SocketPollInfo> pi;
-        # drive the operation until the redirected request has been received
-        while (!peer_b.blocked.size()) {
+        # drive the operation until the redirected request has been received; the operation then waits for a
+        # response that the blocked handler does not send, so the poll also waits for the handler's notification, which
+        # the handler sends after it has queued the request: the loop ends only on the notification
+        while (True) {
             pi = op.continuePoll();
             assertTrue(exists pi);
-            Socket::poll((pi,), 20000);
+            list<hash<SocketPollInfo>> ready = Socket::poll((pi, <SocketPollInfo>{
+                "socket": peer_b.blocked_notifier,
+                "events": SOCK_POLLIN,
+            }), 20000);
+            if (select ready, $1.socket == peer_b.blocked_notifier) {
+                break;
+            }
         }
-        assertEq("/block", peer_b.blocked.get());
+        peer_b.blocked_notifier.acknowledge();
+        assertEq("/block", peer_b.blocked.get(20s));
         op.abort();
         assertFalse(op.goalReached(), "an aborted operation has not reached its goal");
         assertNothing(op.getOutput());
@@ -950,11 +1094,15 @@ public class HttpClientRedirectTest inherits QUnit::Test {
 
     schemeChangeTest() {
         # a redirect to https on the same host and port must use a new TLS connection, never the pooled plaintext
-        # connection that received the redirect; server A does not speak TLS, so the request fails
-        peer_a.setRedirect("/to-https", 302, sprintf("https://127.0.0.1:%d/https-target", port_a));
-        HTTPClient hc({"url": url_a, "connect_timeout": 10s, "timeout": 10s});
+        # connection that received the redirect; the server does not speak TLS and closes the connection of a TLS
+        # handshake at once, so the request fails without waiting for a timeout
+        TlsResettingPeer plain_peer();
+        on_exit plain_peer.stop();
+        HTTPClient hc({"url": sprintf("http://127.0.0.1:%d", plain_peer.getPort()), "connect_timeout": 10s,
+            "timeout": 10s});
+        on_exit hc.disconnect();
         foreach string api in (("sync", "async")) {
-            peer_a.clear();
+            plain_peer.clear();
             try {
                 if (api == "sync") {
                     hc.get("/to-https");
@@ -965,7 +1113,8 @@ public class HttpClientRedirectTest inherits QUnit::Test {
             } catch (hash<ExceptionInfo> ex) {
                 assertNeq("TEST-TIMEOUT", ex.err, api);
             }
-            assertEq(("/to-https",), (map $1.target, peer_a.getRequests()), api);
+            assertEq(("GET /to-https HTTP/1.1",), plain_peer.getRequests(), api);
+            assertEq(1, plain_peer.getTlsHandshakes(), api + ": the redirect was followed with a new TLS connection");
         }
 
         # a redirect from https to http must be followed with HTTP/1: the connection manager's protocol follows

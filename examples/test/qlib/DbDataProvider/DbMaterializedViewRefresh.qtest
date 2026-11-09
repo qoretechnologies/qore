@@ -27,11 +27,11 @@
 %enable-all-warnings
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/SqlUtil
-%requires ../../../../qlib/DbDataProvider
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires SqlUtil
+%requires DbDataProvider
 
 %prepend-module-path "${SCRIPT_DIR}/../SqlUtil"
 %requires ../SqlUtil/PgsqlTestIsolation.qm
@@ -192,9 +192,9 @@ class DbMaterializedViewRefreshTest inherits QUnit::Test {
             DataProviderActionCatalog::getAppActionEx(DbDataProvider::AppName, "refresh-materialized-view"), {}));
         assertEq(("materialized_view", "options"), keys mv.getResponseType().getFields());
         # an option of another database is refused
-        assertThrows("RUNTIME-TYPE-ERROR", "unsupported fields in value: \\[\"method\"\\]", \mv.doRequest(),
+        assertThrows("TYPE-VALUE-ERROR", "unsupported fields in value: \\[\"method\"\\]", \mv.doRequest(),
             ({"method": "fast"},));
-        assertThrows("RUNTIME-TYPE-ERROR", \mv.doRequest(), ({"concurrent": "sometimes"},));
+        assertThrows("TYPE-VALUE-ERROR", \mv.doRequest(), ({"concurrent": "sometimes"},));
     }
 
     readOnlyTest() {

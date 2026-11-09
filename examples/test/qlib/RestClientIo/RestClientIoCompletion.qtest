@@ -4,10 +4,10 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/RestClientIo.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/HttpServerAsyncIo
+%requires QUnit
+%requires RestClientIo
+%requires HttpServer
+%requires HttpServerAsyncIo
 %exec-class RestCompletionTest
 
 class CompletionObservable inherits HttpClientStreamingIo::SseObservable {

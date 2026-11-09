@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreReplSave.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+# QoreRepl is a separated module: its main .qm file is required by explicit path, which loads the whole module
+# directory (QoreRepl.qc and its other sources) like a bare-name %requires
+# qlib-requires-by-path: tests the load of a separated module by the path of its main .qm file
+%requires ../../../../qlib/QoreRepl/QoreRepl.qm
+
+%exec-class QoreReplSaveTest
+
+class QoreReplSaveTest inherits QUnit::Test {
+    constructor() : QUnit::Test("QoreRepl save/load", "1.0") {
+        addTestCase("unterminated expressions round trip", \testExpressions());
+        addTestCase("mixed statements and multiline blocks round trip", \testStatements());
+        addTestCase("empty and command-only sessions", \testEmpty());
+        addTestCase("save errors preserve session", \testErrors());
+        set_return_value(main());
+    }
+
+    private string path(string name) {
+        return sprintf("%s/qore-repl-save-%d-%s.q", (ENV.TMPDIR ?? "/tmp"), getpid(), name);
+    }
+
+    testExpressions() {
+        string filename = path("expressions");
+        on_exit {
+            unlink(filename);
+        }
+        QoreRepl::QoreRepl repl({"history_file": ""});
+        assertEq(42, repl.eval("40 + 2").value);
+        assertEq(3, repl.eval("1 + 2   ").value);
+        assertEq(7, repl.eval("3 + 4;").value);
+        assertFalse(exists repl.eval("/save " + filename).error);
+        assertEq("40 + 2;\n1 + 2;\n3 + 4;\n", ReadOnlyFile::readTextFile(filename));
+        QoreRepl::QoreRepl loaded({"history_file": ""});
+        assertEq("Loaded: " + filename, loaded.eval("/load " + filename).value);
+        assertEq(42, loaded.eval("6 * 7").value);
+    }
+
+    testStatements() {
+        string filename = path("mixed é");
+        on_exit {
+            unlink(filename);
+        }
+        QoreRepl::QoreRepl repl({"history_file": ""});
+        assertFalse(exists repl.eval("our int saved = 40").error);
+        assertFalse(exists repl.eval("saved += 2").error);
+        assertFalse(exists repl.eval("our string label = \"é;{}\";").error);
+        assertFalse(exists repl.eval("sub savedValue() {"));
+        assertFalse(exists repl.eval("    return saved;"));
+        assertFalse(exists repl.eval("}").error);
+        assertFalse(exists repl.eval("class SavedClass {}   ").error);
+        assertFalse(exists repl.eval("if (True) { saved += 1; }").error);
+        assertFalse(exists repl.eval("/vars").error);
+        assertFalse(exists repl.eval("/save " + filename).error);
+        string saved = ReadOnlyFile::readTextFile(filename);
+        assertEq("our int saved = 40;\nsaved += 2;\nour string label = \"é;{}\";\n"
+            + "sub savedValue() {\n    return saved;\n}\nclass SavedClass {}   \n"
+            + "if (True) { saved += 1; }\n", saved);
+        QoreRepl::QoreRepl loaded({"history_file": ""});
+        assertEq("Loaded: " + filename, loaded.eval("/load " + filename).value);
+        assertEq(43, loaded.eval("savedValue()").value);
+        assertEq("é;{}", loaded.eval("label").value);
+        assertFalse(exists loaded.eval("new SavedClass()").error);
+        # Saving again must not mutate history or duplicate terminators.
+        assertFalse(exists repl.eval("/save " + filename).error);
+        assertEq(saved, ReadOnlyFile::readTextFile(filename));
+    }
+
+    testEmpty() {
+        string filename = path("empty");
+        on_exit {
+            unlink(filename);
+        }
+        QoreRepl::QoreRepl repl({"history_file": ""});
+        assertFalse(exists repl.eval("/save " + filename).error);
+        assertEq("", ReadOnlyFile::readTextFile(filename));
+        assertFalse(exists repl.eval("/help").error);
+        assertFalse(exists repl.eval("/save " + filename).error);
+        assertEq("", ReadOnlyFile::readTextFile(filename));
+        assertFalse(exists repl.eval("  ").error);
+        assertFalse(exists repl.eval("/save " + filename).error);
+        assertEq("  \n", ReadOnlyFile::readTextFile(filename));
+        QoreRepl::QoreRepl loaded({"history_file": ""});
+        assertEq("Loaded: " + filename, loaded.eval("/load " + filename).value);
+    }
+
+    testErrors() {
+        string filename = path("errors");
+        on_exit {
+            unlink(filename);
+        }
+        QoreRepl::QoreRepl repl({"history_file": ""});
+        assertFalse(exists repl.eval("our int saved = 42").error);
+        assertFalse(exists repl.eval("/save " + filename).error);
+        assertTrue(exists repl.eval("/save " + filename + "/missing.q").error);
+        assertEq("REPL-ERROR", repl.eval("/save").error.err);
+        assertEq(42, repl.eval("saved").value);
+        assertFalse(exists repl.eval("/save " + filename).error);
+        QoreRepl::QoreRepl loaded({"history_file": ""});
+        assertEq("Loaded: " + filename, loaded.eval("/load " + filename).value);
+        assertEq(42, loaded.eval("saved").value);
+    }
+}

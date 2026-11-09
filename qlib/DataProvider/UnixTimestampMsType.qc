@@ -65,7 +65,7 @@ public class UnixTimestampMsType inherits UnixTimestampType {
 
         @return the value to be assigned; can be converted by the type
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+        @throw TYPE-VALUE-ERROR value cannot be assigned to type
     */
     auto acceptsValue(auto value) {
         switch (value.typeCode()) {
@@ -76,7 +76,7 @@ public class UnixTimestampMsType inherits UnixTimestampType {
                 return value;
 
             default:
-                throw "RUNTIME-TYPE-ERROR", sprintf("Type %s does not accept values of type %y (%y)", getName(),
+                throw "TYPE-VALUE-ERROR", sprintf("Type %s does not accept values of type %y (%y)", getName(),
                     value.fullType(), value);
         }
     }

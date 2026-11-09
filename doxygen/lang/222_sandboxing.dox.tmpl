@@ -125,8 +125,50 @@ Program p(opts);
       was given off the network or the filesystem, give it a @ref Qore::SandboxManager "SandboxManager" with a
       default deny policy (see @ref sandbox_net_rules and @ref sandbox_fs_policy); the other restrictions of the
       %Program apply to the module code that it calls (see @ref user_module_runtime_context)
+    - <b>Threads started by module code</b>: @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and the other
+      thread parse options are checked when the code of the %Program is parsed, so they do not guarantee that the
+      %Program cannot cause concurrent execution; see @ref sandbox_po_threads
 
     For these advanced use cases, use the @ref Qore::SandboxManager "SandboxManager" class.
+
+    @subsection sandbox_po_threads Thread Parse Options and Module Code
+
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" restricts the code of the %Program itself: its code cannot
+    use the @ref background "background" operator, the @ref thread_exit "thread_exit" statement or the builtins of the
+    \c THREAD_CONTROL functional domain, which is checked when the code is parsed and, for a dynamic call such as
+    @ref Qore::call_function() "call_function()", when the call is made.  Module code that the %Program calls keeps its
+    own parse options, and it can start threads, including threads that run the %Program's own code:
+    for example, a module that calls back its caller from a thread of its own (a poller calling the methods of a
+    subclass, a server handler, a WebSocket event callback, a logger appender) runs a closure or a method of the
+    restricted %Program in another thread.  A Program with
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" can therefore cause concurrent execution of its code.  A user
+    module that the restricted %Program loads first inherits its restrictions and so cannot use
+    @ref background "background" (see @ref module_parse_option_masks); module threads come from modules that the host
+    loaded already or that are loaded with a parse option mask, which the host gives the %Program as capabilities.
+
+    What the %Program's restrictions do guarantee when module code is involved:
+    - the restrictions of the %Program apply to the builtins that module code calls for it, as described in
+      @ref user_module_runtime_context; a builtin that runs code asynchronously, such as
+      @ref Qore::call_async() "call_async()", @ref Qore::parallel_map() "parallel_map()" or
+      @ref Qore::AsyncIoController::addTimer() "AsyncIoController::addTimer()", refuses to run the code of a caller that
+      may not control threads (see @ref MODULE_OWNED), but the @ref background "background" operator in module code is
+      checked against the module's own parse options only, and module code can always run its own closures, which can
+      call the caller's code
+    - a thread that module code starts on behalf of a sandboxed caller inherits the caller's
+      @ref Qore::SandboxManager "SandboxManager": its filesystem and network policy, its interrupts, its cancellation
+      scope and its thread limit apply to the thread as they apply to the caller (see @ref sandbox_resources)
+    - @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()" bounds the number of threads started
+      on behalf of sandboxed code, through module code or otherwise; a @ref Qore::SandboxManager "SandboxManager" has no
+      thread limit unless one is set
+    - the threads of a @ref Qore::Thread::ThreadPool "ThreadPool" count against the thread limit of the sandbox of the
+      %Program that created the pool (see @ref sandbox_resources), which
+      @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" does not prevent; a pool created by a %Program without a
+      sandbox manager is not limited, and runs each task under the sandbox of the code that submitted it
+
+    To bound the threads of restricted code, give its %Program a @ref Qore::SandboxManager "SandboxManager" with a
+    thread limit.  A run-time refusal of the @ref background "background" operator in module code for restricted
+    callers would break the modules that run their callers' code on their own threads, while the sandbox already
+    governs those threads.
 
     @section sandbox_manager SandboxManager Class
 
@@ -202,6 +244,77 @@ authenticate();
     Native modules invoke callbacks with ResolvedCallReferenceNode::invoke(), or apply QoreSandboxProvenanceHelper
     around direct native implementations. Foreign runtime I/O that does not use Qore's policy checks remains outside
     this mechanism; provenance is execution context, not data taint tracking.
+
+    @subsection sandbox_module_init Module Initialization
+
+    In this section, code that is not trusted is code that a sandbox governs, and code whose parse options restrict a
+    functional domain.
+
+    The directories of library code are the directories of the process-wide module path when the library is
+    initialized: those of \c QORE_MODULE_DIR and the standard module directories (or those that the embedding
+    application sets before it initializes the library).  A directory added to the process-wide module path later,
+    with an unquoted \c %append-module-path directive or by the embedding application, is searched for modules but
+    does not hold library code: an application whose modules must be library code adds their directories before it
+    initializes the library, in \c QORE_MODULE_DIR or with the embedding API (Qorus, for example, adds
+    \c $OMQ_DIR/qlib and \c $OMQ_DIR/user/modules with \c ModuleManager::addModuleDir() before it initializes the
+    library; its own unquoted directives only repeat them as a fallback).  Code that is not trusted, and a %Program that is sandboxed
+    or restricted when it is parsed, cannot extend the process-wide module path: an unquoted
+    \c %append-module-path directive is a parse error there (a quoted path adds a directory to the %Program's own
+    module path), and the embedding API that adds directories ignores such a caller.  The source of a library module
+    can, whoever loads it first: whether such a directive is allowed depends on the source being parsed, not on the
+    code that loads it.
+
+    A module found in a directory of library code is library code.  It is loaded from the file that was found there:
+    a load by path through a link to a library module loads the library module's file.  Its initialization (the
+    static initializers of its classes, its global variable and constant initializers and its \c init closure) runs
+    with no sandbox provenance, also when code that is not trusted loads it first: the sandbox of the loading code
+    does not govern it, its interrupts and policy do not apply to it, and what it creates (objects, callbacks,
+    registrations in the module's own registries, threads it starts) belongs to no sandbox, so a later caller that
+    uses it is not affected by the sandbox of the code that happened to load the module.  Every later call into the
+    module is governed by its caller, as any other call.  The restrictions of the loading %Program's parse options
+    still apply to the module.  The time limits of the loading call still count the time that the initialization
+    takes.
+
+    Library code that code that is not trusted loads is not shaped by that code:
+    - its source is parsed with the parse defines that the loading %Program's host set (with
+      @ref Qore::Program::define() "Program::define()" by trusted code, or by the embedding application), but not
+      with those that the loading code defined in its source or set itself; a %Program that code that is not trusted
+      creates has no host, so no define of it (its parse option defines included) shapes library code, and a child
+      %Program keeps the record of the defines that its parent's host did not set;
+    - its dependencies (\c %requires), its optional dependencies (\c %try-module) and its child modules
+      (\c %try-child-module) are resolved through its own module paths and the process-wide module path, not through
+      the module paths that the loading %Program added, and never to a module that code that is not trusted chose
+      (see below), also when that code loaded it before: an optional dependency or a child module is then left out,
+      and a dependency is missing; the same holds for a module that library code loads at run time into its own
+      %Program, whoever calls it;
+    - a module that is not library code and that its initialization loads, by path or otherwise, is governed by the
+      sandbox of the loading code, and is subject to the same limits as a module that the loading code loads itself
+      (see below);
+    - code that is not trusted cannot mark imported classes and hashdecls for re-export to the modules that a
+      %Program loads (the \c reexport argument of @ref Qore::Program::importClass() "Program::importClass()" and
+      @ref Qore::Program::importHashDecl() "Program::importHashDecl()").
+
+    A module that a caller loads by path, or finds through a module path that a %Program added with
+    \c %prepend-module-path or \c %append-module-path, is not library code: it is initialized under the sandbox of
+    the code that loads it, and a source module's %Program keeps that sandbox.  Neither is a library module that code
+    that is not trusted loads into a %Program container of its own (for example with
+    @ref Qore::Program::loadApplyToPrivateUserModule() "Program::loadApplyToPrivateUserModule()"): it is parsed and
+    initialized with the container's code and parse defines, under the sandbox of the code that loads it.
+
+    Module names are process-wide: once a module is loaded, every later request for its name gets that module.  So
+    that code that is not trusted cannot replace a library module, or hand other code a module of its own choosing,
+    its loads are limited:
+    - it cannot load a module from outside the directories of library code (by path, through a module path that its
+      %Program added, or from source) under the name of a module in a directory of library code; the load raises
+      \c LOAD-MODULE-ERROR, naming the module, the path it was loaded from and the library module that it would
+      replace
+    - it cannot load a module into a %Program container of its own that is not private (for example with
+      @ref Qore::Program::loadApplyToUserModule() "Program::loadApplyToUserModule()") under the name of a module in a
+      directory of library code; the load raises \c LOAD-MODULE-ERROR, naming the module and the library module
+    - a module that it loaded from outside the directories of library code under any other name is given only to code
+      that is not trusted and that has the same sandbox, or, for code with no sandbox, that runs in the same %Program:
+      a later request for its name from other code, library code included, and a reload raise \c LOAD-MODULE-ERROR,
+      naming the module and its file
 
     @section sandbox_filesystem Filesystem Security
 
@@ -571,7 +684,35 @@ sm.setMaxStackSize(1024 * 1024);
     implemented in %Qore (\c continuePoll() and \c onComplete()), so an asynchronous HTTP request follows a redirect
     or retries a connection only to an address that the sandbox allows.
     @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()" limits the number of such threads
-    running at once; starting another one raises \c THREAD-CREATION-FAILURE.
+    running at once; starting another one raises \c THREAD-CREATION-FAILURE in the code that starts it, which is module
+    code when module code starts the thread for the sandboxed code.  A thread stops counting when its work ends.
+    This applies also to a %Program with @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL", whose code cannot
+    start threads itself but can cause threads through module code (see @ref sandbox_po_threads).
+
+    The threads of a @ref Qore::Thread::ThreadPool "ThreadPool" (its own thread, which assigns tasks to workers, and
+    its workers) count against the thread limit of the sandbox of the %Program that created the pool, if that
+    %Program has a @ref Qore::SandboxManager "SandboxManager"; the pool keeps that sandbox if the %Program is given
+    another one later.  A user module's %Program gets the sandbox of the %Program that loads the module first, so a
+    pool that the code of a module first loaded by sandboxed code creates is counted as well.
+    - creating a pool when the sandbox has no free thread slot raises \c THREAD-CREATION-FAILURE in the code that
+      creates it
+    - a pool does not start more workers than the sandbox has free slots: its queued tasks then wait until one of its
+      busy workers becomes free, another thread of the sandbox ends or the limit is raised, and a task submitted to
+      a pool that has no worker and cannot start one is refused with \c THREAD-CREATION-FAILURE in the code that submits it
+    - an idle worker keeps its slot until the pool releases it (see \c max_idle_threads and \c idle_release_timeout
+      in @ref Qore::Thread::ThreadPool::constructor() "ThreadPool::constructor()"); a worker stops counting when it
+      leaves the pool, and the pool's own thread when the pool has stopped, before it runs the cancellation code of
+      the tasks still queued
+
+    The threads of a pool created by a %Program without a sandbox manager are not counted, as they serve every
+    caller; each task runs under the sandbox of the code that submitted it.
+
+    A @ref Qore::SandboxManager "SandboxManager" has no thread limit by default, as no single limit suits every host
+    and a default limit would restrict every sandbox that a host creates for other purposes, such as a filesystem
+    policy.  Without a limit, sandboxed code is bounded only by the maximum number of threads of the process, which it
+    can then exhaust for the host and for other sandboxes.  A host that runs untrusted code should therefore always set
+    a thread limit for its sandbox; the presets @ref Qore::SandboxManager::createLockdown() "createLockdown()" and
+    @ref Qore::SandboxManager::createWebSafe() "createWebSafe()" set one.
 
     @subsection sandbox_resource_limits Wall Time Limit
 
@@ -773,7 +914,9 @@ sm.clearInterrupt();
     When interrupted, a \c PROGRAM-INTERRUPTED exception is raised.
     For external process functions (system(), backquote(), and the backquote operator), a SandboxManager also
     starts the child in a new process group so that requestInterrupt() can terminate the entire process group.
-    Without a SandboxManager, children remain in the current process group and receive terminal signals (for example,
+    Every process in the group is killed with \c SIGKILL when the call is interrupted, including a process that the
+    command was starting at that moment; a process that the command moves to another process group or session is
+    not.  Without a SandboxManager, children remain in the current process group and receive terminal signals (for example,
     Ctrl-C) along with the parent.
 
     @subsection sandbox_interrupt_polling Waking Blocked Threads
@@ -884,7 +1027,9 @@ hash<auto> net_config = sm.getNetworkConfiguration();
        - Blocks access to internal services
 
     3. <b>Limit threads and stop runaway code</b>
-       - Thread limits prevent fork bombs
+       - Thread limits prevent fork bombs; a SandboxManager has no thread limit unless one is set
+       - Set a thread limit also for Programs with @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL", as module
+         code that they call can start threads for them (see @ref sandbox_po_threads)
        - @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()" stops code that runs too long
 
     4. <b>Use deny-by-default policies</b>
@@ -908,7 +1053,9 @@ hash<auto> net_config = sm.getNetworkConfiguration();
 
     Before deploying sandboxed code execution:
 
-    - [ ] Define the maximum number of threads
+    - [ ] Define the maximum number of threads with
+      @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()", also for Programs with
+      @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" (there is no limit by default)
     - [ ] Block private networks if any network access is allowed
     - [ ] Use deny-by-default for filesystem access
     - [ ] Implement timeout monitoring with interrupt handling

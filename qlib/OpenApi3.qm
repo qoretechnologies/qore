@@ -3325,7 +3325,7 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
         @param type the original wire type
         @return the value used to validate the wire contract
         @throw SCHEMA-VALIDATION-ERROR a named file has an empty filename
-        @throw RUNTIME-TYPE-ERROR the file metadata is invalid
+        @throw TYPE-VALUE-ERROR the file metadata is invalid
         @throw BASE64-PARSE-ERROR the encoded file content is invalid
     */
     static auto getMultipartWireValue(string name, auto value, AbstractDataProviderType type) {
@@ -4904,7 +4904,7 @@ public class OpenApi3HashDataType inherits HashDataType {
         @param input_value the value to validate
         @return the validated/converted value
 
-        @throw RUNTIME-TYPE-ERROR if the value does not match the schema
+        @throw TYPE-VALUE-ERROR if the value does not match the schema
     */
     auto acceptsValue(auto input_value) {
         # a request type has no field for a read-only property, which a request cannot give a value for, and a
@@ -4914,7 +4914,7 @@ public class OpenApi3HashDataType inherits HashDataType {
                 foreach hash<auto> i in (response_fields) {
                     string name = i.field.getName();
                     if (input_value.hasKey(name)) {
-                        throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: property %y is read-only and cannot be "
+                        throw "TYPE-VALUE-ERROR", sprintf("Type %y: property %y is read-only and cannot be "
                             "included in a request", getName(), name);
                     }
                 }
@@ -4922,7 +4922,7 @@ public class OpenApi3HashDataType inherits HashDataType {
                 foreach string name in (keys input_value) {
                     *SchemaObject property = cast<*SchemaObject>(schema.properties{name});
                     if (property && property.writeOnly) {
-                        throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: property %y is write-only and cannot be "
+                        throw "TYPE-VALUE-ERROR", sprintf("Type %y: property %y is write-only and cannot be "
                             "included in a response", getName(), name);
                     }
                 }
@@ -4944,7 +4944,7 @@ public class OpenApi3HashDataType inherits HashDataType {
         if (schema.discriminatorMapping && !schema.oneOf && !schema.anyOf) {
             if (value{schema.discriminator}.typeCode() != NT_STRING
                     || !schema.discriminatorMapping.hasKey(value{schema.discriminator})) {
-                throw "RUNTIME-TYPE-ERROR", sprintf("expected a mapped string discriminator %y",
+                throw "TYPE-VALUE-ERROR", sprintf("expected a mapped string discriminator %y",
                     schema.discriminator);
             }
             schema.check(True, for_request, "/", "POST", getName(), \value);
@@ -4960,11 +4960,11 @@ public class OpenApi3HashDataType inherits HashDataType {
                 }
             }
             if (matches == 0) {
-                throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: value does not match any of the oneOf schemas",
+                throw "TYPE-VALUE-ERROR", sprintf("Type %y: value does not match any of the oneOf schemas",
                     getName());
             }
             if (matches > 1) {
-                throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: value matches multiple oneOf schemas (%y); "
+                throw "TYPE-VALUE-ERROR", sprintf("Type %y: value matches multiple oneOf schemas (%y); "
                     "must match exactly one", getName(), matched_schemas);
             }
         }
@@ -4979,7 +4979,7 @@ public class OpenApi3HashDataType inherits HashDataType {
                 }
             }
             if (!matched) {
-                throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: value does not match any of the anyOf schemas",
+                throw "TYPE-VALUE-ERROR", sprintf("Type %y: value does not match any of the anyOf schemas",
                     getName());
             }
         }
@@ -4987,7 +4987,7 @@ public class OpenApi3HashDataType inherits HashDataType {
         # Check not - value must NOT match the schema
         if (schema.notSchema) {
             if (matchesSchema(schema.notSchema, value)) {
-                throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: value must not match the 'not' schema", getName());
+                throw "TYPE-VALUE-ERROR", sprintf("Type %y: value must not match the 'not' schema", getName());
             }
         }
 
@@ -4996,7 +4996,7 @@ public class OpenApi3HashDataType inherits HashDataType {
             foreach string key in (keys value) {
                 *SchemaObject prop = schema.properties{key};
                 if (prop && prop.readOnly) {
-                    throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: property %y is read-only and cannot be "
+                    throw "TYPE-VALUE-ERROR", sprintf("Type %y: property %y is read-only and cannot be "
                         "included in a request", getName(), key);
                 }
             }
@@ -5007,7 +5007,7 @@ public class OpenApi3HashDataType inherits HashDataType {
             foreach string key in (keys value) {
                 *SchemaObject prop = schema.properties{key};
                 if (prop && prop.writeOnly) {
-                    throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: property %y is write-only and cannot be "
+                    throw "TYPE-VALUE-ERROR", sprintf("Type %y: property %y is write-only and cannot be "
                         "included in a response", getName(), key);
                 }
             }
@@ -5164,7 +5164,7 @@ public class OpenApi3DiscriminatorDataType inherits QoreUnionDataType {
     #! Validates a value against the branch selected by its discriminator
     /** @param value the object to validate
         @return the validated object
-        @throw RUNTIME-TYPE-ERROR the discriminator is missing, invalid, or unknown, or the branch rejects the object
+        @throw TYPE-VALUE-ERROR the discriminator is missing, invalid, or unknown, or the branch rejects the object
         @throw MISSING-VALUE-ERROR a required field of the selected branch is absent
     */
     auto acceptsValue(auto value) {
@@ -5172,11 +5172,11 @@ public class OpenApi3DiscriminatorDataType inherits QoreUnionDataType {
             return;
         }
         if (value.typeCode() != NT_HASH || value{discriminator}.typeCode() != NT_STRING) {
-            throw "RUNTIME-TYPE-ERROR", sprintf("expected an object with string discriminator %y", discriminator);
+            throw "TYPE-VALUE-ERROR", sprintf("expected an object with string discriminator %y", discriminator);
         }
         *AbstractDataProviderType branch = alternatives{value{discriminator}};
         if (!branch) {
-            throw "RUNTIME-TYPE-ERROR", sprintf("unknown value for discriminator %y; expected one of %y",
+            throw "TYPE-VALUE-ERROR", sprintf("unknown value for discriminator %y; expected one of %y",
                 discriminator, keys alternatives);
         }
         return branch.acceptsValue(value);
@@ -5185,11 +5185,13 @@ public class OpenApi3DiscriminatorDataType inherits QoreUnionDataType {
     #! Retains branch identities when presentation replaces the types
     /** @param types replacement branches in the original order
         @return a type with the same discriminator mapping
-        @throw RUNTIME-TYPE-ERROR the replacement branch count differs
+        @throw DISCRIMINATOR-ALTERNATIVES-ERROR the number of replacement branches differs from the number of
+        alternatives, which is an error in the calling code, not a refused value
     */
     QoreUnionDataType copyWithUnionTypes(list<AbstractDataProviderType> types) {
         if (types.size() != alternatives.size()) {
-            throw "RUNTIME-TYPE-ERROR", "cannot change the number of discriminator alternatives";
+            throw "DISCRIMINATOR-ALTERNATIVES-ERROR", sprintf("cannot change the number of discriminator "
+                "alternatives from %d to %d", alternatives.size(), types.size());
         }
         hash<string, AbstractDataProviderType> replaced = {};
         int i = 0;
@@ -5261,13 +5263,19 @@ public class OpenApi3TupleDataType inherits ListDataType {
     #! Validates array positions without coercing an image into a timestamp or vice versa
     /** @param value positional array
         @return validated array
-        @throw RUNTIME-TYPE-ERROR the value is not an array accepted by the declared positions
+        @throw TYPE-VALUE-ERROR the value is not an array accepted by the declared positions
+        @throw SCHEMA-DOCUMENT-DESTROYED the document of a schema that the check needs has been destroyed
     */
     auto acceptsValue(auto value) {
         if (!exists value && isOrNothingType()) { return value; }
-        if (value.typeCode() != NT_LIST) { throw "RUNTIME-TYPE-ERROR", "expected a positional array"; }
-        try { schema.check(False, for_request, "/", "POST", schema.name, \value); }
-        catch (hash<ExceptionInfo> ex) { rethrow "RUNTIME-TYPE-ERROR", ex.desc; }
+        if (value.typeCode() != NT_LIST) { throw "TYPE-VALUE-ERROR", "expected a positional array"; }
+        try {
+            schema.check(False, for_request, "/", "POST", schema.name, \value);
+        } catch (hash<ExceptionInfo> ex) {
+            # a language error and SCHEMA-DOCUMENT-DESTROYED keep their code; see
+            # AbstractDataProviderType::getValueErrorCode()
+            rethrow AbstractDataProviderType::getValueErrorCode(ex.err), ex.desc, ex.arg;
+        }
         return value;
     }
 }
@@ -5367,7 +5375,7 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
     #! Returns the value if the value can be assigned according to the OpenAPI composition keyword
     /** @param value value to validate
         @return the value accepted by the first matching alternative
-        @throw RUNTIME-TYPE-ERROR no alternative accepts \a value, or \c oneOf has more than one match
+        @throw TYPE-VALUE-ERROR no alternative accepts \a value, or \c oneOf has more than one match
     */
     auto acceptsValue(auto value) {
         if (!exists value && isOrNothingType()) {
@@ -5393,6 +5401,9 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
                     have_first = True;
                 }
             } catch (hash<ExceptionInfo> ex) {
+                if (AbstractDataProviderType::isAlternativeCheckFailure(ex.err)) {
+                    rethrow;
+                }
                 last_exception = ex;
             }
         }
@@ -5403,17 +5414,17 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
                 return first_value;
             }
             if (!matches) {
-                throw "RUNTIME-TYPE-ERROR", sprintf("value of type %y does not match any oneOf schema%s",
+                throw "TYPE-VALUE-ERROR", sprintf("value of type %y does not match any oneOf schema%s",
                     value_type, last_exception ? sprintf("; last error: %s", last_exception.desc) : "");
             }
-            throw "RUNTIME-TYPE-ERROR", sprintf("value of type %y matches multiple oneOf schemas; must match "
+            throw "TYPE-VALUE-ERROR", sprintf("value of type %y matches multiple oneOf schemas; must match "
                 "exactly one", value_type);
         }
 
         if (matches) {
             return first_value;
         }
-        throw "RUNTIME-TYPE-ERROR", sprintf("value of type %y does not match any anyOf schema%s", value_type,
+        throw "TYPE-VALUE-ERROR", sprintf("value of type %y does not match any anyOf schema%s", value_type,
             last_exception ? sprintf("; last error: %s", last_exception.desc) : "");
     }
 
@@ -5435,7 +5446,7 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
 
         @return the value that the alternative accepts
 
-        @throw RUNTIME-TYPE-ERROR the alternative's type does not accept the value
+        @throw TYPE-VALUE-ERROR the alternative's type does not accept the value
         @throw SCHEMA-VALIDATION-ERROR the alternative's schema does not accept the value
 
         @since OpenApi3 1.0
@@ -7009,7 +7020,10 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                         }
                         ++matches;
                     } catch (hash<ExceptionInfo> ex) {
-                        # This alternative does not accept the value.
+                        # this alternative does not accept the value, unless its check failed
+                        if (AbstractDataProviderType::isAlternativeCheckFailure(ex.err)) {
+                            rethrow;
+                        }
                     }
                 }
                 if (!matches || (keyword == "oneOf" && matches != 1)) {
@@ -7031,6 +7045,11 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             if (!additional_items && value.size() > (prefix_items ?? ()).size()) {
                 throw "SCHEMA-VALIDATION-ERROR", "array has elements forbidden by items:false";
             }
+            # the check of a position can convert its value, as an integer to a number, but the value type of a list
+            # whose values all have one type, as a literal (0, 1), is narrowed to that type
+            list<auto!> positions = ();
+            positions += value;
+            value = positions;
             for (int i = 0; i < value.size(); ++i) {
                 *SchemaObject item = i < (prefix_items ?? ()).size() ? prefix_items[i] : cast<*SchemaObject>(items);
                 if (item) {

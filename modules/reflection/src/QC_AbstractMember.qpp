@@ -31,6 +31,7 @@
 #include "qore_reflection.h"
 #include "QC_Class.h"
 #include "QC_AbstractMember.h"
+#include "QC_AbstractClassMember.h"
 #include "QC_Type.h"
 
 //! This class provides information about %Qore class and @ref hashdecl "typed hash (hashdecl)" members
@@ -122,6 +123,13 @@ auto AbstractMember::getDefaultValue() {
     if (caller.checkProgramAccess(m->pgm, "evaluate member defaults in",
             QoreReflectionCaller::Access::MemberDefault, xsink)) {
         return QoreValue();
+    }
+    // the default value of a class member is its value before the constructor runs: the member's access applies
+    if (const QoreReflectionClassMember* cm = dynamic_cast<const QoreReflectionClassMember*>(m)) {
+        if (caller.checkClassElementAccess(cm->cls, cm->getAccess(), cm->is_static ? "static member" : "member",
+                cm->name.c_str(), xsink)) {
+            return QoreValue();
+        }
     }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, m->pgm);

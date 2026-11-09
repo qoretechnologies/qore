@@ -149,7 +149,11 @@ DLLLOCAL QoreValue qore_int_lvalue_minus_date(LValueHelper& v, const QoreValue& 
 /** The result is the one the AST interpreter gives: the operation follows the type of the current value (ex: an
     int value converts the operand to an int, so 10 += 1.5 gives 11).  It serves the opcodes that load a variable,
     compute its new value and store it; a variable whose declared type changes the operation (ex: \c timeout) is
-    changed through its lvalue instead.
+    changed through its lvalue instead.  The value is computed for an lvalue of type \c auto, whose assignment
+    converts nothing, so a value that the operation assigns keeps its complex type (ex: \c += on an lvalue with no
+    value gives the operand itself, and a \c hash<HD> stays a \c hash<HD>); an lvalue without any type would strip
+    it.  Variables declared \c any or \c auto! are changed through this function too: the store of the new value
+    applies their declared type, which strips the complex type as their assignment does.
 
     @param op the compound operation
     @param left the current value of the lvalue
@@ -173,5 +177,23 @@ DLLLOCAL bool qore_ir_is_native_leaf(const QoreIRFunction* ir,
 //! Return an importable pure scalar leaf descriptor for cross-object AOT lowering.
 DLLLOCAL bool qore_ir_get_aot_scalar_leaf(const QoreIRFunction* ir,
         const UserVariantBase* uvb, int nargs, AOTScalarLeafInfo& result);
+
+//! Holds an IR value that an operation reads, evaluating a value that needs evaluation except a reference
+/** The AST interpreter gives an operation the value of its operand expression as it is: an expression giving a
+    reference (ex: an element <tt>h.r</tt> holding <tt>\x</tt>) gives the reference itself, which a container access
+    or an operator does not read (ex: <tt>h.r[0]</tt> and <tt>h.r.a</tt> are \c NOTHING).  An IR value is the value
+    of such an expression already, so a reference is held as it is instead of being evaluated, which would read the
+    referenced lvalue.
+*/
+class QoreIROperandHolder : public ValueEvalOptimizedRefHolder {
+public:
+    DLLLOCAL QoreIROperandHolder(const QoreValue& value, ExceptionSink* xs) : ValueEvalOptimizedRefHolder(xs) {
+        if (value.getType() == NT_REFERENCE) {
+            setValue(value, false);
+        } else {
+            eval(value);
+        }
+    }
+};
 
 #endif

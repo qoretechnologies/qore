@@ -100,7 +100,7 @@ if (labels.acceptsValue({"value": "literal"}) != {"value": "literal"}) {
     throw "INSTALL-QUALIFICATION-ERROR", "published map type changed an ordinary value member";
 }
 AbstractDataProviderType result = Serializable::deserialize(
-    GoogleDocumentAiProcessDocumentDataProvider::ResponseType.serialize());
+    GoogleDocumentAiProcessDocumentDataProvider::responseType().serialize());
 auto typed = result.acceptsValue({"document": {"text": "Synthetic 12.34", "entities": ({"type": "amount",
     "normalizedValue": {"moneyValue": {"currencyCode": "USD", "units": "12", "nanos": 340000000}}},)}});
 if (typed.document.entities[0].normalizedValue.moneyValue.units !== "12") {

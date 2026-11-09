@@ -373,6 +373,14 @@ QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
     ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink)
         return QoreValue();
+    // a container read from a variable is borrowed; the index expression is evaluated after it and can assign the
+    // variable another value (l[(l = x).size() - 1]), which releases the only reference to the container before it
+    // is read, so the operator holds its own reference to a borrowed container while the index needs evaluation: the
+    // element is read from the container that the left-hand side gave, as in every other execution mode
+    ValueHolder borrowed_left(xsink);
+    if (!lh.isTemp() && lh->hasNode() && right.needsEval()) {
+        borrowed_left = lh->refSelf();
+    }
     // a temporary read from lives until the end of the statement, so the rest of the chain can use it
     QoreStatementTempScope::holdReceiver(left, lh, xsink);
 

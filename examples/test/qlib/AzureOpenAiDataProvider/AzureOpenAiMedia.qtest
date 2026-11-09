@@ -4,9 +4,9 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires json
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/AzureOpenAiDataProvider
-%requires ../../../../qlib/RestSchemaActions
+%requires QUnit
+%requires AzureOpenAiDataProvider
+%requires RestSchemaActions
 %exec-class AzureOpenAiMediaTest
 
 #! Optional live tests; every request uses the configured resource and incurs Azure inference charges

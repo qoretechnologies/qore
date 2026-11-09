@@ -22,26 +22,33 @@ class SoakHandler inherits AbstractHttpRequestHandler {
 
 #! A connection served by a fast route stays open for longer than the operation timeout
 /** The async I/O controller's timeout of the operation that reads the requests of a connection (the idle time-to-live
-    plus 30 seconds) covers one request: a connection served by the handler gets a new operation for every request.  A
-    fast route answers a request inside the operation, which does not complete, so the operation renews its own
-    timeout.  This test keeps one connection busy with fast-route requests for longer than that timeout; the
-    connection must not be closed, and the answers must keep coming from the route.  It runs for about 35 seconds.
+    plus the I/O operation timeout, \c io_operation_timeout) covers one request: a connection served by the handler gets
+    a new operation for every request.  A fast route answers a request inside the operation, which does not complete,
+    so the operation renews its own timeout.  This test keeps one connection busy with fast-route requests for longer
+    than that timeout; the connection must not be closed, and the answers must keep coming from the route.  The server
+    has a short time-to-live and I/O operation timeout, so it runs for a few seconds.
 */
 class HttpServerFastRoutesSoakTest inherits QUnit::Test {
     public {
-        #! how long the connection is kept busy: longer than the 30 second margin of the operation timeout
-        const Duration = 34s;
+        #! the idle time-to-live of the server
+        const Ttl = 1s;
+        #! the I/O operation timeout of the server: the timeout of the operation is Ttl plus this
+        const IoOperationTimeout = 1s;
+        #! how long the connection is kept busy: longer than the operation timeout
+        const Duration = Ttl + IoOperationTimeout + 2s;
         const Timeout = 30s;
     }
 
     constructor() : QUnit::Test("HttpServerFastRoutesSoakTest", "1.0", \ARGV) {
         addTestCase("a busy connection outlives the operation timeout", \testBusyConnection());
+        addTestCase("an idle connection is closed after the operation timeout", \testIdleConnection());
+        addTestCase("the I/O operation timeout must be greater than zero", \testIoOperationTimeoutOption());
         set_return_value(main());
     }
 
     testBusyConnection() {
-        # a short idle time-to-live: the connection's timeout is this plus 30 seconds
-        HttpServer hs(<HttpServerOptionInfo>{"ttl": 2s});
+        # a short idle time-to-live and I/O operation timeout: the connection's timeout is their sum
+        HttpServer hs(<HttpServerOptionInfo>{"ttl": Ttl, "io_operation_timeout": IoOperationTimeout});
         on_exit hs.stop();
         hs.setDefaultHandler("handler", new SoakHandler());
         int port = hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
@@ -74,5 +81,43 @@ class HttpServerFastRoutesSoakTest inherits QUnit::Test {
         h = c.readHTTPHeader(Timeout);
         assertEq("fast", c.recv(h."content-length".toInt(), Timeout));
         assertEq(n + 2, hs.getFastRouteInfo().routes{"/soak"}, "the route answered every request");
+    }
+
+    #! A connection that sends nothing after a request is closed when the operation that waits for it times out
+    /** This is the timeout that a busy connection outlives (see testBusyConnection()): the idle time-to-live plus the
+        I/O operation timeout set for the server.  The wait for the close is bounded far beyond it, so a server that
+        does not use the option (30 seconds) fails the test with a timeout instead of a close.
+    */
+    testIdleConnection() {
+        HttpServer hs(<HttpServerOptionInfo>{"ttl": Ttl, "io_operation_timeout": IoOperationTimeout});
+        on_exit hs.stop();
+        hs.setDefaultHandler("handler", new SoakHandler());
+        int port = hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        hs.addFastRoute("/soak", {"public": True, "response": {"code": 200, "body": "fast",
+            "content_type": "text/plain"}});
+
+        Socket c();
+        c.connect("127.0.0.1:" + port);
+        on_exit c.close();
+        c.send("GET /soak HTTP/1.1\r\nHost: x\r\n\r\n");
+        hash<auto> h = c.readHTTPHeader(Timeout);
+        assertEq("fast", c.recv(h."content-length".toInt(), Timeout), "the request is answered by the route");
+        # the connection stays idle: the server closes it after the operation timeout, far less than the wait
+        string end;
+        try {
+            *string data = c.recv(1, 15s);
+            end = data.val() ? "data" : "closed";
+        } catch (hash<ExceptionInfo> ex) {
+            end = ex.err == "SOCKET-TIMEOUT" ? "timeout" : "closed";
+        }
+        assertEq("closed", end, "the server closes the idle connection after the operation timeout");
+    }
+
+    testIoOperationTimeoutOption() {
+        foreach timeout to in ((0, -1)) {
+            assertThrows("HTTP-SERVER-INIT-ERROR", "io_operation_timeout", sub () {
+                HttpServer hs(<HttpServerOptionInfo>{"io_operation_timeout": to});
+            });
+        }
     }
 }

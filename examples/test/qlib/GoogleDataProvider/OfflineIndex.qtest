@@ -3,11 +3,11 @@
 # Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/ProviderIndex
+%requires Util
+%requires DataProvider
+%requires QUnit
+%requires FsUtil
+%requires ProviderIndex
 %requires ./OfflineIndexFixture.qm
 %try-module process >= 2.2
 %define NoProcess

@@ -307,9 +307,12 @@ public class GoogleDriveWatchDataProviderBase inherits GoogleDriveDataProviderBa
             string q = wantsFolders()
                 ? "mimeType = '" + FolderMimeType + "' and trashed = false"
                 : "mimeType != '" + FolderMimeType + "' and trashed = false";
-            hash<auto> resp = doRestCommand("GET", sprintf("/drive/v3/files?pageSize=1&q=%s&fields=%s",
-                encode_url(q, True),
-                encode_url("files(" + GoogleDriveDataProviderBase::getFileFields() + ")", True)));
+            # the example data is requested once, without retries
+            hash<auto> resp = DataProviderRetryUtil::runWithoutRetries(hash<auto> sub () {
+                return doRestCommand("GET", sprintf("/drive/v3/files?pageSize=1&q=%s&fields=%s",
+                    encode_url(q, True),
+                    encode_url("files(" + GoogleDriveDataProviderBase::getFileFields() + ")", True)));
+            });
             if (resp.body.files) {
                 return GoogleDriveDataProviderBase::getFileInfo(resp.body.files[0]);
             }

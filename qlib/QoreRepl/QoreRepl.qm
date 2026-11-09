@@ -22,7 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%requires qore >= 2.0
+%requires qore >= 3.0
 
 %modern
 
@@ -103,6 +103,70 @@ printf("Prompt: %s\n", repl.getPrompt());  # "    > "
 result = repl.eval("    print('hello');");
 result = repl.eval("}");  # Now complete, executes
     @endcode
+
+    At the continuation prompt, every submitted line is literal Qore source. Slash-prefixed lines and
+    history shortcuts such as @c !! are not interpreted as REPL commands, including inside multiline strings.
+    Finish the source or cancel it before using commands at the primary @c qore> prompt. Linenoise uses Ctrl+C;
+    embedders call @ref QoreRepl::QoreRepl::reset() "reset()" to clear pending source and indentation without
+    discarding the Program. Command completion and @c inspectRequest() follow the same input mode.
+
+    @code{.py}
+repl.eval("if (True) {");
+repl.reset();  # Cancel this unfinished block; evaluated variables remain available.
+repl.eval("/threads");  # Commands are available again at the primary prompt.
+    @endcode
+
+    @subsection qorerepl_save Saving and Loading Code
+
+    Use @c /save followed by a filename to export the session's entered Qore code.
+    Missing statement terminators are added using the same rules as evaluation;
+    existing terminators and block definitions are preserved. REPL commands such
+    as @c /vars and @c /save are omitted. The interactive history stays unchanged.
+    Load the exported file with @c /load followed by its filename in a fresh session.
+
+    @code{.py}
+QoreRepl original({"history_file": ""});
+original.eval("our int answer = 40 + 2");
+original.eval("/save session.q");
+QoreRepl restored({"history_file": ""});
+restored.eval("/load session.q");
+*hash<auto> result = restored.eval("answer");  # result.value is 42
+    @endcode
+
+    Saving exports entered code, including unsuccessful evaluations; it is not a
+    serialized program-state snapshot. Loading executes that code again, so external
+    side effects and invalid input retain their ordinary execution semantics.
+
+    @subsection qorerepl_threads Background Threads and Parsing
+
+    Parsing remains serialized: Qore cannot reparse a REPL Program while its code is active. Code submissions,
+    @c /type, @c /load and @c /reset return @c REPL-THREADS-ACTIVE before changing pending input or history when
+    threads are running. Use @c /threads to inspect Program thread IDs and names, @c /cancel followed by an ID or
+    @c all to request cooperative termination, and @c /join followed by an ID or @c all to wait for Program
+    activity to finish. These commands run outside the evaluated Program and therefore remain available while
+    parsing is blocked. Cancellation can be caught or deferred; it never forcibly kills a native thread.
+
+    Embedders use @ref QoreRepl::QoreRepl::inspectRequest() "inspectRequest()" to offer Wait, Cancel request, and
+    Terminate threads before submission. Capture @ref QoreRepl::QoreRepl::getProgram() "getProgram()" and call
+    @ref Qore::Program::waitForThreads() "waitForThreads()" from a worker, then post its completion to the UI's
+    event loop. This condition-driven wait includes starting threads and descendants. Cancel the monitor worker
+    when the UI closes; cancelling a pending request leaves the Program and input intact. Recheck before retrying:
+    an idle notification does not reserve the Program against new externally-started work.
+
+    @code{.py}
+QoreRepl repl();
+repl.eval("background sub () { sleep(40); }()");
+repl.eval("/threads");
+# eval("/reset") now returns REPL-THREADS-ACTIVE promptly.
+repl.eval("/cancel all");
+repl.eval("/join all");
+repl.eval("/reset");
+    @endcode
+
+    @c /join waits for threads to leave this Program, including its exit handlers, not for final process-level
+    thread-local cleanup. @ref Qore::thread_join() "thread_join()" provides that stronger guarantee to an embedder
+    that owns the process-level thread. @ref QoreRepl::QoreRepl::getHelpText() "getHelpText(False)" omits linenoise
+    shortcuts so other frontends can supply their own keyboard help.
 
     @subsection qorerepl_websocket WebSocket Server Example
 

@@ -90,7 +90,7 @@ public class EpochIntToDateOrNothingType inherits EpochIntToDateType {
 
         @return the value to be assigned; can be converted by the type
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+        @throw TYPE-VALUE-ERROR value cannot be assigned to type
     */
     auto acceptsValue(auto value) {
         if (!exists value || value === NULL) {

@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - cancellation of sleeps, timed lock and queue waits, pipe reads and file locks
 
 %modern
 %no-child-restrictions
@@ -82,7 +83,8 @@ public class ThreadCancelTest inherits QUnit::Test {
         addTestCase("cancel timed Queue::pop", \testCancelTimedQueuePop());
         addTestCase("cancel file lock", \testCancelFileLock());
         addTestCase("cancel after thread exits", \testCancelAfterThreadExits());
-        addTestCase("cancel during the analysis of a first call", \testCancelFirstCallAnalysis());
+        addTestCase("a pending cancellation is not raised by the analysis of a first call",
+            \testCancelFirstCallAnalysis());
 
         set_return_value(main());
     }
@@ -226,9 +228,11 @@ public class ThreadCancelTest inherits QUnit::Test {
     # Cancel loop tests
     #------------------------------------------------------------------
 
-    #! A cancellation that is first seen while the IR interpreter analyzes a function at its first call is raised
-    /** The analysis checks for cancellation every 100 operands without an exception sink; it must fail with the
-        THREAD-CANCELLED exception, not with an IR execution error
+    #! A pending cancellation is raised at the program's next check point, not by the analysis of a first call
+    /** The IR interpreter analyzes a function at its first call on the IR tier; the analysis checked for
+        cancellation, so the call of a function with no check point of its own raised THREAD-CANCELLED on the IR tier
+        only (and, before that, failed with an IR execution error).  As with the AST interpreter, the call runs, and
+        the cancellation is raised by the next check point, a loop.
     */
     testCancelFirstCallAnalysis() {
         # a new function with enough operands for the analysis to check for cancellation
@@ -245,18 +249,22 @@ public class ThreadCancelTest inherits QUnit::Test {
         Counter started(1);
         Counter done(1);
         *hash<ExceptionInfo> err;
+        *int rv;
         int tid = background sub () {
             on_exit done.dec();
             try {
                 # the thread waits with cancellation deferred, so the request is still pending when the deferral
-                # ends, whenever it arrives, and the first cancellation check point after that is the analysis of
-                # big_function(); an RWLock wait is itself a cancellation point, at its start and while it waits
+                # ends, whenever it arrives; the call of big_function(), which has no check point, runs, and the
+                # first cancellation check point after the deferral is the loop; an RWLock wait is itself a
+                # cancellation point, at its start and while it waits
                 defer_thread_cancel(sub () {
                     started.dec();
                     rwl.readLock();
                     rwl.readUnlock();
                 });
-                pgm.callFunction("big_function", 1);
+                rv = pgm.callFunction("big_function", 1);
+                for (int i = 0; i < 10; ++i) {
+                }
             } catch (hash<ExceptionInfo> ex) {
                 clear_thread_cancel();
                 err = ex;
@@ -266,8 +274,10 @@ public class ThreadCancelTest inherits QUnit::Test {
         assertTrue(cancel_thread(tid, "first call"));
         rwl.writeUnlock();
         done.waitForZero();
+        # the value of the call, made again in a thread with no cancellation
+        assertEq(pgm.callFunction("big_function", 1), rv);
         assertEq("THREAD-CANCELLED", err.err, err.desc);
-        assertRegex("IR interpreter analysis", err.desc);
+        assertNRegex("IR interpreter analysis", err.desc);
     }
 
     testCancelWhileLoop() {
@@ -954,9 +964,9 @@ bool sub do_cancel(int tid) {
             *binary data = pis.read(100);  # Block waiting for data
         });
 
-        # Clean up the pipe
-        try { pos.close(); } catch () {}
+        # Clean up the pipe: the input side finishes its close first, as PipeOutputStream::close() waits for it
         try { pis.finishClose(); } catch () {}
+        try { pos.close(); } catch () {}
 
         assertEq("THREAD-CANCELLED", ex.err, "PipeInputStream::read should throw THREAD-CANCELLED");
     }

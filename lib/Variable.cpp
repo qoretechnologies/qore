@@ -205,6 +205,16 @@ void check_lvalue_object_in_out(AbstractQoreNode* in, AbstractQoreNode* out) {
     }
 }
 
+void qore_release_real_reference_value(QoreValue& v, ExceptionSink* xsink) {
+    if (v.getType() == NT_OBJECT) {
+        // takeNode() ends the registration of an opaque value with its representation and keeps its reference, which
+        // is released here with the real reference that the storage gave the object
+        static_cast<QoreObject*>(v.takeNode())->realDeref(xsink);
+        return;
+    }
+    v.discard(xsink);
+}
+
 static bool is_no_narrow_container_type(const QoreTypeInfo* ti) {
     return QoreTypeInfo::isNoNarrowContainer(ti);
 }
@@ -230,12 +240,15 @@ void QoreTypeInfo::applyNoNarrowCoercion(const QoreTypeInfo* ti, QoreValue& n,
                         cp->setHashDecl(nullptr);
                     }
                     cp->complexTypeInfo = autoHashTypeInfo;
+                    // the value replaced is released as it is held: a value read through an opaque reference ends
+                    // its registration with its reference (see design/dgc.md, "Opaque references")
+                    QoreValue old = n;
                     n = copy;
                     if (lvhelper) {
                         // lvalue locks may be held — defer the deref
-                        lvhelper->saveTemp(h);
+                        lvhelper->saveTemp(old);
                     } else {
-                        h->deref(xsink);
+                        old.discard(xsink);
                     }
                 } else {
                     if (hp->getHashDecl()) {
@@ -256,12 +269,14 @@ void QoreTypeInfo::applyNoNarrowCoercion(const QoreTypeInfo* ti, QoreValue& n,
             } else if (!l->is_unique()) {
                 QoreListNode* copy = l->copy();
                 qore_list_private::get(*copy)->complexTypeInfo = autoListTypeInfo;
+                // the value replaced is released as it is held (see above)
+                QoreValue old = n;
                 n = copy;
                 if (lvhelper) {
                     // lvalue locks may be held — defer the deref
-                    lvhelper->saveTemp(l);
+                    lvhelper->saveTemp(old);
                 } else {
-                    l->deref(xsink);
+                    old.discard(xsink);
                 }
             } else {
                 lp->complexTypeInfo = autoListTypeInfo;
@@ -1085,7 +1100,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
         // create an untyped list
         if (!l) {
             // save the old value for dereferencing outside any locks that may have been acquired
-            saveTemp(getValue().getInternalNode());
+            saveCurrentValue();
             const QoreTypeInfo* valueTypeInfo;
             if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
                 valueTypeInfo = nullptr;
@@ -1226,7 +1241,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         // create an untyped list
         if (!l) {
             // save the old value for dereferencing outside any locks that may have been acquired
-            saveTemp(getValue().getInternalNode());
+            saveCurrentValue();
             const QoreTypeInfo* valueTypeInfo;
             if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
                 valueTypeInfo = nullptr;
@@ -1363,7 +1378,7 @@ int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) 
         if (!h) {
             //printd(5, "LValueHelper::doHashLValue() this: %p saving value to dereference before making hash: %p "
             //    "'%s'\n", this, vp, get_type_name(vp));
-            saveTemp(getValue().getInternalNode());
+            saveCurrentValue();
             assignNodeIntern((h = new QoreHashNode(QoreTypeInfo::getElementType(
                 QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo)
             ))));
@@ -1812,7 +1827,7 @@ double LValueHelper::getAsFloat() const {
     return qv->getAsFloat();
 }
 
-int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool for_remove) {
+int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool for_remove, bool remove_root) {
     assert(num_steps > 0);
 
     const bool final_assignment = assignment_only;
@@ -1918,8 +1933,13 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
         return -1;
     }
 
-    // Check if root resolved to a reference — if so, follow it via AST path
-    {
+    // Check if root resolved to a reference — if so, follow it via AST path.  The remove or delete of a global,
+    // thread_local or static class variable itself removes the variable's own value, the reference, as Var::remove()
+    // and StaticClassVarRefNode::remove() do in the AST interpreter (LValueRemoveHelper does not follow it), while
+    // the remove of a local variable holding a reference removes the referenced value (LocalVar::remove())
+    if (!(remove_root && num_steps == 1
+            && (root.kind == LVPathStepKind::GlobalVar || root.kind == LVPathStepKind::ThreadLocalVar
+                || root.kind == LVPathStepKind::StaticVar))) {
         const ReferenceNode* ref = getReference();
         if (ref) {
             if (val) {
@@ -2075,7 +2095,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                     }
                     if (!l) {
                         // save the old value for dereferencing outside locks
-                        saveTemp(getValue().getInternalNode());
+                        saveCurrentValue();
                         const QoreTypeInfo* valueTypeInfo;
                         if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo
                             || typeInfo == listOrNothingTypeInfo) {
@@ -2322,40 +2342,36 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, Assign
     QoreTypeInfo::applyNoNarrowCoercion(typeInfo, n, vl.xsink, this);
 
     // process weak assignment
+    // the value replaced by its weak or opaque form is released through the temporary list as it is held, as the
+    // target cannot be dereferenced while the lvalue lock is held: a value read through an opaque reference keeps its
+    // opaque representation, and releasing it as a plain node would leave its registration with the opaque target
+    // registry (see design/dgc.md, "Opaque references")
     if (mode == AssignmentMode::Weak) {
+        QoreValue old = n;
         if (n.getType() == NT_OBJECT) {
-            QoreObject* o = n.get<QoreObject>();
-            n = new WeakReferenceNode(o);
-            // cannot dereference object in lock
-            saveTemp(o);
+            n = new WeakReferenceNode(n.get<QoreObject>());
+            saveTemp(old);
         } else if (n.getType() == NT_HASH) {
-            QoreHashNode* h = n.get<QoreHashNode>();
-            n = new WeakHashReferenceNode(h);
-            // cannot dereference a container in lock
-            saveTemp(h);
+            n = new WeakHashReferenceNode(n.get<QoreHashNode>());
+            saveTemp(old);
         } else if (n.getType() == NT_LIST) {
-            QoreListNode* l = n.get<QoreListNode>();
-            n = new WeakListReferenceNode(l);
-            // cannot dereference a container in lock
-            saveTemp(l);
+            n = new WeakListReferenceNode(n.get<QoreListNode>());
+            saveTemp(old);
         }
     } else if (mode == AssignmentMode::Opaque) {
         // an opaque reference keeps the strong reference the value already carries but stores it in
         // a representation the DGC scanner does not follow; the reference taken by the make*()
-        // calls replaces the one held by "n", which is released through the temporary list because
-        // the target cannot be dereferenced while the lvalue lock is held
+        // calls replaces the one held by "n"
+        QoreValue old = n;
         if (n.getType() == NT_OBJECT) {
-            QoreObject* o = n.get<QoreObject>();
-            n = QoreValue::makeOpaqueObject(o);
-            saveTemp(o);
+            n = QoreValue::makeOpaqueObject(n.get<QoreObject>());
+            saveTemp(old);
         } else if (n.getType() == NT_HASH) {
-            QoreHashNode* h = n.get<QoreHashNode>();
-            n = QoreValue::makeOpaqueHash(h);
-            saveTemp(h);
+            n = QoreValue::makeOpaqueHash(n.get<QoreHashNode>());
+            saveTemp(old);
         } else if (n.getType() == NT_LIST) {
-            QoreListNode* l = n.get<QoreListNode>();
-            n = QoreValue::makeOpaqueList(l);
-            saveTemp(l);
+            n = QoreValue::makeOpaqueList(n.get<QoreListNode>());
+            saveTemp(old);
         }
     }
 
@@ -3898,6 +3914,32 @@ void LocalVarValue::resolveLValueTypeInfo(const QoreTypeInfo*& typeInfo, const Q
 
     typeInfo = resolvedTypeInfo;
     refTypeInfo = resolvedRefTypeInfo;
+}
+
+// documented in LocalVar.h
+QoreValue qore_local_reference_eval(const ReferenceNode& ref, bool& needs_deref, ExceptionSink* xsink) {
+    LocalRefHelper<LocalVarValue> helper(nullptr, const_cast<ReferenceNode&>(ref), xsink);
+    if (!helper) {
+        return QoreValue();
+    }
+
+    lvalue_ref* lr = lvalue_ref::get(&ref);
+    ValueEvalOptimizedRefHolder erh(lr->vexp, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreValue rv = erh.takeValue(needs_deref);
+    if (rv.needsEval()) {
+        bool ref_needs_deref = needs_deref;
+        bool eval_needs_deref = true;
+        QoreValue resolved = rv.eval(eval_needs_deref, xsink);
+        if (ref_needs_deref) {
+            rv.discard(xsink);
+        }
+        needs_deref = eval_needs_deref;
+        return *xsink ? QoreValue() : resolved;
+    }
+    return rv;
 }
 
 int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeInfo* typeInfo,

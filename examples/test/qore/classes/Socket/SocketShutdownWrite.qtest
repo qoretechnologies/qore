@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - shutdown(SHUT_WR) half-close on plain and TLS connections
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires ../../../TestCertificates.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SocketShutdownWriteTest
+
+#! Socket::shutdownWrite() shuts down the sending side of a connection only (a half-close)
+/** The peer reads the data sent before the half-close and then the end of the stream; the side that shut down its
+    sending side still receives what the peer sends, and can no longer send.  A TLS connection sends its close_notify
+    alert before the end of the stream (RFC 8446 section 6.1), which the peer reads as the end of the stream.
+*/
+class SocketShutdownWriteTest inherits QUnit::Test {
+    public {
+        const Timeout = 30s;
+    }
+
+    constructor() : QUnit::Test("SocketShutdownWrite", "1.0") {
+        addTestCase("plain connection", \plainTest());
+        addTestCase("TLS connection", \tlsTest());
+        addTestCase("negative tests", \negativeTest());
+        set_return_value(main());
+    }
+
+    plainTest() {
+        halfCloseTest(False);
+    }
+
+    tlsTest() {
+        halfCloseTest(True);
+    }
+
+    negativeTest() {
+        Socket s();
+        assertThrows("SOCKET-NOT-OPEN", \s.shutdownWrite());
+    }
+
+    #! The client sends a request and shuts down its sending side; the server reads the request, sends its reply and
+    #! then reads the end of the stream; the client reads the reply after its half-close
+    /** The server replies before it reads the end of the stream: a Qore socket closes itself when it receives the TLS
+        close_notify alert, so a TLS server could not reply after it
+    */
+    private halfCloseTest(bool tls) {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+        if (tls) {
+            listener.setCertificate(TestCertificates::CertPem);
+            listener.setPrivateKey(TestCertificates::KeyPem);
+        }
+        int port = listener.getSocketInfo().port;
+
+        # the server's results: what it received, and how the stream ended
+        Queue results();
+        Counter done(1);
+        background serve(listener, tls, results, done);
+        on_exit done.waitForZero();
+
+        Socket client();
+        if (tls) {
+            client.connectSSL("127.0.0.1:" + port, Timeout);
+        } else {
+            client.connect("127.0.0.1:" + port, Timeout);
+        }
+        on_exit client.close();
+
+        client.send("request");
+        client.shutdownWrite();
+
+        # the client still receives the reply after its half-close
+        assertEq("reply", client.recv(5, Timeout), "the client receives the reply after its half-close");
+
+        hash<auto> server = results.get(Timeout);
+        assertNothing(server.error, "the server has no error");
+        assertEq("request", server.data, "the server receives the data sent before the half-close");
+        assertEq("closed", server.end, "the server reads the end of the stream after the data");
+        # and the connection ends when the server closes it
+        string end;
+        try {
+            *string more = client.recv(1, Timeout);
+            end = more.val() ? "data" : "closed";
+        } catch (hash<ExceptionInfo> ex) {
+            end = ex.err == "SOCKET-CLOSED" ? "closed" : ex.err;
+        }
+        assertEq("closed", end, "the client reads the end of the stream when the server closes the connection");
+
+        if (!tls) {
+            # the sending side is shut down (a TLS socket is closed when it reads the server's close_notify alert)
+            assertThrows("SOCKET-SEND-ERROR", \client.send(), "more");
+        }
+
+    }
+
+    private serve(Socket listener, bool tls, Queue results, Counter done) {
+        on_exit done.dec();
+        hash<auto> rv;
+        try {
+            Socket s = tls ? listener.acceptSSL(Timeout) : listener.accept(Timeout);
+            on_exit s.close();
+            rv.data = s.recv(7, Timeout);
+            s.send("reply");
+            try {
+                *string more = s.recv(1, Timeout);
+                rv.end = more.val() ? "data" : "closed";
+            } catch (hash<ExceptionInfo> ex) {
+                rv.end = ex.err == "SOCKET-CLOSED" ? "closed" : ex.err;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            rv.error = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        results.push(rv);
+    }
+}

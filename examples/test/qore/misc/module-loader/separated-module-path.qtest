@@ -1,11 +1,12 @@
 #!/usr/bin/env qore
+# test-platform: macos - module search path resolution of relative and absolute dirs under the symlinked temp dir
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires ../../../../../qlib/QUnit.qm
-%requires ../../../../../qlib/FsUtil.qm
+%requires QUnit
+%requires FsUtil
 %exec-class SeparatedModulePathTest
 
 #! Directory-module metadata must identify the file found in the module search path
@@ -14,6 +15,8 @@ class SeparatedModulePathTest inherits QUnit::Test {
         addTestCase("relative search paths with relative and absolute importers", \relativePaths());
         addTestCase("absolute search paths with relative and absolute importers", \absolutePaths());
         addTestCase("explicit relative directory import", \explicitPath());
+        addTestCase("explicit relative import of a directory module's entry source", \explicitMainPath());
+        addTestCase("explicit import of a single-file module beside other sources", \explicitSingleFilePath());
         addTestCase("missing directory-module entry point", \missingMain());
         set_return_value(main());
     }
@@ -24,7 +27,8 @@ class SeparatedModulePathTest inherits QUnit::Test {
         f.write(body);
     }
 
-    private checkPath(bool absolute_search, bool absolute_importer, bool append, bool explicit_path = False) {
+    private checkPath(bool absolute_search, bool absolute_importer, bool append, bool explicit_path = False,
+            bool explicit_main = False) {
         TmpDir tmp("qore-separated-path-");
         string cwd = getcwd2();
         chdir(tmp.path);
@@ -32,8 +36,8 @@ class SeparatedModulePathTest inherits QUnit::Test {
         mkdir("scripts", 0755);
         mkdir("module files", 0755);
         # Every variant has a distinct feature, so the process-wide module cache cannot mask a load.
-        string name = sprintf("SeparatedPath%d%d%d%d", absolute_search, absolute_importer, append,
-            explicit_path);
+        string name = sprintf("SeparatedPath%d%d%d%d%d", absolute_search, absolute_importer, append,
+            explicit_path, explicit_main);
         string dir = tmp.path + "/module files/" + name;
         mkdir(dir, 0755);
         write(dir + "/" + name + ".qm", "%modern\nmodule " + name + " {\n"
@@ -46,7 +50,10 @@ class SeparatedModulePathTest inherits QUnit::Test {
         string script = (absolute_importer ? tmp.path + "/" : "") + "scripts/import.qr";
         string search = absolute_search ? tmp.path + "/module files" : "./scripts/../module files";
         string source = "%modern\n";
-        if (explicit_path) {
+        if (explicit_main) {
+            # the path of the entry source names the module in its directory, with its sibling sources
+            source += "%requires ../module files/" + name + "/" + name + ".qm\n";
+        } else if (explicit_path) {
             source += "%requires ../module files/" + name + "\n";
         } else {
             source += (append ? "%append-module-path \"" : "%prepend-module-path \"") + search
@@ -86,6 +93,29 @@ class SeparatedModulePathTest inherits QUnit::Test {
 
     private explicitPath() {
         checkPath(False, False, False, True);
+    }
+
+    private explicitMainPath() {
+        checkPath(False, False, False, True, True);
+    }
+
+    private explicitSingleFilePath() {
+        TmpDir tmp("qore-single-file-path-");
+        string dir = tmp.path + "/plainlib";
+        mkdir(dir, 0755);
+        # a directory not named after the module is no directory module: its other sources are not part of it
+        write(dir + "/SingleFilePath.qm", "%modern\nmodule SingleFilePath {\n"
+            "version = \"1.0\"; desc = \"single-file module\";\n"
+            "author = \"Qore Technologies, s.r.o.\"; license = \"MIT\";\n}\n"
+            "public namespace SingleFilePath { public string sub single_file_path() { return \"single\"; } }\n");
+        write(dir + "/broken.qc", "this is no Qore code;\n");
+        string script = tmp.path + "/import.qr";
+        string source = "%modern\n%requires plainlib/SingleFilePath.qm\n"
+            "string sub check() { return SingleFilePath::single_file_path(); }\n";
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.setScriptPath(script);
+        p.parse(source, script);
+        assertEq("single", p.callFunction("check"));
     }
 
     private missingMain() {

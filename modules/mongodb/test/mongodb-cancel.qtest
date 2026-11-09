@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - libmongoc blocked on a loopback socket, cancelled through qore_cancellable_poll()
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

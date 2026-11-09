@@ -389,7 +389,7 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
             restoredType.acceptsValue({"id": "a1", "tags": ("x", "y")}));
         assertEq({"id": "b1", "amount": 7},
             restoredType.acceptsValue({"id": "b1", "amount": 7}));
-        assertThrows("RUNTIME-TYPE-ERROR", \restoredType.acceptsValue(), {"id": "bad", "tags": (1,)});
+        assertThrows("TYPE-VALUE-ERROR", \restoredType.acceptsValue(), {"id": "bad", "tags": (1,)});
     }
 
     inheritedOperationMessagesTest() {
@@ -464,7 +464,7 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
 
         assertThrows("INVALID-MESSAGE", \opProvider.sendMessage(),
             ("Missing", {"id": "a1", "tags": ("x",)}, NOTHING));
-        assertThrows("SEND-MESSAGE-ERROR", "RUNTIME-TYPE-ERROR", \opProvider.sendMessage(),
+        assertThrows("SEND-MESSAGE-ERROR", "TYPE-VALUE-ERROR", \opProvider.sendMessage(),
             ("Alpha", {"id": "a1", "tags": (1,)}, NOTHING));
     }
 

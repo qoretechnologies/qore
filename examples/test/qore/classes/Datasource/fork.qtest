@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - fork() with inherited DB sessions, pthread_atfork handlers, child exit seen through pipes
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 

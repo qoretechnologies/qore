@@ -13,15 +13,16 @@ module SqlUtilTestBase {
     license = "MIT";
 }
 
-%requires(reexport) ../../../../qlib/Util.qm
-%requires(reexport) ../../../../qlib/QUnit.qm
-%requires(reexport) ../../../../qlib/Logger.qm
-%requires(reexport) ../../../../qlib/DataProvider
-%requires(reexport) ../../../../qlib/SqlUtil
-%requires(reexport) ../../../../qlib/BulkSqlUtil
-%requires(reexport) ../../../../qlib/Schema
-%requires(reexport) ../../../../qlib/DbDataProvider
-%requires(reexport) ../../../../qlib/Mapper.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires(reexport) Util
+%requires(reexport) QUnit
+%requires(reexport) Logger
+%requires(reexport) DataProvider
+%requires(reexport) SqlUtil
+%requires(reexport) BulkSqlUtil
+%requires(reexport) Schema
+%requires(reexport) DbDataProvider
+%requires(reexport) Mapper
 
 public class SqlUtilTestSchema inherits AbstractSchema {
     private {
@@ -47,7 +48,7 @@ public class SqlUtilTestSchema inherits AbstractSchema {
                     "native_type": type,
                 });
                 if (h.value.typeCode() == NT_HASH)
-                    ch += (h.value - ("value", "bind", "expect", "type", "soft"));
+                    ch += (h.value - ("value", "bind", "expect", "stored", "type", "soft"));
                 tables{table}.columns{SqlTestBase::getColumnName(h.key)} = ch;
             }
         }
@@ -79,6 +80,9 @@ public class SqlTestBase inherits QUnit::Test {
         const OptionColumn = 22;
 
         hash expect_data;
+        #! the values as the database stores them, where they differ from the values the driver returns (ex: a CHAR
+        #! value padded to the size of its column, which the jdbc driver returns without its trailing spaces)
+        hash stored_data;
         hash<string, bool> softmap;
 
         list insert_data;
@@ -342,7 +346,24 @@ public class SqlTestBase inherits QUnit::Test {
         }
         assertTrue(commit_error ? True : False, "an unresolved deferred move fails at commit");
         if (commit_error) {
-            assertTrue(commit_error.err =~ /^DBI(:[^:]+)?:ERROR$/, commit_error.err);
+            # a database error: DBI:<DRIVER>:ERROR; Oracle's driver raises DBI:ORACLE:OCI-ERROR, with the error of the
+            # deferred constraint: ORA-02091 (the transaction is rolled back) for ORA-02291 or ORA-02292
+            if (commit_error.err =~ /^DBI:ORACLE:/) {
+                assertEq("DBI:ORACLE:OCI-ERROR", commit_error.err);
+                assertRegex("ORA-02091", commit_error.desc);
+            } else if (ds.getDriverName() == "jdbc") {
+                # the jdbc driver raises an SQL error as JNI-ERROR with the java.sql.SQLException as its argument:
+                # on Oracle ORA-02091 (the transaction is rolled back), elsewhere SQLState 23503 (foreign key
+                # violation)
+                assertEq("JNI-ERROR", commit_error.err);
+                if (ds.getDriverRealName() =~ /^Oracle/) {
+                    assertEq(2091, commit_error.arg.getErrorCode());
+                } else {
+                    assertEq("23503", commit_error.arg.getSQLState());
+                }
+            } else {
+                assertTrue(commit_error.err =~ /^DBI(:[^:]+)?:ERROR$/, commit_error.err);
+            }
         }
         ds.rollback();
     }
@@ -694,7 +715,7 @@ public class SqlTestBase inherits QUnit::Test {
                 assertEq(2, q.firstValue().lsize());
             }
 
-            assertThrows("RUNTIME-TYPE-ERROR", \dp.searchSingleRecord(), {"id": <00>});
+            assertThrows("TYPE-VALUE-ERROR", \dp.searchSingleRecord(), {"id": <00>});
 
             # get first string column
             string fname;
@@ -1761,7 +1782,7 @@ public class SqlTestBase inherits QUnit::Test {
                 ),
             "op_substr_1": (
                 "in": (
-                    "where": ("char_f": op_substr (2, expect_data.char_f.substr(1))),
+                    "where": ("char_f": op_substr (2, stored_data.char_f.substr(1))),
                     ),
                 "out": (
                     "count": 2,
@@ -1770,7 +1791,7 @@ public class SqlTestBase inherits QUnit::Test {
                 ),
             "op_substr_2": (
                 "in": (
-                    "where": ("char_f": op_substr (1, 4, expect_data.char_f.substr(0,4))),
+                    "where": ("char_f": op_substr (1, 4, stored_data.char_f.substr(0,4))),
                     ),
                 "out": (
                     "count": 2,
@@ -2118,6 +2139,7 @@ public class SqlTestBase inherits QUnit::Test {
             } else {
                 expect_data{cn} = h.value.bind.'^value^' ?? h.value.value ?? h.value;
             }
+            stored_data{cn} = (h.value.typeCode() == NT_HASH ? h.value.stored : NOTHING) ?? expect_data{cn};
             if (h.value.soft) {
                 softmap{cn} = True;
             }

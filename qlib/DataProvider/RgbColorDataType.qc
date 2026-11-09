@@ -92,7 +92,7 @@ public class RgbColorDataTypeBase inherits HashDataType {
 
         @return the value to be assigned, with the opacity as a \c float
 
-        @throw RUNTIME-TYPE-ERROR the value cannot be assigned to the type, for example because a color component
+        @throw TYPE-VALUE-ERROR the value cannot be assigned to the type, for example because a color component
         is outside of \c 0 to \c 255 or its opacity is outside of \c 0 to \c 1
 
         @since DataProvider 3.9

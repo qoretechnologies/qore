@@ -723,6 +723,32 @@ set QORE_DATA_PROVIDERS=MyDataProvider;OtherDataProvider
     @verbatim
 $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     @endverbatim
+
+    @section dataprovider_retries Retries of Failed Requests
+
+    Data providers that call a remote API retry a request that failed with a transient transport error, such as a
+    refused connection or a timeout, usually after an increasing delay; a rate-limited request is retried after the
+    time given by the server.  The parts of this policy that are the same for all of them are implemented by
+    @ref DataProvider::DataProviderRetryUtil "DataProviderRetryUtil":
+    - a request that failed because the name of the server does not exist, has no address or is not a valid name,
+      or because its service is not known, is not retried; a failure of name resolution that can be temporary, such
+      as a DNS server that does not answer, is retried
+    - example data (@ref DataProvider::AbstractDataProvider::getExampleEventData() "getExampleEventData()",
+      @ref DataProvider::AbstractDataProvider::getExampleRecordData() "getExampleRecordData()" and their
+      \c WithOptions variants) is built with retries suppressed
+      (@ref DataProvider::DataProviderRetryUtil::runWithoutRetries() "runWithoutRetries()"): a request made for it
+      is made once, also when it fails with a transport error or is rate-limited, and a data provider that
+      requests a real record returns generated or fake example data when the request fails
+    - the delays between transport retries are multiples of a unit of 1 second by default, which a process can
+      change for all data providers with
+      @ref DataProvider::DataProviderRetryUtil::setTransportRetryDelayUnit() "setTransportRetryDelayUnit()";
+      a unit of zero retries without waiting
+
+    @par Example
+    @code{.py}
+# transport retries wait milliseconds instead of seconds
+DataProviderRetryUtil::setTransportRetryDelayUnit(1ms);
+    @endcode
 */
 /** @page dataprovider_pipelines Data Provider Pipelines
 
@@ -1631,6 +1657,59 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_11 DataProvider v3.11
+    - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()
+      "DataProviderActionCatalog::registerLazyAppActions()", with which a module registers code that builds the
+      actions of its app the first time that the app is used, so that loading the module does not build them (see
+      @ref dataprovider_lazy_actions); the code never runs in the sandbox of a sandboxed first reader, but on a
+      catalog worker thread that no sandbox governs, started when a sandboxed reader first needs it;
+      @ref DataProvider::DataProviderActionCatalog::hasLazyAppActions()
+      "DataProviderActionCatalog::hasLazyAppActions()" tells whether it has run
+    - added @ref DataProvider::DataProviderActionCatalog::registerLazyValue()
+      "DataProviderActionCatalog::registerLazyValue()" and
+      @ref DataProvider::DataProviderActionCatalog::getLazyValue() "DataProviderActionCatalog::getLazyValue()" to
+      build shared values, such as types built from a vendored API description, on first use in the same way
+    - the module needs a %Qore with \c register_exit_hook(), \c SandboxManager::createSystemThreadCall(),
+      \c SandboxManager::isSandboxed() and module initialization with no sandbox provenance (a module from the module
+      path is initialized as library code, also when sandboxed code loads it first, so its registrations and what
+      they create belong to no tenant); when the @ref Qore::Program "Program" that loads it first
+      may not create the worker's capability (@ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"), every
+      deferred registration runs and every lazy value is built when it is registered, as before they were deferred;
+      code restricted with \c PO_NO_UNCONTROLLED_APIS uses the catalog as any other code after a trusted load
+    - registrations (pending or lazy) made by code that a sandbox governs, also under a policy barrier, run when they
+      are made, and so do the output type and dynamic option callbacks of the actions that it registers, so that no
+      code registered under a sandbox runs later on another thread; for a sandboxed reader, the catalog workers run
+      the registrations that trusted code made
+    - sandboxed code cannot add a catalog change listener, nor set or clear the scheme lookup callback or the
+      generic API call action or child builder; a catalog change listener never runs on a sandboxed thread
+    - a lazy value registered by a module whose load fails and is rolled back is removed
+    - the \c NoInit getters of @ref DataProvider::DataProviderActionCatalog "DataProviderActionCatalog" never run or
+      wait for deferred registrations; the deferred initialization of an app runs on one thread at a time, and a
+      thread that uses the app meanwhile waits for it instead of reading part of what it registers
+    - added @ref DataProvider::DataProviderRetryUtil "DataProviderRetryUtil", the retry policy shared by data
+      providers that retry failed requests: a request that failed because the name of the server does not exist
+      is not retried, code that builds example data can make its requests without retries, and the
+      unit of the delays between transport retries can be set for all data providers with
+      @ref DataProvider::DataProviderRetryUtil::setTransportRetryDelayUnit() "setTransportRetryDelayUnit()"
+      (see @ref dataprovider_retries)
+    - the example event and record data of every data provider are built with retries suppressed: a request made
+      for example data is made once, without retries or waits (see @ref dataprovider_retries)
+    - fixed @ref DataProvider::FileDataType::acceptsValue() "FileDataType::acceptsValue()" for a hash holding only
+      binary values, such as a literal <tt>{"content": binary("x")}</tt>: encoding the content raised
+      \c RUNTIME-TYPE-ERROR instead of checking the value
+    - soft numeric and date types refuse text that is no number or date with \c TYPE-VALUE-ERROR instead of
+      converting it to a zero value: the soft types that @ref DataProvider::AbstractDataProviderType::get()
+      "AbstractDataProviderType::get()" and @ref DataProvider::AbstractDataProviderTypeMap "AbstractDataProviderTypeMap"
+      give, and a soft numeric type with the \c number.format option, whose text must be a number in that format; a
+      number or date as text is converted as before
+    - a value that a data type refused with \c RUNTIME-TYPE-ERROR is refused with \c TYPE-VALUE-ERROR, and an option
+      value with \c OPTION-VALUE-ERROR, so that a caller's data can be told apart from a type error in the code; text
+      that a soft date type cannot parse as a date is also refused with \c TYPE-VALUE-ERROR instead of
+      \c INVALID-DATE, as non-numeric text is by the soft numeric types; a missing value is still reported with
+      \c MISSING-VALUE-ERROR and a missing required group of fields with \c REQUIRED-FIELD-GROUP-ERROR.
+      \c RUNTIME-TYPE-ERROR from a type now means that the check itself failed, and a field of a hash type reports
+      such an error, \c RUNTIME-OVERLOAD-ERROR, \c STACK-LIMIT-EXCEEDED and \c SCHEMA-DOCUMENT-DESTROYED with
+      their own code instead of as a refused value (@ref DataProvider::AbstractDataProviderType::getValueErrorCode()
+      "AbstractDataProviderType::getValueErrorCode()")
     - added catalog change listeners
       (@ref DataProvider::DataProviderActionCatalog::addCatalogChangeListener() "DataProviderActionCatalog::addCatalogChangeListener()",
       @ref DataProvider::DataProviderCatalogChangeListener "DataProviderCatalogChangeListener"): a listener is
@@ -1747,7 +1826,7 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       (\c "a whole number") for each base type and for the types of this module with a presentation of their own;
       DPQL completion names types with them
     - an allowed value or element choice that is a string with a NUL character, which cannot be a key of the set of
-      allowed values, raises \c RUNTIME-TYPE-ERROR when it is set on a field or type, and a value with a NUL
+      allowed values, raises \c TYPE-VALUE-ERROR when it is set on a field or type, and a value with a NUL
       character is refused as outside the allowed values (\c FIELD-VALUE-ERROR or \c TYPE-VALUE-ERROR); before, the
       allowed values of a field and a value checked against them were cut at the NUL character, so that a value
       could be accepted that was not an allowed value.
@@ -2534,6 +2613,9 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       document, so vector indexes avoid semantic dilution as translations are added
     - action option generation returns an empty hash for operations without input fields
     - added HTTP/3 debug tracking, context-sensitive action filtering, and the \c amqp factory registration
+    - added @ref DataProvider::DataProviderActionCatalog::getAppNamesNoInit() "DataProviderActionCatalog::getAppNamesNoInit()",
+      which returns the names of all registered applications, including those pending initialization, without
+      initializing any
 
     @section dataprovider_v3_2_2 DataProvider v3.2.2
     - fixed setting the mandatory flag for hashes with dynamic fields

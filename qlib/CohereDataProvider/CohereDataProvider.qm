@@ -60,7 +60,11 @@ module CohereDataProvider {
             "groups": (DataProvider::AppGroup::AiLlm,),
         });
 
-        (CohereSchema::getActionSet()).registerActions(CohereDataProvider::AppName);
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(CohereDataProvider::AppName, sub () {
+            (CohereSchema::getActionSet()).registerActions(CohereDataProvider::AppName);
+        });
     };
 }
 

@@ -5,7 +5,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
-%requires ../../../../qlib/QUnit.qm
+%requires QUnit
 %requires reflection
 
 %exec-class SoftListOptionalityTest

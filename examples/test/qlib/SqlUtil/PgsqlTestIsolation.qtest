@@ -36,6 +36,14 @@ class PgsqlTestIsolationTest inherits QUnit::Test {
         connstr = ENV.QORE_DB_CONNSTR_PGSQL;
         if (!connstr) {
             skip_reason = "QORE_DB_CONNSTR_PGSQL is not configured";
+        } else if (!skip_reason) {
+            # a configured server that this host cannot reach skips the cases, as the other database tests do
+            try {
+                Datasource connstr_ds(connstr);
+                connstr_ds.open();
+            } catch (hash<ExceptionInfo> ex) {
+                skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+            }
         }
         addTestCase("a non-PostgreSQL connection has no run schema", \notPgsql());
         addTestCase("a PostgreSQL JDBC URL gets the run's schema as its currentSchema", \jdbcConnectionString());
@@ -159,18 +167,22 @@ class PgsqlTestIsolationTest inherits QUnit::Test {
         int now = now_us().getEpochSeconds();
         int old = now - PgsqlRunSchema::LeftoverAge.durationSeconds() - 60;
         int gone = PgsqlTestIsolationTest::getGonePid();
+        # each name has this process's host and id (the id in the first label of a run's name): the runs on the
+        # database at the same time, on this host or on another, make schemas of their own; two runs on a host may
+        # find the same gone process id
+        int pid = getpid();
         hash<string, bool> expected = {
             # a gone run, old enough: dropped, with its other schema
-            sprintf("qtest_leftover_%s_%d_%d", host, gone, old): False,
-            sprintf("qtest_leftover_%s_%d_%d_other", host, gone, old): False,
+            sprintf("qtest_leftover%d_%s_%d_%d", pid, host, gone, old): False,
+            sprintf("qtest_leftover%d_%s_%d_%d_other", pid, host, gone, old): False,
             # a gone run, too recent: kept, as its process id may have been reused
-            sprintf("qtest_recent_%s_%d_%d", host, gone, now): True,
+            sprintf("qtest_recent%d_%s_%d_%d", pid, host, gone, now): True,
             # a live run (this process), old: kept
             sprintf("qtest_live_%s_%d_%d", host, getpid(), old): True,
             # another host: kept
-            sprintf("qtest_otherhost_%s_%d_%d", host + "x", gone, old): True,
+            sprintf("qtest_otherhost%d_%s_%d_%d", pid, host + "x", gone, old): True,
             # not a run's schema: kept
-            sprintf("qtest_%d", old): True,
+            sprintf("qtest_%d_%s_%d", old, host, pid): True,
         };
         foreach string schema in (keys expected) {
             ds.exec("create schema " + schema);

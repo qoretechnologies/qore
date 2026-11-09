@@ -615,7 +615,7 @@ public class TabularProfilerTest inherits QUnit::Test {
         foreach hash<TabularProfileFinding> finding in (profile.sheets[0].findings) {
             assertTrue(codes{finding.code}, finding.code);
         }
-        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+        assertThrows("TYPE-VALUE-ERROR", sub () {
             TabularWorkbookProfileDataType.acceptsValue({"format": "csv", "sheets": ({"name": 1},)});
         });
     }

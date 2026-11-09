@@ -151,6 +151,70 @@ DLLLOCAL bool qore_ir_get_readonly_scalar_closure_captures(
 DLLLOCAL const LocalVar* qore_ir_get_written_local(
     const QoreIRInstruction* inst);
 
+//! Finds the values read from the storage of a local variable that a later write to the variable can release while
+//! they still have a use
+/** A LoadLocal gives the value the variable holds, as does a StoreLocal (the value it stored), and an engine can give
+    it without a reference of its own, borrowed from the variable's storage (native code reads its local cache this
+    way, the IR interpreter the base of a method call).  The AST interpreter evaluates every argument of a call, and
+    the operands of an operator, into a value of its own, so a write to the variable between the read and the use
+    (ex: <tt>f(t = new T("a"), t = new T("b"))</tt>, <tt>o.m(o = new T())</tt>, <tt>o.m(remove o)</tt>) leaves the
+    value read intact; borrowed, it was released by the write while the call still had to use it.
+
+    A write is any instruction that qore_ir_get_written_local() gives for the variable; in a function that creates a
+    reference (\c \\x), any instruction that can change state visible to its caller, and any write to a local (which can
+    hold a reference), can write a variable through it, and is a write to every variable.  The value of a guard
+    (GuardType, GuardNotNothing) and of a Phi is the value of its operand, so a use of it is a use of the values read
+    that it can be.  A write is between a read and a use in the same block when it comes after the read and before the
+    use; otherwise when a path from the read reaches the use through the write without executing the read again (a path
+    is assumed when the search exceeds its budget, or when a read used in another block needs more than a bounded number
+    of checks).  A write between a read and its uses in the read's block is found by a binary search in the writes of
+    the block, so the analysis takes about n log n steps for a function of n instructions in all but those cases.
+
+    @param func the function
+    @param result the values found (LoadLocal and StoreLocal results)
+    @return false if the analysis was cancelled; @a result then holds every value read from a variable
+*/
+DLLLOCAL bool qore_ir_find_local_reads_overwritten_before_use(const QoreIRFunction& func,
+    std::unordered_set<uint32_t>& result);
+
+//! The release class of a value that is the receiver of an operation (see qore_ir_build_exception_release_groups())
+constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
+
+//! Classifies the values of a function for the order in which an exception releases the temporaries of a statement
+/** When an exception leaves an expression, the AST interpreter unwinds its evaluation: the arguments of each call (and
+    the elements of each list or hash) whose evaluation the exception interrupted are released with their argument
+    list, first argument first, the innermost call's first, and an operand that an operator holds is released as the
+    operator is unwound; a receiver (the object of a method call, the container of [] or {}, the value of a
+    cast), which the statement holds until it ends (QoreStatementTempScope::holdReceiver()), is released last, last
+    held first.  An engine that releases a statement's temporaries last registered first gives another order
+    (f(new T("a"), new T("b"), thr()) destroys b before a).
+
+    Each value used once gets a class: 1 + the serial (in block and instruction order) of the instruction whose argument
+    list (the arguments of a call, the elements of a list or a hash) it is in, QORE_IR_RELEASE_RECEIVER if it is a
+    receiver, or 0 if it is released on its own (an operand of any other instruction, or a value used more than once);
+    an incoming value of a Phi in an argument list that has no class of its own gets the Phi's, as the Phi's value is
+    the incoming value, which an engine can keep in the incoming value's own slot.
+
+    @param func the function
+    @param groups receives the class of each value, indexed by value id
+*/
+DLLLOCAL void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vector<uint32_t>& groups);
+
+//! Orders the temporaries of a statement for their release when an exception leaves it
+/** The temporaries of each argument list (see qore_ir_build_exception_release_groups()) are released together, first
+    registered first, and the lists last started first (the innermost first); a temporary released on its own takes
+    the place of a list of one; receivers are released after all of them, last registered first.
+
+    @param groups the classes of the values (qore_ir_build_exception_release_groups()); a value id outside it is
+    released on its own
+    @param ids the value ids of the temporaries, in the order of their registration
+    @param count the number of temporaries
+    @param order receives the indexes into @a ids in the order of their release
+    @return true if @a order differs from the reverse of the registration order
+*/
+DLLLOCAL bool qore_ir_order_exception_release(const std::vector<uint32_t>& groups, const uint32_t* ids, size_t count,
+    std::vector<size_t>& order);
+
 //! Return true when one instruction can mutate state visible to its caller.
 //! Direct function calls without reference arguments are handled by the
 //! interprocedural fixed-point analysis and therefore return false here.

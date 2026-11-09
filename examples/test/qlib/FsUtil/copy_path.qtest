@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - copying through followed and unfollowed symlinks, mode bits and unreadable (0000) sources
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util

@@ -185,6 +185,26 @@ public:
     QoreIRValue lowerConstant(const QoreValue& expr, std::string& error);
     QoreIRValue lowerVarRef(const QoreValue& expr, std::string& error);
     QoreIRValue lowerAssignment(const QoreValue& expr, std::string& error);
+    //! Returns the result of +=, -=, *= or /= on a variable that is changed by loading it, computing its new value
+    //! and storing it
+    /** The result is the value the variable holds after the store, as in the AST interpreter, whose +=, -=, *= and
+        /= operators return the lvalue's value: the variable's declared type can convert the computed value when it is
+        stored (ex: an \c any or \c auto! variable stores a \c hash<HD> as a plain \c hash, a \c softint variable
+        stores 17.5 as 17), so the variable is read again when the result is used.  The integer operators (%=, &=,
+        |=, ^=, <<=, >>=) apply only to lvalues that accept and return an integer, which store the integer computed
+        as it is, so their lowerings return the value they compute.
+
+        @param needs_rv true if the result of the operator is used
+        @param var the variable
+        @param left the operator's lvalue expression
+        @param result the computed value that was stored
+        @param error for an error message
+        @param context the context of the load for error messages
+
+        @return the result of the operator
+    */
+    QoreIRValue compoundAssignmentResult(bool needs_rv, const VarRefNode* var, const QoreValue& left,
+        QoreIRValue result, std::string& error, const char* context);
     QoreIRValue lowerPlusEquals(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMinusEquals(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMultiplyEquals(const QoreValue& expr, std::string& error);
@@ -253,6 +273,20 @@ public:
     QoreIRValue lowerDotEval(const QoreValue& expr, std::string& error);
     QoreIRValue lowerFoldl(const QoreValue& expr, std::string& error);
     QoreIRValue lowerFoldr(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerFoldlImpl(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerFoldrImpl(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerMapImpl(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerSelectImpl(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerMapSelectImpl(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerHashMapImpl(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerHashMapSelectImpl(const QoreValue& expr, std::string& error);
+    //! Lowers a functional operator and releases its source, if it is a temporary, once the operator has run
+    template <typename F>
+    QoreIRValue lowerWithSourceRelease(const QoreValue& expr, const QoreValue& source,
+            const QoreProgramLocation* loc, bool always_ref,
+            std::string& error, F&& lower);
+    //! Sets the source of the functional operator being lowered to the base source of its fused pipeline
+    void setFunctionalBaseSource(const QoreValue& base_source);
     QoreIRValue lowerMap(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSelect(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMapSelect(const QoreValue& expr, std::string& error);
@@ -423,6 +457,17 @@ private:
     bool lowerCallArgs(const QoreParseListNode* parse_args, const QoreListNode* args,
         std::vector<QoreIRValue>& lowered, std::string& error);
     bool callArgumentMayPassReference(const QoreValue& arg) const;
+    //! Returns true if the value of an assignment to a variable can be a reference that the variable now holds
+    /** The value of <tt>t = v</tt> and <tt>t += v</tt> in the AST interpreter is the value the lvalue holds
+        afterwards, taken as it is (LValueHelper::getReferencedValue()): if \a v is a reference that a variable of
+        no type now holds (an element <tt>h.r</tt> holding <tt>\x</tt>, the value of a call), the value is the
+        reference, so that <tt>auto r = (t = h.r); r = 5;</tt> assigns \c x.  Reading the variable again gives the
+        referenced value instead, so such an assignment whose value is used is lowered as an lvalue path operation,
+        which gives the value as the AST interpreter does.
+        @param var the variable assigned
+        @param right the value assigned or added
+    */
+    bool assignmentValueMayBeReference(const VarRefNode* var, const QoreValue& right) const;
     bool callArgsMayPassReferences(const QoreParseListNode* parse_args, const QoreListNode* args) const;
     bool markReferenceArgumentAssignmentsUnknown(const QoreParseListNode* parse_args,
         const QoreListNode* args, std::string& error);
@@ -607,6 +652,26 @@ private:
 
     //! Returns true when a concrete constant container can be loaded once instead of rebuilt per read
     bool constantContainerLoadsByReference(const QoreValue& expr) const;
+
+    //! Releases the temporaries of the elements of a list or hash literal once the container holds them
+    template <typename F>
+    void releaseContainerElementTemps(const std::vector<QoreIRValue>& values, F&& element_expr,
+            const QoreProgramLocation* loc);
+
+    //! Lowers an expression (see lowerExpression(), which records the value of a functional operator's source)
+    QoreIRValue lowerExpressionImpl(const QoreValue& expr, std::string& error);
+
+    //! The source of a functional operator being lowered and the value it gave, for its release after the operator
+    struct FunctionalSourceCapture {
+        const AbstractQoreNode* node = nullptr;
+        QoreIRValue value;
+        //! true if the operator's value can be the source's (a source that is not known to be a list)
+        bool may_alias = false;
+    };
+    //! The sources of the functional operators being lowered, innermost last
+    std::vector<FunctionalSourceCapture> functional_source_captures;
+    //! Releases the temporary that a functional operator's source gave once the operator has run (see the definition)
+    class FunctionalSourceRelease;
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;

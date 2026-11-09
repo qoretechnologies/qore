@@ -1,0 +1,239 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../TestFileTime.qm
+%requires ./CMakeBuildHelpersTestBase.qm
+
+%exec-class CMakeGenericContextTest
+
+#! Generic qcc objects: qcc context transitions, the frozen graph and a broad recovery
+/** One scenario of the incremental life of the generic qcc object helper project of CMakeBuildHelpersTestBase.qm,
+    on a baseline built for it.  Each scenario is a file of its own, so that none comes near the time limit of a
+    test and test shards run them side by side.
+*/
+class CMakeGenericContextTest inherits CMakeBuildHelpersTestBase::GenericQccObjectTest {
+    constructor() : GenericQccObjectTest("CMakeGenericContextTest", "1.0", \ARGV) {
+        addTestCase("generic qcc objects: qcc context transitions, the frozen graph, and a broad recovery",
+            \testContextTransitions());
+        set_return_value(main());
+    }
+
+    #! A qcc context transition, the same transition inside one second, the frozen graph, and a broad recovery
+    /** Setup: the tree is current (@ref settleGenericBaseline()); the objects are the baseline's shared parse.
+
+        Steps, each on the tree the step before it left:
+        - the qcc context touched: one shared parse compiles every source once
+        - the published stamps rolled back into the second of the context the previous step touched, which is what
+          gives the context a time inside that second: the transition is still seen
+        - the graph the previous build froze, and the publication it names; the batch bootstrap helper run behind
+          the current tree advances the ordering token only
+        - a build after that ordering touch compiles nothing
+        - eight of the generation records the previous builds published removed, with the plan stamp: one decision
+          rebuilds what the consumer closure needs
+    */
+    testContextTransitions() {
+        TmpDir tmp("qore-cmake-qcc-context-");
+        hash<GenericQccProject> project = buildGenericBaseline(tmp.path);
+        settleGenericBaseline(project);
+
+        string build_dir = project.build_dir;
+        list<string> object_paths = project.object_paths;
+        string bootstrap_stamp = build_dir + "/qo/.qcc-scc/.qcc-batch-bootstrap.stamp";
+
+        # A changed group context is a shared-parse generation transition.  If
+        # the bootstrap helper accepts the source-only SCC generation here,
+        # Make runs the standalone rule once for every source in the group.
+        run(sprintf("cmake -E touch %s/qo-scripts/.qcc-context", build_dir));
+        string context_rebuild = run(buildCommand(build_dir));
+        assertEq(1, occurrences(context_rebuild,
+                "compiling the group in one shared parse"),
+            "a newer qcc context forces one batch generation transition: "
+                + context_rebuild);
+        assertEq(object_paths.size(),
+            occurrences(context_rebuild, "qcc: script-context .qo"),
+            "a qcc context transition compiles each source exactly once: "
+                + context_rebuild);
+
+        # The same transition with the context and the publication it supersedes
+        # inside one second.  Both timestamps are produced by the build itself
+        # and are routinely less than a second apart, so a whole-second currency
+        # comparison -- what POSIX test(1) does, and what the bootstrap helper
+        # used to ask it for -- cannot see this shape at all.  Rolling every
+        # published stamp back to the context's own second reproduces it without
+        # depending on how fast the machine runs the preceding build.
+        string context_path = build_dir + "/qo-scripts/.qcc-context";
+        date context_time = mtime(context_path);
+        list<string> published_stamps = (bootstrap_stamp,);
+        foreach string object_path in (object_paths) {
+            push published_stamps, object_path + ".stamp";
+        }
+        TestFileTime::set_file_times(context_time, published_stamps);
+        assertTrue(context_time > mtime(bootstrap_stamp)
+                && get_duration_microseconds(context_time - mtime(bootstrap_stamp))
+                    < 1000000,
+            "the fixture publishes a sub-second qcc context transition");
+        string same_second_rebuild = run(buildCommand(build_dir));
+        assertEq(1, occurrences(same_second_rebuild,
+                "compiling the group in one shared parse"),
+            "a sub-second qcc context transition still forces one batch "
+                "generation transition: " + same_second_rebuild);
+        assertEq(object_paths.size(),
+            occurrences(same_second_rebuild, "qcc: script-context .qo"),
+            "a sub-second qcc context transition compiles each source exactly "
+                "once: " + same_second_rebuild);
+
+        # The frozen dependency graph is an ordinary file that outlives the build
+        # that wrote it, so it records the whole-group publication it was frozen
+        # from. Direct object-stamp consumers now inherit the planner barrier,
+        # but standalone helper invocations can still run before a build's first
+        # freeze. Applying the previous build's edge set
+        # there resolves a compile plan the coordinator's freeze then refuses to
+        # publish, and the component is compiled a second time.
+        string snapshot_path = context_path + ".graph-snapshot.json";
+        string snapshot_text = read(snapshot_path);
+        assertTrue(snapshot_text.find("\"edges\":[[") != -1,
+            "the fixture's frozen graph carries contract edges: " + snapshot_text);
+        *string frozen_batch_generation = (snapshot_text
+            =~ x/"batch_stamp_generation":([0-9]+)/)[0];
+        assertTrue(exists frozen_batch_generation,
+            "the frozen graph names the whole-group publication it was read "
+                "from: " + snapshot_text);
+        # The publication sidecar dates that publication; the batch stamp beside
+        # it cannot, because the build tool also touches it for ordering.
+        string publication_marker = bootstrap_stamp + ".publication";
+        assertTrue(is_file(publication_marker),
+            "a shared parse dates the group's whole-group publication");
+        assertEq(get_duration_microseconds(mtime(publication_marker) - 1970-01-01Z),
+            frozen_batch_generation.toInt(),
+            "the frozen graph names the current batch publication");
+        string vars_text = read(build_dir + "/qo-vars.txt");
+        *string source_order_helper = (vars_text
+            =~ x/source_order_helper=(.*)/)[0];
+        assertTrue(exists source_order_helper && is_file(source_order_helper),
+            "the fixture exports the source-order helper: "
+                + (source_order_helper ?? "<missing>"));
+        *string batch_bootstrap_helper = (vars_text
+            =~ x/batch_bootstrap_helper=(.*)/)[0];
+        assertTrue(exists batch_bootstrap_helper && is_file(batch_bootstrap_helper),
+            "the fixture exports the batch bootstrap helper: "
+                + (batch_bootstrap_helper ?? "<missing>"));
+        string graph_generation_cmd = sprintf("%s %s --scc-graph-generation %s",
+            shellQuote(qore_bin), shellQuote(source_order_helper),
+            shellQuote(context_path));
+        string live_graph = trim(run(graph_generation_cmd));
+        # Both probes name an edge set the live depfiles do not, so whether the
+        # snapshot was applied is visible in the generation the helper reports.
+        string standing_snapshot = build_dir + "/graph-snapshot-standing.json";
+        write(standing_snapshot,
+            regex_subst(snapshot_text, "\"edges\":\\[", "\"edges\":[[0,1],"));
+        string superseded_snapshot = build_dir + "/graph-snapshot-superseded.json";
+        write(superseded_snapshot, replace(read(standing_snapshot),
+            "\"batch_stamp_generation\":" + frozen_batch_generation,
+            "\"batch_stamp_generation\":"
+                + string(frozen_batch_generation.toInt() - 1000000)));
+        assertNeq(live_graph, trim(run(sprintf("QORE_QCC_GRAPH_SNAPSHOT=%s %s",
+            shellQuote(standing_snapshot), graph_generation_cmd))),
+            "a graph frozen from the standing whole-group publication is applied");
+        assertEq(live_graph, trim(run(sprintf("QORE_QCC_GRAPH_SNAPSHOT=%s %s",
+            shellQuote(superseded_snapshot), graph_generation_cmd))),
+            "a graph frozen from a superseded whole-group publication is "
+                "discarded for a live scan");
+
+        # The batch stamp is also the build tool's ordering token, so a bootstrap
+        # run that publishes nothing still touches it: CMake's Makefile generator
+        # duplicates the bootstrap recipe into every independent target that
+        # depends on the stamp, and in a parallel build the copy that loses the
+        # race to the group lock finds the tree the winner published current and
+        # touches the stamp so no member stays older than its dependencies.  That
+        # touch can land after the coordinator's last freeze, and dating the
+        # publication by the stamp then discarded an edge set that is still exact
+        # -- silently, on every later build.  Running the helper here against a
+        # current tree is exactly what that losing copy does.
+        date published_at = mtime(publication_marker);
+        date stamped_at = mtime(bootstrap_stamp);
+        string ordering_touch = run(sprintf("QORE_QCC_QORE_EXECUTABLE=%s %s %s %s %s %s",
+            shellQuote(qore_bin), shellQuote(batch_bootstrap_helper),
+            shellQuote(context_path), shellQuote(bootstrap_stamp),
+            shellQuote(build_dir + "/qo-scripts/qcc-batch.sh"),
+            shellQuote(source_order_helper)));
+        assertEq(-1, ordering_touch.find("compiling the group in one shared parse"),
+            "a bootstrap run behind a current tree publishes nothing: "
+                + ordering_touch);
+        assertGt(stamped_at, mtime(bootstrap_stamp),
+            "a bootstrap run behind a current tree still advances the build "
+                "tool's ordering token: " + ordering_touch);
+        assertEq(published_at, mtime(publication_marker),
+            "a bootstrap run that publishes nothing dates no new publication");
+        assertEq(snapshot_text, read(snapshot_path),
+            "an ordering touch of the batch stamp leaves the frozen graph alone");
+        assertNeq(live_graph, trim(run(sprintf("QORE_QCC_GRAPH_SNAPSHOT=%s %s",
+            shellQuote(standing_snapshot), graph_generation_cmd))),
+            "a graph frozen before an ordering touch of the batch stamp is "
+                "still applied");
+        unlink(standing_snapshot);
+        unlink(superseded_snapshot);
+
+        string no_op = run(buildCommand(build_dir));
+        assertTrue(no_op.find("qcc -c:") == -1
+                && no_op.find("qcc: scanning") == -1
+                && no_op.find("qcc --link-qo:") == -1
+                && no_op.find("qcc --script-aggregate:") == -1,
+            "no-op rebuild does not rerun qcc helper targets: " + no_op);
+
+        # Recreate the failure shape from a killed or partially published broad
+        # incremental build. The group planner must make one decision before any
+        # object recipes run and recover through one shared parse, rather than
+        # starting a recursive prerequisite walker for every missing generation.
+        string incremental_plan_stamp = build_dir
+            + "/qo/.qcc-scc/.qcc-incremental-plan.stamp";
+        assertTrue(is_file(incremental_plan_stamp),
+            "multi-source groups publish an incremental-plan barrier");
+        list<string> generation_records = ();
+        foreach string line in (backquote(sprintf(
+                "find %y -name '*.generation.json' -type f | sort", build_dir
+                    + "/qo/.qcc-scc")).split("\n")) {
+            if (trim(line)) {
+                push generation_records, line;
+            }
+        }
+        assertEq(object_paths.size(), generation_records.size(),
+            "the acyclic fixture publishes one generation record per source");
+        for (int index = 0; index < 8; ++index) {
+            unlink(generation_records[index]);
+        }
+        unlink(incremental_plan_stamp);
+        string broad_recovery = run(buildCommand(build_dir));
+        # How the coordinator recovers depends on the consumer closure of those
+        # eight components, and that closure is a property of the depfiles this
+        # platform's compiles produced -- it is not the same everywhere.  The
+        # policy is what this asserts: a closure that reaches most of the group
+        # is parsed as the group, and anything smaller rebuilds only what was
+        # stale rather than reparsing current sources to republish eight.
+        int recovery_compiles = occurrences(broad_recovery,
+            "qcc: script-context .qo");
+        if (occurrences(broad_recovery, "broad incremental invalidation")) {
+            assertEq(object_paths.size(), recovery_compiles,
+                "a closure that reaches most of the group is parsed as the "
+                    "group: " + broad_recovery);
+        } else {
+            # A component whose artifacts are all intact -- which is the case
+            # here, only the generation records were removed -- republishes
+            # without recompiling, so zero is a valid count too.
+            # The smaller closure must not reparse the group.
+            assertTrue(recovery_compiles < object_paths.size(),
+                sprintf("a smaller closure does not reparse the group (%d of "
+                    "%d): %s", recovery_compiles, object_paths.size(),
+                    broad_recovery));
+        }
+        assertTrue(is_file(incremental_plan_stamp),
+            "the successful coordinated rebuild commits its plan stamp: "
+                + broad_recovery);
+    }
+}

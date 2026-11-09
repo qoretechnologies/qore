@@ -92,6 +92,9 @@ protected:
 
     DLLLOCAL bool getEffectiveRange(const QoreValue& seq, int64& start, int64& stop, int64& seq_size,
             bool broken_list_range, bool negative_offsets, ExceptionSink* xsink) const;
+
+    //! gives a sequence borrowed from a variable a reference of its own if the indexes need evaluation
+    DLLLOCAL void holdBorrowedSequence(ValueEvalRefHolder& seq) const;
 };
 
 class QoreFunctionalSquareBracketsRangeOperator : public FunctionalOperatorInterface, public RangeIterator {

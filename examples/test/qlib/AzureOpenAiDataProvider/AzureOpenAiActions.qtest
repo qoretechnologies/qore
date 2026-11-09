@@ -297,7 +297,7 @@ class AzureActionsTest inherits QUnit::Test {
                 assertEq(1.5, accepted.duration.toFloat());
                 assertEq((), accepted.segments);
                 assertEq((), accepted.words);
-                assertThrows("RUNTIME-TYPE-ERROR", sub () { type.acceptsValue({"wrong": "field"}); });
+                assertThrows("TYPE-VALUE-ERROR", sub () { type.acceptsValue({"wrong": "field"}); });
             }
             foreach string format in ("json", "text", "srt", "verbose_json", "vtt") {
                 root.getChildProvider(action).doRequest({"model": "whisper-deployment",
@@ -337,7 +337,7 @@ class AzureActionsTest inherits QUnit::Test {
             foreach string name in ("first_id", "last_id") {
                 hash<auto> invalid = empty;
                 invalid{name} = {};
-                assertThrows("RUNTIME-TYPE-ERROR", sub () { type.acceptsValue(invalid); });
+                assertThrows("TYPE-VALUE-ERROR", sub () { type.acceptsValue(invalid); });
                 invalid{name} = "item-1";
                 assertEq("item-1", type.acceptsValue(invalid){name});
             }

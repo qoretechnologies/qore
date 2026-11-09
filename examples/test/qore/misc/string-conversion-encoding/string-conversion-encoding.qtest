@@ -1,6 +1,8 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - iconv conversions of UTF-16/UTF-32 (with and without BOM) and IBM1140 strings to numbers
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: parent - the reference results are computed in the test's own process
 
 %modern
 %no-child-restrictions

@@ -1,0 +1,106 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class ProcessWideRegistriesTest
+
+#! Verifies that code that a sandbox governs cannot change DataProvider's process-wide state
+/** Process-wide state changes what the module does for every caller, of other tenants and of trusted code, and the
+    code it holds runs on their threads: sandboxed code is refused, also under a policy barrier, and a static
+    initializer that sandboxed code registers runs at once, on its thread
+*/
+class ProcessWideRegistriesTest inherits QUnit::Test {
+    public {
+        #! the calls that sandboxed code makes; each must raise DATA-PROVIDER-CALLBACK-ERROR
+        const Calls = {
+            "set_global_logger": "DataProvider::setGlobalLogger();",
+            "add_options": "DataProvider::addOptions(0);",
+            "remove_options": "DataProvider::removeOptions(0);",
+            "set_options": "DataProvider::setOptions(DataProvider::getOptions());",
+            "lock_all_types": "DataProvider::lockAllTypes();",
+            "set_template_callbacks": "DataProvider::setTemplateCallbacks(auto sub (string a, string b, *hash<auto> c) {});",
+            "clear_template_callbacks": "DataProvider::clearTemplateCallbacks();",
+            "set_auto_config": "DataProvider::setAutoConfig();",
+            "defer_static_init": "DataProvider::deferStaticInitialization();",
+            "restore_static_init": "DataProvider::restoreStaticInitialization();",
+            "register_shutdown_handler": "DataProvider::registerShutdownHandler('tenant', sub () {});",
+            "deregister_shutdown_handler": "DataProvider::deregisterShutdownHandler('trusted');",
+            "lock_dynamic_value_callbacks": "AbstractDataProvider::setDynamicValueCallbacks();",
+            "set_dynamic_value_callbacks": "AbstractDataProvider::setDynamicValueCallbacks(bool sub (string v) { return False; }, auto sub (auto v) { return v; });",
+            "set_adp_template_callbacks": "AbstractDataProvider::setTemplateCallbacks(auto sub (string a, string b, *hash<auto> c) {});",
+            "clear_adp_template_callbacks": "AbstractDataProvider::clearTemplateCallbacks();",
+            "register_webhook_apis": "DataProviderWebhook::registerWebhookApis(hash<auto> sub (hash<auto> h) { return {}; }, sub (hash<auto> h) {});",
+        };
+    }
+
+    constructor() : Test("DataProvider process-wide registries", "1.0", \ARGV) {
+        addTestCase("sandboxed code cannot change process-wide state", \sandboxedTest());
+        addTestCase("trusted code serving sandboxed code under a policy barrier cannot either", \barrierTest());
+        addTestCase("a static initializer that sandboxed code registers runs at once", \staticInitializerTest());
+        set_return_value(main());
+    }
+
+    sandboxedTest() {
+        DataProvider::registerShutdownHandler("trusted", sub () {});
+        on_exit DataProvider::deregisterShutdownHandler("trusted");
+        int options = DataProvider::getOptions();
+        bool webhooks = DataProviderWebhook::hasWebhookSupport();
+        Program tenant = ProcessWideRegistriesTest::tenant();
+        foreach string f in (keys Calls) {
+            assertThrows("DATA-PROVIDER-CALLBACK-ERROR", \tenant.callFunction(), (f,), f);
+        }
+        # nothing changed
+        assertEq(options, DataProvider::getOptions());
+        assertEq(webhooks, DataProviderWebhook::hasWebhookSupport());
+        # the trusted shutdown handler is still registered
+        assertThrows("SHUTDOWN-HANDLER-ERROR", \DataProvider::registerShutdownHandler(), ("trusted", sub () {}));
+    }
+
+    barrierTest() {
+        int options = DataProvider::getOptions();
+        # trusted infrastructure that changes the options for its callers, under a policy barrier
+        code cap = SandboxManager::createSystemPolicyCall(sub () { DataProvider::addOptions(DPO_EnableOnDemandActions); });
+        Program tenant = ProcessWideRegistriesTest::tenant();
+        assertThrows("DATA-PROVIDER-CALLBACK-ERROR", \tenant.callFunction(), ("run", cap));
+        assertEq(options, DataProvider::getOptions());
+    }
+
+    staticInitializerTest() {
+        Program tenant = ProcessWideRegistriesTest::tenant();
+        hash<auto> h = tenant.callFunction("register_initializer");
+        # it ran on the tenant's thread, when it was registered
+        assertEq(h.tid, h.ran_in);
+        # and is not run again by a static initialization check
+        DataProvider::checkStaticInit();
+        assertEq(1, tenant.callFunction("initializer_runs"));
+    }
+
+    #! Returns a sandboxed Program with a function for each call
+    private static Program tenant() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        string src = "%requires DataProvider\n"
+            "auto sub run(code c) { return c(); }\n"
+            "our int runs = 0;\n"
+            "hash<auto> sub register_initializer() {\n"
+            "    hash<auto> h;\n"
+            "    h.tid = gettid();\n"
+            "    DataProvider::registerStaticInitializer(sub () { ++runs; h.ran_in = gettid(); });\n"
+            "    return h;\n"
+            "}\n"
+            "int sub initializer_runs() { return runs; }\n";
+        foreach hash<auto> i in (Calls.pairIterator()) {
+            src += sprintf("sub %s() { %s }\n", i.key, i.value);
+        }
+        p.parse(src, "tenant");
+        p.setSandboxManager(new SandboxManager());
+        return p;
+    }
+}

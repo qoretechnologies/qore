@@ -1,5 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - native code generation, executable memory and exception unwinding of the LLVM JIT on arm64
 
 %modern
 %no-child-restrictions

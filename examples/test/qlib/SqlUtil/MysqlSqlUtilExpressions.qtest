@@ -4,12 +4,19 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+# qlib-requires-by-path: the test runs the AOT-compiled modules; by name, a module not built would load its source
 %requires ../../../../qlib/Util.qmod
+# qlib-requires-by-path: the test runs the AOT-compiled modules; by name, a module not built would load its source
 %requires ../../../../qlib/Logger.qmod
+# qlib-requires-by-path: the test runs the AOT-compiled modules; by name, a module not built would load its source
 %requires ../../../../qlib/DataProvider/DataProvider.qmod
+# qlib-requires-by-path: the test runs the AOT-compiled modules; by name, a module not built would load its source
 %requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+# qlib-requires-by-path: the test runs the AOT-compiled modules; by name, a module not built would load its source
 %requires ../../../../qlib/MysqlSqlUtil.qmod
+# qlib-requires-by-path: the test runs the AOT-compiled modules; by name, a module not built would load its source
 %requires ../../../../qlib/QUnit.qmod
+%requires ./MysqlTestIsolation.qm
 
 %try-module mysql
 %define NoMysql
@@ -122,7 +129,9 @@ class MysqlExpressionTest inherits QUnit::Test {
 %ifdef NoMysql
         testSkip("no mysql module");
 %endif
-        string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_MYSQL ?? "";
+        # the run's own database: tests that run at the same time do not share the tables of this one
+        string connstr = MysqlRunDatabase::getConnectionString(m_options.connstr ?? ENV.QORE_DB_CONNSTR_MYSQL,
+            "MysqlSqlUtilExpressions") ?? "";
         if (!connstr.val()) {
             testSkip("no DB connection");
         }

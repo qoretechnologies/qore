@@ -2487,7 +2487,7 @@ int qore_release_signals(const sig_vec_t& sig_vec, const char* name) {
 }
 
 // returns 0 for OK, -1 for error
-int check_lvalue(QoreValue n, bool assignment, bool allow_slice) {
+int check_lvalue(QoreValue n, bool assignment, qore_lvalue_use_e use) {
     if (n.isNothing()) {
         return 0;
     }
@@ -2496,10 +2496,10 @@ int check_lvalue(QoreValue n, bool assignment, bool allow_slice) {
         return -1;
     }
 
-    return check_lvalue(n.getInternalNode(), assignment, allow_slice);
+    return check_lvalue(n.getInternalNode(), assignment, use);
 }
 
-static int check_lvalue_intern(QoreValue n, bool assignment, bool direct, bool allow_slice);
+static int check_lvalue_intern(QoreValue n, bool assignment, bool direct, qore_lvalue_use_e use);
 
 //! Raises a parse error for a slice used as an lvalue and returns -2, as the error is reported
 static int check_lvalue_slice(const QoreProgramLocation* loc) {
@@ -2508,7 +2508,7 @@ static int check_lvalue_slice(const QoreProgramLocation* loc) {
     return -2;
 }
 
-static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool direct, bool allow_slice) {
+static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool direct, qore_lvalue_use_e use) {
     qore_type_t ntype = node->getType();
     //printd(5, "type: %s\n", node->getTypeName());
     if (ntype == NT_VARREF) {
@@ -2533,14 +2533,14 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
     if (ntype == NT_OPERATOR) {
         // remove and delete remove the elements of a slice of their lvalue; any other use of a slice, including a
         // slice inside a remove or delete lvalue, would modify a member named after the slice's selector
-        bool slice_ok = allow_slice && direct;
+        bool slice_ok = use == qore_lvalue_use_e::REMOVE && direct;
         {
             QoreSquareBracketsOperatorNode* op = dynamic_cast<QoreSquareBracketsOperatorNode*>(node);
             if (op) {
                 if (op->isSlice() && !slice_ok) {
                     return check_lvalue_slice(op->loc);
                 }
-                return check_lvalue_intern(op->getLeft(), assignment, false, allow_slice);
+                return check_lvalue_intern(op->getLeft(), assignment, false, use);
             }
         }
         {
@@ -2549,7 +2549,7 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
                 if (!slice_ok) {
                     return check_lvalue_slice(op->loc);
                 }
-                return check_lvalue_intern(op->get(0), assignment, false, allow_slice);
+                return check_lvalue_intern(op->get(0), assignment, false, use);
             }
         }
         {
@@ -2558,13 +2558,29 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
                 if (op->isSlice() && !slice_ok) {
                     return check_lvalue_slice(op->loc);
                 }
-                return check_lvalue_intern(op->getLeft(), assignment, false, allow_slice);
+                return check_lvalue_intern(op->getLeft(), assignment, false, use);
             }
         }
         {
             QoreCastOperatorNode* op = dynamic_cast<QoreCastOperatorNode*>(node);
             if (op) {
-                return check_lvalue_intern(op->getExp(), assignment, false, allow_slice);
+                // a cast checks the value of its lvalue when the lvalue is modified in place or when the cast is a step
+                // of a remove or delete lvalue (as in "remove cast<C>(o).m"), but a cast is a converted value and not
+                // storage that can be removed (issue #5640); a reference to an lvalue evaluates the variables and
+                // the selectors of the lvalue when it is made and has no means to do so for a cast, so a cast cannot
+                // be in its lvalue at all
+                if (use == qore_lvalue_use_e::REFERENCE) {
+                    parse_error(*op->loc, "a cast cannot be in the lvalue of a reference; refer to the lvalue inside "
+                        "the cast instead");
+                    return -2;
+                }
+                if (direct && use == qore_lvalue_use_e::REMOVE) {
+                    parse_error(*op->loc, "a cast cannot be the lvalue of the remove or delete operators; a cast is "
+                        "a converted value and not storage that can be removed; remove or delete the lvalue inside "
+                        "the cast instead");
+                    return -2;
+                }
+                return check_lvalue_intern(op->getExp(), assignment, false, use);
             }
         }
     }
@@ -2572,7 +2588,7 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
     return -1;
 }
 
-static int check_lvalue_intern(QoreValue n, bool assignment, bool direct, bool allow_slice) {
+static int check_lvalue_intern(QoreValue n, bool assignment, bool direct, qore_lvalue_use_e use) {
     if (n.isNothing()) {
         return 0;
     }
@@ -2581,12 +2597,12 @@ static int check_lvalue_intern(QoreValue n, bool assignment, bool direct, bool a
         return -1;
     }
 
-    return check_lvalue_intern(n.getInternalNode(), assignment, direct, allow_slice);
+    return check_lvalue_intern(n.getInternalNode(), assignment, direct, use);
 }
 
 // returns 0 for OK, -1 for error, -2 for an error already reported
-int check_lvalue(AbstractQoreNode* node, bool assignment, bool allow_slice) {
-    return check_lvalue_intern(node, assignment, true, allow_slice);
+int check_lvalue(AbstractQoreNode* node, bool assignment, qore_lvalue_use_e use) {
+    return check_lvalue_intern(node, assignment, true, use);
 }
 
 static bool parse_is_readonly_receiver_node(AbstractQoreNode* node, int pflag) {
@@ -3602,14 +3618,43 @@ void ensure_unique(QoreValue& v, ExceptionSink* xsink) {
     if (!v.hasNode()) {
         return;
     }
-    AbstractQoreNode* n = v.getInternalNode();
-    if (!n->is_unique()) {
-        AbstractQoreNode* old = n;
-        n = old->realCopy();
-        old->deref(xsink);
-        assert(!*xsink);
-        v = n;
+    qore_value_copy_on_write(v).discard(xsink);
+    assert(!xsink || !*xsink);
+}
+
+QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* copy) {
+    assert(copy);
+    if (v.isOpaque()) {
+        // an object is never copied
+        assert(!v.isOpaqueObject());
+        // the Program responsible for the registration that the copy replaces, if any
+        QoreProgram* owner = qore_program_private::getOpaqueTargetProgram(v.getInternalNode());
+        // registers the copy with the current Program, if any
+        QoreValue rv = v.isOpaqueHash()
+            ? QoreValue::makeOpaqueHash(static_cast<QoreHashNode*>(copy))
+            : QoreValue::makeOpaqueList(static_cast<QoreListNode*>(copy));
+        // the copy keeps the registration's Program: the teardown that breaks a cycle through the reference must not
+        // depend on whether the change copied the container, and a change made by another Program's code would
+        // otherwise give the copy to a Program whose teardown never reaches the cycle
+        if (owner) {
+            qore_program_private::setOpaqueTargetProgram(copy, owner);
+        }
+        // the opaque value took a reference of its own; the copy is not shared, so this does not release it
+        copy->deref(nullptr);
+        return rv;
     }
+    return QoreValue(copy);
+}
+
+QoreValue qore_value_copy_on_write(QoreValue& v) {
+    AbstractQoreNode* n = v.getInternalNode();
+    assert(n && n->getType() != NT_OBJECT);
+    if (n->is_unique()) {
+        return QoreValue();
+    }
+    QoreValue old = v;
+    v = qore_value_with_copy(old, n->realCopy());
+    return old;
 }
 
 // checks for illegal "self" assignments in an object context

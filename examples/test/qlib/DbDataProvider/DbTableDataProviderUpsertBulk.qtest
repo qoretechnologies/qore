@@ -27,12 +27,12 @@
 %enable-all-warnings
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/SqlUtil
-%requires ../../../../qlib/BulkSqlUtil
-%requires ../../../../qlib/DbDataProvider
-%requires ../../../../qlib/Schema
+%requires QUnit
+%requires DataProvider
+%requires SqlUtil
+%requires BulkSqlUtil
+%requires DbDataProvider
+%requires Schema
 # a run on PostgreSQL has its own schema
 %requires ../SqlUtil/PgsqlTestIsolation.qm
 

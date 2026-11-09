@@ -6,10 +6,10 @@
 %enable-all-warnings
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/SqlUtil
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires SqlUtil
 
 %exec-class OperatorHashWhereTest
 

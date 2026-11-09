@@ -151,7 +151,7 @@ if [ -d "${QORE_SRC_DIR}/build" ] && [ -f "${QORE_SRC_DIR}/build/CMakeCache.txt"
             echo "Building Release mode..."
             mkdir -p build-release
             cd build-release
-            cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+            cmake .. -DCMAKE_BUILD_TYPE=release -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
             make -j${MAKE_JOBS}
             echo "Release build complete"
         ) &
@@ -186,7 +186,7 @@ else
             echo "Building Debug mode..."
             mkdir -p build
             cd build
-            cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+            cmake .. -DCMAKE_BUILD_TYPE=debug -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
             make -j${MAKE_JOBS}
             make install
             echo "Debug build complete"
@@ -197,7 +197,7 @@ else
             echo "Building Release mode..."
             mkdir -p build-release
             cd build-release
-            cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+            cmake .. -DCMAKE_BUILD_TYPE=release -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
             make -j${MAKE_JOBS}
             echo "Release build complete"
         ) &
@@ -217,7 +217,7 @@ else
         echo && echo "-- building Qore Debug; perf tests excluded, skipping release build --"
         mkdir -p build
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+        cmake .. -DCMAKE_BUILD_TYPE=debug -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
         make -j${MAKE_JOBS}
         make install
         cd ${QORE_SRC_DIR}
@@ -340,6 +340,13 @@ if [ "$NEED_RELEASE_BUILD" = "1" ]; then
 else
     echo && echo "-- running tests with pre-built Debug Qore; performance tests excluded --"
 fi
+# the CPUs and memory the job may use, and (after the tests) its peak memory use (see ci-resource-report.sh); the
+# tests run as many at a time as the pod's CPU and memory limits allow (QORE_TEST_JOBS, see run_tests.sh), unless the
+# job sets QORE_TEST_JOBS; see run_tests.sh for the tests that run in a lane of their own
+. "${QORE_SRC_DIR}/test/docker_test/ci-resource-report.sh"
+qore_ci_resource_report "before the tests"
+QORE_TEST_JOBS="${QORE_TEST_JOBS:-$(qore_ci_test_jobs)}"
+echo "QORE_TEST_JOBS=${QORE_TEST_JOBS}"
 TEST_RC=0
 gosu qore:qore env \
     QORE_DEBUG_BINARY="${QORE_DEBUG_BINARY}" \
@@ -351,9 +358,18 @@ gosu qore:qore env \
     QORE_EXCLUDE_PERF_TESTS="${QORE_EXCLUDE_PERF_TESTS}" \
     QORE_PERF_TESTS_ONLY="${QORE_PERF_TESTS_ONLY}" \
     QORE_TEST_EXTRA_DIRS="${QORE_TEST_EXTRA_DIRS}" \
+    QORE_TEST_JOBS="${QORE_TEST_JOBS}" \
     LIBQORE_BINARY="${LIBQORE_BINARY}" \
     LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
     ./run_tests.sh || TEST_RC=$?
+qore_ci_resource_report "after the tests"
+# the databases, schemas and users that killed test runs (of this job or of earlier ones) left on the shared test
+# database servers; a server that cannot be reached is reported, and the cleanup never fails the job
+gosu qore:qore env \
+    QORE_MODULE_DIR="${QORE_MODULE_DIR}" \
+    QORE_MODULE_DIR_ONLY="${QORE_MODULE_DIR_ONLY}" \
+    LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
+    "${QORE_DEBUG_BINARY}" examples/test/docker_test/drop-test-run-leftovers.q || true
 
 # the cores of the processes the tests started are kept with those of the tests
 qore_ci_collect_cores "$CORE_DIR"

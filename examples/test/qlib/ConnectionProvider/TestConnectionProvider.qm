@@ -30,7 +30,8 @@
 %new-style
 %strict-args
 
-%requires ../../../../qlib/ConnectionProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ConnectionProvider
 
 module TestConnectionProvider {
     version = "1.0";

@@ -27,6 +27,9 @@ publishes the inferred type after the loop, matching the AST map's value-type
 tracking. Type comparison is incremental, so the operation remains linear and
 requires no second pass. The IR interpreter and JIT/AOT call the same helper;
 its partial result is reference-managed, and its loop checks cancellation.
+Each element is read as `$1.key` reads it (`qore_rt_hash_key_access_impl()`): the key of a hash,
+the member of an object (through its `memberGate()` if it has one, and the target of a weak
+reference), and `NOTHING` for any other value (`MapObjectSource.qtest`).
 The change does not allow
 unrelated hash declarations through typed argument validation, or coerce mixed
 values into the first element's type. The common-type comparison itself introduces

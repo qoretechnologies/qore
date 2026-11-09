@@ -22,8 +22,8 @@
 %modern
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires ../../../qlib/QUnit.qm
-%requires ../../../qlib/FsUtil.qm
+%requires QUnit
+%requires FsUtil
 %exec-class AOTUnresolvedSymbolDiagnosticsTest
 
 class AOTUnresolvedSymbolDiagnosticsTest inherits QUnit::Test {

@@ -98,7 +98,10 @@ public class EasyPostBaseEventDataProvider inherits EasyPostDataProviderBase, Da
     private auto getExampleEventDataImpl(string event_id) {
         if (rest) {
             try {
-                auto response = doGet("events", {"page_size": 10});
+                # the example data is requested once, without retries
+                auto response = DataProviderRetryUtil::runWithoutRetries(auto sub () {
+                    return doGet("events", {"page_size": 10});
+                });
                 *list<auto> evts = response.events ?? (response.typeCode() == NT_LIST ? response : ());
                 foreach hash<auto> evt in (evts) {
                     if (evt.description == getWebhookEventType()) {

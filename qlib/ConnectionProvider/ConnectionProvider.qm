@@ -53,6 +53,13 @@ module ConnectionProvider {
         # The callback returns the ConnectionSchemeInfo hash for a given scheme name, or throws if
         # the scheme is unknown. DataProvider catches and treats unknown-scheme as "non-REST"
         # (conservative default).
+        #
+        # The callback runs on the threads of every caller: from the module path, this module is initialized with no
+        # sandbox provenance and registers it; when sandboxed code loads a copy of it by path, its initialization is
+        # governed by that sandbox, and it is not registered: no app is then treated as a REST app.
+        if (SandboxManager::isSandboxed()) {
+            return;
+        }
         DataProvider::DataProviderActionCatalog::setSchemeLookupCallback(
             *hash<auto> sub (string scheme) {
                 return ConnectionProvider::ConnectionSchemeCache::getSchemeEx(scheme);
@@ -174,6 +181,8 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
 
     @section connectionprovider_3_1 ConnectionProvider 3.1
+    - added @ref ConnectionProvider::PollingConnectionMonitor::startPollConnect() "PollingConnectionMonitor::startPollConnect()",
+      which a subclass can override to decide how the monitor opens the connection of a ping
     - added source-owned connection presentation and catalogs for shared scheme options and setup messages;
       see @ref connectionprovider_presentation
     - the errors of invalid connections, of connection URLs with control characters and of inaccessible filesystem

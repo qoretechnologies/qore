@@ -1,0 +1,264 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ReferenceValueAssignmentTest
+
+#! Regression test: a reference that arrives as a value is assigned, read and written as the AST interpreter does it
+/** A reference reaches a variable of no type as a value in a function that creates none: as the element of a
+    container (<tt>h.r</tt> holding <tt>\x</tt>), the argument of a parameter, an element of a list iterated by
+    foreach.  The compiled modes gave other results than the AST interpreter:
+    - <tt>auto t; t += h.r;</tt> made \c t hold the reference, but the IR took the value of += as one that is never a
+      reference, so \c t was IR-only: a read gave the reference itself as a value (JIT, tiered, AOT:
+      "reference expression"), and <tt>t = 5</tt> replaced the reference instead of assigning \c x (IR, JIT, tiered);
+      in a try block, the value of += was the referenced value instead of the reference (JIT, tiered, AOT)
+    - the value of an assignment, <tt>auto r = (t = h.r)</tt>, <tt>(t += h.r)</tt>, <tt>u = t = h.r</tt>, is the reference
+      that the variable holds afterwards, but the IR read the variable again, which gave the referenced value
+    - the variable of a foreach loop given a reference element assigns the referenced lvalue when it is assigned in the
+      loop and when the loop assigns it the next element; the compiled modes replaced the reference, and an int
+      local added the variable (<tt>s += v</tt>) read the reference as 0 in AOT code
+    - a global variable holding a reference was read as the reference itself in the IR and replaced by an assignment
+      in every compiled mode
+    - <tt>s += v</tt> with an untyped local \c v now uses the fused int instruction again, which reads \c v as a load
+      reads it (through a reference, a weak reference) and leaves it unchanged
+
+    The script runs twice in each case, in every execution mode, on the IR tier of tiered execution and as a qcc
+    executable (see ExecModeOutputTest).
+*/
+class ReferenceValueAssignmentTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+%strict-args
+int x = 1;
+sub show(string n, auto a) {
+    printf("%s a=%y x=%y\n", n, a, x);
+}
+# += on a local with no value assigns the reference it adds, which reads and writes the referenced lvalue
+sub plus_eq(hash h) { auto t; t += h.r; x = 7; auto a = t; t = 5; show("plus_eq", a); }
+sub plus_eq_null(hash h) { auto t = NULL; t += h.r; x = 7; auto a = t; t = 5; show("plus_eq_null", a); }
+sub plus_eq_int(hash h) { auto t; t += h.r; x = 7; int a = t; t = 5; show("plus_eq_int", a); }
+sub plus_eq_stmt(hash h) { auto t; (t += h.r); t = 5; show("plus_eq_stmt", t); }
+sub plus_eq_loop(hash h) {
+    auto t;
+    for (int i = 0; i < 3; ++i) {
+        t += h.r;
+    }
+    x = 7;
+    auto a = t;
+    show("plus_eq_loop", a);
+}
+sub plus_eq_try(hash h) {
+    auto t;
+    try {
+        t += h.r;
+        x = 7;
+        auto a = t;
+        t = 5;
+        show("plus_eq_try", a);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("plus_eq_try %s\n", ex.err);
+    }
+}
+# the value of an assignment is the value the variable holds afterwards, the reference
+sub assign_value(hash h) { auto t; auto r = (t = h.r); r = 5; show("assign_value", t); }
+sub plus_eq_value(hash h) { auto t; auto r = (t += h.r); r = 5; show("plus_eq_value", t); }
+sub chained(hash h) { auto t; auto u; u = t = h.r; u = 6; show("chained", t); }
+sub assign_value_held(hash h) {
+    # the variable already holds a reference: the value is that of the referenced lvalue
+    auto t = h.r;
+    auto r = (t = 9);
+    r = 5;
+    show("assign_value_held", t);
+}
+our auto g;
+sub global_value(hash h) { g = NOTHING; auto r = (g = h.r); r = 5; show("global_value", g); }
+sub value_not_used(hash h) { auto t; t = h.r; t = 8; show("value_not_used", t); }
+# the variable of a foreach loop given a reference element assigns the referenced lvalue
+sub foreach_store(list l) {
+    foreach auto v in (l) {
+        v = 5;
+    }
+    show("foreach_store", NOTHING);
+}
+sub foreach_store_read(list l) {
+    foreach auto v in (l) {
+        v = 6;
+        printf("foreach_store_read v=%y\n", v);
+    }
+    show("foreach_store_read", NOTHING);
+}
+sub foreach_plus_eq(list l) {
+    foreach auto v in (l) {
+        v += 2;
+    }
+    show("foreach_plus_eq", NOTHING);
+}
+sub foreach_read_only(list l) {
+    int s = 0;
+    foreach auto v in (l) {
+        s += v;
+        x = 20;
+        s += v;
+    }
+    show("foreach_read_only", s);
+}
+# += with a local of no type as the value added reads it as a load reads it
+sub add_local(hash h) {
+    int s = 0;
+    auto v = h.r;
+    x = 3;
+    s += v;
+    x = 4;
+    s += v;
+    show("add_local", s);
+}
+sub add_local_kinds() {
+    int s = 0;
+    auto a = "3";
+    auto b = 1.5;
+    auto c;
+    auto d = True;
+    s += a;
+    s += b;
+    s += c;
+    s += d;
+    softint si = 1;
+    si += a;
+    printf("add_local_kinds s=%y a=%y b=%y c=%y d=%y si=%y\n", s, a, b, c, d, si);
+}
+sub add_local_loop(list<auto> l) {
+    int s = 0;
+    foreach auto v in (l) {
+        auto w = v;
+        s += w;
+    }
+    printf("add_local_loop s=%y\n", s);
+}
+foreach code c in ((\plus_eq(), \plus_eq_null(), \plus_eq_int(), \plus_eq_stmt(), \plus_eq_loop(), \plus_eq_try(),
+        \assign_value(), \plus_eq_value(), \chained(), \assign_value_held(), \global_value(), \value_not_used(),
+        \add_local())) {
+    for (int i = 0; i < 2; ++i) {
+        x = 1;
+        try {
+            c({"r": \x});
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s: %s\n", ex.err, ex.desc);
+        }
+    }
+}
+foreach code c in ((\foreach_store(), \foreach_store_read(), \foreach_plus_eq(), \foreach_read_only())) {
+    for (int i = 0; i < 2; ++i) {
+        x = 1;
+        c((\x, 1));
+    }
+}
+for (int i = 0; i < 2; ++i) {
+    add_local_kinds();
+    add_local_loop((1, "2", 3.5, NOTHING));
+}
+
+# a global variable holding a reference
+x = 1;
+our auto g2;
+sub gset(hash h) { g2 = h.r; }
+sub gwr() { g2 = 5; }
+auto sub grd() { return g2; }
+gset({"r": \x});
+x = 7;
+printf("rd=%y\n", grd());
+gwr();
+printf("x=%y\n", x);
+sub pet(hash h) {
+    auto t;
+    try {
+        t += h.r;
+        x = 9;
+        auto a = t;
+        printf("pet a=%y\n", a);
+        t = 3;
+    } catch (hash<ExceptionInfo> ex) {
+        printf("%s\n", ex.err);
+    }
+    printf("pet x=%y\n", x);
+}
+pet({"r": \x});
+sub foreach_read_only2(list l) {
+    int s = 0;
+    foreach auto v in (l) {
+        s += v;
+        x = 20;
+        s += v;
+    }
+    printf("s=%y x=%y\n", s, x);
+}
+x = 1;
+foreach_read_only2((\x, 1));
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "plus_eq a=7 x=5",
+            "plus_eq a=7 x=5",
+            "plus_eq_null a=7 x=5",
+            "plus_eq_null a=7 x=5",
+            "plus_eq_int a=7 x=5",
+            "plus_eq_int a=7 x=5",
+            "plus_eq_stmt a=5 x=5",
+            "plus_eq_stmt a=5 x=5",
+            "plus_eq_loop a=7 x=7",
+            "plus_eq_loop a=7 x=7",
+            "plus_eq_try a=7 x=5",
+            "plus_eq_try a=7 x=5",
+            "assign_value a=5 x=5",
+            "assign_value a=5 x=5",
+            "plus_eq_value a=5 x=5",
+            "plus_eq_value a=5 x=5",
+            "chained a=6 x=6",
+            "chained a=6 x=6",
+            "assign_value_held a=9 x=9",
+            "assign_value_held a=9 x=9",
+            "global_value a=5 x=5",
+            "RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got no value instead",
+            "value_not_used a=8 x=8",
+            "value_not_used a=8 x=8",
+            "add_local a=7 x=4",
+            "add_local a=7 x=4",
+            "foreach_store a=null x=5",
+            "foreach_store a=null x=5",
+            "foreach_store_read v=6",
+            "foreach_store_read v=6",
+            "foreach_store_read a=null x=6",
+            "foreach_store_read v=6",
+            "foreach_store_read v=6",
+            "foreach_store_read a=null x=6",
+            "foreach_plus_eq a=null x=3",
+            "foreach_plus_eq a=null x=3",
+            "foreach_read_only a=42 x=20",
+            "foreach_read_only a=42 x=20",
+            "add_local_kinds s=5 a=\"3\" b=1.5 c=null d=True si=4",
+            "add_local_loop s=6",
+            "add_local_kinds s=5 a=\"3\" b=1.5 c=null d=True si=4",
+            "add_local_loop s=6",
+            "rd=7",
+            "x=5",
+            "pet a=9",
+            "pet x=3",
+            "s=42 x=20",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ReferenceValueAssignment", Script, (map $1 + "\n", Expected).join(""),
+            "assigns, reads and writes a reference that arrives as a value as the AST interpreter does") {
+    }
+}

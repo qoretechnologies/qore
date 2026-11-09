@@ -115,7 +115,10 @@ public class AwsS3WatchDataProviderBase inherits AwsS3DataProviderBase,
     private auto getExampleEventDataImpl(string event_id) {
         checkWatchConfig();
         try {
-            list<hash<auto>> records = fetchRecords(1970-01-01Z);
+            # the example data is requested once, without retries
+            list<hash<auto>> records = DataProviderRetryUtil::runWithoutRetries(list<hash<auto>> sub () {
+                return fetchRecords(1970-01-01Z);
+            });
             if (records) {
                 return records[0];
             }

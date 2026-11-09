@@ -220,6 +220,76 @@ if (ws.isHttp3()) {
 ws.send("Hello from HTTP/3!");
     @endcode
 
+    @section websocketclient_lifecycle Connection Lifecycle and Concurrency
+
+    @ref WebSocketClient::WebSocketClient::connect() "connect()",
+    @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()",
+    @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()" and each attempt of an automatic reconnect run as
+    one action at a time, in the order they are called; the same is true of
+    @ref WebSocketClient::WebSocketClient::startPollConnect() "startPollConnect()" and
+    @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()".  A call that finds another action in
+    progress waits for it at most its own timeout: the connect timeout (the \c connect_timeout option if positive,
+    otherwise as for a disconnect) for a connect, and the I/O timeout (the \c timeout option if positive, otherwise 15
+    seconds, as for the close handshake) for a disconnect or reconnect; then it raises \c WEBSOCKET-ACTION-TIMEOUT.
+    While a connect runs its handshake, the client's lock is held, so other calls wait for the handshake as before.
+    @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" returns once it is its turn, and makes the
+    connection in the background, still in call order: a call made after it returned runs after the connect.  A call
+    made on the thread that processes the frames of the connection (e.g. in the raw frame callback) does not wait for
+    an action in progress, which may need that thread to finish its close handshake: it runs at once.  Two
+    exceptions to the call order of @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()": when it is
+    called on such a thread while another action is in progress, or inside an action of the calling thread (e.g. in a
+    subclass's explicitDisconnect() or in code run with runInReconnectAction(); the open, message and closing
+    callbacks run outside of any action), it returns at once and its background connect waits for its turn after the
+    action in progress, so a call made after it returned may run before its connect.
+
+    These calls never wait for the end of a connection that the client processes on its own (when the server closes
+    the connection or it is lost), nor for any callback: a connection is taken from the client in one step when it
+    ends, so the client is ready for a new connection at once, and the closing callback (and
+    @ref WebSocketClient::EVENT_WS_CLOSED "EVENT_WS_CLOSED") runs afterwards, outside of any action.  As a result, a
+    connection's closing callback can run after a new connection is open, for example when a
+    @ref WebSocketClient::WebSocketClient::connect() "connect()" made on another thread, or from a callback, opens a
+    new connection while the closed one is still being reported; a
+    @ref WebSocketClient::WebSocketClient::connect() "connect()" that replaces an open connection reports it closed
+    after the new connection is open, before it returns.  Each connection is reported closed exactly once, by the
+    thread that takes it, without waiting for any other callback: also while a message callback of the connection
+    still runs on its delivery task, so a callback can call
+    @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" and then wait for the close event.
+
+    The destructor joins the client's threads: it closes the connections, then waits, without a time limit, until the
+    threads the client started for itself (automatic reconnects,
+    @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" workers) and its delivery tasks ended,
+    except the thread it runs on.  From the start of the destructor, no such thread is started, waits for another
+    connect, disconnect or reconnect end at once with \c WEBSOCKET-ERROR, and a handshake in progress is canceled; a
+    close handshake ends at the latest at its close timeout.  User code these threads run (callbacks, observers, the
+    logger, a \c start_thread hook, subclass hooks) must therefore not block on anything the thread destroying the
+    client holds, and a \c start_thread hook must not raise an exception once it has started the thread (the client
+    then takes the start for failed and does not wait for that thread).  A thread whose code is released without
+    having been run (e.g. by a \c start_thread hook that drops it, or a thread that ends before it runs it) is not
+    waited for; one whose code is still held, e.g. deferred by the hook, is waited for until the code runs and ends,
+    or is released.
+
+    Each connection is reported open exactly once
+    (@ref WebSocketClient::EVENT_WS_CONNECTED "EVENT_WS_CONNECTED" for
+    @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization"), and that report is
+    started before any of the connection's other events: the first thread that needs it makes it - the connecting
+    thread, the delivery task before the connection's first message, or the thread reporting the connection closed -
+    and the others go on without waiting for it to finish.  So a message or the close of a connection can be reported
+    while the callbacks of its open report still run on another thread, and an
+    @ref WebSocketClient::EVENT_WS_CONNECTED "EVENT_WS_CONNECTED" observer can send a message and wait for the reply.
+
+    The events of @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization" carry the
+    ID of their connection as \c cid (see
+    @ref WebSocketClient::WebSocketClient::getConnectionId() "getConnectionId()"); in callbacks,
+    @ref WebSocketClient::WebSocketClient::getEventConnectionId() "getEventConnectionId()" and
+    @ref WebSocketClient::WebSocketClient::getClosingConnectionId() "getClosingConnectionId()" return it, and
+    @ref WebSocketClient::WebSocketClient::getCurrentConnectionId() "getCurrentConnectionId()" the ID of the
+    connection the client has, so the close of an older connection reported after a newer one was opened can be told
+    apart.
+
+    An automatic reconnect started for a connection that ended is not made, and makes no further attempt, once a
+    connection was opened after that connection ended, for example by an explicit
+    @ref WebSocketClient::WebSocketClient::connect() "connect()".
+
     @section websocketclient_debug Debug Info Collection
 
     WebSocket data providers support debug info collection for capturing technical details about WebSocket
@@ -262,6 +332,64 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
 
     @section wsc_v2_5 v2.5
+    - a thread of the client that is cancelled (e.g. with \c cancel_thread() or
+      @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()") is no longer waited for by
+      the destructor, and a cancelled @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" worker
+      does not keep the client's action
+    - @ref WebSocketClient::WebSocketClient::connect() "connect()",
+      @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()",
+      @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()",
+      @ref WebSocketClient::WebSocketClient::startPollConnect() "startPollConnect()",
+      @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" and each attempt of an automatic reconnect
+      run one at a time; a call that finds another one in progress waits for it at most its own timeout, then raises
+      the new \c WEBSOCKET-ACTION-TIMEOUT error; these calls never wait for the end of a connection that the client
+      processes on its own, nor for a callback, so a connection's closing callback can run after a new connection is
+      open (see @ref websocketclient_lifecycle)
+    - each connection is reported open once, by the first thread that needs it, without any thread waiting for it:
+      the report of @ref WebSocketClient::EVENT_WS_CONNECTED "EVENT_WS_CONNECTED" is started before any of the
+      connection's other events is reported, but other threads can report them while it runs, so observers can get
+      them before it is raised or finished; it is raised for connections made with
+      @ref WebSocketClient::WebSocketClient::startPollConnect() "startPollConnect()" too; before, it was only started
+      after connect() returned, so a connection's data or close event could be reported first
+    - the events of @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization" carry
+      the connection ID as \c cid; added
+      @ref WebSocketClient::WebSocketClient::getEventConnectionId() "getEventConnectionId()",
+      @ref WebSocketClient::WebSocketClient::getClosingConnectionId() "getClosingConnectionId()" and
+      @ref WebSocketClient::WebSocketClient::getCurrentConnectionId() "getCurrentConnectionId()"
+    - the destructor waits, without a time limit, for the threads the client started for itself (automatic
+      reconnects and @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" workers) and for its
+      delivery tasks, except the thread it runs on, so they no longer run on a destroyed client; from its start, no
+      such thread is started, action waits end with \c WEBSOCKET-ERROR and a connect in progress ends, also in its
+      TCP connect or TLS handshake, without falling back to HTTP/1.1 (see @ref websocketclient_lifecycle for what
+      user code run by these threads, such as a \c start_thread hook, must not do); before, the wait for delivery
+      tasks gave up after 30 seconds
+    - the frames an HTTP/2 or HTTP/3 connection receives with its handshake are delivered without the client's lock;
+      before, a raw frame callback calling a method of the client could deadlock with the connecting thread
+    - a callback running on the thread that processes a connection's frames (e.g. the raw frame callback) that calls
+      @ref WebSocketClient::WebSocketClient::connect() "connect()" or
+      @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" does not wait for another connect, disconnect
+      or reconnect in progress, which may need that thread to finish its close handshake
+    - @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" makes its connection in call order: a
+      @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" made after it returned closes the connection;
+      a failed async connect no longer disconnects the client nor disables automatic reconnects
+    - fixed races where the end of a connection, closed with
+      @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()", by the server, or lost, could be processed
+      after the client had connected again, also from the closing callback, and then closed the new connection, or
+      left it open but unknown to the client, so that the next
+      @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" did not close it and the next
+      @ref WebSocketClient::WebSocketClient::connect() "connect()" failed with \c HTTPCLIENT-CAPACITY-ERROR; each
+      connection is now reported closed exactly once
+    - an automatic reconnect is not made, and makes no further attempt, once a connection was opened after the
+      connection it was started for ended; before, it could close that connection
+    - the messages of a connection are delivered by one task at a time, in order, and a delivery task never delivers
+      the messages of another connection
+    - @ref WebSocketClient::WebSocketClient::isOpen() "isOpen()" reports an HTTP/1.1 connection open as long as its
+      WebSocket is open, and @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" closes it; before,
+      the connection could be reported closed when the HTTP connection that the WebSocket was upgraded on was marked
+      closed, and then @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" did not close it
+    - a @ref WebSocketClient::WebSocketClient::connect() "connect()" that fails after the WebSocket handshake releases
+      the connection it opened; before, the connection was left open, and the next
+      @ref WebSocketClient::WebSocketClient::connect() "connect()" failed with \c HTTPCLIENT-CAPACITY-ERROR
     - fixed the @ref WebSocketClient::WebSocketClient "WebSocketClient" constructor to accept a \c headers option
       whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>, with the \c token or
       \c cookie option; adding the \c Authorization or \c Cookie header raised \c RUNTIME-TYPE-ERROR
@@ -466,6 +594,437 @@ public const WsSchemes = {
     },
 };
 
+#! the async I/O resources of a connection taken from a WebSocketClient
+/** Used by the private teardown methods of @ref WebSocketClient::WebSocketClient "WebSocketClient", which subclasses
+    can override.
+
+    @since WebSocketClient 2.5
+*/
+public hashdecl WscAsyncIoResources {
+    #! the poll operation of the connection
+    *object op;
+    #! the owner of the connection's operations in the async I/O controller
+    *string owner;
+    #! the HttpClientIo connection manager of the connection
+    *HttpClientIo::HttpClientConnectionManager mgr;
+    #! the HttpClientIo stream of the connection
+    *HttpClientIo::HttpClientStreamHandle stream;
+    #! with HTTP/1.1, the socket taken from the HttpClientIo connection after the upgrade
+    *Socket wake_socket;
+    #! the close cause captured from the poll operation, if any
+    *string close_cause;
+    #! the state event Queue of an HTTP/1.1 poll operation, which gets an event with \c done set when it ends
+    *Queue<hash<SocketPollStateInfo>> state_queue;
+    #! @ref True if the client's close frame was sent on the connection
+    bool close_sent = False;
+    #! the connection the resources belong to
+    *WscConnection conn;
+}
+
+#! The lifecycle of one connection of a WebSocketClient
+/** A connection is torn down by exactly one thread: the one that takes it from its client with the client's lock
+    held (WebSocketClient::claimConnectionUnlocked()).  That thread alone releases the connection's resources and
+    reports the connection closed.  The delivery tasks of a connection deliver only its messages, and end once it is
+    taken.
+
+    Used by the private methods of @ref WebSocketClient::WebSocketClient "WebSocketClient", which subclasses can
+    override.
+
+    @since WebSocketClient 2.5
+*/
+#! The threads a WebSocketClient starts for itself; internal to WebSocketClient
+/** Not for use outside of @ref WebSocketClient::WebSocketClient "WebSocketClient" and its subclasses; it may change
+    without notice.  Each start gets a token, counted from before the thread runs until the thread ends or its start
+    fails, whichever comes first; the running threads are recorded by TID with the number of their tokens (a
+    \c start_thread hook can run the code inline, also nested), so the client's destructor can wait for all threads
+    but the one it runs on.  Once closed (by the destructor), no thread can be started.
+
+    The bookkeeping is done in synchronized methods and waited for with a Queue: it runs also in cleanup on a
+    cancelled thread (a thread's end, the release of a start's code), and neither the lock of a synchronized method
+    nor a Queue push is a cancellation point, while a Mutex lock is, which would skip the bookkeeping and leave the
+    destructor waiting (see design/cooperative-cancellation.md, "Cleanup Critical Sections").
+
+    @since WebSocketClient 2.5
+*/
+public class WscLibraryThreads {
+    private {
+        #! wakes a thread in waitOthers() when a counted start ends; pushed only while a thread waits
+        Queue wake();
+        #! the number of threads in waitOthers()
+        int waiters = 0;
+        #! the tokens counted
+        hash<string, bool> live = {};
+        #! the tokens whose thread started
+        hash<string, bool> entered = {};
+        #! the tokens whose start was reported failed before their thread ran: never counted again
+        hash<string, bool> failed = {};
+        #! the number of tokens running on each thread
+        hash<string, int> tids = {};
+        int seq = 0;
+        bool closed = False;
+    }
+
+    #! Counts a thread about to be started and returns its token
+    /** @throw WEBSOCKET-ERROR the client is being destroyed
+    */
+    synchronized int starting() {
+        if (closed) {
+            throw "WEBSOCKET-ERROR", "the client is being destroyed; no thread can be started";
+        }
+        int token = ++seq;
+        live{token} = True;
+        return token;
+    }
+
+    #! Uncounts a start that failed, unless its thread started (e.g. a \c start_thread hook that started it and then
+    #! threw): that thread uncounts it when it ends
+    /** A thread that starts after its start was reported failed is not counted (the count is never raised again
+        after it went down): a \c start_thread hook must not throw once it has started the thread.
+    */
+    synchronized startFailed(int token) {
+        if (!entered{token} && remove live{token}) {
+            failed{token} = True;
+            notifyUnlocked();
+        }
+    }
+
+    #! Records the calling thread as running the given start, unless its start was reported failed
+    synchronized bool enter(int token) {
+        if (failed{token}) {
+            return False;
+        }
+        entered{token} = True;
+        ++tids{gettid()};
+        return True;
+    }
+
+    #! Uncounts a start whose code was released without being run: no thread can run it any more
+    /** Called when the code given to the thread (or to a \c start_thread hook) is released; a start whose thread
+        entered it is not affected.
+    */
+    synchronized abandon(int token) {
+        remove failed{token};
+        if (!entered{token} && remove live{token}) {
+            notifyUnlocked();
+        }
+    }
+
+    #! Records the end of the given start on the calling thread and uncounts it
+    synchronized leave(int token) {
+        if (remove failed{token}) {
+            return;
+        }
+        string t = gettid().toString();
+        if (!--tids{t}) {
+            remove tids{t};
+        }
+        remove live{token};
+        remove entered{token};
+        notifyUnlocked();
+    }
+
+    #! Closes the object: no thread can be started from now on
+    synchronized close() {
+        closed = True;
+    }
+
+    #! Returns @ref True if a counted start does not run on the calling thread; called in a synchronized method
+    private bool othersUnlocked() {
+        return live.size() > (tids{gettid()} ?? 0);
+    }
+
+    #! Returns @ref True if a counted start does not run on the calling thread
+    synchronized bool hasOthers() {
+        return othersUnlocked();
+    }
+
+    #! Waits until every counted start runs on the calling thread or ended
+    waitOthers() {
+        while (beginWait()) {
+            on_exit endWait();
+            # each counted start that ends meanwhile pushes a wakeup, so none is lost
+            wake.get();
+        }
+    }
+
+    #! Registers the calling thread as waiting, unless no counted start runs on another thread
+    private synchronized bool beginWait() {
+        if (!othersUnlocked()) {
+            return False;
+        }
+        ++waiters;
+        return True;
+    }
+
+    #! Ends a wait started with beginWait()
+    private synchronized endWait() {
+        --waiters;
+    }
+
+    #! Wakes the threads in waitOthers(); called in a synchronized method
+    private notifyUnlocked() {
+        if (waiters) {
+            wake.push(True);
+        }
+    }
+
+    #! Returns the number of starts reported failed whose thread may still run (and is then not counted)
+    /** An entry is removed when the thread ends or when the start's code is released without having been run.
+    */
+    synchronized int getFailedCount() {
+        return failed.size();
+    }
+
+    #! Returns the number of counted starts
+    synchronized int getCount() {
+        return live.size();
+    }
+}
+
+#! The threads waiting to start an action of a client, and the actions of threads that ended without releasing
+#! them; internal to WebSocketClient
+/** Each waiter waits on a Queue of its own, so a wakeup pushed after it registered and before it waits is still
+    there when it waits; an action recorded before it registered is released by the waiter itself, which releases the
+    recorded actions again right after it registers (see acquireActionUnlocked()).  The state is changed in synchronized methods, and a Queue push is not a cancellation point,
+    so a cancelled thread records the action it cannot release (it cannot take the client's lock, a cancellation
+    point), and the first waiter is woken to release it; the next thread that starts an action releases it too.
+
+    The methods contain no loop: they run also in cleanup on a cancelled thread (e.g. its \c on_exit code), where a
+    loop is a cancellation point that would raise the cancellation again and skip the rest.  One waiter is woken at a
+    time; a waiter that stops waiting without the action (e.g. when the client is destroyed, or when it is cancelled
+    or times out) wakes the next one as it unregisters, in the same call (see leave()).
+
+    @since WebSocketClient 2.5
+*/
+public class WscActionWaiters {
+    private {
+        #! the waiters, in the order they started waiting, by TID
+        hash<string, Queue> waiters = {};
+        #! the TIDs whose action is to be released
+        list<int> orphans = ();
+    }
+
+    #! Registers the calling thread as waiting, with the Queue it waits on
+    synchronized register(Queue q) {
+        waiters{gettid()} = q;
+    }
+
+    #! Ends the wait of the calling thread; if it did not take the action, the next waiter is woken
+    /** Done at once, so the woken waiter finds this thread unregistered: a wakeup that may have been meant for it is
+        passed on; a spurious wakeup only makes the next waiter check again.
+
+        @param wake_next @ref True if the calling thread stops waiting without the action (it was cancelled, timed
+        out, or the client is being destroyed)
+    */
+    synchronized leave(bool wake_next) {
+        remove waiters{gettid()};
+        if (wake_next) {
+            wakeFirst();
+        }
+    }
+
+    #! Returns the TID of the first waiter, if any
+    synchronized *string first() {
+        return waiters.firstKey();
+    }
+
+    #! Returns the number of waiters
+    synchronized int size() {
+        return waiters.size();
+    }
+
+    #! Wakes the first waiter, if any
+    synchronized wakeFirst() {
+        *string t = waiters.firstKey();
+        if (exists t) {
+            waiters{t}.push(True);
+        }
+    }
+
+    #! Records that the action of the given thread is to be released, and wakes the first waiter to release it
+    synchronized addOrphan(int tid) {
+        push orphans, tid;
+        wakeFirst();
+    }
+
+    #! Returns and forgets the TIDs whose action is to be released
+    synchronized list<int> takeOrphans() {
+        list<int> rv = orphans;
+        orphans = ();
+        return rv;
+    }
+}
+
+#! The handoff of an action from connectAsync() to its worker; internal to WebSocketClient
+/** Decided once: the worker takes the action over (in acquireActionUnlocked(), with the client's lock held, as its
+    connect's action), or abandons it (it ended before, e.g. cancelled, or its code was released unrun), and then the
+    caller still owns the action and releases it.  The state is changed in synchronized methods and reported with a
+    Queue push, neither of which is a cancellation point, so a cancelled worker abandons it too.
+
+    @since WebSocketClient 2.5
+*/
+public class WscActionHandoff {
+    private {
+        #! "taken" or "abandoned" once decided; "orphaned" while undecided after the caller stopped waiting
+        *string state;
+        #! gets True when the worker took the action over, False when it abandoned it
+        Queue result();
+        #! the TID of connectAsync()'s caller, which owns the action until it is taken over
+        int caller_tid;
+        #! where an abandoned action of a caller that stopped waiting is recorded
+        WscActionWaiters orphans;
+    }
+
+    constructor(WscActionWaiters orphans) {
+        self.orphans = orphans;
+        caller_tid = gettid();
+    }
+
+    #! Takes the action over; returns @ref False if the handoff was abandoned
+    synchronized bool take() {
+        if (state && state != "orphaned") {
+            return False;
+        }
+        state = "taken";
+        result.push(True);
+        return True;
+    }
+
+    #! Abandons the handoff unless the action was taken over
+    /** If the caller stopped waiting, its action is recorded to be released by the next holder of the client's lock.
+    */
+    synchronized abandon() {
+        if (!state) {
+            state = "abandoned";
+            result.push(False);
+        } else if (state == "orphaned") {
+            state = "abandoned";
+            orphans.addOrphan(caller_tid);
+        }
+    }
+
+    #! Called when the caller stops waiting for the decision (it was cancelled)
+    /** If the handoff was already abandoned, the caller's action is recorded to be released; if it is undecided, the
+        worker decides later: it takes the action over or abandons it, which then records it.
+    */
+    synchronized orphan() {
+        if (!state) {
+            state = "orphaned";
+        } else if (state == "abandoned") {
+            orphans.addOrphan(caller_tid);
+        }
+    }
+
+    #! Waits for the decision: @ref True if the worker took the action over
+    bool wait() {
+        return result.get();
+    }
+}
+
+#! The handoffs of actions to the threads that run connectAsync() workers, by TID; internal to WebSocketClient
+/** Changed in synchronized methods, which are not cancellation points (see WscActionHandoff).
+
+    @since WebSocketClient 2.5
+*/
+public class WscActionHandoffs {
+    private {
+        hash<string, WscActionHandoff> h = {};
+    }
+
+    #! Records the handoff to the calling thread
+    synchronized set(WscActionHandoff handoff) {
+        h{gettid()} = handoff;
+    }
+
+    #! Removes and returns the handoff to the calling thread, if any
+    synchronized *WscActionHandoff take() {
+        return remove h{gettid()};
+    }
+}
+
+#! The start of a thread of a client, held by the code that the thread runs
+/** When the code is released without having been run (e.g. a \c start_thread hook that dropped it, or a thread that
+    ended before it ran it), the start is uncounted, so the client's destructor does not wait for a thread that will
+    never run it.
+
+    @since WebSocketClient 2.5
+*/
+public class WscStartTicket {
+    private {
+        WscLibraryThreads lt;
+        int token;
+        bool entered = False;
+        #! the handoff of the action to the thread, if any: abandoned with the code
+        *WscActionHandoff handoff;
+    }
+
+    constructor(WscLibraryThreads lt, int token, *WscActionHandoff handoff) {
+        self.lt = lt;
+        self.token = token;
+        self.handoff = handoff;
+    }
+
+    destructor() {
+        if (!entered) {
+            lt.abandon(token);
+            if (handoff) {
+                handoff.abandon();
+            }
+        }
+    }
+
+    #! Records the calling thread as running the start, unless the start was reported failed
+    enter() {
+        entered = lt.enter(token);
+    }
+}
+
+public class WscConnection {
+    public {
+        #! the sequence number of the connection in its client
+        int seq;
+
+        #! the poll operation of the connection, once its async I/O is started
+        *object op;
+
+        #! True once the connection was taken from its client to be torn down; protected by the client's delivery mutex
+        bool claimed = False;
+
+        #! True while a delivery task of the connection is scheduled or running; protected by the client's delivery mutex
+        bool delivery_active = False;
+
+        #! Incremented by each completion callback of the operation; protected by the client's delivery mutex
+        int delivery_pending = 0;
+
+        #! The connection ID (see @ref WebSocketClient::WebSocketClient::getConnectionId() "getConnectionId()")
+        int cid = -1;
+
+        #! True if the connection is a WebSocket over HTTP/2
+        bool http2 = False;
+
+        #! True if the connection is a WebSocket over HTTP/3
+        bool http3 = False;
+
+        #! True once the connection's open notification (connectionOpened()) was claimed by a thread; protected by the
+        #! client's delivery mutex
+        /** The first thread that needs it raises it: the connecting thread, the delivery task before the connection's
+            first message, or the thread reporting the connection closed; the others go on without waiting.
+        */
+        bool connected_issued = False;
+
+        #! True if frames received before the connection's async I/O started are to be delivered; protected by the
+        #! client's delivery mutex
+        bool initial_drain = False;
+    }
+
+    #! Creates the object
+    /** @param seq the sequence number of the connection in its client
+    */
+    constructor(int seq) {
+        self.seq = seq;
+    }
+}
+
 /** @defgroup WSClientRawCallbackReturnCodes WebSocketClient Raw Callback Return Codes
 */
 #! Application name
@@ -659,17 +1218,82 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         Condition tid_cond();
 
         #! Monotonic teardown generation; incremented by each clearTid() call
-        /** Used by waitTidCleared() to detect that the connection it is waiting
-            for has been torn down even when the @ref tid sentinel is immediately
-            reused by a reconnect.  In async mode @ref tid is the constant
-            sentinel -1, so comparing @ref tid alone suffers an ABA race: a
-            reconnect can tear down the old connection (clearTid() sets tid to
-            NOTHING) and re-establish a new one (updateTid(-1)) before the
-            waiter re-evaluates its predicate, leaving the waiter blocked forever
-            on a healthy connection.  Tracking a generation that only ever
-            increases makes the wait robust to sentinel reuse.
+        /** A thread waiting on @ref tid_cond for a teardown compares it, as the @ref tid sentinel is reused by every
+            async connection.
         */
         int tid_generation = 0;
+
+        #! The client's current connection; set and taken only with \c m held
+        /** A connection is torn down by exactly one thread: the one that takes it from the client with
+            claimConnectionUnlocked().  The resource members (@ref poll_op, @ref hcio_mgr, @ref hcio_stream,
+            @ref async_wake_socket, @ref async_state_queue) belong to this connection: they are set while a connection is
+            made, with \c m held, and taken together with it.
+
+            @since WebSocketClient 2.5
+        */
+        *WscConnection conn;
+
+        #! The sequence number of the last connection published (@ref conn); incremented with \c m held
+        /** @since WebSocketClient 2.5
+        */
+        int conn_seq = 0;
+
+        #! The value of @ref conn_seq when the last connection was taken (clearTid())
+        /** An automatic reconnect started for that teardown gets it as its token, and does nothing once a connection
+            was published after the teardown; see doReconnect().
+
+            @since WebSocketClient 2.5
+        */
+        int reconnect_token = 0;
+
+        #! The token of each running reconnect thread, by TID; protected by \c m
+        /** See reconnectSupersededUnlocked().
+
+            @since WebSocketClient 2.5
+        */
+        hash<string, int> reconnect_tokens();
+
+        #! The poll operation of a connection taken by this client while its close handshake is waited for
+        /** A data message sent meanwhile raises \c WEBSOCKET-CLOSING-ERROR; see closeAndWaitUnlocked().
+
+            @since WebSocketClient 2.5
+        */
+        *object closing_op;
+
+        #! The TID of the thread running the current action, or 0; protected by \c m
+        /** connect(), disconnect(), reconnect() and each attempt of an automatic reconnect run as one action at a time;
+            see acquireActionUnlocked().
+
+            @since WebSocketClient 2.5
+        */
+        int action_tid = 0;
+
+        #! How many times the thread in @ref action_tid started the current action; protected by \c m
+        /** @since WebSocketClient 2.5
+        */
+        int action_count = 0;
+
+        #! The threads waiting to start an action, in the order they started waiting; protected by \c m
+        /** @since WebSocketClient 2.5
+        */
+        WscActionWaiters action_waiters();
+
+        #! The handoffs of actions to connectAsync() workers (see connectAsync())
+        /** @since WebSocketClient 2.5
+        */
+        WscActionHandoffs action_handoffs();
+
+        #! The number of calls of each thread that act without the action; protected by \c m
+        /** See acquireActionUnlocked().
+
+            @since WebSocketClient 2.5
+        */
+        hash<string, int> action_exempt();
+
+        #! True once the destructor started; no connection is published afterwards; protected by \c m
+        /** @since WebSocketClient 2.5
+        */
+        bool destroying = False;
 
         #! Unique websocket connection ID; -1 when not connected
         int cid = -1;
@@ -793,18 +1417,33 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         */
         Mutex delivery_mutex();
 
-        #! True if a delivery task is currently running on the ThreadPool
-        /** @since WebSocketClient 2.4
+        #! The threads the client starts for itself (automatic reconnects, connectAsync() workers), which the
+        #! destructor waits for
+        /** @since WebSocketClient 2.5
         */
-        bool delivery_active = False;
+        WscLibraryThreads lib_threads();
 
-        #! Counter incremented by each I/O callback to detect missed messages
-        /** The delivery task uses this to re-drain the channel if new I/O callbacks fired
-            while it was processing messages.
-
-            @since WebSocketClient 2.4
+        #! Protects @ref handshake_stream and @ref handshake_canceled
+        /** @since WebSocketClient 2.5
         */
-        int delivery_pending = 0;
+        Mutex handshake_lock();
+
+        #! The stream whose handshake response a connect waits for, if any; the destructor cancels it
+        /** @since WebSocketClient 2.5
+        */
+        *HttpClientIo::HttpClientStreamHandle handshake_stream;
+
+        #! Set by the destructor: a handshake in progress or started later is canceled
+        /** @since WebSocketClient 2.5
+        */
+        bool handshake_canceled = False;
+
+        #! The connection manager a connect acquires its connection from, if any; the destructor shuts it down
+        /** Protected by @ref handshake_lock.
+
+            @since WebSocketClient 2.5
+        */
+        *HttpClientIo::HttpClientConnectionManager handshake_mgr;
 
         #! Counter tracking active delivery threads for deterministic shutdown
         /** Incremented when a delivery thread is launched, decremented when it exits.
@@ -815,32 +1454,37 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         */
         Counter delivery_thread_counter();
 
-        #! TID of the currently running delivery thread (0 if none)
-        /** Protected by @ref delivery_mutex. Used by the destructor to detect the
-            self-deadlock case where the destructor is triggered from a user callback
-            on the delivery thread itself.
+        #! The TIDs of the threads running delivery tasks, with the number of tasks each runs
+        /** Protected by @ref delivery_mutex.  Used by the destructor to detect the self-deadlock case where the
+            destructor is called from a user callback on a delivery thread.
 
-            @since WebSocketClient 2.4
+            @since WebSocketClient 2.5
         */
-        int delivery_thread_id = 0;
+        hash<string, int> delivery_tids();
+
+        #! The close cause of the connection whose closing callback the thread runs, by TID
+        /** Protected by @ref delivery_mutex; see getAsyncCloseCause().
+
+            @since WebSocketClient 2.5
+        */
+        hash<string, list<hash<auto>>> closing_info();
+
+        #! The IDs of the connections whose events each thread reports, by TID, as a stack; protected by
+        #! @ref delivery_mutex
+        /** See getEventConnectionId().
+
+            @since WebSocketClient 2.5
+        */
+        hash<string, list<int>> event_cids();
 
         #! True if a close frame has been sent in async mode (prevents duplicate sends)
         /** @since WebSocketClient 2.4
         */
         bool async_close_sent = False;
 
-        #! TID of the thread running handleAsyncShutdown(), used to detect self-deadlock
-        /** Set before closingConnection() so the destructor path can detect that it's being
-            called from within handleAsyncShutdown() on the same thread and skip waitTidCleared();
-            reset once closingConnection() has returned, because the thread is a pool thread that later runs other
-            tasks.
-            @since WebSocketClient 2.4
-        */
-        int async_shutdown_tid = -2;
-
         #! The state event Queue of the HTTP/1.1 poll operation
         /** Gets an event with \c done set when the operation ends; a close started by the client waits on it for the
-            close handshake to end; see sendCloseAndWaitUnlocked().
+            close handshake to end; see waitCloseHandshake().
 
             @since WebSocketClient 2.5
         */
@@ -911,6 +1555,10 @@ WebSocketClient ws(\event(), {
 
     #! disconnects the connection and stops the event thread if connected
     destructor() {
+        # no thread of the client is started from here on, and a handshake in progress on another thread (which
+        # holds the client's lock) is canceled
+        lib_threads.close();
+        cancelHandshakeForDestroy();
         {
             AutoLock al(m);
             self.reconnect = False;
@@ -919,33 +1567,31 @@ WebSocketClient ws(\event(), {
             self.sleep_cond.broadcast();
         }
         disconnectIntern(WSCC_GoingAway, True);
-        # Wait for any pending delivery tasks to fully exit before members are destroyed.
-        # This covers the race where scheduleDelivery() has incremented the counter and
-        # submitted a ThreadPool task, but the task hasn't started yet (delivery_thread_id
-        # is still 0).  Without this wait the object would be destroyed before the task
-        # runs, causing OBJECT-ALREADY-DELETED in the ThreadPool worker.
-        #
-        # Skip the wait only in the self-deadlock case: a user callback on the delivery
+        # Skip the delivery-task wait only in the self-deadlock case: a user callback on the delivery
         # thread dropped the last reference and triggered this destructor.  In that case,
         # the delivery thread handles cleanup via !self checks after the destructor
         # returns, and its on_exit cnt.dec() uses a local Counter reference.
+        bool on_delivery_task;
         {
             AutoLock al(delivery_mutex);
-            if (delivery_thread_id != 0 && delivery_thread_id == gettid()) {
+            on_delivery_task = delivery_tids{gettid()} ? True : False;
+        }
+        # The threads the client started for itself (automatic reconnects, connectAsync() workers) and the
+        # delivery tasks use the object, so it is not torn down before they ended; they end once they see the client
+        # being destroyed (no new thread can be started, action waits and handshakes end at once).  They are waited
+        # for together, as one can wait for the other, until neither runs.  The delivery-task counter also covers a
+        # task submitted but not started yet.  The waits are not bounded: a bound that expires would leave threads
+        # running on a destroyed object; user code run by these threads must not block on something the destroying
+        # thread holds (see @ref websocketclient_lifecycle).
+        while (True) {
+            waitLibraryThreads();
+            if (on_delivery_task) {
                 return;
             }
-        }
-        # Defense-in-depth: bounded wait with a diagnostic warning rather than an
-        # unbounded waitForZero().  The root-cause fix in scheduleDelivery() makes
-        # this timeout unreachable in normal operation, but bugs in any future code
-        # path that bumps this counter without a matching dec would hang the
-        # destructor forever.  A bounded wait + logError turns "hang forever" into
-        # "log + proceed with destruction" (still buggy but diagnosable).
-        if (delivery_thread_counter.waitForZero(30s)) {
-            logError("destructor timed out after 30s waiting for delivery tasks; "
-                "proceeding with destruction (counter=%d, delivery_pending=%d) — this "
-                "indicates a bug: a delivery task was accounted for but never decremented",
-                delivery_thread_counter.getCount(), delivery_pending);
+            delivery_thread_counter.waitForZero();
+            if (!lib_threads.hasOthers()) {
+                break;
+            }
         }
         # Synchronous shutdown gate for the controller layer: the delivery-task
         # counter above only covers WS-layer deliverInBackground() tasks, not the
@@ -957,7 +1603,7 @@ WebSocketClient ws(\event(), {
         # scheduleDelivery().  Drain them deterministically here.  Self-wait safety:
         # this destructor can run ON a dispatcher callback worker that is executing
         # one of this owner's callbacks (when on_poll_complete drops the client's
-        # last reference) — the delivery_thread_id==gettid() guard above does NOT
+        # last reference) — the delivery_tids guard above does NOT
         # catch that, because the callback-worker pool is distinct from the WS
         # delivery thread.  flushCallbacksByOwner() is nonetheless safe because the
         # dispatcher's waitForOwnerIdle() returns immediately when called from a
@@ -1025,13 +1671,23 @@ WebSocketClient ws(\event(), {
 
     #! Returns the client-initiated close cause captured on the last async shutdown
     /** Populated by the async shutdown path when the client itself triggered the close
-        (e.g. on idle-timeout).  Empty string otherwise.
+        (e.g. on idle-timeout).  Empty string otherwise.  Called in the closing callback, it returns the close cause of
+        the connection being reported closed, even when a new connection was started meanwhile.
 
         @return the close cause tag (e.g. \c "idle-timeout") or empty string
 
         @since WebSocketClient 2.4.1
     */
     string getAsyncCloseCause() {
+        {
+            AutoLock al(delivery_mutex);
+            # in the closing callback of a connection, its own close cause, also when another connection was started
+            # meanwhile
+            *list<hash<auto>> l = closing_info{gettid()};
+            if (l) {
+                return l.last().cause;
+            }
+        }
         return async_close_cause;
     }
 
@@ -1177,6 +1833,11 @@ ws.connect();
 
         @throw WEBSOCKET-ERROR the option hash is missing either the 'url' or 'callback' keys or type error in the
         option hash
+        @throw WEBSOCKET-ACTION-TIMEOUT another connect, disconnect or reconnect did not end within the connect timeout; see
+        @ref websocketclient_lifecycle
+
+        @note An open connection replaced by this call is reported closed after the new connection is open, before
+        this method returns
     */
     hash<auto> connect(*hash<auto> opts, *reference<hash<auto>> info) {
         opts = addAcceptHeader(opts);
@@ -1191,30 +1852,70 @@ ws.connect();
         @param opts optional connection options; the \c hdr key can provide additional headers
         @return a pre-completed @ref WebSocketConnectPollOperation
 
+        @throw WEBSOCKET-ACTION-TIMEOUT another connect, disconnect or reconnect did not end within the connect timeout; see
+        @ref websocketclient_lifecycle
+
         @since WebSocketClient 2.4
     */
     WebSocketConnectPollOperation startPollConnect(*hash<auto> opts) {
         opts = addAcceptHeader(opts);
 
-        m.lock();
-        on_exit m.unlock();
-
-        if (isOpenUnlocked()) {
-            disconnectUnlocked();
+        # a connection published by a connect that then failed is released without the lock, after the connections
+        # it replaced
+        *hash<WscAsyncIoResources> unstarted;
+        on_error if (unstarted) {
+            releaseUnstartedConnection(unstarted);
         }
+        # the connections replaced are reported closed after the action, without the lock
+        list<hash<WscAsyncIoResources>> replaced = ();
+        on_exit releaseAndNotifyClosed(replaced);
 
-        # Do the full HCIO connect (blocking — the caller drives the poll loop
-        # but the actual I/O is controller-driven via HCIO)
-        hash<auto> result = connectUnlocked(opts.hdr);
+        hash<auto> result;
+        {
+            m.lock();
+            # an action wait that is cancelled leaves without the lock (see acquireActionUnlocked())
+            on_exit if (m.lockOwner()) {
+                m.unlock();
+            }
+
+            acquireActionUnlocked(getConnectActionTimeout());
+            on_exit releaseActionUnlocked();
+
+            replaced = closeAllConnectionsUnlocked();
+
+            on_error {
+                releaseFailedConnectUnlocked();
+            }
+            # Do the full HCIO connect (blocking — the caller drives the poll loop
+            # but the actual I/O is controller-driven via HCIO)
+            result = connectUnlocked(opts.hdr);
+            # registered before the connection is published: an exception raised once it is published, also by an
+            # override of publishConnectionUnlocked(), takes it again
+            int seq0 = conn_seq;
+            on_error if (!unstarted && conn && conn.seq > seq0) {
+                unstarted = takeUnstartedConnectionUnlocked(conn);
+            }
+            # the connection is the client's from here on; startEventLoop() starts its async I/O
+            publishConnectionUnlocked();
+        }
 
         # Return a pre-completed poll operation
         return new WebSocketConnectPollOperation(result);
     }
 
     #! Connects asynchronously using the global AsyncSocketIoController
-    /** This method returns immediately. The WebSocket handshake is performed asynchronously
-        by the controller. When the handshake completes, the async event loop is automatically
-        started.
+    /** This method returns once it is this call's turn among the client's connects, disconnects and reconnects
+        (see @ref websocketclient_lifecycle), without waiting for the connection: the close of the current connection,
+        if any, and the WebSocket handshake are made in a background thread, and the async event loop is started when
+        the handshake completes.  A call made after this method returned runs after the connect, for example a
+        @ref disconnect() closes the connection made here, except when this method is called on the thread that
+        processes a connection's frames while another action is in progress, or inside an action of the calling thread
+        (e.g. in a subclass's explicitDisconnect() or in code run with runInReconnectAction(); the open, message and
+        closing callbacks run outside of any action): then it returns at once, and its background connect waits for its
+        turn after the action in progress, so a call made after it returned may run before the connect.
+
+        The destructor waits for the background connect, which then fails and gives its error to \a ready_queue,
+        before the client is torn down.
 
         @param opts optional connection options; the \c hdr key can provide additional headers
         @param ready_queue optional Queue that receives the connect result hash when the
@@ -1222,51 +1923,108 @@ ws.connect();
 
         @note Only supports HTTP/1.1 WebSocket connections
 
+        @throw WEBSOCKET-ACTION-TIMEOUT another connect, disconnect or reconnect did not end within the connect timeout; see
+        @ref websocketclient_lifecycle
+
         @since WebSocketClient 2.4
     */
     connectAsync(*hash<auto> opts, *Queue ready_queue) {
         opts = addAcceptHeader(opts);
 
+        # the lock is not taken again once the action was handed over: the worker holds it while it connects
+        bool locked = True;
         m.lock();
-        on_exit m.unlock();
-
-        if (isOpenUnlocked()) {
-            disconnectUnlocked();
+        # an action wait that is cancelled leaves without the lock (see acquireActionUnlocked())
+        on_exit if (locked && m.lockOwner()) {
+            m.unlock();
         }
 
-        async_owner = "wsc-" + get_random_string(12);
-        async_close_sent = False;
-        # Reset close-cause state so each connection lifecycle sees only its
-        # own close reason; otherwise a later peer-initiated close on a
-        # reconnected session could surface a stale value to observers.
-        async_close_cause = "";
+        bool reentry = action_tid == gettid();
+        acquireActionUnlocked(getConnectActionTimeout());
+        # released here unless handed over to the background thread
+        bool handed_over = False;
+        on_exit if (!handed_over && locked && m.lockOwner()) {
+            releaseActionUnlocked();
+        }
+
+        # inside an action of this thread, or on a callback thread that acts without the action (see
+        # acquireActionUnlocked()): the action is not this call's to hand over; the background thread takes its own
+        # action after the current one
+        if (reentry || action_tid != gettid()) {
+            startLibraryThread(sub () { connectAsyncWorker(opts, ready_queue); });
+            return;
+        }
 
         # The HCIO connect (connectUnlocked + startAsyncIo) is driven by the
         # controller's I/O thread. The calling thread blocks at readData() on
         # a Channel — no actual I/O, just waiting for the I/O thread to deliver
-        # the 101 response. We dispatch this to a ThreadPool worker so
-        # connectAsync() returns immediately.
+        # the 101 response. We dispatch this to a background thread so
+        # connectAsync() returns without waiting for the connection.
         #
         # After the HCIO connect, startAsyncIo() submits the WS poll op to the
         # controller — all WS frame I/O is controller-driven from that point.
-        background connectAsyncWorker(opts, ready_queue);
+        #
+        # The action is handed over to the background thread, so calls made after this method returns run after the
+        # connect.
+        WscActionHandoff handoff(action_waiters);
+        startLibraryThread(sub () { connectAsyncWorker(opts, ready_queue, True); }, NOTHING, handoff);
+        # the worker takes the action over as its connect's action, with the lock held; this call returns once it
+        # did, without waiting for the connect
+        locked = False;
+        m.unlock();
+        bool took;
+        try {
+            waitingForHandoffHook();
+            took = handoff.wait();
+        } catch (hash<ExceptionInfo> ex) {
+            # this call was cancelled: the action it owns until the worker takes it over is released by the next
+            # holder of the lock if the worker abandons it (see WscActionHandoff::orphan())
+            handed_over = True;
+            handoff.orphan();
+            rethrow;
+        }
+        if (took) {
+            handed_over = True;
+            return;
+        }
+        # the worker ended without taking it over (e.g. it was cancelled): this call still owns the action
+        try {
+            m.lock();
+        } catch (hash<ExceptionInfo> ex) {
+            # cancelled: the action is released by the next holder of the lock
+            handed_over = True;
+            action_waiters.addOrphan(gettid());
+            rethrow;
+        }
+        locked = True;
     }
 
-    #! Worker for connectAsync — runs the HCIO connect on a ThreadPool worker
+    #! Worker for connectAsync — runs the HCIO connect on a background thread
     /** The actual I/O (TCP connect, TLS, HTTP request/response) is driven by the
         controller's I/O thread. This worker just blocks on a Channel waiting for
         the 101 response, then starts the WS event loop.
 
+        A connect that fails releases what it acquired (see connectIntern()); the client is left as it was otherwise,
+        and automatic reconnects stay enabled.
+
+        @param opts the connection options
+        @param ready_queue optional Queue that receives the connect result hash or an exception hash
+        @param handed_over True if the action of connectAsync() was handed over to this thread; for subclasses
+        overriding this method (the base implementation does not need it: its connect takes the action over from the
+        handoff recorded for this thread)
+
         @since WebSocketClient 2.5
     */
-    private connectAsyncWorker(*hash<auto> opts, *Queue ready_queue) {
+    private connectAsyncWorker(*hash<auto> opts, *Queue ready_queue, *bool handed_over) {
+        # an action handed over to this thread is taken over by connectIntern(), which then releases it as its own;
+        # if this thread ends before (e.g. it is cancelled), the thread's end abandons the handoff (see
+        # startLibraryThread()), and connectAsync() releases the action
         try {
             hash<auto> result = connectIntern(opts);
             if (ready_queue) {
                 ready_queue.push(result);
             }
         } catch (hash<ExceptionInfo> ex) {
-            try { disconnect(); } catch () {}
             try {
                 logError("async connect error: %s: %s", ex.err, ex.desc);
             } catch () {}
@@ -1281,18 +2039,42 @@ ws.connect();
 
         @param connect_result the handshake response from the poll operation's getOutput()
 
+        @throw WEBSOCKET-ERROR the event loop of the current connection is already running, or the connection made by
+        @ref startPollConnect() was closed before this call
+
         @since WebSocketClient 2.4
     */
     startEventLoop(hash<auto> connect_result) {
-        AutoLock al(m);
-
-        on_error {
-            clearTid();
+        WscConnection c;
+        # a connection whose start failed is released without the lock
+        *hash<WscAsyncIoResources> unstarted;
+        on_error if (unstarted) {
+            releaseUnstartedConnection(unstarted);
         }
+        {
+            AutoLock al(m);
 
-        startAsyncIo();
-        updateTid(-1);
-        logDebug("WS async I/O started (no delivery thread, async connect)");
+            # the connection published by startPollConnect(), unless it was closed meanwhile
+            if (!conn) {
+                # nothing is published: a reconnect in progress is not superseded
+                throw "WEBSOCKET-ERROR", "the client has no connection to start the event loop of: startPollConnect() "
+                    "was not called, or its connection was closed";
+            }
+            if (conn.op) {
+                throw "WEBSOCKET-ERROR", "the event loop of the current connection is already running";
+            }
+            c = conn;
+            on_error {
+                unstarted = takeUnstartedConnectionUnlocked(c);
+            }
+
+            startAsyncIo();
+            updateTid(-1);
+            logDebug("WS async I/O started (no delivery thread, async connect)");
+        }
+        # deliver the frames received during the handshake without the lock, and report the connection open
+        runInitialDrain(c);
+        ensureConnected(c);
     }
 
     #! returns @ref True "True" if the connection is currently open and active, @ref False "False" if not
@@ -1307,6 +2089,16 @@ ws.connect();
     /** @since WebSocketClient 2.5
     */
     private bool isOpenUnlocked() {
+        # a connection taken to be torn down is closed, even while its teardown releases its resources
+        if (!conn) {
+            return False;
+        }
+        # HTTP/1.1 after the upgrade: the WebSocket runs in its own poll operation on the socket of the HttpClientIo
+        # connection, whose state no longer applies: the connection is marked closed when its own poll operation is
+        # canceled or aborted, while the WebSocket stays open
+        if (poll_op && !http2_websocket && !http3_websocket) {
+            return True;
+        }
         if (hcio_stream) {
             try {
                 return hcio_stream.getConnection().isReady();
@@ -1393,15 +2185,41 @@ ws.connect();
 
     #! Initiate a server reconnect immediately
     /** @return True if the reconnect was started
+
+        @throw WEBSOCKET-ACTION-TIMEOUT another connect, disconnect or reconnect did not end within the I/O timeout; see
+        @ref websocketclient_lifecycle
     */
     bool reconnect() {
+        return reconnectIntern();
+    }
+
+    #! Reconnects the given connection, or the current one
+    /** @param cid if given, the reconnect is made only if the connection with this ID is still the client's when it is
+        this call's turn (checked in the action), e.g. for a reconnect triggered by a timer or a thread of that
+        connection, which must neither close a newer connection nor resurrect one closed by an explicit disconnect
+
+        @return as for @ref reconnect(); @ref False also if \a cid is given and that connection is no longer the
+        client's
+
+        @since WebSocketClient 2.5
+    */
+    private bool reconnectIntern(*int cid) {
         bool need_start = False;
-        bool notify_closed = False;
+        *hash<WscAsyncIoResources> res;
 
         {
             AutoLock al(m);
 
             if (self.stop) {
+                return False;
+            }
+
+            acquireActionUnlocked(getActionTimeout());
+            on_exit releaseActionUnlocked();
+
+            if (exists cid && (!conn || conn.cid != cid)) {
+                logInfo("reconnect for connection %d not made: the client's connection is %d", cid,
+                    conn ? conn.cid : -1);
                 return False;
             }
 
@@ -1411,83 +2229,42 @@ ws.connect();
                 self.reconnect = True;
             }
 
-            if (!tid) {
-                # Wedged state recovery: the event thread is gone but auto-reconnect
-                # is enabled.  This happens when handleAsyncShutdown() reached
-                # clearTid() but never managed to schedule startReconnect() — for
-                # example because start_thread() threw, the spawned doReconnect
-                # thread died before updating tid, or a re-entrant disconnectUnlocked()
-                # cleared tid via a path that skips reconnect scheduling.  Without
-                # this branch, isOpen() stays False, isReconnecting() stays True, and
-                # reconnect() returns False forever; nothing else recovers.
+            *WscConnection c = conn;
+            if (!c) {
+                # No connection: e.g. a lost connection that could not be reconnected (handleAsyncShutdown() took
+                # it but never managed to schedule startReconnect(), for example because start_thread() threw).
+                # Without this branch, isOpen() stays False, isReconnecting() stays True, and reconnect() returns
+                # False forever; nothing else recovers.
                 #
-                # Use do_reconnect as an in-flight latch so concurrent reconnect()
-                # callers don't double-spawn doReconnect threads.  doReconnect's
-                # entry path will run reconnectPreamble() (a no-op disconnect since
-                # nothing is open) and then drive a fresh connect.
+                # Use do_reconnect as an in-flight latch so concurrent reconnect() callers don't double-spawn
+                # doReconnect threads.  doReconnect's entry path will run reconnectPreamble() (a no-op disconnect
+                # since nothing is open) and then drive a fresh connect.
                 if (do_reconnect) {
                     return True;
                 }
                 do_reconnect = True;
                 need_start = True;
+                # the reconnect is made unless a connection is published before it runs
+                reconnect_token = conn_seq;
             } else {
-                # check if already reconnecting
-                if (!do_reconnect) {
-                    do_reconnect = True;
-                    # wake up any sleeping threads
-                    sleep_cond.broadcast();
-                    if (poll_op) {
-                        # Send close frame for async mode
-                        if (!async_close_sent && !poll_op.goalReached()) {
-                            async_close_sent = True;
-                            sendClose(WSCC_NormalClosure);
-                        }
-                        wakeAsyncIo();
-                    }
+                do_reconnect = True;
+                # Close and take the connection and run its close handshake (RFC 6455 section 5.5.1); the lock is
+                # released while waiting.
+                res = closeAndWaitUnlocked(WSCC_NormalClosure);
+                if (!res) {
+                    return True;
                 }
-
-                if (tid == -1) {
-                    # Async mode has no event thread; -1 is only a sentinel.  Clean
-                    # up directly instead of waiting for a thread termination signal
-                    # that might never be produced if no delivery task is active.
-                    # First let the close handshake started above end (RFC 6455 section 5.5.1); the lock is
-                    # released while waiting, and if the delivery pipeline tore the connection down meanwhile, it
-                    # has also started the reconnect, as the stop flag is not set.
-                    if (sendCloseAndWaitUnlocked(WSCC_NormalClosure)) {
-                        return True;
-                    }
-                    stopAsyncIo();
-                    shutdownAndCloseUnlocked();
-                    {
-                        AutoLock dal(delivery_mutex);
-                        delivery_active = False;
-                    }
-                    clearTid();
-                    # clearTid() releases do_reconnect; keep the reconnect latch set
-                    # until startReconnect() has been scheduled.
-                    do_reconnect = True;
-                    cid = -1;
-                    need_start = True;
-                    notify_closed = True;
-                } else {
-                    # wait for the event thread to terminate
-                    waitTidCleared(tid);
-                }
+                # clearTid() releases do_reconnect; keep the reconnect latch set
+                # until startReconnect() has been scheduled.
+                do_reconnect = True;
+                need_start = True;
             }
         }
 
-        if (notify_closed) {
-            try {
-                closingConnection();
-            } catch (hash<ExceptionInfo> ex) {
-                try {
-                    logError("Exception in closing WebSocketClient callback: %s",
-                        get_exception_string(ex));
-                } catch () {
-                    # ignore
-                }
-            }
-            if (!self) {
+        if (res) {
+            # the connection is no longer the client's: release it and report it closed without the lock
+            releaseClaimedConnection(res);
+            if (!notifyClosed(res)) {
                 return True;
             }
         }
@@ -1517,17 +2294,17 @@ ws.connect();
     }
 
     #! Disconnect with the given @ref closecodes "close code"
-    disconnect(int cmd = WSCC_GoingAway) {
-        # do not reconnect if an explicit disconnect is called
-        {
-            AutoLock al(m);
-            self.reconnect = False;
-            self.reconnect_stopping = True;
-            self.stop = cmd;
-            self.sleep_cond.broadcast();
-        }
+    /** Runs the close handshake and closes the connection; the connection is reported closed after this call has
+        taken it from the client, outside of the action (see @ref websocketclient_lifecycle).
 
-        disconnectIntern(cmd);
+        @param cmd the close code
+
+        @throw WEBSOCKET-ACTION-TIMEOUT another connect, disconnect or reconnect did not end within the I/O timeout; see
+        @ref websocketclient_lifecycle
+    */
+    disconnect(int cmd = WSCC_GoingAway) {
+        # an explicit disconnect stops automatic reconnects once it holds the action; see disconnectIntern()
+        disconnectIntern(cmd, False, True);
     }
 
     #! Returns @ref True if the client is reconnecting
@@ -1622,69 +2399,326 @@ ws.connect();
                 "received: %y", opts.hdr.fullType());
         }
 
-        m.lock();
-        on_exit m.unlock();
+        # a connection whose start failed is released without the lock, after the connections it replaced: declared
+        # first, so it runs last
+        *hash<WscAsyncIoResources> unstarted;
+        on_error if (unstarted) {
+            releaseUnstartedConnection(unstarted);
+        }
+        # the connections replaced are reported closed after the action, without the lock, before returning
+        list<hash<WscAsyncIoResources>> replaced = ();
+        on_exit releaseAndNotifyClosed(replaced);
 
-        if (!reconnecting) {
-            self.reconnect_stopping = False;
-            self.stop = 0;
+        hash<auto> h;
+        WscConnection c;
+        {
+            m.lock();
+            # an action wait that is cancelled leaves without the lock (see acquireActionUnlocked())
+            on_exit if (m.lockOwner()) {
+                m.unlock();
+            }
+
+            acquireActionUnlocked(getConnectActionTimeout());
+            on_exit releaseActionUnlocked();
+
+            if (!reconnecting) {
+                self.reconnect_stopping = False;
+                self.stop = 0;
+            }
+
+            # an automatic reconnect never replaces a connection published after the teardown it was started for;
+            # checked in the action, so no other connect can publish one before this one ends
+            if (reconnecting && reconnectSupersededUnlocked()) {
+                throw "WEBSOCKET-RECONNECT-SUPERSEDED", "a connection was started after the teardown that the "
+                    "reconnect was started for";
+            }
+            # an explicit disconnect() or the destructor stopped automatic reconnects meanwhile; checked in the
+            # action, so no connection is published after them
+            if (reconnecting && (!self.reconnect || self.reconnect_stopping || self.stop)) {
+                throw "WEBSOCKET-RECONNECT-SUPERSEDED", "the automatic reconnect was stopped";
+            }
+
+            replaced = closeAllConnectionsUnlocked();
+
+            on_error {
+                releaseFailedConnectUnlocked();
+            }
+            h = connectUnlocked(opts.hdr, \info, reconnecting);
+            # registered before the connection is published: an exception raised once it is published, also by an
+            # override of publishConnectionUnlocked() after the base method published it, takes it again
+            int seq0 = conn_seq;
+            on_error if (!unstarted && conn && conn.seq > seq0) {
+                unstarted = takeUnstartedConnectionUnlocked(conn);
+            }
+            c = publishConnectionUnlocked();
+
+            startAsyncIo();
+            updateTid(-1);
+            if (reconnecting) {
+                # the connection belongs to the reconnect, which may still disconnect it
+                string t = gettid().toString();
+                if (exists reconnect_tokens{t}) {
+                    reconnect_tokens{t} = c.seq;
+                }
+            }
+            logDebug("WS async I/O started (no delivery thread)");
         }
 
-        if (isOpenUnlocked()) {
-            disconnectUnlocked();
+        # outside of the action and without the lock: report the replaced connections closed, deliver the frames
+        # received during the handshake, and report the new connection open, unless the delivery task or the thread
+        # that took the connection already did
+        {
+            list<hash<WscAsyncIoResources>> l = replaced;
+            replaced = ();
+            releaseAndNotifyClosed(l);
         }
-
-        hash<auto> h = connectUnlocked(opts.hdr, \info, reconnecting);
-        on_error {
-            clearTid();
-        }
-
-        startAsyncIo();
-        updateTid(-1);
-        logDebug("WS async I/O started (no delivery thread)");
+        runInitialDrain(c);
+        ensureConnected(c);
         return h;
     }
 
-    #! Disconnect with the given @ref closecodes "close code"
-    private disconnectIntern(int cmd = WSCC_GoingAway, *bool destroy) {
-        AutoLock al(m);
+    #! Called when a connection is reported open
+    /** Runs without the client's lock and outside of any action, once per connection, started before any of the
+        connection's messages or its close is reported (see ensureConnected()); the base class does nothing.  Never
+        called on the connection's delivery slot, so its messages are delivered meanwhile.
 
-        # HTTP/3 closes the TCP socket after QUIC handshake, so isOpen() returns False
-        # even though the QUIC connection is active; check http3_websocket as well
-        if (isOpenUnlocked() || (http3_websocket && tid)) {
-            disconnectUnlocked(cmd);
-        } else if (destroy && tid && tid != gettid()) {
-            # Check for self-deadlock in async mode: the destructor may be called from a
-            # user callback on the delivery thread (via handleAsyncShutdown() ->
-            # closingConnection()) when the connection is already closed (isOpenUnlocked() = False).
-            # In this case tid == -1 and the thread that will call clearTid() is THIS thread,
-            # so waitTidCleared() would deadlock.
-            if (tid == -1 && async_shutdown_tid == gettid()) {
+        @param info a hash with the following keys:
+        - \c cid: the connection ID
+        - \c http2: @ref True if the connection is a WebSocket over HTTP/2
+        - \c http3: @ref True if the connection is a WebSocket over HTTP/3
+
+        @since WebSocketClient 2.5
+    */
+    private connectionOpened(hash<auto> info) {
+    }
+
+    #! Reports a connection open unless that was done already; called without \c m held
+    /** The first thread that needs it claims the report under the delivery lock and makes it: the connecting thread,
+        the delivery task before the connection's first message, or the thread that reports the connection closed.
+        The others go on without waiting, so the report is started, not necessarily finished, before any other event
+        of the connection.
+
+        @param c the connection
+
+        @since WebSocketClient 2.5
+    */
+    private ensureConnected(WscConnection c) {
+        {
+            AutoLock al(delivery_mutex);
+            if (c.connected_issued) {
                 return;
             }
-            if (tid == -1) {
-                # Async mode: handle cleanup directly instead of calling waitTidCleared().
-                # The delivery threads that normally call clearTid() via handleAsyncShutdown()
-                # may be blocked in cancelByOwner() waiting for the I/O thread — and this
-                # destructor may BE the I/O thread (triggered from a continuePoll ->
-                # notifyPollComplete callback that dropped the last reference). Waiting for
-                # clearTid() in that scenario deadlocks the I/O thread and all threads
-                # waiting on cancelByOwner().
-                stopAsyncIo();
-                {
-                    AutoLock dal(delivery_mutex);
-                    delivery_active = False;
-                }
-                clearTid();
-                return;
-            }
-            # wait for reconnect thread to stop if deleting when disconnected and reconnecting
-            stop = cmd;
-            # wake up any sleeping threads
-            sleep_cond.broadcast();
-            # wait for the event thread to terminate
-            waitTidCleared(tid);
+            c.connected_issued = True;
         }
+        raiseConnected(c);
+    }
+
+    #! Makes the open report of a connection whose report the calling thread claimed; called without \c m held
+    /** @param c the connection
+
+        @since WebSocketClient 2.5
+    */
+    private raiseConnected(WscConnection c) {
+        pushEventConnectionId(c.cid);
+        on_exit popEventConnectionId();
+        try {
+            connectionOpened({"cid": c.cid, "http2": c.http2, "http3": c.http3});
+        } catch (hash<ExceptionInfo> ex) {
+            logError("Exception in the connection callback: %s", get_exception_string(ex));
+        }
+    }
+
+    #! Returns the ID of the connection whose event the calling thread reports, or the current connection's ID
+    /** In a callback for a message, the open notification or the close of a connection, the ID of that connection,
+        which may differ from @ref getConnectionId() when a newer connection was opened meanwhile.
+
+        @return the connection ID; -1 if none
+
+        @since WebSocketClient 2.5
+    */
+    int getEventConnectionId() {
+        {
+            AutoLock al(delivery_mutex);
+            *list<int> l = event_cids{gettid()};
+            if (l) {
+                return l.last();
+            }
+        }
+        return cid;
+    }
+
+    #! Returns the ID of the client's current connection, or -1 if it has none
+    /** Unlike @ref getConnectionId(), which is assigned during a connection's handshake and so can belong to a
+        connect still in progress, this is the ID of the connection that the client has; it takes no lock.
+
+        @since WebSocketClient 2.5
+    */
+    int getCurrentConnectionId() {
+        *WscConnection c = conn;
+        return c ? c.cid : -1;
+    }
+
+    #! Returns the ID of the connection being reported closed in a closing callback
+    /** Called in the closing callback (closingConnection() or @ref EVENT_WS_CLOSED), the ID of the connection being
+        reported closed, which may be older than the current connection: a connection can be reported closed after a
+        newer one was opened.  Outside of a closing callback, the current connection's ID.
+
+        @return the connection ID; -1 if none
+
+        @since WebSocketClient 2.5
+    */
+    int getClosingConnectionId() {
+        {
+            AutoLock al(delivery_mutex);
+            *list<hash<auto>> l = closing_info{gettid()};
+            if (l) {
+                return l.last().cid;
+            }
+        }
+        return cid;
+    }
+
+    #! Pushes the ID of the connection whose event the calling thread reports
+    private pushEventConnectionId(int id) {
+        AutoLock al(delivery_mutex);
+        push event_cids{gettid()}, id;
+    }
+
+    #! Pops the ID pushed with pushEventConnectionId()
+    private popEventConnectionId() {
+        if (!self) {
+            return;
+        }
+        AutoLock al(delivery_mutex);
+        string t = gettid().toString();
+        pop event_cids{t};
+        if (!event_cids{t}) {
+            remove event_cids{t};
+        }
+    }
+
+    #! Delivers the frames that an HTTP/2 or HTTP/3 connection received before its async I/O started; called without \c m held
+    /** The raw frame callback may run here, so it never runs with the client's lock held.
+
+        @param c the connection
+
+        @since WebSocketClient 2.5
+    */
+    private runInitialDrain(WscConnection c) {
+        *object op;
+        {
+            AutoLock al(delivery_mutex);
+            if (c.claimed || !c.initial_drain) {
+                return;
+            }
+            c.initial_drain = False;
+            op = c.op;
+        }
+        if (op instanceof WebSocketClientHcioPollOp) {
+            try {
+                cast<WebSocketClientHcioPollOp>(op).initialDrain();
+            } catch (hash<ExceptionInfo> ex) {
+                # an exception of the raw frame callback, logged as in notifyIo(); the frames drained are delivered
+                logError("exception delivering the frames received with the handshake: %s: %s", ex.err, ex.desc);
+            }
+        }
+        scheduleDelivery(c);
+    }
+
+    #! Called by an explicit @ref disconnect() once it holds its action, before the connection is closed
+    /** Runs without the client's lock; the base class does nothing.  A subclass stops here what must not survive an
+        explicit disconnect (e.g. timers that would reconnect); a disconnect that times out waiting for the action
+        does not call it.
+
+        @since WebSocketClient 2.5
+    */
+    private explicitDisconnect() {
+    }
+
+    #! Disconnect with the given @ref closecodes "close code"
+    /** @param cmd the close code
+        @param destroy @ref True if called from the destructor
+        @param explicit @ref True if called by @ref disconnect(); a disconnect made by an automatic reconnect (from
+        reconnectPreamble() or doReconnect()) does nothing once a connection was published after the teardown that
+        the reconnect was started for
+
+        @since WebSocketClient 2.5 added the \a explicit parameter
+    */
+    private disconnectIntern(int cmd = WSCC_GoingAway, *bool destroy, *bool explicit) {
+        list<hash<WscAsyncIoResources>> taken = ();
+        {
+            m.lock();
+            # the lock is not held when the thread was cancelled while it waited for the action or for the lock again
+            # (see below)
+            on_exit if (m.lockOwner()) {
+                m.unlock();
+            }
+
+            if (destroy) {
+                # no connection is published from here on: a connect running on another thread (e.g. the worker of
+                # connectAsync()) fails instead of publishing a connection while the destructor closes the current one
+                destroying = True;
+                # threads waiting for an action stop waiting: the first one is woken, and each one wakes the next one
+                # (see acquireActionUnlocked())
+                action_waiters.wakeFirst();
+            }
+
+            # the destructor does not wait for an action; destroying the object while another thread runs one of its
+            # methods is an error of the caller
+            if (!destroy) {
+                acquireActionUnlocked(getActionTimeout());
+            }
+            on_exit if (!destroy) {
+                if (m.lockOwner()) {
+                    releaseActionUnlocked();
+                } else {
+                    # cancelled while the lock was released (see below): the action is released by the next holder of
+                    # the lock (see releaseOrphanedActionsUnlocked()); not a cancellation point
+                    action_waiters.addOrphan(gettid());
+                }
+            }
+
+            # checked in the action, so no connection can be published between the check and the disconnect: an
+            # automatic reconnect never closes a connection started after the teardown it was started for; user code
+            # running on the reconnect thread (e.g. a closing callback) calls disconnect(), which is explicit
+            if (!explicit && !destroy && reconnectSupersededUnlocked()) {
+                return;
+            }
+
+            if (explicit) {
+                # do not reconnect after an explicit disconnect; set once the action is held, so a disconnect that
+                # times out waiting for the action changes nothing
+                reconnect = False;
+                reconnect_stopping = True;
+                stop = cmd;
+                sleep_cond.broadcast();
+                # subclass steps of an explicit disconnect run in the action, without the lock
+                m.unlock();
+                try {
+                    explicitDisconnect();
+                } catch (hash<ExceptionInfo> ex) {
+                    logError("exception in explicitDisconnect(): %s", get_exception_string(ex));
+                }
+                # a cancellation point: when the thread was cancelled, e.g. in explicitDisconnect(), the exception
+                # leaves without the lock, the connection is not closed by this call, and the action is released by
+                # the next holder of the lock (see the on_exit code above)
+                m.lock();
+            }
+
+            if (destroy) {
+                # the destructor closes every connection, also one published while it waited for a close handshake
+                taken = closeAllConnectionsUnlocked();
+            } else {
+                *hash<WscAsyncIoResources> res = closeAndWaitUnlocked(cmd);
+                if (res) {
+                    push taken, res;
+                }
+            }
+        }
+        # Release the connection and report it closed outside the action and without the lock; the connection is no
+        # longer the client's, so re-entrant disconnect() calls are no-ops, and a connect() made meanwhile starts a
+        # new connection
+        releaseAndNotifyClosed(taken);
     }
 
     #! Removes any warning @ref Qore::Thread::Queue "Queue" object from the Socket
@@ -1874,8 +2908,11 @@ ws.setEventQueue();
     */
     send(string str) {
         logDebug("sending string: %y (open: %y)", LoggerUtil::getArgSummary(str), isOpen());
-        if (poll_op) {
-            poll_op.sendText(str);
+        # during the close handshake of a connection taken by this client, its operation raises
+        # WEBSOCKET-CLOSING-ERROR
+        *object po = poll_op ?? closing_op;
+        if (po) {
+            po.sendText(str);
             wakeAsyncIo();
         }
     }
@@ -1894,8 +2931,11 @@ ws.setEventQueue();
     */
     send(binary bin) {
         logDebug("sending binary: %y (open: %y)", LoggerUtil::getArgSummary(bin), isOpen());
-        if (poll_op) {
-            poll_op.sendBinary(bin);
+        # during the close handshake of a connection taken by this client, its operation raises
+        # WEBSOCKET-CLOSING-ERROR
+        *object po = poll_op ?? closing_op;
+        if (po) {
+            po.sendBinary(bin);
             wakeAsyncIo();
         }
     }
@@ -1912,8 +2952,11 @@ ws.setEventQueue();
     send(data msg, int op, bool fin) {
         logDebug("sending message: %y op: %d/%y fin: %y (open: %y)", LoggerUtil::getArgSummary(msg), op,
             WSOPMap{op} ?? "unknown", fin, isOpen());
-        if (poll_op) {
-            poll_op.sendRaw(msg, op, fin);
+        # during the close handshake of a connection taken by this client, its operation raises
+        # WEBSOCKET-CLOSING-ERROR
+        *object po = poll_op ?? closing_op;
+        if (po) {
+            po.sendRaw(msg, op, fin);
             wakeAsyncIo();
         }
     }
@@ -1973,7 +3016,7 @@ ws.setEventQueue();
     private WebSocketSendPollOperation startPollSendIntern(data msg, int op, bool fin) {
         # no data frame may follow a close frame (RFC 6455 section 5.5.1)
         if (op < WSOP_Close) {
-            *object op_obj = poll_op;
+            *object op_obj = poll_op ?? closing_op;
             if (op_obj) {
                 op_obj.checkDataSend();
             }
@@ -2186,119 +3229,313 @@ ws.setEventQueue();
         # HTTPClient hc member removed — all paths use HCIO
     }
 
-    private disconnectUnlocked(int cmd = WSCC_GoingAway) {
-        # disconnect only if possible; in case this method is called from the destructor from the event thread, we
-        # cannot wait for the event thread to terminate, as there would be a deadlock
-        if (tid && (tid != gettid())) {
-            # Check for self-deadlock in async mode: if the destructor is called from within
-            # closingConnection() on the same ThreadPool thread that's running handleAsyncShutdown(),
-            # we cannot wait for clearTid() — it's on the same call stack above us.
-            # handleAsyncShutdown() sets async_shutdown_tid before calling closingConnection().
-            if (tid == -1 && async_shutdown_tid == gettid()) {
-                # We're on the async shutdown thread — handleAsyncShutdown() will call clearTid()
-                # after closingConnection() returns. Don't wait; just clean up what we can.
-                # handleAsyncShutdown() runs once the poll operation has ended and has already released it, so
-                # there is no close handshake left to run here.
-                stopAsyncIo();
-                shutdownAndCloseUnlocked();
-                return;
-            }
-            stop = cmd;
-            # wake up any sleeping threads
-            sleep_cond.broadcast();
-            if (tid == -1) {
-                # Async mode: handle cleanup atomically. We cannot rely on the delivery
-                # pipeline to call handleAsyncShutdown() → clearTid() because the I/O
-                # controller may have already been stopped (e.g., by server shutdown),
-                # which means no I/O events will fire, no callbacks will be invoked,
-                # and clearTid() would never be called — causing waitTidCleared() to
-                # hang forever.
-                # First run the close handshake: send the close frame and wait for the server's (RFC 6455 section
-                # 5.5.1), at most the close timeout.  The lock is released while waiting, so the delivery
-                # pipeline may tear the connection down meanwhile: then there is nothing left to do here.
-                if (sendCloseAndWaitUnlocked(cmd)) {
-                    return;
-                }
-                stopAsyncIo();
-                shutdownAndCloseUnlocked();
-                {
-                    AutoLock al(delivery_mutex);
-                    delivery_active = False;
-                }
-                clearTid();
-                cid = -1;
-                # Call closingConnection() outside the lock; tid is cleared so
-                # re-entrant disconnect() calls are no-ops
-                m.unlock();
-                try {
-                    closingConnection();
-                } catch (hash<ExceptionInfo> ex) {
-                    try {
-                        logError("Exception in closing WebSocketClient callback: %s",
-                            get_exception_string(ex));
-                    } catch () {
-                        # ignore
-                    }
-                }
-                m.lock();
-                return;
-            }
-            # Reconnect thread: wait for the event thread to terminate
-            waitTidCleared(tid);
-            cid = -1;
-        }
-    }
 
-    #! Runs the close handshake of a close the client starts in async mode
-    /** Sends the client's close frame if no close was started yet, then waits until the poll operation has ended:
-        when the server's close frame arrives, when the connection is lost, or at the close timeout, when the
-        operation ends with the close code 1006 (see
-        @ref Qore::WebSocketClientPollOperationBase::setCloseTimeout() "setCloseTimeout()").
+    #! Runs the close handshake of the current connection and takes it; must be called with \c m held
+    /** The caller releases the connection with releaseClaimedConnection() and reports it closed with notifyClosed(),
+        both without the lock.
 
-        Must be called with \c m held.  \c m is released while waiting, because the poll operation's callbacks and
-        the delivery pipeline (handleAsyncShutdown()) need it.  No wait is made on a thread that runs a callback of
-        the operation, which the operation would need to finish first.
+        @param cmd the close code
 
-        @param cmd the close code to send
-
-        @return @ref True "True" if the connection was torn down by another thread (clearTid() was called) while
-        \c m was released, in which case the caller has nothing left to clean up
+        @return the resources of the connection, or @ref nothing if the client has no connection, or if the delivery
+        task took it during the close handshake (it then reports it closed)
 
         @since WebSocketClient 2.5
     */
-    private bool sendCloseAndWaitUnlocked(int cmd) {
-        *object op = poll_op;
-        if (!op || op.goalReached()) {
-            return False;
+    private *hash<WscAsyncIoResources> closeConnectionUnlocked(int cmd) {
+        *WscConnection c = conn;
+        if (!c) {
+            return;
         }
-        if (!async_close_sent) {
-            try {
-                sendClose(cmd);
-                async_close_sent = True;
-            } catch (hash<ExceptionInfo> ex) {
-                # the close frame cannot be sent, so there is no close handshake to wait for
-                logDebug("cannot send the close frame: %s: %s", ex.err, ex.desc);
-                return False;
+        # wake up any sleeping threads
+        sleep_cond.broadcast();
+        # send the close frame, then take the connection at once: the delivery task does not take it during the close
+        # handshake, so this thread reports it closed
+        sendCloseFrameUnlocked(cmd);
+        return claimConnectionUnlocked(c);
+    }
+
+    #! Closes and takes the current connection, and waits for the end of its close handshake; must be called with \c m held
+    /** The lock is released while waiting for the close handshake to end (see waitCloseHandshake()).
+
+        @param cmd the close code
+
+        @return the resources of the connection, or @ref nothing if the client has no connection
+
+        @since WebSocketClient 2.5
+    */
+    private *hash<WscAsyncIoResources> closeAndWaitUnlocked(int cmd) {
+        *hash<WscAsyncIoResources> res = closeConnectionUnlocked(cmd);
+        if (res) {
+            closing_op = res.op;
+            on_exit if (closing_op == res.op) {
+                remove closing_op;
             }
-            # the close frame is sent by the thread driving the operation
-            wakeAsyncIo();
-        }
-        if (op.isCallbackThread()) {
-            return False;
-        }
-        *Queue<hash<SocketPollStateInfo>> state_queue = async_state_queue;
-        int gen = tid_generation;
-        {
             m.unlock();
             on_exit m.lock();
+            waitCloseHandshake(res);
+        }
+        return res;
+    }
 
-            if (op instanceof WebSocketClientHcioPollOp) {
-                cast<WebSocketClientHcioPollOp>(op).waitClosed();
-            } else if (state_queue) {
-                waitPollOperationEnd(state_queue);
+    #! Closes and takes the client's connections until it has none; must be called with \c m held
+    /** closeConnectionUnlocked() releases the lock, so a connection may be published meanwhile by a path that does
+        not start an action (startEventLoop()).
+
+        @return the resources of the connections taken, to be released and reported closed without the lock
+
+        @since WebSocketClient 2.5
+    */
+    private list<hash<WscAsyncIoResources>> closeAllConnectionsUnlocked() {
+        list<hash<WscAsyncIoResources>> rv = ();
+        while (conn) {
+            *hash<WscAsyncIoResources> res = closeAndWaitUnlocked(WSCC_GoingAway);
+            if (res) {
+                push rv, res;
             }
         }
-        return tid_generation != gen;
+        return rv;
+    }
+
+    #! Releases connections taken from the client and reports them closed; called without \c m held
+    /** In order, until the object is destroyed in a callback.  Recursive, with no loop: also called in cleanup on a
+        cancelled thread (e.g. by an \c on_exit block), where a loop is a cancellation point at each iteration that
+        would skip the connections left (see WscActionWaiters); the list is short (the connections of one client).
+
+        @since WebSocketClient 2.5
+    */
+    private releaseAndNotifyClosed(list<hash<WscAsyncIoResources>> l) {
+        if (!l) {
+            return;
+        }
+        hash<WscAsyncIoResources> res = shift l;
+        releaseClaimedConnection(res);
+        if (notifyClosed(res)) {
+            releaseAndNotifyClosed(l);
+        }
+    }
+
+    #! Makes a new connection the client's connection; must be called with \c m held
+    /** Called once the connection's handshake succeeded; the resource members set while it was made belong to it.
+
+        @return the new connection
+
+        @since WebSocketClient 2.5
+    */
+    private WscConnection publishConnectionUnlocked() {
+        if (destroying) {
+            throw "WEBSOCKET-ERROR", "the client is being destroyed";
+        }
+        remove closing_op;
+        WscConnection c(++conn_seq);
+        # the connection ID assigned by its handshake (finishConnect()) and its protocol, for its events
+        c.cid = cid;
+        c.http2 = http2_websocket;
+        c.http3 = http3_websocket;
+        conn = c;
+        # a reconnect waiting between attempts checks at once that it is superseded
+        sleep_cond.broadcast();
+        return c;
+    }
+
+    #! Takes the given connection from the client to tear it down; must be called with \c m held
+    /** A connection is torn down by exactly one thread: the one that takes it here.  In one step with the lock held,
+        the connection stops being the client's, its resources are taken from the client, and clearTid() is called,
+        so the client is ready for a new connection at once.  The caller then releases the resources with
+        releaseClaimedConnection() and reports the connection closed with notifyClosed(), both without the lock.
+
+        @param c the connection to take
+
+        @return the resources of the connection, or @ref nothing if \a c is no longer the client's connection (it was
+        taken by another thread, which reports it closed)
+
+        @since WebSocketClient 2.5
+    */
+    private *hash<WscAsyncIoResources> claimConnectionUnlocked(WscConnection c) {
+        if (conn != c) {
+            return;
+        }
+        remove conn;
+        {
+            AutoLock al(delivery_mutex);
+            c.claimed = True;
+        }
+        hash<WscAsyncIoResources> res = detachAsyncIo();
+        res.conn = c;
+        # with HTTP/1.1, the socket taken from the HttpClientIo connection after the upgrade; see
+        # shutdownAndCloseUnlocked()
+        res.wake_socket = remove async_wake_socket;
+        clearTid();
+        cid = -1;
+        return res;
+    }
+
+    #! Releases the resources of a connection taken with claimConnectionUnlocked(); called without \c m held
+    /** @param res the resources of the connection
+
+        @since WebSocketClient 2.5
+    */
+    private releaseClaimedConnection(hash<WscAsyncIoResources> res) {
+        releaseAsyncIo(res);
+        if (res.wake_socket) {
+            try {
+                res.wake_socket.shutdown();
+                res.wake_socket.close();
+            } catch () {
+            }
+        }
+    }
+
+    #! Reports a connection taken with claimConnectionUnlocked() closed; called without \c m held
+    /** Calls closingConnection(), on the calling thread, without waiting for any other callback;
+        getAsyncCloseCause() and getClosingConnectionId() return the connection's close cause and ID in it, even when
+        a new connection was started meanwhile.  The connection is reported open first if no thread did it yet (see
+        ensureConnected()).  Exceptions are logged.
+
+        @param res the resources of the connection
+
+        @return @ref False if the object was destroyed in the callback
+
+        @since WebSocketClient 2.5
+    */
+    private bool notifyClosed(hash<WscAsyncIoResources> res) {
+        # a connection is reported open before its close; when no thread did it yet, this thread does it
+        if (res.conn) {
+            ensureConnected(res.conn);
+        }
+        string t = gettid().toString();
+        {
+            AutoLock al(delivery_mutex);
+            # a stack: a closing callback can report another connection closed on the same thread
+            push closing_info{t}, {"cause": res.close_cause ?? "", "cid": res.conn ? res.conn.cid : -1};
+            # getEventConnectionId() in the closing callback gives the closed connection's ID too
+            push event_cids{t}, res.conn ? res.conn.cid : -1;
+        }
+        on_exit {
+            if (self) {
+                AutoLock al(delivery_mutex);
+                pop closing_info{t};
+                if (!closing_info{t}) {
+                    remove closing_info{t};
+                }
+                pop event_cids{t};
+                if (!event_cids{t}) {
+                    remove event_cids{t};
+                }
+            }
+        }
+        try {
+            closingConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            try {
+                logError("Exception in closing WebSocketClient callback: %s", get_exception_string(ex));
+            } catch (hash<ExceptionInfo> ex2) {
+                if (ex2.err == "OBJECT-ALREADY-DELETED") {
+                    return False;
+                }
+                rethrow;
+            }
+        }
+        return self ? True : False;
+    }
+
+    #! Takes a connection whose async I/O could not be started; must be called with \c m held
+    /** The caller releases it with releaseUnstartedConnection() without the lock.
+
+        @param c the connection
+
+        @since WebSocketClient 2.5
+    */
+    private *hash<WscAsyncIoResources> takeUnstartedConnectionUnlocked(WscConnection c) {
+        try {
+            return claimConnectionUnlocked(c);
+        } catch (hash<ExceptionInfo> ex) {
+            logDebug("error taking a connection that did not start: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    #! Releases a connection taken with takeUnstartedConnectionUnlocked(); called without \c m held
+    /** If a delivery task reported the connection open before its start failed (its operation was submitted
+        already), the connection is reported closed too.
+
+        @param res the resources of the connection
+
+        @since WebSocketClient 2.5
+    */
+    private releaseUnstartedConnection(hash<WscAsyncIoResources> res) {
+        try {
+            releaseClaimedConnection(res);
+            bool opened;
+            {
+                AutoLock al(delivery_mutex);
+                opened = res.conn.connected_issued;
+            }
+            if (opened) {
+                notifyClosed(res);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            logDebug("error releasing a connection that did not start: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    #! Returns @ref True if the calling thread runs an automatic reconnect that a newer connection supersedes; must be called with \c m held
+    /** A reconnect started for a teardown must neither close nor replace a connection published after that teardown,
+        e.g. by an explicit @ref connect(); each reconnect thread checks its own token (see doReconnect()).
+
+        @since WebSocketClient 2.5
+    */
+    private bool reconnectSupersededUnlocked() {
+        *int token = reconnect_tokens{gettid().toString()};
+        return exists token && token != conn_seq;
+    }
+
+    #! Sends the client's close frame on the current connection, unless a close was started already; must be called with \c m held
+    /** The close handshake (RFC 6455 section 5.5.1) then ends when the server's close frame arrives, when the
+        connection is lost, or at the close timeout, when the operation ends with the close code 1006 (see
+        @ref Qore::WebSocketClientPollOperationBase::setCloseTimeout() "setCloseTimeout()"); see
+        waitCloseHandshake().
+
+        @param cmd the close code to send
+
+        @since WebSocketClient 2.5
+    */
+    private sendCloseFrameUnlocked(int cmd) {
+        *object op = poll_op;
+        if (!op || op.goalReached() || async_close_sent) {
+            return;
+        }
+        try {
+            sendClose(cmd);
+            async_close_sent = True;
+        } catch (hash<ExceptionInfo> ex) {
+            # the close frame cannot be sent, so there is no close handshake to wait for
+            logDebug("cannot send the close frame: %s: %s", ex.err, ex.desc);
+            return;
+        }
+        # the close frame is sent by the thread driving the operation
+        wakeAsyncIo();
+    }
+
+    #! Waits for the end of the close handshake of a connection taken from the client; called without \c m held
+    /** Waits until the poll operation of the connection has ended: when the server's close frame arrives, when the
+        connection is lost, or at the close timeout.  No wait is made when the client's close frame was not sent, or
+        on a thread that runs a callback of the operation, which the operation would need to finish first.  The
+        connection is no longer the client's, so the delivery task does not take it meanwhile, and the caller reports
+        it closed after the handshake.
+
+        @param res the resources of the connection
+
+        @since WebSocketClient 2.5
+    */
+    private waitCloseHandshake(hash<WscAsyncIoResources> res) {
+        *object op = res.op;
+        if (!res.close_sent || !op || op.goalReached() || op.isCallbackThread()) {
+            return;
+        }
+        if (op instanceof WebSocketClientHcioPollOp) {
+            cast<WebSocketClientHcioPollOp>(op).waitClosed();
+        } else if (res.state_queue) {
+            waitPollOperationEnd(res.state_queue);
+        }
     }
 
     #! Waits until the HTTP/1.1 poll operation has ended
@@ -2401,30 +3638,211 @@ ws.setEventQueue();
         remove tid;
         stop = 0;
         do_reconnect = False;
-        # advance the teardown generation so waitTidCleared() observes this
+        # advance the teardown generation so a waiter observes this
         # teardown even if the tid sentinel is immediately reused by a reconnect
         ++tid_generation;
+        # a reconnect started for this teardown is made only if no connection is published before it runs
+        reconnect_token = conn_seq;
         if (tid_waiting) {
             tid_cond.broadcast();
         }
     }
 
-    private waitTidCleared(int old_tid) {
-        # Wait for the next clearTid() (teardown of the connection active when
-        # this method was entered) rather than for the tid value to change.  In
-        # async mode tid is the constant sentinel -1, which a reconnect reuses
-        # immediately via updateTid(-1); waiting on the tid value alone would
-        # then race (ABA) and block forever.  Capturing the generation while
-        # holding m guarantees we observe exactly the teardown we are waiting
-        # for.  The tid check is retained so callers that wait on a still-active
-        # legacy event-thread tid behave as before.
-        int gen = tid_generation;
-        while (tid_generation == gen && tid == old_tid) {
-            ++tid_waiting;
-            tid_cond.wait(m);
-            --tid_waiting;
+    #! Releases the resources acquired by a connect that failed; must be called with \c m held
+    /** A stream left open by a failed connect would hold the only connection of the client's connection manager,
+        and the next connect would fail with \c HTTPCLIENT-CAPACITY-ERROR.  Errors are ignored, so the error of the
+        connect is the one raised.
+
+        @since WebSocketClient 2.5
+    */
+    private releaseFailedConnectUnlocked() {
+        try {
+            stopAsyncIo();
+            shutdownAndCloseUnlocked();
+        } catch (hash<ExceptionInfo> ex) {
+            logDebug("error releasing the resources of a failed connect: %s: %s", ex.err, ex.desc);
         }
     }
+
+    #! Starts an action: connect, disconnect, reconnect, or an attempt of an automatic reconnect; must be called with \c m held
+    /** Actions run one at a time, in the order they start; a thread can start an action inside its own action.  The
+        teardown the client runs on its own (handleAsyncShutdown()), the destructor and the callbacks of the async I/O
+        controller never start an action, so an action never waits for them; user callbacks run outside actions.
+
+        @param to the longest time to wait for an action in progress to end
+
+        @throw WEBSOCKET-ACTION-TIMEOUT the action in progress did not end within \a to
+
+        @since WebSocketClient 2.5
+    */
+    private acquireActionUnlocked(timeout to) {
+        int tid = gettid();
+        # the actions of threads that could not release them are released first; a thread with the TID of such a
+        # thread does not take its action for its own
+        releaseOrphanedActionsUnlocked();
+        orphansReleasedHook();
+        # an action handed over to this thread (see connectAsync()) becomes this call's action, unless the handoff
+        # was abandoned
+        *WscActionHandoff handoff = action_handoffs.take();
+        if (handoff && handoff.take()) {
+            action_tid = tid;
+            action_count = 1;
+            return;
+        }
+        if (action_tid == tid) {
+            ++action_count;
+            return;
+        }
+        # A thread running a callback of the operation of the current connection, or of the connection whose close
+        # handshake is waited for (e.g. the raw frame callback), never waits for the action: the action's owner may
+        # need this very thread to process the server's close frame.  It acts without the action; taking the
+        # connection under the lock keeps that safe.
+        # also while the action is passed to the next waiter (released, not yet taken), who may need this thread too
+        if ((action_tid || action_waiters.size()) && ((poll_op && poll_op.isCallbackThread())
+            || (closing_op && closing_op.isCallbackThread()))) {
+            ++action_exempt{tid};
+            return;
+        }
+        if (destroying) {
+            throw "WEBSOCKET-ERROR", "the client is being destroyed";
+        }
+        if (action_tid || action_waiters.size()) {
+            string t = tid.toString();
+            # the thread waits on a Queue of its own, so a wakeup made while it does not wait yet is not lost
+            Queue wake();
+            action_waiters.register(wake);
+            # an action orphaned after the release above and before this registration woke no waiter: release it now; an
+            # orphan recorded after this line wakes this registered waiter
+            releaseOrphanedActionsUnlocked();
+            # set once the thread takes the action
+            bool took = False;
+            # not a cancellation point: a thread that stops waiting without the action (cancelled, timed out, or the
+            # client is destroyed) passes a wakeup that may have been meant for it to the next waiter
+            on_exit action_waiters.leave(!took);
+            date deadline = now_us() + milliseconds(to);
+            # the first waiter takes the action once it is released
+            while (action_tid || action_waiters.first() != t) {
+                int remaining_us = (deadline - now_us()).durationMicroseconds();
+                if (remaining_us <= 0) {
+                    # the next waiter is woken when this one leaves (see leave()), in case the action was released
+                    # while this one timed out
+                    throw "WEBSOCKET-ACTION-TIMEOUT", sprintf("another connect, disconnect or reconnect did not end "
+                        "within %y", milliseconds(to));
+                }
+                # the wait is made without the lock; when this thread is cancelled, the lock is not taken again: the
+                # exception leaves this method without the lock (the callers release it only if they hold it)
+                m.unlock();
+                waitingForActionHook();
+                try {
+                    # rounded up, so the wait never ends before the deadline
+                    wake.get((remaining_us + 999) / 1000);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err != "QUEUE-TIMEOUT") {
+                        rethrow;
+                    }
+                }
+                m.lock();
+                # the destructor ends every action wait: each waiter wakes the next one (see leave())
+                if (destroying) {
+                    throw "WEBSOCKET-ERROR", "the client is being destroyed";
+                }
+                releaseOrphanedActionsUnlocked();
+            }
+            took = True;
+        }
+        action_tid = tid;
+        action_count = 1;
+    }
+
+    #! Ends an action started with acquireActionUnlocked(); must be called with \c m held
+    /** @since WebSocketClient 2.5
+    */
+    private releaseActionUnlocked() {
+        int tid = gettid();
+        # a call that did not wait for the action (see acquireActionUnlocked())
+        if (action_exempt{tid}) {
+            if (!--action_exempt{tid}) {
+                remove action_exempt{tid};
+            }
+            return;
+        }
+        if (action_tid != tid) {
+            return;
+        }
+        if (--action_count) {
+            return;
+        }
+        action_tid = 0;
+        signalNextActionWaiterUnlocked();
+    }
+
+    #! Wakes the first thread waiting to start an action, which takes it; must be called with \c m held
+    private signalNextActionWaiterUnlocked() {
+        action_waiters.wakeFirst();
+    }
+
+    #! Called by connectAsync() about to wait for its worker to take its action over, without the client's lock; does
+    #! nothing
+    /** A hook for tests, which can cancel the waiting thread.
+
+        @since WebSocketClient 2.5
+    */
+    private waitingForHandoffHook() {
+    }
+
+    #! Called by acquireActionUnlocked() after it released the orphaned actions, before it registers a waiter, with
+    #! the client's lock held; does nothing
+    /** A hook for tests, which can record an orphaned action before the thread registers as a waiter.
+
+        @since WebSocketClient 2.5
+    */
+    private orphansReleasedHook() {
+    }
+
+    #! Called by a thread about to wait for an action, without the client's lock; does nothing
+    /** A hook for tests, which can order a wakeup before the wait.
+
+        @since WebSocketClient 2.5
+    */
+    private waitingForActionHook() {
+    }
+
+    #! Releases the actions of threads that ended without releasing them (see WscActionWaiters); must be called
+    #! with \c m held
+    /** @since WebSocketClient 2.5
+    */
+    private releaseOrphanedActionsUnlocked() {
+        # no loop: also called on a thread being cancelled, where a loop would raise the cancellation again after the
+        # orphans were taken (see WscActionWaiters); only the action in progress can be an orphan to release
+        list<int> orphans = action_waiters.takeOrphans();
+        if (action_tid && inlist(action_tid, orphans)) {
+            action_tid = 0;
+            action_count = 0;
+            signalNextActionWaiterUnlocked();
+        }
+    }
+
+    #! Returns the longest time a connect waits for an action in progress
+    /** The \c connect_timeout option if positive, otherwise as getActionTimeout().
+
+        @since WebSocketClient 2.5
+    */
+    private timeout getConnectActionTimeout() {
+        # timeout: an integer is milliseconds, a relative date is converted
+        timeout ct = http_opts.connect_timeout ?? 0;
+        return ct > 0 ? ct : getActionTimeout();
+    }
+
+    #! Returns the longest time a disconnect or reconnect waits for an action in progress
+    /** The I/O timeout (the \c timeout option) if positive; otherwise 15 seconds, as for the close handshake
+        (see waitPollOperationEnd()).
+
+        @since WebSocketClient 2.5
+    */
+    private timeout getActionTimeout() {
+        return timeout_ms > 0 ? timeout_ms : DefaultTimeout;
+    }
+
 
     #! Initializes the poll operation and submits it to the async I/O controller
     /** Must be called while holding the mutex \c m.
@@ -2447,9 +3865,11 @@ ws.setEventQueue();
 
         AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
 
+        # the operation's messages are delivered for the connection it belongs to, published before this call
+        WscConnection c = conn;
         code<nothing()> on_poll_complete = sub () {
             try {
-                scheduleDelivery();
+                scheduleDelivery(c);
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "OBJECT-ALREADY-DELETED") {
                     return;
@@ -2477,6 +3897,7 @@ ws.setEventQueue();
                 try { controller.cancel(ws_sock); } catch () {}
                 poll_op = new WebSocketClientPollOperation(ws_sock, transport, 0,
                     active_extensions, timeout_ms, logger, raw_callback, on_poll_complete);
+                c.op = poll_op;
                 # Enable keepalive heartbeat (default 20s) and optional idle-timeout.
                 # The heartbeat sends a PING when recv-idle; the idle-timeout closes
                 # the connection with WSCC_GoingAway when no real traffic is seen.
@@ -2486,7 +3907,7 @@ ws.setEventQueue();
                 }
                 async_wake_socket = ws_sock;
                 # the controller reports the end of the operation on the state Queue, which a close started by the
-                # client waits for; see sendCloseAndWaitUnlocked()
+                # client waits for; see waitCloseHandshake()
                 async_state_queue = new Queue<hash<SocketPollStateInfo>>();
                 # Submit to the global async I/O controller
                 controller.submit(<SocketPollOperationInfo>{
@@ -2507,6 +3928,7 @@ ws.setEventQueue();
             # that reads from the stream handle and parses WS frames.
             poll_op = new WebSocketClientHcioPollOp(hcio_stream, active_extensions,
                 logger, raw_callback, on_poll_complete);
+            c.op = poll_op;
             # the end of a close started by the client is waited for with WebSocketClientHcioPollOp::waitClosed()
             remove async_state_queue;
             async_owner = "wsc-hcio-" + get_random_string(12);
@@ -2523,8 +3945,12 @@ ws.setEventQueue();
             # a close the client starts waits for the server's close frame at most the I/O timeout, as on HTTP/1.1
             poll_op.setCloseTimeout(timeout_ms);
             poll_op.start();
-            poll_op.initialDrain();
-            scheduleDelivery();
+            # the frames dispatched before the adapter was wired up are delivered without the lock (the raw frame callback
+            # may run); see runInitialDrain()
+            {
+                AutoLock al(delivery_mutex);
+                c.initial_drain = True;
+            }
             return;
         }
 
@@ -2535,21 +3961,30 @@ ws.setEventQueue();
     /** @since WebSocketClient 2.4
     */
     private stopAsyncIo() {
-        # stopAsyncIo() can run concurrently: handleAsyncShutdown() calls it
-        # from a delivery-task thread (deliberately without the lock — see the
-        # lock-ordering notes there), while disconnectUnlocked() calls it with
-        # the lock held.  Take each resource member atomically (object member
-        # removal is atomic) so exactly one caller acts on each resource;
-        # check-then-use on the members raced with the other caller's `remove`
-        # (observed as PSEUDO-METHOD-DOES-NOT-EXIST <nothing>::clearCallbacks()
-        # in the GraphQLHandler subscription robustness test).
-        *object op = remove poll_op;
-        # a thread waiting for the operation to end keeps its own reference to the Queue
-        remove async_state_queue;
+        releaseAsyncIo(detachAsyncIo());
+    }
 
-        # Clear the delivery callback BEFORE cancelling — cancelByOwner dispatches
-        # onComplete asynchronously to a worker, which would reference a destroyed
-        # closure if we don't clear it first
+    #! Takes the async I/O resources of the current connection from the client
+    /** Each resource member is taken atomically (object member removal is atomic), so when two threads take them
+        concurrently, each resource is released by exactly one of them; check-then-use on the members raced with
+        the other caller's \c remove (observed as <tt>PSEUDO-METHOD-DOES-NOT-EXIST <nothing>::clearCallbacks()</tt>
+        in the GraphQLHandler subscription robustness test).  It is called with \c m held, by
+        claimConnectionUnlocked() together with taking the connection, so the resources taken always belong to the
+        connection taken.
+
+        The poll operation's callbacks are cleared before it is canceled in releaseAsyncIo(): cancelByOwner()
+        dispatches its completion asynchronously to a worker, which would reference a destroyed closure otherwise.
+
+        @return the resources taken, to be released with releaseAsyncIo()
+
+        @since WebSocketClient 2.5
+    */
+    private hash<WscAsyncIoResources> detachAsyncIo() {
+        hash<WscAsyncIoResources> res();
+        *object op = remove poll_op;
+        # the close handshake of a connection taken waits on the Queue; see waitCloseHandshake()
+        res.state_queue = remove async_state_queue;
+        res.close_sent = async_close_sent;
         if (op) {
             op.clearCallbacks();
             # Capture the close cause before releasing the poll op so
@@ -2558,16 +3993,34 @@ ws.setEventQueue();
                 string cause = call_object_method(op, "getCloseCause");
                 if (cause.val()) {
                     async_close_cause = cause;
+                    res.close_cause = cause;
                 }
             } catch () {}
+            res.op = op;
         }
-        # async_owner is not cleared here, so both concurrent callers may cancel;
-        # cancelByOwner() is idempotent
-        if (async_owner) {
+        # async_owner is not cleared here, so concurrent callers may both cancel; cancelByOwner() is idempotent
+        if (async_owner.val()) {
+            res.owner = async_owner;
+        }
+        res.mgr = remove hcio_mgr;
+        res.stream = remove hcio_stream;
+        return res;
+    }
+
+    #! Releases the async I/O resources taken from the client with detachAsyncIo()
+    /** Cancels the connection's I/O operations in the async I/O controller and closes its HttpClientIo connection
+        manager.  Can be called without \c m held.
+
+        @param res the resources returned by detachAsyncIo()
+
+        @since WebSocketClient 2.5
+    */
+    private releaseAsyncIo(hash<WscAsyncIoResources> res) {
+        if (res.owner) {
             try {
                 AsyncSocketIo::AsyncSocketIoController controller =
                     AsyncSocketIo::getGlobalAsyncIoController();
-                controller.cancelByOwner(async_owner);
+                controller.cancelByOwner(res.owner);
             } catch (hash<ExceptionInfo> ex) {
                 logDebug("async I/O cancel error: %s: %s", ex.err, ex.desc);
             }
@@ -2576,14 +4029,12 @@ ws.setEventQueue();
         # Clean up HttpClientIo resources — shut down the connection manager
         # so its pooled connections are removed from the async I/O controller's
         # cache, preventing cache leaks across test runs
-        *HttpClientIo::HttpClientConnectionManager mgr = remove hcio_mgr;
-        if (mgr) {
+        if (res.mgr) {
             try {
-                mgr.closeAll();
+                res.mgr.closeAll();
             } catch () {
             }
         }
-        remove hcio_stream;
     }
 
     #! Wakes the async I/O controller to process pending operations
@@ -2627,21 +4078,37 @@ ws.setEventQueue();
         return sub () { cw(body); };
     }
 
-    #! Schedules delivery of received messages via a background thread
-    /** Called from the I/O callback. Only submits a task if no delivery task is currently active,
-        ensuring message ordering is preserved (only one delivery task runs at a time per client).
+    #! Schedules delivery of the received messages of a connection via a background task
+    /** Called from the completion callback of the connection's poll operation. Only submits a task if no delivery task
+        of the connection is active, ensuring message ordering is preserved (only one delivery task runs at a time per
+        connection).  Nothing is scheduled for a connection taken to be torn down.
+
+        @param c the connection whose operation received messages
 
         @since WebSocketClient 2.4
+        @since WebSocketClient 2.5 takes the connection
     */
-    private scheduleDelivery() {
+    private scheduleDelivery(WscConnection c) {
         {
             AutoLock al(delivery_mutex);
-            ++delivery_pending;
-            if (delivery_active) {
+            if (c.claimed) {
                 return;
             }
-            delivery_active = True;
+            ++c.delivery_pending;
+            if (c.delivery_active) {
+                return;
+            }
+            c.delivery_active = True;
         }
+        submitDeliveryTask(c);
+    }
+
+    #! Submits a delivery task for a connection whose delivery flag the caller set
+    /** @param c the connection
+
+        @since WebSocketClient 2.5
+    */
+    private submitDeliveryTask(WscConnection c) {
         # Use the global async I/O controller's ThreadPool for delivery, avoiding glibc
         # TLS memory accumulation from short-lived background threads. The controller's
         # pool has proper lifecycle management (stopped in module del handler).
@@ -2657,20 +4124,20 @@ ws.setEventQueue();
         # OBJECT-ALREADY-DELETED BEFORE reaching deliverInBackground(), stranding the
         # counter increment and hanging the destructor forever on waitForZero().
         delivery_thread_counter.inc();
-        code<nothing()> deliver = \deliverPendingMessages();
+        code<nothing(WscConnection)> deliver = \deliverPendingMessages();
         Counter cnt = delivery_thread_counter;
         try {
             AsyncSocketIo::AsyncSocketIoController controller =
                 AsyncSocketIo::getGlobalAsyncIoController();
             controller.submitTask(wrapAsyncCallback(sub () {
-                WebSocketClientWithSerialization::deliverInBackground(deliver, cnt);
+                WebSocketClientWithSerialization::deliverInBackground(deliver, cnt, c);
             }));
         } catch (hash<ExceptionInfo> ex) {
-            # Controller may be stopped during shutdown
+            # Controller may be stopped during shutdown; the flag set above is this connection's own
             delivery_thread_counter.dec();
             {
                 AutoLock al(delivery_mutex);
-                delivery_active = False;
+                c.delivery_active = False;
             }
         }
     }
@@ -2682,13 +4149,14 @@ ws.setEventQueue();
 
         @param deliver code reference to the \c deliverPendingMessages() method
         @param cnt the delivery thread counter to decrement when the thread exits
+        @param c the connection whose messages are delivered
 
         @since WebSocketClient 2.4
     */
-    private static deliverInBackground(code<nothing()> deliver, Counter cnt) {
+    private static deliverInBackground(code<nothing(WscConnection)> deliver, Counter cnt, WscConnection c) {
         on_exit cnt.dec();
         try {
-            deliver();
+            deliver(c);
         } catch (hash<ExceptionInfo> ex) {
             # OBJECT-ALREADY-DELETED: object destroyed between background statement and thread
             # start, or during execution when the weak self reference becomes invalid.
@@ -2700,25 +4168,36 @@ ws.setEventQueue();
         }
     }
 
-    #! Drains and delivers all pending messages from the poll operation's receive channel
-    /** Runs on a background thread. Processes all available messages in order, then clears the
-        delivery_active flag to allow the next delivery task to be scheduled.
+    #! Drains and delivers the pending messages of a connection from its poll operation's receive channel
+    /** Runs on a background thread. Processes all available messages in order, then clears the connection's delivery
+        flag to allow its next delivery task to be scheduled.  Ends as soon as the connection is taken to be torn
+        down: the messages of a connection are never delivered by a task of another connection.
+
+        @param c the connection whose messages are delivered
 
         @since WebSocketClient 2.4
+        @since WebSocketClient 2.5 takes the connection
     */
-    private deliverPendingMessages() {
+    private deliverPendingMessages(WscConnection c) {
         # Track this thread's TID so the destructor can detect the self-deadlock case
         # (destructor called from a user callback on this thread)
+        string t = gettid().toString();
         {
             AutoLock al(delivery_mutex);
-            delivery_thread_id = gettid();
+            if (c.claimed) {
+                c.delivery_active = False;
+                return;
+            }
+            ++delivery_tids{t};
         }
         on_exit {
-            # Clear delivery_thread_id; check !self for the self-deadlock case where
-            # the destructor has already completed and members are destroyed
+            # check !self for the self-deadlock case where the destructor has already completed and members are
+            # destroyed
             if (self) {
                 AutoLock al(delivery_mutex);
-                delivery_thread_id = 0;
+                if (!--delivery_tids{t}) {
+                    remove delivery_tids{t};
+                }
             }
         }
 
@@ -2731,65 +4210,78 @@ ws.setEventQueue();
             if (!self) {
                 return;
             }
-            if (!poll_op) {
-                {
-                    AutoLock al(delivery_mutex);
-                    delivery_active = False;
-                }
-                return;
-            }
 
             # Snapshot the counter to detect new callbacks
             int last_seen;
             {
                 AutoLock al(delivery_mutex);
-                last_seen = delivery_pending;
+                if (c.claimed) {
+                    c.delivery_active = False;
+                    return;
+                }
+                last_seen = c.delivery_pending;
             }
 
             # Drain all available messages
             while (True) {
-                # poll_op can be cleared by another thread between the outer check and here
                 if (!self) {
                     return;
                 }
-                *object op = poll_op;
-                if (!op) {
-                    {
-                        AutoLock al(delivery_mutex);
-                        delivery_active = False;
+                bool open_here;
+                {
+                    AutoLock al(delivery_mutex);
+                    if (c.claimed) {
+                        c.delivery_active = False;
+                        return;
                     }
+                    # the connection is reported open before its first message; when no thread did it yet, this task
+                    # claims the report, and gives up the delivery slot to make it
+                    if (!c.connected_issued) {
+                        c.connected_issued = True;
+                        c.delivery_active = False;
+                        open_here = True;
+                    }
+                }
+                if (open_here) {
+                    # a new task delivers the messages, also while the report's callbacks wait for one (e.g. an
+                    # EVENT_WS_CONNECTED observer that waits for a reply); the report was claimed before any of them
+                    scheduleDelivery(c);
+                    raiseConnected(c);
                     return;
                 }
-                *hash<auto> msg = op.getReceivedMessage();
+                *hash<auto> msg = c.op ? c.op.getReceivedMessage() : NOTHING;
                 if (!msg) {
                     break;
                 }
-                try {
-                    int disp = processAsyncMessage(msg);
-                    if (disp == WSEDC_BREAK) {
-                        # Keep delivery_active = True during handleAsyncShutdown() so that
-                        # the completion callback's scheduleDelivery() sees it and doesn't
-                        # submit a new task that would race with object destruction.
-                        # handleAsyncShutdown() calls stopAsyncIo() which cancels the I/O
-                        # operation, preventing any further callbacks.
-                        # handleAsyncShutdown() clears delivery_active BEFORE calling clearTid()
-                        # so the flag is cleared while the object is still alive.
-                        handleAsyncShutdown();
-                        return;
-                    }
-                } catch (hash<ExceptionInfo> ex) {
-                    # Log callback exceptions and continue — don't shut down the
-                    # connection for user callback errors (matching the old sync
-                    # event loop behavior which tolerated callback exceptions)
+                int disp = WSEDC_CONTINUE;
+                {
+                    pushEventConnectionId(c.cid);
+                    on_exit popEventConnectionId();
                     try {
-                        logError("callback exception: %s: %s: %s",
-                            get_ex_pos(ex), ex.err, ex.desc);
-                    } catch (hash<ExceptionInfo> ex2) {
-                        if (ex2.err == "OBJECT-ALREADY-DELETED") {
-                            return;
+                        disp = processAsyncMessage(msg);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # Log callback exceptions and continue — don't shut down the
+                        # connection for user callback errors (matching the old sync
+                        # event loop behavior which tolerated callback exceptions)
+                        try {
+                            logError("callback exception: %s: %s: %s",
+                                get_ex_pos(ex), ex.err, ex.desc);
+                        } catch (hash<ExceptionInfo> ex2) {
+                            if (ex2.err == "OBJECT-ALREADY-DELETED") {
+                                return;
+                            }
+                            rethrow;
                         }
-                        rethrow;
                     }
+                }
+                if (disp == WSEDC_BREAK) {
+                    # the connection ended: take it and report it closed, unless another thread took it
+                    handleAsyncShutdown(c);
+                    if (self) {
+                        AutoLock al(delivery_mutex);
+                        c.delivery_active = False;
+                    }
+                    return;
                 }
             }
 
@@ -2797,100 +4289,50 @@ ws.setEventQueue();
             if (!self) {
                 return;
             }
-            bool done = False;
             {
                 AutoLock al(delivery_mutex);
-                if (delivery_pending == last_seen) {
+                if (c.claimed || c.delivery_pending == last_seen) {
                     # No new callbacks since we started; safe to stop
-                    delivery_active = False;
-                    done = True;
+                    c.delivery_active = False;
+                    return;
                 }
                 # New callbacks arrived; loop and drain again
-            }
-            if (done) {
-                return;
             }
         }
     }
 
-    #! Handles async I/O connection shutdown and lifecycle cleanup
-    /** Called from a ThreadPool delivery task when a terminal message (closed/error) is received
-        or an unrecoverable error occurs. Stops the I/O controller, closes the socket, signals
-        any waiting disconnect() callers, and initiates reconnection if configured.
+    #! Handles the end of a connection reported by its poll operation
+    /** Called from a delivery task of the connection when a terminal message (closed/error) is received.  Takes the
+        connection without waiting for any other thread, releases its resources, reports it closed, and starts a
+        reconnect if configured.  Nothing is done when another thread took the connection already (disconnect(),
+        reconnect(), the destructor): that thread reports it closed.  The client is ready for a new connection as
+        soon as the connection is taken, so the closing callback can run after a new connection was started.
+
+        @param c the connection that ended
 
         @since WebSocketClient 2.4
+        @since WebSocketClient 2.5 takes the connection
     */
-    private handleAsyncShutdown() {
+    private handleAsyncShutdown(WscConnection c) {
         if (!self) {
             return;
         }
 
-        stopAsyncIo();
-
-        # Shut down the connection
-        shutdownAndCloseUnlocked();
-
-        # Check if disconnectUnlocked() already handled the cleanup (cleared tid).
-        # If so, skip closingConnection() and clearTid() to avoid double cleanup.
-        {
-            m.lock();
-            on_exit m.unlock();
-            if (tid != -1) {
-                # tid was already cleared by disconnectUnlocked(); skip cleanup
-                {
-                    AutoLock al(delivery_mutex);
-                    delivery_active = False;
-                }
-                return;
-            }
-            # Set the shutdown TID before calling closingConnection() so that if the callback
-            # drops the last user reference and triggers the destructor on THIS thread,
-            # disconnectUnlocked() can detect the self-deadlock and skip waitTidCleared()
-            async_shutdown_tid = gettid();
-        }
-
-        # Call the callback with NOTHING to signal that the connection has been closed
-        try {
-            closingConnection();
-        } catch (hash<ExceptionInfo> ex) {
-            try {
-                logError("Exception in closing WebSocketClient callback: %s", get_exception_string(ex));
-            } catch (hash<ExceptionInfo> ex2) {
-                if (ex2.err == "OBJECT-ALREADY-DELETED") {
-                    return;
-                }
-                rethrow;
-            }
-        }
-
-        if (!self) {
-            return;
-        }
-
-        # Signal any waiting disconnect() callers and handle reconnection
+        *hash<WscAsyncIoResources> res;
         bool should_reconnect;
         {
             m.lock();
             on_exit m.unlock();
 
-            # closingConnection() has returned; this pool thread may run another task of this client later, such as
-            # a delivery whose callback calls disconnect(), which must not be taken for one made from here
-            if (async_shutdown_tid == gettid()) {
-                async_shutdown_tid = -2;
-            }
-
-            # Check again: disconnectUnlocked() may have cleared tid while we were
-            # in closingConnection()
-            if (tid != -1) {
-                {
-                    AutoLock al(delivery_mutex);
-                    delivery_active = False;
-                }
+            # decided before the connection is taken, as clearTid() resets the stop flag
+            should_reconnect = reconnect && !stop;
+            bool stopped = stop.toBool();
+            res = claimConnectionUnlocked(c);
+            if (!res) {
                 return;
             }
-
-            if (reconnect && !stop) {
-                should_reconnect = True;
+            string cause = res.close_cause.val() ? sprintf(" (cause: %s)", res.close_cause) : "";
+            if (should_reconnect) {
                 # Diagnostic breadcrumb at INFO level: without this, a shutdown
                 # that will reconnect only logs via startReconnect()'s "starting
                 # reconnect in TID N" message — which never prints if start_thread()
@@ -2898,25 +4340,18 @@ ws.setEventQueue();
                 # (the per-message "closed"/"error" logs in processAsyncMessage()
                 # are logDebug and thus hidden).  Always record the reason here so a
                 # silent-death investigation has a starting point.
-                logInfo("Disconnected websocket connection; will reconnect (async)%s",
-                    async_close_cause.val() ? sprintf(" (cause: %s)", async_close_cause) : "");
+                logInfo("Disconnected websocket connection; will reconnect (async)%s", cause);
+            } else if (stopped) {
+                logInfo("Disconnected websocket connection on external request (async)");
             } else {
-                if (stop) {
-                    logInfo("Disconnected websocket connection on external request (async)");
-                } else {
-                    logInfo("Disconnected websocket connection; reconnect flag not set (async)");
-                }
+                logInfo("Disconnected websocket connection; reconnect flag not set (async)");
             }
-            # Clear delivery_active flag BEFORE clearTid() to prevent a use-after-free:
-            # clearTid() wakes waitTidCleared() which may allow the main thread to return from
-            # disconnect() and destroy the object (including delivery_mutex). We must not touch
-            # delivery_mutex after clearTid() returns, so we clear it here while we still hold
-            # lock m and the object is guaranteed to be alive.
-            {
-                AutoLock al(delivery_mutex);
-                delivery_active = False;
-            }
-            clearTid();
+        }
+
+        # release the connection and report it closed without the lock
+        releaseClaimedConnection(res);
+        if (!notifyClosed(res)) {
+            return;
         }
 
         if (should_reconnect) {
@@ -2926,7 +4361,7 @@ ws.setEventQueue();
                 # startReconnect() threw (e.g. start_thread() refused the new
                 # thread).  clearTid() has already run, so tid==0 and
                 # do_reconnect==False; the next external reconnect() call will see
-                # the wedged state and recover via its tid==0 branch.  Log so the
+                # the wedged state and recover via its no-connection branch.  Log so the
                 # silent disconnect is at least diagnosable post-mortem.
                 try {
                     logError("startReconnect from handleAsyncShutdown failed: %s",
@@ -3016,28 +4451,218 @@ ws.setEventQueue();
     }
 
     #! Starts a reconnect
+    #! Starts a thread of the client, which the destructor waits for (see waitLibraryThreads())
+    /** @param body the code to run
+        @param use_start_thread use the \c start_thread option, if set, to start the thread
+
+        @return the TID of the new thread
+
+        @since WebSocketClient 2.5
+    */
+    /** @throw WEBSOCKET-ERROR the client is being destroyed
+    */
+    private int startLibraryThread(code body, *bool use_start_thread, *WscActionHandoff handoff) {
+        WscLibraryThreads lt = lib_threads;
+        int token = lt.starting();
+        # released with the code: a start whose code is released without being run is not waited for, and abandons
+        # the action handed over to it
+        WscStartTicket ticket(lt, token, handoff);
+        WscActionHandoffs handoffs = action_handoffs;
+        code run = sub () {
+            ticket.enter();
+            # the action handed over to this thread is taken over by its connect (see acquireActionUnlocked())
+            if (handoff) {
+                handoffs.set(handoff);
+            }
+            # none of the calls is a cancellation point: done also when the thread is cancelled
+            on_exit {
+                lt.leave(token);
+                # an action handed over to this thread and not taken over is abandoned (see connectAsync())
+                if (handoff) {
+                    handoffs.take();
+                    handoff.abandon();
+                }
+            }
+            body();
+        };
+        try {
+%ifdef PO_NO_THREAD_CONTROL
+            return start_thread(run);
+%else
+            return (use_start_thread && start_thread) ? start_thread(run) : background run();
+%endif
+        } catch (hash<ExceptionInfo> ex) {
+            # the caller keeps and releases the action: a thread that the hook started anyway cannot take it over
+            if (handoff) {
+                handoff.abandon();
+            }
+            lt.startFailed(token);
+            rethrow;
+        }
+    }
+
+    #! Waits for the handshake response of the current connect's stream; the destructor cancels the wait
+    /** A connect running on another thread (e.g. a connectAsync() worker) holds the client's lock during its
+        handshake; the destructor, which needs that lock, cancels the stream instead of waiting for the response or
+        the connect timeout.
+
+        @throw WEBSOCKET-ERROR the client is being destroyed
+
+        @since WebSocketClient 2.5
+    */
+    private auto readHandshakeResponse() {
+        HttpClientIo::HttpClientStreamHandle stream = hcio_stream;
+        {
+            AutoLock al(handshake_lock);
+            if (handshake_canceled) {
+                stream.cancel();
+                throw "WEBSOCKET-ERROR", "the client is being destroyed";
+            }
+            handshake_stream = stream;
+        }
+        on_exit {
+            AutoLock al(handshake_lock);
+            remove handshake_stream;
+        }
+        auto rv;
+        try {
+            rv = stream.readData(timeout_ms);
+        } catch (hash<ExceptionInfo> ex) {
+            if (handshake_canceled) {
+                throw "WEBSOCKET-ERROR", "the client is being destroyed";
+            }
+            rethrow;
+        }
+        if (handshake_canceled) {
+            throw "WEBSOCKET-ERROR", "the client is being destroyed";
+        }
+        return rv;
+    }
+
+    #! Raises \c WEBSOCKET-ERROR if the destructor canceled the handshakes, else records the connection manager
+    /** Called before each step of a connect that could wait for the network (acquiring a connection, starting a
+        request), so a connect started or continued after the destructor began does not go on.
+
+        @param mgr the connection manager that the step acquires its connection from, if any; the destructor shuts it
+        down, which ends a connection acquisition in progress (a TCP connect or a TLS handshake)
+
+        @throw WEBSOCKET-ERROR the client is being destroyed
+
+        @since WebSocketClient 2.5
+    */
+    private checkHandshakeCanceled(*HttpClientIo::HttpClientConnectionManager mgr) {
+        AutoLock al(handshake_lock);
+        if (handshake_canceled) {
+            throw "WEBSOCKET-ERROR", "the client is being destroyed";
+        }
+        if (mgr) {
+            handshake_mgr = mgr;
+        }
+    }
+
+    #! Forgets the connection manager recorded by checkHandshakeCanceled()
+    private clearHandshakeMgr() {
+        AutoLock al(handshake_lock);
+        remove handshake_mgr;
+    }
+
+    #! Cancels a handshake in progress, and every later one, for the destructor
+    /** @since WebSocketClient 2.5
+    */
+    private cancelHandshakeForDestroy() {
+        *HttpClientIo::HttpClientConnectionManager mgr;
+        {
+            AutoLock al(handshake_lock);
+            handshake_canceled = True;
+            mgr = handshake_mgr;
+            if (handshake_stream) {
+                try {
+                    handshake_stream.cancel();
+                } catch (hash<ExceptionInfo> ex) {
+                    logDebug("error canceling the handshake: %s: %s", ex.err, ex.desc);
+                }
+            }
+        }
+        # a connection acquisition in progress (TCP connect or TLS handshake) ends when its manager is shut down, and
+        # one started later fails at once; not under the lock, since the shutdown waits for the callers of the manager
+        if (mgr) {
+            try {
+                mgr.closeAll();
+            } catch (hash<ExceptionInfo> ex) {
+                logDebug("error shutting down the connection manager of the connect: %s: %s", ex.err, ex.desc);
+            }
+        }
+    }
+
+    #! Waits in the destructor for the threads the client started for itself, except the calling thread
+    /** Not bounded: these threads end once they see the client being destroyed (an action wait, a connect and the
+        automatic reconnect's retry wait end at once; a close handshake ends at its close timeout).  User code they
+        run (a callback, the logger, a \c start_thread hook) must not block on something the destroying thread
+        holds.
+
+        @since WebSocketClient 2.5
+    */
+    private waitLibraryThreads() {
+        lib_threads.waitOthers();
+    }
+
     private startReconnect() {
+        int token;
         {
             AutoLock al(m);
             if (!self.reconnect || self.reconnect_stopping || self.stop) {
                 do_reconnect = False;
                 return;
             }
+            # the reconnect is made only if no connection is published after the teardown it is started for
+            token = reconnect_token;
         }
 
-        int tid;
-%ifdef PO_NO_THREAD_CONTROL
-        tid = start_thread(\doReconnect());
-%else
-        tid = start_thread ? start_thread(\doReconnect()) : background doReconnect();
-%endif
+        int tid = startLibraryThread(sub () { doReconnect(token); }, True);
         logInfo("Disconnected websocket connection; starting reconnect in TID %d", tid);
     }
 
     #! Handles reconnections
-    private doReconnect() {
+    /** Does nothing, or stops retrying, once a connection was published after the teardown the reconnect was started
+        for, e.g. by an explicit @ref connect(): the reconnect would otherwise close or replace that connection.  The
+        disconnect and connect the reconnect makes check this in their action (see reconnectSupersededUnlocked()), and
+        the action is not held between attempts, so an explicit call is not delayed by the retry delay.
+
+        @param token the value of @ref conn_seq when the teardown that the reconnect is started for took its
+        connection
+
+        @since WebSocketClient 2.5 takes the token
+    */
+    private doReconnect(int token) {
+        string t = gettid().toString();
+        {
+            AutoLock al(m);
+            reconnect_tokens{t} = token;
+        }
+        on_exit {
+            if (self) {
+                AutoLock al(m);
+                remove reconnect_tokens{t};
+            }
+        }
         try {
-            reconnectPreamble();
+            {
+                AutoLock al(m);
+                if (reconnectSupersededUnlocked()) {
+                    logInfo("Reconnect: a connection was started meanwhile; no reconnect is made");
+                    do_reconnect = False;
+                    return;
+                }
+            }
+            try {
+                reconnectPreamble();
+            } catch (hash<ExceptionInfo> ex) {
+                # the preamble's disconnect could not start: the connect attempts below close any connection anyway
+                if (ex.err != "WEBSOCKET-ACTION-TIMEOUT") {
+                    rethrow;
+                }
+                logInfo("Reconnect: %s: %s; continuing with the connect attempts", ex.err, ex.desc);
+            }
 
             # connect to the new gateway
             int retries = 0;
@@ -3046,6 +4671,11 @@ ws.setEventQueue();
                 {
                     AutoLock al(m);
                     if (!self.reconnect || self.reconnect_stopping || self.stop) {
+                        break;
+                    }
+                    if (reconnectSupersededUnlocked()) {
+                        logInfo("Reconnect %d: a connection was started meanwhile; no further attempt is made",
+                            retries);
                         break;
                     }
                 }
@@ -3067,13 +4697,19 @@ ws.setEventQueue();
                     connected = True;
                     break;
                 } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "WEBSOCKET-RECONNECT-SUPERSEDED") {
+                        logInfo("Reconnect %d: a connection was started meanwhile; no further attempt is made",
+                            retries);
+                        break;
+                    }
                     ++retries;
                     if (MaxReconnectRetries > 0 && (retries == MaxReconnectRetries)) {
                         logError("Reconnect %d: failed (%s: %s); max retries exhausted", retries, ex.err, ex.desc);
                         rethrow;
                     }
+                    timeout delay = getReconnectDelay();
                     logInfo("Reconnect %d: failed to connect to WebSocket server: %s: %s; sleeping for %y and "
-                        "retrying", retries, ex.err, ex.desc, ReconnectDelay);
+                        "retrying", retries, ex.err, ex.desc, milliseconds(delay));
 
                     # Use the Mutex and Condition variable to delay, because sleep() is protected with
                     # PO_NO_PROCESS_CONTROL
@@ -3081,7 +4717,14 @@ ws.setEventQueue();
                     if (!self.reconnect || self.reconnect_stopping || self.stop) {
                         break;
                     }
-                    self.sleep_cond.wait(m, ReconnectDelay);
+                    # checked under the lock before waiting, so a connection published before the wait is not missed
+                    if (reconnectSupersededUnlocked()) {
+                        logInfo("Reconnect %d: a connection was started meanwhile; no further attempt is made",
+                            retries);
+                        break;
+                    }
+                    # also woken when a connection is published, which ends this reconnect
+                    self.sleep_cond.wait(m, delay);
                 }
             }
             if (self.stop || self.reconnect_stopping) {
@@ -3120,6 +4763,47 @@ ws.setEventQueue();
                 }
             }
         }
+    }
+
+    #! Returns the delay between the attempts of an automatic reconnect
+    /** @return @ref ReconnectDelay
+
+        @since WebSocketClient 2.5
+    */
+    private timeout getReconnectDelay() {
+        return ReconnectDelay;
+    }
+
+    #! Runs code of an automatic reconnect in an action, unless a connection was published after its teardown
+    /** For subclasses whose reconnectPreamble() changes the client's state (e.g. its URL) or stops something that
+        belongs to the current connection: the code runs in an action of the reconnect thread, with the client's lock
+        released, and only if no connection was published after the teardown that the reconnect was started for; a
+        disconnectIntern() called by the code runs in the same action.  Called outside of an action, without the
+        client's lock.
+
+        @param c the code to run
+
+        @return @ref True if the code ran, @ref False if the reconnect is superseded by a newer connection
+
+        @throw WEBSOCKET-ACTION-TIMEOUT another connect, disconnect or reconnect did not end within the I/O timeout
+
+        @since WebSocketClient 2.5
+    */
+    private bool runInReconnectAction(code c) {
+        m.lock();
+        # an action wait that is cancelled leaves without the lock (see acquireActionUnlocked())
+        on_exit if (m.lockOwner()) {
+            m.unlock();
+        }
+        acquireActionUnlocked(getActionTimeout());
+        on_exit releaseActionUnlocked();
+        if (reconnectSupersededUnlocked()) {
+            return False;
+        }
+        m.unlock();
+        on_exit m.lock();
+        c();
+        return True;
     }
 
     #! Executes before a reconnect
@@ -3414,32 +5098,6 @@ ws.setEventQueue();
         return http_opts.ssl_verify_cert.typeCode() == NT_BOOLEAN && !http_opts.ssl_verify_cert;
     }
 
-    #! Called from connectAsync's on_complete callback when H1 handshake completes
-    /** Sets up the WebSocketClient state for the WS event loop.
-        Called on the controller's I/O thread — must be lightweight.
-
-        @param rh the 101 response headers
-        @param new_poll_op the WS poll operation for frame I/O
-        @param ws_sock the socket for wake calls
-
-        @since WebSocketClient 2.5
-    */
-    finishAsyncConnect(hash<auto> rh, WebSocketClientPollOperation new_poll_op,
-            Socket ws_sock) {
-        AutoLock al(m);
-        http2_websocket = False;
-        http3_websocket = False;
-
-        # Process extensions from the handshake response
-        hash<auto> rhdr = rh.headers ?? rh;
-        processExtensions(rhdr);
-
-        use_hcio = True;
-        poll_op = new_poll_op;
-        async_wake_socket = ws_sock;
-        finishConnect();
-        updateTid(-1);
-    }
 
     #! Returns the connection path from http_opts.url
     /** Parses the URL and returns the path component, defaulting to "/" if no
@@ -3518,6 +5176,13 @@ ws.setEventQueue();
 
         int retries = 0;
         while (True) {
+            # not after the destructor began, also not as a retry; the destructor shuts the manager down, which ends
+            # the acquisition
+            checkHandshakeCanceled(hcio_mgr);
+            # the manager stays registered for the destructor through the whole attempt: the TLS handshake of an
+            # HTTP/2 or HTTP/3 connection can be waited for in startStreaming() (the stream waits for its connection to
+            # be ready), after acquireStream() returned
+            on_exit clearHandshakeMgr();
             # Acquire a stream — the manager negotiates the best protocol via
             # ALPN (H1/H2) and Alt-Svc (H3). We use the same stream for the
             # WS handshake — no probe-and-discard.
@@ -3533,6 +5198,11 @@ ws.setEventQueue();
             try {
                 return connectH2H3WebSocketOnStream(stream, hdr, \info, reconnect, is_h3);
             } catch (hash<ExceptionInfo> ex) {
+                # the destructor canceled the handshake: neither retried nor taken for a server that cannot tunnel
+                # WebSocket
+                if (handshake_canceled) {
+                    rethrow;
+                }
                 # A connection that died while it was still being established (e.g. a
                 # peer FIN in the middle of the TLS handshake, or a pooled connection
                 # the server closed under us) is transient and unrelated to whether the
@@ -3629,11 +5299,12 @@ ws.setEventQueue();
         # not as a chunked HTTP request body.  Passing True here would add
         # "Transfer-Encoding: chunked" to the upgrade request and the server
         # would reject the handshake.
+        checkHandshakeCanceled();
         stream.startStreaming("GET", path, hdr, False);
         hcio_stream = stream;
 
         # Read the 101 response
-        auto rh = hcio_stream.readData(timeout_ms);
+        auto rh = readHandshakeResponse();
         if (!rh || rh.typeCode() != NT_HASH) {
             raiseError("HttpClientIo H1 WebSocket to %y failed: no response received",
                 http_opts.url);
@@ -3691,11 +5362,12 @@ ws.setEventQueue();
         string path = getUrlPath();
 
         # Start bidirectional CONNECT on the already-acquired stream
+        checkHandshakeCanceled();
         stream.startStreaming("CONNECT", path, hdr, True);
         hcio_stream = stream;
 
         # Read the CONNECT response
-        auto rh = hcio_stream.readData(timeout_ms);
+        auto rh = readHandshakeResponse();
         if (!rh || rh.typeCode() != NT_HASH) {
             raiseError("HttpClientIo CONNECT to %y failed: no response received",
                 http_opts.url);
@@ -3788,11 +5460,14 @@ ws.setEventQueue();
         # Switching Protocols, not as a chunked HTTP request body.  Passing
         # True here would add "Transfer-Encoding: chunked" to the upgrade
         # request and the server would reject the handshake.
-        hcio_stream = hcio_mgr.acquireAndStartStreaming(http_opts.url, "GET", path, hdr,
-            False);
+        checkHandshakeCanceled(hcio_mgr);
+        {
+            on_exit clearHandshakeMgr();
+            hcio_stream = hcio_mgr.acquireAndStartStreaming(http_opts.url, "GET", path, hdr, False);
+        }
 
         # Read the 101 response headers from the Channel
-        auto rh = hcio_stream.readData(timeout_ms);
+        auto rh = readHandshakeResponse();
         if (!rh || rh.typeCode() != NT_HASH) {
             raiseError("HttpClientIo H1 WebSocket to %y failed: no response received",
                 http_opts.url);
@@ -3930,12 +5605,19 @@ class MyObserver inherits Observer {
         return serialization;
     }
 
-    #! Connects to the websocket server
-    private hash<auto> connectIntern(*hash<auto> opts, *reference<hash<auto>> info, *bool reconnect) {
-        hash<auto> rv = WebSocketClient::connectIntern(opts, \info, reconnect);
-        logDebug("Reconnected; raising reconnect event: %y", observer_map);
-        notifyObservers(EVENT_WS_CONNECTED, getConnectionEventInfo());
-        return rv;
+    #! Raises @ref EVENT_WS_CONNECTED when a connection is reported open
+    /** Called once per connection, without the client's lock and outside of any action, by the first thread that
+        needs it (see ensureConnected()), so
+        @ref EVENT_WS_CONNECTED is started before any of the connection's other events.
+
+        @param info the connection's ID and protocol (\c cid, \c http2, \c http3), given in the event; taken when the
+        connection was made, so no lock is needed here
+
+        @since WebSocketClient 2.5 raised from this hook; before, it was raised after connectIntern() returned
+    */
+    private connectionOpened(hash<auto> info) {
+        logDebug("Connected; raising connect event: %y", observer_map);
+        notifyObservers(EVENT_WS_CONNECTED, info);
     }
 
     #! Returns event info for the connection event
@@ -3987,6 +5669,7 @@ class MyObserver inherits Observer {
             notifyObservers(EVENT_WS_ERROR, {
                 "buf": buf,
                 "data": ex,
+                "cid": getEventConnectionId(),
             });
             auto buf_summary = LoggerUtil::getArgSummary(buf);
             # Emit to stderr only as a last resort — when no observer is subscribed to
@@ -4006,7 +5689,7 @@ class MyObserver inherits Observer {
     #! Handles deserialized event data
     private int handleEventData(auto msgdata) {
         validateIncomingMessage(\msgdata);
-        notifyObservers(EVENT_WS_DATA, {"data": msgdata});
+        notifyObservers(EVENT_WS_DATA, {"data": msgdata, "cid": getEventConnectionId()});
         return WSEDC_CONTINUE;
     }
 
@@ -4019,6 +5702,7 @@ class MyObserver inherits Observer {
                 notifyObservers(EVENT_WS_ERROR, {
                     "buf": buf,
                     "data": ex,
+                    "cid": getEventConnectionId(),
                 });
                 # Emit to stderr only as a last resort — when no observer handles EVENT_WS_ERROR
                 # and the logger may have no appender
@@ -4040,13 +5724,13 @@ class MyObserver inherits Observer {
     private handlePing(hash<auto> h) {
         WebSocketClient::handlePing(h);
         if (raise_ping_events) {
-            notifyObservers(EVENT_WS_PING, {"data": h.msg});
+            notifyObservers(EVENT_WS_PING, {"data": h.msg, "cid": getEventConnectionId()});
         }
     }
 
     #! Got a pong message
     private receivedPong(*data msg) {
-        notifyObservers(EVENT_WS_PONG, {"data": msg});
+        notifyObservers(EVENT_WS_PONG, {"data": msg, "cid": getEventConnectionId()});
     }
 
     #! Called when the connection is closed
@@ -4055,6 +5739,7 @@ class MyObserver inherits Observer {
         # observers when the async poll op captured one before shutdown;
         # otherwise the event hash is empty as before.
         hash<auto> info = {};
+        info.cid = getClosingConnectionId();
         string cause = getAsyncCloseCause();
         if (cause.val()) {
             info.reason = cause;
@@ -6637,285 +8322,6 @@ public class WebSocketClientHcioPollOp {
         }
     }
 }
-
-%ifdef __REMOVED_WEBSOCKET_CONNECT_AND_RUN_POLL_OPERATION__
-# thread), which prevents them from delegating to C++ poll operations that require
-# I/O-thread execution. The DelegatingPollOperation approach is used instead.
-public class WebSocketConnectAndRunPollOperation inherits Qore::AbstractPollOperation<auto> {
-    private {
-        #! The WebSocketClient that created this operation
-        WebSocketClient wsc;
-
-        #! The H1 connection (owns the socket)
-        HttpClientIo::Http1ClientConnection h1conn;
-
-        #! The H1 poll operation (drives TCP/TLS/HTTP handshake)
-        HttpClientIo::Http1ClientPollOperation h1op;
-
-        #! Channel for receiving the 101 response headers
-        Channel data_channel(-1);
-
-        #! WebSocket handshake key
-        string ws_key;
-
-        #! True after H1 request has been submitted
-        bool request_submitted = False;
-
-        #! True after 101 received and WS poll op created
-        bool connected = False;
-
-        #! The WS frame I/O poll operation (phase 2)
-        *WebSocketClientPollOperation ws_op;
-
-        #! Headers for the upgrade request (queued until connection ready)
-        hash<auto> upgrade_hdr;
-
-        #! Request path
-        string request_path;
-
-        #! Optional queue to signal when connection is ready
-        *Queue ready_queue;
-
-        #! Active extensions for the WS connection
-        *list<AbstractWebSocketExtension> offered_extensions;
-
-        #! Timeout for the connection
-        timeout timeout_ms;
-
-        #! Logger
-        *Logger::LoggerInterface logger;
-
-        #! Raw callback for frame inspection
-        *code raw_callback;
-
-        #! Callback for delivery scheduling
-        *code on_poll_complete;
-
-        #! Error flag
-        bool has_error = False;
-
-        #! Error info
-        *hash<auto> error_info;
-    }
-
-    #! Creates a new WebSocketConnectAndRunPollOperation
-    /** @param wsc the WebSocketClient that created this operation
-        @param url_info parsed URL info (scheme should be http/https, not ws/wss)
-        @param hdr HTTP headers for the upgrade request
-        @param offered_extensions optional extensions to offer
-        @param ws_ver WebSocket protocol version
-        @param timeout_ms connection/I/O timeout
-        @param logger optional logger
-        @param raw_callback optional raw frame callback
-        @param on_poll_complete delivery scheduling callback
-        @param ready_queue optional queue to signal when connected
-    */
-    constructor(WebSocketClient wsc, hash<auto> url_info, hash<auto> hdr,
-            *list<AbstractWebSocketExtension> offered_extensions,
-            softint ws_ver, timeout timeout_ms,
-            *Logger::LoggerInterface logger, *code raw_callback,
-            *code on_poll_complete, *Queue ready_queue) {
-        self.wsc = wsc;
-        self.offered_extensions = offered_extensions;
-        self.timeout_ms = timeout_ms;
-        self.logger = logger;
-        self.raw_callback = raw_callback;
-        self.on_poll_complete = on_poll_complete;
-        self.ready_queue = ready_queue;
-
-        # Create H1 connection directly (bypass HCIO manager — WS needs no pooling)
-        bool accept_all_certs = wsc.isAcceptAllCerts();
-        h1conn = new HttpClientIo::Http1ClientConnection(url_info, timeout_ms, logger, 1,
-            NOTHING, accept_all_certs);
-        h1op = cast<HttpClientIo::Http1ClientPollOperation>(h1conn.getPollOperation());
-
-        # Build WebSocket upgrade headers (stored for submission after connect)
-        ws_key = get_random_string(16).toBase64();
-        hdr += {
-            "Upgrade": "websocket",
-            "Connection": "Upgrade",
-            "Sec-WebSocket-Key": ws_key,
-        };
-        if (ws_ver) {
-            hdr."Sec-WebSocket-Version" = sprintf("%d", ws_ver);
-        }
-        if (offered_extensions) {
-            *string ext_header = WebSocketExtensionRegistry::buildOfferHeader(offered_extensions);
-            if (ext_header) {
-                hdr."Sec-WebSocket-Extensions" = ext_header;
-            }
-        }
-
-        upgrade_hdr = hdr;
-        request_path = url_info.path ?? "/";
-    }
-
-    #! Returns the socket for controller registration
-    Socket getSocket() {
-        return h1conn.getSocket();
-    }
-
-    string getGoal() {
-        return connected ? "ws-event-loop" : "ws-connect";
-    }
-
-    string getState() {
-        if (connected) {
-            return "connected";
-        }
-        return "connecting";
-    }
-
-    bool goalReached() {
-        # The unified op never signals goal reached — it runs until the WS
-        # connection is closed (handled by onComplete)
-        if (ws_op) {
-            return ws_op.goalReached();
-        }
-        return False;
-    }
-
-    *hash<SocketPollInfo> continuePoll() {
-        if (!connected) {
-            # Phase 1: delegate to H1 poll op (TCP/TLS/HTTP handshake)
-            *hash<SocketPollInfo> rv = h1op.continuePoll();
-
-            # Submit the WS upgrade request once the H1 connection is established
-            # Use the C++ isReady() (checks H1State enum, not Qore state string)
-            if (!request_submitted
-                    && (cast<Http1ClientPollOperationBase>(h1op)).isReady()) {
-                h1op.submitRequestStreaming("GET", request_path, upgrade_hdr, NOTHING,
-                    data_channel, 1, True);
-                request_submitted = True;
-                # Return poll info to continue reading the response
-                return rv ?? h1op.continuePoll();
-            }
-
-            # Check for protocol switch (101 received)
-            if (h1op.isProtocolSwitched()) {
-                try {
-                    handleProtocolSwitched();
-                    # Immediately start WS frame reading
-                    return ws_op.continuePoll();
-                } catch (hash<ExceptionInfo> ex) {
-                    has_error = True;
-                    error_info = ex;
-                    if (ready_queue) {
-                        ready_queue.push({"error": ex});
-                    }
-                    return NOTHING;
-                }
-            }
-
-            # Check for H1 errors
-            if (h1op.hasError()) {
-                has_error = True;
-                error_info = h1op.getError();
-                if (ready_queue) {
-                    ready_queue.push({"error": error_info});
-                }
-                return NOTHING;
-            }
-
-            return rv;
-        }
-
-        # Phase 2: delegate to WS poll op (frame I/O)
-        return ws_op.continuePoll();
-    }
-
-    #! Called by the controller on a worker thread after continuePoll() has data
-    public onPollComplete() {
-        if (ws_op) {
-            ws_op.onPollComplete();
-        }
-    }
-
-    #! Called when the poll operation completes (closed or error)
-    nothing onComplete(hash<SocketPollResultInfo> result) {
-        if (ws_op) {
-            ws_op.onComplete(result);
-        }
-        if (!connected && ready_queue) {
-            # Connection failed before handshake completed
-            if (result.ex) {
-                ready_queue.push({"error": result.ex});
-            } else if (result.canceled) {
-                ready_queue.push({"error": {"err": "WEBSOCKET-CONNECT-ERROR",
-                    "desc": "async connect was canceled"}});
-            }
-        }
-    }
-
-    auto getOutput() {
-        if (ws_op) {
-            return ws_op.getOutput();
-        }
-        return NOTHING;
-    }
-
-    abort() {
-        if (ws_op) {
-            ws_op.abort();
-        }
-    }
-
-    #! Handles the transition from H1 handshake to WS event loop
-    private handleProtocolSwitched() {
-        # Read 101 response from Channel (non-blocking — data already delivered by H1 poll op)
-        auto rh = data_channel.recv(0s);
-        if (!rh || rh.typeCode() != NT_HASH) {
-            throw "WEBSOCKET-CONNECT-ERROR", "HTTP/1.1 WebSocket handshake failed: no response";
-        }
-
-        int status_code = rh.status_code ?? 0;
-        if (status_code != 101) {
-            throw "WEBSOCKET-CONNECT-ERROR", sprintf("WebSocket handshake failed: expected 101, "
-                "got %d", status_code);
-        }
-
-        # Validate Sec-WebSocket-Accept
-        hash<auto> rhdr = rh.headers ?? rh;
-        *string accept_key = rhdr."sec-websocket-accept";
-        if (!accept_key) {
-            throw "WEBSOCKET-CONNECT-ERROR", "WebSocket handshake failed: missing "
-                "Sec-WebSocket-Accept header";
-        }
-        string expected_key = ws_get_response_key(ws_key);
-        if (accept_key != expected_key) {
-            throw "WEBSOCKET-CONNECT-ERROR", sprintf("WebSocket handshake failed: invalid "
-                "Sec-WebSocket-Accept: got %y, expected %y", accept_key, expected_key);
-        }
-
-        # Create WS poll op on the same socket
-        Socket ws_sock = h1conn.getSocket();
-        ws_op = new WebSocketClientPollOperation(ws_sock, "http1", 0,
-            offered_extensions, timeout_ms, logger, raw_callback, on_poll_complete);
-        ws_op.setHeartbeat(wsc.getAsyncHeartbeat());
-        if (wsc.getAsyncIdleTimeout() > 0) {
-            ws_op.setIdleTimeout(wsc.getAsyncIdleTimeout());
-        }
-
-        # Notify the WebSocketClient of the successful connect
-        wsc.finishAsyncConnect(rh, ws_op, ws_sock);
-
-        connected = True;
-
-        # Signal the ready queue
-        if (ready_queue) {
-            ready_queue.push(rh);
-        }
-
-        logDebug("WebSocket handshake complete, transitioning to WS event loop");
-    }
-
-    private logDebug(string fmt, ...) {
-        if (logger) {
-            logger.log(LoggerLevel::DEBUG, "%s", "WsConnectAndRun: " + vsprintf(fmt, argv));
-        }
-    }
-}
-%endif
 
 #! Poll operation for non-blocking WebSocket sends
 /** Supports HTTP/1.1, HTTP/2, and HTTP/3 transports.

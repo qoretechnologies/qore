@@ -1,0 +1,258 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ObjectLocalLifetimeTest
+
+#! Regression test: an object held in a local is destroyed where the AST interpreter destroys it
+/** A function left by an exception released the values that its IR-only locals (untyped locals and locals of
+    optional object types, ex: <tt>auto a = new T()</tt>, <tt>*T b</tt>) own first local first in the IR, JIT and
+    tiered execution modes, so the destructor of an object declared in an outer block ran before that of one
+    declared in an inner block.  They are now released last local first, as the AST interpreter releases the
+    variables of a frame.  The script also checks the other points where an object held in a typed or an untyped
+    local is destroyed: when its scope ends, in a loop body at the end of each iteration, in reverse declaration
+    order when a function returns, before a catch block of the same function runs, when the local is reassigned
+    (also in a loop: a qcc executable released the object that a store in a loop replaced only at the next store or
+    when the function returned), when an AutoLock in a block unlocks its Mutex, and when the object leaves a
+    recursive graph; a temporary holding the object (the value of an expression) does not keep it past the end of
+    the scope.
+
+    Each case runs twice, in every execution mode, on the IR tier of tiered execution and as a qcc executable (see
+    ExecModeOutputTest).
+*/
+class ObjectLocalLifetimeTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# objects in typed block locals: destructors run where the AST interpreter runs them
+list<string> log;
+class T {
+    private { string n; }
+    constructor(string n) { self.n = n; log += "ctor " + n; }
+    destructor() { log += "dtor " + n; }
+    string name() { return n; }
+    T self_ref() { return self; }
+}
+class Holder {
+    public { *T t; }
+    constructor(*T t) { self.t = t; }
+    destructor() { log += "dtor holder"; }
+}
+sub block_exit() {
+    {
+        T a("a");
+        log += "in block";
+    }
+    log += "after block";
+}
+sub loop_locals() {
+    for (int i = 0; i < 3; ++i) {
+        T t("l" + i);
+        log += "body " + t.name();
+    }
+    log += "after loop";
+}
+sub reverse_order() {
+    T a("r1");
+    T b("r2");
+    T c("r3");
+    log += "end";
+}
+sub return_mid(bool early) {
+    T a("m1");
+    if (early) {
+        T b("m2");
+        log += "returning";
+        return;
+    }
+    log += "not early";
+}
+sub throws() {
+    T a("x1");
+    {
+        T b("x2");
+        throw "ERR";
+    }
+}
+# the same with untyped locals, which keep their values in IR storage
+sub throws_untyped() {
+    auto a = new T("u1");
+    {
+        auto b = new T("u2");
+        *T c = new T("u3");
+        throw "ERR";
+    }
+}
+sub with_exception_untyped() {
+    try {
+        throws_untyped();
+    } catch (hash<ExceptionInfo> ex) {
+        log += "caught " + ex.err;
+    }
+    log += "after catch";
+}
+sub reverse_order_untyped() {
+    auto a = new T("v1");
+    *T b = new T("v2");
+    auto c = new T("v3");
+    log += "end";
+}
+sub with_exception() {
+    try {
+        throws();
+    } catch (hash<ExceptionInfo> ex) {
+        log += "caught " + ex.err;
+    }
+    log += "after catch";
+}
+sub try_local() {
+    try {
+        T a("y1");
+        {
+            T b("y2");
+            throw "E";
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        log += "caught " + ex.err;
+    }
+    log += "after try";
+}
+sub loop_throw() {
+    for (int i = 0; i < 2; ++i) {
+        try {
+            T a("z" + i);
+            if (i) {
+                throw "Z";
+            }
+            log += "no throw";
+        } catch (hash<ExceptionInfo> ex) {
+            log += "caught " + ex.err;
+        }
+    }
+}
+sub autolock() {
+    Mutex m();
+    {
+        AutoLock al(m);
+        log += "held " + (m.lockOwner() ? "yes" : "no");
+    }
+    log += "after block " + (m.lockOwner() ? "held" : "free");
+}
+sub temp_ref() {
+    {
+        T a("t1");
+        # an expression whose value is the object; the temporary must not keep it past the block
+        T b = a.self_ref();
+        log += "assigned " + b.name();
+    }
+    log += "after temp";
+}
+sub reassign() {
+    T a("s1");
+    a = new T("s2");
+    log += "reassigned";
+    a = new T("s3");
+    log += "end reassign";
+}
+sub reassign_loop() {
+    *T a;
+    auto b;
+    for (int i = 0; i < 3; ++i) {
+        a = new T("ra" + i);
+        b = new T("rb" + i);
+        log += "iteration " + i;
+    }
+    log += "end reassign loop";
+}
+sub holder_member() {
+    {
+        Holder h(new T("h1"));
+        log += "holder " + h.t.name();
+    }
+    log += "after holder";
+}
+*T sub returns_obj() {
+    T a("ret");
+    return a;
+}
+sub returned() {
+    {
+        T b = returns_obj();
+        log += "got " + b.name();
+    }
+    log += "after returned";
+}
+sub cycle() {
+    {
+        Holder h1();
+        Holder h2(new T("c1"));
+        h1.t = h2.t;
+    }
+    log += "after cycle";
+}
+list<code> cases = (\block_exit(), \loop_locals(), \reverse_order(), sub () { return_mid(True); },
+    sub () { return_mid(False); }, \with_exception(), \with_exception_untyped(), \reverse_order_untyped(),
+    \try_local(), \loop_throw(), \autolock(), \temp_ref(), \reassign(), \reassign_loop(), \holder_member(),
+    \returned(), \cycle());
+foreach code c in (cases) {
+    for (int r = 0; r < 2; ++r) {
+        log = ();
+        c();
+        printf("%s\n", log.join(", "));
+    }
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "ctor a, in block, dtor a, after block",
+            "ctor a, in block, dtor a, after block",
+            "ctor l0, body l0, dtor l0, ctor l1, body l1, dtor l1, ctor l2, body l2, dtor l2, after loop",
+            "ctor l0, body l0, dtor l0, ctor l1, body l1, dtor l1, ctor l2, body l2, dtor l2, after loop",
+            "ctor r1, ctor r2, ctor r3, end, dtor r3, dtor r2, dtor r1",
+            "ctor r1, ctor r2, ctor r3, end, dtor r3, dtor r2, dtor r1",
+            "ctor m1, ctor m2, returning, dtor m2, dtor m1",
+            "ctor m1, ctor m2, returning, dtor m2, dtor m1",
+            "ctor m1, not early, dtor m1",
+            "ctor m1, not early, dtor m1",
+            "ctor x1, ctor x2, dtor x2, dtor x1, caught ERR, after catch",
+            "ctor x1, ctor x2, dtor x2, dtor x1, caught ERR, after catch",
+            "ctor u1, ctor u2, ctor u3, dtor u3, dtor u2, dtor u1, caught ERR, after catch",
+            "ctor u1, ctor u2, ctor u3, dtor u3, dtor u2, dtor u1, caught ERR, after catch",
+            "ctor v1, ctor v2, ctor v3, end, dtor v3, dtor v2, dtor v1",
+            "ctor v1, ctor v2, ctor v3, end, dtor v3, dtor v2, dtor v1",
+            "ctor y1, ctor y2, dtor y2, dtor y1, caught E, after try",
+            "ctor y1, ctor y2, dtor y2, dtor y1, caught E, after try",
+            "ctor z0, no throw, dtor z0, ctor z1, dtor z1, caught Z",
+            "ctor z0, no throw, dtor z0, ctor z1, dtor z1, caught Z",
+            "held yes, after block free",
+            "held yes, after block free",
+            "ctor t1, assigned t1, dtor t1, after temp",
+            "ctor t1, assigned t1, dtor t1, after temp",
+            "ctor s1, ctor s2, dtor s1, reassigned, ctor s3, dtor s2, end reassign, dtor s3",
+            "ctor s1, ctor s2, dtor s1, reassigned, ctor s3, dtor s2, end reassign, dtor s3",
+            "ctor ra0, ctor rb0, iteration 0, ctor ra1, dtor ra0, ctor rb1, dtor rb0, iteration 1, ctor ra2, dtor ra1, ctor rb2, dtor rb1, iteration 2, end reassign loop, dtor rb2, dtor ra2",
+            "ctor ra0, ctor rb0, iteration 0, ctor ra1, dtor ra0, ctor rb1, dtor rb0, iteration 1, ctor ra2, dtor ra1, ctor rb2, dtor rb1, iteration 2, end reassign loop, dtor rb2, dtor ra2",
+            "ctor h1, holder h1, dtor holder, dtor h1, after holder",
+            "ctor h1, holder h1, dtor holder, dtor h1, after holder",
+            "ctor ret, got ret, dtor ret, after returned",
+            "ctor ret, got ret, dtor ret, after returned",
+            "ctor c1, dtor holder, dtor holder, dtor c1, after cycle",
+            "ctor c1, dtor holder, dtor holder, dtor c1, after cycle",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ObjectLocalLifetime", Script, (map $1 + "\n", Expected).join(""),
+            "destroys an object held in a local where the AST interpreter does") {
+    }
+}

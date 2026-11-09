@@ -154,6 +154,26 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - a column with a qore type and a native type that the database's type map does not have raises
+      \c COLUMN-ERROR, which names the column and the type; it raised \c RUNTIME-TYPE-ERROR
+    - the driver-specific options of a description under the key of a database's native driver (ex: \c "oracle",
+      \c "pgsql" or \c "freetds") apply also on a connection to that database through a generic driver such as
+      \c jdbc or \c odbc, followed by the options under the generic driver's own name, which take precedence; they
+      were ignored, so, for example, a column default given for Oracle was not created on a \c jdbc connection to
+      Oracle.  A description of a table on such a connection gives its driver-specific options under the native
+      key.  Added @ref SqlUtil::AbstractSqlUtilBase::getDriverOptionKeys() "AbstractSqlUtilBase::getDriverOptionKeys()",
+      @ref SqlUtil::AbstractSqlUtilBase::getDatasourceDriverOptionKeys() "getDatasourceDriverOptionKeys()",
+      @ref SqlUtil::AbstractSqlUtilBase::getDriverValue() "getDriverValue()" and
+      @ref SqlUtil::DriverOptionFamilyKeys "DriverOptionFamilyKeys"; @ref SqlUtil::AbstractDatabase::checkDriverOptions()
+      "AbstractDatabase::checkDriverOptions()" accepts a list of keys
+    - @ref SqlUtil::generate_auto_triggers() "generate_auto_triggers()" takes \c "freetds", the name of the SQL Server
+      driver, for SQL Server, as \c "mssql"
+    - fixed @ref SqlUtil::AbstractDatabase::getDropFunctionSqlIfExists() "AbstractDatabase::getDropFunctionSqlIfExists()",
+      @ref SqlUtil::AbstractDatabase::getDropProcedureSqlIfExists() "getDropProcedureSqlIfExists()" and
+      @ref SqlUtil::AbstractDatabase::getDropSequenceSqlIfExists() "getDropSequenceSqlIfExists()", which returned no
+      SQL for an object that exists
+    - added @ref SqlUtil::AbstractTable::getInsertArgs() "AbstractTable::getInsertArgs()", which gives the values that
+      an insert of a row binds, so a statement prepared with the insert's SQL can insert more rows
     - a template table built from a description (the @ref SqlUtil::Table "Table" constructor with a description,
       @ref SqlUtil::AbstractDatabase::makeTable() "AbstractDatabase::makeTable()" and
       @ref SqlUtil::Tables::populate() "Tables::populate()") is created by the driver as a template, which reads
@@ -161,6 +181,8 @@ module SqlUtil {
       @ref SqlUtil::Tables::getConnectionValue() "Tables::getConnectionValue()", which reads a value of the connection
       once for all the templates of a cache
       (<a href="https://github.com/qoretechnologies/qore/issues/5584">issue 5584</a>)
+    - a column field treats a default value that its type refuses (\c TYPE-VALUE-ERROR) as an expression for the
+      server; any other error raised when the default value is checked is raised to the caller
     - added @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "AbstractDatabase::refreshMaterializedView()"
       and
       @ref SqlUtil::AbstractDatabase::getMaterializedViewRefreshOptions() "AbstractDatabase::getMaterializedViewRefreshOptions()" to refresh the stored data of a materialized view, with
@@ -7666,6 +7688,25 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         "freetds",
         "sybase",
     );
+
+    #! the keys of the driver-specific options of the native driver of a database reached through a generic driver
+    /** The key is the first word of @ref Qore::SQL::AbstractDatasource::getDriverRealName()
+        "AbstractDatasource::getDriverRealName()" in lower case; see
+        @ref SqlUtil::AbstractSqlUtilBase::getDatasourceDriverOptionKeys() "getDatasourceDriverOptionKeys()"
+
+        @since SqlUtil 3.11.0
+    */
+    public const hash<string, string> DriverOptionFamilyKeys = {
+        "oracle": "oracle",
+        "postgresql": "pgsql",
+        "microsoft": "freetds",
+        "adaptive": "sybase",
+        "sybase": "sybase",
+        "mysql": "mysql",
+        "mariadb": "mysql",
+        "firebird": "firebird",
+        "sqlite": "sqlite3",
+    };
 
     # private variable to store the closure used to deserialize datasources (if any)
     our *code ds_get;

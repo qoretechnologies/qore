@@ -1,0 +1,227 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./MssqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
+
+%try-module freetds
+%define NoFreetds
+%endtry
+
+%exec-class MssqlTestIsolationTest
+
+#! The database that MssqlTestIsolation gives a run of a SQL Server test
+class MssqlTestIsolationTest inherits QUnit::Test {
+    private {
+        *string connstr;
+        *string skip_reason;
+        # databases made for the leftover test, dropped at the end
+        list<string> made;
+    }
+
+    constructor() : Test("MssqlTestIsolationTest", "1.0", \ARGV) {
+%ifdef NoFreetds
+        skip_reason = "freetds module unavailable";
+%endif
+        connstr = ENV.QORE_DB_CONNSTR_FREETDS;
+        if (!connstr) {
+            skip_reason = "QORE_DB_CONNSTR_FREETDS is not configured";
+        } else if (!skip_reason) {
+            # a configured server that this host cannot reach (the arm64 CI runners) skips the cases, as the other
+            # SQL Server tests do
+            try {
+                Datasource ds(connstr);
+                ds.open();
+            } catch (hash<ExceptionInfo> ex) {
+                skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+            }
+        }
+        addTestCase("a non-SQL Server connection has no run database", \notMssql());
+        # the leftover databases are made before the run's database, whose setup drops the ones that may be dropped
+        addTestCase("the setup drops only the databases of gone runs", \leftovers());
+        addTestCase("the run's connections use the run's database", \runDatabase());
+        addTestCase("another driver's connection to the same server uses the run's database", \otherDriver());
+        addTestCase("the lock of the leftovers is one lock of the server", \leftoverLock());
+        addTestCase("the teardown drops the run's database", \teardown());
+        addTestCase("a leftover with sessions is left for a later run", \liveLeftover());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (connstr && made) {
+            Datasource ds(connstr);
+            ds.setAutoCommit(True);
+            ds.open();
+            map MssqlRunDatabase::dropDatabase(ds, $1), made;
+        }
+    }
+
+    private checkSkip() {
+        if (skip_reason) {
+            testSkip(skip_reason);
+        }
+    }
+
+    private notMssql() {
+        assertNothing(MssqlRunDatabase::getConnectionString(NOTHING, "x"));
+        assertEq("sqlite3:@:memory:", MssqlRunDatabase::getConnectionString("sqlite3:@:memory:", "x"));
+        assertNothing(MssqlRunDatabase::getName());
+    }
+
+    private leftovers() {
+        checkSkip();
+        Datasource ds(connstr);
+        ds.setAutoCommit(True);
+        ds.open();
+        string host = getHost();
+        int now = now_us().getEpochSeconds();
+        int old = now - TestRun::LeftoverAge.durationSeconds() - 60;
+        # each name has this process's host and id: the runs on the server at the same time, on this host or on
+        # another, make databases of their own
+        hash<string, bool> expected = {
+            # runs at least TestRun::LeftoverAge old, of any host and process, this one's too: dropped
+            sprintf("qtest_leftover_%s_%d_%d_abc123", host, getpid(), old): False,
+            sprintf("qtest_otherhost_%s_%d_%d_abc123", host + "x", getpid(), old): False,
+            # a recent run: kept
+            sprintf("qtest_recent_%s_%d_%d_abc123", host, getpid(), now): True,
+            # not a run's name: kept
+            sprintf("qtest_%d_%s_%d", old, host, getpid()): True,
+        };
+        foreach string db in (keys expected) {
+            ds.execRaw(MssqlRunDatabase::outsideTransaction("create database [" + db + "]"));
+            push made, db;
+        }
+
+        string run_connstr = MssqlRunDatabase::getConnectionString(connstr, "MssqlTestIsolation");
+        *string run = MssqlRunDatabase::getName();
+        assertRegex(sprintf("^qtest_mssqltestiso_%s_%d_[0-9]+_[a-z0-9]{6}$", host, getpid()), run);
+        assertEq(run, parse_datasource(run_connstr).db);
+
+        hash<string, bool> present = map {$1: True}, ds.select("select name from sys.databases where name like %v",
+            "qtest%").name;
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, present{i.key} ?? False, i.key);
+        }
+        # a second call, with the same datasource string or with the one returned, gives the same database
+        assertEq(run_connstr, MssqlRunDatabase::getConnectionString(connstr, "MssqlTestIsolation"));
+        assertEq(run_connstr, MssqlRunDatabase::getConnectionString(run_connstr, "MssqlTestIsolation"));
+        assertEq(run, MssqlRunDatabase::getName());
+    }
+
+    private runDatabase() {
+        checkSkip();
+        string run_connstr = MssqlRunDatabase::getConnectionString(connstr, "MssqlTestIsolation");
+        Datasource ds(run_connstr);
+        assertEq(MssqlRunDatabase::getName(), ds.selectRow("select db_name() as db").db);
+        # a table created without a database name is in the run's database, not in the test's
+        ds.exec("create table isolation_t (id int)");
+        ds.commit();
+        assertEq(1, ds.selectRow("select count(*) as c from sys.tables where name = 'isolation_t'").c);
+        Datasource shared(connstr);
+        assertEq(0, shared.selectRow("select count(*) as c from sys.tables where name = 'isolation_t'").c);
+        # closed, so the teardown does not wait for their locks
+        ds.rollback();
+        shared.rollback();
+        ds.close();
+        shared.close();
+    }
+
+    #! A datasource string of another driver to the same server (the jdbc driver) failed: the run's database, created
+    #! for the first one, existed already
+    private otherDriver() {
+        checkSkip();
+        *string jdbc = ENV.QORE_DB_CONNSTR_JDBC_MSSQL;
+        if (!jdbc.val()) {
+            testSkip("QORE_DB_CONNSTR_JDBC_MSSQL is not configured");
+        }
+        string run = MssqlRunDatabase::getConnectionString(connstr, "MssqlTestIsolation");
+        Datasource jds(MssqlRunDatabase::getConnectionString(jdbc, "MssqlTestIsolation"));
+        on_exit {
+            jds.rollback();
+            jds.close();
+        }
+        # the same server: the same database
+        assertEq(MssqlRunDatabase::getName(), jds.selectRow("select db_name() as db").db);
+        # and the same datasource string again
+        assertEq(run, MssqlRunDatabase::getConnectionString(connstr, "MssqlTestIsolation"));
+    }
+
+    #! A leftover database with sessions is in use by a live run: its sessions are not ended, and it is left for a
+    #! later run
+    private liveLeftover() {
+        checkSkip();
+        Datasource ds(connstr);
+        ds.setAutoCommit(True);
+        ds.open();
+        int old = now_us().getEpochSeconds() - TestRun::LeftoverAge.durationSeconds() - 60;
+        string db = sprintf("qtest_livesess_%s_%d_%d_abc123", getHost(), getpid(), old);
+        # the leftovers are not dropped until the database has a session: the setup of a test that runs at the same
+        # time would drop it
+        hash<auto> config = parse_datasource(connstr);
+        config.db = db;
+        Datasource session(make_datasource_string(config));
+        {
+            MssqlRunDatabase::lockLeftovers(ds);
+            on_exit MssqlRunDatabase::unlockLeftovers(ds);
+            ds.execRaw(MssqlRunDatabase::outsideTransaction("create database [" + db + "]"));
+            push made, db;
+            # a session of the database
+            session.open();
+        }
+        list<string> dropped = MssqlRunDatabase::dropLeftovers(connstr);
+        assertFalse(inlist(db, dropped));
+        # the session was not ended
+        assertEq(1, session.selectRow("select 1 as v").v);
+        assertEq(1, ds.selectRow("select count(*) as c from sys.databases where name = %v", db).c);
+        session.close();
+    }
+
+    #! the lock of the leftover databases is taken in master: an application lock is a lock of the database of its
+    #! call, so the connections to other databases, such as a run's database, did not wait for it
+    private leftoverLock() {
+        checkSkip();
+        Datasource ds(MssqlRunDatabase::getConnectionString(connstr, "MssqlTestIsolation"));
+        ds.setAutoCommit(True);
+        ds.open();
+        on_exit ds.close();
+        assertEq(MssqlRunDatabase::getName(), ds.selectRow("select db_name() as db").db);
+        int spid = ds.selectRow("select @@spid as id").id;
+        code count = int sub () {
+            return ds.selectRow("select count(*) as c from sys.dm_tran_locks where resource_type = 'APPLICATION' "
+                "and resource_database_id = db_id('master') and request_session_id = %v", spid).c;
+        };
+        assertEq(0, count());
+        MssqlRunDatabase::lockLeftovers(ds);
+        assertEq(1, count());
+        MssqlRunDatabase::unlockLeftovers(ds);
+        assertEq(0, count());
+    }
+
+    private teardown() {
+        checkSkip();
+        string run = MssqlRunDatabase::getName();
+        MssqlRunDatabase::teardown();
+        assertNothing(MssqlRunDatabase::getName());
+        Datasource ds(connstr);
+        assertEq(0, ds.selectRow("select count(*) as c from sys.databases where name = %v", run).c);
+        # nothing is done once it is dropped
+        MssqlRunDatabase::teardown();
+    }
+
+    private static string getHost() {
+        string host = (gethostname() =~ x/^([^.]+)/)[0] ?? gethostname();
+        host = host.lwr();
+        host =~ s/[^a-z0-9]//g;
+        return host.substr(0, 12);
+    }
+
+}

@@ -1,8 +1,9 @@
 #!/usr/bin/env qore
+# test-platform: macos - string-to-float prefix conversion independent of libc++ versus libstdc++ parsing
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
+%requires QUnit
 %exec-class EmptyFloatConversionTest
 
 class EmptyFloatConversionTest inherits QUnit::Test {

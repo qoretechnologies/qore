@@ -38,6 +38,7 @@
 %requires(reexport) RestClient >= 1.3.1
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
+%requires DataProvider
 
 module InstantlyRestClient {
     version = "1.0";
@@ -196,6 +197,8 @@ public class InstantlyRestClientBase {
     - Backoff multiplier: 2x
     - Maximum single retry delay: 30 seconds
     - Uses Retry-After header when available
+    - No retry while @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed" in the
+      calling thread, as while a data provider requests example data: the first 429 response is raised
 */
 public class InstantlyRestClient inherits RestClient::RestClient, InstantlyRestClientBase {
     #! creates the object with the given options
@@ -244,8 +247,11 @@ InstantlyRestClient instantly({"apikey": "your-api-key"});
             } catch (hash<ExceptionInfo> ex) {
                 # the synchronous client raises an error status as HTTP-CLIENT-RECEIVE-ERROR, with the status code
                 # and the response headers in the exception argument
+                # nothing is retried while a data provider requests example data in this thread (see
+                # DataProvider::DataProviderRetryUtil::runWithoutRetries())
                 if ((ex.err != "REST-RESPONSE-ERROR" && ex.err != "HTTP-CLIENT-RECEIVE-ERROR")
-                    || (info."response-code" ?? ex.arg.status_code) != 429) {
+                    || (info."response-code" ?? ex.arg.status_code) != 429
+                    || DataProvider::DataProviderRetryUtil::retriesSuppressed()) {
                     rethrow;
                 }
 
@@ -479,7 +485,8 @@ public class InstantlyRestClientIo inherits RestClientIo::RestClientIo, Instantl
     #! Sends a REST request with automatic retry on 429 (Too Many Requests) errors
     /** Rate-limited requests are retried like with @ref InstantlyRestClient::InstantlyRestClient::doRequest(),
         using the \c Retry-After response header when available or else exponential backoff, for a total retry
-        time of at most @ref InstantlyRestClientBase::MaxRetryTime.
+        time of at most @ref InstantlyRestClientBase::MaxRetryTime, and they are not retried while
+        @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed" in the calling thread.
 
         @param method the HTTP method
         @param path the request path
@@ -509,7 +516,10 @@ public class InstantlyRestClientIo inherits RestClientIo::RestClientIo, Instantl
                 return RestClientIo::restDoRequestIntern(method, target.path, body, hdr, False, NOTHING,
                     NOTHING, request_context);
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err != "REST-RESPONSE-ERROR" || ex.arg.status_code != 429) {
+                # nothing is retried while a data provider requests example data in this thread (see
+                # DataProvider::DataProviderRetryUtil::runWithoutRetries())
+                if (ex.err != "REST-RESPONSE-ERROR" || ex.arg.status_code != 429
+                        || DataProvider::DataProviderRetryUtil::retriesSuppressed()) {
                     rethrow;
                 }
 

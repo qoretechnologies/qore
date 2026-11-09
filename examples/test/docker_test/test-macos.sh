@@ -181,14 +181,25 @@ fi
 
 # Configure with CMake
 # CMAKE_PREFIX_PATH includes package-manager dependencies and LLVM prefix if found
+# the qmod build cache, when the job has one (see qmod-cache.sh)
+. "${QORE_SRC_DIR}/test/docker_test/qmod-cache.sh"
+qore_qmod_cache_setup "${QORE_SRC_DIR}"
+# the C and C++ compiler cache, when the job has one (see ccache-ci.sh)
+. "${QORE_SRC_DIR}/test/docker_test/ccache-ci.sh"
+qore_ccache_setup
 cmake .. \
     -DCMAKE_BUILD_TYPE=release \
+    -DQORE_QCC_TEST_HOOKS=ON \
     -DSINGLE_COMPILATION_UNIT=1 \
     -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
-    -DCMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH}"
+    -DCMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH}" \
+    ${QMOD_CACHE_ARG:+"${QMOD_CACHE_ARG}"} \
+    ${CCACHE_CMAKE_ARGS}
 
 # Build
 make -j${MAKE_JOBS}
+qore_ccache_finish
+qore_qmod_cache_finish "${QORE_SRC_DIR}" "${BUILD_DIR}"
 
 echo "=== Running Tests ==="
 cd "${QORE_SRC_DIR}"
@@ -256,7 +267,25 @@ if [ -z "${QORE_TEST_DIRS:-}" ]; then
 fi
 export QORE_TEST_EXTRA_DIRS
 
+# The job runs the tests that declare "# test-platform: macos - <why>" (see run_tests.sh): the tests whose checks
+# depend on the platform; the Linux jobs run every test.  A pipeline that sets QORE_TEST_PLATFORM_SUBSET to an empty
+# value runs every test here too.  It is set only now, as nothing the build runs reads it.
+QORE_TEST_PLATFORM_SUBSET="${QORE_TEST_PLATFORM_SUBSET-macos}"
+export QORE_TEST_PLATFORM_SUBSET
+
+# The tests run as many at a time as the machine has CPUs (the VM's size is set in the runner, so it is read here),
+# unless QORE_TEST_JOBS says otherwise; see run_tests.sh for the tests that run in a lane of their own
+QORE_TEST_JOBS="${QORE_TEST_JOBS:-$(sysctl -n hw.ncpu)}"
+export QORE_TEST_JOBS
+. ./test/docker_test/ci-resource-report.sh
+qore_ci_resource_report "before the tests"
+
 # Run the test suite (QORE_TEST_OPTS is read from the environment by run_tests.sh)
-./run_tests.sh
+TEST_RC=0
+./run_tests.sh || TEST_RC=$?
+qore_ci_resource_report "after the tests"
+if [ "${TEST_RC}" != "0" ]; then
+    exit ${TEST_RC}
+fi
 
 echo "=== macOS CI Tests Complete ==="
