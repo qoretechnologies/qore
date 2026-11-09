@@ -11,6 +11,22 @@
 
 %exec-class ProgramControlEvalTest
 
+#! the Programs whose commits create evaluation Programs of each other (see crossCommitTest())
+our hash<string, ProgramControl> EvalPeers;
+#! the rendezvous of the commits
+our Counter EvalSync;
+
+#! returns the control object of the Program with the given name; imported into the committed Programs
+ProgramControl sub eval_peer(string name) {
+    return EvalPeers{name};
+}
+
+#! waits until both commits run their initializers; imported into the committed Programs
+sub eval_rendezvous() {
+    EvalSync.dec();
+    EvalSync.waitForZero(30s);
+}
+
 #! ProgramControl::createEvalProgram() creates a Program whose code can refer to all code of the controlled Program
 class ProgramControlEvalTest inherits QUnit::Test {
     private {
@@ -31,6 +47,27 @@ our int counter = 5;
 our Account acct = new Account();
 ";
 
+        #! code whose static initializer creates an evaluation Program of the other Program (see crossCommitTest())
+        const CrossSource = "%modern
+class X {
+    public {
+        static string v = X::go();
+    }
+    static string go() {
+        eval_rendezvous();
+        try {
+            eval_peer(get_script_name() == 'p' ? 'q' : 'p').createEvalProgram(PO_NEW_STYLE);
+            return 'copied';
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + ': ' + ex.desc;
+        }
+    }
+}
+string sub v() {
+    return X::v;
+}
+";
+
         #! a public function of the debugged Program that does what the evaluation Program may not
         const WriteSource = "%modern
 public nothing sub write_file(string path) { File f(); f.open2(path, O_CREAT | O_WRONLY | O_TRUNC); f.write(\"ok\"); }
@@ -44,6 +81,7 @@ public nothing sub write_file(string path) { File f(); f.open2(path, O_CREAT | O
         addTestCase("errors", \errorTest());
         addTestCase("a deleted Program", \deletedTest());
         addTestCase("a Program that another thread parses code in", \concurrentParseTest());
+        addTestCase("Programs whose commits create evaluation Programs of each other", \crossCommitTest());
         set_return_value(main());
     }
 
@@ -208,5 +246,71 @@ string sub go() {
             assertRegex("^PROGRAM-ERROR: the Program is currently undergoing parsing", err);
         }
         assertGt(0, copied + parsed);
+    }
+
+    #! parses the code in the Program and reports the result of its initializer; run in a thread of its own
+    private parseCross(Program p, string name, string src, Counter done, Queue results) {
+        on_exit done.dec();
+        try {
+            p.parse(src, name);
+            results.push(name + ":" + p.callFunction("v"));
+        } catch (hash<ExceptionInfo> ex) {
+            results.push(name + ":" + ex.err);
+        }
+    }
+
+    #! The static initializers of two Programs, run by their commits in two threads at once, each create an
+    #! evaluation Program of the other: the parse lock of the other Program is held by its commit, so each is refused
+    #! at once instead of waiting for the other (which would never end); the Program's own commit, whose parse lock is
+    #! the thread's own, copies it
+    crossCommitTest() {
+        EvalSync = new Counter(2);
+        hash<string, Program> pgms;
+        foreach string name in (("p", "q")) {
+            Program p(PO_NEW_STYLE | PO_ALLOW_DEBUGGER);
+            p.importFunction("eval_peer");
+            p.importFunction("eval_rendezvous");
+            p.setScriptPath("/eval/" + name);
+            EvalPeers{name} = p.getProgram();
+            pgms{name} = p;
+        }
+        on_exit remove EvalPeers;
+        Counter done(2);
+        Queue results();
+        foreach string name in (keys pgms) {
+            background parseCross(pgms{name}, name, CrossSource, done, results);
+        }
+        assertEq(0, done.waitForZero(30s), "the commits did not wait for each other");
+        list<string> res = sort((results.get(), results.get()));
+        assertEq(2, res.size());
+        foreach string r in (res) {
+            assertRegex("^[pq]:PROGRAM-ERROR: the Program is currently undergoing parsing", r);
+        }
+
+        # the Program's own commit
+        Program p(PO_NEW_STYLE | PO_ALLOW_DEBUGGER);
+        p.importFunction("eval_peer");
+        p.setScriptPath("/eval/q");
+        EvalPeers.p = p.getProgram();
+        p.parse("%modern
+class X {
+    public {
+        static string v = X::go();
+    }
+    static string go() {
+        try {
+            eval_peer('p').createEvalProgram(PO_NEW_STYLE);
+            return 'copied';
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + ': ' + ex.desc;
+        }
+    }
+}
+string sub v() {
+    return X::v;
+}
+", "self");
+        # the parse lock that the commit holds is this thread's own, and the parsed code is no longer pending
+        assertEq("copied", p.callFunction("v"));
     }
 }

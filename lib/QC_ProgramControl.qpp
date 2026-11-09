@@ -184,52 +184,19 @@ Program ProgramControl::createEvalProgram(softint parse_options = PO_DEFAULT) [f
             "options that can only be set by the system", parse_options);
     }
     // the namespace of this Program is copied when the new Program is created: the Program is held while it is
-    // copied, so that its data cannot be cleared meanwhile; a Program that is deleted or being parsed is refused
-    if (qore_program_private::incThreadCountForCopy(*p, xsink)) {
+    // copied, so that its data cannot be cleared meanwhile, and its parse lock is held, so that no code is parsed in
+    // it meanwhile; a Program that is deleted or being parsed, or whose parse lock another thread holds, is refused
+    // (see qore_program_private::EvalCopyHolder)
+    qore_program_private::EvalCopyHolder copy_holder(*p, xsink);
+    if (*xsink) {
         return QoreValue();
     }
     QoreProgram* pgm;
     {
-        // released on every path, also if the copy throws
-        class CopyHolder {
-        public:
-            DLLLOCAL CopyHolder(QoreProgram* p, ExceptionSink* xsink) : p(p), xsink(xsink) {
-            }
-            DLLLOCAL ~CopyHolder() {
-                qore_program_private::decThreadCount(*p, q_gettid(), xsink);
-            }
-        private:
-            QoreProgram* p;
-            ExceptionSink* xsink;
-        } copy_holder(p, xsink);
-        // the Program's namespaces are copied as they are: no code may be parsed in it meanwhile, nor be pending, so
-        // the parse lock is held for the copy.  Waiting for it cannot deadlock with a parse of this Program that
-        // waits for this thread: the thread holds no lock of the Program now, and a parse lock that it holds itself
-        // (code of a parse of this Program, or of another one, calls this method) is a re-entrant lock in the first
-        // case, and in the second the same order as any runtime parse in another Program from code run by a parse
-        // (Program::parse() or Program::loadModule() from an initializer); the wait ends when the Program is deleted
-        if (qore_program_private::lockParsing(*p, xsink)) {
-            return QoreValue();
-        }
-        class ParseHolder {
-        public:
-            DLLLOCAL ParseHolder(QoreProgram* p, ExceptionSink* xsink) : p(p), xsink(xsink) {
-            }
-            DLLLOCAL ~ParseHolder() {
-                qore_program_private::unlockParsing(*p, xsink);
-            }
-        private:
-            QoreProgram* p;
-            ExceptionSink* xsink;
-        } parse_holder(p, xsink);
-        // stable while the parse lock is held: it is only written with it
-        if (qore_program_private::get(*p)->parsing_in_progress) {
-            return xsink->raiseException("PROGRAM-ERROR", "the Program is currently undergoing parsing; its code "
-                "cannot be inherited");
-        }
         InheritAllUserCodeHelper all_user_code;
         pgm = new QoreProgram(p, parse_options);
     }
+    copy_holder.release();
     // a child Program has only the positive options of its parent; this one only allows the new Program to be
     // parsed again
     if (parse_options & PO_ALLOW_REPARSE) {

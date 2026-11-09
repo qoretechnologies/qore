@@ -1594,6 +1594,86 @@ public:
     }
     */
 
+    //! Takes the parse lock without waiting for another thread that holds it
+    /** @return 0 if the lock was taken (also if this thread holds it already), 1 if another thread holds it, -1 if
+        the Program is deleted or being deleted by another thread (\c PROGRAM-ERROR is raised then)
+    */
+    DLLLOCAL int tryLockParsing(ExceptionSink* xsink) {
+        assert(xsink);
+        int tid = q_gettid();
+        AutoLocker al(plock);
+        assert(parse_tid == tid || !qore_root_ns_private::threadHoldsRuntimeNamespaceReadLock());
+        if (ptid && ptid != tid) {
+            xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and therefore "
+                "cannot be accessed");
+            return -1;
+        }
+        if (parse_tid != -1 && parse_tid != tid) {
+            return 1;
+        }
+        ++parse_count;
+        parse_tid = tid;
+        return 0;
+    }
+
+    //! Holds a Program while ProgramControl::createEvalProgram() copies its code
+    /** Takes the Program's thread count (incThreadCountForCopy()), so that its data are not cleared during the copy,
+        and its parse lock, so that no code is parsed in it meanwhile, nor is pending; raises \c PROGRAM-ERROR if the
+        Program is deleted or being parsed.
+
+        The parse lock is never waited for: if another thread holds it (it parses code in the Program, commits it or
+        loads a module into it), the copy is refused as for a Program that is being parsed.  Waiting would block the
+        caller for all of another thread's parse, could not be cancelled, and could deadlock: two Programs whose
+        commits each create an evaluation Program of the other would wait for each other forever.
+
+        Released by release() or the destructor: the thread count first, then the parse lock, so that a parse that
+        waits for the lock does not find this thread still counted in the Program (see checkParse())
+    */
+    class EvalCopyHolder {
+    public:
+        DLLLOCAL EvalCopyHolder(QoreProgram& p, ExceptionSink* xsink) : p(p), xsink(xsink) {
+            qore_program_private* pp = qore_program_private::get(p);
+            if (pp->incThreadCountForCopy(xsink)) {
+                return;
+            }
+            counted = true;
+            int rc = pp->tryLockParsing(xsink);
+            if (rc < 0) {
+                return;
+            }
+            if (!rc) {
+                locked = true;
+                // stable while the parse lock is held: it is only written with it
+                if (!pp->parsing_in_progress) {
+                    return;
+                }
+            }
+            xsink->raiseException("PROGRAM-ERROR", "the Program is currently undergoing parsing; its code cannot "
+                "be inherited");
+        }
+
+        DLLLOCAL ~EvalCopyHolder() {
+            release();
+        }
+
+        DLLLOCAL void release() {
+            if (counted) {
+                counted = false;
+                qore_program_private::decThreadCount(p, q_gettid(), xsink);
+            }
+            if (locked) {
+                locked = false;
+                qore_program_private::unlockParsing(p, xsink);
+            }
+        }
+
+    private:
+        QoreProgram& p;
+        ExceptionSink* xsink;
+        bool counted = false;
+        bool locked = false;
+    };
+
     //! Enters the Program's thread count for a copy of its code (ProgramControl::createEvalProgram())
     /** Refuses a Program that is deleted or being deleted, also by the current thread, with \c PROGRAM-ERROR; while
         the count is held, the Program's data are not cleared (see waitForTerminationAndClear()).  Released with
