@@ -872,7 +872,10 @@ pkg_check_modules(BROTLI_ENC QUIET libbrotlienc)
 pkg_check_modules(BROTLI_DEC QUIET libbrotlidec)
 if(BROTLI_ENC_FOUND AND BROTLI_DEC_FOUND)
     message(STATUS "Found Brotli: ${BROTLI_ENC_VERSION}")
-    list(APPEND LIBQORE_OPTIONAL_LIBS ${BROTLI_ENC_LIBRARIES} ${BROTLI_DEC_LIBRARIES})
+    # link the full paths that pkg-config's library directories resolve to (as for zstd below): the bare names in
+    # BROTLI_*_LIBRARIES only resolve when the library is on the linker's default search path, which Homebrew's
+    # /opt/homebrew on Apple Silicon is not
+    list(APPEND LIBQORE_OPTIONAL_LIBS ${BROTLI_ENC_LINK_LIBRARIES} ${BROTLI_DEC_LINK_LIBRARIES})
     list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${BROTLI_ENC_INCLUDE_DIRS})
 else()
     # Try to find Brotli without pkg-config
@@ -942,7 +945,8 @@ set(HAVE_ZSTD TRUE)
 pkg_check_modules(LZ4 QUIET liblz4)
 if(LZ4_FOUND)
     message(STATUS "Found LZ4: ${LZ4_VERSION}")
-    list(APPEND LIBQORE_OPTIONAL_LIBS ${LZ4_LIBRARIES})
+    # full paths, as for Brotli above
+    list(APPEND LIBQORE_OPTIONAL_LIBS ${LZ4_LINK_LIBRARIES})
     list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${LZ4_INCLUDE_DIRS})
 else()
     # Try to find LZ4 without pkg-config
