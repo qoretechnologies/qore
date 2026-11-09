@@ -1477,6 +1477,10 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclParseDiagnosticFixInfo = init_hashdecl_ParseDiagnosticFixInfo(qns);
     hashdeclParseDiagnosticInfo = init_hashdecl_ParseDiagnosticInfo(qns);
     hashdeclRuntimeDiagnosticInfo = init_hashdecl_RuntimeDiagnosticInfo(qns);
+    hashdeclProgramThreadEventOptions = init_hashdecl_ProgramThreadEventOptions(qns);
+    hashdeclProgramThreadInfo = init_hashdecl_ProgramThreadInfo(qns);
+    hashdeclProgramThreadSubscription = init_hashdecl_ProgramThreadSubscription(qns);
+    hashdeclProgramThreadEvent = init_hashdecl_ProgramThreadEvent(qns);
     hashdeclObjectSerializationInfo = init_hashdecl_ObjectSerializationInfo(qns);
     hashdeclSerializationInfo = init_hashdecl_SerializationInfo(qns);
     hashdeclIndexedObjectSerializationInfo = init_hashdecl_IndexedObjectSerializationInfo(qns);

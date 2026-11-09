@@ -523,6 +523,12 @@
     allow an embedding UI to keep responding while waiting for the Program to become safe to parse or reset;
     they do not enable concurrent parsing or forcibly kill native threads.
 
+    @par Program Thread Lifecycle Events
+    @ref Qore::Program::subscribeThreadEvents() "Program::subscribeThreadEvents()" delivers events to a
+    @ref Qore::Thread::Queue "Queue" when the Program's background threads start, are asked to cancel and end (with
+    how they ended), and when the Program becomes idle or active
+    (<a href="https://github.com/qoretechnologies/qore/issues/5633">issue 5633</a>).
+
     @par Waiting for a Thread to Terminate
     @ref Qore::thread_join() "thread_join()" waits until a thread started with @ref background has left the thread
     list, which is later than a Counter signalled from @ref on_exit; see the teardown order in its documentation

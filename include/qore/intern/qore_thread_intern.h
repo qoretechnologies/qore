@@ -37,6 +37,7 @@
 class RuntimeConfig;
 
 #include <atomic>
+#include <functional>
 #include <vector>
 #include <set>
 #include <map>
@@ -2273,6 +2274,12 @@ DLLLOCAL const pthread_mutexattr_t* qore_recursive_mutex_attr();
 DLLLOCAL extern thread_local int qore_thread_counter_share;
 //! the count that the current thread adds to tp_thread_counter (an external-lifecycle thread until it is joined)
 DLLLOCAL extern thread_local int qore_tp_thread_counter_share;
+
+#ifdef DEBUG
+//! called by QoreThreadList::cancelThread() before it publishes a claimed cancellation request, if set; tests use it
+//! to publish after the thread has ended (dbg_cancel_thread_after_end())
+DLLLOCAL extern thread_local std::function<void()>* qore_dbg_cancel_before_publish;
+#endif
 
 #ifdef QORE_HAVE_THREAD_NAME
 DLLLOCAL void q_set_thread_name(const char* name);

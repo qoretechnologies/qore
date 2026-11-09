@@ -1,0 +1,622 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.  SPDX-License-Identifier: MIT
+# test-platform: macos - background delivery threads, thread cancellation wakeups and process exit with running threads
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires QoreRepl
+%requires FsUtil
+
+%try-module process
+%define NoProcess
+%endtry
+
+%exec-class ReplThreadEventsTest
+
+#! Tests the session events and thread notices of QoreRepl; see design/program-thread-lifecycle-events.md
+class ReplThreadEventsTest inherits QUnit::Test {
+    private {
+        #! the time to wait for an event before the test fails
+        const EventTimeout = 60s;
+
+        #! the code that declares the counters the tests control the REPL's threads with
+        const Counters = "our Counter entered; our Counter gate; our *int last_tid;";
+    }
+
+    constructor() : QUnit::Test("REPL session events", "1.0") {
+        addTestCase("thread events", \threadLifecycle());
+        addTestCase("evaluation events", \evaluationEvents());
+        addTestCase("cancellation", \cancellation());
+        addTestCase("background thread state", \backgroundThreads());
+        addTestCase("nested threads", \nested());
+        addTestCase("reset", \resetProgram());
+        addTestCase("other threads", \otherThreads());
+        addTestCase("listeners", \listeners());
+        addTestCase("listener calls the session", \listenerCallsSession());
+        addTestCase("close", \closeSession());
+        addTestCase("close from a listener", \closeFromListener());
+        addTestCase("destructor", \sessionDestructor());
+        addTestCase("without listeners", \withoutListeners());
+        addTestCase("process exit", \processExit());
+        addTestCase("notice levels", \noticeLevels());
+        addTestCase("summary notices", \summaryNotices());
+        addTestCase("all notices", \allNotices());
+        addTestCase("failure notices", \failureNotices());
+        addTestCase("notify command", \notifyCommand());
+        set_return_value(main());
+    }
+
+    #! creates a REPL with the counters of the tests
+    private QoreRepl::QoreRepl makeRepl(int entered = 0, int gate = 0, *hash<auto> opts) {
+        QoreRepl::QoreRepl repl({"history_file": NOTHING} + opts);
+        assertNothing(repl.eval(Counters).error);
+        Program pgm = repl.getProgram();
+        pgm.setGlobalVarValue("entered", new Counter(entered));
+        pgm.setGlobalVarValue("gate", new Counter(gate));
+        return repl;
+    }
+
+    #! starts a background thread with the given closure in the REPL and returns its TID
+    private int start(QoreRepl::QoreRepl repl, string closure) {
+        *hash<auto> result = repl.eval("last_tid = background " + closure + "();");
+        assertNothing(result.error);
+        return repl.getProgram().getGlobalVariable("last_tid");
+    }
+
+    #! releases the threads waiting for the gate if it has not been released, so that a failed test ends them
+    private static release(QoreRepl::QoreRepl repl) {
+        Counter gate = counter(repl, "gate");
+        if (gate.getCount()) {
+            gate.dec();
+        }
+    }
+
+    #! returns the counter with the given name from the REPL's Program
+    private static Counter counter(QoreRepl::QoreRepl repl, string name) {
+        return repl.getProgram().getGlobalVariable(name);
+    }
+
+    #! adds a listener that pushes the events to a queue, which is returned
+    private Queue listen(QoreRepl::QoreRepl repl, bool activity = False) {
+        Queue q();
+        repl.addEventListener(sub (hash<ReplEvent> ev) { q.push(ev); }, activity);
+        return q;
+    }
+
+    #! returns the next event
+    private hash<ReplEvent> next(Queue q) {
+        auto ev = q.get(EventTimeout);
+        assertEq("hash<ReplEvent>", ev.fullType());
+        return ev;
+    }
+
+    #! returns the events up to the first one of the given type, and that one
+    private list<hash<ReplEvent>> until(Queue q, string event, *int tid) {
+        list<hash<ReplEvent>> rv();
+        while (True) {
+            hash<ReplEvent> ev = next(q);
+            rv += ev;
+            if (ev.event == event && (!exists tid || ev.thread.tid == tid)) {
+                return rv;
+            }
+        }
+    }
+
+    #! returns the thread events
+    private static list<hash<ReplEvent>> selectThreadEvents(list<hash<ReplEvent>> l) {
+        return (map $1, l, $1.thread) ?? ();
+    }
+
+    threadLifecycle() {
+        QoreRepl::QoreRepl repl = makeRepl();
+        Queue q = listen(repl);
+        int tid = start(repl, "sub () {}");
+        list<hash<ReplEvent>> l = selectThreadEvents(until(q, "thread-finished", tid));
+        assertEq(("thread-started", "thread-finished"), (map $1.event, l));
+        # no listener receives the activity events, so the Program's state is not known to the events
+        assertNothing(l[0].idle);
+        assertEq(tid, l[0].thread.tid);
+        assertEq(1, l[0].running);
+        assertEq(0, l[1].running);
+        assertEq("COMPLETED", l[1].thread.outcome);
+        assertEq(repl.getProgram().getProgramId(), l[1].program_id);
+
+        tid = start(repl, "sub () { throw \"REPL-TEST\", \"test error\"; }");
+        hash<ReplEvent> end = until(q, "thread-finished", tid).last();
+        assertEq("EXCEPTION", end.thread.outcome);
+        assertEq("REPL-TEST", end.thread.error.err);
+        repl.close();
+    }
+
+    evaluationEvents() {
+        QoreRepl::QoreRepl repl = makeRepl();
+        Queue q = listen(repl, True);
+        # a listener that did not ask for activity events receives the other events only
+        Queue q_no_activity = listen(repl);
+        repl.eval("1 + 1");
+        # the evaluation makes the Program active and idle; the order is that of the evaluation
+        list<hash<ReplEvent>> l = until(q, "eval-finished");
+        list<string> names = (map $1.event, l, $1.event =~ /^eval-/);
+        assertEq(("eval-started", "eval-finished"), names);
+        assertEq("1 + 1", l[0].input);
+        list<hash<ReplEvent>> activity = (map $1, l, $1.event =~ /^program-/) ?? ();
+        assertTrue(activity.size() >= 2);
+        assertEq("program-busy", activity[0].event);
+        assertFalse(activity[0].idle);
+        # the Program is idle once the evaluation has ended: the last activity event says so
+        while (q.size()) {
+            hash<ReplEvent> ev = q.get();
+            if (ev.event =~ /^program-/) {
+                activity += ev;
+            }
+        }
+        assertEq("program-idle", activity.last().event);
+        assertTrue(repl.isProgramIdle());
+        list<hash<ReplEvent>> other;
+        while (other.size() < 2) {
+            other += next(q_no_activity);
+        }
+        assertEq(("eval-started", "eval-finished"), (map $1.event, other));
+        # the Program's state is known, as another listener of the session receives the activity events
+        assertTrue(other[0].idle.typeCode() == NT_BOOLEAN);
+
+        # a command that does not run code has no evaluation events
+        repl.eval("/vars");
+        repl.eval("2");
+        l = until(q, "eval-started");
+        assertEq("2", l.last().input);
+        assertEq((), (map $1, l, $1.input == "/vars") ?? ());
+        repl.close();
+    }
+
+    cancellation() {
+        QoreRepl::QoreRepl repl = makeRepl(1, 1);
+        Queue q = listen(repl);
+        on_exit release(repl);
+        int tid = start(repl, "sub () { entered.dec(); gate.waitForZero(); }");
+        counter(repl, "entered").waitForZero();
+        assertEq("Cancellation requested", repl.eval("/cancel " + tid).value);
+        list<hash<ReplEvent>> l = selectThreadEvents(until(q, "thread-finished", tid));
+        assertEq(("thread-started", "thread-cancel-requested", "thread-finished"), (map $1.event, l));
+        assertEq("REPL /cancel", l[1].thread.cancel_reason);
+        assertEq("CANCELLED", l[2].thread.outcome);
+        assertEq(("Thread " + tid + " cancelled",), QoreRepl::QoreRepl::formatThreadNotices(l));
+        repl.close();
+    }
+
+    backgroundThreads() {
+        QoreRepl::QoreRepl repl = makeRepl(2, 1);
+        Queue q = listen(repl);
+        on_exit release(repl);
+        # both threads are started by one evaluation, as a running thread blocks the next one; the second thread is
+        # started only once the first is running, as the threads are listed in the order they published STARTED, and
+        # it defers cancellation, so it keeps running after its request
+        assertNothing(repl.eval("our *int tid2; Counter first(1); last_tid = background sub () { first.dec(); "
+            "entered.dec(); gate.waitForZero(); }(); first.waitForZero(); "
+            "tid2 = background sub () { defer_thread_cancel(sub () { entered.dec(); gate.waitForZero(); }); }();").error);
+        int tid1 = repl.getProgram().getGlobalVariable("last_tid");
+        int tid2 = repl.getProgram().getGlobalVariable("tid2");
+        counter(repl, "entered").waitForZero();
+        repl.getProgram().cancelThread(tid2);
+        # wait until the request has been processed
+        until(q, "thread-cancel-requested", tid2);
+        list<hash<ProgramThreadInfo>> threads = repl.getBackgroundThreads();
+        assertEq((tid1, tid2), (map $1.tid, threads));
+        assertEq((False, True), (map $1.cancel_requested, threads));
+        assertFalse(repl.isProgramIdle());
+
+        string list = repl.eval("/threads").value;
+        assertRegex("^TID +Running +Name +Notes", list);
+        assertRegex("\n" + tid1 + " +[0-9]+\\.[0-9]s +qore/" + tid1, list);
+        assertRegex("\n" + tid2 + " .* cancellation requested", list);
+
+        counter(repl, "gate").dec();
+        repl.eval("/join all");
+        until(q, "thread-finished", tid1);
+        while (repl.getBackgroundThreads()) {
+            until(q, "thread-finished");
+        }
+        assertEq((), repl.getBackgroundThreads());
+        assertEq("No running threads in this Program", repl.eval("/threads").value);
+        repl.close();
+    }
+
+    nested() {
+        QoreRepl::QoreRepl repl = makeRepl(2, 1);
+        Queue q = listen(repl);
+        on_exit release(repl);
+        int tid = start(repl, "sub () { background sub () { entered.dec(); gate.waitForZero(); }(); "
+            "entered.dec(); gate.waitForZero(); }");
+        counter(repl, "entered").waitForZero();
+        list<hash<ReplEvent>> l;
+        while (l.size() < 2) {
+            l += selectThreadEvents((next(q),));
+        }
+        assertEq(tid, l[0].thread.tid);
+        int child = l[1].thread.tid;
+        assertEq(tid, l[1].thread.parent_tid);
+        assertEq(2, l[1].running);
+        string list = repl.eval("/threads").value;
+        assertRegex("\n" + child + " .* started by thread " + tid, list);
+        assertEq(("Thread " + tid + " started", "Thread " + child + " started by thread " + tid),
+            QoreRepl::QoreRepl::formatThreadNotices(l, "all"));
+        counter(repl, "gate").dec();
+        repl.eval("/join all");
+        repl.close();
+    }
+
+    resetProgram() {
+        QoreRepl::QoreRepl repl = makeRepl();
+        Queue q = listen(repl);
+        int old_id = repl.getProgram().getProgramId();
+        repl.eval("background sub () {}()");
+        until(q, "thread-finished");
+        assertEq("Program state reset", repl.eval("/reset").value);
+        hash<ReplEvent> ev = until(q, "program-replaced").last();
+        int new_id = repl.getProgram().getProgramId();
+        assertNeq(old_id, new_id);
+        assertEq(new_id, ev.program_id);
+        assertEq((), ev.threads);
+        assertEq(0, ev.running);
+        # events are about the new Program
+        assertNothing(repl.eval("our *int last_tid;").error);
+        int tid = start(repl, "sub () {}");
+        list<hash<ReplEvent>> l = selectThreadEvents(until(q, "thread-finished", tid));
+        assertEq((new_id, new_id), (map $1.program_id, l));
+        assertEq((new_id, new_id), (map $1.thread.program_id, l));
+        repl.close();
+    }
+
+    otherThreads() {
+        # threads that are not started by the session's code are not reported: the thread that evaluates, and the
+        # embedding application's own threads
+        QoreRepl::QoreRepl repl = makeRepl();
+        Queue q = listen(repl);
+        Queue result();
+        background sub () {
+            result.push(start(repl, "sub () {}"));
+        }();
+        int tid = result.get(EventTimeout);
+        background sub () {}();
+        list<hash<ReplEvent>> l = selectThreadEvents(until(q, "thread-finished", tid));
+        assertEq((tid, tid), (map $1.thread.tid, l));
+        repl.close();
+    }
+
+    listeners() {
+        QoreRepl::QoreRepl repl = makeRepl();
+        Queue q1();
+        Queue q2();
+        int id1 = repl.addEventListener(sub (hash<ReplEvent> ev) {
+            q1.push(ev);
+            throw "LISTENER-ERROR", "listener error";
+        });
+        int id2 = repl.addEventListener(sub (hash<ReplEvent> ev) { q2.push(ev); });
+        assertNeq(id1, id2);
+        int tid = start(repl, "sub () {}");
+        # the first listener's exceptions do not stop the delivery
+        until(q1, "thread-finished", tid);
+        until(q2, "thread-finished", tid);
+        assertTrue(repl.removeEventListener(id1));
+        assertFalse(repl.removeEventListener(id1));
+        tid = start(repl, "sub () {}");
+        until(q2, "thread-finished", tid);
+        # events processed after the removal are not delivered to the removed listener
+        list<hash<ReplEvent>> l;
+        while (q1.size()) {
+            l += q1.get();
+        }
+        assertEq((), (map $1, l, $1.thread.tid == tid) ?? ());
+        repl.close();
+    }
+
+    listenerCallsSession() {
+        # a listener can call the session's methods
+        QoreRepl::QoreRepl repl = makeRepl();
+        Queue q();
+        repl.addEventListener(sub (hash<ReplEvent> ev) {
+            if (ev.event == "thread-started") {
+                q.push(repl.getBackgroundThreads());
+            }
+        });
+        int tid = start(repl, "sub () {}");
+        list<hash<ProgramThreadInfo>> threads = q.get(EventTimeout);
+        assertEq((tid,), (map $1.tid, threads));
+        repl.close();
+    }
+
+    closeSession() {
+        QoreRepl::QoreRepl repl = makeRepl(1, 1);
+        Queue q = listen(repl);
+        on_exit release(repl);
+        int tid = start(repl, "sub () { entered.dec(); gate.waitForZero(); }");
+        counter(repl, "entered").waitForZero();
+        until(q, "thread-started", tid);
+        # closing ends the delivery while the thread runs; it returns when the delivering thread has ended
+        repl.close();
+        repl.close();
+        int delivered = q.size();
+        assertThrows("REPL-ERROR", \repl.getBackgroundThreads());
+        assertThrows("REPL-ERROR", \repl.isProgramIdle());
+        assertThrows("REPL-ERROR", \repl.addEventListener(), sub (hash<ReplEvent> ev) {});
+        counter(repl, "gate").dec();
+        repl.eval("/join all");
+        assertEq(delivered, q.size());
+        # the session still evaluates, and lists the threads without their details
+        assertEq(2, repl.eval("1 + 1").value);
+        assertEq("No running threads in this Program", repl.eval("/threads").value);
+    }
+
+    closeFromListener() {
+        QoreRepl::QoreRepl repl = makeRepl();
+        Queue q();
+        repl.addEventListener(sub (hash<ReplEvent> ev) {
+            if (ev.event == "thread-started") {
+                repl.close();
+                q.push(True);
+            }
+        });
+        repl.eval("background sub () {}()");
+        assertTrue(q.get(EventTimeout));
+        assertThrows("REPL-ERROR", \repl.getBackgroundThreads());
+    }
+
+    sessionDestructor() {
+        # a session whose listener does not refer to it is destroyed when released; its destructor stops the
+        # delivery
+        Queue q();
+        Program pgm;
+        {
+            QoreRepl::QoreRepl repl = makeRepl();
+            pgm = repl.getProgram();
+            repl.addEventListener(sub (hash<ReplEvent> ev) { q.push(ev.event); });
+            start(repl, "sub () {}");
+            while (q.get(EventTimeout) != "thread-finished") {
+            }
+        }
+        int delivered = q.size();
+        # a thread started in the Program after the session is gone is not delivered: its FINISHED event is
+        # published before thread_join() returns
+        pgm.parse("int sub start_one() { return background sub () {}(); }", "after");
+        int tid = pgm.callFunction("start_one");
+        assertTrue(thread_join(tid, EventTimeout));
+        assertEq(delivered, q.size());
+    }
+
+    withoutListeners() {
+        # without listeners, the state is a snapshot taken when asked
+        QoreRepl::QoreRepl repl = makeRepl(1, 1);
+        on_exit release(repl);
+        assertTrue(repl.isProgramIdle());
+        int tid = start(repl, "sub () { entered.dec(); gate.waitForZero(); }");
+        counter(repl, "entered").waitForZero();
+        assertEq((tid,), (map $1.tid, repl.getBackgroundThreads()));
+        assertFalse(repl.isProgramIdle());
+
+        # a listener added and removed again leaves the session without a delivering thread; the state is still
+        # reported
+        int id = repl.addEventListener(sub (hash<ReplEvent> ev) {});
+        assertEq((tid,), (map $1.tid, repl.getBackgroundThreads()));
+        assertTrue(repl.removeEventListener(id));
+        assertEq((tid,), (map $1.tid, repl.getBackgroundThreads()));
+
+        counter(repl, "gate").dec();
+        repl.eval("/join all");
+        assertTrue(thread_join(tid, EventTimeout));
+        assertEq((), repl.getBackgroundThreads());
+        assertTrue(repl.isProgramIdle());
+    }
+
+    processExit() {
+%ifdef NoProcess
+        testSkip("the process module is required");
+%else
+        # a process waits for its background threads before it ends: the module stops the thread that delivers the
+        # events before that, so a session with a listener does not keep the process from ending, wherever it is kept
+        string qore = ENV.QORE_BINARY ?? ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        # Process searches PATH for a command without a directory
+        if (qore =~ /\//) {
+            qore = realpath(qore);
+        }
+        string qlib = realpath(get_script_dir() + "/../../../../qlib");
+        TmpDir tmp("repl-exit-");
+        hash<string, string> scripts = {
+            "listener removed": "QoreRepl::QoreRepl repl({\"history_file\": NOTHING});\n"
+                "int id = repl.addEventListener(sub (hash<QoreRepl::ReplEvent> ev) {});\n"
+                "repl.eval(\"background sub () {}()\");\n"
+                "repl.removeEventListener(id);\n",
+            "top-level local": "QoreRepl::QoreRepl repl({\"history_file\": NOTHING});\n"
+                "repl.addEventListener(sub (hash<QoreRepl::ReplEvent> ev) {}, True);\n"
+                "repl.eval(\"background sub () {}()\");\n",
+            "global": "our QoreRepl::QoreRepl repl({\"history_file\": NOTHING});\n"
+                "repl.addEventListener(sub (hash<QoreRepl::ReplEvent> ev) {});\n",
+            "listener refers to the session": "QoreRepl::QoreRepl repl({\"history_file\": NOTHING});\n"
+                "repl.addEventListener(sub (hash<QoreRepl::ReplEvent> ev) { repl.getThreadNoticeLevel(); });\n"
+                "repl.eval(\"background sub () {}()\");\n",
+        };
+        foreach hash<auto> i in (scripts.pairIterator()) {
+            string script = tmp.path + "/exit-" + $# + ".q";
+            {
+                File f();
+                f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
+                f.write(sprintf("%%modern\n%%prepend-module-path %s\n%%requires QoreRepl\n%sprintf(\"done\\n\");\n",
+                    qlib, i.value));
+            }
+            StringOutputStream out();
+            StringOutputStream err();
+            Process p(qore, (script,), {"stdout": out, "stderr": err});
+            # a hang fails the test instead of stalling the run
+            bool done = p.wait(60s);
+            if (!done) {
+                p.terminate();
+                p.wait();
+            }
+            assertTrue(done, i.key + ": the process ended");
+            assertEq(0, p.exitCode(), i.key + ": " + err.getData());
+            assertEq("done\n", out.getData(), i.key);
+        }
+%endif
+    }
+
+    #! returns a thread event for the notice tests
+    private static hash<ReplEvent> event(string event, int tid, *hash<auto> thread) {
+        string pevent = {
+            "thread-started": "STARTED",
+            "thread-cancel-requested": "CANCEL_REQUESTED",
+            "thread-finished": "FINISHED",
+        }{event};
+        return <ReplEvent>{
+            "event": event,
+            "program_id": 1,
+            "running": 0,
+            "idle": False,
+            "thread": cast<hash<ProgramThreadEvent>>(<ProgramThreadEvent>{
+                "subscription_id": 1,
+                "program_id": 1,
+                "seq": 1,
+                "event": pevent,
+                "running": 0,
+                "tid": tid,
+                "thread_id": tid + 1000,
+                "parent_tid": 1,
+                "parent_thread_id": 0,
+                "name": "qore/" + tid,
+                "start": 2026-11-09T10:00:00,
+            } + thread),
+        };
+    }
+
+    noticeLevels() {
+        assertEq(("all", "summary", "failures", "off"), ThreadNoticeLevels);
+        assertEq("summary", DefaultThreadNoticeLevel);
+        QoreRepl::QoreRepl repl({"history_file": NOTHING});
+        assertEq("summary", repl.getThreadNoticeLevel());
+        repl.setThreadNoticeLevel("failures");
+        assertEq("failures", repl.getThreadNoticeLevel());
+        assertThrows("REPL-ERROR", "unknown thread notice level", \repl.setThreadNoticeLevel(), "loud");
+        assertThrows("REPL-ERROR", "unknown thread notice level", \QoreRepl::QoreRepl::formatThreadNotices(),
+            ((), "loud"));
+        assertThrows("REPL-ERROR", "unknown thread notice level", sub () {
+            QoreRepl::QoreRepl r({"history_file": NOTHING, "thread_notifications": "loud"});
+        });
+        repl = new QoreRepl::QoreRepl({"history_file": NOTHING, "thread_notifications": "all"});
+        assertEq("all", repl.getThreadNoticeLevel());
+        list<hash<ReplEvent>> l = (event("thread-started", 5),);
+        assertEq(("Thread 5 started",), repl.getThreadNotices(l));
+        assertEq((), QoreRepl::QoreRepl::formatThreadNotices(l, "off"));
+        # events other than thread events have no notices
+        assertEq((), QoreRepl::QoreRepl::formatThreadNotices((<ReplEvent>{"event": "program-idle",
+            "program_id": 1, "running": 0, "idle": True},), "all"));
+    }
+
+    summaryNotices() {
+        # starts are grouped; a thread that started and ended in the batch is reported when it ended
+        list<hash<ReplEvent>> l = (
+            event("thread-started", 17),
+            event("thread-started", 18),
+            event("thread-started", 19),
+            event("thread-started", 20),
+            event("thread-finished", 20, {"outcome": "COMPLETED", "duration_us": 1500000}),
+        );
+        assertEq(("3 threads started (17, 18, 19)", "Thread 20 finished (1.5s)"),
+            QoreRepl::QoreRepl::formatThreadNotices(l));
+
+        l = (
+            event("thread-finished", 17, {"outcome": "COMPLETED", "duration_us": 40000000}),
+        );
+        assertEq(("Thread 17 finished (40.0s)",), QoreRepl::QoreRepl::formatThreadNotices(l));
+
+        l = (
+            event("thread-cancel-requested", 18),
+            event("thread-cancel-requested", 21),
+            event("thread-cancel-requested", 22),
+            event("thread-finished", 22, {"outcome": "CANCELLED"}),
+            event("thread-finished", 23, {"outcome": "CANCELLED"}),
+            event("thread-finished", 24, {"outcome": "EXITED"}),
+            event("thread-finished", 25, {"outcome": "COMPLETED"}),
+        );
+        # a request whose thread was cancelled in the batch is reported by the cancellation
+        assertEq(("Cancellation requested for 2 threads (18, 21)", "2 threads finished (24, 25)",
+            "2 threads cancelled (22, 23)"), QoreRepl::QoreRepl::formatThreadNotices(l));
+
+        # a thread that caught the cancellation and completed is not reported as cancelled
+        l = (
+            event("thread-cancel-requested", 18),
+            event("thread-finished", 18, {"outcome": "COMPLETED", "duration_us": 100000}),
+        );
+        assertEq(("Thread 18: cancellation requested", "Thread 18 finished (0.1s)"),
+            QoreRepl::QoreRepl::formatThreadNotices(l));
+
+        # failures are reported one by one, after the grouped notices
+        l = (
+            event("thread-started", 30),
+            event("thread-finished", 19, {"outcome": "EXCEPTION", "error": <ExceptionInfo>{"err": "ERR",
+                "desc": "description", "file": "<repl:3>", "line": 1}}),
+            event("thread-finished", 31, {"outcome": "EXCEPTION", "error": <ExceptionInfo>{"err": "ERR2"}}),
+        );
+        assertEq(("Thread 30 started", "Thread 19 failed: ERR: description (<repl:3>:1)", "Thread 31 failed: ERR2"),
+            QoreRepl::QoreRepl::formatThreadNotices(l));
+    }
+
+    allNotices() {
+        list<hash<ReplEvent>> l = (
+            event("thread-started", 17),
+            event("thread-started", 18, {"parent_tid": 17, "parent_thread_id": 1017}),
+            event("thread-cancel-requested", 17, {"cancel_reason": "stop"}),
+            event("thread-cancel-requested", 18),
+            event("thread-finished", 17, {"outcome": "CANCELLED", "duration_us": 2000000}),
+            event("thread-finished", 18, {"outcome": "COMPLETED", "duration_us": 0}),
+            event("thread-finished", 19, {"outcome": "EXITED", "duration_us": 250000}),
+        );
+        assertEq((
+            "Thread 17 started",
+            "Thread 18 started by thread 17",
+            "Thread 17: cancellation requested (stop)",
+            "Thread 18: cancellation requested",
+            "Thread 17 cancelled (2.0s)",
+            "Thread 18 finished (0.0s)",
+            "Thread 19 exited (0.2s)",
+        ), QoreRepl::QoreRepl::formatThreadNotices(l, "all"));
+    }
+
+    failureNotices() {
+        list<hash<ReplEvent>> l = (
+            event("thread-started", 17),
+            event("thread-finished", 18, {"outcome": "COMPLETED"}),
+            event("thread-finished", 19, {"outcome": "INTERRUPTED", "error": <ExceptionInfo>{
+                "err": "PROGRAM-INTERRUPTED", "desc": "interrupted"}}),
+            event("thread-finished", 20, {"outcome": "START_FAILED", "error": <ExceptionInfo>{"err": "ENTRY"}}),
+            event("thread-finished", 21, {"outcome": "COMPLETED", "cleanup_error": <ExceptionInfo>{
+                "err": "DESTRUCTOR-ERROR", "desc": "destructor"}}),
+            event("thread-finished", 22, {"outcome": "EXCEPTION"}),
+        );
+        list<string> failures = (
+            "Thread 19 interrupted: PROGRAM-INTERRUPTED: interrupted",
+            "Thread 20 failed to start: ENTRY",
+            "Thread 21: error in cleanup: DESTRUCTOR-ERROR: destructor",
+            "Thread 22 failed: unknown error",
+        );
+        assertEq(failures, QoreRepl::QoreRepl::formatThreadNotices(l, "failures"));
+        # failures are reported at every level but off
+        list<string> summary = QoreRepl::QoreRepl::formatThreadNotices(l, "summary");
+        assertEq(("Thread 17 started", "2 threads finished (18, 21)") + failures, summary);
+    }
+
+    notifyCommand() {
+        QoreRepl::QoreRepl repl({"history_file": NOTHING});
+        assertEq("Thread notices: summary", repl.eval("/notify").value);
+        assertEq("Thread notices: failures", repl.eval("/notify failures").value);
+        assertEq("failures", repl.getThreadNoticeLevel());
+        assertEq("Thread notices: off", repl.eval("/notify OFF").value);
+        assertEq("REPL-ERROR", repl.eval("/notify loud").error.err);
+        assertEq("REPL-ERROR", repl.eval("/notify all summary").error.err);
+        assertEq("off", repl.getThreadNoticeLevel());
+        # an abbreviation; the command needs no idle Program
+        assertEq("Thread notices: all", repl.eval("/not all").value);
+        assertFalse(repl.inspectRequest("/notify all").requires_idle);
+        assertTrue(repl.getHelpText(False).find("/notify") >= 0);
+    }
+}

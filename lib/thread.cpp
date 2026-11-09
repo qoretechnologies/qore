@@ -501,6 +501,13 @@ public:
     //! the number of thread entry or exit handlers running on the thread; while non-zero, entries run no handlers
     unsigned entry_handler_depth = 0;
 
+    //! the process-unique ID of the thread if it is a background thread started in a Program, or 0
+    /** Recorded as the parent of the background threads it starts; see design/program-thread-lifecycle-events.md
+    */
+    int64 bg_thread_id = 0;
+    //! the ID of the Program of the background thread in bg_thread_id; it is the parent only of that Program's threads
+    qore_program_id_t bg_pgm_id = 0;
+
     // issue #4285: sandbox policy barrier depth; when non-zero, POLICY resolution
     // (filesystem/network) does not walk out to enclosing caller Programs, so trusted
     // infrastructure code does not inherit a sandboxed caller's policy for the call it
@@ -1014,6 +1021,12 @@ void ThreadEntry::abandonAfterFork() {
     thread_data = nullptr;
     joined = false;
     clearCancelState();
+    // the thread's reference to the hub is dropped by the hub's own fork fixup (ProgramThreadHub::forkChild())
+    lifecycle_hub = nullptr;
+    lifecycle_thread_id = 0;
+    lifecycle_pgm_id = 0;
+    lifecycle_cancel_gen = 0;
+    lifecycle_cancels.clear();
     waiting_on = nullptr;
     waiting_mutex = nullptr;
     wake_cond = nullptr;
@@ -1042,6 +1055,10 @@ void ThreadEntry::cleanup() {
 
     // clear per-thread cancellation state
     clearCancelState();
+    // a background thread clears its hub and takes its claims before its TID is released
+    assert(!lifecycle_hub);
+    assert(lifecycle_cancels.empty());
+    lifecycle_cancel_gen = 0;
     // a thread in a cancellable condition wait unregisters before it returns
     assert(!waiting_on && !waiting_mutex && !wake_queued && !wake_busy);
     // release the thread's cancellation wakeup channel with its TID
@@ -1528,6 +1545,8 @@ public:
     std::unique_ptr<QoreInheritedSandbox> sandbox;
     int tid;
     const QoreProgramLocation* loc;
+    //! the identity of the thread for its Program's lifecycle events
+    ProgramThreadIdentity identity;
     bool registered = false,
         started = false;
 
@@ -1541,6 +1560,7 @@ public:
             call_obj = td->current_obj;
             class_ctx = td->current_class;
             loc = td->runtime_loc ? td->runtime_loc : &loc_builtin;
+            setIdentity(*td);
         }
 
         //printd(5, "BGThreadParams::BGThreadParams(f: %p (%s %d), t: %d) this: %p call_obj: %p '%s' cc: %p '%s' "
@@ -1601,6 +1621,7 @@ public:
             call_obj = td->current_obj;
             class_ctx = td->current_class;
             loc = td->runtime_loc ? td->runtime_loc : &loc_builtin;
+            setIdentity(*td);
         }
 
         if (preregister(xsink)) {
@@ -1618,6 +1639,16 @@ public:
         if (call_obj) {
             call_obj->tRef();
         }
+    }
+
+    //! records the identity of the new thread and of the starting thread
+    /** The starting thread is the parent only if it is a background thread of the same Program: the subscribers of
+        a Program never see the threads of another one
+    */
+    DLLLOCAL void setIdentity(const ThreadData& td) {
+        identity.thread_id = program_thread_new_id();
+        identity.parent_tid = q_gettid();
+        identity.parent_thread_id = td.bg_pgm_id == pgm->getProgramId() ? td.bg_thread_id : 0;
     }
 
     //! preregisters the new thread in the Program; returns -1 if an exception was raised
@@ -5629,6 +5660,29 @@ namespace {
             // register thread in Program object
             btp->startThread(xsink);
 
+            // the thread publishes its lifecycle events to the hub of its Program, which it holds until it has
+            // published FINISHED, as the Program can be destroyed once the thread has left it
+            ProgramThreadHubHolder hub(qore_program_private::refThreadHub(*btp->pgm));
+            int tid = btp->tid;
+            int64 thread_id = btp->identity.thread_id;
+            thread_data.get()->bg_thread_id = thread_id;
+            thread_data.get()->bg_pgm_id = btp->pgm->getProgramId();
+            hub->threadStarted(tid, btp->identity);
+            {
+                // a cancellation request made before the hub was set (by a cancellation wave in startThread(), or
+                // by a canceller that had the TID from the starting thread) is published now; later ones are
+                // published by their canceller, and by the thread when its code has ended
+                lifecycle_cancel_claims_t claims;
+                thread_list.setLifecycleHub(tid, *hub, thread_id, btp->pgm->getProgramId(), claims);
+                for (const QoreLifecycleCancelClaim& claim : claims) {
+                    hub->cancelRequested(thread_id, claim.gen, claim.has_reason ? claim.reason.c_str() : nullptr);
+                }
+            }
+            // how the thread's code ended, the exceptions that ended it, and the first exception of its teardown
+            ProgramThreadOutcome outcome = ProgramThreadOutcome::COMPLETED;
+            ReferenceHolder<QoreHashNode> error(nullptr);
+            int64 exception_count = 0;
+
             // the thread runs the Program's code for its whole life: it enters the Program here, which runs the
             // Program's thread entry handler, and then the Program's thread initialization code; if the entry handler
             // fails, the thread runs none of the Program's code
@@ -5665,6 +5719,21 @@ namespace {
                     } else {
                         btp->discardExpression(&xsink);
                     }
+                    // the outcome is taken before the teardown adds exceptions to the sink; a cancellation request
+                    // made from now on is not published
+                    outcome = program_thread_get_outcome(xsink, entered);
+                    error = program_thread_event_error(xsink, 0);
+                    exception_count = program_thread_count_exceptions(xsink);
+                    {
+                        // every request claimed for the thread is published before its FINISHED event, also when
+                        // its canceller has not published it yet; the hub publishes each claim once
+                        lifecycle_cancel_claims_t claims;
+                        thread_list.clearLifecycleHub(tid, claims);
+                        for (const QoreLifecycleCancelClaim& claim : claims) {
+                            hub->cancelRequested(thread_id, claim.gen,
+                                claim.has_reason ? claim.reason.c_str() : nullptr);
+                        }
+                    }
                     // the thread expression has returned; everything from here on is teardown
                     end_thread_cancellation(true);
                     if (tlpd) {
@@ -5673,6 +5742,10 @@ namespace {
                         tlpd->dbgDetach(&xsink);
                         // a thread that a debugger cancelled to end its Program ends without an error
                         tlpd->dbgClearTermination(xsink);
+                        // the exceptions of the code are then no longer in the sink
+                        if (!xsink.isException()) {
+                            exception_count = 0;
+                        }
                     }
 
                     // if there is an object, we dereference the extra reference here
@@ -5689,7 +5762,6 @@ namespace {
                 // Program's thread count, so the Program is not being destroyed
                 entry_frame.exit(&xsink);
 
-                int tid = btp->tid;
                 // the thread's work has ended: it stops counting against the sandbox's thread limit before the
                 // Program sees it end
                 if (sandbox) {
@@ -5703,6 +5775,10 @@ namespace {
                 // delete any thread data
                 td->del(&xsink);
 
+                // the first exception added by the teardown, after the exceptions of the code
+                ReferenceHolder<QoreHashNode> cleanup_error(program_thread_event_error(xsink, exception_count),
+                    nullptr);
+
                 xsink.handleExceptions();
 
                 printd(4, "thread terminating");
@@ -5713,6 +5789,11 @@ namespace {
                 // the thread's data is deleted next; the inherited sandbox stops counting the thread here
                 sandbox_helper.reset();
                 sandbox.reset();
+
+                // the thread has ended: it publishes FINISHED while it still holds its TID, so a thread that reuses
+                // the TID cannot publish STARTED first
+                hub->threadFinished(thread_id, outcome, error.release(), exception_count, cleanup_error.release());
+                hub.reset();
 
                 // delete internal thread data structure and release TID entry
                 thread_list.deleteDataRelease(tid);
@@ -6706,35 +6787,142 @@ int q_remove_thread_local_data(int key, q_user_tld& data, bool run_destructor) {
 
 // --- Thread Cancellation API ---
 
+#ifdef DEBUG
+thread_local std::function<void()>* qore_dbg_cancel_before_publish = nullptr;
+#endif
+
+//! claims a new cancellation request of a background thread for its lifecycle event; called with lck held
+/** A request scoped to another Program applies only while the thread runs that Program's code, so it is not
+    published: the thread's FINISHED event reports whether it ended the thread.
+
+    @return true if the request was claimed
+*/
+static bool qore_claim_lifecycle_cancel(ThreadEntry& e, qore_program_id_t scope_pgm_id,
+        QoreLifecycleCancelClaim& claim) {
+    if (!e.lifecycle_hub || (scope_pgm_id && scope_pgm_id != e.lifecycle_pgm_id)) {
+        return false;
+    }
+    claim.gen = ++e.lifecycle_cancel_gen;
+    if (e.cancel_reason) {
+        claim.reason = e.cancel_reason->c_str();
+        claim.has_reason = true;
+    }
+    e.lifecycle_cancels.push_back(claim);
+    return true;
+}
+
 int QoreThreadList::cancelThread(int tid, const char* reason, qore_program_id_t scope_pgm_id) {
-    AutoLocker al(lck);
-    if (tid <= 0 || tid >= MAX_QORE_THREADS) {
-        return -1;
-    }
-    // a thread that has been started but is not running yet (the TID returned by background or q_start_thread()
-    // before the new thread registers itself) keeps the request; ThreadEntry::activate() leaves it in place, so it
-    // takes effect at the thread's first cancellation check point instead of being dropped
-    if (!entry[tid].active() && entry[tid].status != QTS_NA) {
-        return -1;
-    }
-    if (reason) {
-        if (entry[tid].cancel_reason) {
-            entry[tid].cancel_reason->deref();
+    // a new request to a background thread whose code runs is claimed under the lock and published to its Program's
+    // lifecycle subscriptions after the lock is released; the thread publishes its claims as well before it ends, so
+    // a request is published even if the thread ends first
+    ProgramThreadHubHolder hub;
+    int64 thread_id = 0;
+    QoreLifecycleCancelClaim claim;
+    {
+        AutoLocker al(lck);
+        if (tid <= 0 || tid >= MAX_QORE_THREADS) {
+            return -1;
         }
-        entry[tid].cancel_reason = new QoreStringNode(reason);
+        // a thread that has been started but is not running yet (the TID returned by background or q_start_thread()
+        // before the new thread registers itself) keeps the request; ThreadEntry::activate() leaves it in place, so
+        // it takes effect at the thread's first cancellation check point instead of being dropped
+        if (!entry[tid].active() && entry[tid].status != QTS_NA) {
+            return -1;
+        }
+        if (reason) {
+            if (entry[tid].cancel_reason) {
+                entry[tid].cancel_reason->deref();
+            }
+            entry[tid].cancel_reason = new QoreStringNode(reason);
+        }
+        // publish the scope before the request flag; the target only reads the scope after observing
+        // the flag, so this release store pairs with the acquire load in getCancelScopeProgramId()
+        entry[tid].cancel_scope_pgm_id.store(scope_pgm_id, std::memory_order_release);
+        // seq_cst pairs with seq_cst on the waiter side (register waiting_on, then check flag) to
+        // defeat the lost-wakeup race in QoreCondition::waitWithInterrupt
+        unsigned prev = entry[tid].cancel_requested.fetch_or(QCR_THREAD_CANCEL, std::memory_order_seq_cst);
+        // wake the target if it's blocked (or about to block) in a cancellable condition wait
+        wakeCondWaiter(tid);
+        // wake the target if it's blocked in qore_cancellable_poll(); the waiter clears waiting_fd under
+        // lck before it drains or closes the channel
+        signalWaitingFd(tid);
+        // a request made while one is pending is not a new one
+        if (!(prev & QCR_THREAD_CANCEL) && qore_claim_lifecycle_cancel(entry[tid], scope_pgm_id, claim)) {
+            entry[tid].lifecycle_hub->ref();
+            hub.set(entry[tid].lifecycle_hub);
+            thread_id = entry[tid].lifecycle_thread_id;
+        }
     }
-    // publish the scope before the request flag; the target only reads the scope after observing
-    // the flag, so this release store pairs with the acquire load in getCancelScopeProgramId()
-    entry[tid].cancel_scope_pgm_id.store(scope_pgm_id, std::memory_order_release);
-    // seq_cst pairs with seq_cst on the waiter side (register waiting_on, then check flag) to
-    // defeat the lost-wakeup race in QoreCondition::waitWithInterrupt
-    entry[tid].cancel_requested.fetch_or(QCR_THREAD_CANCEL, std::memory_order_seq_cst);
-    // wake the target if it's blocked (or about to block) in a cancellable condition wait
-    wakeCondWaiter(tid);
-    // wake the target if it's blocked in qore_cancellable_poll(); the waiter clears waiting_fd under
-    // lck before it drains or closes the channel
-    signalWaitingFd(tid);
+    if (hub) {
+#ifdef DEBUG
+        // tests delay the publication until the thread has ended (dbg_cancel_thread_after_end())
+        if (qore_dbg_cancel_before_publish) {
+            (*qore_dbg_cancel_before_publish)();
+        }
+#endif
+        hub->cancelRequested(thread_id, claim.gen, claim.has_reason ? claim.reason.c_str() : nullptr);
+        // the claim is published; the thread no longer needs it, unless it has already taken it to publish it itself,
+        // and once it has been removed, the hub need not keep its generation to detect a second publication
+        if (releaseLifecycleCancelClaim(tid, thread_id, claim.gen)) {
+            hub->cancelClaimReleased(thread_id, claim.gen);
+        }
+    }
     return 0;
+}
+
+#ifdef DEBUG
+size_t QoreThreadList::getLifecycleCancelClaimCount(int tid) {
+    if (tid <= 0 || tid >= MAX_QORE_THREADS) {
+        return 0;
+    }
+    AutoLocker al(lck);
+    return entry[tid].lifecycle_cancels.size();
+}
+#endif
+
+bool QoreThreadList::releaseLifecycleCancelClaim(int tid, int64 thread_id, uint64_t gen) {
+    AutoLocker al(lck);
+    ThreadEntry& e = entry[tid];
+    // the TID may have been released and reused since the claim was made
+    if (e.lifecycle_thread_id != thread_id) {
+        return false;
+    }
+    for (lifecycle_cancel_claims_t::iterator i = e.lifecycle_cancels.begin(), end = e.lifecycle_cancels.end();
+            i != end; ++i) {
+        if (i->gen == gen) {
+            e.lifecycle_cancels.erase(i);
+            return true;
+        }
+    }
+    return false;
+}
+
+void QoreThreadList::setLifecycleHub(int tid, ProgramThreadHub* hub, int64 thread_id, qore_program_id_t pgm_id,
+        lifecycle_cancel_claims_t& claims) {
+    assert(tid > 0 && tid < MAX_QORE_THREADS);
+    AutoLocker al(lck);
+    ThreadEntry& e = entry[tid];
+    assert(!e.lifecycle_hub);
+    e.lifecycle_hub = hub;
+    e.lifecycle_thread_id = thread_id;
+    e.lifecycle_pgm_id = pgm_id;
+    // a request made before the hub was set was not claimed by its canceller; the thread publishes it itself now
+    if (e.cancel_requested.load(std::memory_order_seq_cst) & QCR_THREAD_CANCEL) {
+        QoreLifecycleCancelClaim claim;
+        if (qore_claim_lifecycle_cancel(e, e.cancel_scope_pgm_id.load(std::memory_order_acquire), claim)) {
+            claims.swap(e.lifecycle_cancels);
+        }
+    }
+}
+
+void QoreThreadList::clearLifecycleHub(int tid, lifecycle_cancel_claims_t& claims) {
+    assert(tid > 0 && tid < MAX_QORE_THREADS);
+    AutoLocker al(lck);
+    ThreadEntry& e = entry[tid];
+    e.lifecycle_hub = nullptr;
+    e.lifecycle_thread_id = 0;
+    e.lifecycle_pgm_id = 0;
+    claims.swap(e.lifecycle_cancels);
 }
 
 void QoreThreadList::requestSandboxLimit(const std::vector<int>& tids) {

@@ -40,6 +40,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <string>
 #include <vector>
 #include <pthread.h>
 #include <sys/types.h>
@@ -72,6 +73,23 @@ static_assert(!(QTF_NO_SANDBOX_INHERIT & (QTF_NO_STACK_GUARD | QTF_EXTERNAL_LIFE
 #endif
 
 class ThreadData;
+class ProgramThreadHub;
+
+//! a cancellation request to a background thread, claimed under thread_list.lck for its lifecycle event
+/** See QoreThreadList::cancelThread() and design/program-thread-lifecycle-events.md: the canceller publishes the
+    claim after it releases the lock, and the thread publishes all of its claims before it publishes FINISHED, so a
+    request is published even if the thread ends first; the hub publishes each claim once
+*/
+struct QoreLifecycleCancelClaim {
+    //! the claim's generation, unique for the thread
+    uint64_t gen = 0;
+    //! the reason given with the request
+    std::string reason;
+    //! true if a reason was given
+    bool has_reason = false;
+};
+
+typedef std::vector<QoreLifecycleCancelClaim> lifecycle_cancel_claims_t;
 class QoreSandboxBudgetStack;
 class QoreStringNode;
 class QoreCondition;
@@ -196,6 +214,24 @@ public:
     pid_t wake_pid = 0;
     //! the nesting depth of qore_cancel_wakeup_register() registrations; only used by the thread itself
     int wake_reg_depth = 0;
+
+    //! the lifecycle event hub of the Program of a background thread while its code runs, or nullptr
+    /** Set and cleared by the thread itself under thread_list.lck (QoreThreadList::setLifecycleHub() and
+        clearLifecycleHub()); the thread holds a reference to the hub while it is set, so cancelThread() can reference
+        it under the lock to publish a cancellation request.  See design/program-thread-lifecycle-events.md.
+    */
+    ProgramThreadHub* lifecycle_hub = nullptr;
+    //! the process-unique ID of the background thread in lifecycle_hub
+    int64 lifecycle_thread_id = 0;
+    //! the ID of the Program of the background thread in lifecycle_hub
+    qore_program_id_t lifecycle_pgm_id = 0;
+    //! the generation of the last cancellation request claimed for the thread's lifecycle events
+    uint64_t lifecycle_cancel_gen = 0;
+    //! the cancellation requests claimed for the thread's lifecycle events that their canceller has not published yet
+    /** The canceller removes its claim once it has published it (QoreThreadList::releaseLifecycleCancelClaim()); the
+        thread takes those left when its code ends and publishes them before its FINISHED event
+    */
+    lifecycle_cancel_claims_t lifecycle_cancels;
 
 #ifdef DEBUG
     //! the number of times a cancellation request woke a wait that the thread had registered (debug builds)
@@ -610,6 +646,39 @@ public:
         @return 0 if the request was delivered, -1 if the thread is not active
     */
     DLLLOCAL int cancelThread(int tid, const char* reason, qore_program_id_t scope_pgm_id);
+
+    //! Sets the lifecycle event hub of the calling background thread, so that cancellation requests are published
+    /** @param tid the calling thread's TID
+        @param hub the hub of the thread's Program; the thread holds a reference until it calls clearLifecycleHub()
+        @param thread_id the thread's process-unique ID
+        @param pgm_id the ID of the thread's Program
+        @param claims set to the claim of a request already pending: it was made before the hub was set, so its
+        canceller did not claim it, and the thread publishes it
+    */
+    DLLLOCAL void setLifecycleHub(int tid, ProgramThreadHub* hub, int64 thread_id, qore_program_id_t pgm_id,
+            lifecycle_cancel_claims_t& claims);
+
+    //! Clears the lifecycle event hub of the calling background thread once its code has ended
+    /** @param tid the calling thread's TID
+        @param claims set to every cancellation request claimed for the thread, which it publishes before FINISHED
+    */
+    DLLLOCAL void clearLifecycleHub(int tid, lifecycle_cancel_claims_t& claims);
+
+    //! removes a published cancellation claim from the thread, if it still has it; returns true if it was removed
+    /** Called by the canceller after it has published the claim, so that the claims of a thread that is cancelled
+        many times (with cancellation deferred or cleared) do not accumulate
+
+        @param tid the thread's TID
+        @param thread_id the thread's lifecycle thread ID when the claim was made; a TID reused since then is left
+        alone
+        @param gen the generation of the claim
+    */
+    DLLLOCAL bool releaseLifecycleCancelClaim(int tid, int64 thread_id, uint64_t gen);
+
+#ifdef DEBUG
+    //! returns the number of cancellation claims of the thread not published by their canceller yet (debug builds)
+    DLLLOCAL size_t getLifecycleCancelClaimCount(int tid);
+#endif
 
     //! Clear cancellation for the given thread; acquires lock internally
     DLLLOCAL void clearCancel(int tid);
