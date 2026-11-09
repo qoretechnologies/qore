@@ -909,6 +909,15 @@ enum class QoreIROpcode : uint16_t {
     //! (QoreStreamingOperatorNode).
     CheckCancelEvery = 418,
 
+    //! string(), int() and float() with one argument whose value the builtin may not accept (issue #5660)
+    /** The conversion of ToString, ToInt and ToFloat for the values that the builtin accepts (a string, an int, a
+        float, a number, a boolean, a date and NOTHING, and NULL for int()); any other value raises the error of the
+        builtin call (RUNTIME-OVERLOAD-ERROR).  Operand 0 is the value; the result is that of the unchecked opcode.
+    */
+    ToStringChecked = 419,
+    ToIntChecked = 420,
+    ToFloatChecked = 421,
+
     // NOTE: When adding new opcodes, assign the next sequential ID (419, 420, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
@@ -918,8 +927,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::CheckCancelEvery);
-static_assert(QORE_IR_MAX_OPCODE == 418, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ToFloatChecked);
+static_assert(QORE_IR_MAX_OPCODE == 421, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)

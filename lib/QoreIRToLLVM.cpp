@@ -49,7 +49,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 418,
+static_assert(QORE_IR_MAX_OPCODE == 421,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -14812,6 +14812,43 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::ToStringChecked:
+        case QoreIROpcode::ToIntChecked:
+        case QoreIROpcode::ToFloatChecked: {
+            // string(), int() or float() of a value that the builtin may not accept: the helper converts a value that
+            // it accepts and raises the error of the builtin call for any other (issue #5660)
+            auto* val = getVal(inst->operands[0].id, error);
+            if (!val) { return false; }
+            llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            const char* helper_name;
+            const char* throwing_name;
+            llvm::Type* result_type;
+            if (inst->opcode == QoreIROpcode::ToStringChecked) {
+                helper_name = "qore_rt_to_string_checked";
+                throwing_name = "qore_rt_to_string_checked_throwing";
+                result_type = i64_type;
+            } else if (inst->opcode == QoreIROpcode::ToIntChecked) {
+                helper_name = "qore_rt_to_int_checked";
+                throwing_name = "qore_rt_to_int_checked_throwing";
+                result_type = i64_type;
+            } else {
+                helper_name = "qore_rt_to_float_checked";
+                throwing_name = "qore_rt_to_float_checked_throwing";
+                result_type = double_type;
+            }
+            auto ft = llvm::FunctionType::get(result_type, {i64_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction(helper_name, ft);
+            auto helper_throwing = module.getOrInsertFunction(throwing_name, ft);
+            llvm::Value* result = emitMaybeInvoke(helper, helper_throwing, {val_boxed, xsink_arg}, module,
+                llvm_func, inst);
+            emitExceptionCheck(module, llvm_func, inst);
+            values[inst->result.id] = result;
+            if (inst->opcode == QoreIROpcode::ToStringChecked) {
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+            }
             return true;
         }
         case QoreIROpcode::Sprintf: {

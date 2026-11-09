@@ -191,6 +191,7 @@ static void qore_ir_set_opcode_value_facts(QoreIRFunction* func, QoreIRValue val
         case QoreIROpcode::CmpFloat:
         case QoreIROpcode::UnaryMinusInt:
         case QoreIROpcode::ToInt:
+        case QoreIROpcode::ToIntChecked:
             qore_ir_set_native_value_facts(func, value, QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
             break;
         case QoreIROpcode::AddFloat:
@@ -199,6 +200,7 @@ static void qore_ir_set_opcode_value_facts(QoreIRFunction* func, QoreIRValue val
         case QoreIROpcode::DivFloat:
         case QoreIROpcode::UnaryMinusFloat:
         case QoreIROpcode::ToFloat:
+        case QoreIROpcode::ToFloatChecked:
             qore_ir_set_native_value_facts(func, value, QoreIRValueRepresentation::NativeFloat, floatTypeInfo);
             break;
         case QoreIROpcode::EqInt:
@@ -217,6 +219,7 @@ static void qore_ir_set_opcode_value_facts(QoreIRFunction* func, QoreIRValue val
             qore_ir_set_native_value_facts(func, value, QoreIRValueRepresentation::NativeBool, boolTypeInfo);
             break;
         case QoreIROpcode::ToString:
+        case QoreIROpcode::ToStringChecked:
             if (!q_env_is_set("QORE_DISABLE_IR_ASSIGNED_STRING_CONVERSION_FACTS")) {
                 QoreIRValueFacts facts;
                 facts.type_info = stringTypeInfo;

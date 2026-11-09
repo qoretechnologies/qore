@@ -166,6 +166,8 @@ static bool claimBuiltinTypeConversion(const QoreValue& expr) {
     const QoreListNode* args = call->getArgs();
     const QoreParseListNode* parse_args = call->getParseArgs();
     size_t nargs = args ? args->size() : (parse_args ? parse_args->size() : 0);
+    // the handler lowers a call whose argument may have values that the builtin does not accept as a normal builtin
+    // call: see QoreIRLowering::lowerBuiltinTypeConversion()
     return nargs == 1;
 }
 

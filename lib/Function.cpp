@@ -5369,6 +5369,40 @@ void UserVariantBase::parseInitPopLocalVars() {
     signature.parseInitPopLocalVars();
 }
 
+void qore_fast_call_param_mismatch(const QoreFunction* func, const QoreTypeInfo* receiver_type_info,
+        const QoreListNode* args, ExceptionSink* xsink) {
+    assert(*xsink);
+    if (!func) {
+        return;
+    }
+    // the class context of a method call, as CodeEvaluationHelper::findVariant() takes it
+    const qore_class_private* class_ctx = nullptr;
+    if (const auto* mfb = dynamic_cast<const MethodFunctionBase*>(func)) {
+        const QoreClass* qc = mfb->getClass();
+        class_ctx = qc ? runtime_get_class() : nullptr;
+        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*qc, class_ctx)) {
+            class_ctx = nullptr;
+        }
+        // the receiver of a call of a normal method, as CodeEvaluationHelper::init() takes it: the object whose method
+        // runs, which is the object of the thread here (a fast path that has it gives it)
+        if (!receiver_type_info && qc && !mfb->isStatic()) {
+            QoreObject* self = runtime_get_stack_object();
+            if (self && self->getClass()->getClass(qc->getID())) {
+                receiver_type_info = qore_get_object_receiver_type_info(self);
+            }
+        }
+    }
+    ExceptionSink match_xsink;
+    const AbstractQoreFunctionVariant* variant = func->runtimeFindVariant(&match_xsink, args, false, class_ctx,
+        receiver_type_info);
+    if (!variant && match_xsink) {
+        // no variant matches the arguments: the error of the AST interpreter
+        xsink->clear();
+        xsink->assimilate(match_xsink);
+    }
+    // otherwise the variant matches the arguments, and their conversion failed: the parameter type error stands
+}
+
 // instantiates arguments and sets up the argv variable
 int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreListNode>& argv, ExceptionSink* xsink)
         const {

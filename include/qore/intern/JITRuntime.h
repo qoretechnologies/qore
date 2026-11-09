@@ -2098,6 +2098,28 @@ uint64_t qore_rt_call_closure_fast_consume_args(uint64_t ref_bits, uint64_t* arg
 } // extern "C"
 
 //! Returns the size of the storage of a call stack frame for qore_rt_push_native_call_frame()
+//! The kinds of qore_rt_builtin_conversion_checked(): string(), int() and float()
+enum : int {
+    QORE_RT_BUILTIN_CONVERSION_STRING = 0,
+    QORE_RT_BUILTIN_CONVERSION_INT = 1,
+    QORE_RT_BUILTIN_CONVERSION_FLOAT = 2,
+};
+
+//! string(), int() or float() of a value that the builtin may not accept (QoreIROpcode::ToStringChecked etc.)
+/** @return the conversion of a value that the builtin accepts; any other value raises the error of the builtin call
+    (RUNTIME-OVERLOAD-ERROR), as with the AST interpreter (issue #5660)
+*/
+DLLLOCAL QoreValue qore_rt_builtin_conversion_checked(int kind, QoreValue val, ExceptionSink* xsink);
+
+extern "C" {
+DLLEXPORT uint64_t qore_rt_to_string_checked(uint64_t val_bits, ExceptionSink* xsink);
+DLLEXPORT int64_t qore_rt_to_int_checked(uint64_t val_bits, ExceptionSink* xsink);
+DLLEXPORT double qore_rt_to_float_checked(uint64_t val_bits, ExceptionSink* xsink);
+DLLEXPORT uint64_t qore_rt_to_string_checked_throwing(uint64_t val_bits, ExceptionSink* xsink);
+DLLEXPORT int64_t qore_rt_to_int_checked_throwing(uint64_t val_bits, ExceptionSink* xsink);
+DLLEXPORT double qore_rt_to_float_checked_throwing(uint64_t val_bits, ExceptionSink* xsink);
+}
+
 DLLLOCAL size_t qore_rt_native_call_frame_size();
 //! Returns the alignment of the storage of a call stack frame for qore_rt_push_native_call_frame()
 DLLLOCAL size_t qore_rt_native_call_frame_align();

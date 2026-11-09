@@ -13007,6 +13007,28 @@ QoreIRValue QoreIRLowering::lowerCast(const QoreValue& expr, std::string& error)
     return result;
 }
 
+static QoreValue qore_ir_get_call_arg(const QoreParseListNode* parse_args, const QoreListNode* args, size_t i);
+
+//! Returns true if every value of the given type is accepted by the builtin conversion function of the opcode
+/** string(), int() and float() accept a string, an int, a float, a number, a boolean, a date and NOTHING, and int()
+    also NULL (the soft types of their parameters); a type that also has other values (auto, an object, a hash, ...)
+    or no known type is not accepted: see QoreIRLowering::lowerBuiltinTypeConversion()
+*/
+static bool qore_ir_conversion_accepts_type(QoreIROpcode opcode, const QoreTypeInfo* type) {
+    if (!type || !QoreTypeInfo::hasType(type)) {
+        return false;
+    }
+    // NOTHING is accepted, so "*T" is accepted if T is
+    const QoreTypeInfo* base = qore_get_value_type(type);
+    static constexpr qore_type_t accepted[] = {NT_STRING, NT_INT, NT_FLOAT, NT_NUMBER, NT_BOOLEAN, NT_DATE};
+    for (qore_type_t t : accepted) {
+        if (QoreTypeInfo::parseReturns(base, t) == QTI_IDENT) {
+            return true;
+        }
+    }
+    return opcode == QoreIROpcode::ToInt && QoreTypeInfo::parseReturns(base, NT_NULL) == QTI_IDENT;
+}
+
 QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* call = dynamic_cast<const FunctionCallNode*>(node);
@@ -13038,10 +13060,32 @@ QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, st
     if (nargs != 1) {
         return QoreIRValue();
     }
+    // The inline conversion accepts every value; the builtins take soft types that do not (string(softstring),
+    // int(*softint), float(softfloat)): an object, for example, matches no variant, and the call raises
+    // RUNTIME-OVERLOAD-ERROR.  The unchecked conversion is used when the parser resolved the variant (the argument's
+    // type matches it statically) or when the argument's type only has values that the builtin accepts; any other
+    // call uses the checked conversion, which raises the error of the AST interpreter (issue #5660)
+    bool checked = false;
+    if (opcode != QoreIROpcode::ToBool && !call->getVariant()) {
+        QoreValue arg = qore_ir_get_call_arg(parse_args, args, 0);
+        checked = !qore_ir_conversion_accepts_type(opcode, getGuaranteedTypeForValue(&arg, nullptr));
+    }
     // Lower the single argument
     std::vector<QoreIRValue> operands;
     if (!lowerCallArgs(parse_args, args, operands, error)) {
         return QoreIRValue();
+    }
+    if (checked) {
+        // the checked conversion converts a value that the builtin accepts as the unchecked one does and raises the
+        // error of the builtin call for any other: as fast as the unchecked conversion for the values it accepts
+        QoreIROpcode checked_opcode = opcode == QoreIROpcode::ToString ? QoreIROpcode::ToStringChecked
+            : (opcode == QoreIROpcode::ToInt ? QoreIROpcode::ToIntChecked : QoreIROpcode::ToFloatChecked);
+        QoreIRInstruction* inst = builder.createExprOp(checked_opcode, expr, operands, call->loc);
+        if (!exception_stack.empty()) {
+            inst->exception_target = exception_stack.back();
+        }
+        never_nothing_values.insert(inst->result.id);
+        return inst->result;
     }
     // These conversions never throw; always emit as plain ExprOps, not Invoke.
     // The argument's call (if any) is already lowered as Invoke by lowerCallArgs.

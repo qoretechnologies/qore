@@ -1139,6 +1139,11 @@ public:
             const QoreTypeParamInstantiation* type_param_instantiation = nullptr) const {
         return getOrCreateSpecializedIR(name, receiver_type_info, type_param_instantiation, false);
     }
+    //! Returns the function that owns the variant, if known
+    DLLLOCAL const QoreFunction* getSourceFunction() const {
+        return source_qf;
+    }
+
     DLLLOCAL UserSignature* getUserSignature() const {
         return const_cast<UserSignature*>(&signature);
     }
@@ -2089,6 +2094,22 @@ private:
 
 class MethodVariantBase;
 class MethodFunctionBase;
+
+//! Gives the parameter type error of a fast call path the outcome of the AST interpreter (issue #5686)
+/** A call whose variant was resolved at parse time binds its arguments in the native and IR fast call paths, which
+    raise the parameter type error when an argument does not match.  The AST interpreter checks the arguments before it
+    evaluates anything and, when they do not match, resolves the variant again with the arguments (see
+    CodeEvaluationHelper::init()): when no variant matches them, the call raises RUNTIME-OVERLOAD-ERROR instead.  This
+    function makes the same decision: called with the type error in \a xsink, it replaces it with the overload error
+    when no variant of \a func matches \a args, and leaves it otherwise.
+
+    @param func the function or method called; nothing is done if it is nullptr
+    @param receiver_type_info the type of the receiver of a method of a generic class, if any
+    @param args the arguments of the call, as passed (before parameter type conversions)
+    @param xsink holds the parameter type error of the fast call path
+*/
+DLLLOCAL void qore_fast_call_param_mismatch(const QoreFunction* func, const QoreTypeInfo* receiver_type_info,
+        const QoreListNode* args, ExceptionSink* xsink);
 #define METHFB(f) (reinterpret_cast<MethodFunctionBase*>(f))
 #define METHFB_const(f) (reinterpret_cast<const MethodFunctionBase*>(f))
 

@@ -81,7 +81,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 418,
+static_assert(QORE_IR_MAX_OPCODE == 421,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -2937,8 +2937,26 @@ static bool preserveInterpreterFastCallArg(QoreValue val) {
     }
 }
 
+//! Gives the parameter type error of a fast call the outcome of the AST interpreter; see qore_fast_call_param_mismatch()
+static void qore_ir_fast_call_param_mismatch(const QoreFunction* func, const QoreTypeInfo* receiver_type_info,
+        unsigned nargs, const uint64_t* args, ExceptionSink* xsink) {
+    if (!func) {
+        return;
+    }
+    ReferenceHolder<QoreListNode> arg_list(new QoreListNode(autoTypeInfo), xsink);
+    for (unsigned i = 0; i < nargs; ++i) {
+        arg_list->push(fromBits(args[i]).refSelf(), xsink);
+    }
+    qore_fast_call_param_mismatch(func, receiver_type_info, *arg_list, xsink);
+}
+
+//! Instantiates the parameters of an inlined call
+/** @param func the function or method called, for the error of an argument that does not match its parameter (see
+    qore_fast_call_param_mismatch()); with nullptr, the parameter type error is raised
+*/
 static int instantiateInterpreterFastCallParams(const UserSignature* sig, unsigned num_params,
-        const uint64_t* args, ExceptionSink* xsink, const QoreTypeInfo* receiver_type_info = nullptr) {
+        const uint64_t* args, ExceptionSink* xsink, const QoreTypeInfo* receiver_type_info = nullptr,
+        const QoreFunction* func = nullptr) {
     for (unsigned i = 0; i < num_params; ++i) {
         QoreValue raw = fromBits(args[i]);
         QoreValue val;
@@ -2968,6 +2986,8 @@ static int instantiateInterpreterFastCallParams(const UserSignature* sig, unsign
                 for (int j = static_cast<int>(i) - 1; j >= 0; --j) {
                     sig->lv[j]->uninstantiate(xsink);
                 }
+                // the error of the AST interpreter when no variant matches the arguments (issue #5686)
+                qore_ir_fast_call_param_mismatch(func, receiver_type_info, num_params, args, xsink);
                 return -1;
             }
         }
@@ -4567,7 +4587,8 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     unsigned num_params = sig->numParams();
     bool use_direct_params = inline_state == QORE_IR_INLINE_DIRECT_PARAMS;
     if (!use_direct_params
-            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink) < 0) {
+            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink, nullptr,
+                uvb->getSourceFunction()) < 0) {
         result = QoreValue();
         return true;
     }
@@ -4675,7 +4696,8 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
 
     bool use_direct_params = inline_state == QORE_IR_INLINE_DIRECT_PARAMS;
     if (!use_direct_params
-            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink, receiver_type_info) < 0) {
+            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink, receiver_type_info,
+                uvb->getSourceFunction()) < 0) {
         result = QoreValue();
         return true;
     }
@@ -4940,7 +4962,8 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
     ClassOnlySubstitutionHelper cosh(qore_class_private::get(*inst->method->getClass()));
     bool use_direct_params = inline_state == QORE_IR_INLINE_DIRECT_PARAMS;
     if (!use_direct_params
-            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink) < 0) {
+            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink, nullptr,
+                uvb->getSourceFunction()) < 0) {
         result = QoreValue();
         return true;
     }
@@ -5135,7 +5158,8 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     bool use_direct_params = callee_ir->direct_params_eligible
         && nargs >= static_cast<int>(num_params);
     if (!use_direct_params
-            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink) < 0) {
+            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink, nullptr,
+                uvb->getSourceFunction()) < 0) {
         result = QoreValue();
         return true;
     }
@@ -5303,6 +5327,15 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::ElementsInt: {
             QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
             return QoreIRInterpreter::evalUnary(op, val, xsink);
+        }
+        case QoreIROpcode::ToStringChecked:
+        case QoreIROpcode::ToIntChecked:
+        case QoreIROpcode::ToFloatChecked: {
+            int kind = op == QoreIROpcode::ToStringChecked ? QORE_RT_BUILTIN_CONVERSION_STRING
+                : (op == QoreIROpcode::ToIntChecked ? QORE_RT_BUILTIN_CONVERSION_INT
+                    : QORE_RT_BUILTIN_CONVERSION_FLOAT);
+            QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
+            return qore_rt_builtin_conversion_checked(kind, val, xsink);
         }
         case QoreIROpcode::ToString: {
                 QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
@@ -6757,6 +6790,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                 val.discard(xsink);
                                 // Error in type filtering - cleanup already-instantiated locals
                                 cleanupDirectParamSlots(i - 1);
+                                // the error of the AST interpreter when no variant matches the arguments (issue
+                                // #5686)
+                                qore_ir_fast_call_param_mismatch(func.source_qf, nullptr,
+                                    static_cast<unsigned>(direct_params->nargs), direct_params->args, xsink);
                                 return false;
                             }
                         }
@@ -13657,6 +13694,31 @@ load_local_done:
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
                 if (res.needsRef()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ToStringChecked:
+            case QoreIROpcode::ToIntChecked:
+            case QoreIROpcode::ToFloatChecked: {
+                // string(), int() or float() of a value that the builtin may not accept (issue #5660)
+                int kind = inst->opcode == QoreIROpcode::ToStringChecked ? QORE_RT_BUILTIN_CONVERSION_STRING
+                    : (inst->opcode == QoreIROpcode::ToIntChecked ? QORE_RT_BUILTIN_CONVERSION_INT
+                        : QORE_RT_BUILTIN_CONVERSION_FLOAT);
+                QoreValue res = qore_rt_builtin_conversion_checked(kind, getIRValue(values, inst->operands[0]), xsink);
+                if (*xsink) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    return returnAfterUnhandledException();
+                }
+                setValueSlot(values, inst->result.id, res, xsink);
+                if (kind == QORE_RT_BUILTIN_CONVERSION_STRING) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;

@@ -4964,10 +4964,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash_by_type_path_cached(QoreAOTConte
     return qore_rt_make_hash(kv_pairs, count, type_info, xsink);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_to_string(uint64_t val_bits) {
-    QoreValue val = fromBits(val_bits);
+//! Returns the string conversion of a value of the given type (the type of \a val)
+static QoreStringNode* qore_rt_value_to_string_node(QoreValue val, qore_type_t t) {
     QoreStringNode* str;
-    switch (val.getType()) {
+    switch (t) {
         case NT_STRING: {
             QoreStringNodeValueHelper val_str(val);
             str = val_str.getReferencedValue();
@@ -4992,7 +4992,129 @@ extern "C" DLLEXPORT uint64_t qore_rt_to_string(uint64_t val_bits) {
             break;
         }
     }
-    return toBits(QoreValue(str));
+    return str;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_to_string(uint64_t val_bits) {
+    QoreValue val = fromBits(val_bits);
+    return toBits(QoreValue(qore_rt_value_to_string_node(val, val.getType())));
+}
+
+// --- string(), int() and float() of values that the builtin may not accept (issue #5660) ---
+
+//! Raises the error of the builtin conversion call for a value that it does not accept
+/** The builtin is called with the value, so the error is that of the AST interpreter, which resolves the variant at
+    runtime: RUNTIME-OVERLOAD-ERROR
+*/
+static void qore_rt_builtin_conversion_error(int kind, QoreValue val, ExceptionSink* xsink) {
+    static const char* names[] = {"Qore::string", "Qore::int", "Qore::float"};
+    assert(kind >= 0 && kind <= QORE_RT_BUILTIN_CONVERSION_FLOAT);
+    QoreProgram* pgm = getProgram();
+    const QoreFunction* func = pgm ? reinterpret_cast<const QoreFunction*>(pgm->findFunction(names[kind])) : nullptr;
+    if (func) {
+        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+        args->push(val.refSelf(), xsink);
+        ValueHolder rv(func->evalFunction(nullptr, *args, pgm, rc_get_current_ref(), xsink), xsink);
+    }
+    if (!*xsink) {
+        // not reached: the builtin accepts no other value
+        xsink->raiseException("RUNTIME-OVERLOAD-ERROR", "no variant matching '%s(%s)' can be found",
+            names[kind] + 6, val.getTypeName());
+    }
+}
+
+QoreValue qore_rt_builtin_conversion_checked(int kind, QoreValue val, ExceptionSink* xsink) {
+    switch (kind) {
+        case QORE_RT_BUILTIN_CONVERSION_STRING:
+            return fromBits(qore_rt_to_string_checked(toBits(val), xsink));
+        case QORE_RT_BUILTIN_CONVERSION_INT:
+            return QoreValue(qore_rt_to_int_checked(toBits(val), xsink));
+        default:
+            return QoreValue(qore_rt_to_float_checked(toBits(val), xsink));
+    }
+}
+
+// the checked conversions dispatch once on the type of the value: the types that the builtin accepts are converted,
+// any other raises the error of the builtin call
+
+extern "C" DLLEXPORT uint64_t qore_rt_to_string_checked(uint64_t val_bits, ExceptionSink* xsink) {
+    QoreValue val = fromBits(val_bits);
+    qore_type_t t = val.getType();
+    switch (t) {
+        case NT_STRING:
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_BOOLEAN:
+        case NT_NOTHING:
+        case NT_NUMBER:
+        case NT_DATE:
+            return toBits(QoreValue(qore_rt_value_to_string_node(val, t)));
+        default:
+            qore_rt_builtin_conversion_error(QORE_RT_BUILTIN_CONVERSION_STRING, val, xsink);
+            return toBits(QoreValue());
+    }
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_to_int_checked(uint64_t val_bits, ExceptionSink* xsink) {
+    QoreValue val = fromBits(val_bits);
+    switch (val.getType()) {
+        case NT_STRING:
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_BOOLEAN:
+        case NT_NOTHING:
+        case NT_NUMBER:
+        case NT_DATE:
+        case NT_NULL:
+            return val.getAsBigInt();
+        default:
+            qore_rt_builtin_conversion_error(QORE_RT_BUILTIN_CONVERSION_INT, val, xsink);
+            return 0;
+    }
+}
+
+extern "C" DLLEXPORT double qore_rt_to_float_checked(uint64_t val_bits, ExceptionSink* xsink) {
+    QoreValue val = fromBits(val_bits);
+    switch (val.getType()) {
+        case NT_STRING:
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_BOOLEAN:
+        case NT_NOTHING:
+        case NT_NUMBER:
+        case NT_DATE:
+            return val.getAsFloat();
+        default:
+            qore_rt_builtin_conversion_error(QORE_RT_BUILTIN_CONVERSION_FLOAT, val, xsink);
+            return 0.0;
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_to_string_checked_throwing(uint64_t val_bits,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_to_string_checked(val_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) int64_t qore_rt_to_int_checked_throwing(uint64_t val_bits,
+        ExceptionSink* xsink) {
+    int64_t result = qore_rt_to_int_checked(val_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) double qore_rt_to_float_checked_throwing(uint64_t val_bits,
+        ExceptionSink* xsink) {
+    double result = qore_rt_to_float_checked(val_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_int_to_string(int64_t value) {
@@ -10901,12 +11023,29 @@ static bool qore_rt_preserve_unevaluated_arg(QoreValue val) {
     }
 }
 
+//! Gives the parameter type error of a fast call the outcome of the AST interpreter; see qore_fast_call_param_mismatch()
+static void qore_rt_fast_call_param_mismatch(const QoreFunction* func, const QoreTypeInfo* receiver_type_info,
+        int nargs, const uint64_t* args, ExceptionSink* xsink) {
+    if (!func) {
+        return;
+    }
+    ReferenceHolder<QoreListNode> arg_list(new QoreListNode(autoTypeInfo), xsink);
+    for (int i = 0; i < nargs; ++i) {
+        arg_list->push(fromBits(args[i]).refSelf(), xsink);
+    }
+    qore_fast_call_param_mismatch(func, receiver_type_info, *arg_list, xsink);
+}
+
 //! Instantiate parameter locals from NaN-boxed args with default argument evaluation
 /** \return 0 on success, -1 on error (already-instantiated params are cleaned up on error,
     but caller must handle selfid cleanup and return value)
+
+    @param func the function or method called, for the error of an argument that does not match its parameter (see
+    qore_fast_call_param_mismatch()); with nullptr, the parameter type error is raised
 */
 static int instantiateFastCallParams(const UserSignature* sig, unsigned num_params, int nargs,
-        const uint64_t* args, ExceptionSink* xsink, const QoreTypeInfo* receiver_type_info = nullptr) {
+        const uint64_t* args, ExceptionSink* xsink, const QoreTypeInfo* receiver_type_info = nullptr,
+        const QoreFunction* func = nullptr) {
     const arg_vec_t& defaultArgList = sig->getDefaultArgList();
     for (unsigned i = 0; i < num_params; ++i) {
         if (i < (unsigned)nargs) {
@@ -10944,6 +11083,8 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
                     for (int j = (int)i - 1; j >= 0; --j) {
                         sig->lv[j]->uninstantiate(xsink);
                     }
+                    // the error of the AST interpreter when no variant matches the arguments (issue #5686)
+                    qore_rt_fast_call_param_mismatch(func, receiver_type_info, nargs, args, xsink);
                     return -1;
                 }
             }
@@ -11112,7 +11253,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
 
     if (!use_direct_params) {
         // Standard path: push params to TLS
-        if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+        if (instantiateFastCallParams(sig, num_params, nargs, args, xsink, nullptr,
+                uvb->getSourceFunction()) < 0) {
             return toBits(QoreValue());
         }
     }
@@ -11552,7 +11694,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
     ThreadFrameBoundaryHelper tfbh(true);
 
     // Instantiate parameter locals directly from NaN-boxed args
-    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink, nullptr,
+                uvb->getSourceFunction()) < 0) {
         return toBits(QoreValue());
     }
 
@@ -11684,7 +11827,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
     ThreadFrameBoundaryHelper tfbh(true);
 
     // Instantiate parameter locals directly from NaN-boxed args
-    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink, nullptr,
+                uvb->getSourceFunction()) < 0) {
         return toBits(QoreValue());
     }
 
@@ -11969,7 +12113,8 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
 
     if (!use_direct_params) {
         // Standard path: push params to TLS
-        if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+        if (instantiateFastCallParams(sig, num_params, nargs, args, xsink, nullptr,
+                uvb->getSourceFunction()) < 0) {
             if (selfid_instantiated) {
                 selfid->uninstantiateSelf();
             }
@@ -15840,7 +15985,8 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         ThreadFrameBoundaryHelper tfbh(true);
 
         // Instantiate parameter locals directly from NaN-boxed args
-        if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+        if (instantiateFastCallParams(sig, num_params, nargs, args, xsink, nullptr,
+                uvb->getSourceFunction()) < 0) {
             return toBits(QoreValue());
         }
 
@@ -16394,7 +16540,8 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
     ThreadFrameBoundaryHelper tfbh(true);
 
     // Instantiate params on thread-local stack
-    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink, nullptr,
+                uvb->getSourceFunction()) < 0) {
         return toBits(QoreValue());
     }
 
@@ -17536,7 +17683,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     if (!use_direct_params) {
         // Standard path: push params to TLS
         if (instantiateFastCallParams(sig, num_params, nargs, args, xsink,
-                receiver_type_info) < 0) {
+                receiver_type_info, uvb->getSourceFunction()) < 0) {
             if (selfid_instantiated) {
                 selfid->uninstantiateSelf();
             }
@@ -18985,7 +19132,8 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
     ThreadFrameBoundaryHelper tfbh(true);
 
     // Instantiate parameter locals directly from NaN-boxed args
-    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink, receiver_type_info) < 0) {
+    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink, receiver_type_info,
+            uvb->getSourceFunction()) < 0) {
         return toBits(QoreValue());
     }
 

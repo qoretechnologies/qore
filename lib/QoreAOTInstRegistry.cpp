@@ -970,7 +970,10 @@ static bool writeExpr(AOTInstWriteCtx& ctx) {
     const QoreValue& expr = ((isUnaryInvokeOpcode(ei->opcode) && !ei->operands.empty())
             || (isBinaryInvokeOpcode(ei->opcode) && ei->operands.size() >= 2)
             || (ei->opcode == QoreIROpcode::ListAssignAny && ei->operands.size() >= 2)
-            || (isRangeSliceOpcode(ei->opcode) && ei->operands.size() >= 3))
+            || (isRangeSliceOpcode(ei->opcode) && ei->operands.size() >= 3)
+            // the checked builtin conversions need only their operand (issue #5660)
+            || ((ei->opcode == QoreIROpcode::ToStringChecked || ei->opcode == QoreIROpcode::ToIntChecked
+                || ei->opcode == QoreIROpcode::ToFloatChecked) && !ei->operands.empty()))
         ? QoreValue()
         : ei->expr;
     if (!expr_written && !ctx.writeExpr(ctx.writer, expr)) {

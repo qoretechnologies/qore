@@ -57,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[419] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[422] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -477,12 +477,15 @@ constexpr OpcodeInfo OPCODE_REGISTRY[419] = {
     { "ListSetScannedType"             , false, false, false, -1, "Set the type of a select result list from its values", false, true , "QoreSelectOperatorNode", false, false, false, false, false }, // 416
     { "ListAppendElement"              , false, true , false,  3, "Append a value to a map result list as the AST interpreter pushes it and fold its type", false, true , "QoreMapOperatorNode", true , false, false, false, false }, // 417
     { "CheckCancelEvery"               , false, false, false,  3, "Check for cancellation every 100 elements of an expression, as the AST interpreter does", true , true , "QoreFoldlOperatorNode", false, false, false, false, false }, // 418
+    { "ToStringChecked"                , false, true , false,  1, "string() of a value that the builtin may not accept", false, true , "FunctionCallNode", true , false, true , false, false }, // 419
+    { "ToIntChecked"                   , false, true , false,  1, "int() of a value that the builtin may not accept", false, true , "FunctionCallNode", true , false, true , false, false }, // 420
+    { "ToFloatChecked"                 , false, true , false,  1, "float() of a value that the builtin may not accept", false, true , "FunctionCallNode", true , false, true , false, false }, // 421
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 419,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 419"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 422,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 422"
 );
 
 //! ============================================================================
