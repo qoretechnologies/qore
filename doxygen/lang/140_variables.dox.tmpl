@@ -206,8 +206,8 @@ list<int> l1(1);
     initialized elsewhere.
 
     In a @ref Qore::Program "Program", the <tt><b>thread_local</b></tt> keyword can be preceded by
-    @ref mod_public "public", which means that the <tt><b>thread_local</b></tt> variable is passed to the child
-    @ref Qore::Program "Program" objects that the Program creates; each thread still has its own value, which the
+    @ref mod_public "public", which means that the <tt><b>thread_local</b></tt> variable is passed to the directly
+    created child @ref Qore::Program "Program" objects of the Program; each thread still has its own value, which the
     parent and child Programs share.
 
     A @ref user_modules "user module" may not declare a <tt><b>public thread_local</b></tt> variable; doing so raises

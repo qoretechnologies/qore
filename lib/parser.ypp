@@ -1072,8 +1072,11 @@ struct GVarListDecl : public GVarDecl {
                 }
             }
 
-            if (vrn && pub)
+            // an element declared with another scope, such as "my a" in "public our (my a, b)", is still a local
+            // variable reference here; it has already raised a parse error and must not be marked public
+            if (vrn && pub && (vrn->getType() == VT_GLOBAL || vrn->getType() == VT_THREAD_LOCAL)) {
                 vrn->setPublic();
+            }
         }
 
         QoreParseListNode* rv = takeList();
