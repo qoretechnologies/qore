@@ -3599,19 +3599,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         return rv;
     }
 
-    #! Returns the configured response headers of the listener merged with a handler's response headers
-    /** @param listener_id the listener ID
-        @param hdr the response headers of the handler; the names of the fields managed by the server must be
-        canonical (see @ref HttpServer::http_canonicalize_reply_header_names())
-
-        @return the merged headers; a field in \a hdr replaces the configured fields with the same name in any case
-    */
     #! Returns @ref True if an HTTP/2 or HTTP/3 extended CONNECT that a handler answered with an ordinary 2xx response is refused
     /** Any 2xx response to an extended CONNECT establishes a tunnel (RFC 8441 section 4, RFC 9220); a handler that
         answers one with an ordinary (non-streaming) 2xx response, such as a catch-all handler that serves a page for
         every path, cannot accept the protocol, so the server answers @c 501 instead of sending the response as it
         is.  A subclass can override this method to send such responses unchanged, as a server without this check
-        did, for example to test how clients handle them.
+        did, for example to test how clients handle them; a production server should not override it, as clients
+        take such a response for an accepted tunnel.
 
         @param cx the call context hash
         @param hdr the request headers
@@ -3624,6 +3618,14 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     private bool refuseNonTunnelExtendedConnectResponse(hash<auto> cx, hash<auto> hdr, hash<auto> rv) {
         return True;
     }
+
+    #! Returns the configured response headers of the listener merged with a handler's response headers
+    /** @param listener_id the listener ID
+        @param hdr the response headers of the handler; the names of the fields managed by the server must be
+        canonical (see @ref HttpServer::http_canonicalize_reply_header_names())
+
+        @return the merged headers; a field in \a hdr replaces the configured fields with the same name in any case
+    */
 
     private hash<auto> getMergedResponseHeaders(int listener_id, *hash<auto> hdr) {
         hash<auto> base = getResponseHeaders(listener_id);
