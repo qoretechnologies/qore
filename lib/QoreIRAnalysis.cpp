@@ -2451,6 +2451,11 @@ bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8
     bool search_cancelled = false;
     // the call's block is in a cyclic component (the caller checks)
     auto reentered = [&](size_t use, size_t def) -> bool {
+        // every cycle through the call's block stays in its component: if the defining block is outside, any of
+        // them runs the call again without it; only a defining block in the component needs the search
+        if (comp[def] != comp[use]) {
+            return true;
+        }
         uint64_t key = (static_cast<uint64_t>(use) << 32) | static_cast<uint64_t>(def);
         auto it = answers.find(key);
         if (it != answers.end()) {
