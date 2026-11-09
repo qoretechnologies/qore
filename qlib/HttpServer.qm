@@ -243,6 +243,10 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - an HTTP/2 or HTTP/3 extended CONNECT (RFC 8441, RFC 9220) that a handler answers with an ordinary
+      (non-streaming) 2xx response, such as a catch-all handler serving a page, is refused with @c 501 instead of
+      being sent as a response that promises a tunnel and ends the stream at once (issue #5667); see
+      @ref HttpServer::HttpServer::refuseNonTunnelExtendedConnectResponse() "refuseNonTunnelExtendedConnectResponse()"
     - added @ref HttpServer::HttpServer::addFastRoute() "fast routes": a path that is answered on the async I/O thread,
       without a hand-off to a worker thread and without calling a handler, for the requests that qualify
       (@ref HttpServer::HttpServer::addFastRoute(), @ref HttpServer::HttpServer::removeFastRoute(),
@@ -3602,6 +3606,25 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
         @return the merged headers; a field in \a hdr replaces the configured fields with the same name in any case
     */
+    #! Returns @ref True if an HTTP/2 or HTTP/3 extended CONNECT that a handler answered with an ordinary 2xx response is refused
+    /** Any 2xx response to an extended CONNECT establishes a tunnel (RFC 8441 section 4, RFC 9220); a handler that
+        answers one with an ordinary (non-streaming) 2xx response, such as a catch-all handler that serves a page for
+        every path, cannot accept the protocol, so the server answers @c 501 instead of sending the response as it
+        is.  A subclass can override this method to send such responses unchanged, as a server without this check
+        did, for example to test how clients handle them.
+
+        @param cx the call context hash
+        @param hdr the request headers
+        @param rv the handler's response
+
+        @return @ref True (the default) to answer @c 501, @ref False to send the handler's response as it is
+
+        @since HttpServer 1.7
+    */
+    private bool refuseNonTunnelExtendedConnectResponse(hash<auto> cx, hash<auto> hdr, hash<auto> rv) {
+        return True;
+    }
+
     private hash<auto> getMergedResponseHeaders(int listener_id, *hash<auto> hdr) {
         hash<auto> base = getResponseHeaders(listener_id);
         if (!hdr) {
@@ -5048,7 +5071,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         # promise a tunnel and end the stream at once (issue #5667).  The request is refused instead, so that a
         # client in automatic HTTP-version mode can fall back to an HTTP/1.1 Upgrade and one that requested HTTP/2 or
         # HTTP/3 gets a clear error
-        if (ext_connect && !rv.streaming && rv."code" >= 200 && rv."code" < 300) {
+        if (ext_connect && !rv.streaming && rv."code" >= 200 && rv."code" < 300
+                && refuseNonTunnelExtendedConnectResponse(cx, hdr, rv)) {
             string proto_label = (cx."header-info".http3 ?? False) ? "HTTP/3" : "HTTP/2";
             listener.logError("cid %d: %s extended CONNECT (protocol %y) answered by handler %y with a %d response "
                 "that does not establish a tunnel; refusing the request", cx.id, proto_label, hdr.":protocol",
@@ -5060,9 +5084,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 proto_label);
             remove rv.chunked_body;
             remove rv.send_callback;
-            if (rv.hdr) {
-                remove rv.hdr{"Content-Type", "Content-Length", "Content-Encoding", "Transfer-Encoding"};
-            }
+            # the headers of the handler's response describe the representation that is not sent (ETag,
+            # Content-Range, Set-Cookie, ...): the refusal has only the listener's headers and the standard ones
+            # (RFC 9110 sections 8.8 and 14.4)
+            rv.hdr = getMergedResponseHeaders(cx."listener-id", NOTHING) + {"Date": getDateHeader()};
+            HttpServer::http_set_reply_headers(s, cx, \rv);
         }
 
         if (rv."code" >= 300 && rv."code" < 400) {
