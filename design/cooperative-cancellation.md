@@ -703,6 +703,43 @@ if (qore_check_cancel(xsink, "while loop")) {
 }
 ```
 
+The check is at the start of every iteration, before the condition of a `while` or `for` statement and before the
+body of a `do-while` statement, and the operation it names is the statement's: `"while loop"`, `"do-while loop"`,
+`"for loop"` or `"foreach loop"`.  The iterations of expressions (`map`, `select`, `foldl`, `foldr`, hash `map`,
+map/select, list and hash literals, the lazy pipelines) and of the `context` statement are not cancellation points.
+A few expressions check every 100 elements in their C++ code, with a label of their own: the string join of `foldl`
+and `foldr` (`"string fold join"`, `QoreFoldlOperatorNode`), the streaming operators (`QoreStreamingOperatorNode`),
+range selectors with negative offsets (`"negative offset range selector"`) and the evaluation of a runtime hash
+value whose members need evaluation (`"hash expression evaluation"`).
+
+**The AST interpreter is the reference** for every other execution mode: IR, native (JIT and tiered) and AOT code
+must check exactly where it does, with its labels, and nowhere else (issue #5641).  Their runtime helpers for
+expressions (fused map/foldl, hash-key projections, select loops, list construction, literals, string pipelines,
+slice removal) therefore have no cancellation checks, and an expression that the IR lowers into a loop of its own
+checks with `QoreIROpcode::CheckCancelEvery` (an element count, a `QoreIRCancelPoint` and the limit of a drop
+operator) where the AST does, after it counted an element and before the next element is taken: the string join of a
+pipeline every 100 joined values (`QoreFoldlOperatorNode`, also when the pipeline is not fused into a string join); a
+streaming operator every 100 elements that it took (first, any, all, count) or returned (take, takewhile, takeuntil),
+and a drop operator also every 100 elements that it skipped (`QoreStreamingOperatorNode`); a drop operator inside a
+pipeline only while it skips elements (`QoreFunctionalStreamingOperator::skipDropPrefix()`,
+`QoreIRCancelPoint::DropSkip`).  The check is made only on the path that counted the element, so an element that a
+stage rejects does not check the same count again.  A foreach statement over a fused pipeline checks once per
+iteration of its body, through blocks of its own (`foreach.fused.enter`, `foreach.fused.again`), as the header of its
+loop is also entered for every element that a stage rejects.  Building the IR of an AOT closure on its first call is
+no cancellation point either.
+
+The IR interpreter, native (JIT and tiered) code and AOT code follow the same rule (issue #5641): the IR lowering
+sets `QoreIRBasicBlock::loop_cancel` on the block that starts an iteration of a loop statement, and the IR interpreter
+(`QoreIROpcode::Br`) and the native code (`QoreIRToLLVM`) call `qore_check_cancel()` with the statement's label on
+every unconditional branch into such a block.  Only unconditional branches may enter one (`QoreIRVerifier` rejects
+any other), which is why a `do-while` statement takes the next iteration through a latch block (`do.latch`).  The
+check raises the exception in the scope of the loop: the loop's own branches, and a `continue` or `break` statement
+inside a `try` block in the loop, take the exception target in force where the loop starts
+(`FlowTarget::loop_exception_target`).  An AOT helper outlined from a region that starts an iteration
+(`QoreAOT.cpp`) has its call block checked instead, as the helper enters the region without a branch.
+`is_loop_header`, which also marks the headers of expression loops, only counts iterations for on-stack replacement.
+The kind is serialized in AOT code with the block's loop-header flag.
+
 #### Blocking Primitives
 
 `QoreCondition::waitWithInterrupt()` registers its condition and mutex (see "Condition waits") and
@@ -827,10 +864,9 @@ and `Queue::push()` and `Counter::dec()` never wait), so the cleanup completes o
 thread.  Only the *waits* (`Queue::get()`, `Counter::waitForZero()`) are cancellation points, which
 is what the waiter wants.  The cleanup methods contain **no loop**: a loop statement is a cancellation
 point at each iteration, so on a cancelled thread it raises the cancellation again and skips the rest of
-the cleanup (a `map` expression is not one when run from source, but the code `qcc` compiles for it
-checks too, so cleanup code does not rely on it).  A waiter registers itself in a synchronized method before it waits and
-the cleanup pushes only while a waiter is registered, so no wakeup is lost and the queue does not
-grow without one:
+the cleanup (a `map` expression is not one, in any execution mode).  A waiter registers itself in a
+synchronized method before it waits and the cleanup pushes only while a waiter is registered, so no
+wakeup is lost and the queue does not grow without one:
 
 ```qore
 synchronized leave(int token) {

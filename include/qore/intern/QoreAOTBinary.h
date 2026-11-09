@@ -4172,7 +4172,7 @@ typedef std::function<QoreValue(const QoreAOTBinaryReader& reader, const uint8_t
     - Function header: name, max_value_id, max_local_slot_id, num_guards, return_type, block/local counts
     - Local variable slot table: name, type_path, slot_id for each local
     - Body locals list: name, type_path for each body local
-    - Blocks: for each block, name, is_loop_header, instructions
+    - Blocks: for each block, name, a flag byte (bit 0: is_loop_header, bits 1-3: loop_cancel), instructions
     - Instructions: opcode, group_tag, result, operands, exception_target, group-specific fields
 
     @param writer binary writer (uses string pool and buffer)

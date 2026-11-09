@@ -806,6 +806,10 @@ private:
         size_t cleanup_stack_depth = 0;  //!< cleanup_stack depth when this flow target was created
         QoreIRValue old_implicit_element;  //!< saved $# value for foreach loops (for break/continue cleanup)
         size_t temp_scope_depth = 0;     //!< temp scopes open when this flow target was created
+        //! the exception target in force when this flow target was created: a continue or break that branches to a
+        //! block that checks for cancellation raises it in the scope of the loop, as the loop's own branches do,
+        //! and not in a try block that the statement is in inside the loop
+        QoreIRBasicBlock* loop_exception_target = nullptr;
     };
     std::vector<FlowTarget> flow_stack;
     //! Push a block cleanup entry, recording the number of temp scopes open where it is pushed

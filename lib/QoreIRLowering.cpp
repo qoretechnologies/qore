@@ -1864,15 +1864,21 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     if (auto* do_stmt = dynamic_cast<const DoWhileStatement*>(stmt)) {
         QoreIRBasicBlock* body_block = createBlock("do.body");
         QoreIRBasicBlock* cond_block = createBlock("do.cond");
+        QoreIRBasicBlock* latch_block = createBlock("do.latch");
         QoreIRBasicBlock* exit_block = createBlock("do.exit");
-        if (!body_block || !cond_block || !exit_block) {
+        if (!body_block || !cond_block || !latch_block || !exit_block) {
             error = "IR builder failed to create blocks for do-while";
             return false;
         }
         // Mark condition block as loop header for OSR detection
         cond_block->is_loop_header = true;
+        // the statement checks for cancellation at the start of every iteration, before the body, as in the AST
+        // interpreter: on the branch that enters the loop and on the branch from the latch, which the condition
+        // takes for the next iteration, as only unconditional branches enter a block with loop_cancel
+        body_block->loop_cancel = QoreIRLoopCancel::DoWhile;
         if (!blockHasTerminator(builder.getBlock())) {
-            builder.createBranch(body_block);
+            auto* br = builder.createBranch(body_block);
+            setLoopCheckpointExceptionTarget(br, body_block);
         }
 
         builder.setBlock(body_block);
@@ -1915,7 +1921,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (condition_needs_cleanup) {
             createDiscardTemps(stmt->loc);
         }
-        builder.createBranchIf(cond_bool, body_block, exit_block);
+        builder.createBranchIf(cond_bool, latch_block, exit_block);
+        builder.setBlock(latch_block);
+        {
+            auto* br = builder.createBranch(body_block);
+            setLoopCheckpointExceptionTarget(br, body_block);
+        }
 
         // Move exit_block to end so LLVM lowering processes it after any
         // invoke.cont blocks created during the do-while body lowering.
@@ -1941,6 +1952,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // Mark condition block as loop header for OSR detection
         cond_block->is_loop_header = true;
+        // the statement checks for cancellation at the start of every iteration, as in the AST interpreter
+        cond_block->loop_cancel = QoreIRLoopCancel::While;
         QoreIRLoopInvariantHoists invariant_hoists;
         if (!blockHasTerminator(builder.getBlock())) {
             invariant_hoists = qoreIrHoistLoopInvariantValues(*this, builder, while_stmt->getCond(),
@@ -2059,6 +2072,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // Mark condition block as loop header for OSR detection
         cond_block->is_loop_header = true;
+        // the statement checks for cancellation at the start of every iteration, as in the AST interpreter
+        cond_block->loop_cancel = QoreIRLoopCancel::For;
         QoreValue init = for_stmt->getAssignment();
         if (init && !init.isNothing()) {
             // the value of the initializer is not used: it and its temps are released before the loop runs, as in
@@ -2304,6 +2319,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 return false;
             }
             header_block->is_loop_header = true;
+            // the statement checks for cancellation at the start of every iteration, as in the AST interpreter
+            header_block->loop_cancel = QoreIRLoopCancel::Foreach;
 
             // Preheader: initialize index counter
             builder.createBranch(preheader_block, stmt->loc);
@@ -2567,6 +2584,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // Mark header block as loop header for OSR detection
         header_block->is_loop_header = true;
+        // the statement checks for cancellation at the start of every iteration, as in the AST interpreter
+        header_block->loop_cancel = QoreIRLoopCancel::Foreach;
 
         if (guard_typed_list) {
             // A declared list lvalue can still be unassigned. Preserve foreach
@@ -2817,7 +2836,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             stmt->loc)->result;
         {
             auto* br = builder.createBranch(header_block, stmt->loc);
-            setLoopCheckpointExceptionTarget(br, header_block);
+            // a cancellation raised on entering the next iteration unwinds the foreach statement: its exception
+            // cleanup releases the iterator, the list and the loop variables before the enclosing handler runs, as
+            // the AST's foreach statement does
+            setLoopCheckpointExceptionTarget(br, header_block, foreach_exception_cleanup_block);
         }
 
         // Complete the PHI node with incoming values
@@ -3192,6 +3214,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         size_t target_cleanup_depth = 0;
         size_t target_temp_depth = 0;
         int target_catch_depth = 0;
+        QoreIRBasicBlock* target_exception_target = nullptr;
         QoreIRValue old_elem;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
             if (it->break_target) {
@@ -3199,6 +3222,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 target_cleanup_depth = it->cleanup_stack_depth;
                 target_temp_depth = it->temp_scope_depth;
                 target_catch_depth = it->catch_cleanup_depth;
+                target_exception_target = it->loop_exception_target;
                 old_elem = it->old_implicit_element;
                 break;
             }
@@ -3223,7 +3247,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         {
             auto* br = builder.createBranch(target);
-            setLoopCheckpointExceptionTarget(br, target);
+            // a cancellation raised on entering the next iteration is raised in the scope of the loop
+            if (target->loop_cancel != QoreIRLoopCancel::None) {
+                br->exception_target = target_exception_target;
+            }
         }
         return true;
     }
@@ -3232,12 +3259,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         size_t target_cleanup_depth = 0;
         size_t target_temp_depth = 0;
         int target_catch_depth = 0;
+        QoreIRBasicBlock* target_exception_target = nullptr;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
             if (it->continue_target) {
                 target = it->continue_target;
                 target_cleanup_depth = it->cleanup_stack_depth;
                 target_temp_depth = it->temp_scope_depth;
                 target_catch_depth = it->catch_cleanup_depth;
+                target_exception_target = it->loop_exception_target;
                 break;
             }
         }
@@ -3260,7 +3289,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // index and branching back to the header.
         {
             auto* br = builder.createBranch(target);
-            setLoopCheckpointExceptionTarget(br, target);
+            // a cancellation raised on entering the next iteration is raised in the scope of the loop
+            if (target->loop_cancel != QoreIRLoopCancel::None) {
+                br->exception_target = target_exception_target;
+            }
         }
         return true;
     }
@@ -4225,6 +4257,7 @@ void QoreIRLowering::pushBlockCleanup(BlockCleanupEntry entry) {
 
 void QoreIRLowering::pushFlowTarget(FlowTarget target) {
     target.temp_scope_depth = builder.getTempScopeDepth();
+    target.loop_exception_target = getCurrentExceptionTarget();
     flow_stack.push_back(target);
 }
 
@@ -7915,7 +7948,8 @@ QoreIRBasicBlock* QoreIRLowering::getGuardExceptionTarget() const {
 
 void QoreIRLowering::setLoopCheckpointExceptionTarget(QoreIRInstruction* inst, QoreIRBasicBlock* target,
         QoreIRBasicBlock* handler) {
-    if (inst && target && target->is_loop_header) {
+    // only a branch into a block that starts an iteration of a loop statement checks for cancellation
+    if (inst && target && target->loop_cancel != QoreIRLoopCancel::None) {
         inst->exception_target = handler ? handler : getCurrentExceptionTarget();
     }
 }
@@ -10600,7 +10634,10 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
                 operands.push_back(index);
             }
         }
-        auto* inst = builder.createExprOp(QoreIROpcode::ListIndexDynamic, expr, operands, op->loc);
+        // the selectors can raise (a range error, or a cancellation of a range with negative offsets): in a try block
+        // the handler gets the exception
+        auto* inst = withExceptionTarget(builder.createExprOp(QoreIROpcode::ListIndexDynamic, expr, operands,
+            op->loc));
         inst->list_selector_kinds = std::move(selector_kinds);
         return inst->result;
     }
@@ -15887,7 +15924,10 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         QoreIRValue zero = builder.createConstInt(0, map->loc)->result;
         QoreIRValue result_list;
         if (need_result) {
-            QoreIRInstruction* result_inst = builder.createSizedList(list_size, map->loc, expTypeInfo);
+            // the list's construction can raise (an AOT type path that does not resolve): in a try block, the
+            // handler gets it
+            QoreIRInstruction* result_inst = withExceptionTarget(
+                builder.createSizedList(list_size, map->loc, expTypeInfo));
             // a list that the values are appended to (see QoreIROpcode::ListAppendElement) only reserves its size
             result_inst->list_reserve_only = track_value_type;
             result_list = result_inst->result;
@@ -16051,7 +16091,8 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         // Exit block: result_list is the result (empty for size 0, filled for size > 0)
         builder.setBlock(exit_block);
         if (type_state_phi) {
-            builder.createListSetCommonType(result_list, type_state_phi->result, map->getMapExpType(), map->loc);
+            withExceptionTarget(
+                builder.createListSetCommonType(result_list, type_state_phi->result, map->getMapExpType(), map->loc));
         }
         builder.createBranch(final_block, map->loc);
 
@@ -16130,7 +16171,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     builder.setBlock(preheader_block);
     QoreIRValue result_list;
     if (need_result) {
-        result_list = builder.createEmptyList(map->loc, expTypeInfo)->result;
+        result_list = withExceptionTarget(builder.createEmptyList(map->loc, expTypeInfo))->result;
     }
     QoreIRValue init_index = builder.createConstInt(0, map->loc)->result;
     QoreIRValue type_state_init = track_value_type ? builder.createConstInt(0, map->loc)->result : QoreIRValue();
@@ -16254,7 +16295,8 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
 
     builder.setBlock(loop_exit_block);
     if (type_state_phi) {
-        builder.createListSetCommonType(result_list, type_state_phi->result, map->getMapExpType(), map->loc);
+        withExceptionTarget(
+            builder.createListSetCommonType(result_list, type_state_phi->result, map->getMapExpType(), map->loc));
     }
     if (needs_runtime_unwrap_check) {
         builder.createBranchIf(is_collection_val, final_block, unwrap_check_block, map->loc);
@@ -16365,8 +16407,8 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
         QoreIRValue list_size = builder.createListSize(input_list, select->loc)->result;
         QoreIRValue zero = builder.createConstInt(0, select->loc)->result;
         QoreIRInstruction* result_inst = use_typed_scalar_construction
-            ? builder.createSizedList(list_size, select->loc, elem_type)
-            : builder.createEmptyList(select->loc, elem_type);
+            ? withExceptionTarget(builder.createSizedList(list_size, select->loc, elem_type))
+            : withExceptionTarget(builder.createEmptyList(select->loc, elem_type));
         result_inst->list_reserve_only = use_typed_scalar_construction;
         QoreIRValue result_list = result_inst->result;
         {
@@ -16613,7 +16655,8 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator
-    auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, loop_exit_block, body_block, select->loc));
+    auto* next_inst = withExceptionTarget(
+        builder.createIteratorNext(iter_val, loop_exit_block, body_block, select->loc));
     QoreIRValue element_val = next_inst->result;
 
     // Body block: set up context, evaluate predicate
@@ -17321,8 +17364,8 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
             // a list whose values are converted when they are stored has the type that the AST interpreter creates
             // it with
             QoreIRInstruction* result_inst = use_typed_scalar_construction
-                ? builder.createSizedList(list_size, ms->loc, map_type)
-                : builder.createEmptyList(ms->loc, track_value_type ? map_type : nullptr);
+                ? withExceptionTarget(builder.createSizedList(list_size, ms->loc, map_type))
+                : withExceptionTarget(builder.createEmptyList(ms->loc, track_value_type ? map_type : nullptr));
             result_inst->list_reserve_only = use_typed_scalar_construction;
             result_list = result_inst->result;
         }
@@ -17516,7 +17559,8 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
             builder.createListSetLength(result_list, output_index, ms->loc);
         }
         if (type_state_phi) {
-            builder.createListSetCommonType(result_list, type_state_phi->result, map_type, ms->loc);
+            withExceptionTarget(
+                builder.createListSetCommonType(result_list, type_state_phi->result, map_type, ms->loc));
         }
         builder.createBranch(final_block, ms->loc);
 
@@ -17598,7 +17642,8 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     if (need_result) {
         // a list whose values are converted when they are stored has the type that the AST interpreter creates it
         // with
-        result_list = builder.createEmptyList(ms->loc, track_value_type ? map_type : nullptr)->result;
+        result_list = withExceptionTarget(
+            builder.createEmptyList(ms->loc, track_value_type ? map_type : nullptr))->result;
     }
     QoreIRValue init_index = builder.createConstInt(0, ms->loc)->result;
     QoreIRValue type_state_init = track_value_type ? builder.createConstInt(0, ms->loc)->result : QoreIRValue();
@@ -17716,7 +17761,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
     builder.setBlock(loop_exit_block);
     if (type_state_phi) {
-        builder.createListSetCommonType(result_list, type_state_phi->result, map_type, ms->loc);
+        withExceptionTarget(builder.createListSetCommonType(result_list, type_state_phi->result, map_type, ms->loc));
     }
     if (needs_runtime_unwrap_check) {
         builder.createBranchIf(is_collection_val, final_block, unwrap_check_block, ms->loc);
@@ -17822,8 +17867,8 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         QoreIRValue list_size = builder.createListSize(input_list, hm->loc)->result;
         QoreIRValue zero = builder.createConstInt(0, hm->loc)->result;
         QoreIRValue result_hash = q_env_is_set("QORE_DISABLE_IR_SIZED_HASH_MAP_RESULT")
-            ? builder.createMakeHash({}, hm->loc, hash_result_type)->result
-            : builder.createSizedHash(list_size, hm->loc, hash_result_type)->result;
+            ? withExceptionTarget(builder.createMakeHash({}, hm->loc, hash_result_type))->result
+            : withExceptionTarget(builder.createSizedHash(list_size, hm->loc, hash_result_type))->result;
         QoreIRValue type_state_init = track_value_type ? builder.createConstInt(0, hm->loc)->result : QoreIRValue();
         {
             auto* br = builder.createBranch(header_block, hm->loc);
@@ -17905,10 +17950,11 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         // Set key-value in hash; with the type of the value folded into the common value type
         QoreIRValue next_type_state;
         if (type_state_phi) {
-            next_type_state = builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
-                type_state_phi->result, index_val, hm->loc)->result;
+            next_type_state = withExceptionTarget(
+                builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
+                type_state_phi->result, index_val, hm->loc))->result;
         } else {
-            builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc);
+            withExceptionTarget(builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc));
         }
 
         // Increment index
@@ -17982,7 +18028,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
 
     // Preheader: create empty result hash and proceed to loop
     builder.setBlock(preheader_block);
-    QoreIRValue result_hash = builder.createMakeHash({}, hm->loc, hash_result_type)->result;
+    QoreIRValue result_hash = withExceptionTarget(builder.createMakeHash({}, hm->loc, hash_result_type))->result;
     QoreIRValue init_index = builder.createConstInt(0, hm->loc)->result;
     QoreIRValue type_state_init = track_value_type ? builder.createConstInt(0, hm->loc)->result : QoreIRValue();
     {
@@ -18062,10 +18108,10 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     // Set key-value in hash; with the type of the value folded into the common value type
     QoreIRValue next_type_state;
     if (type_state_phi) {
-        next_type_state = builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
-            type_state_phi->result, index_val, hm->loc)->result;
+        next_type_state = withExceptionTarget(builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
+            type_state_phi->result, index_val, hm->loc))->result;
     } else {
-        builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc);
+        withExceptionTarget(builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc));
     }
 
     // Increment index
@@ -18174,7 +18220,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         builder.setBlock(preheader_block);
         QoreIRValue list_size = builder.createListSize(input_list, hms->loc)->result;
         QoreIRValue zero = builder.createConstInt(0, hms->loc)->result;
-        QoreIRValue result_hash = builder.createMakeHash({}, hms->loc, hash_result_type)->result;
+        QoreIRValue result_hash = withExceptionTarget(builder.createMakeHash({}, hms->loc, hash_result_type))->result;
         QoreIRValue type_state_init = track_value_type ? builder.createConstInt(0, hms->loc)->result : QoreIRValue();
         {
             auto* br = builder.createBranch(header_block, hms->loc);
@@ -18242,10 +18288,11 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         // Set key-value in hash; with the type of the value folded into the common value type
         QoreIRValue inserted_type_state;
         if (type_state_phi) {
-            inserted_type_state = builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
-                type_state_phi->result, index_val, hms->loc)->result;
+            inserted_type_state = withExceptionTarget(
+                builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
+                type_state_phi->result, index_val, hms->loc))->result;
         } else {
-            builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc);
+            withExceptionTarget(builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc));
         }
         QoreIRBasicBlock* insert_exit_block = builder.getBlock();
         builder.createBranch(cont_block, hms->loc);
@@ -18364,7 +18411,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
 
     // Preheader: create empty result hash and proceed to loop
     builder.setBlock(preheader_block);
-    QoreIRValue result_hash = builder.createMakeHash({}, hms->loc, hash_result_type)->result;
+    QoreIRValue result_hash = withExceptionTarget(builder.createMakeHash({}, hms->loc, hash_result_type))->result;
     QoreIRValue type_state_init = track_value_type ? builder.createConstInt(0, hms->loc)->result : QoreIRValue();
     QoreIRValue init_index = builder.createConstInt(0, hms->loc)->result;
     {
@@ -18430,10 +18477,11 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     // Set key-value in hash; with the type of the value folded into the common value type
     QoreIRValue inserted_type_state;
     if (type_state_phi) {
-        inserted_type_state = builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
-            type_state_phi->result, index_val, hms->loc)->result;
+        inserted_type_state = withExceptionTarget(
+            builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
+            type_state_phi->result, index_val, hms->loc))->result;
     } else {
-        builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc);
+        withExceptionTarget(builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc));
     }
     QoreIRBasicBlock* insert_exit_block = builder.getBlock();
     builder.createBranch(cont_block, hms->loc);
@@ -18601,6 +18649,22 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineStage(const QoreValue& stage_expr,
     return result;
 }
 
+//! Returns the cancellation point of a streaming operator, for QoreIROpcode::CheckCancelEvery
+static QoreIRCancelPoint qore_ir_stream_cancel_point(QoreStreamingOperatorNode::Kind kind) {
+    switch (kind) {
+        case QoreStreamingOperatorNode::First: return QoreIRCancelPoint::First;
+        case QoreStreamingOperatorNode::Any: return QoreIRCancelPoint::Any;
+        case QoreStreamingOperatorNode::All: return QoreIRCancelPoint::All;
+        case QoreStreamingOperatorNode::Count: return QoreIRCancelPoint::Count;
+        case QoreStreamingOperatorNode::Take: return QoreIRCancelPoint::Take;
+        case QoreStreamingOperatorNode::Drop: return QoreIRCancelPoint::Drop;
+        case QoreStreamingOperatorNode::TakeWhile: return QoreIRCancelPoint::TakeWhile;
+        case QoreStreamingOperatorNode::TakeUntil: return QoreIRCancelPoint::TakeUntil;
+    }
+    assert(false);
+    return QoreIRCancelPoint::Take;
+}
+
 QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         const std::vector<LazyPipelineStage>& source_stages, const LazyPipelineRoot& root, std::string& error) {
     if (!ensureBuilderContext(error)) {
@@ -18656,6 +18720,16 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             root_string_join = true;
         }
     }
+    // the AST interpreter's foldl of strings with a string join expression checks for cancellation every 100 joined
+    // values (QoreFoldlOperatorNode) also when the pipeline is not fused into a string join here: the fold then
+    // counts the values it folded for the check
+    bool generic_string_join = false;
+    if (root_foldl && !root_string_join && root.list_element_type
+            && QoreTypeInfo::parseReturns(root.list_element_type, NT_STRING) == QTI_IDENT) {
+        QoreValue separator;
+        generic_string_join = analyzeStringJoinFoldPattern(*root.fold_expr, separator);
+    }
+    bool count_joined_values = root_string_join || generic_string_join;
 
     std::vector<LazyPipelineStage> stages = source_stages;
     if (root_streaming && !root_terminal) {
@@ -18928,12 +19002,13 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         QoreIRInstruction* result_inst;
         if (use_typed_list_sink) {
             QoreIRValue source_size = builder.createListSize(source, loc)->result;
-            result_inst = builder.createSizedList(source_size, loc, elem_type);
+            result_inst = withExceptionTarget(builder.createSizedList(source_size, loc, elem_type));
             result_inst->list_reserve_only = true;
         } else {
             // a list whose values are converted when they are stored has the type that the AST interpreter creates
             // it with
-            result_inst = builder.createEmptyList(loc, fold_root_type ? root_ast_element_type : elem_type);
+            result_inst = withExceptionTarget(
+                builder.createEmptyList(loc, fold_root_type ? root_ast_element_type : elem_type));
         }
         result_list = result_inst->result;
     }
@@ -19012,6 +19087,11 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             count_value = count_phi->result;
         }
     }
+    // a string join counts the values it joined, for its cancellation check (see the fold path below)
+    if (count_joined_values && !count_phi) {
+        count_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
+        count_value = count_phi->result;
+    }
     QoreIRPhiInstruction* type_state_phi = fold_root_type
         ? builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt) : nullptr;
     QoreIRValue fold_accum;
@@ -19060,6 +19140,20 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         type_state_phi ? type_state_phi->result : QoreIRValue()};
     QoreIRValue one = builder.createConstInt(1, loc)->result;
 
+    // the AST interpreter checks for cancellation in some operators of a pipeline every 100 elements, after it has
+    // counted an element and before it takes the next one: the streaming operator at the root
+    // (QoreStreamingOperatorNode: the values it returned, and a drop operator also the values it skipped), a drop
+    // operator inside the pipeline while it skips elements (QoreFunctionalStreamingOperator::skipDropPrefix()), and a
+    // string join (QoreFoldlOperatorNode::evalImpl(): the values it joined); each check is made only on the path that
+    // counted the element, so an element that a stage rejects does not check again
+    auto is_root_stage = [&](size_t i) -> bool {
+        return root_streaming && !root_terminal && i + 1 == stages.size();
+    };
+    auto check_cancel_every = [&](QoreIRValue count, QoreIRCancelPoint point, const QoreProgramLocation* check_loc,
+            QoreIRValue limit = QoreIRValue()) {
+        withExceptionTarget(builder.createCheckCancelEvery(count, point, check_loc, limit));
+    };
+
     for (size_t i = 0; i < stages.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "fused streaming body lowering")) {
             error = "fused streaming body lowering cancelled";
@@ -19070,6 +19164,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             case LazyPipelineStage::StreamTake: {
                 state.stage_indices[i] = builder.createBinaryOp(QoreIROpcode::AddInt, state.stage_indices[i],
                     one, stage.loc)->result;
+                if (is_root_stage(i)) {
+                    check_cancel_every(state.stage_indices[i], QoreIRCancelPoint::Take, stage.loc);
+                }
                 break;
             }
             case LazyPipelineStage::StreamDrop: {
@@ -19089,9 +19186,14 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 builder.createBranchIf(keep, keep_block, drop_block, stage.loc);
 
                 builder.setBlock(drop_block);
+                check_cancel_every(next_stage_index,
+                    is_root_stage(i) ? QoreIRCancelPoint::Drop : QoreIRCancelPoint::DropSkip, stage.loc, limits[i]);
                 add_continue(updated, stage.loc);
 
                 builder.setBlock(keep_block);
+                if (is_root_stage(i)) {
+                    check_cancel_every(next_stage_index, QoreIRCancelPoint::Drop, stage.loc, limits[i]);
+                }
                 state = updated;
                 break;
             }
@@ -19120,6 +19222,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 builder.setBlock(include_block);
                 state.stage_indices[i] = builder.createBinaryOp(QoreIROpcode::AddInt, state.stage_indices[i],
                     one, stage.loc)->result;
+                if (is_root_stage(i)) {
+                    check_cancel_every(state.stage_indices[i], qore_ir_stream_cancel_point(op->getKind()), stage.loc);
+                }
                 break;
             }
             case LazyPipelineStage::Select: {
@@ -19317,6 +19422,11 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 {{false_val, init_accum_exit_block}, {true_val, fold_exit_block}}, loc);
             next_state.fold_join_started = next_join_started_phi->result;
         }
+        if (count_joined_values) {
+            QoreIRValue one = builder.createConstInt(1, loc)->result;
+            next_state.count = builder.createBinaryOp(QoreIROpcode::AddInt, state.count, one, loc)->result;
+            check_cancel_every(next_state.count, QoreIRCancelPoint::StringFoldJoin, loc);
+        }
         add_continue(next_state, loc);
     } else if (op->getKind() == QoreStreamingOperatorNode::Count) {
         QoreIRValue pred_bool = lower_predicate(op->hasPredicate() ? &op->getPredicate() : nullptr, loc,
@@ -19344,6 +19454,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         FusedLoopState next_state = state;
         next_state.count = next_count_phi->result;
         next_state.root_index = builder.createBinaryOp(QoreIROpcode::AddInt, state.root_index, one, loc)->result;
+        // the root index counts the elements that reached the operator
+        check_cancel_every(next_state.root_index, QoreIRCancelPoint::Count, loc);
         add_continue(next_state, loc);
     } else {
         QoreIRValue pred_bool = lower_predicate(op->hasPredicate() ? &op->getPredicate() : nullptr, loc,
@@ -19378,6 +19490,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         builder.setBlock(cont_block);
         FusedLoopState next_state = state;
         next_state.root_index = builder.createBinaryOp(QoreIROpcode::AddInt, state.root_index, one, loc)->result;
+        // the root index counts the elements that reached the operator
+        check_cancel_every(next_state.root_index, qore_ir_stream_cancel_point(op->getKind()), loc);
         add_continue(next_state, loc);
     }
 
@@ -19507,13 +19621,14 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     }
     if (type_state_phi) {
         // every path to the exit leaves the loop before the value of the element is folded
-        builder.createListSetCommonType(result_list, type_state_phi->result, root_ast_element_type, loc);
+        withExceptionTarget(
+            builder.createListSetCommonType(result_list, type_state_phi->result, root_ast_element_type, loc));
     } else if (scan_root_type) {
         // a select operator whose stages before it are select stages stores the values of the base source
         builder.createListSetScannedType(result_list, nullptr, source, loc);
     } else if (build_result_list && root.set_common_type) {
         // the values have the exact element type of the nearest map stage, which is the type of the list
-        builder.createListSetScannedType(result_list, root_ast_element_type, QoreIRValue(), loc);
+        withExceptionTarget(builder.createListSetScannedType(result_list, root_ast_element_type, QoreIRValue(), loc));
     }
     if (root_accumulator) {
         QoreIRBasicBlock* fold_result_block = createBlock("stream.fused.fold.result");
@@ -19791,6 +19906,15 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         return false;
     }
     header_block->is_loop_header = true;
+    // the statement checks for cancellation at the start of every iteration of its body, as in the AST interpreter:
+    // on entering the loop and on the branch from the latch, through blocks of their own, as the header is also
+    // entered for every element that a stage skips, which takes no iteration of the body
+    QoreIRBasicBlock* enter_block = createBlock("foreach.fused.enter");
+    if (!enter_block) {
+        error = "IR builder failed to create the fused foreach entry block";
+        return false;
+    }
+    enter_block->loop_cancel = QoreIRLoopCancel::Foreach;
 
     QoreIRValue zero = builder.createConstInt(0, loc)->result;
     QoreIRValue is_null = builder.createBinaryOp(QoreIROpcode::EqInt, iter_val, zero, loc)->result;
@@ -19801,9 +19925,11 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
 
     builder.setBlock(preheader_block);
     {
-        auto* br = builder.createBranch(header_block, loc);
-        setLoopCheckpointExceptionTarget(br, header_block);
+        auto* br = builder.createBranch(enter_block, loc);
+        setLoopCheckpointExceptionTarget(br, enter_block);
     }
+    builder.setBlock(enter_block);
+    builder.createBranch(header_block, loc);
 
     struct FusedForeachState {
         std::vector<QoreIRValue> stage_indices;
@@ -19900,6 +20026,10 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
                 builder.createBranchIf(keep, keep_block, drop_block, stage.loc);
 
                 builder.setBlock(drop_block);
+                // a drop operator of the pipeline checks for cancellation every 100 elements that it skipped, before
+                // the pipeline takes the next element, as QoreFunctionalStreamingOperator::skipDropPrefix() does
+                withExceptionTarget(builder.createCheckCancelEvery(next_stage_index, QoreIRCancelPoint::DropSkip,
+                    stage.loc, limits[i]));
                 add_continue(updated, stage.loc);
 
                 builder.setBlock(keep_block);
@@ -20110,8 +20240,19 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     next_state.foreach_index = next_foreach_index;
     QoreIRBasicBlock* latch_exit_block = builder.getBlock();
     {
-        auto* br = builder.createBranch(header_block, loc);
-        setLoopCheckpointExceptionTarget(br, header_block);
+        // the next iteration of the body starts in a block of its own that checks for cancellation (see enter_block);
+        // the check unwinds the foreach statement through its exception cleanup (see the foreach statement's latch)
+        QoreIRBasicBlock* again_block = createBlock("foreach.fused.again");
+        if (!again_block) {
+            error = "IR builder failed to create the fused foreach iteration block";
+            return false;
+        }
+        again_block->loop_cancel = QoreIRLoopCancel::Foreach;
+        auto* br = builder.createBranch(again_block, loc);
+        setLoopCheckpointExceptionTarget(br, again_block, foreach_exception_cleanup_block);
+        builder.setBlock(again_block);
+        builder.createBranch(header_block, loc);
+        latch_exit_block = again_block;
     }
     continue_paths.push_back({latch_exit_block, next_state});
 
@@ -20120,7 +20261,7 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
             error = "fused foreach incoming lowering cancelled";
             return false;
         }
-        stage_phis[i]->incoming.push_back({zero, preheader_block});
+        stage_phis[i]->incoming.push_back({zero, enter_block});
         stage_phis[i]->operands.push_back(zero);
         size_t path_count = 0;
         for (const FusedForeachContinuePath& path : continue_paths) {
@@ -20133,7 +20274,7 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         }
     }
 
-    foreach_index_phi->incoming.push_back({zero, preheader_block});
+    foreach_index_phi->incoming.push_back({zero, enter_block});
     foreach_index_phi->operands.push_back(zero);
     size_t path_count = 0;
     for (const FusedForeachContinuePath& path : continue_paths) {
@@ -20199,6 +20340,7 @@ void QoreIRLowering::emitForeachExceptionCleanup(QoreIRBasicBlock* cleanup_block
     builder.createBranch(outer_target, loc);
     builder.setBlock(after_block);
 }
+
 
 QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode* op, const QoreValue& expr,
         std::string& error) {
@@ -20291,6 +20433,9 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
             builder.setBlock(header_block);
             auto* index_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
             QoreIRValue index_val = index_phi->result;
+            // the AST interpreter checks for cancellation every 100 elements, before it takes the next one
+            withExceptionTarget(builder.createCheckCancelEvery(index_val, qore_ir_stream_cancel_point(op->getKind()),
+                loc));
             auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, loc));
             QoreIRValue element_val = next_inst->result;
 
@@ -20376,6 +20521,8 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
             auto* count_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
             QoreIRValue index_val = index_phi->result;
             QoreIRValue count_val = count_phi->result;
+            // the AST interpreter checks for cancellation every 100 elements, before it takes the next one
+            withExceptionTarget(builder.createCheckCancelEvery(index_val, QoreIRCancelPoint::Count, loc));
             auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, loc));
             QoreIRValue element_val = next_inst->result;
 
@@ -20470,7 +20617,7 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
     builder.setBlock(preheader_block);
     const QoreTypeInfo* elem_type = QoreIterateOperatorNode::getElementTypeInfo(op->getSource(),
         getExprTypeInfo(op->getSource()));
-    QoreIRValue result_list = builder.createEmptyList(loc, elem_type)->result;
+    QoreIRValue result_list = withExceptionTarget(builder.createEmptyList(loc, elem_type))->result;
     {
         auto* br = builder.createBranch(header_block, loc);
         setLoopCheckpointExceptionTarget(br, header_block);
@@ -20479,6 +20626,11 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
     builder.setBlock(header_block);
     auto* index_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
     QoreIRValue index_val = index_phi->result;
+    // the AST interpreter checks for cancellation every 100 values that the operator returned, before it takes the
+    // next one, and a drop operator also every 100 values that it skipped (QoreFunctionalStreamingOperator); every
+    // element up to the limit of take, takewhile and takeuntil is returned, so the index is that count
+    withExceptionTarget(builder.createCheckCancelEvery(index_val, qore_ir_stream_cancel_point(op->getKind()), loc,
+        op->getKind() == QoreStreamingOperatorNode::Drop ? limit_val : QoreIRValue()));
     QoreIRBasicBlock* take_done_block = nullptr;
     if (op->getKind() == QoreStreamingOperatorNode::Take) {
         take_done_block = createBlock("stream.take.done");

@@ -77,6 +77,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::HashSetKeyValueFold: return "hash.set.key.value.fold";
         case QoreIROpcode::ListSetScannedType: return "list.set.scanned.type";
         case QoreIROpcode::ListAppendElement: return "list.append.element";
+        case QoreIROpcode::CheckCancelEvery: return "check.cancel.every";
         case QoreIROpcode::HashSetCommonType: return "hash.set.common.type";
         case QoreIROpcode::AddInt: return "add.int";
         case QoreIROpcode::AddFloat: return "add.float";

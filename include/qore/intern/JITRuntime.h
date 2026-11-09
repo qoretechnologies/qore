@@ -1371,6 +1371,11 @@ void qore_rt_list_set_scanned_type_by_type_path(uint64_t list_val, const char* e
 */
 int64_t qore_rt_list_append_element(uint64_t list_val, uint64_t value_val, int64_t state, ExceptionSink* xsink);
 
+//! Checks for cancellation when \a count is a positive multiple of 100, with the label of the QoreIRCancelPoint
+//! \a point; with a positive drop \a limit, the count is the number skipped below the limit and the number after
+//! the skipped ones otherwise; returns 1 if an exception was raised.  See QoreIROpcode::CheckCancelEvery.
+int64_t qore_rt_check_cancel_every(int64_t count, int64_t point, int64_t limit, ExceptionSink* xsink);
+
 //! Throwing form of qore_rt_list_append_element() for native code that unwinds with QoreJITException
 int64_t qore_rt_list_append_element_throwing(uint64_t list_val, uint64_t value_val, int64_t state,
         ExceptionSink* xsink);

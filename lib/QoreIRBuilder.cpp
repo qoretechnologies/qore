@@ -615,6 +615,20 @@ QoreIRInstruction* QoreIRBuilder::createHashSetCommonType(QoreIRValue hash, Qore
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createCheckCancelEvery(QoreIRValue count, QoreIRCancelPoint point,
+        const QoreProgramLocation* loc, QoreIRValue limit) {
+    QoreIRValue point_val = createConstInt(static_cast<int64_t>(point), loc)->result;
+    if (!limit.isValid()) {
+        limit = createConstInt(0, loc)->result;
+    }
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CheckCancelEvery);
+    inst->loc = loc;
+    inst->operands.push_back(count);
+    inst->operands.push_back(point_val);
+    inst->operands.push_back(limit);
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createListAppendElement(QoreIRValue list, QoreIRValue value, QoreIRValue state,
         const QoreProgramLocation* loc) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::ListAppendElement);

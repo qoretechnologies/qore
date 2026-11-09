@@ -57,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[418] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[419] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -476,12 +476,13 @@ constexpr OpcodeInfo OPCODE_REGISTRY[418] = {
     { "HashSetCommonType"              , false, false, false,  2, "Set the type of a hash map result from the common value type", false, false, "QoreHashMapOperatorNode", false, false, false, false, false }, // 415
     { "ListSetScannedType"             , false, false, false, -1, "Set the type of a select result list from its values", false, true , "QoreSelectOperatorNode", false, false, false, false, false }, // 416
     { "ListAppendElement"              , false, true , false,  3, "Append a value to a map result list as the AST interpreter pushes it and fold its type", false, true , "QoreMapOperatorNode", true , false, false, false, false }, // 417
+    { "CheckCancelEvery"               , false, false, false,  3, "Check for cancellation every 100 elements of an expression, as the AST interpreter does", true , true , "QoreFoldlOperatorNode", false, false, false, false, false }, // 418
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 418,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 418"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 419,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 419"
 );
 
 //! ============================================================================

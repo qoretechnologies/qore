@@ -36,6 +36,7 @@
 #include <vector>
 
 #include <qore/intern/QoreIR.h>
+#include <qore/intern/QoreIRAnalysis.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/QoreTypeInfo.h>
 #include <qore/intern/VarRefNode.h>
@@ -355,6 +356,22 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                 }
                 if (value_ids.find(op.id) == value_ids.end()) {
                     error = "operand references undefined value";
+                    return false;
+                }
+            }
+            // only an unconditional branch can enter a block that starts an iteration of a loop statement, as the
+            // cancellation check that such a block makes is made on the branch, and the native code makes it only for
+            // unconditional branches (see QoreIRBasicBlock::loop_cancel)
+            if (inst->opcode != QoreIROpcode::Br) {
+                bool enters_loop_cancel = false;
+                qore_ir_visit_successors(*inst, [&enters_loop_cancel](QoreIRBasicBlock* target) {
+                    if (target && target->loop_cancel != QoreIRLoopCancel::None) {
+                        enters_loop_cancel = true;
+                    }
+                });
+                if (enters_loop_cancel) {
+                    error = "a conditional branch enters a block that checks for cancellation (opcode "
+                        + std::to_string(static_cast<int>(inst->opcode)) + ")";
                     return false;
                 }
             }
