@@ -237,7 +237,10 @@ list<int> l1(1);
     its other data (the cleanup of @ref thread_resources "thread resources") and in its next task.
 
     A thread releases its values of the variables of a Program that is being deleted in another thread before the
-    Program's data is deleted, so that the destructors of the objects of the Program's classes still run; the
-    deletion of the Program waits for the thread while it releases such values, but not while it releases values
-    whose destructors are code of other Programs.
+    Program's data is deleted, so that the destructors of the objects of the Program's classes and the closures of the
+    Program that the values hold (directly, or in lists and hashes) still run; the deletion of the Program waits for
+    the thread while it releases such values, but not while it releases values whose destructors are code of other
+    Programs.  This does not cover the members of an object whose class belongs to another Program, which are released
+    after that object's destructor, without the deletion waiting for them: the destructor of a member that is an object
+    of a class of the Program being deleted raises a \c PROGRAM-ERROR exception if the deletion has started by then.
 */
