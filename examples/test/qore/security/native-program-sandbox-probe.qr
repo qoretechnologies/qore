@@ -70,6 +70,14 @@ Program sub expression_in(Program p) {
     e.eval();
     return p;
 }
+Program sub load_into(Program p, string path) {
+    p.loadModule(path);
+    return p;
+}
+Program sub load_into_with_warnings(Program p, string path) {
+    p.loadModuleWarn(path);
+    return p;
+}
 Program sub parse_into_library_program(string src) {
     Program p = call_function('NpsLibrary::shared_program');
     p.parse(src, 'sandbox-supplied');
@@ -185,7 +193,12 @@ string sub probe_parsed(Program p) {
     is that of its classes, whose destructors are checked
 */
 string sub probe_module(Program t, string name) {
-    string rv = probe(sub () {}, auto sub (Queue ev) { return t.callFunction("call", name + "::make", ev); });
+    return probe_class(auto sub (Queue ev) { return t.callFunction("call", name + "::make", ev); });
+}
+
+#! returns how the destructor of the class of the object that @p make returns treats a pending cancellation
+string sub probe_class(code<auto(Queue)> make) {
+    string rv = probe(sub () {}, make);
     switch (rv) {
         case "trusted": return "trusted";
         case "caught:THREAD-CANCELLED,deferred,released": return "sandboxed";
@@ -229,8 +242,16 @@ module %s {
     author = 'Qore Technologies, s.r.o.';
     url = 'https://qore.org';
     license = 'MIT';
+    init = \\%s::init();
 }
 public namespace %s {
+    our bool Governed;
+    sub init() {
+        Governed = SandboxManager::isSandboxed();
+    }
+    public bool sub governed() {
+        return Governed;
+    }
     public class Res {
         private {
             Queue ev;
@@ -249,7 +270,7 @@ public namespace %s {
         return new Res(ev);
     }
 }
-", name, name));
+", name, name, name));
     f.close();
     return path;
 }
@@ -349,6 +370,70 @@ Program sub parse_into_pre(string src) {
     p.run();
     p.setSandboxManager(new SandboxManager());
     return probe_parsed(p.callFunction("parse_into_pre", ProbeSource));
+});
+
+# sandboxed code loads a user module by path into a trusted Program that it was handed (Program::loadModule()): the
+# module's code is sandboxed
+run("load-module-into-trusted", string sub () {
+    SandboxManager sm();
+    sm.addFilesystemAllowedPath(dir, QSEC_READ);
+    Program s = sandboxed(sm, mode);
+    Program t = loader(mode);
+    string name = "NpsLoadInto" + mode.upr();
+    s.callFunction("load_into", t, write_module(dir, name));
+    return probe_module(t, name);
+});
+
+# the same with Program::loadModuleWarn(): the module's initialization is governed by the caller's sandbox
+run("load-module-into-trusted-governed", string sub () {
+    SandboxManager sm();
+    sm.addFilesystemAllowedPath(dir, QSEC_READ);
+    Program s = sandboxed(sm, mode);
+    Program t = loader(mode);
+    string name = "NpsLoadIntoGov" + mode.upr();
+    s.callFunction("load_into_with_warnings", t, write_module(dir, name));
+    return t.callFunction("call", name + "::governed") ? "governed" : "not-governed";
+});
+
+# sandboxed code parses a %requires of a user module by path in a trusted Program that it was handed
+run("requires-into-trusted", string sub () {
+    SandboxManager sm();
+    sm.addFilesystemAllowedPath(dir, QSEC_READ);
+    Program s = sandboxed(sm, mode);
+    string name = "NpsRequires" + mode.upr();
+    string path = write_module(dir, name);
+    Program h = target(mode);
+    s.callFunction("parse_into", h, sprintf("%%modern\n%%requires %s\nobject sub make_res(Queue ev) {\n"
+        "    return new %s::Res(ev);\n}\n", path, name));
+    return probe_class(auto sub (Queue ev) { return h.callFunction("make_res", ev); });
+});
+
+# the code that the commit of code that sandboxed code parses in a trusted Program runs (the initializers of static
+# class members) is governed by its sandbox; a constant is initialized when it is first used, which is when the
+# AST interpreter first reads it, by the code that reads it
+run("parse-into-trusted-governed", string sub () {
+    SandboxManager sm();
+    Program s = sandboxed(sm, mode);
+    Program h = target(mode);
+    s.callFunction("parse_into", h, "%modern
+class G {
+    public {
+        static bool governed = SandboxManager::isSandboxed();
+    }
+}
+bool sub governed() {
+    return G::governed;
+}
+");
+    return h.callFunction("governed") ? "governed" : "not-governed";
+});
+
+# trusted code loads a user module by path into a trusted Program with Program::loadModule()
+run("load-module-trusted", string sub () {
+    Program t = loader(mode);
+    string name = "NpsLoadTrusted" + mode.upr();
+    t.loadModule(write_module(dir, name));
+    return probe_module(t, name);
 });
 
 # trusted code creates a Program

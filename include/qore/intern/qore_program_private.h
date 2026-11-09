@@ -2061,7 +2061,11 @@ public:
             const char* orig_src = nullptr, int offset = 0) {
         //printd(5, "qore_program_private::parsePending() wm=0x%x UV=0x%x on: %d\n", wm, QP_WARN_UNREFERENCED_VARIABLE, wm & QP_WARN_UNREFERENCED_VARIABLE);
 
-        // before the parse switches to the Program
+        // before the parse switches to the Program: the caller stays the caller of the code that runs for it
+        QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
+        if (*xsink) {
+            return -1;
+        }
         markSandboxedParse();
 
         ProgramRuntimeParseContextHelper pch(xsink, pgm);
@@ -2176,7 +2180,11 @@ public:
         yyscan_t lexer;
         QoreParseState state;
 
-        // before the parse switches to the Program
+        // before the parse switches to the Program: the caller stays the caller of the code that runs for it
+        QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
+        if (*xsink) {
+            return;
+        }
         markSandboxedParse();
 
         {
@@ -2266,7 +2274,11 @@ public:
         assert(code && code[0]);
         assert(xsink);
 
-        // before the parse switches to the Program
+        // before the parse switches to the Program: the caller stays the caller of the code that runs for it
+        QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
+        if (*xsink) {
+            return;
+        }
         markSandboxedParse();
 
         ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
@@ -2387,7 +2399,11 @@ public:
         assert(code && code[0]);
         assert(xsink);
 
-        // before the parse switches to the Program
+        // before the parse switches to the Program: the caller stays the caller of the code that runs for it
+        QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
         markSandboxedParse();
 
         ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
@@ -2456,7 +2472,11 @@ public:
 
         setScriptPath(filename);
 
-        // before the parse switches to the Program
+        // before the parse switches to the Program: the caller stays the caller of the code that runs for it
+        QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
+        if (*xsink) {
+            return;
+        }
         markSandboxedParse();
 
         ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);

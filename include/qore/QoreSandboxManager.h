@@ -1068,6 +1068,9 @@ private:
     QoreSandboxContext* context = nullptr;
     const QoreSandboxProvenanceHelper* previous = nullptr;
     void apply(QoreSandboxContext* captured);
+
+    // applies the sandbox of the caller of a parse or a module load in another Program
+    friend class QoreCallerSandboxHelper;
 };
 
 //! The sandbox that governs the current thread, captured so that it can govern work run on another thread

@@ -984,6 +984,20 @@ reads together with the manager.  It is set:
   that sandboxed code defines in it the trusted deferral.  This fails safe: the classes that the Program
   already had, which trusted code defined, are sandboxed from then on as well.
 
+Parsing code in a Program and loading a module into it (`Program::parse()`, `Program::loadModule()` and
+their variants) switch the thread's current Program to the target Program with a
+`ProgramRuntimeParseContextHelper` or one of its variants, which used to hide the calling Program from
+sandbox resolution: the initializers of code that sandboxed code parsed in a trusted Program, and the
+initialization of a module that it loaded into one by a path it chose, ran ungoverned, the module manager
+checked the load as a trusted one, and the module's Program was trusted.  `QoreCallerSandboxHelper`,
+created before the switch (in the parse functions of `qore_program_private`,
+`QoreModuleManager::runTimeLoadModule()` and `registerAOTStaticModuleIntern()`), keeps a sandboxed caller
+the caller: `qore_caller_is_sandboxed()` stays true while it exists, and the sandbox that governs the
+caller is applied as the provenance of the code that runs.  Under a module initialization barrier set
+later, neither is seen, so library code that such a call loads is initialized as library code.  A user
+module that sandboxed code chose, loaded into a Program that has no manager, gets the sandbox of that code
+(`inherit_module_sandbox_manager()`), as when it loads the module into its own Program.
+
 A user module that trusted code loads while it serves sandboxed code is sandboxed, and stays sandboxed for
 every later caller (the module manager binds such a module to the tenant that chose it in any case); this is
 fail-safe.

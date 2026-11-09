@@ -2343,6 +2343,14 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
     // path above remains lock-free.
     QoreModuleLoadLockHelper aot_init_al;
 
+    // the module is loaded for the caller, also when it is loaded into another Program (Program::loadModule()): the
+    // switch to that Program below must not hide a sandboxed caller from the checks of the load and from the code
+    // that the load runs (issue #5659)
+    QoreCallerSandboxHelper caller_sandbox(pgm, &xsink);
+    if (xsink) {
+        return -1;
+    }
+
     // slow path: grab the exclusive parse lock for actual module loading
     ProgramRuntimeParseContextHelper pah(&xsink, pgm);
     if (xsink) {
@@ -2420,6 +2428,11 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
     // AOT-specific and can otherwise participate in the same cross-Program
     // initializer deadlock.
     QoreModuleLoadLockHelper aot_init_al;
+    // see runTimeLoadModule()
+    QoreCallerSandboxHelper caller_sandbox(tpgm, &xsink);
+    if (xsink) {
+        return -1;
+    }
     ProgramRuntimeParseContextHelper pah(&xsink, tpgm);
     if (xsink) {
         return -1;
@@ -3551,10 +3564,17 @@ static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram*
     if (!sm) {
         sm = qore_module_init_lift_manager_ref();
     }
+    // a module that sandboxed code chose, loaded into a Program that has no manager (Program::loadModule() on a
+    // Program that it was handed, or trusted code that it called), has the sandbox of that code, as when it loads the
+    // module into its own Program; the tenant chose the path (see checkShadowingLoad()) (issue #5659)
+    const bool sandboxed_caller = qore_caller_is_sandboxed();
+    if (!sm && sandboxed_caller) {
+        sm = qore_caller_sandbox_ref();
+    }
     module_pgm.setSandboxManager(sm);
-    // a module that a sandboxed Program without a manager of its own (one that sandboxed code created) chose is
-    // sandboxed as well; its code is governed by the sandbox of its callers
-    if (qore_program_is_sandboxed(parent_pgm)) {
+    // a module that a sandboxed Program without a manager of its own (one that sandboxed code created), or a
+    // sandboxed caller, chose is sandboxed as well; its code is governed by the sandbox of its callers
+    if (sandboxed_caller || qore_program_is_sandboxed(parent_pgm)) {
         qore_program_mark_sandboxed(module_pgm);
     }
     if (sm) {

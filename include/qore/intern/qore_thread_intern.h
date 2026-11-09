@@ -43,6 +43,7 @@ class RuntimeConfig;
 #include <memory>
 
 #include "qore/intern/QoreSandboxLimits.h"
+#include "qore/QoreSandboxManager.h"
 
 #ifndef QORE_THREAD_STACK_SIZE
 #define QORE_THREAD_STACK_SIZE 1024*512
@@ -1010,6 +1011,46 @@ DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
     Fails closed: true if the governing sandbox cannot be resolved for lack of memory.
 */
 DLLLOCAL bool qore_caller_is_sandboxed();
+
+//! Keeps the code that parses code or loads a module in another Program the caller of what runs there (issue #5659)
+/** Parsing code in a Program and loading a module into it (Program::parse(), Program::loadModule(), and their
+    variants) switch the thread's current Program to the target Program with a ProgramRuntimeParseContextHelper (or
+    one of its variants), which hides the calling Program from sandbox resolution: without this helper, the code that
+    runs for the call in the target Program (the initializers of the parsed code, the initialization of the module,
+    the module manager's own checks, the Programs created) would be governed as if trusted code had made the call.
+
+    Created before the switch: if the caller is sandboxed (see qore_caller_is_sandboxed()), it records that on the
+    thread, so that qore_caller_is_sandboxed() stays true while it exists, and applies the sandbox that governs the
+    caller as the provenance of the code that runs (see QoreSandboxProvenanceHelper).  Under a module initialization
+    barrier set later (the initialization of library code that the call loads), neither is seen, as for any caller of
+    library code (see QoreModuleInitSandboxBarrierHelper).  Inactive if the target Program is the current one or the
+    caller is trusted.
+*/
+class QoreCallerSandboxHelper {
+public:
+    //! Applies the caller's sandbox for a parse or module load in \a target; raises out-of-memory in \a xsink on failure
+    DLLLOCAL QoreCallerSandboxHelper(const QoreProgram* target, ExceptionSink* xsink);
+    DLLLOCAL ~QoreCallerSandboxHelper();
+
+    //! Returns the helper that was active before this one on the thread
+    DLLLOCAL const QoreCallerSandboxHelper* getPrevious() const {
+        return previous;
+    }
+
+    //! Returns the number of module initialization barriers that were active when the helper was created
+    DLLLOCAL size_t getBarrierDepth() const {
+        return barrier_depth;
+    }
+
+    DLLLOCAL QoreCallerSandboxHelper(const QoreCallerSandboxHelper&) = delete;
+    DLLLOCAL QoreCallerSandboxHelper& operator=(const QoreCallerSandboxHelper&) = delete;
+
+private:
+    QoreSandboxProvenanceHelper provenance;
+    const QoreCallerSandboxHelper* previous = nullptr;
+    size_t barrier_depth = 0;
+    bool pushed = false;
+};
 
 
 //! Waits on a condition variable until it is signalled, the timeout expires, or the thread is cancelled or interrupted
