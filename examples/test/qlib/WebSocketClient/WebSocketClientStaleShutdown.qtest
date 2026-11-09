@@ -207,6 +207,14 @@ class LifecycleWsClient inherits WebSocketClient {
         Counter release_before_open(1);
         #! gets the TID of the thread that reported each connection open
         Queue opened_tids();
+        #! after the next close frame is sent, wait for the delivery that the server's answer schedules
+        bool widen_close_window = False;
+        #! set while the answer to the close frame is awaited
+        bool await_close_answer = False;
+        #! gets whether the connection was taken when the server's answer to the close frame scheduled its delivery
+        Queue close_answer_claimed();
+        #! reaches zero when the server's answer to the close frame has scheduled the connection's delivery
+        Counter close_answer_seen(1);
 
         #! the delay between reconnect attempts
         timeout reconnect_delay = 1;
@@ -614,6 +622,35 @@ class LifecycleWsClient inherits WebSocketClient {
         return rv;
     }
 
+    private sendCloseFrameUnlocked(int cmd) {
+        bool widen = widen_close_window;
+        if (widen) {
+            widen_close_window = False;
+            await_close_answer = True;
+        }
+        WebSocketClient::sendCloseFrameUnlocked(cmd);
+        if (widen) {
+            # the thread that closes the connection goes on only once the server's answer to its close frame has
+            # scheduled the connection's delivery, as when it is preempted between sending the close frame and
+            # taking the connection
+            close_answer_seen.waitForZero(HandoffTimeout);
+        }
+    }
+
+    private scheduleDelivery(WscConnection c) {
+        if (await_close_answer) {
+            await_close_answer = False;
+            bool claimed;
+            {
+                AutoLock al(delivery_mutex);
+                claimed = c.claimed;
+            }
+            close_answer_claimed.push(claimed);
+            close_answer_seen.dec();
+        }
+        WebSocketClient::scheduleDelivery(c);
+    }
+
     private acquireActionUnlocked(timeout to) {
         bool handed = handoff_tid == gettid();
         if (report_action_wait && action_tid && action_tid != gettid() && !handed) {
@@ -838,6 +875,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
                 \destructorCancelsReconnectHandshakeTest(), proto);
             addTestCase(proto + ": destructor reports a reconnect's connection open",
                 \destructorReportsReconnectOpenTest(), proto);
+            addTestCase(proto + ": destructor reports a reconnect's connection open when the close answer is early",
+                \destructorReportsReconnectOpenTest(), (proto, True));
             addTestCase(proto + ": destructor while a reconnect connects", \destructorDuringReconnectConnectTest(),
                 proto);
             addTestCase(proto + ": connect waiting for an action times out", \actionTimeoutTest(), (proto, "connect"));
@@ -2216,7 +2255,11 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! The client is destroyed while the reconnect thread, having published its connection, has not reported it open
     #! yet: the destructor, which takes the connection, reports it open before it reports it closed
-    destructorReportsReconnectOpenTest(string proto) {
+    /** With \a early_answer, the destructor goes on only once the server's answer to its close frame has scheduled
+        the connection's delivery (issue: a delivery task scheduled between sending the close frame and taking the
+        connection reported the connection open instead of the destructor)
+    */
+    destructorReportsReconnectOpenTest(string proto, *bool early_answer) {
         LifecycleCtx ctx = makeCtx(proto, {"reconnect": True});
         connectChecked(ctx, proto);
         ctx.wsc.hold_before_open = True;
@@ -2236,11 +2279,20 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         opened_tids.clear();
         opened_cids.clear();
         handshake_tids.clear();
+        Queue close_answer_claimed = c.close_answer_claimed;
+        if (early_answer) {
+            c.widen_close_window = True;
+        }
         Queue deleted();
         background TestThreads::run(sub () {
             delete c;
             deleted.push(True);
         });
+        if (early_answer) {
+            # the connection was taken before the close frame was sent: no delivery task can report it open
+            assertTrue(close_answer_claimed.get(LifecycleWsClient::HandoffTimeout),
+                "the connection is taken when the server's answer arrives");
+        }
         # the destructor takes the connection, reports it open and closed, then waits for the reconnect thread
         assertEq("waiting-threads", events.get(LifecycleWsClient::HandoffTimeout));
         int destructor_tid = handshake_tids.get(LifecycleWsClient::HandoffTimeout);

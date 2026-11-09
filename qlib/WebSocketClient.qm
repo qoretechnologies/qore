@@ -349,6 +349,8 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       server without a WebSocket endpoint for the path) fails the handshake, so the connection is not reported as
       connected and the \c "auto" mode tries the HTTP/1.1 Upgrade; any 2xx status accepts the connection, and the
       status of a refusal is reported when the response's headers arrive with its body (issue #5668)
+    - a connection that the client closes is no longer reported open on another thread after it was reported closed,
+      when the server answers the close frame at once (issue #5679)
     - a thread of the client that is cancelled (e.g. with \c cancel_thread() or
       @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()") is no longer waited for by
       the destructor, and a cancelled @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" worker
@@ -3268,10 +3270,21 @@ ws.setEventQueue();
         }
         # wake up any sleeping threads
         sleep_cond.broadcast();
-        # send the close frame, then take the connection at once: the delivery task does not take it during the close
-        # handshake, so this thread reports it closed
-        sendCloseFrameUnlocked(cmd);
-        return claimConnectionUnlocked(c);
+        # the connection is marked as taken before the close frame is sent: the server's answer can arrive at once,
+        # and a delivery task scheduled for it neither delivers it nor reports it open, so this thread reports it open
+        # (if no thread did yet) and closed, in that order (a delivery task scheduled between the close frame and
+        # claimConnectionUnlocked() reported a connection open while this thread reported it closed)
+        {
+            AutoLock al(delivery_mutex);
+            c.claimed = True;
+        }
+        *hash<WscAsyncIoResources> res;
+        {
+            # taken also when sending the close frame fails
+            on_exit res = claimConnectionUnlocked(c);
+            sendCloseFrameUnlocked(cmd);
+        }
+        return res;
     }
 
     #! Closes and takes the current connection, and waits for the end of its close handshake; must be called with \c m held
