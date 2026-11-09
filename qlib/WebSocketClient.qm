@@ -152,7 +152,11 @@ module WebSocketClient {
     the stream arrives in a later frame than the response, as with a body sent after the response headers, it cannot
     be told apart from a tunnel that the server accepted and closed at once (RFC 9113 section 8.5, RFC 8441
     section 5): the connection is then either refused in the handshake or reported as connected and closed right
-    after with the close code 1006 ("stream ended"), depending on whether the frames arrive together.
+    after with the close code 1006 ("stream ended"), depending on whether the frames arrive together.  This depends on
+    the size of the body and is common: over HTTP/3, a page of about 6 KB or more is often, and one of 16 KB or more
+    always, reported as connected and then closed, and over HTTP/2 a large page (e.g. 120 KB) nearly always is; the
+    \c "auto" mode does not fall back to HTTP/1.1 then.  Against a server that serves a page for the path, the remedy
+    is on the server: a Qore @ref httpserverintro "HttpServer" refuses such a request with \c 501 (issue #5667).
 
     All the public symbols in the module are defined in the WebSocketClient namespace.
 
