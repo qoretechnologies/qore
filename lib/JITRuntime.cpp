@@ -1962,6 +1962,14 @@ extern "C" DLLEXPORT void qore_rt_sync_local(LocalVar* var, uint64_t value) {
     // written to their raw stack slot; LocalVar::getLValue() would follow the
     // reference and write through to the referenced lvalue.
     LocalVarValue* lvv = thread_try_find_lvar(var);
+    // a local that the code has not assigned yet (one declared after the point where the handlers run) has nothing to
+    // publish: assigned NOTHING here, it was marked assigned, so that its declaration's initial assignment became an
+    // ordinary assignment, which for a reference local assigns through the reference type instead of binding the
+    // reference (an on_error handler run out of line before "reference<int> r = \x" made it fail with
+    // RUNTIME-TYPE-ERROR or corrupt the slots in native code; issue #5676)
+    if (lvv && !lvv->val.assigned && val.isNothing()) {
+        return;
+    }
     if (lvv && lvv->isRef()) {
         if (val.getType() == NT_REFERENCE) {
             QoreValue stored = val.refSelf();

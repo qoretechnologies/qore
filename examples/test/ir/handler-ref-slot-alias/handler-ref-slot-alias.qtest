@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of on_block_exit handlers and the publication of native locals
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class HandlerRefSlotAliasTest
+
+#! issue #5676: a reference to a local declared after an on_block_exit handler ran out of line is bound correctly
+/** Before native code runs the handlers of a scope, it publishes its local variables to the runtime stack.  A local
+    declared after that point, which the code had not assigned yet, was published as NOTHING and thereby marked
+    assigned, so the initial assignment of its declaration became an ordinary assignment: for a reference local
+    (reference<int> r = \x), that assigned through the reference type instead of binding the reference, which raised
+    RUNTIME-TYPE-ERROR, and the error path then crashed (JIT, tiered and AOT; the AST and IR interpreters were
+    correct).
+
+    The script next to the test runs the cases in every execution mode, on the IR tier and as AOT executables at -O0
+    and -O3, and its output must be that of the AST interpreter.
+*/
+class HandlerRefSlotAliasTest inherits QUnit::Test {
+    public {
+        #! the output of handler-ref.q with the AST interpreter, which every execution mode and AOT must give
+        const Expected = (
+            "after try: inner; inner caught IN; o=10 p=3",
+            "in loop: m=7; error 0; caught BS; m=8; error 1; caught BS",
+            "in handler: nested; nested caught IN; outer o=6; caught X",
+            "nothing assigned: inner; x=4",
+        );
+
+        #! the script prints its lines this many times
+        const Iterations = 3;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string path;
+    }
+
+    constructor() : QUnit::Test("on_block_exit handler reference slots", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        path = get_script_dir() + "/handler-ref.q";
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executable -O0", sub () { aotTest("-O0"); });
+        addTestCase("AOT executable -O3", sub () { aotTest("-O3"); });
+        set_return_value(main());
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = expected();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, path)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, path)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("handler-ref-slot-alias-aot-");
+        string exe = dir.path + "/handler-ref";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, path));
+        assertTrue(is_file(exe), opt + ": qcc compiles the script: " + out);
+        assertEq(expected(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), opt + ": AOT");
+    }
+
+    #! the expected output: the lines, printed once per iteration
+    private string expected() {
+        return strmul((foldl $1 + "\n" + $2, Expected) + "\n", Iterations);
+    }
+}
