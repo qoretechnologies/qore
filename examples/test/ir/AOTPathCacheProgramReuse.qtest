@@ -2,6 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the allocator gives a deleted subclass's address to the next one in most runs (glibc rarely)
 
 %modern
 %no-child-restrictions
@@ -26,7 +27,9 @@
 
     The driver loads the module into Programs created one after another, each declaring a subclass of the module's
     generic class with a type argument of another type than the previous one (\c int, \c string, and a hashdecl of
-    the Program), calls the inherited methods and deletes the Program.  It runs in every execution mode.
+    the Program), calls the inherited methods and deletes the Program.  It runs in every execution mode.  Whether a
+    deleted subclass's address is given to the next one depends on the allocator: before the fix the test failed in
+    every mode on macOS, and in one of four on Linux.
 */
 class AOTPathCacheProgramReuseTest inherits QUnit::Test {
     public {
