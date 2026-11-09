@@ -1484,6 +1484,8 @@
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, @ref remove "remove" and @ref delete "delete"
       with a list of selectors whose later selector raised an exception removed nothing; they now remove what the
       earlier selectors selected, as with the AST interpreter
+    - iterating a list of selectors with a range (ex: <tt>foreach x in (l[0, 1..-1])</tt>) with negative offsets gave
+      other elements than the same expression as a value; it now gives the same elements
     - with the AST interpreter, @ref remove "remove" and @ref delete "delete" with a list of selectors whose later
       selector raised an exception leaked the removed values, and a list of selectors with ranges iterated by
       \c foreach or a functional operator could read a list that the loop had released, which could crash
