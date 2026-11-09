@@ -7195,7 +7195,8 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
 // documented in QoreIRLowering.h
 void QoreIRLowering::setReferenceLoadExceptionTarget(QoreIRInstruction* load, const QoreTypeInfo* type_info) {
     assert(load->opcode == QoreIROpcode::LoadLocal || load->opcode == QoreIROpcode::LoadClosure
-        || load->opcode == QoreIROpcode::LoadGlobal || load->opcode == QoreIROpcode::LoadThreadLocal);
+        || load->opcode == QoreIROpcode::LoadGlobal || load->opcode == QoreIROpcode::LoadThreadLocal
+        || load->opcode == QoreIROpcode::AddAssignLocalInt);
     // the same rule as the interpreter's (qore_ir_type_may_hold_reference()): a variable of any other type cannot be
     // assigned a reference, which its type does not accept
     if (exception_stack.empty() || (QoreTypeInfo::hasType(type_info) && !QoreTypeInfo::isReference(type_info))) {
@@ -8332,6 +8333,9 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             // target += source (both typed int locals) → AddAssignLocalInt
             auto* inst = builder.createAddAssignLocalInt(
                 left_var->ref.id, right_var->ref.id, op->loc);
+            // the instruction reads the source as a load of it reads it: a source of no type can hold a reference,
+            // whose read raises an exception if the referenced lvalue is gone
+            setReferenceLoadExceptionTarget(inst, right_var->ref.id->getTypeInfo());
             if (parse_context) {
                 parse_context->markLocalAssignment(left_var->ref.id, true,
                     left_var->getTypeInfo());

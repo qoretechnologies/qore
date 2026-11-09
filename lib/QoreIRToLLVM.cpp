@@ -13803,6 +13803,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
     auto load_local_int_for_fused = [&](LocalVar* local, const void* key,
             LocalAllocaMap::iterator alloca_it,
             const char* name) -> llvm::Value* {
+        // a local whose type allows a reference reads the referenced lvalue if it holds one, which raises an
+        // exception if the lvalue is gone: the runtime reads below are followed by the check that takes the fused
+        // instruction's exception edge, as for LoadLocal; a local of another type cannot raise, and is not checked
+        const bool may_hold_reference = local && (!QoreTypeInfo::hasType(local->getTypeInfo())
+            || QoreTypeInfo::isReference(local->getTypeInfo()));
+        auto check_reference_read = [&]() {
+            if (may_hold_reference) {
+                emitExceptionCheck(module, llvm_func, inst);
+            }
+        };
         if (local && local->closureUse()) {
             llvm::Value* boxed;
             if (aot_mode) {
@@ -13826,6 +13836,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
             builder->CreateCall(decref_fn, {boxed, xsink_arg});
+            check_reference_read();
             return rv;
         }
 
@@ -13864,6 +13875,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             builder->CreateCall(decref_fn, {loaded, xsink_arg});
             builder->CreateBr(done_bb);
             builder->SetInsertPoint(done_bb);
+            check_reference_read();
             return rv;
         }
 
@@ -13918,6 +13930,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
         builder->CreateCall(decref_fn, {boxed, xsink_arg});
+        check_reference_read();
         return rv;
     };
 

@@ -10320,6 +10320,9 @@ load_local_done:
                         if (ref_needs_deref) {
                             rv.discard(xsink);
                         }
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
                         cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
@@ -10339,6 +10342,12 @@ load_local_done:
                     bool nd = true;
                     QoreValue sv = fused_inst->source->eval(nd, xsink);
                     if (xsink && *xsink) {
+                        if (nd) {
+                            sv.discard(xsink);
+                        }
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
                         cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;

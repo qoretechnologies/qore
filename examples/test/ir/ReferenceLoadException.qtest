@@ -22,8 +22,9 @@
     with the exception (LoadLocal and LoadClosure returned without branching to a handler; LoadGlobal and
     LoadThreadLocal had no handler to branch to), skipping the try that encloses the read and the handlers and
     releases of the blocks between them, and the native code of a global, thread_local or closure-bound variable did
-    the same.  The load of a variable whose type allows a reference now takes the exception edge of the try or scope
-    cleanup that encloses it.  Each case runs in a function of its own, whose caller reports an exception that
+    the same, as did the fused addition of a local of no type to an int local (AddAssignLocalInt), which reads its
+    source as a load does.  The load of a variable whose type allows a reference, and that addition, now take the
+    exception edge of the try or scope cleanup that encloses them.  Each case runs in a function of its own, whose caller reports an exception that
     escapes it, and at top level; the script runs in every execution mode, on the IR tier of tiered execution and as
     a qcc executable (see ExecModeOutputTest).
 */
@@ -214,6 +215,21 @@ sub pending_parse() {
         report("pending parse", ex);
     }
 }
+# the fused addition of a local of no type to an int local reads the source as a load of it reads it
+sub fused_int_add() {
+    C c("fa", 15);
+    int t = 5;
+    auto s;
+    s = c.get();
+    delete c;
+    try {
+        t += s;
+        printf("fused add: t=%d\n", t);
+    } catch (hash<ExceptionInfo> ex) {
+        report("fused add", ex);
+    }
+    printf("fused add: t=%d after\n", t);
+}
 dangle();
 try { global_typed(); } catch (hash<ExceptionInfo> ex) { escaped("global", ex); }
 try { global_auto(); } catch (hash<ExceptionInfo> ex) { escaped("global auto", ex); }
@@ -226,6 +242,7 @@ try { local_in_loop(); } catch (hash<ExceptionInfo> ex) { escaped("local in a lo
 try { closure_bound(); } catch (hash<ExceptionInfo> ex) { escaped("closure-bound", ex); }
 try { read_in_closure(); } catch (hash<ExceptionInfo> ex) { escaped("read in a closure", ex); }
 try { pending_parse(); } catch (hash<ExceptionInfo> ex) { escaped("pending parse", ex); }
+try { fused_int_add(); } catch (hash<ExceptionInfo> ex) { escaped("fused add", ex); }
 # the same at top level, where the exception of a case would end the script
 try {
     printf("top-level global: %y\n", gref);
@@ -272,6 +289,20 @@ try {
     }
     p.parseRollback();
 }
+{
+    C c("tfa", 16);
+    int t = 6;
+    auto s;
+    s = c.get();
+    delete c;
+    try {
+        t += s;
+        printf("top-level fused add: t=%d\n", t);
+    } catch (hash<ExceptionInfo> ex) {
+        report("top-level fused add", ex);
+    }
+    printf("top-level fused add: t=%d after\n", t);
+}
 printf("done\n");
 ';
 
@@ -306,6 +337,9 @@ printf("done\n");
             "read in a closure: OBJECT-ALREADY-DELETED: attempt to access member 'm' of an already-deleted object of class 'C'",
             "closure: \"handled\"",
             "pending parse: PROGRAM-ERROR: the Program accessed is currently undergoing parsing and cannot be accessed at runtime",
+            "destroy fa",
+            "fused add: OBJECT-ALREADY-DELETED: attempt to access member 'm' of an already-deleted object of class 'C'",
+            "fused add: t=5 after",
             "top-level global: OBJECT-ALREADY-DELETED: write attempted to member \"m\" in an already-deleted object",
             "top-level thread_local: OBJECT-ALREADY-DELETED: write attempted to member \"m\" in an already-deleted object",
             "destroy top",
@@ -314,6 +348,9 @@ printf("done\n");
             "destroy topc",
             "top-level closure-bound: OBJECT-ALREADY-DELETED: attempt to access member 'm' of an already-deleted object of class 'C'",
             "top-level pending parse: PROGRAM-ERROR: the Program accessed is currently undergoing parsing and cannot be accessed at runtime",
+            "destroy tfa",
+            "top-level fused add: OBJECT-ALREADY-DELETED: attempt to access member 'm' of an already-deleted object of class 'C'",
+            "top-level fused add: t=6 after",
             "done",
         );
     }

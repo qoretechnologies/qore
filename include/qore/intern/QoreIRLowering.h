@@ -456,8 +456,9 @@ private:
         try or scope cleanup, as in the AST interpreter.  The read of any other variable cannot raise, and its load
         gets no exception edge, which would constrain the optimization of the code around it.
 
-        @param load a LoadLocal, LoadClosure, LoadGlobal or LoadThreadLocal instruction
-        @param type_info the declared type of the variable
+        @param load a LoadLocal, LoadClosure, LoadGlobal or LoadThreadLocal instruction, or an AddAssignLocalInt
+        instruction, which reads its source as a load does
+        @param type_info the declared type of the variable read
     */
     void setReferenceLoadExceptionTarget(QoreIRInstruction* load, const QoreTypeInfo* type_info);
     bool storeVarRef(const VarRefNode* var, QoreIRValue value, std::string& error, const char* context,
