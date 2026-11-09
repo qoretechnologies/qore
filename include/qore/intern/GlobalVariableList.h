@@ -37,6 +37,8 @@
 
 #include "qore/intern/Variable.h"
 
+#include <string>
+
 class Var;
 
 // we use a vector map as the number of constants is generally relatively small
@@ -68,7 +70,15 @@ public:
 
     DLLLOCAL GlobalVariableList(const GlobalVariableList& old, const QoreParseOptions& po);
 
-    DLLLOCAL void mergePublic(const GlobalVariableList& old);
+    //! Adds references to the public variables of a module's namespace
+    /** @param old the variables of the module's namespace
+        @param module_var_importer the importing Program if the module is trusted, whose references to the variables
+        are then read-only when it is restricted (qore#5664), otherwise nullptr
+        @param module_name the name of the module for the variables that do not record it, or nullptr
+        @param ns_path the namespace path of the variables in the importer
+    */
+    DLLLOCAL void mergePublic(const GlobalVariableList& old, QoreProgram* module_var_importer,
+            const char* module_name, const std::string& ns_path);
 
     DLLLOCAL ~GlobalVariableList() {
         reset();
