@@ -3180,8 +3180,9 @@ int qore_ns_private::checkGlobalVarDecl(Var* v, const NamedScope& vname) {
         err = -1;
     }
     // thread-local storage in a user module is not thread control: a module that keeps per-thread state can be
-    // loaded by code that may not control threads, and its source and AOT forms are treated the same way (an AOT
-    // image records no thread-local declarations)
+    // loaded by code that may not control threads, and its source and AOT forms are treated the same way: an AOT
+    // module image records its thread_local declarations (in its GLOBALS section), and loading it does not apply
+    // this restriction either
     if ((po & PO_NO_THREAD_CONTROL) && v->isThreadLocal() && !(po & PO_IN_MODULE)) {
         parse_error(*v->getParseLocation(), "illegal reference to new thread_local variable '%s' (conflicts with parse " \
             "option NO_THREAD_CONTROL)", vname.ostr);
@@ -3208,11 +3209,45 @@ int qore_ns_private::checkGlobalVarDecl(Var* v, const NamedScope& vname) {
     return err;
 }
 
+// static
+int qore_ns_private::checkPublicThreadLocalDecl(const Var& v) {
+    assert(v.isThreadLocal());
+    assert(v.isPublic());
+    if (!parse_check_parse_option(PO_IN_MODULE)) {
+        return 0;
+    }
+    parseException(*v.getParseLocation(), "MODULE-PUBLIC-THREAD-LOCAL", "public thread_local variable '%s' cannot " \
+        "be declared in a module: " QORE_MODULE_PUBLIC_THREAD_LOCAL_HELP, v.getName());
+    return -1;
+}
+
+// static
+void qore_ns_private::scanExportedThreadLocals(const qore_ns_private& mns, const std::string& path,
+        std::string& list) {
+    for (const auto& i : mns.var_list.vmap) {
+        if (i.second->isPublic() && i.second->isThreadLocal()) {
+            if (!list.empty()) {
+                list += ", ";
+            }
+            list += "'" + path + i.first + "'";
+        }
+    }
+    for (const auto& i : mns.nsl.nsmap) {
+        if (isExportedNamespace(*i.second)) {
+            scanExportedThreadLocals(*i.second->priv, path + i.first + "::", list);
+        }
+    }
+}
+
 void qore_ns_private::parseAddGlobalVarDecl(const QoreProgramLocation* loc, char* name, const QoreTypeInfo* typeInfo,
         QoreParseTypeInfo* parseTypeInfo, bool pub, qore_var_t type) {
     GVEntryBase e(loc, name, typeInfo, parseTypeInfo, type);
-    if (pub)
+    if (pub) {
         e.var->setPublic();
+        if (type == VT_THREAD_LOCAL) {
+            checkPublicThreadLocalDecl(*e.var);
+        }
+    }
     pend_gvblist.push_back(e);
     //printd(5, "qore_ns_private::parseAddGlobalVarDecl() this: %p var: %p '%s' %d-%d\n", this, e.var, e.var->getName(), loc.start_line, loc.end_line);
 
