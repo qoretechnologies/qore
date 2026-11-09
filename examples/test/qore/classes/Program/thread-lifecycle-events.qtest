@@ -67,6 +67,7 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
         addTestCase("cleanup error", \cleanupError());
         addTestCase("snapshot", \snapshot());
         addTestCase("nested threads", \nested());
+        addTestCase("thread started by another Program's thread", \otherProgramParent());
         addTestCase("short-lived threads", \shortLived());
         addTestCase("concurrent subscriptions", \concurrentSubscriptions());
         addTestCase("TID reuse", \tidReuse());
@@ -467,6 +468,21 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
         assertEq(0, l.last().running);
     }
 
+    otherProgramParent() {
+        # a background thread of this (the test's) Program starts a thread in the child Program: its parent is not a
+        # background thread of the child Program, so the event names only its TID
+        Program pgm = makeProgram();
+        Queue q();
+        pgm.subscribeThreadEvents(q);
+        Queue started();
+        int starter = background started.push(pgm.callFunction("start_quick"));
+        int tid = started.get(EventTimeout);
+        hash<ProgramThreadEvent> ev = until(q, "STARTED", tid).last();
+        assertEq(starter, ev.parent_tid);
+        assertEq(0, ev.parent_thread_id);
+        assertEq("COMPLETED", finished(q, tid).outcome);
+    }
+
     shortLived() {
         # threads that start and end before anything reads the queue are each published once, in order
         Program pgm = makeProgram("list<int> sub run(int n) { list<int> l(); for (int i = 0; i < n; ++i) "
@@ -734,16 +750,21 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
         on_exit requests.push(0);
         Counter entered = pgm.getGlobalVariable("entered");
         entered.waitForZero();
+        int thread_id = until(q, "STARTED", tid).last().thread_id;
         const int Requests = 20;
         for (int i = 1; i <= Requests; ++i) {
             assertTrue(pgm.cancelThread(tid, "request " + i));
             assertEq(0, call_function("dbg_get_lifecycle_cancel_claim_count", tid), "request " + i);
+            # nor does the hub keep the generations of the claims that only their canceller could publish
+            assertEq(0, call_function("dbg_get_program_thread_cancel_generation_count", pgm, thread_id),
+                "request " + i);
             # the thread clears the request, so that the next one is a new request
             requests.push(1);
             assertEq(1, cleared.get(EventTimeout));
         }
         requests.push(0);
         list<hash<ProgramThreadEvent>> l = until(q, "FINISHED", tid);
+        assertEq(-1, call_function("dbg_get_program_thread_cancel_generation_count", pgm, thread_id));
         list<hash<ProgramThreadEvent>> cancels = select(l, "CANCEL_REQUESTED");
         assertEq(Requests, cancels.size());
         assertEq((map "request " + $1, xrange(1, Requests + 1)), (map $1.cancel_reason, cancels));

@@ -16428,6 +16428,24 @@ static QoreValue f_dbg_get_lifecycle_cancel_claim_count(const QoreListNode* para
 }
 #endif
 
+#ifdef DEBUG
+//! Debug-only: returns the number of cancellation claim generations a Program's lifecycle hub keeps for a thread
+/** @return the number of generations, or -1 if the hub has no record of the thread
+    (design/program-thread-lifecycle-events.md)
+*/
+static QoreValue f_dbg_get_program_thread_cancel_generation_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    ProgramThreadHubHolder hub(qore_program_private::refThreadHub(**pgm));
+    return hub->getCancelGenerationCount(HARD_QORE_VALUE_INT(params, 1));
+}
+#endif
+
 //! Debug-only: runs the unit tests of the poll operation states that need no connection (Http3ServerPollStateTest)
 static QoreValue f_dbg_run_poll_state_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
@@ -19785,6 +19803,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QORE_PARAM_NO_ARG, "reason");
     qns.addBuiltinVariant("dbg_get_lifecycle_cancel_claim_count", f_dbg_get_lifecycle_cancel_claim_count,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid");
+    qns.addBuiltinVariant("dbg_get_program_thread_cancel_generation_count",
+        f_dbg_get_program_thread_cancel_generation_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntOrNothingTypeInfo, 2,
+        QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", bigIntTypeInfo, QORE_PARAM_NO_ARG, "thread_id");
 #endif
     qns.addBuiltinVariant("dbg_run_poll_state_tests", f_dbg_run_poll_state_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);

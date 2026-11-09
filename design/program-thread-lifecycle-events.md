@@ -78,8 +78,8 @@ call its code as callbacks do: they make the Program active, which `ACTIVITY` re
 TIDs are reused (`QoreThreadList::get()` scans for free entries once the array has been used), so each background
 thread also gets a process-unique `thread_id` (64-bit, from a global atomic counter) when it is created. Events and
 snapshot entries carry both. `parent_tid` and `parent_thread_id` identify the thread that ran `background`
-(`parent_thread_id` is 0 when the parent was not itself a background thread of a Program, ex: the main thread or an
-evaluation worker).
+(`parent_thread_id` is 0 when the parent was not itself a background thread of the same Program, ex: the main
+thread, an evaluation worker or a background thread of another Program, which the Program's subscribers never see).
 
 ### Event hash
 
@@ -180,8 +180,12 @@ reported by `FINISHED`. Each request is published once, and always before the th
   `FINISHED`. A canceller can therefore be preempted between releasing the lock and publishing while the thread
   ends: the request is still published, by the thread. The hub publishes each claim generation once
   (`ThreadRecord::cancel_gens`), so the canceller's and the thread's publications of a claim produce one event, and a
-  canceller that publishes after `FINISHED` finds no record. Publishing under `thread_list.lck` is not an option: a queue's waiters take the queue's lock and then
-  `thread_list.lck`, and the hub pushes to queues under its lock.
+  canceller that publishes after `FINISHED` finds no record. A canceller that removes its claim after publishing
+  it tells the hub to forget the generation (`cancelClaimReleased()`), as only the thread could have published it
+  again; the hub keeps only the generation of a claim made before the hub was set and those of the claims that the
+  thread took before their canceller removed them, so the set stays bounded for a thread that is cancelled and
+  clears the request in a loop. Publishing under `thread_list.lck` is not an option: a queue's waiters take the
+  queue's lock and then `thread_list.lck`, and the hub pushes to queues under its lock.
 - **Scope.** A request scoped to another Program (a sandboxed requester's, or another Program's
   `cancelThreads()` while the thread runs that Program's code) applies only while the thread runs that Program's
   code; it is not claimed, as it is not a request to end the thread's own work. `FINISHED` reports whether it ended

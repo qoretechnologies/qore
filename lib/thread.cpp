@@ -505,6 +505,8 @@ public:
     /** Recorded as the parent of the background threads it starts; see design/program-thread-lifecycle-events.md
     */
     int64 bg_thread_id = 0;
+    //! the ID of the Program of the background thread in bg_thread_id; it is the parent only of that Program's threads
+    qore_program_id_t bg_pgm_id = 0;
 
     // issue #4285: sandbox policy barrier depth; when non-zero, POLICY resolution
     // (filesystem/network) does not walk out to enclosing caller Programs, so trusted
@@ -1632,10 +1634,13 @@ public:
     }
 
     //! records the identity of the new thread and of the starting thread
+    /** The starting thread is the parent only if it is a background thread of the same Program: the subscribers of
+        a Program never see the threads of another one
+    */
     DLLLOCAL void setIdentity(const ThreadData& td) {
         identity.thread_id = program_thread_new_id();
         identity.parent_tid = q_gettid();
-        identity.parent_thread_id = td.bg_thread_id;
+        identity.parent_thread_id = td.bg_pgm_id == pgm->getProgramId() ? td.bg_thread_id : 0;
     }
 
     //! preregisters the new thread in the Program; returns -1 if an exception was raised
@@ -5604,6 +5609,7 @@ namespace {
             int tid = btp->tid;
             int64 thread_id = btp->identity.thread_id;
             thread_data.get()->bg_thread_id = thread_id;
+            thread_data.get()->bg_pgm_id = btp->pgm->getProgramId();
             hub->threadStarted(tid, btp->identity);
             {
                 // a cancellation request made before the hub was set (by a cancellation wave in startThread(), or
@@ -6798,8 +6804,11 @@ int QoreThreadList::cancelThread(int tid, const char* reason, qore_program_id_t 
         }
 #endif
         hub->cancelRequested(thread_id, claim.gen, claim.has_reason ? claim.reason.c_str() : nullptr);
-        // the claim is published; the thread no longer needs it, unless it has already taken it to publish it itself
-        releaseLifecycleCancelClaim(tid, thread_id, claim.gen);
+        // the claim is published; the thread no longer needs it, unless it has already taken it to publish it itself,
+        // and once it has been removed, the hub need not keep its generation to detect a second publication
+        if (releaseLifecycleCancelClaim(tid, thread_id, claim.gen)) {
+            hub->cancelClaimReleased(thread_id, claim.gen);
+        }
     }
     return 0;
 }
@@ -6814,20 +6823,21 @@ size_t QoreThreadList::getLifecycleCancelClaimCount(int tid) {
 }
 #endif
 
-void QoreThreadList::releaseLifecycleCancelClaim(int tid, int64 thread_id, uint64_t gen) {
+bool QoreThreadList::releaseLifecycleCancelClaim(int tid, int64 thread_id, uint64_t gen) {
     AutoLocker al(lck);
     ThreadEntry& e = entry[tid];
     // the TID may have been released and reused since the claim was made
     if (e.lifecycle_thread_id != thread_id) {
-        return;
+        return false;
     }
     for (lifecycle_cancel_claims_t::iterator i = e.lifecycle_cancels.begin(), end = e.lifecycle_cancels.end();
             i != end; ++i) {
         if (i->gen == gen) {
             e.lifecycle_cancels.erase(i);
-            return;
+            return true;
         }
     }
+    return false;
 }
 
 void QoreThreadList::setLifecycleHub(int tid, ProgramThreadHub* hub, int64 thread_id, qore_program_id_t pgm_id,

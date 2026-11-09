@@ -285,6 +285,22 @@ void ProgramThreadHub::cancelRequested(int64 thread_id, uint64_t gen, const char
     }
 }
 
+void ProgramThreadHub::cancelClaimReleased(int64 thread_id, uint64_t gen) {
+    AutoLocker al(lck);
+    thread_map_t::iterator i = threads.find(thread_id);
+    if (i != threads.end()) {
+        i->second.cancel_gens.erase(gen);
+    }
+}
+
+#ifdef DEBUG
+int64 ProgramThreadHub::getCancelGenerationCount(int64 thread_id) const {
+    AutoLocker al(lck);
+    thread_map_t::const_iterator i = threads.find(thread_id);
+    return i == threads.end() ? -1 : static_cast<int64>(i->second.cancel_gens.size());
+}
+#endif
+
 void ProgramThreadHub::threadFinished(int64 thread_id, ProgramThreadOutcome outcome, QoreHashNode* error,
         int64 exception_count, QoreHashNode* cleanup_error) {
     ReferenceHolder<QoreHashNode> error_holder(error, nullptr);

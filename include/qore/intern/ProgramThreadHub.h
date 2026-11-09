@@ -157,6 +157,22 @@ public:
     */
     DLLLOCAL void cancelRequested(int64 thread_id, uint64_t gen, const char* reason);
 
+    //! forgets a published claim that the thread can no longer publish
+    /** Called by the canceller after it has published the claim and removed it from the thread
+        (QoreThreadList::releaseLifecycleCancelClaim()): only the thread could publish it again, so the generation no
+        longer needs to be kept to detect a second publication.  The generations kept are thus those of the claims
+        whose thread took them before their canceller removed them, at most the requests in flight when it ended.
+
+        @param thread_id the thread
+        @param gen the claim's generation
+    */
+    DLLLOCAL void cancelClaimReleased(int64 thread_id, uint64_t gen);
+
+#ifdef DEBUG
+    //! returns the number of claim generations kept for a live thread, or -1 if it has no record (debug builds)
+    DLLLOCAL int64 getCancelGenerationCount(int64 thread_id) const;
+#endif
+
     //! records a transition of the Program between idle and active and publishes ACTIVITY
     /** @param gen the Program's activity generation of the transition; a transition older than the last one
         recorded is ignored, as transitions are published after the Program's lock is released and can arrive out of
@@ -226,7 +242,7 @@ private:
         uint64_t start_order = 0;
         //! true once a cancellation request has been published for the thread
         bool cancel_requested = false;
-        //! the generations of the cancellation claims published for the thread
+        //! the generations of the published cancellation claims that may still be published again
         std::set<uint64_t> cancel_gens;
     };
 

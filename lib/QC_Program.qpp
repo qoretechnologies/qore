@@ -307,7 +307,7 @@ hashdecl ProgramThreadInfo {
     //! the TID of the thread that started it
     int parent_tid;
 
-    //! the \c thread_id of the thread that started it, or 0 if that thread is not a background thread
+    //! the \c thread_id of the thread that started it, or 0 if that thread is not a background thread of the Program
     int parent_thread_id;
 
     //! the thread's name when it started
@@ -403,7 +403,7 @@ hashdecl ProgramThreadEvent {
     //! the TID of the thread that started it (thread events)
     *int parent_tid;
 
-    //! the \c thread_id of the thread that started it, or 0 if that thread is not a background thread (thread events)
+    //! the \c thread_id of the starting thread if it is a background thread of the Program, else 0 (thread events)
     *int parent_thread_id;
 
     //! the thread's name: its name when it started, and for \c "FINISHED" its name when it ended (thread events)

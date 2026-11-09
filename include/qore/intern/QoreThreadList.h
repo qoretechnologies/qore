@@ -644,7 +644,7 @@ public:
     */
     DLLLOCAL void clearLifecycleHub(int tid, lifecycle_cancel_claims_t& claims);
 
-    //! removes a published cancellation claim from the thread, if it still has it
+    //! removes a published cancellation claim from the thread, if it still has it; returns true if it was removed
     /** Called by the canceller after it has published the claim, so that the claims of a thread that is cancelled
         many times (with cancellation deferred or cleared) do not accumulate
 
@@ -653,7 +653,7 @@ public:
         alone
         @param gen the generation of the claim
     */
-    DLLLOCAL void releaseLifecycleCancelClaim(int tid, int64 thread_id, uint64_t gen);
+    DLLLOCAL bool releaseLifecycleCancelClaim(int tid, int64 thread_id, uint64_t gen);
 
 #ifdef DEBUG
     //! returns the number of cancellation claims of the thread not published by their canceller yet (debug builds)
