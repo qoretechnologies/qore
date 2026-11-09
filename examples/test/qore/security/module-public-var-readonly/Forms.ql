@@ -81,6 +81,9 @@ namespace ModVarForms {
         "read-typed-hash": ("return get_hash_ref(\\OurVarMod::hn.a);", "{b: 1}", "{b: 1}"),
         # a typed reference that would convert the value would have to change it
         "read-typed-conv": ("return get_softstring_ref(\\OurVarMod::hn.a.b);", ErrCode, "\"1\""),
+        # a NaN, which is not equal to itself, is read through a typed reference as it is
+        "read-typed-nan": ("float x = get_float_ref(\\OurVarMod::f); return x != x;", "True", "True"),
+        "read-typed-nan-elem": ("float x = get_float_ref(\\OurVarMod::hnan.n); return x != x;", "True", "True"),
         "read-static": ("return OurVarMod::Obj::sx;", "1", "1"),
         "read-static-ref": ("reference r = \\OurVarMod::Obj::sx; return r;", "1", "1"),
         "read-static-elem-ref": ("reference r = \\OurVarMod::Obj::sl[1]; return r;", "2", "2"),
@@ -127,6 +130,7 @@ namespace ModVarForms {
         "auto sub get_string_ref(reference<string> r) { return r; }\n"
         "auto sub get_softstring_ref(reference<softstring> r) { return r; }\n"
         "auto sub get_hash_ref(reference<hash<string, int>> r) { return r; }\n"
+        "float sub get_float_ref(reference<float> r) { return r; }\n"
         "code sub get_closure() { return sub () { OurVarMod::i = 11; }; }\n";
 
     #! returns the name of a function of the restricted code

@@ -66,7 +66,7 @@ Program sub make_program(string ctx) {
     map p.importFunction($1), ("host_write", "host_set_i", "get_host_closure");
     if (ctx == "lockdown") {
         # the Program cannot load modules: the host gives it the module's variables, classes and functions
-        map p.importGlobalVariable("OurVarMod::" + $1), ("i", "l", "h", "s", "o", "g", "hn");
+        map p.importGlobalVariable("OurVarMod::" + $1), ("i", "l", "h", "s", "o", "g", "hn", "f", "hnan");
         # the classes of the imported variables are imported with them
         foreach string cls in (("Obj", "G")) {
             try {

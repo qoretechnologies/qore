@@ -3313,6 +3313,24 @@ static bool qore_complex_buffer_accepts_runtime(const QoreTypeInfo* target_ti, c
     return false;
 }
 
+//! Returns true if a type's conversion left a value as it was: the same node, or the same type and bits
+/** A value compared with itself: a float NaN is unchanged, although it is not equal to itself
+*/
+static bool qore_value_unchanged_by_conversion(const QoreValue& orig, const QoreValue& conv) {
+    if (orig.hasNode() || conv.hasNode()) {
+        return orig.getInternalNode() == conv.getInternalNode();
+    }
+    if (orig.getType() != conv.getType()) {
+        return false;
+    }
+    if (orig.getType() == NT_FLOAT) {
+        double a = orig.getAsFloat();
+        double b = conv.getAsFloat();
+        return !memcmp(&a, &b, sizeof(double));
+    }
+    return orig.isEqualHard(conv);
+}
+
 bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, q_type_map_t map,
         const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
         LValueHelper* lvhelper) const {
@@ -3542,9 +3560,7 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                                 ValueHolder conv(val->refSelf(), xsink);
                                 QoreTypeInfo::acceptAssignment(u.ti, "<reference>", *conv, xsink);
                                 if (!*xsink) {
-                                    needs_write = val->hasNode()
-                                        ? conv->getInternalNode() != val->getInternalNode()
-                                        : (conv->getType() != val->getType() || !conv->isEqualHard(*val));
+                                    needs_write = !qore_value_unchanged_by_conversion(*val, *conv);
                                 }
                             }
                         }

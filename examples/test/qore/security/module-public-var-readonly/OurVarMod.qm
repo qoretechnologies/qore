@@ -58,6 +58,9 @@ public namespace OurVarMod {
     public our Obj o;
     public our G g;
     public our hash<auto> hn;
+    # a value that is not equal to itself
+    public our float f;
+    public our hash<auto> hnan;
     # not exported, but reachable with reflection through the module's namespace
     our int priv;
 
@@ -73,6 +76,8 @@ public namespace OurVarMod {
         o = new Obj();
         g = new G();
         hn = {"a": {"b": 1}};
+        f = @nan@;
+        hnan = {"n": @nan@};
         Obj::resetStatic();
     }
 
