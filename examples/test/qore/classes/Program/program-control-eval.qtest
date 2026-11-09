@@ -13,18 +13,27 @@
 
 #! the Programs whose commits create evaluation Programs of each other (see crossCommitTest())
 our hash<string, ProgramControl> EvalPeers;
-#! the rendezvous of the commits
+#! the rendezvous of the commits before they copy each other's Program
 our Counter EvalSync;
+#! the rendezvous of the commits after they tried to copy each other's Program, so that neither ends before both tried
+our Counter EvalDone;
 
 #! returns the control object of the Program with the given name; imported into the committed Programs
 ProgramControl sub eval_peer(string name) {
     return EvalPeers{name};
 }
 
-#! waits until both commits run their initializers; imported into the committed Programs
+#! waits until both commits run their initializers, so that each holds its Program's parse lock; imported into the
+#! committed Programs; not bounded, as both commits always get here
 sub eval_rendezvous() {
     EvalSync.dec();
-    EvalSync.waitForZero(30s);
+    EvalSync.waitForZero();
+}
+
+#! waits until both commits tried to copy the other Program; imported into the committed Programs
+sub eval_done() {
+    EvalDone.dec();
+    EvalDone.waitForZero();
 }
 
 #! ProgramControl::createEvalProgram() creates a Program whose code can refer to all code of the controlled Program
@@ -55,12 +64,15 @@ class X {
     }
     static string go() {
         eval_rendezvous();
+        string rv;
         try {
             eval_peer(get_script_name() == 'p' ? 'q' : 'p').createEvalProgram(PO_NEW_STYLE);
-            return 'copied';
+            rv = 'copied';
         } catch (hash<ExceptionInfo> ex) {
-            return ex.err + ': ' + ex.desc;
+            rv = ex.err + ': ' + ex.desc;
         }
+        eval_done();
+        return rv;
     }
 }
 string sub v() {
@@ -265,11 +277,13 @@ string sub go() {
     #! the thread's own, copies it
     crossCommitTest() {
         EvalSync = new Counter(2);
+        EvalDone = new Counter(2);
         hash<string, Program> pgms;
         foreach string name in (("p", "q")) {
             Program p(PO_NEW_STYLE | PO_ALLOW_DEBUGGER);
             p.importFunction("eval_peer");
             p.importFunction("eval_rendezvous");
+            p.importFunction("eval_done");
             p.setScriptPath("/eval/" + name);
             EvalPeers{name} = p.getProgram();
             pgms{name} = p;
