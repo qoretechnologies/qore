@@ -2420,8 +2420,18 @@ static QoreValue qore_rt_build_selector_range_values(int64 start, int64 stop, bo
 
 static QoreValue qore_rt_build_selector_range(const QoreValue& seq, QoreValue start, QoreValue stop,
         bool negative_offsets, ExceptionSink* xsink) {
-    if (negative_offsets
-            && (start.isNothing() || stop.isNothing() || start.getAsBigInt() < 0 || stop.getAsBigInt() < 0)) {
+    // a range in a list of selectors is evaluated as the range operator (..) first, which raises an exception for a
+    // bound that evaluates to NOTHING, as the AST interpreter's QoreSquareBracketsOperatorNode does before it resolves
+    // negative offsets; resolving them first took a missing bound as the start or the end of the list (qore#5656)
+    if (start.isNothing()) {
+        xsink->raiseException("RANGE-ERROR", "the start expression of the range operator (..) evaluated to NOTHING");
+        return QoreValue();
+    }
+    if (stop.isNothing()) {
+        xsink->raiseException("RANGE-ERROR", "the end expression of the range operator (..) evaluated to NOTHING");
+        return QoreValue();
+    }
+    if (negative_offsets && (start.getAsBigInt() < 0 || stop.getAsBigInt() < 0)) {
         int64 effective_start;
         int64 effective_stop;
         int64 seq_size;
@@ -2435,15 +2445,6 @@ static QoreValue qore_rt_build_selector_range(const QoreValue& seq, QoreValue st
             return new QoreListNode(bigIntTypeInfo);
         }
         return qore_rt_build_selector_range_values(effective_start, effective_stop, true, xsink);
-    }
-
-    if (start.isNothing()) {
-        xsink->raiseException("RANGE-ERROR", "the start expression of the range operator (..) evaluated to NOTHING");
-        return QoreValue();
-    }
-    if (stop.isNothing()) {
-        xsink->raiseException("RANGE-ERROR", "the end expression of the range operator (..) evaluated to NOTHING");
-        return QoreValue();
     }
 
     int64 s = start.getAsBigInt();
