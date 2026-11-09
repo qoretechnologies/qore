@@ -218,4 +218,26 @@ list<int> l1(1);
     - @ref Qore::Program::setThreadEntryHandler() "Program::setThreadEntryHandler()" can be used to set and restore
       the values of @ref thread_local variables every time a thread enters and leaves a child Program, for threads
       that run the code of more than one Program
+
+    @subsection thread_local_lifetime Lifetime of Thread-Local Values
+    The value that a thread gives a <tt><b>thread_local</b></tt> variable is released:
+    - when the @ref Qore::Program "Program" that declares the variable is deleted, in every thread that has a value;
+      a variable that another Program imports (a @ref mod_public "public" variable of a user module or of a parent
+      Program) is released when the last Program holding it is deleted: if the Program that declares it is deleted
+      first, it releases the value of the deleting thread only, and the values of the other threads are released
+      with the last Program importing the variable
+    - when the thread ends
+    - between the tasks of a worker thread of a @ref Qore::Thread::ThreadPool "ThreadPool" or of the
+      @ref Qore::AsyncIoController "AsyncIoController", so that a task does not see the values of the previous one
+
+    While a thread releases its values, when it ends or between the tasks of a worker thread, the destructors that
+    the release runs cannot assign <tt><b>thread_local</b></tt> variables: an assignment raises a
+    \c DESTRUCTOR-ERROR exception, as a destructor giving a variable a value whose destructor gave it a value again
+    would keep the release going for ever.  A worker thread can assign them again afterwards, in the code that clears
+    its other data (the cleanup of @ref thread_resources "thread resources") and in its next task.
+
+    A thread releases its values of the variables of a Program that is being deleted in another thread before the
+    Program's data is deleted, so that the destructors of the objects of the Program's classes still run; the
+    deletion of the Program waits for the thread while it releases such values, but not while it releases values
+    whose destructors are code of other Programs.
 */

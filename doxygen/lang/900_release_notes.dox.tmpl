@@ -86,6 +86,13 @@
     lookup delayed every accept, and \c source (the peer's IP address) is set as before.  Socket::getPeerInfo()
     still resolves the hostname on request.
 
+    @par Destructors Cannot Assign Thread-Local Variables While a Worker Thread Releases Its Values
+    A worker thread of a @ref Qore::Thread::ThreadPool "ThreadPool" or of the
+    @ref Qore::AsyncIoController "AsyncIoController" releases the values of its @ref thread_local variables between
+    its tasks; as at the end of a thread, the destructors that the release runs now cannot assign
+    <tt><b>thread_local</b></tt> variables (\c DESTRUCTOR-ERROR): a destructor giving a variable a value whose
+    destructor gave it a value again kept the worker releasing values for ever (see @ref thread_local_lifetime)
+
     @par Final Methods Hold for the Whole Class Hierarchy
     A subclass can no longer bypass a @ref final_methods "final" method with an overload that accepts the same
     arguments or with a parent class listed before the final method's class that declares or inherits its name;
@@ -1476,6 +1483,23 @@
     - @ref zohoinvoicerestclientintro "ZohoInvoiceRestClient": REST client for the Zoho Invoice API
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
+
+    - the value of a @ref thread_local "thread_local" variable could be read by the code of a
+      @ref Qore::Program "Program" created after the Program declaring the variable was deleted, with its type, in
+      another thread that ran both Programs' code (the threads of a pool, across sandboxes); the values of the
+      threads other than the deleting one were kept until the threads ended, and their destructors could raise
+      \c PROGRAM-ERROR; the values of every thread are now released with the variable, and a thread that ends or
+      clears its values while the Program is deleted in another thread releases them while the Program can still run
+      their destructors (see @ref thread_local_lifetime)
+    - a thread that ended made every @ref thread_local "thread_local" variable that a destructor read while it ended
+      read-only in every thread ("illegal variable assignment after second phase of variable destruction")
+    - using a @ref lvalue_references "reference" to a lvalue of a deleted @ref Qore::Program "Program", which a
+      function of the Program can return, crashed; it now raises a \c PROGRAM-ERROR exception (see
+      @ref references_overview)
+    - a thread running the code of a @ref Qore::Program "Program" whose deletion waited for it could not call into the
+      Program again through the code of another Program (\c PROGRAM-ERROR); see @ref threads_and_program_deletion
+    - in the IR, JIT and tiered execution modes, leaving the scope of a variable holding a reference to a lvalue that
+      was gone, such as a member of a deleted object, raised an exception that the AST interpreter does not raise
 
     - a @ref cast "cast" as the lvalue of @ref remove "remove" or @ref delete "delete" (ex: <tt>remove cast<int>(x)</tt>)
       or in the lvalue of a @ref lvalue_references "reference" aborted debug builds or gave wrong results; it is now a
