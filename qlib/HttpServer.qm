@@ -5042,6 +5042,29 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         # Detect HTTP/2 or HTTP/3 extended CONNECT (RFC 8441 / RFC 9220)
         bool ext_connect = is_extended_connect(cx, hdr);
 
+        # any 2xx response to an extended CONNECT establishes the tunnel (RFC 8441 section 4, RFC 9220): a handler
+        # that is not a socket handler and answers with an ordinary (non-streaming) 2xx response, such as a catch-all
+        # handler that serves a page for every path, cannot accept the protocol; sent as it is, the response would
+        # promise a tunnel and end the stream at once (issue #5667).  The request is refused instead, so that a
+        # client in automatic HTTP-version mode can fall back to an HTTP/1.1 Upgrade and one that requested HTTP/2 or
+        # HTTP/3 gets a clear error
+        if (ext_connect && !rv.streaming && rv."code" >= 200 && rv."code" < 300) {
+            string proto_label = (cx."header-info".http3 ?? False) ? "HTTP/3" : "HTTP/2";
+            listener.logError("cid %d: %s extended CONNECT (protocol %y) answered by handler %y with a %d response "
+                "that does not establish a tunnel; refusing the request", cx.id, proto_label, hdr.":protocol",
+                cx.handler_name, rv."code");
+            # the refusal replaces the handler's response and is sent as an error response below, which also works
+            # with the asynchronous I/O controller (HTTP/2 multiplexing, HTTP/3)
+            rv."code" = 501;
+            rv.body = sprintf("the resource does not support the requested protocol (%s extended CONNECT)",
+                proto_label);
+            remove rv.chunked_body;
+            remove rv.send_callback;
+            if (rv.hdr) {
+                remove rv.hdr{"Content-Type", "Content-Length", "Content-Encoding", "Transfer-Encoding"};
+            }
+        }
+
         if (rv."code" >= 300 && rv."code" < 400) {
             # handle redirect msgs (RFC 2616 section 10.3 http://tools.ietf.org/html/rfc2616#section-10.3)
             doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out);
