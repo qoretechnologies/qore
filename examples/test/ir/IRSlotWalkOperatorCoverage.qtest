@@ -1,0 +1,242 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%exec-class IRSlotWalkOperatorCoverageTest
+
+#! Guard test: the IR slot walk reaches the operands of every operator class
+/** collectLocalSlotsFromExpr() (lib/QoreIRVerifier.cpp) gives a slot to every local variable of an AST expression
+    that an instruction evaluates with its node.  A background helper takes exactly the locals that have slots in it
+    as its parameters, so a local the walk misses is not instantiated in the new thread, which raises LVALUE-ERROR
+    (the operators with three and four operands were missed: a local used only in a ?: in new hash<K, V>(...) in a
+    background expression).  The walk has no fallback for a node it does not know, so every operator class in
+    include/qore/intern must derive from one of the operator classes it handles; this test reads the headers and the
+    walk and fails for an operator class that does not, and for a handled class that the walk no longer casts to.
+*/
+class IRSlotWalkOperatorCoverageTest inherits QUnit::Test {
+    public {
+        #! the operator classes the walk handles, with the cast in the walk that matches each of them
+        const Handled = {
+            "QoreBinaryOperatorNode<QoreOperatorNode>": "dynamic_cast<const QoreBinaryOperatorNode<>*>",
+            "QoreBinaryOperatorNode<LValueOperatorNode>":
+                "dynamic_cast<const QoreBinaryOperatorNode<LValueOperatorNode>*>",
+            "QoreSingleExpressionOperatorNode<QoreOperatorNode>":
+                "dynamic_cast<const QoreSingleExpressionOperatorNode<>*>",
+            "QoreSingleExpressionOperatorNode<LValueOperatorNode>":
+                "dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>",
+            "QoreSingleValueExpressionOperatorNode<QoreOperatorNode>":
+                "dynamic_cast<const QoreSingleValueExpressionOperatorNode<>*>",
+            "QoreNOperatorNodeBase<3,QoreOperatorNode>": "dynamic_cast<const QoreNOperatorNodeBase<3>*>",
+            "QoreNOperatorNodeBase<4,QoreOperatorNode>": "dynamic_cast<const QoreNOperatorNodeBase<4>*>",
+            "QoreDotEvalOperatorNode": "dynamic_cast<const QoreDotEvalOperatorNode*>",
+            "QoreExtractOperatorNode": "dynamic_cast<const QoreExtractOperatorNode*>",
+            "QoreSpliceOperatorNode": "dynamic_cast<const QoreSpliceOperatorNode*>",
+        };
+
+        #! the abstract operator classes, which no expression is an object of
+        const Abstract = {
+            "QoreOperatorNode": True,
+            "LValueOperatorNode": True,
+        };
+
+        #! the class templates whose instantiations are operator bases; the default template arguments
+        const Templates = {
+            "QoreBinaryOperatorNode": ("QoreOperatorNode",),
+            "QoreSingleExpressionOperatorNode": ("QoreOperatorNode",),
+            "QoreSingleValueExpressionOperatorNode": ("QoreOperatorNode",),
+            "QoreNOperatorNodeBase": (NOTHING, "QoreOperatorNode"),
+        };
+    }
+
+    private {
+        string src_dir;
+    }
+
+    constructor() : QUnit::Test("IRSlotWalkOperatorCoverageTest", "1.0", \ARGV) {
+        src_dir = get_script_dir() + "/../../..";
+        addTestCase("every operator class is walked", \testOperatorClasses());
+        addTestCase("the walk casts to every handled class", \testWalkCasts());
+        addTestCase("an operator class of an unhandled base is reported", \testUnhandledReported());
+        set_return_value(main());
+    }
+
+    testOperatorClasses() {
+        string headers = "";
+        foreach string file in (glob(src_dir + "/include/qore/intern/*.h")) {
+            headers += ReadOnlyFile::readTextFile(file) + "\n";
+        }
+        hash<string, list<string>> bases = parseClasses(headers);
+        list<string> ops = operatorClasses(bases);
+        # the operators of the language are many more than the bases; a scan that finds few has failed
+        assertGt(80, ops.size(), "operator classes found");
+        assertEq((), uncovered(bases, ops), "operator classes whose operands the slot walk does not reach");
+    }
+
+    testWalkCasts() {
+        string walk = getWalk();
+        foreach hash<auto> i in (Handled.pairIterator()) {
+            assertTrue(walk.find(i.value) >= 0, sprintf("collectLocalSlotsFromExpr() handles %s (%s)", i.key,
+                i.value));
+        }
+        # an operator that matches no branch fails an assertion in a debug build
+        assertTrue(walk.find("assert(ntype != NT_OPERATOR)") >= 0, "the walk asserts that it handled the operator");
+    }
+
+    #! the check itself reports an operator class whose base the walk does not handle
+    testUnhandledReported() {
+        string headers = "class QoreFiveOperatorNode : public QoreNOperatorNodeBase<5> {\n};\n"
+            "class QoreTernaryOperatorNode : public QoreNOperatorNodeBase<3> {\n};\n"
+            "class QoreRawOperatorNode : public QoreOperatorNode {\n};\n"
+            "class QoreSubOperatorNode\n    : public QoreTernaryOperatorNode, public FunctionalOperator {\n};\n";
+        hash<string, list<string>> bases = parseClasses(headers);
+        list<string> ops = operatorClasses(bases);
+        assertEq(("QoreFiveOperatorNode", "QoreRawOperatorNode", "QoreSubOperatorNode", "QoreTernaryOperatorNode"),
+            sort(ops));
+        assertEq(("QoreFiveOperatorNode", "QoreRawOperatorNode"), sort(uncovered(bases, ops)));
+    }
+
+    #! returns the source of collectLocalSlotsFromExpr()
+    private string getWalk() {
+        string src = ReadOnlyFile::readTextFile(src_dir + "/lib/QoreIRVerifier.cpp");
+        int start = src.find("static void collectLocalSlotsFromExpr(const QoreValue& expr,");
+        assertTrue(start >= 0, "collectLocalSlotsFromExpr() found");
+        int end = src.find("\n}\n", start);
+        assertTrue(end > start, "the end of collectLocalSlotsFromExpr() found");
+        return src.substr(start, end - start);
+    }
+
+    #! returns the direct bases of every class declared in the source, normalized (see normalize())
+    private hash<string, list<string>> parseClasses(string src) {
+        hash<string, list<string>> rv();
+        # a class definition, with its bases up to the opening brace; the second group always matches, so that the
+        # list has two elements for each class
+        *list<*string> m = (src =~ x/\bclass\s+(\w+)\s*(?:final\s*)?(:[^{;]*|)\{/g);
+        for (int i = 0; i < m.size(); i += 2) {
+            string name = m[i];
+            if (exists rv{name}) {
+                continue;
+            }
+            list<string> base_list = ();
+            if (*string b = m[i + 1]) {
+                b = replace(b.substr(1), "\n", " ");
+                foreach string base in (splitBases(b)) {
+                    base = trim(regex_subst(base, "^\\s*(public|protected|private|virtual)\\s+", ""));
+                    base = trim(regex_subst(base, "^\\s*(public|protected|private|virtual)\\s+", ""));
+                    if (base.val()) {
+                        base_list += normalize(base);
+                    }
+                }
+            }
+            rv{name} = base_list;
+        }
+        return rv;
+    }
+
+    #! splits a base clause at the commas that are not in template arguments
+    private list<string> splitBases(string b) {
+        list<string> rv = ();
+        string cur = "";
+        int depth = 0;
+        for (int i = 0; i < b.size(); ++i) {
+            string c = b[i];
+            if (c == "<") {
+                ++depth;
+            } else if (c == ">") {
+                --depth;
+            } else if (c == "," && !depth) {
+                rv += cur;
+                cur = "";
+                continue;
+            }
+            cur += c;
+        }
+        rv += cur;
+        return rv;
+    }
+
+    #! returns a base with its template arguments complete (the defaults filled in) and without spaces
+    private string normalize(string base) {
+        base = replace(base, " ", "");
+        *list<*string> p = (base =~ x/^(\w+)<(.*)>$/);
+        if (!p) {
+            return base;
+        }
+        string tmpl = p[0];
+        *list<auto> defaults = Templates{tmpl};
+        if (!defaults) {
+            return base;
+        }
+        list<string> args = p[1].val() ? p[1].split(",") : ();
+        for (int i = args.size(); i < defaults.size(); ++i) {
+            if (defaults[i]) {
+                args += defaults[i];
+            }
+        }
+        return sprintf("%s<%s>", tmpl, args.join(","));
+    }
+
+    #! returns the name of a template instantiation's template, or the class name
+    private string templateName(string base) {
+        *list<*string> p = (base =~ x/^(\w+)</);
+        return p ? p[0] : base;
+    }
+
+    #! returns all bases of a class, transitively; an instantiation of an operator template is a base of its own
+    private list<string> allBases(hash<string, list<string>> bases, string name, *hash<string, bool> seen) {
+        list<string> rv = ();
+        foreach string base in (bases{name} ?? ()) {
+            if (seen{base}) {
+                continue;
+            }
+            seen{base} = True;
+            rv += base;
+            if (!Templates{templateName(base)}) {
+                rv += allBases(bases, base, seen);
+            }
+        }
+        return rv;
+    }
+
+    #! returns the concrete operator classes: the classes that derive from QoreOperatorNode
+    private list<string> operatorClasses(hash<string, list<string>> bases) {
+        list<string> rv = ();
+        foreach string name in (keys bases) {
+            if (Abstract{name} || Templates{name}) {
+                continue;
+            }
+            foreach string base in (allBases(bases, name)) {
+                if (base == "QoreOperatorNode" || base == "LValueOperatorNode" || Templates{templateName(base)}) {
+                    rv += name;
+                    break;
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! returns the operator classes that neither are nor derive from a handled class
+    private list<string> uncovered(hash<string, list<string>> bases, list<string> ops) {
+        list<string> rv = ();
+        foreach string name in (ops) {
+            if (Handled{name}) {
+                continue;
+            }
+            bool covered = False;
+            foreach string base in (allBases(bases, name)) {
+                if (Handled{base}) {
+                    covered = True;
+                    break;
+                }
+            }
+            if (!covered) {
+                rv += name;
+            }
+        }
+        return sort(rv);
+    }
+}

@@ -40,6 +40,9 @@
 #include <qore/intern/QoreTypeInfo.h>
 #include <qore/intern/VarRefNode.h>
 #include <qore/intern/QoreOperatorNode.h>
+#include <qore/intern/QoreExtractOperatorNode.h>
+#include <qore/intern/QoreSpliceOperatorNode.h>
+#include <qore/intern/FindNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
 #include <qore/intern/QoreDotEvalOperatorNode.h>
 #include <qore/intern/SelfVarrefNode.h>
@@ -959,6 +962,14 @@ static void collectLocalsFromFindInstruction(const QoreIRFindInstruction* find_i
 
 //! Recursively walk an expression in source order and collect LocalVar* slots
 //! needed to serialize embedded AST expression trees.
+/** The walk must reach every local variable of the expression: an instruction that evaluates an embedded AST
+    expression reads its locals from the thread's local variable stack, and a background helper takes exactly the
+    locals that have slots in it as its parameters (QoreIRLowering::lowerBackgroundHelper()), so a local the walk
+    misses is not instantiated in the new thread (LVALUE-ERROR).  Every operator class therefore matches one of the
+    operator branches below; in a debug build an operator that matches none fails an assertion, and
+    examples/test/ir/IRSlotWalkOperatorCoverage.qtest checks that every operator class in include/qore/intern
+    derives from one of the classes the walk handles.
+*/
 static void collectLocalSlotsFromExpr(const QoreValue& expr,
         std::vector<const LocalVar*>& locals, std::unordered_set<const void*>& seen) {
     if (!expr.hasNode()) {
@@ -1013,7 +1024,8 @@ static void collectLocalSlotsFromExpr(const QoreValue& expr,
         collectLocalSlotsFromExpr(binop->getRight(), locals, seen);
         return;
     }
-    if (auto* binop = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
+    // the binary lvalue operators (assignments, +=, push, ..., and QoreBinaryIntLValueOperatorNode)
+    if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<LValueOperatorNode>*>(node)) {
         collectLocalSlotsFromExpr(binop->getLeft(), locals, seen);
         collectLocalSlotsFromExpr(binop->getRight(), locals, seen);
         return;
@@ -1028,6 +1040,34 @@ static void collectLocalSlotsFromExpr(const QoreValue& expr,
     }
     if (auto* unop = dynamic_cast<const QoreSingleValueExpressionOperatorNode<>*>(node)) {
         collectLocalSlotsFromExpr(unop->getExp(), locals, seen);
+        return;
+    }
+    // the operators with three operands (?:, map with a select expression, the hash form of map, a range subscript)
+    if (auto* nop = dynamic_cast<const QoreNOperatorNodeBase<3>*>(node)) {
+        for (unsigned i = 0; i < 3; ++i) {
+            collectLocalSlotsFromExpr(nop->get(i), locals, seen);
+        }
+        return;
+    }
+    // the operator with four operands (the hash form of map with a select expression)
+    if (auto* nop = dynamic_cast<const QoreNOperatorNodeBase<4>*>(node)) {
+        for (unsigned i = 0; i < 4; ++i) {
+            collectLocalSlotsFromExpr(nop->get(i), locals, seen);
+        }
+        return;
+    }
+    if (auto* ext = dynamic_cast<const QoreExtractOperatorNode*>(node)) {
+        collectLocalSlotsFromExpr(ext->getLValue(), locals, seen);
+        collectLocalSlotsFromExpr(ext->getOffset(), locals, seen);
+        collectLocalSlotsFromExpr(ext->getLength(), locals, seen);
+        collectLocalSlotsFromExpr(ext->getNewValue(), locals, seen);
+        return;
+    }
+    if (auto* spl = dynamic_cast<const QoreSpliceOperatorNode*>(node)) {
+        collectLocalSlotsFromExpr(spl->getLValue(), locals, seen);
+        collectLocalSlotsFromExpr(spl->getOffset(), locals, seen);
+        collectLocalSlotsFromExpr(spl->getLength(), locals, seen);
+        collectLocalSlotsFromExpr(spl->getNewValue(), locals, seen);
         return;
     }
     if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
@@ -1109,6 +1149,9 @@ static void collectLocalSlotsFromExpr(const QoreValue& expr,
             collectLocalSlotsFromExpr(ncl->args, locals, seen);
         } else if (auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
             collectLocalSlotsFromExpr(ncb->args, locals, seen);
+        } else {
+            // every new expression is a call (ScopedObjectCallNode, above) or one of the classes here
+            assert(false);
         }
         if (plist) {
             for (size_t i = 0; i < plist->size(); ++i) {
@@ -1133,7 +1176,17 @@ static void collectLocalSlotsFromExpr(const QoreValue& expr,
         for (const QoreValue& value : phash->getValues()) {
             collectLocalSlotsFromExpr(value, locals, seen);
         }
+        return;
     }
+    if (ntype == NT_FIND) {
+        auto* find = reinterpret_cast<const FindNode*>(node);
+        collectLocalSlotsFromExpr(find->exp, locals, seen);
+        collectLocalSlotsFromExpr(find->find_exp, locals, seen);
+        collectLocalSlotsFromExpr(find->where, locals, seen);
+        return;
+    }
+    // an operator that matches none of the operator branches above would have its locals missed
+    assert(ntype != NT_OPERATOR);
 }
 
 //! Recursively walks a StatementBlock AST tree to find all local variable references.

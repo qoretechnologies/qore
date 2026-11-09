@@ -56,7 +56,16 @@ by the synthetic ones in the order recorded. A background expression declares no
 instruction that evaluates an AST expression with its node (`new hash<K, V>()`, `new list<T>()`, ...) reads a local of
 that expression from the thread's local variable stack, so the slot walk (`collectLocalSlotsFromExpr()`,
 `lib/QoreIRVerifier.cpp`) must give every such local a slot: a local it misses is not a parameter, and the new thread
-raises `LVALUE-ERROR` when it evaluates the expression.
+raises `LVALUE-ERROR` when it evaluates the expression. The walk has no fallback for a node it does not know, so every
+operator class must derive from one of the operator classes it handles (the binary, single-expression and N-operand
+bases, `QoreDotEvalOperatorNode`, `QoreExtractOperatorNode`, `QoreSpliceOperatorNode`): an operator that matches none
+fails an assertion in a debug build, and `examples/test/ir/IRSlotWalkOperatorCoverage.qtest` reads the headers and
+fails for an operator class that does not derive from a handled one.
+
+The copies of calls (`ScopedObjectCallNode` included) release their arguments in `~AbstractFunctionCallNode()`, with
+an exception sink of its own; the copies of the other nodes (lists, hashes, operators, the `NewHashDeclNode` and
+`NewComplex*Node` classes, `ParseObjectMethodReferenceNode`) release their operands in `derefImpl()`, with the
+releasing thread's exception sink.
 
 If the expression calls a method of the starting code's object (`SelfFunctionCallNode` with a non-static or
 unresolved method, see `lowerSelfCall()`), `helper_uses_self` is set: the new thread runs with that object as its

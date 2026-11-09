@@ -58,6 +58,14 @@ class BackgroundThreadEvalTest inherits QUnit::Test {
             "new-complex-list": "6",
             "new-complex-buffer": "8",
             "object-method-ref": "9",
+            "question-mark-hash": "11",
+            "question-mark-list": "[12]",
+            "question-mark-key": "{a: 33}",
+            "map-select": "[[12, 13]]",
+            "hash-map": "{a: 13}",
+            "hash-map-select": "{a: 14}",
+            "range-subscript": "[[2, 3]]",
+            "map-select-new-object": "[[5, 9]]",
         };
 
         #! a top-level script whose local is used in a loop and in a background call

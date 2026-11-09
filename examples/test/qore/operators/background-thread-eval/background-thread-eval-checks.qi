@@ -398,6 +398,21 @@ public class TypedHolder {
     }
 }
 
+#! returns the value given, or "gate-timeout" if the wait for the gate (the first argument, evaluated before the value)
+#! timed out
+auto sub after_gate(int wait_rc, auto v) {
+    return wait_rc ? "gate-timeout" : v;
+}
+
+#! returns the next value of the queue formatted with %y, or "timeout"
+string sub get_y(Queue q) {
+    try {
+        return sprintf("%y", q.get(Timeout));
+    } catch (hash<ExceptionInfo> ex) {
+        return "timeout";
+    }
+}
+
 #! the arguments of new expressions and the object of a method reference take the values of the starting code's
 #! local variables when the thread starts (the AST interpreter evaluated them in the new thread, where the variables
 #! are not instantiated: LVALUE-ERROR, or no value for a closure-bound variable; the compiled tiers did so for new
@@ -414,9 +429,12 @@ hash<string, string> sub construction_checks() {
     gate.dec();
     rv."new-object" = get_str(q);
 
+    gate = new Counter(1);
     Mutex m();
     Counter c(2);
-    background record(q, (new TypedHolder(m, c)).v);
+    background record(q, after_gate(wait_gate(gate), (new TypedHolder(m, c)).v));
+    c = new Counter(5);
+    gate.dec();
     rv."new-object-typed" = get_str(q);
 
     # a variable that a closure captures is closure-bound
@@ -462,6 +480,82 @@ hash<string, string> sub construction_checks() {
     o = new Holder(0);
     gate.dec();
     rv."object-method-ref" = get_str(q);
+    return rv + operand_checks();
+}
+
+#! the locals used only in an operand of an operator with three or four operands in the arguments of a new expression
+#! of a complex type, which compiled code evaluates with the node: they are taken when the thread starts, as any local
+#! (compiled code gave the background helper no parameter for them, so the new thread raised LVALUE-ERROR)
+hash<string, string> sub operand_checks() {
+    hash<string, string> rv();
+    Queue q();
+
+    Counter gate(1);
+    bool tc = True;
+    int tx = 11;
+    background record(q, after_gate(wait_gate(gate), (new hash<string, int>({"a": tc ? tx : 0})).a));
+    tc = False;
+    tx = 0;
+    gate.dec();
+    rv."question-mark-hash" = get_y(q);
+
+    gate = new Counter(1);
+    bool bc = True;
+    int bx = 12;
+    background record(q, after_gate(wait_gate(gate), new list<auto>(bc ? bx : 0)));
+    bc = False;
+    bx = 0;
+    gate.dec();
+    rv."question-mark-list" = get_y(q);
+
+    gate = new Counter(1);
+    bool tk = True;
+    background record(q, after_gate(wait_gate(gate), new hash<string, int>({tk ? "a" : "b": 33})));
+    tk = False;
+    gate.dec();
+    rv."question-mark-key" = get_y(q);
+
+    gate = new Counter(1);
+    int mx = 10;
+    int msel = 1;
+    background record(q, after_gate(wait_gate(gate), new list<auto>(map $1 + mx, (1, 2, 3), $1 > msel)));
+    mx = 0;
+    msel = 5;
+    gate.dec();
+    rv."map-select" = get_y(q);
+
+    gate = new Counter(1);
+    int hmx = 13;
+    background record(q, after_gate(wait_gate(gate), new hash<string, int>(map {$1: hmx}, ("a",))));
+    hmx = 0;
+    gate.dec();
+    rv."hash-map" = get_y(q);
+
+    gate = new Counter(1);
+    int hsx = 14;
+    background record(q, after_gate(wait_gate(gate), new hash<string, int>(map {$1: hsx}, ("a", "b"),
+        $1 == "a")));
+    hsx = 0;
+    gate.dec();
+    rv."hash-map-select" = get_y(q);
+
+    gate = new Counter(1);
+    list<int> rl = (1, 2, 3, 4);
+    int ri = 1;
+    background record(q, after_gate(wait_gate(gate), new list<auto>(rl[ri..ri + 1])));
+    rl = (0, 0, 0, 0);
+    ri = 0;
+    gate.dec();
+    rv."range-subscript" = get_y(q);
+
+    gate = new Counter(1);
+    list<int> sl = (1, 5, 9);
+    int sc = 4;
+    background record(q, after_gate(wait_gate(gate), new list<auto>(map $1, sl, (new Holder(sc)).v < $1)));
+    sl = (0, 0, 0);
+    sc = 100;
+    gate.dec();
+    rv."map-select-new-object" = get_y(q);
     return rv;
 }
 
