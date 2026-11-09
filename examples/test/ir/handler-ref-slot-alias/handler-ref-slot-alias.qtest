@@ -21,6 +21,12 @@
     RUNTIME-TYPE-ERROR, and the error path then crashed (JIT, tiered and AOT; the AST and IR interpreters were
     correct).
 
+    The cases from the review: an assignment that binds a reference local and raises, followed by a handler (where
+    native code stored the value in the variable's cache before the runtime assignment raised), a handler that assigns
+    NOTHING to an unbound reference local, reference locals declared without a value before or after the handler and
+    bound by their first assignment, one declared in a loop body bound in an earlier iteration, recursion, a method,
+    top-level code, and assignments to locals that are not references that raise before a handler runs.
+
     The script next to the test runs the cases in every execution mode, on the IR tier and as AOT executables at -O0
     and -O3, and its output must be that of the AST interpreter.
 */
@@ -32,7 +38,18 @@ class HandlerRefSlotAliasTest inherits QUnit::Test {
             "in loop: m=7; error 0; caught BS; m=8; error 1; caught BS",
             "in handler: nested; nested caught IN; outer o=6; caught X",
             "nothing assigned: inner; x=4",
+            "bound then failed: bind 1 RUNTIME-TYPE-ERROR; handler o=1; o=5",
+            "handler assigns nothing: bind RUNTIME-TYPE-ERROR; o=1",
+            "declared before bound after: handler; o=5",
+            "declared after bound: handler; o=8",
+            "loop rebound: handler 1; handler 2; vals=[11, 12, 13]",
+            "recursive: 102,101,100",
+            "method: handler; o=5",
+            "failed assignments: x RUNTIME-TYPE-ERROR; a RUNTIME-TYPE-ERROR; si RUNTIME-TYPE-ERROR; l RUNTIME-TYPE-ERROR; w RUNTIME-TYPE-ERROR; handler x=1 a=A1 si=3 l=[1, 2] w=False; x=1 a=A1 si=3 l=[1, 2]",
         );
+
+        #! the line that the top-level code of the script prints once, after the iterations
+        const TopLevel = "top level: handler; o=9";
 
         #! the script prints its lines this many times
         const Iterations = 3;
@@ -83,6 +100,6 @@ class HandlerRefSlotAliasTest inherits QUnit::Test {
 
     #! the expected output: the lines, printed once per iteration
     private string expected() {
-        return strmul((foldl $1 + "\n" + $2, Expected) + "\n", Iterations);
+        return strmul((foldl $1 + "\n" + $2, Expected) + "\n", Iterations) + TopLevel + "\n";
     }
 }
