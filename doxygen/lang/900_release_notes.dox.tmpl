@@ -87,15 +87,10 @@
     still resolves the hostname on request.
 
     @par Modules May Not Declare Public thread_local Variables
-    A user module that declares a <tt>public thread_local</tt> variable no longer loads: the declaration raises a
-    \c MODULE-PUBLIC-THREAD-LOCAL parse exception, also when the module is compiled with \c qcc.  A module's public
-    variable is shared by every %Program that imports the module, so a public thread-local variable let any importer
-    set a value that another importer reads on the same thread.  A third-party module that declares one must keep the
-    variable private and export public functions or methods that read and set it; see @ref thread_local.  A module
-    compiled with an earlier version of \c qcc that exports such a variable is refused when it is loaded, and must be
-    changed in the same way and recompiled.  A <tt>public thread_local</tt> variable of a %Program, which is passed to
-    the child Programs it creates directly, is still supported.  None of the modules distributed with %Qore declare
-    one.
+    A module that declares a <tt>public thread_local</tt> variable raises \c MODULE-PUBLIC-THREAD-LOCAL when parsed or
+    compiled; keep the variable private and export functions that read and set it (see @ref thread_local).  A module
+    compiled by an earlier \c qcc that exports one is refused when loaded and must be changed and recompiled.  A
+    %Program's <tt>public thread_local</tt> variables are still passed to its child Programs.
 
     @par Final Methods Hold for the Whole Class Hierarchy
     A subclass can no longer bypass a @ref final_methods "final" method with an overload that accepts the same
