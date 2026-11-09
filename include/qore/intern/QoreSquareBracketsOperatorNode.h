@@ -139,9 +139,7 @@ public:
         lhs.clearTemp();
     }
 
-    DLLLOCAL virtual ~QoreFunctionalSquareBracketsComplexOperator() {
-        clearRange(nullptr);
-    }
+    DLLLOCAL virtual ~QoreFunctionalSquareBracketsComplexOperator() {}
 
     DLLLOCAL virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink);
 
@@ -151,32 +149,21 @@ protected:
     ValueOptionalRefHolder leftValue;
     const QoreParseListNode* rightParseList;
     qore_offset_t offset = -1;
-    //! the indices of the current range selector, as the range operator gives them, or nullptr
-    QoreListNode* rangeList = nullptr;
-    //! the position of the next index in \a rangeList
-    size_t rangePos = 0;
-    //! true while the current range selector is iterated over the effective range of the sequence
-    bool inEffectiveRange = false;
-    //! the next index and the last index of the effective range, and the step between them
-    int64 effectiveIndex = 0;
-    int64 effectiveStop = 0;
-    int64 effectiveStep = 1;
+    //! true while the indices of a range selector are iterated
+    bool inRange = false;
+    //! true if the range is the effective range of a range with a negative bound, which checks for cancellation
+    bool rangeCheckCancel = false;
+    //! the next index and the last index of the current range, and the step between them
+    int64 rangeIndex = 0;
+    int64 rangeStop = 0;
+    int64 rangeStep = 1;
     //! counts the indices of an effective range for the cancellation check
     unsigned cancelCheck = 0;
     bool string_index_char = true;
     bool negative_offsets = false;
 
-    //! Starts the iteration of the range selector \a range, which it evaluates; returns -1 for an exception
-    DLLLOCAL int startRange(const QoreValue& range, ExceptionSink* xsink);
-
-    //! Releases the indices of the current range selector
-    DLLLOCAL void clearRange(ExceptionSink* xsink) {
-        if (rangeList) {
-            rangeList->deref(xsink);
-            rangeList = nullptr;
-        }
-        inEffectiveRange = false;
-    }
+    //! Starts the iteration of the range selector \a range, whose bounds it evaluates; returns -1 for an exception
+    DLLLOCAL int startRange(const class QoreRangeOperatorNode* range, ExceptionSink* xsink);
 };
 
 #endif

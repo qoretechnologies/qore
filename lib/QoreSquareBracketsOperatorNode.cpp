@@ -35,6 +35,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QorePluginRegistry.h"
 #include "qore/intern/QoreTypeSpec.h"
+#include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
 
 QoreString QoreSquareBracketsOperatorNode::op_str("[] operator expression");
 
@@ -812,63 +813,74 @@ const QoreTypeInfo* QoreFunctionalSquareBracketsOperator::getValueTypeImpl() con
     return nothingTypeInfo;
 }
 
-int QoreFunctionalSquareBracketsComplexOperator::startRange(const QoreValue& range, ExceptionSink* xsink) {
-    // the range is evaluated as doSquareBracketsListRange() evaluates it: as the value of the range operator, which
-    // raises RANGE-ERROR for a bound that is NOTHING, the start first
-    ValueEvalOptimizedRefHolder rh(range, xsink);
+int QoreFunctionalSquareBracketsComplexOperator::startRange(const QoreRangeOperatorNode* range,
+        ExceptionSink* xsink) {
+    // the bounds are evaluated as the range operator evaluates them for doSquareBracketsListRange(): a bound that is
+    // NOTHING raises RANGE-ERROR, the start before the end is evaluated
+    ValueEvalOptimizedRefHolder lh(range->getLeft(), xsink);
     if (*xsink) {
         return -1;
     }
-    int64 start;
-    int64 stop;
-    bool empty;
+    if (lh->isNothing()) {
+        xsink->raiseException("RANGE-ERROR", "the start expression of the range operator (..) evaluated to NOTHING");
+        return -1;
+    }
+    int64 start = lh->getAsBigInt();
+    ValueEvalOptimizedRefHolder rh(range->getRight(), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (rh->isNothing()) {
+        xsink->raiseException("RANGE-ERROR", "the end expression of the range operator (..) evaluated to NOTHING");
+        return -1;
+    }
+    int64 stop = rh->getAsBigInt();
     // with negative offsets, a range with a negative bound selects the elements of its effective range in the
-    // sequence, as when the list of selectors is evaluated as a value (qore#5688)
-    if (qore_get_effective_selector_range(*leftValue, *rh, negative_offsets, start, stop, empty, xsink)) {
+    // sequence, as when the list of selectors is evaluated as a value (qore#5688); otherwise each index of the range,
+    // which includes both bounds, selects an element.  The indices are computed as they are used, without a list.
+    rangeCheckCancel = false;
+    if (negative_offsets && (start < 0 || stop < 0)) {
+        int64 effective_start;
+        int64 effective_stop;
+        int64 seq_size;
+        bool has_range = QoreSquareBracketsRangeOperatorNode::getEffectiveRange(*leftValue, effective_start,
+            effective_stop, seq_size, QoreValue(start), QoreValue(stop),
+            static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE), negative_offsets, xsink);
         if (*xsink) {
             return -1;
         }
-        if (!empty) {
-            inEffectiveRange = true;
-            effectiveIndex = start;
-            effectiveStop = stop;
-            effectiveStep = start <= stop ? 1 : -1;
-            cancelCheck = 0;
+        if (!has_range) {
+            return 0;
         }
-        return 0;
+        start = effective_start;
+        stop = effective_stop;
+        rangeCheckCancel = true;
+        cancelCheck = 0;
     }
-    // otherwise each index of the range selects an element, as doSquareBrackets() applies a range to a list
-    assert(rh->getType() == NT_LIST);
-    rangeList = rh.takeReferencedValue().get<QoreListNode>();
-    rangePos = 0;
+    inRange = true;
+    rangeIndex = start;
+    rangeStop = stop;
+    rangeStep = start <= stop ? 1 : -1;
     return 0;
 }
 
 bool QoreFunctionalSquareBracketsComplexOperator::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
     while (true) {
-        if (inEffectiveRange) {
-            if (++cancelCheck % 100 == 0 && qore_check_cancel(xsink, "negative offset range selector")) {
-                clearRange(xsink);
+        if (inRange) {
+            if (rangeCheckCancel && ++cancelCheck % 100 == 0
+                    && qore_check_cancel(xsink, "negative offset range selector")) {
+                inRange = false;
                 return false;
             }
-            QoreValue index(effectiveIndex);
-            if (effectiveIndex == effectiveStop) {
-                inEffectiveRange = false;
+            QoreValue index(rangeIndex);
+            if (rangeIndex == rangeStop) {
+                inRange = false;
             } else {
-                effectiveIndex += effectiveStep;
+                rangeIndex += rangeStep;
             }
             val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*leftValue, index, false,
                 string_index_char, negative_offsets, xsink), true);
             return false;
-        }
-        if (rangeList) {
-            if (rangePos < rangeList->size()) {
-                QoreValue index = rangeList->retrieveEntry(rangePos++);
-                val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*leftValue, index, false,
-                    string_index_char, negative_offsets, xsink), true);
-                return false;
-            }
-            clearRange(xsink);
         }
 
         // do a step in the top-level list
@@ -878,11 +890,13 @@ bool QoreFunctionalSquareBracketsComplexOperator::getNextImpl(ValueOptionalRefHo
 
         // a range is evaluated when its position is reached, and its indices are given one at a time
         QoreValue n = rightParseList->get(offset);
-        if (n.getType() == NT_OPERATOR && dynamic_cast<const QoreRangeOperatorNode*>(n.getInternalNode())) {
-            if (startRange(n, xsink)) {
-                return false;
+        if (n.getType() == NT_OPERATOR) {
+            if (auto* range = dynamic_cast<const QoreRangeOperatorNode*>(n.getInternalNode())) {
+                if (startRange(range, xsink)) {
+                    return false;
+                }
+                continue;
             }
-            continue;
         }
 
         ValueEvalOptimizedRefHolder rh(n, xsink);

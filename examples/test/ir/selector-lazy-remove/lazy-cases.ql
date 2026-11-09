@@ -505,6 +505,41 @@ auto sub pure_map_strings() {
     return map $1 + "x", sl[f("a", 0), f("b", 1)..f("c", 2)];
 }
 
+# --- a sequence that no selector applies to: a functional operator's value is NOTHING ---
+
+auto sub none_map() {
+    *list<int> n;
+    return map $1, n[0, f("a", 1)..2];
+}
+
+auto sub none_select() {
+    *list<int> n;
+    return select n[0, f("a", 1)..2], True;
+}
+
+auto sub none_take() {
+    auto hv = h;
+    return take 1, hv[0, f("a", 1)..2];
+}
+
+#! removes the variable that \a r refers to, which makes an int local NOTHING
+sub clear_ref(reference<int> r) {
+    remove r;
+}
+
+auto sub remove_cleared_bound() {
+    list<int> m = (10, 11, 12, 13, 14);
+    int a = 1;
+    int e = 2;
+    clear_ref(\e);
+    try {
+        remove m[0, a..e];
+    } catch (hash<ExceptionInfo> ex) {
+        print("  caught " + ex.err + "\n");
+    }
+    return m;
+}
+
 # --- iterated elements are the elements of the value: a list of selectors with a range that a foreach statement or
 # an operator iterates gives the elements that it gives as a value, for every bound (qore#5688) ---
 
@@ -788,6 +823,10 @@ sub main() {
         t("inert pipeline", \inert_pipeline());
         t("inert value", \inert_value());
         t("inert remove", \inert_remove());
+        t("none map", \none_map());
+        t("none select", \none_select());
+        t("none take", \none_take());
+        t("remove cleared bound", \remove_cleared_bound());
         t("pure map", \pure_map());
         t("pure map raises", \pure_map_raises());
         t("pure select", \pure_select());

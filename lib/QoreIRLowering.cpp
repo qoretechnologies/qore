@@ -13806,10 +13806,13 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
                 // always holds an int
                 if (qore_ir_selector_eval_is_inert(selector)) {
                     auto* range = dynamic_cast<const QoreRangeOperatorNode*>(selector.getInternalNode());
+                    // an int local that no closure captures and of which no reference is taken: a callee can
+                    // remove a local through a reference, which makes it NOTHING
                     auto bound_may_be_nothing = [this](const QoreValue& bound) -> bool {
                         if (auto* var = dynamic_cast<const VarRefNode*>(bound.getInternalNode())) {
                             const QoreTypeInfo* ti = var->ref.id ? var->ref.id->getTypeInfo() : nullptr;
-                            if (ti == bigIntTypeInfo || ti == softBigIntTypeInfo) {
+                            if (var->getType() == VT_LOCAL && !var->ref.id->closureUse()
+                                    && (ti == bigIntTypeInfo || ti == softBigIntTypeInfo)) {
                                 return false;
                             }
                         }
@@ -19568,6 +19571,10 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             || stages.front().kind == LazyPipelineStage::StreamTakeWhile
             || stages.front().kind == LazyPipelineStage::StreamTakeUntil);
     const QoreTypeInfo* base_source_type = getExprTypeInfo(base_source);
+    // a lazy list of selectors gives the values of its sequence, which is a collection only if it is a list
+    if (selector_source) {
+        base_source_type = getExprTypeInfo(selector_source.op->getLeft());
+    }
     bool base_source_known_collection = base_source_type
         && (QoreTypeInfo::isListType(base_source_type)
             || qore_ir_type_is_iterator_class(base_source_type));

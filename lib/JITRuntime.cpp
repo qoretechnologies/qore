@@ -2811,7 +2811,7 @@ namespace {
 */
 class QoreRtSelectorIterator : public FunctionalOperatorInterface {
 public:
-    DLLLOCAL QoreRtSelectorIterator(QoreValue n_seq, bool n_string_index_char, ExceptionSink* xs)
+    QoreRtSelectorIterator(QoreValue n_seq, bool n_string_index_char, ExceptionSink* xs)
             : seq(n_seq.refSelf(), xs), string_index_char(n_string_index_char), xsink(xs) {
         switch (seq->getType()) {
             case NT_LIST:
@@ -2828,14 +2828,14 @@ public:
         }
     }
 
-    DLLLOCAL virtual ~QoreRtSelectorIterator() {
+    virtual ~QoreRtSelectorIterator() {
         pending_index.discard(xsink);
         range_indices.discard(xsink);
         result.discard(xsink);
     }
 
     //! Returns true if the iterator needs the value of the next selector before it can give its next value
-    DLLLOCAL bool needsSelector() const {
+    bool needsSelector() const {
         switch (mode) {
             case Lazy:
                 return !has_pending && range_indices.isNothing();
@@ -2851,7 +2851,7 @@ public:
     /** @param count the number of selectors: an iterator that needs a selector after the last one has given every
         value (a list sequence) or has the value that it gives (a string or a binary sequence)
     */
-    DLLLOCAL int64_t pending(int64_t count) const {
+    int64_t pending(int64_t count) const {
         if (mode == None || !needsSelector() || next_selector >= count) {
             return -1;
         }
@@ -2859,7 +2859,7 @@ public:
     }
 
     //! Applies the value of the next selector; returns -1 if an exception was raised
-    DLLLOCAL int feed(bool is_range, const QoreValue& first, const QoreValue& second, ExceptionSink* xs) {
+    int feed(bool is_range, const QoreValue& first, const QoreValue& second, ExceptionSink* xs) {
         assert(mode != None);
         assert(needsSelector());
         ++next_selector;
@@ -2894,7 +2894,7 @@ public:
         return 0;
     }
 
-    DLLLOCAL virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xs) override {
+    virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xs) override {
         switch (mode) {
             case None:
                 return true;
@@ -2925,7 +2925,7 @@ public:
         return false;
     }
 
-    DLLLOCAL virtual const QoreTypeInfo* getValueTypeImpl() const override {
+    virtual const QoreTypeInfo* getValueTypeImpl() const override {
         switch (seq->getType()) {
             case NT_LIST: return seq->get<const QoreListNode>()->getValueTypeInfo();
             case NT_STRING: return string_index_char ? charTypeInfo : stringTypeInfo;
@@ -2962,7 +2962,7 @@ private:
     ExceptionSink* xsink;
 
     //! Takes the next index of the current range as the pending index, or ends the range
-    DLLLOCAL void prefetchRangeIndex(ExceptionSink* xs) {
+    void prefetchRangeIndex(ExceptionSink* xs) {
         const QoreListNode* indices = range_indices.get<const QoreListNode>();
         if (range_pos < indices->size()) {
             pending_index = indices->retrieveEntry(range_pos++).refSelf();
@@ -2977,6 +2977,16 @@ private:
 
 extern "C" DLLEXPORT void* qore_rt_iterator_create_selectors(uint64_t seq_bits, int64_t flags,
         ExceptionSink* xsink) {
+    // a sequence that is not a list, a string or a binary object gives no value and no selector is evaluated: no
+    // iterator, as for NOTHING, so that a functional operator's value is NOTHING, as in the AST interpreter
+    switch (fromBits(seq_bits).getType()) {
+        case NT_LIST:
+        case NT_STRING:
+        case NT_BINARY:
+            break;
+        default:
+            return nullptr;
+    }
     return new QoreRtSelectorIterator(fromBits(seq_bits),
         flags & static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar), xsink);
 }
