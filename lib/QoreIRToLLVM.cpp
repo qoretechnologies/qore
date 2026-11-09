@@ -49,7 +49,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 420,
+static_assert(QORE_IR_MAX_OPCODE == 425,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -26058,6 +26058,65 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
+        case QoreIROpcode::ExceptionSuspend: {
+            auto helper = module.getOrInsertFunction("qore_rt_exception_suspend",
+                    llvm::FunctionType::get(ptr_type, {ptr_type}, false));
+            llvm::Value* handle = builder->CreateCall(helper, {xsink_arg});
+            values[inst->result.id] = builder->CreatePtrToInt(handle, i64_type);
+            return true;
+        }
+        case QoreIROpcode::ExceptionResume: {
+            // no exception check: the code that follows routes the exceptions
+            auto* handle = getVal(inst->operands[0].id, error);
+            if (!handle) { return false; }
+            llvm::Value* handle_ptr = handle->getType() == ptr_type ? handle
+                : builder->CreateIntToPtr(ensureIntTypeInline(handle, inst->operands[0].id), ptr_type);
+            auto helper = module.getOrInsertFunction("qore_rt_exception_resume",
+                    llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+            builder->CreateCall(helper, {handle_ptr, xsink_arg});
+            return true;
+        }
+        case QoreIROpcode::SelectorIteratorPending: {
+            // operands: the iterator handle and the number of selectors
+            auto* iter_ptr = getVal(inst->operands[0].id, error);
+            if (!iter_ptr) { return false; }
+            if (iter_ptr->getType() != ptr_type) {
+                iter_ptr = builder->CreateIntToPtr(ensureIntTypeInline(iter_ptr, inst->operands[0].id), ptr_type);
+            }
+            auto* count = getVal(inst->operands[1].id, error);
+            if (!count) { return false; }
+            auto helper = module.getOrInsertFunction("qore_rt_selector_iterator_pending",
+                    llvm::FunctionType::get(i64_type, {ptr_type, i64_type}, false));
+            values[inst->result.id] = builder->CreateCall(helper, {iter_ptr,
+                ensureIntTypeInline(count, inst->operands[1].id)});
+            return true;
+        }
+        case QoreIROpcode::SelectorIteratorFeed: {
+            // operands: the iterator handle, the flags, and the index or the bounds of a range
+            auto* iter_ptr = getVal(inst->operands[0].id, error);
+            if (!iter_ptr) { return false; }
+            if (iter_ptr->getType() != ptr_type) {
+                iter_ptr = builder->CreateIntToPtr(ensureIntTypeInline(iter_ptr, inst->operands[0].id), ptr_type);
+            }
+            auto* flags = getVal(inst->operands[1].id, error);
+            if (!flags) { return false; }
+            llvm::Value* args[2];
+            for (size_t i = 0; i < 2; ++i) {
+                if (i + 2 >= inst->operands.size()) {
+                    args[i] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+                    continue;
+                }
+                auto* operand = getVal(inst->operands[i + 2].id, error);
+                if (!operand) { return false; }
+                args[i] = boxValue(operand, inst->operands[i + 2].id);
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_selector_iterator_feed",
+                    llvm::FunctionType::get(i64_type, {ptr_type, i64_type, i64_type, i64_type, ptr_type}, false));
+            builder->CreateCall(helper, {iter_ptr, ensureIntTypeInline(flags, inst->operands[1].id), args[0],
+                args[1], xsink_arg});
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
         case QoreIROpcode::ListSelectorStep: {
             // operands: the result so far, the sequence, the flags, and the index or the bounds of a range
             llvm::Value* args[5];
@@ -32439,7 +32498,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
         // === Iterator operations ===
         case QoreIROpcode::IteratorCreate:
-        case QoreIROpcode::IteratorCreateIterate: {
+        case QoreIROpcode::IteratorCreateIterate:
+        case QoreIROpcode::IteratorCreateSelectors: {
             const auto* iter_inst = static_cast<const QoreIRIteratorCreateInstruction*>(inst);
             // Get the iterable value (NaN-boxed)
             auto* iterable_val = getVal(iter_inst->iterable.id, error);
@@ -32460,7 +32520,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             llvm::Value* result;
-            if (inst->opcode == QoreIROpcode::IteratorCreateIterate) {
+            if (inst->opcode == QoreIROpcode::IteratorCreateSelectors) {
+                // operands[0] = the flags; the iterator is created without evaluating anything, and cannot raise
+                if (inst->operands.empty()) {
+                    error = "IteratorCreateSelectors: missing flags operand";
+                    return false;
+                }
+                auto* flags = getVal(inst->operands[0].id, error);
+                if (!flags) {
+                    return false;
+                }
+                auto ft = llvm::FunctionType::get(ptr_type, {i64_type, i64_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_iterator_create_selectors", ft);
+                result = builder->CreateCall(helper, {iterable_boxed,
+                    ensureIntTypeInline(flags, inst->operands[0].id), xsink_arg});
+            } else if (inst->opcode == QoreIROpcode::IteratorCreateIterate) {
                 auto ft = llvm::FunctionType::get(ptr_type, {i64_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction("qore_rt_iterator_create_iterate", ft);
                 auto helper_throwing = module.getOrInsertFunction(

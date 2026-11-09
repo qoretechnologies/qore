@@ -81,7 +81,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 420,
+static_assert(QORE_IR_MAX_OPCODE == 425,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -8573,6 +8573,48 @@ next_instruction:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::ExceptionSuspend: {
+                setValueSlotDirect(values, inst->result.id,
+                    QoreValue(reinterpret_cast<int64_t>(qore_rt_exception_suspend(xsink))));
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ExceptionResume: {
+                // no exception check: the code that follows routes the exceptions
+                qore_rt_exception_resume(reinterpret_cast<void*>(getIRValue(values, inst->operands[0]).getAsBigInt()),
+                    xsink);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::SelectorIteratorPending: {
+                // operands: the iterator handle and the number of selectors
+                void* iter = reinterpret_cast<void*>(getIRValue(values, inst->operands[0]).getAsBigInt());
+                setValueSlotDirect(values, inst->result.id, QoreValue(qore_rt_selector_iterator_pending(iter,
+                    getIRValue(values, inst->operands[1]).getAsBigInt())));
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::SelectorIteratorFeed: {
+                // operands: the iterator handle, the flags, and the index or the bounds of a range
+                void* iter = reinterpret_cast<void*>(getIRValue(values, inst->operands[0]).getAsBigInt());
+                uint64_t second_bits = inst->operands.size() > 3
+                    ? toBits(getIRValue(values, inst->operands[3])) : toBits(QoreValue());
+                if (qore_rt_selector_iterator_feed(iter, getIRValue(values, inst->operands[1]).getAsBigInt(),
+                        toBits(getIRValue(values, inst->operands[2])), second_bits, xsink)) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::ListSelectorStep: {
                 // operands: the result so far, the sequence, the flags, and the index or the bounds of a range
                 uint64_t first_bits = inst->operands.size() > 3
@@ -12861,12 +12903,17 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::IteratorCreate:
-            case QoreIROpcode::IteratorCreateIterate: {
+            case QoreIROpcode::IteratorCreateIterate:
+            case QoreIROpcode::IteratorCreateSelectors: {
                 auto* iter_inst = static_cast<QoreIRIteratorCreateInstruction*>(inst);
                 QoreValue iterable = getIRValue(values, iter_inst->iterable);
                 FunctionalOperator::FunctionalValueType value_type;
                 FunctionalOperatorInterface* iter = nullptr;
-                if (iter_inst->iterator_func) {
+                if (inst->opcode == QoreIROpcode::IteratorCreateSelectors) {
+                    // operands[0] = the flags
+                    iter = reinterpret_cast<FunctionalOperatorInterface*>(qore_rt_iterator_create_selectors(
+                        toBits(iterable), getIRValue(values, inst->operands[0]).getAsBigInt(), xsink));
+                } else if (iter_inst->iterator_func) {
                     iter = iter_inst->iterator_func->getFunctionalIterator(value_type, xsink);
                 } else if (inst->opcode == QoreIROpcode::IteratorCreateIterate) {
                     iter = QoreIterateOperatorNode::getFunctionalIterator(value_type, iterable, nullptr,

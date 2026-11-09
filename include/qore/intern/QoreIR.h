@@ -937,7 +937,52 @@ enum class QoreIROpcode : uint16_t {
     //! instruction instead.
     ListSelectorStep = 420,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (421, 422, ...)
+    //! Create the iterator of a list of selectors with ranges (seq[a..b, c]) that a foreach statement or a functional
+    //! or streaming operator uses as its source, as the AST interpreter iterates it
+    //! (QoreSquareBracketsOperatorNode::getFunctionalIteratorImpl())
+    //!
+    //! A QoreIRIteratorCreateInstruction: iterable = the sequence; operands[0] = the QoreIRListSelectorFlag flags
+    //! (native int: StringIndexChar); result = the iterator handle, as with IteratorCreate, which IteratorNext,
+    //! IteratorRelease and the cleanups of the frame use.  The AST interpreter iterates the selectors of a list
+    //! sequence lazily (QoreFunctionalSquareBracketsComplexOperator): a selector is evaluated only when the elements
+    //! of the previous ones have been given to the loop body or the operator's expression, and a range gives its
+    //! indices one after the other, each normalized as an index of its own.  For a string or a binary sequence it
+    //! evaluates every selector first and iterates the result as a single value, and for any other sequence it
+    //! evaluates no selector and iterates nothing.  The lowering evaluates each selector in the loop when
+    //! SelectorIteratorPending asks for it and gives it to the iterator with SelectorIteratorFeed (qore#5675).
+    IteratorCreateSelectors = 421,
+
+    //! Return the index of the selector that the iterator of IteratorCreateSelectors needs before the next
+    //! IteratorNext, or -1 if it needs none
+    //!
+    //! operands[0] = the iterator handle; operands[1] = the number of selectors (native int); result = the index
+    //! (native int).  -1 means that the iterator has the next
+    //! value or has no more values; IteratorNext then gives the value or ends the loop (qore#5675).
+    SelectorIteratorPending = 422,
+
+    //! Give the iterator of IteratorCreateSelectors the value of its next selector
+    //!
+    //! operands[0] = the iterator handle; operands[1] = the QoreIRListSelectorFlag flags (native int: Range);
+    //! operands[2] = the index, or the start of a range; operands[3] = the end of a range; no result.  A range raises
+    //! RANGE-ERROR for a bound that is NOTHING, as the range operator does; an exception goes to the instruction's
+    //! exception target (qore#5675).
+    SelectorIteratorFeed = 423,
+
+    //! Set the exceptions raised aside, so that the code that follows runs as if none was raised
+    //!
+    //! No operands; result = the handle of the exceptions (native int), which ExceptionResume takes.  It runs on the
+    //! path of an exception, for code that the AST interpreter runs while the exception is raised and that must not
+    //! take the exception as its own: the removal of the elements that the selectors of a remove or delete
+    //! expression evaluated before a later selector raised an exception (LValueRemoveHelper; qore#5675).
+    ExceptionSuspend = 424,
+
+    //! Raise again the exceptions that ExceptionSuspend set aside, before any exception raised since
+    //!
+    //! operands[0] = the handle of ExceptionSuspend; no result.  The instruction does not branch: the code that
+    //! follows routes the exceptions, as a synthetic Rethrow does (qore#5675).
+    ExceptionResume = 425,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (426, 427, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -946,8 +991,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ListSelectorStep);
-static_assert(QORE_IR_MAX_OPCODE == 420, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ExceptionResume);
+static_assert(QORE_IR_MAX_OPCODE == 425, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! The flags of QoreIROpcode::ListSelectorStep (operands[2])
@@ -3546,6 +3591,27 @@ public:
             blocks.erase(it);
             blocks.push_back(std::move(ptr));
         }
+    }
+
+    //! Move an existing block right after another block in the block list.
+    //! LLVM lowering processes blocks in list order, so a block whose values the blocks after \a after use is
+    //! placed before them; nothing happens if either block is not in the list.
+    void moveBlockAfter(QoreIRBasicBlock* block, QoreIRBasicBlock* after) {
+        assert(block != after);
+        auto it = std::find_if(blocks.begin(), blocks.end(),
+                [block](const std::unique_ptr<QoreIRBasicBlock>& p) { return p.get() == block; });
+        if (it == blocks.end()) {
+            return;
+        }
+        auto ptr = std::move(*it);
+        blocks.erase(it);
+        auto pos = std::find_if(blocks.begin(), blocks.end(),
+                [after](const std::unique_ptr<QoreIRBasicBlock>& p) { return p.get() == after; });
+        if (pos == blocks.end()) {
+            blocks.push_back(std::move(ptr));
+            return;
+        }
+        blocks.insert(pos + 1, std::move(ptr));
     }
 
     QoreIRValue createValue() {

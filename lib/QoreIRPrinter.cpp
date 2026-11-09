@@ -80,6 +80,11 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::CheckCancelEvery: return "check.cancel.every";
         case QoreIROpcode::CheckRangeBound: return "check.range.bound";
         case QoreIROpcode::ListSelectorStep: return "list.selector.step";
+        case QoreIROpcode::IteratorCreateSelectors: return "iterator.create.selectors";
+        case QoreIROpcode::SelectorIteratorPending: return "selector.iterator.pending";
+        case QoreIROpcode::SelectorIteratorFeed: return "selector.iterator.feed";
+        case QoreIROpcode::ExceptionSuspend: return "exception.suspend";
+        case QoreIROpcode::ExceptionResume: return "exception.resume";
         case QoreIROpcode::HashSetCommonType: return "hash.set.common.type";
         case QoreIROpcode::AddInt: return "add.int";
         case QoreIROpcode::AddFloat: return "add.float";
@@ -835,7 +840,8 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     out << " %" << ret->value.id;
                 }
             } else if (inst->opcode == QoreIROpcode::IteratorCreate
-                    || inst->opcode == QoreIROpcode::IteratorCreateIterate) {
+                    || inst->opcode == QoreIROpcode::IteratorCreateIterate
+                    || inst->opcode == QoreIROpcode::IteratorCreateSelectors) {
                 auto* iter = dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst.get());
                 if (iter) {
                     out << " %" << iter->iterable.id;

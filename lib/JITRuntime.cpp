@@ -95,6 +95,7 @@
 #include <qore/intern/QoreHashObjectDereferenceOperatorNode.h>
 #include <qore/intern/QoreSquareBracketsOperatorNode.h>
 #include <qore/intern/QoreSquareBracketsRangeOperatorNode.h>
+#include <qore/intern/QoreRangeOperatorNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
 #include <qore/intern/FunctionalOperatorInterface.h>
 #include <qore/intern/QoreClassIntern.h>
@@ -381,6 +382,11 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_check_cancel_every", reinterpret_cast<void*>(&qore_rt_check_cancel_every) },
     { "qore_rt_check_range_bound", reinterpret_cast<void*>(&qore_rt_check_range_bound) },
     { "qore_rt_list_selector_step", reinterpret_cast<void*>(&qore_rt_list_selector_step) },
+    { "qore_rt_iterator_create_selectors", reinterpret_cast<void*>(&qore_rt_iterator_create_selectors) },
+    { "qore_rt_selector_iterator_pending", reinterpret_cast<void*>(&qore_rt_selector_iterator_pending) },
+    { "qore_rt_selector_iterator_feed", reinterpret_cast<void*>(&qore_rt_selector_iterator_feed) },
+    { "qore_rt_exception_suspend", reinterpret_cast<void*>(&qore_rt_exception_suspend) },
+    { "qore_rt_exception_resume", reinterpret_cast<void*>(&qore_rt_exception_resume) },
     { "qore_rt_list_append_element_throwing",
         reinterpret_cast<void*>(&qore_rt_list_append_element_throwing) },
     { "qore_rt_list_set_scanned_type_by_type_path",
@@ -2792,6 +2798,233 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_selector_step(uint64_t result_val, ui
         }
     }
     return toBits(qore_rt_finish_list_selectors(result.refSelf(), fold, xsink));
+}
+
+namespace {
+//! The iterator of a list of selectors with ranges (seq[a..b, c]) that a foreach statement or a functional or
+//! streaming operator uses as its source (QoreIROpcode::IteratorCreateSelectors)
+/** It iterates the sequence as the AST interpreter does (QoreSquareBracketsOperatorNode::getFunctionalIteratorImpl()):
+    a list lazily, as QoreFunctionalSquareBracketsComplexOperator does, a string or a binary object as the single value
+    that the selectors select, and any other value as no value, without evaluating any selector.  The compiled code
+    evaluates the selectors: it asks the iterator with qore_rt_selector_iterator_pending() which selector it needs
+    before each qore_rt_iterator_next(), evaluates it, and gives its value to qore_rt_selector_iterator_feed(), so
+    that each selector is evaluated only when the values of the previous ones have been used (qore#5675).
+*/
+class QoreRtSelectorIterator : public FunctionalOperatorInterface {
+public:
+    DLLLOCAL QoreRtSelectorIterator(QoreValue n_seq, bool n_string_index_char, ExceptionSink* xs)
+            : seq(n_seq.refSelf(), xs), string_index_char(n_string_index_char), xsink(xs) {
+        switch (seq->getType()) {
+            case NT_LIST:
+                mode = Lazy;
+                break;
+            case NT_STRING:
+            case NT_BINARY:
+                mode = Eager;
+                result = qore_rt_new_list_selector_result(*seq);
+                break;
+            default:
+                mode = None;
+                break;
+        }
+    }
+
+    DLLLOCAL virtual ~QoreRtSelectorIterator() {
+        pending_index.discard(xsink);
+        result.discard(xsink);
+    }
+
+    //! Returns true if the iterator needs the value of the next selector before it can give its next value
+    DLLLOCAL bool needsSelector() const {
+        switch (mode) {
+            case Lazy:
+                return !has_pending && !range;
+            case Eager:
+                return !result_given;
+            case None:
+                break;
+        }
+        return false;
+    }
+
+    //! Returns the index of the selector needed next, or -1 if none is needed
+    /** @param count the number of selectors: an iterator that needs a selector after the last one has given every
+        value (a list sequence) or has the value that it gives (a string or a binary sequence)
+    */
+    DLLLOCAL int64_t pending(int64_t count) const {
+        if (mode == None || !needsSelector() || next_selector >= count) {
+            return -1;
+        }
+        return next_selector;
+    }
+
+    //! Applies the value of the next selector; returns -1 if an exception was raised
+    DLLLOCAL int feed(bool is_range, const QoreValue& first, const QoreValue& second, ExceptionSink* xs) {
+        assert(mode != None);
+        assert(needsSelector());
+        ++next_selector;
+        if (mode == Eager) {
+            if (qore_rt_apply_list_selector(result, *seq, is_range, first, second, string_index_char,
+                    runtime_check_parse_option(PO_NEGATIVE_OFFSETS), xs)) {
+                return -1;
+            }
+            return 0;
+        }
+
+        if (!is_range) {
+            // the element is read from the sequence, which the iterator holds, when it is given
+            pending_index = first.refSelf();
+            has_pending = true;
+            return 0;
+        }
+
+        // as QoreRangeOperatorNode::getFunctionalIteratorImpl() makes the iterator of a range
+        if (first.isNothing()) {
+            xs->raiseException("RANGE-ERROR", QORE_RT_RANGE_START_NOTHING);
+            return -1;
+        }
+        int64 start = first.getAsBigInt();
+        if (second.isNothing()) {
+            xs->raiseException("RANGE-ERROR", QORE_RT_RANGE_END_NOTHING);
+            return -1;
+        }
+        int64 stop = second.getAsBigInt();
+        if (!(runtime_get_parse_options() & PO_BROKEN_RANGE)) {
+            if (start <= stop) {
+                ++stop;
+            } else {
+                --stop;
+            }
+        }
+        range.reset(new QoreFunctionalRangeOperator(start, stop, xs));
+        if (*xs) {
+            range.reset();
+            return -1;
+        }
+        return prefetchRangeIndex(xs);
+    }
+
+    DLLLOCAL virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xs) override {
+        switch (mode) {
+            case None:
+                return true;
+            case Eager:
+                if (result_given) {
+                    return true;
+                }
+                result_given = true;
+                val.setValue(result, true);
+                result = QoreValue();
+                return false;
+            case Lazy:
+                break;
+        }
+        if (!has_pending) {
+            // every selector has been applied
+            return true;
+        }
+        ValueHolder index(pending_index, xs);
+        pending_index = QoreValue();
+        has_pending = false;
+        val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*seq, *index, false, string_index_char,
+            runtime_check_parse_option(PO_NEGATIVE_OFFSETS), xs), true);
+        // the next index of the current range, if any, is taken now, so that pending() knows if a selector is needed
+        if (!*xs && range) {
+            prefetchRangeIndex(xs);
+        }
+        return false;
+    }
+
+    DLLLOCAL virtual const QoreTypeInfo* getValueTypeImpl() const override {
+        switch (seq->getType()) {
+            case NT_LIST: return seq->get<const QoreListNode>()->getValueTypeInfo();
+            case NT_STRING: return string_index_char ? charTypeInfo : stringTypeInfo;
+            case NT_BINARY: return binaryTypeInfo;
+        }
+        return nothingTypeInfo;
+    }
+
+private:
+    enum Mode {
+        //! a list: each selector is evaluated when the values of the previous ones have been used
+        Lazy,
+        //! a string or a binary object: every selector is evaluated, and the result is the single value given
+        Eager,
+        //! any other value: no selector is evaluated, and no value is given
+        None,
+    };
+
+    //! the sequence
+    ValueHolder seq;
+    //! the result of a string or binary sequence
+    QoreValue result;
+    //! the index of the next value of a lazy sequence
+    QoreValue pending_index;
+    //! the iterator of the current range of a lazy sequence
+    std::unique_ptr<QoreFunctionalRangeOperator> range;
+    Mode mode;
+    int64_t next_selector = 0;
+    bool string_index_char;
+    bool has_pending = false;
+    bool result_given = false;
+    ExceptionSink* xsink;
+
+    //! Takes the next index of the current range as the pending index, or ends the range; returns -1 for an exception
+    DLLLOCAL int prefetchRangeIndex(ExceptionSink* xs) {
+        ValueOptionalRefHolder index(xs);
+        if (range->getNext(index, xs)) {
+            range.reset();
+            return *xs ? -1 : 0;
+        }
+        if (*xs) {
+            range.reset();
+            return -1;
+        }
+        pending_index = index.takeReferencedValue();
+        has_pending = true;
+        return 0;
+    }
+};
+}
+
+extern "C" DLLEXPORT void* qore_rt_iterator_create_selectors(uint64_t seq_bits, int64_t flags,
+        ExceptionSink* xsink) {
+    return new QoreRtSelectorIterator(fromBits(seq_bits),
+        flags & static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar), xsink);
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_selector_iterator_pending(void* iter_ptr, int64_t count) {
+    if (!iter_ptr) {
+        return -1;
+    }
+    return static_cast<QoreRtSelectorIterator*>(reinterpret_cast<FunctionalOperatorInterface*>(iter_ptr))
+        ->pending(count);
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_selector_iterator_feed(void* iter_ptr, int64_t flags, uint64_t first_bits,
+        uint64_t second_bits, ExceptionSink* xsink) {
+    assert(iter_ptr);
+    return static_cast<QoreRtSelectorIterator*>(reinterpret_cast<FunctionalOperatorInterface*>(iter_ptr))
+        ->feed(flags & static_cast<int64_t>(QoreIRListSelectorFlag::Range), fromBits(first_bits),
+            fromBits(second_bits), xsink) ? 1 : 0;
+}
+
+extern "C" DLLEXPORT void* qore_rt_exception_suspend(ExceptionSink* xsink) {
+    std::unique_ptr<ExceptionSink> saved(new ExceptionSink);
+    saved->assimilate(*xsink);
+    return saved.release();
+}
+
+extern "C" DLLEXPORT void qore_rt_exception_resume(void* handle, ExceptionSink* xsink) {
+    std::unique_ptr<ExceptionSink> saved(reinterpret_cast<ExceptionSink*>(handle));
+    if (!saved) {
+        return;
+    }
+    // the exceptions set aside come first, then those raised since, as they are raised in the AST interpreter
+    ExceptionSink since;
+    since.assimilate(*xsink);
+    xsink->assimilate(*saved);
+    xsink->assimilate(since);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_unary_op(int opcode, uint64_t operand, ExceptionSink* xsink) {

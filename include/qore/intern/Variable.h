@@ -1086,6 +1086,19 @@ public:
     DLLLOCAL LValueRemoveHelper(const ReferenceNode& ref, ExceptionSink* n_xsink, bool fd);
     DLLLOCAL LValueRemoveHelper(const QoreValue& exp, ExceptionSink* n_xsink, bool fd);
 
+    //! Releases what a removal that an exception ended removed
+    /** A list of selectors (l[a, b..c]) whose later selector raises an exception still removes what the earlier
+        selectors selected (doRemove()); the removed values are then not taken by remove() or deleteLValue() and are
+        released here, after the lvalue's lock (qore#5675)
+    */
+    DLLLOCAL ~LValueRemoveHelper() {
+        bool static_assignment = false;
+        QoreValue v = rv.remove(static_assignment);
+        if (!static_assignment) {
+            v.discard(xsink);
+        }
+    }
+
     DLLLOCAL void doRemove(QoreValue exp);
 
     DLLLOCAL operator bool() const {

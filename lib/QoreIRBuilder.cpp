@@ -1786,6 +1786,56 @@ QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateIterate(Qore
     return inst;
 }
 
+QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateSelectors(QoreIRValue seq, int64_t flags,
+        const QoreProgramLocation* loc) {
+    QoreIRValue flags_val = createConstInt(flags, loc)->result;
+    auto inst = append<QoreIRIteratorCreateInstruction>(seq);
+    inst->opcode = QoreIROpcode::IteratorCreateSelectors;
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(flags_val);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createSelectorIteratorPending(QoreIRValue iterator, int64_t count,
+        const QoreProgramLocation* loc) {
+    QoreIRValue count_val = createConstInt(count, loc)->result;
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::SelectorIteratorPending);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(iterator);
+    inst->operands.push_back(count_val);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createSelectorIteratorFeed(QoreIRValue iterator, int64_t flags,
+        const std::vector<QoreIRValue>& selector, const QoreProgramLocation* loc) {
+    assert(selector.size() == ((flags & static_cast<int64_t>(QoreIRListSelectorFlag::Range)) ? 2 : 1));
+    QoreIRValue flags_val = createConstInt(flags, loc)->result;
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::SelectorIteratorFeed);
+    inst->loc = loc;
+    inst->operands.push_back(iterator);
+    inst->operands.push_back(flags_val);
+    for (const QoreIRValue& value : selector) {
+        inst->operands.push_back(value);
+    }
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createExceptionSuspend(const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ExceptionSuspend);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createExceptionResume(QoreIRValue handle, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ExceptionResume);
+    inst->loc = loc;
+    inst->operands.push_back(handle);
+    return inst;
+}
+
 QoreIRIteratorNextInstruction* QoreIRBuilder::createIteratorNext(QoreIRValue iterator, QoreIRBasicBlock* done_target,
         QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRIteratorNextInstruction>(iterator, done_target, continue_target);

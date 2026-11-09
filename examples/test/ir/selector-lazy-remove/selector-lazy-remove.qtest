@@ -1,0 +1,139 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of lazily iterated lists of selectors and of partial removals
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class SelectorLazyRemoveTest
+
+#! issue #5675: lists of selectors that are iterated lazily, and remove and delete with a raising later selector
+/** The AST interpreter iterates a list of selectors with ranges (l[a, b..c]) that a foreach statement or a map,
+    select, map/select, foldl or streaming operator uses as its source lazily: each selector is evaluated only when
+    the values of the previous ones have been used, and a range gives its indices one at a time, each normalized as
+    an index of its own with %negative-offsets.  The IR interpreter, native code and AOT built the whole list first.
+
+    When a later selector of a remove or delete expression raises an exception, the AST interpreter has removed what
+    the earlier selectors selected; the other execution modes removed nothing.  The removed values are released before
+    the handler runs, and a delete expression ended by an exception does not delete the objects that it removed.
+
+    The scripts next to the test (without and with %negative-offsets) run in every execution mode, on the IR tier and
+    as AOT executables, and their output, which shows each evaluation and destruction, must be that of the AST
+    interpreter.
+*/
+class SelectorLazyRemoveTest inherits QUnit::Test {
+    public {
+        #! the scripts: without and with %negative-offsets
+        const Scripts = ("lazy-plain", "lazy-negative-offsets");
+
+        #! lines of the output of the AST interpreter that show its semantics, in this order
+        const AstLines = (
+            "foreach list:",
+            "  sel a",
+            "  body 0 10",
+            "  sel b",
+            "  sel c",
+            "  body 1 11",
+            "foreach break:",
+            "remove partial:",
+            "  = [1, 2, 3, 4]",
+            "remove partial two:",
+            "  = [0, 2, 4]",
+            "remove objects partial:",
+            "  destroy x2",
+            "  destroy x0",
+            "  caught RANGE-ERROR",
+            "delete objects shared:",
+            "  caught RANGE-ERROR",
+            "  destroy z1",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("selector lazy iteration and partial removal", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks that the output of the AST interpreter shows the semantics that the other modes must have
+    private astTest() {
+        foreach string name in (Scripts) {
+            string out = astOutput(name);
+            int pos = 0;
+            foreach string line in (AstLines) {
+                int next = out.find(line + "\n", pos);
+                assertTrue(next >= 0, sprintf("%s: AST line %y after offset %d", name, line, pos));
+                if (next >= 0) {
+                    pos = next + line.size();
+                }
+            }
+            # the lines of the remove and delete cases do not show an abort of the AST interpreter
+            assertTrue(out =~ /remove partial unhandled:\n  sel a\n  caught RANGE-ERROR\n  = \[0, 2, 3, 4\]\n/,
+                name + ": partial removal of an unhandled exception");
+        }
+    }
+
+    #! runs each script in every execution mode and on the IR tier
+    private modesTest() {
+        foreach string name in (Scripts) {
+            string exp = astOutput(name);
+            string path = scriptPath(name);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, path)),
+                    name + ": " + mode);
+            }
+            assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, path)),
+                name + ": " + ExecModeHarness::IRTierName);
+        }
+    }
+
+    #! compiles each script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("selector-lazy-remove-aot-");
+        foreach string name in (Scripts) {
+            string exp = astOutput(name);
+            foreach string opt in ("-O0", "-O3") {
+                string exe = sprintf("%s/%s%s", dir.path, name, opt);
+                string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe,
+                    scriptPath(name)));
+                assertTrue(is_file(exe), sprintf("%s %s: qcc compiles the script: %s", name, opt, out));
+                assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), sprintf("%s: AOT %s", name, opt));
+            }
+        }
+    }
+
+    private string scriptPath(string name) {
+        return get_script_dir() + "/" + name + ".q";
+    }
+
+    #! the output of a script with the AST interpreter
+    private string astOutput(string name) {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath(name)));
+    }
+}

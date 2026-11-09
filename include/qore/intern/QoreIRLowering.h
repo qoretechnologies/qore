@@ -253,6 +253,52 @@ public:
         const std::vector<QoreValue>& selectors, std::string& error);
     //! Returns true if a bound of a range operator can evaluate to NOTHING
     bool rangeBoundMayBeNothing(const QoreValue& expr) const;
+    //! A list of selectors with ranges (seq[a..b, c]) that a foreach statement or a functional or streaming
+    //! operator iterates lazily, as the AST interpreter does (see QoreIROpcode::IteratorCreateSelectors)
+    struct LazySelectorSource {
+        const QoreSquareBracketsOperatorNode* op = nullptr;
+        std::vector<QoreValue> selectors;
+
+        explicit operator bool() const {
+            return op != nullptr;
+        }
+    };
+    //! Returns true and sets \a src if \a expr is a list of selectors with ranges whose lazy iteration can be
+    //! observed: a selector with side effects, or a range with negative offsets, which the AST interpreter iterates
+    //! index by index instead of as the range of the sequence that it selects
+    bool getLazySelectorSource(const QoreValue& expr, LazySelectorSource& src) const;
+    //! Returns true if \a expr is a list of selectors with ranges that is iterated lazily (see getLazySelectorSource())
+    bool hasLazySelectorSource(const QoreValue& expr) const {
+        LazySelectorSource src;
+        return getLazySelectorSource(expr, src);
+    }
+    //! Lowers the source of an iterator: the sequence and IteratorCreateSelectors for a lazy list of selectors, or
+    //! the expression and IteratorCreate (or IteratorCreateIterate if \a iterate) otherwise
+    /** @param source set to the value iterated: the sequence for a lazy list of selectors
+        @param in_temp_scope true to lower the expression in a temp scope of its own
+
+        @return the iterator handle, or an invalid value on error
+    */
+    QoreIRValue lowerSourceIterator(const QoreValue& expr, const LazySelectorSource& src, bool iterate,
+        bool in_temp_scope, const QoreProgramLocation* loc, QoreIRValue& source, std::string& error);
+    //! Emits the evaluation of the next selector of a lazy list of selectors before IteratorNext
+    /** Branches to a block that asks the iterator which selector it needs (SelectorIteratorPending), evaluates it in
+        a temp scope of its own and gives it to the iterator (SelectorIteratorFeed), and returns to the question until
+        the iterator needs none; the builder is then left in the block where IteratorNext follows.  An exception
+        raised by a selector goes to \a exception_target, which must release the iterator; if it is null, to a block
+        that releases the iterator and branches to the handler in this frame, if any.
+
+        @return false on error
+    */
+    bool emitSelectorIteratorDispatch(const LazySelectorSource& src, QoreIRValue iter,
+        QoreIRBasicBlock* exception_target, std::string& error);
+    //! Fills the handler of a selector of a remove or delete expression with a list of selectors that raised an
+    //! exception: it removes what the \a selector_count selectors before it select, releases the removed values,
+    //! and branches with the exceptions to the handler of the expression, as the AST interpreter does
+    //! (LValueRemoveHelper::doRemove()); see tryEmitLValuePathOp()
+    void emitPartialSliceRemove(QoreIRBasicBlock* partial_block, const std::vector<LVPathStep>& path,
+        const std::vector<QoreIRValue>& dyn_vals, size_t selector_count, AssignmentMode mode,
+        const QoreProgramLocation* loc);
     QoreIRValue lowerHashObjectDereference(const QoreValue& expr, std::string& error);
     QoreIRValue lowerPop(const QoreValue& expr, std::string& error);
     QoreIRValue lowerShift(const QoreValue& expr, std::string& error);

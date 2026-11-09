@@ -100,7 +100,10 @@ class QoreFunctionalSquareBracketsOperator : public FunctionalOperatorInterface 
 public:
     DLLLOCAL QoreFunctionalSquareBracketsOperator(ValueEvalRefHolder& lhs, ValueEvalRefHolder& rhs,
             bool string_index_char, bool negative_offsets, ExceptionSink* xsink)
-            : leftValue(*lhs, lhs.isTemp(), xsink),
+            // a sequence read from a variable is borrowed: the iterator holds its own reference, since the loop body
+            // or the operator's expression can assign the variable another value, which released the only
+            // reference to the sequence while it was iterated (qore#5675)
+            : leftValue(lhs.isTemp() ? *lhs : lhs->refSelf(), true, xsink),
               rightList(rhs->get<const QoreListNode>()),
               string_index_char(string_index_char),
               negative_offsets(negative_offsets) {
@@ -126,7 +129,10 @@ class QoreFunctionalSquareBracketsComplexOperator : public FunctionalOperatorInt
 public:
     DLLLOCAL QoreFunctionalSquareBracketsComplexOperator(ValueEvalRefHolder& lhs, const QoreParseListNode* rpl,
             bool string_index_char, bool negative_offsets, ExceptionSink* xsink)
-            : leftValue(*lhs, lhs.isTemp(), xsink),
+            // a sequence read from a variable is borrowed: the iterator holds its own reference, since the loop body
+            // or the operator's expression can assign the variable another value, which released the only
+            // reference to the sequence while it was iterated (qore#5675)
+            : leftValue(lhs.isTemp() ? *lhs : lhs->refSelf(), true, xsink),
             rightParseList(rpl),
             string_index_char(string_index_char),
             negative_offsets(negative_offsets) {
