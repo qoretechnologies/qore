@@ -28,7 +28,10 @@
     to it.
 
     The scripts next to the test run each kind of handler on both paths in every execution mode and on the IR tier,
-    and handler-locals.q as an AOT executable too, and their output must be that of the AST interpreter.
+    and as AOT executables, and their output must be that of the AST interpreter.  handler-modes.q has handlers that
+    only run on an exception, which are never lowered inline: their own locals had no slots in the function, so qcc
+    could not compile a closure whose handler references one (qore#5657), and AOT gave wrong results for loops in
+    them (qore#5658).
 */
 class OnBlockExitClosureLocalsTest inherits QUnit::Test {
     public {
@@ -54,6 +57,9 @@ class OnBlockExitClosureLocalsTest inherits QUnit::Test {
                 "loop in handler: loop [0, 10, 20]; caught L",
                 "foreach variable: foreach 0; foreach 1; after the loop; caught FE",
                 "statement variables: for [2, 2]; switch; while 0; while 3; caught SV",
+                "loop typed list: exit [0, 1, 2]; caught TL",
+                "two handlers: exit [0, 1, 2]",
+                "two handlers: error [0, 1]; exit [0, 1, 2]; caught TH",
             ),
         };
 
@@ -72,12 +78,13 @@ class OnBlockExitClosureLocalsTest inherits QUnit::Test {
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
-        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
 
         addTestCase("execution modes", sub () { modesTest("handler-locals"); });
-        addTestCase("AOT executable", \aotTest());
-        # qcc cannot compile the on_error case (qore#5657), and AOT gives a wrong result for the loop (qore#5658)
-        addTestCase("execution modes: cases that AOT cannot run yet", sub () { modesTest("handler-modes"); });
+        addTestCase("AOT executable", sub () { aotTest("handler-locals"); });
+        addTestCase("execution modes: handlers that only run on an exception", sub () { modesTest("handler-modes"); });
+        # qcc could not compile the on_error case (qore#5657), and AOT gave wrong results for the loops (qore#5658)
+        addTestCase("AOT executable: handlers that only run on an exception", sub () { aotTest("handler-modes"); });
         set_return_value(main());
     }
 
@@ -94,17 +101,16 @@ class OnBlockExitClosureLocalsTest inherits QUnit::Test {
             name + ": " + ExecModeHarness::IRTierName);
     }
 
-    #! compiles handler-locals.q with qcc and checks that the executable gives the output of the AST interpreter
-    private aotTest() {
+    #! compiles a script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string name) {
         if (!is_file(qcc_bin)) {
             testSkip("qcc is not available at " + qcc_bin);
         }
         TmpDir dir("on-block-exit-closure-locals-aot-");
-        string exe = dir.path + "/handler-locals";
-        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe,
-            scriptPath("handler-locals")));
-        assertTrue(is_file(exe), "qcc compiles the script: " + out);
-        assertEq(expected("handler-locals"), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT");
+        string exe = dir.path + "/" + name;
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, scriptPath(name)));
+        assertTrue(is_file(exe), name + ": qcc compiles the script: " + out);
+        assertEq(expected(name), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), name + ": AOT");
     }
 
     private string scriptPath(string name) {

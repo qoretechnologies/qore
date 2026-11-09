@@ -174,6 +174,15 @@ extern void collectAllStatementLocals(const StatementBlock* block, std::vector<L
     UserVariantBase's IR compilation), a closure-bound body local is instantiated at its lexical scope, so it is not
     pre-instantiated; the InstantiateLocal makes it a local of the handler (see QoreIRInterpreter's own locals).
 */
+//! Reserves slots in the function an on_block_exit handler belongs to for the locals that the handler declares
+static void qore_ir_reserve_handler_local_slots(QoreIRFunction& parent_func, const StatementBlock* handler_code) {
+    std::vector<LocalVar*> handler_locals;
+    collectAllStatementLocals(handler_code, handler_locals);
+    for (LocalVar* lv : handler_locals) {
+        parent_func.reserveLocalSlot(lv);
+    }
+}
+
 static void qore_ir_scope_handler_closure_locals(QoreIRFunction& handler_func, const StatementBlock* handler_code) {
     std::vector<LocalVar*> handler_locals;
     collectAllStatementLocals(handler_code, handler_locals);
@@ -4533,6 +4542,12 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         handler_func->emit_debug_statements = parent_func->emit_debug_statements;
 
         // Phase B1: Pre-seed handler's local_var_slots with parent's entries
+        // the locals that the handler declares get slots in the function first, as the inline lowering of a handler
+        // gives them: a handler that only runs on an exception (on_error) is never lowered inline, and its own
+        // locals then had slots only in the handler's IR, so the expression trees of the handler that use them (a
+        // reference, \var) could not be serialized against the slot table of the function (qcc failed for a
+        // closure; qore#5657); a local that has a slot keeps it
+        qore_ir_reserve_handler_local_slots(*parent_func, handler.code);
         uint32_t parent_slot_count = parent_func->local_var_slots.size();
         handler_func->local_var_slots = parent_func->local_var_slots;
         handler_func->parent_slot_count = parent_slot_count;
@@ -4658,6 +4673,12 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
 
         // Phase B1: Pre-seed handler's local_var_slots with parent's entries
         // This allows handler code to reference parent-scope variables by their parent slot IDs
+        // the locals that the handler declares get slots in the function first, as the inline lowering of a handler
+        // gives them: a handler that only runs on an exception (on_error) is never lowered inline, and its own
+        // locals then had slots only in the handler's IR, so the expression trees of the handler that use them (a
+        // reference, \var) could not be serialized against the slot table of the function (qcc failed for a
+        // closure; qore#5657); a local that has a slot keeps it
+        qore_ir_reserve_handler_local_slots(*parent_func, handler.code);
         uint32_t parent_slot_count = parent_func->local_var_slots.size();
         handler_func->local_var_slots = parent_func->local_var_slots;
         handler_func->parent_slot_count = parent_slot_count;

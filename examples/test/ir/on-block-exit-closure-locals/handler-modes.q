@@ -1,8 +1,7 @@
 %modern
-# the cases of handler-locals.q that AOT cannot run yet, which are checked with the execution modes only: a local that
-# the on_error handler of a closure declares and references (qcc cannot compile it: qore#5657), and a loop in a handler
-# (AOT gives a wrong result: qore#5658), and the loop and statement variables of handlers (loops: qore#5658); see
-# on-block-exit-closure-locals.qtest
+# locals of handlers that only run on an exception, which are never lowered inline: a local that the on_error handler
+# of a closure declares and references (qcc could not compile it: qore#5657), loops in handlers and the loop and
+# statement variables of handlers (AOT gave wrong results: qore#5658); see on-block-exit-closure-locals.qtest
 
 #! describes an exception and the exceptions chained to it, which must be only those that the code raised
 string sub chain(hash<ExceptionInfo> ex) {
@@ -114,6 +113,57 @@ string sub statement_variables() {
     return log.join("; ");
 }
 
+#! qore#5658: a loop in an on_exit handler that runs on an exception appends to a typed list that it declares
+string sub loop_typed_list() {
+    list<string> log;
+    code c = sub () {
+        on_exit {
+            list<int> cl;
+            foreach int i in (xrange(3)) {
+                cl += i;
+            }
+            log += sprintf("exit %y", cl);
+        }
+        throw "TL";
+    };
+    try {
+        c();
+    } catch (hash<ExceptionInfo> ex) {
+        log += "caught " + chain(ex);
+    }
+    return log.join("; ");
+}
+
+#! qore#5658: two handlers with loops, on the normal path and on an exception
+string sub two_handlers(bool fail) {
+    list<string> log;
+    code c = sub () {
+        on_exit {
+            list<int> cl;
+            foreach int i in (xrange(3)) {
+                cl += i;
+            }
+            log += sprintf("exit %y", cl);
+        }
+        on_error {
+            list<int> el;
+            for (int i = 0; i < 2; ++i) {
+                el += i;
+            }
+            log += sprintf("error %y", el);
+        }
+        if (fail) {
+            throw "TH";
+        }
+    };
+    try {
+        c();
+    } catch (hash<ExceptionInfo> ex) {
+        log += "caught " + chain(ex);
+    }
+    return log.join("; ");
+}
+
 sub main() {
     # runs more than once so that the functions are compiled with tiered execution
     for (int i = 0; i < 3; ++i) {
@@ -121,6 +171,9 @@ sub main() {
         printf("loop in handler: %s\n", loop_in_handler());
         printf("foreach variable: %s\n", foreach_variable());
         printf("statement variables: %s\n", statement_variables());
+        printf("loop typed list: %s\n", loop_typed_list());
+        printf("two handlers: %s\n", two_handlers(False));
+        printf("two handlers: %s\n", two_handlers(True));
     }
 }
 
