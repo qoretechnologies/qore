@@ -30,14 +30,20 @@ class DgcNode {
 
     private {
         Counter destroyed;
+        #! if set, decremented when the object is destroyed, after \c destroyed is incremented
+        *Counter gone;
     }
 
-    constructor(Counter destroyed) {
+    constructor(Counter destroyed, *Counter gone) {
         self.destroyed = destroyed;
+        self.gone = gone;
     }
 
     destructor() {
         destroyed.inc();
+        if (gone) {
+            gone.dec();
+        }
     }
 }
 
@@ -4327,8 +4333,11 @@ sub write_parquet(string path) {
 
     # threads make and release cycles through DataFrames while others make DataFrames that share the columns of one
     # that holds objects; returns the number of objects created
-    private int dgcRunConcurrent(Counter destroyed) {
-        DgcNode shared_node(destroyed);
+    # the threads that use the shared DataFrame reference it through their closure, which a background thread holds
+    # until it ends, after it has decremented "done"; they wait for "release" before they end, so the last reference
+    # to the shared DataFrame's cycle is always released by a thread after this method has returned
+    private int dgcRunConcurrent(Counter destroyed, Counter shared_gone, Counter release) {
+        DgcNode shared_node(destroyed, shared_gone);
         DataFrame::DataFrame shared({"k": (1, 2), "x": (shared_node, shared_node)});
         shared_node.ref = shared;
 
@@ -4347,7 +4356,10 @@ sub write_parquet(string path) {
             }
         };
         code derived = sub () {
-            on_exit done.dec();
+            on_exit {
+                done.dec();
+                release.waitForZero();
+            }
             try {
                 for (int i = 0; i < 200; ++i) {
                     DgcNode n(destroyed);
@@ -4378,7 +4390,24 @@ sub write_parquet(string path) {
 
     dgcConcurrentTest() {
         Counter destroyed();
-        int created = dgcRunConcurrent(destroyed);
+        # reaches zero when the object in the shared DataFrame's cycle is destroyed
+        Counter shared_gone(1);
+        int created;
+        {
+            Counter release(1);
+            # the threads are released also when an assertion fails
+            on_exit release.dec();
+            created = dgcRunConcurrent(destroyed, shared_gone, release);
+            assertEq(created - 1, destroyed.getCount(),
+                "the shared DataFrame's cycle is not collected while a thread references it");
+        }
+        # a hang guard, not synchronization: the cycle is collected when the last thread releases its closure, and
+        # the wait returns then
+        if (shared_gone.waitForZero(60s)) {
+            stderr.print("FAILURE: the shared DataFrame's cycle was not collected within 60 seconds of the threads "
+                "ending\n");
+            exit(1);
+        }
         assertEq(created, destroyed.getCount(), "the shared DataFrame's cycle is collected after the threads");
     }
 }

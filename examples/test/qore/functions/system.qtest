@@ -12,6 +12,17 @@
 %exec-class SystemCallTest
 
 class SystemCallTest inherits QUnit::Test {
+    #! a script that starts processes in a loop and writes the shell's PID to descriptor 3 after starting 20 of them
+    const ShellLoop = "i=0; while [ $i -lt 200 ]; do sleep 120 & i=$((i + 1)); [ $i -eq 20 ] && echo $$ >&3; done; "
+        "wait";
+    #! a script that starts subshells, each of which starts subshells that start processes, and writes the shell's PID
+    #! to descriptor 3 once it has started the first subshells
+    /** The first subshells are starting subshells when the command is interrupted, and a subshell being started then
+        goes on starting processes after the shell has ended.
+    */
+    const SubshellLoops = "j=0; while [ $j -lt 8 ]; do ( i=0; while [ $i -lt 8 ]; do ( k=0; while [ $k -lt 4 ]; do "
+        "sleep 120 & k=$((k + 1)); done; wait ) & i=$((i + 1)); done; wait ) & j=$((j + 1)); done; echo $$ >&3; wait";
+
     constructor() : Test("SystemCallTest", "1.0") {
         addTestCase("system() test", \testMethod());
         addTestCase("system() exit code", \testExitCode());
@@ -62,16 +73,36 @@ class SystemCallTest inherits QUnit::Test {
         assertEq(42, rc, "system() child should handle SIGINT");
     }
 
+    #! interrupting the sandbox of a thread waiting in system() kills every process of the command
+    /** The interrupt can arrive while a process of the command is starting a process: on macOS, a process being
+        created when SIGKILL is sent to its process group does not receive it, and system() kills the group
+        again each time processes in it end, until none is left but the command's shell.  The commands start
+        processes in loops and write the shell's PID once some have been started, so that the interrupt arrives
+        while processes are being started: by the shell, or by subshells, which go on starting processes after the
+        shell has ended.
+    */
     testInterruptKillsProcessGroup() {
 %ifdef Windows
         testSkip("Windows");
 %endif
-        string pid_file = tmp_location() + "/system_pid_" + string(getpid());
-        on_exit {
-            if (is_file(pid_file)) {
-                unlink(pid_file);
-            }
+        for (int i = 1; i <= 3; ++i) {
+            interruptCommand(sprintf("round %d: the shell starts processes", i), ShellLoop);
         }
+        for (int i = 1; i <= 8; ++i) {
+            interruptCommand(sprintf("round %d: subshells start processes", i), SubshellLoops);
+        }
+    }
+
+    #! runs a command in a sandboxed Program, interrupts the sandbox and checks that every process of the command ends
+    /** The shell opens a FIFO on descriptor 3, which every process of the command inherits and holds open, so that
+        end-of-file on its read end shows that every one of them has exited; the script writes the shell's PID, which
+        is the ID of its process group, to the FIFO.
+    */
+    private interruptCommand(string label, string script) {
+        # a directory of its own, so that concurrent runs of this test do not share the FIFO
+        TmpDir tmp("qore-system-");
+        string fifo = tmp.path + DirSep + "fifo";
+        assertEq(0, mkfifo(fifo), label + ": FIFO created");
 
         SandboxManager sm();
         sm.addFilesystemAllowedPath("/bin/sh", QSEC_EXECUTE);
@@ -87,49 +118,67 @@ int sub run_system(string cmd) {
         ", "system_interrupt_test");
 
         Counter done(1);
-        bool caught = False;
-        string ex_err;
+        *string ex_err;
         int rc = -999;
 
-        string cmd = "echo $$ > " + pid_file + "; sleep 30 & wait";
-        background sub() {
+        string cmd = sprintf("exec 3> %s; %s", fifo, script);
+        background sub () {
+            on_exit {
+                # opens the FIFO and closes it at once: if the command failed before its shell opened the FIFO, this
+                # ends the open() of its read end below; the open() returns at once otherwise, as the read end is open
+                try {
+                    File w();
+                    w.open2(fifo, O_WRONLY);
+                } catch (hash<ExceptionInfo> ex) {
+                    stderr.printf("%s: cannot open the FIFO to write: %s\n", label, get_exception_string(ex));
+                }
+                done.dec();
+            }
             try {
                 rc = p.callFunction("run_system", cmd);
             } catch (hash<ExceptionInfo> ex) {
-                caught = True;
                 ex_err = ex.err;
-                rc = -1;
             }
-            done.dec();
         }();
 
-        int wait_attempts = 200;
-        while (!is_file(pid_file) && wait_attempts-- > 0) {
-            usleep(10000);
+        # blocks until the shell has opened the FIFO
+        ReadOnlyFile f(fifo);
+        int pgid;
+        # set when processes of the command are left running
+        bool left_running = False;
+        on_exit {
+            # ends the command if the test fails before interrupting it
+            if (done.getCount()) {
+                sm.requestInterrupt();
+            }
+            done.waitForZero();
+            # the processes left running hold the FIFO open, so the ID of their process group cannot have been reused
+            if (left_running) {
+                kill(-pgid, SIGKILL);
+            }
         }
-        assertTrue(is_file(pid_file), "pid file created");
 
-        string pid_str = chomp(ReadOnlyFile::readTextFile(pid_file));
-        int pgid = pid_str.toInt();
-        assertTrue(pgid > 0, "process group id captured");
+        pgid = int(f.readLine());
+        assertGt(0, pgid, label + ": process group ID read");
 
         sm.requestInterrupt();
-        done.waitForZero(5s);
+        # a backstop only: the interrupt ends the wait at once
+        assertEq(0, done.waitForZero(20s), label + ": the interrupted wait ended");
+        assertEq("PROGRAM-INTERRUPTED", ex_err, label + ": system() raised PROGRAM-INTERRUPTED");
+        assertEq(-999, rc, label + ": system() returned no value");
 
-        assertEq(-1, rc, "system() should return -1 on interrupt");
-        assertEq(True, caught, "system() call interrupted");
-        assertEq("PROGRAM-INTERRUPTED", ex_err, "system() raised PROGRAM-INTERRUPTED");
-
-        int krc = 0;
-        int kill_attempts = 50;
-        while (kill_attempts-- > 0) {
-            krc = kill(-pgid, 0);
-            if (krc == -1) {
-                break;
+        # end-of-file is read when every process holding the FIFO open has exited; the timeout is a hang guard, not
+        # synchronization: the processes have been killed, and the read returns when the last one has exited
+        try {
+            while (f.readBinary(1, 30s)) {
             }
-            usleep(10000);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "FILE-READ-TIMEOUT") {
+                rethrow;
+            }
+            left_running = True;
         }
-        assertEq(-1, krc, "process group should be gone");
+        assertFalse(left_running, label + ": every process of the command has exited");
     }
 
     testRestrictedAccess() {
