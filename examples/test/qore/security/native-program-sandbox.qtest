@@ -7,7 +7,8 @@
 # Program::constructor(), by ProgramControl::createEvalProgram(), by the module manager for a user module, or by a
 # module - so its code never gets the paths reserved for trusted code: the cancellation deferral of trusted
 # destructors and of cleanup critical sections (issue #5634).  A Program that trusted code creates stays trusted, and
-# so does library code that sandboxed code loads first, with the Programs that its initialization creates.
+# so does library code that sandboxed code loads first, with the Programs that its initialization creates.  A
+# Program that sandboxed code parses code in is sandboxed from then on, also if trusted code created it.
 #
 # The scenarios are in native-program-sandbox-probe.qr, which runs in a process of its own (the directory of the
 # library module must be in the process-wide module path when the library is initialized) in each execution mode and
@@ -36,6 +37,14 @@ class NativeProgramSandboxTest inherits QUnit::Test {
             "created-by-sandboxed": "sandboxed",
             # trusted code that sandboxed code calls loads a user module
             "user-module-for-sandboxed": "sandboxed",
+            # sandboxed code parses its code in a trusted Program that it was handed (Program::parse())
+            "parse-into-trusted": "sandboxed",
+            # the same with Program::parsePending() and Program::parseCommit()
+            "parse-pending-into-trusted": "sandboxed",
+            # sandboxed code creates an Expression in a trusted Program
+            "expression-in-trusted": "sandboxed",
+            # a child Program created before its parent had a sandbox manager, in which the parent's code parses code
+            "child-before-sandbox": "sandboxed",
             # trusted code creates a Program
             "trusted-creates": "trusted",
             # trusted code creates a Program after a call into sandboxed code has returned
@@ -46,6 +55,8 @@ class NativeProgramSandboxTest inherits QUnit::Test {
             "library-class": "trusted",
             # a Program that the initialization of library code creates, when sandboxed code loads it first
             "library-init-program": "trusted",
+            # sandboxed code parses its code in a Program that the initialization of library code created
+            "library-program-parsed-by-sandboxed": "sandboxed",
         };
     }
 

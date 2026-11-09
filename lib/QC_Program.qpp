@@ -1415,7 +1415,7 @@ Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
     assert(!xsink->isEvent());
     program_set_independent_creator(*pgm, independent);
     // the code of a Program that sandboxed code creates is sandboxed, although the Program has no manager of its own;
-    // the QoreProgram constructor decides it (see qore_creator_is_sandboxed())
+    // the QoreProgram constructor decides it (see qore_caller_is_sandboxed())
 
     self->setPrivate(CID_PROGRAM, pgm);
     // the object reports the Program's code to the garbage collector (issue #5590)
@@ -1445,7 +1445,7 @@ Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool ind
     assert(!xsink->isEvent());
     program_set_independent_creator(*pgm, independent);
     // the code of a Program that sandboxed code creates is sandboxed, although the Program has no manager of its own;
-    // the QoreProgram constructor decides it (see qore_creator_is_sandboxed())
+    // the QoreProgram constructor decides it (see qore_caller_is_sandboxed())
 
     self->setPrivate(CID_PROGRAM, pgm);
     // the object reports the Program's code to the garbage collector (issue #5590)

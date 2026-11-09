@@ -952,7 +952,7 @@ public:
     //! true if the code of the Program is sandboxed; never cleared once set (see qore_program_is_sandboxed())
     /** Set when a sandbox manager is set on the Program, when the Program is created by code that a sandbox governs
         or by the code of a sandboxed Program, by Qore code or by C++ code acting for it (decided in the constructor
-        for every Program; see qore_creator_is_sandboxed()), and for a user module that a sandboxed Program loads by
+        for every Program; see qore_caller_is_sandboxed()), and for a user module that a sandboxed Program loads by
         a path it chose (inherit_module_sandbox_manager()).  A Program that sandboxed code creates has no manager of
         its own (the code it runs is governed by its callers), so the manager alone cannot tell that its code is not
         trusted; the flag also outlives the manager, which is cleared when the Program is deleted.
@@ -1978,6 +1978,17 @@ public:
         return rc;
     }
 
+    //! Marks the Program sandboxed if sandboxed code, or code acting for it, adds code to it (issue #5659)
+    /** Called by every parse of source code (parse(), parsePending(), parseExpression()) before it switches to the
+        Program, so that the caller's code is looked at (see qore_caller_is_sandboxed()).  Whether a Program is trusted
+        is decided when it is created, but code that sandboxed code supplies later is the sandbox's as well: a
+        trusted Program that sandboxed code parses its own code in (one that it was handed, one that library code's
+        initialization created, a child Program created before its parent had a sandbox manager) is sandboxed from
+        then on.  This fails safe: the classes that the Program already had, which trusted code defined, lose the
+        paths reserved for trusted code as well.
+    */
+    DLLLOCAL void markSandboxedParse();
+
     DLLLOCAL void startParsing(ExceptionSink* xsink, ExceptionSink* wS, int wm) {
         warnSink = wS;
         pwo.warn_mask = wm;
@@ -2049,6 +2060,9 @@ public:
     DLLLOCAL int parsePending(const char* code, const char* label, ExceptionSink* xsink, ExceptionSink* wS, int wm,
             const char* orig_src = nullptr, int offset = 0) {
         //printd(5, "qore_program_private::parsePending() wm=0x%x UV=0x%x on: %d\n", wm, QP_WARN_UNREFERENCED_VARIABLE, wm & QP_WARN_UNREFERENCED_VARIABLE);
+
+        // before the parse switches to the Program
+        markSandboxedParse();
 
         ProgramRuntimeParseContextHelper pch(xsink, pgm);
         assert(xsink);
@@ -2162,6 +2176,9 @@ public:
         yyscan_t lexer;
         QoreParseState state;
 
+        // before the parse switches to the Program
+        markSandboxedParse();
+
         {
             ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
             if (*xsink) {
@@ -2248,6 +2265,9 @@ public:
 
         assert(code && code[0]);
         assert(xsink);
+
+        // before the parse switches to the Program
+        markSandboxedParse();
 
         ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         if (*xsink) {
@@ -2367,6 +2387,9 @@ public:
         assert(code && code[0]);
         assert(xsink);
 
+        // before the parse switches to the Program
+        markSandboxedParse();
+
         ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         if (*xsink) {
             return nullptr;
@@ -2432,6 +2455,9 @@ public:
         applyModernSourceDefault(filename);
 
         setScriptPath(filename);
+
+        // before the parse switches to the Program
+        markSandboxedParse();
 
         ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         if (*xsink)

@@ -2,8 +2,8 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # A library module for native-program-sandbox.qtest (issue #5659): the test puts this directory in the process-wide
-# module path, so the module is library code also when sandboxed code loads it first.  Its class and the Program
-# that its initialization creates are trusted code.
+# module path, so the module is library code also when sandboxed code loads it first.  Its class and the Programs
+# that its initialization creates are trusted code, until sandboxed code parses code in one of them.
 
 %modern
 
@@ -17,17 +17,25 @@ module NpsLibrary {
 }
 
 public namespace NpsLibrary {
-    #! the Program that the initialization of the module creates
+    #! a Program that the initialization of the module creates; trusted code parses code in it
     our Program InitProgram;
+    #! another Program that the initialization of the module creates; sandboxed code parses code in it
+    our Program SharedProgram;
 
-    #! creates the Program; called when the module is initialized
+    #! creates the Programs; called when the module is initialized
     sub init() {
         InitProgram = new Program(PO_NEW_STYLE);
+        SharedProgram = new Program(PO_NEW_STYLE);
     }
 
-    #! returns the Program that the initialization of the module created
+    #! returns a Program that the initialization of the module created
     public Program sub init_program() {
         return InitProgram;
+    }
+
+    #! returns the other Program that the initialization of the module created
+    public Program sub shared_program() {
+        return SharedProgram;
     }
 
     #! a class whose destructor reaches a cancellation point

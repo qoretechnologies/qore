@@ -534,7 +534,7 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm) {
     // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
     // every Program wherever it is created, and before the Program is registered and can be found
-    if (qore_creator_is_sandboxed()) {
+    if (qore_caller_is_sandboxed()) {
         sandboxed.store(true, std::memory_order_release);
     }
     registerProgram();
@@ -552,6 +552,13 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
         for (const auto& i : dmap) {
             source_defines.insert(i.first);
         }
+    }
+}
+
+void qore_program_private::markSandboxedParse() {
+    // the flag is never cleared, so a Program that is sandboxed already needs no lookup
+    if (!sandboxed.load(std::memory_order_acquire) && qore_caller_is_sandboxed()) {
+        sandboxed.store(true, std::memory_order_release);
     }
 }
 

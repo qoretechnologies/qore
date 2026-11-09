@@ -56,6 +56,25 @@ auto sub call(code<auto()> c) {
 sub load(string name) {
     load_module(name);
 }
+Program sub parse_into(Program p, string src) {
+    p.parse(src, 'sandbox-supplied');
+    return p;
+}
+Program sub parse_pending_into(Program p, string src) {
+    p.parsePending(src, 'sandbox-supplied');
+    p.parseCommit();
+    return p;
+}
+Program sub expression_in(Program p) {
+    Expression e(p, '1 + 1', 'sandbox-supplied');
+    e.eval();
+    return p;
+}
+Program sub parse_into_library_program(string src) {
+    Program p = call_function('NpsLibrary::shared_program');
+    p.parse(src, 'sandbox-supplied');
+    return p;
+}
 Program sub child() {
     Program c(PO_NEW_STYLE | PO_ALLOW_DEBUGGER);
     c.parse('%modern
@@ -153,6 +172,11 @@ string sub probe(code<auto()> point, code<auto(Queue)> make) {
 string sub probe_program(Program p, string mode) {
     p.setExecMode(exec_mode(mode));
     p.parse(ProbeSource, "probe");
+    return probe(sub () { p.callFunction("point"); }, auto sub (Queue ev) { return p.callFunction("make", ev); });
+}
+
+#! returns how the code of a Program in which the probe code has been parsed treats a pending cancellation
+string sub probe_parsed(Program p) {
     return probe(sub () { p.callFunction("point"); }, auto sub (Queue ev) { return p.callFunction("make", ev); });
 }
 
@@ -287,6 +311,46 @@ run("user-module-for-sandboxed", string sub () {
     return probe_module(t, name);
 });
 
+# sandboxed code parses its code in a trusted Program that it was handed
+run("parse-into-trusted", string sub () {
+    SandboxManager sm();
+    Program s = sandboxed(sm, mode);
+    Program h = target(mode);
+    return probe_parsed(s.callFunction("parse_into", h, ProbeSource));
+});
+
+# the same with Program::parsePending() and Program::parseCommit()
+run("parse-pending-into-trusted", string sub () {
+    SandboxManager sm();
+    Program s = sandboxed(sm, mode);
+    Program h = target(mode);
+    return probe_parsed(s.callFunction("parse_pending_into", h, ProbeSource));
+});
+
+# sandboxed code creates an Expression in a trusted Program: the code that trusted code parses in it later is in a
+# sandboxed Program
+run("expression-in-trusted", string sub () {
+    SandboxManager sm();
+    Program s = sandboxed(sm, mode);
+    return probe_program(s.callFunction("expression_in", target(mode)), mode);
+});
+
+# a child Program that a Program created before it had a sandbox manager, in which its code parses code then
+run("child-before-sandbox", string sub () {
+    Program p(PO_NEW_STYLE);
+    p.setExecMode(exec_mode(mode));
+    p.parse("%modern
+our Program Pre = new Program(PO_NEW_STYLE);
+Program sub parse_into_pre(string src) {
+    Pre.parse(src, 'sandbox-supplied');
+    return Pre;
+}
+", "pre");
+    p.run();
+    p.setSandboxManager(new SandboxManager());
+    return probe_parsed(p.callFunction("parse_into_pre", ProbeSource));
+});
+
 # trusted code creates a Program
 run("trusted-creates", string sub () {
     Program h = target(mode);
@@ -322,5 +386,9 @@ if (ENV.QORE_MODULE_DIR =~ /native-program-sandbox-lib/) {
     });
     run("library-init-program", string sub () {
         return probe_program(call_function("NpsLibrary::init_program"), mode);
+    });
+    # sandboxed code parses its code in a Program that the library's initialization created
+    run("library-program-parsed-by-sandboxed", string sub () {
+        return probe_parsed(s.callFunction("parse_into_library_program", ProbeSource));
     });
 }
