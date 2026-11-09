@@ -118,18 +118,29 @@ with debugging counts the calls that found an entry of a deleted Program at the 
 (`dbg_closure_call_cache_program_misses()`), and the test fails on macOS if no run was given the addresses, so that it
 cannot stop reproducing the reuse unnoticed.
 
-A cache keyed by the metadata of a class or a hashdecl can use the method dispatch epoch instead
-(`qore_get_method_dispatch_epoch()`): the destruction of a class or a hashdecl increments it before the memory can be
-reused (`qore_bump_method_dispatch_epoch()`), so an entry of an earlier epoch is not used.  The type and hashdecl path
-caches of an AOT module (`qore_rt_resolve_full_type_path_cached()` and `qore_rt_resolve_hashdecl_path_cached()` in
-`lib/JITRuntime.cpp`: their thread-local front caches and `QoreAOTContext::type_path_cache` and
-`hashdecl_path_cache`) are keyed by the receiver's type, which is freed with its class, and give types and hashdecls
-freed with their Program, while the module's context lives as long as the module.  A subclass of the module's
-generic class declared by a later Program at the deleted subclass's address was given the type found for the deleted
-one (`hash<string, int>` for a `Box<string>`) or a type of a freed hashdecl.  Their entries now record the epoch: a
-front-cache entry of an earlier epoch is not used, a context's map is cleared when the epoch has changed, and a map
-holds at most `QORE_AOT_PATH_CACHE_MAX_ENTRIES` entries.  `examples/test/ir/AOTPathCacheProgramReuse.qtest` declares
-such subclasses in Programs created one after another.
+A cache keyed by the metadata of a class can identify the class by its instance serial instead
+(`qore_class_private::instance_serial`, which no other class ever has), or use the method dispatch epoch
+(`qore_get_method_dispatch_epoch()`), which the destruction of a class or a hashdecl increments before the memory can be
+reused (`qore_bump_method_dispatch_epoch()`), as do the methods added at parse time.  The type and hashdecl path caches
+of an AOT module (`qore_rt_resolve_full_type_path_cached()` and `qore_rt_resolve_hashdecl_path_cached()` in
+`lib/JITRuntime.cpp`: their thread-local front caches and `QoreAOTContext::type_path_cache` and `hashdecl_path_cache`)
+are keyed by the receiver's type, which is freed with its class, while the module's context lives as long as the module.
+A subclass of the module's generic class declared by a later Program at the deleted subclass's address was given the
+type found for the deleted one (`hash<string, int>` for a `Box<string>`) or a type of a freed hashdecl.  The entries of
+the contexts' maps are keyed by the receiver's type and the serial of its class
+(`qore_rt_aot_path_cache_receiver_serial()`): a class's own type is identified by the serial of the class, and a
+parameterized class type, which is never freed (a type built on a destroyed one is retired by
+`qore_purge_derived_types()`), by its address and the serial of its base class; the receiver is live, so its class is,
+and the class keeps the types of its type arguments.  Nothing is cached for a receiver type of another kind, which is
+not the type of an object or a class, nor for a context without a Program.  The thread-local front caches record the
+epoch, which a call compares at no cost, and refill an entry of an earlier epoch from the map.  The maps' entries
+recorded the epoch first, but each method added at parse time and each class destroyed cleared every context's maps, so
+the module's generic code resolved the paths of all of its receivers again while another thread created and deleted
+Programs (calls over 300 receivers took 48% longer than without the other thread, 10% longer with the serials).  A map
+holds at most `QORE_AOT_PATH_CACHE_MAX_ENTRIES` entries, and evicts an entry for each new one once it is full: the
+entries of destroyed classes are never found again, and clearing the full map made a working set larger than the map
+resolve every path again.  `examples/test/ir/AOTPathCacheProgramReuse.qtest` declares such subclasses in Programs
+created one after another, and more subclasses in one Program than a map holds.
 
 ## Thread-local variables
 
