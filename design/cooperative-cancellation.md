@@ -678,11 +678,23 @@ if (qore_check_cancel(xsink, "while loop")) {
 
 The check is at the start of every iteration, before the condition of a `while` or `for` statement and before the
 body of a `do-while` statement, and the operation it names is the statement's: `"while loop"`, `"do-while loop"`,
-`"for loop"` or `"foreach loop"`.  The iterations of expressions (`map`, `select`, `foldl`, `foldr`, hash `map`, the
-lazy pipelines) and of the `context` statement are not cancellation points.  The C++ code that implements an
-operator can still check every 100 elements, with a label of its own: the AST streaming operators do
-(`QoreStreamingOperatorNode`), and so do some IR and JIT runtime helpers (fused list operations, sized list
-construction), which the AST interpreter's code for the same expressions does not.
+`"for loop"` or `"foreach loop"`.  The iterations of expressions (`map`, `select`, `foldl`, `foldr`, hash `map`,
+map/select, list and hash literals, the lazy pipelines) and of the `context` statement are not cancellation points.
+A few expressions check every 100 elements in their C++ code, with a label of their own: the string join of `foldl`
+and `foldr` (`"string fold join"`, `QoreFoldlOperatorNode`), the streaming operators (`QoreStreamingOperatorNode`),
+range selectors with negative offsets (`"negative offset range selector"`) and the evaluation of a runtime hash
+value whose members need evaluation (`"hash expression evaluation"`).
+
+**The AST interpreter is the reference** for every other execution mode: IR, native (JIT and tiered) and AOT code
+must check exactly where it does, with its labels, and nowhere else (issue #5641).  Their runtime helpers for
+expressions (fused map/foldl, hash-key projections, select loops, list construction, literals, string pipelines,
+slice removal) therefore have no cancellation checks, and an expression that the IR lowers into a loop of its own
+checks with `QoreIROpcode::CheckCancelEvery` (an element count, a `QoreIRCancelPoint` and the limit of a drop
+operator) where the AST does, before the next element is taken: the string join of a fused pipeline every 100 joined
+values (`QoreFoldlOperatorNode`); a streaming operator every 100 elements that it took (first, any, all, count) or
+returned (take, takewhile, takeuntil), and a drop operator also every 100 elements that it skipped
+(`QoreStreamingOperatorNode`); a drop operator inside a pipeline only while it skips elements
+(`QoreFunctionalStreamingOperator::skipDropPrefix()`, `QoreIRCancelPoint::DropSkip`).
 
 The IR interpreter, native (JIT and tiered) code and AOT code follow the same rule (issue #5641): the IR lowering
 sets `QoreIRBasicBlock::loop_cancel` on the block that starts an iteration of a loop statement, and the IR interpreter
@@ -820,10 +832,9 @@ and `Queue::push()` and `Counter::dec()` never wait), so the cleanup completes o
 thread.  Only the *waits* (`Queue::get()`, `Counter::waitForZero()`) are cancellation points, which
 is what the waiter wants.  The cleanup methods contain **no loop**: a loop statement is a cancellation
 point at each iteration, so on a cancelled thread it raises the cancellation again and skips the rest of
-the cleanup (a `map` expression is not one when run from source, but the code `qcc` compiles for it
-checks too, so cleanup code does not rely on it).  A waiter registers itself in a synchronized method before it waits and
-the cleanup pushes only while a waiter is registered, so no wakeup is lost and the queue does not
-grow without one:
+the cleanup (a `map` expression is not one, in any execution mode).  A waiter registers itself in a
+synchronized method before it waits and the cleanup pushes only while a waiter is registered, so no
+wakeup is lost and the queue does not grow without one:
 
 ```qore
 synchronized leave(int token) {

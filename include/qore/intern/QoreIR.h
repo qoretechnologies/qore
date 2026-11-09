@@ -896,7 +896,20 @@ enum class QoreIROpcode : uint16_t {
     //! common type.  The value type is taken once for the fold and the store.
     ListAppendElement = 417,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (418, 419, ...)
+    //! Check for cancellation every 100 elements of an expression that the AST interpreter checks the same way
+    //!
+    //! operands[0] = the number of elements done so far (native int); operands[1] = the QoreIRCancelPoint of the
+    //! check (native int); operands[2] = the limit of a drop operator, or 0 (native int); no result.  With a limit,
+    //! the count is the number of elements skipped while it is below the limit and the number of elements after the
+    //! skipped ones otherwise, as the AST interpreter counts them.  When the count is a positive multiple of 100,
+    //! qore_check_cancel() is called with the label of the cancellation point, and an exception it raises goes to
+    //! the instruction's exception target.  Used where the AST interpreter checks inside the evaluation of an
+    //! expression and IR lowers the expression into a loop of its own: the string join of foldl and foldr
+    //! (QoreFoldlOperatorNode, "string fold join") in a fused pipeline loop, and the streaming operators
+    //! (QoreStreamingOperatorNode).
+    CheckCancelEvery = 418,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (419, 420, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -905,8 +918,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ListAppendElement);
-static_assert(QORE_IR_MAX_OPCODE == 417, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::CheckCancelEvery);
+static_assert(QORE_IR_MAX_OPCODE == 418, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -1112,6 +1125,45 @@ inline const char* qore_ir_loop_cancel_operation(QoreIRLoopCancel kind) {
         case QoreIRLoopCancel::None: break;
     }
     return nullptr;
+}
+
+//! The cancellation points of QoreIROpcode::CheckCancelEvery: expressions that the AST interpreter checks every 100
+//! elements, with its labels
+enum class QoreIRCancelPoint : int64_t {
+    //! the string join of foldl and foldr (QoreFoldlOperatorNode)
+    StringFoldJoin = 0,
+    //! the streaming operators (QoreStreamingOperatorNode::getOperatorName())
+    First = 1,
+    Any = 2,
+    All = 3,
+    Count = 4,
+    Take = 5,
+    Drop = 6,
+    TakeWhile = 7,
+    TakeUntil = 8,
+    //! a drop operator inside a pipeline, which the AST interpreter checks only while it skips elements
+    //! (QoreFunctionalStreamingOperator::skipDropPrefix()); operands[2] is its limit
+    DropSkip = 9,
+};
+
+//! The largest QoreIRCancelPoint value
+constexpr int64_t QORE_IR_CANCEL_POINT_MAX = static_cast<int64_t>(QoreIRCancelPoint::DropSkip);
+
+//! Returns the operation that a cancellation raised at a QoreIRCancelPoint names, as the AST interpreter names it
+inline const char* qore_ir_cancel_point_operation(int64_t point) {
+    switch (static_cast<QoreIRCancelPoint>(point)) {
+        case QoreIRCancelPoint::StringFoldJoin: return "string fold join";
+        case QoreIRCancelPoint::First: return "first operator expression";
+        case QoreIRCancelPoint::Any: return "any operator expression";
+        case QoreIRCancelPoint::All: return "all operator expression";
+        case QoreIRCancelPoint::Count: return "count operator expression";
+        case QoreIRCancelPoint::Take: return "take operator expression";
+        case QoreIRCancelPoint::Drop:
+        case QoreIRCancelPoint::DropSkip: return "drop operator expression";
+        case QoreIRCancelPoint::TakeWhile: return "takewhile operator expression";
+        case QoreIRCancelPoint::TakeUntil: return "takeuntil operator expression";
+    }
+    return "operation";
 }
 
 class QoreIRBasicBlock;
