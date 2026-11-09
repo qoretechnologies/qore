@@ -782,9 +782,11 @@ int32_t Http2Session::submitRequestImpl(const char* method, const char* path,
     // Lock only for nghttp2 API calls and session state access
     std::lock_guard<std::recursive_mutex> lg(m);
 
+    // a definitive answer of the server (its SETTINGS), with an error code of its own: HTTP2-CONNECT-ERROR is also the
+    // code of failures to connect, which callers retry on a fresh connection (issue #5672)
     if (is_extended_connect && remote_settings_received
             && !remote_settings.enable_connect_protocol) {
-        xsink->raiseException("HTTP2-CONNECT-ERROR",
+        xsink->raiseException("HTTP2-EXTENDED-CONNECT-UNSUPPORTED",
             "server does not support extended CONNECT protocol (RFC 8441); "
             "SETTINGS_ENABLE_CONNECT_PROTOCOL was not advertised");
         return -1;

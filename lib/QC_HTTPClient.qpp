@@ -943,6 +943,7 @@ nothing HTTPClient::setHttp2StreamPriority(int stream_id, int weight = 16, int d
 
     @throw HTTP2-ERROR if HTTP/2 is not available
     @throw HTTP2-CONNECT-ERROR if the CONNECT request fails, or the protocol contains a NUL or another control character than horizontal tab
+    @throw HTTP2-EXTENDED-CONNECT-UNSUPPORTED the server did not advertise \c SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 8441), so it does not support extended CONNECT
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
     @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
