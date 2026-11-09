@@ -145,6 +145,19 @@ module WebSocketClient {
     capabilities; use @ref WebSocketClient::WebSocketClient::isHttp2() "isHttp2()" and
     @ref WebSocketClient::WebSocketClient::isHttp3() "isHttp3()" to check which transport is in use.
 
+    Over HTTP/2 and HTTP/3, the server accepts the connection with any 2xx response to the extended \c CONNECT
+    request (RFC 8441, RFC 9220), which establishes a tunnel that stays open.  The handshake fails when the stream is
+    already ended with the response, as when a server that has no WebSocket endpoint for the path answers with a
+    page (in the default \c "auto" HTTP-version mode an HTTP/1.1 \c 101 Upgrade is tried then).  When the end of
+    the stream arrives in a later frame than the response, as with a body sent after the response headers, it cannot
+    be told apart from a tunnel that the server accepted and closed at once (RFC 9113 section 8.5, RFC 8441
+    section 5): the connection is then either refused in the handshake or reported as connected and closed right
+    after with the close code 1006 ("stream ended"), depending on whether the frames arrive together.  This depends on
+    the size of the body and is common: over HTTP/3, a page of about 6 KB or more is often, and one of 16 KB or more
+    always, reported as connected and then closed, and over HTTP/2 a large page (e.g. 120 KB) nearly always is; the
+    \c "auto" mode does not fall back to HTTP/1.1 then.  Against a server that serves a page for the path, the remedy
+    is on the server: a Qore @ref httpserverintro "HttpServer" refuses such a request with \c 501 (issue #5667).
+
     All the public symbols in the module are defined in the WebSocketClient namespace.
 
     Currently the module provides the following classes:
@@ -332,6 +345,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
 
     @section wsc_v2_5 v2.5
+    - an HTTP/2 or HTTP/3 extended \c CONNECT that the server answers with a response that ends the stream (a
+      server without a WebSocket endpoint for the path) fails the handshake, so the connection is not reported as
+      connected and the \c "auto" mode tries the HTTP/1.1 Upgrade; any 2xx status accepts the connection, and the
+      status of a refusal is reported when the response's headers arrive with its body (issue #5668)
     - a thread of the client that is cancelled (e.g. with \c cancel_thread() or
       @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()") is no longer waited for by
       the destructor, and a cancelled @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" worker
@@ -1408,6 +1425,9 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
             @since WebSocketClient 2.4
         */
         *HttpClientIo::HttpClientStreamHandle hcio_stream;
+        #! the queue of an HTTP/2 or HTTP/3 tunnel's frames, whose frame state the handshake installed; see
+        #! connectH2H3WebSocketOnStream()
+        *Queue hcio_frame_queue;
 
         #! Always True — all paths use HttpClientIo (kept for backward compat with subclasses)
         bool use_hcio = True;
@@ -3927,7 +3947,7 @@ ws.setEventQueue();
             # the poll operation to the async I/O controller. Create an adapter
             # that reads from the stream handle and parses WS frames.
             poll_op = new WebSocketClientHcioPollOp(hcio_stream, active_extensions,
-                logger, raw_callback, on_poll_complete);
+                logger, raw_callback, on_poll_complete, remove hcio_frame_queue);
             c.op = poll_op;
             # the end of a close started by the client is waited for with WebSocketClientHcioPollOp::waitClosed()
             remove async_state_queue;
@@ -5227,6 +5247,7 @@ ws.setEventQueue();
                     # drop the dead stream; the next acquireStream() evicts the closed
                     # connection at checkout and creates a fresh one
                     remove hcio_stream;
+                    remove hcio_frame_queue;
                     continue;
                 }
                 # The HTTP connection itself negotiated fine, but the RFC 8441/9220
@@ -5248,6 +5269,7 @@ ws.setEventQueue();
                 # discard the failed H2/H3 stream and manager so the H1 path opens a
                 # fresh H1-only connection (ensureHcioMgr() only creates one if unset)
                 remove hcio_stream;
+                remove hcio_frame_queue;
                 remove hcio_mgr;
                 return connectHttp1WebSocketViaHcio(hdr, \info, reconnect);
             }
@@ -5368,6 +5390,15 @@ ws.setEventQueue();
 
         # Read the CONNECT response
         auto rh = readHandshakeResponse();
+        # the response's headers can arrive with its body and the end of the stream in one event, which the stream
+        # delivers as the body: they are read from the response that the stream received (an HTTP/3 refusal, or a
+        # server that answered with a resource instead of a tunnel; issue #5668)
+        if (rh.typeCode() != NT_HASH || !(rh.status_code || rh.headers)) {
+            *hash<auto> resp = stream.getResponse();
+            if (resp.status_code || resp.headers) {
+                rh = resp;
+            }
+        }
         if (!rh || rh.typeCode() != NT_HASH) {
             raiseError("HttpClientIo CONNECT to %y failed: no response received",
                 http_opts.url);
@@ -5376,9 +5407,10 @@ ws.setEventQueue();
         # Validate status code BEFORE setting protocol flags — if validation
         # fails, the flags must remain False so fallback to H1 works correctly
         int status_code = rh.status_code ?? rh.headers.":status".toInt();
-        if (status_code != 200) {
+        # any 2xx response to CONNECT establishes the tunnel (RFC 9110 section 9.3.6)
+        if (status_code < 200 || status_code >= 300) {
             raiseError("%s server at URL %y returned status code '%d' to our WebSocket "
-                "CONNECT request; expecting '200 OK'",
+                "CONNECT request; expecting a 2xx status",
                 is_h3 ? "HTTP/3" : "HTTP/2", http_opts.url, status_code);
         }
 
@@ -5396,6 +5428,39 @@ ws.setEventQueue();
                     rhdr."sec-websocket-accept", expected_key);
             }
         }
+
+        # a 2xx response establishes a tunnel, which stays open (RFC 8441 section 4, RFC 9220): a server that ended the
+        # stream with its response (one that served a resource for the path) has no WebSocket there; the frame state is
+        # installed here, in the handshake, so that a stream that the server ends at once also fails the handshake
+        # instead of the connection being reported as connected (in "auto" mode the HTTP/1.1 Upgrade is tried then);
+        # the Content-Length of the response is not checked, as a client must ignore it in a successful response to
+        # CONNECT (RFC 9110 section 9.3.6) (issue #5668)
+        # a stream that the destructor canceled is done as well
+        checkHandshakeCanceled();
+        if (stream.isDone()) {
+            raiseError("%s server at URL %y accepted the WebSocket CONNECT request but ended the stream with its "
+                "response; the resource is not a WebSocket endpoint", is_h3 ? "HTTP/3" : "HTTP/2", http_opts.url);
+        }
+        Queue frame_queue();
+        # an HTTP/2 stream's queue is registered before the frame state is installed, as the poll operation did:
+        # installFrameState() marks the registration for the queue as owned by the frame state, so that the
+        # connection does not read the stream's data itself; see WebSocketClientHcioPollOp::constructor()
+        HttpClientIo::HttpClientConnection frame_conn = stream.getConnection();
+        if (frame_conn instanceof HttpClientIo::Http2ClientConnection) {
+            cast<HttpClientIo::Http2ClientConnection>(frame_conn).registerStreamQueue(stream.getStreamId(),
+                frame_queue);
+        }
+        try {
+            stream.installFrameState(frame_queue);
+        } catch (hash<ExceptionInfo> ex) {
+            raiseError("%s server at URL %y accepted the WebSocket CONNECT request but the stream is closed (%s: %s); "
+                "the resource is not a WebSocket endpoint", is_h3 ? "HTTP/3" : "HTTP/2", http_opts.url, ex.err,
+                ex.desc);
+        }
+        hcio_frame_queue = frame_queue;
+        # the queue belongs to this handshake's stream: a failure after this point leaves no queue for a later
+        # connection
+        on_error remove hcio_frame_queue;
 
         # Set protocol flags AFTER successful validation
         if (is_h3) {
@@ -7634,13 +7699,22 @@ public class WebSocketClientHcioPollOp {
         @param logger optional logger
         @param raw_callback optional raw frame callback
         @param on_poll_complete callback for delivery scheduling
+        @param frame_queue the queue whose frame state the handshake installed on the stream, if any; without it the
+        frame state is installed here
     */
     constructor(HttpClientIo::HttpClientStreamHandle stream,
             *list<AbstractWebSocketExtension> active_extensions,
             *Logger::LoggerInterface logger,
             *code raw_callback,
-            *code on_poll_complete) {
+            *code on_poll_complete,
+            *Queue frame_queue) {
         self.stream = stream;
+        # the frame state was installed with this queue by the handshake (see
+        # WebSocketClient::connectH2H3WebSocketOnStream()); the frames that arrived since are delivered by the initial
+        # drain
+        if (frame_queue) {
+            msg_queue = frame_queue;
+        }
         self.active_extensions = active_extensions;
         self.logger = logger;
         self.raw_callback = raw_callback;
@@ -7662,7 +7736,10 @@ public class WebSocketClientHcioPollOp {
         #     socket, not WebSocketClientHcioPollOp.
         if (conn instanceof HttpClientIo::Http2ClientConnection) {
             auto h2conn = cast<HttpClientIo::Http2ClientConnection>(conn);
-            h2conn.registerStreamQueue(stream_id, msg_queue);
+            # the handshake registered the queue before it installed the frame state
+            if (!frame_queue) {
+                h2conn.registerStreamQueue(stream_id, msg_queue);
+            }
             h2conn.registerStreamListener(stream_id, self);
         } else if (conn instanceof HttpClientIo::Http3ClientConnection) {
             auto h3conn = cast<HttpClientIo::Http3ClientConnection>(conn);
@@ -7674,7 +7751,9 @@ public class WebSocketClientHcioPollOp {
         # hashes land in msg_queue.  installFrameState() drains any residual
         # body bytes from the old Channel and hands them to the new frame
         # state so the decoder sees a contiguous byte stream across the swap.
-        stream.installFrameState(msg_queue);
+        if (!frame_queue) {
+            stream.installFrameState(msg_queue);
+        }
     }
 
     #! Called on a worker thread when stream data has been dispatched
@@ -7685,6 +7764,13 @@ public class WebSocketClientHcioPollOp {
     notifyIo() {
         AutoLock al(process_mutex);
         if (isClosed()) {
+            return;
+        }
+        # the frames that arrived before start() are delivered by initialDrain(), which the client calls without its
+        # lock once the event loop runs: the raw frame callback may run when frames are processed, and a notification
+        # can come on the thread that registers the stream (in the constructor, with the client's lock held) when the
+        # handshake already installed the frame state and frames arrived (issue #5668)
+        if (!started) {
             return;
         }
 
