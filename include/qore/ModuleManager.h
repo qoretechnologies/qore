@@ -52,8 +52,8 @@
     a module built with the previous headers would get wrong must increment this number, so that such modules are
     refused with an API mismatch error instead of failing at run time; see design/module-api-version.md.
 
-    @since %Qore 3.0: 2.1 (binary modules built with the module API 2.0 headers handle enum values without the
-    declaration ownership of qore#5519 and are refused)
+    @since %Qore 3.0: 2.1, which covers all public ABI changes made during %Qore 3.0 development after module API 2.0
+    was introduced; modules built with the 2.0 headers are refused
 */
 #define QORE_MODULE_API_MINOR 1
 

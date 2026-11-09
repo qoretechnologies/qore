@@ -2097,6 +2097,20 @@ MACRO (QORE_BINARY_MODULE _module_name _version)
    QORE_BINARY_MODULE_INTERN(${_module_name} ${_version} "" ${ARGN})
 ENDMACRO (QORE_BINARY_MODULE)
 
+# qore_remove_stale_module_api_files(<target>)
+# After each build of the binary module <target> (a <name>-api-<major>.<minor>.qmod file), removes the files of the
+# same module built for another module API from its output directory: CMake does not remove the file with the old name
+# when the module API of the Qore headers changes, and tools that look for a module's file by a pattern would find the
+# stale one (see QoreRemoveStaleModuleApiFiles.cmake and design/module-api-version.md).  QORE_BINARY_MODULE* call it;
+# a module that sets its -api-*.qmod suffix itself calls it after doing so.
+function(qore_remove_stale_module_api_files _target)
+    set(_name "$<IF:$<BOOL:$<TARGET_PROPERTY:${_target},OUTPUT_NAME>>,$<TARGET_PROPERTY:${_target},OUTPUT_NAME>,${_target}>")
+    add_custom_command(TARGET ${_target} POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" "-DDIR=$<TARGET_FILE_DIR:${_target}>" "-DNAME=${_name}"
+            "-DKEEP=$<TARGET_FILE_NAME:${_target}>" -P "${QORE_CMAKE_DIR}/QoreRemoveStaleModuleApiFiles.cmake"
+        VERBATIM)
+endfunction()
+
 # Create qore binary module.
 # Arguments:
 #  _module_name - string name of the module
@@ -2311,6 +2325,7 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
     set(_mod_target_dir ${QORE_MODULES_DIR}${_install_suffix})
 
     set_target_properties(${_module_name} PROPERTIES PREFIX "" SUFFIX "-api-${QORE_API_VERSION}.qmod")
+    qore_remove_stale_module_api_files(${_module_name})
 
     # issue #3802: do not link with the qore library
     target_link_libraries(${_module_name} ${_libs})

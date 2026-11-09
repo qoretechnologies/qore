@@ -11,14 +11,17 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires FsUtil
 %requires ../../ExecModeHarness.qm
 
 %exec-class ModuleApiVersionTest
 
-#! A binary module built for an earlier module API is refused with LOAD-MODULE-ERROR
-/** The public headers of module API 2.0 had inline code that a binary module compiled with them carries (the enum
-    value ownership of qore#5519), so a module built with them must not be loaded: the module API is 2.1, and a module
-    that declares 2.0 is refused with the API mismatch error, while a module built with the current headers loads.
+#! A binary module built for another module API is not loaded
+/** Module API 2.1 covers the public ABI changes made during Qore 3.0 development after module API 2.0 was introduced,
+    so a module built with the 2.0 headers must not be loaded.  Such a module is named <name>-api-2.0.qmod (apiold):
+    looked up by its feature name, it is not found, and the error names the file and the module API to rebuild it for;
+    loaded by its path, it is refused with the API mismatch error; a module built with the current headers (apicur)
+    loads.
 */
 class ModuleApiVersionTest inherits QUnit::Test {
     private {
@@ -31,18 +34,73 @@ class ModuleApiVersionTest inherits QUnit::Test {
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
         addTestCase("API version check", \versionTest());
+        addTestCase("not found hint", \hintTest());
         set_return_value(main());
     }
 
     private versionTest() {
+        # apiold has the file name of a module built for module API 2.0 (see module-cpp-api/CMakeLists.txt)
+        *string old_path;
+        foreach string dir in ((ENV.QORE_MODULE_DIR ?? "").split(":")) {
+            string path = dir + DirSep + "apiold-api-2.0.qmod";
+            if (is_file(path)) {
+                old_path = path;
+                break;
+            }
+        }
+        assertTrue(exists old_path, "apiold-api-2.0.qmod in QORE_MODULE_DIR: " + (ENV.QORE_MODULE_DIR ?? "<none>"));
+        if (!exists old_path) {
+            return;
+        }
         string probe = get_script_dir() + "/module-api-probe.q";
         foreach string mode in (ExecModeHarness::ExecModes) {
             # the probe only loads modules: no code of its own is compiled to native code in any mode
-            string out = ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, probe),
-                NativeCheck::None);
-            assertRegex("apiold: LOAD-MODULE-ERROR: module '[^']*apiold[^']*\\.qmod': feature 'apiold': API mismatch, "
-                "module supports API 2\\.0, however only version 2\\.1 is supported\n", out, mode + ": apiold");
-            assertRegex("apicur: loaded API 2\\.1\n", out, mode + ": apicur");
+            string out = ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s %s", env, qore_bin, mode, probe,
+                old_path), NativeCheck::None);
+            assertRegex("^feature apiold: LOAD-MODULE-ERROR: feature 'apiold' is not builtin and no module with this "
+                "name could be found in the module path: [^\n]*; found '[^'\n]*apiold-api-2\\.0\\.qmod' built for "
+                "module API 2\\.0: rebuild it for module API 2\\.1\n", out, mode + ": apiold by feature name");
+            assertRegex("\npath apiold: LOAD-MODULE-ERROR: module '[^']*apiold-api-2\\.0\\.qmod': feature 'apiold': API "
+                "mismatch, module supports API 2\\.0, however only version 2\\.1 is supported\n", out,
+                mode + ": apiold by path");
+            assertRegex("\napicur: loaded API 2\\.1\n$", out, mode + ": apicur");
         }
+    }
+
+    #! the hint names each file of the feature built for another module API, in the flat and the split form, and no other
+    private hintTest() {
+        TmpDir tmp("qore-module-api-hint-");
+        string dir = tmp.path;
+        mkdir(dir + DirSep + "hint");
+        # not loaded: only the names matter
+        foreach string name in ("hint-api-1.9.qmod", "hint" + DirSep + "hint-api-3.0.qmod",
+                # not <major>.<minor>.qmod, or another feature
+                "hint-api-2.1x.qmod", "hint-api-.qmod", "hint-api-2.qmod", "hint-api-a.1.qmod", "hint-api-2.1.qm",
+                "hintx-api-1.0.qmod", "other-api-1.0.qmod") {
+            File f();
+            f.open2(dir + DirSep + name, O_CREAT | O_WRONLY | O_TRUNC);
+            f.close();
+        }
+        string probe = get_script_dir() + "/module-api-hint-probe.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string cmd = sprintf("%s QORE_MODULE_DIR=%s QORE_MODULE_DIR_ONLY=1 %s --exec-mode=%s %s", env, dir,
+                qore_bin, mode, probe);
+            string out = ExecModeHarness::run(cmd + " hint", NativeCheck::None);
+            assertRegex("^hint: LOAD-MODULE-ERROR: feature 'hint' is not builtin and no module with this name could be "
+                "found in the module path: [^\n]*; found '" + quote(dir) + "/hint-api-1\\.9\\.qmod' built for module API "
+                "1\\.9: rebuild it for module API 2\\.1; found '" + quote(dir) + "/hint/hint-api-3\\.0\\.qmod' built for "
+                "module API 3\\.0: rebuild it for module API 2\\.1\n$", out, mode + ": hint");
+            assertEq(2, (out =~ x/(; found ')/g).size(), mode + ": hint count");
+
+            # no file of the feature: no hint
+            out = ExecModeHarness::run(cmd + " nohint", NativeCheck::None);
+            assertRegex("^nohint: LOAD-MODULE-ERROR: feature 'nohint' is not builtin and no module with this name "
+                "could be found in the module path: [^\n;]*\n$", out, mode + ": nohint");
+        }
+    }
+
+    #! escapes the regular expression characters of a path
+    static string quote(string str) {
+        return regex_subst(str, "([\\\\.^$|?*+()\\[\\]{}])", "\\\\$1", RE_Global);
     }
 }

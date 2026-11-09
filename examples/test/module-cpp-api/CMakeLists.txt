@@ -94,7 +94,8 @@ target_compile_definitions(forkexitb PRIVATE FORKEXIT_NS="ForkExitB" FORKEXIT_AT
 
 # --- the modules that declare a module API version -----------------------------------------------
 # (see module-api/apiprobe-module.cpp and module-api/module-api-version.qtest): one source built twice, declaring
-# the module API of the headers (apicur) and the module API 2.0 of the headers before qore#5519 (apiold)
+# the module API of the headers (apicur) and the module API 2.0 of the headers before qore#5519 (apiold); apiold has
+# the file name that a module built with the 2.0 headers has (apiold-api-2.0.qmod)
 
 foreach(_apiprobe_module apicur apiold)
     add_library(${_apiprobe_module} MODULE module-api/apiprobe-module.cpp)
@@ -118,6 +119,7 @@ foreach(_apiprobe_module apicur apiold)
         target_link_options(${_apiprobe_module} PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
     endif()
 endforeach()
+set_target_properties(apiold PROPERTIES SUFFIX "-api-2.0.qmod")
 target_compile_definitions(apicur PRIVATE APIPROBE_MAJOR=QORE_MODULE_API_MAJOR APIPROBE_MINOR=QORE_MODULE_API_MINOR)
 target_compile_definitions(apiold PRIVATE APIPROBE_MAJOR=2 APIPROBE_MINOR=0)
 
@@ -142,3 +144,8 @@ set_target_properties(tdpgmowner PROPERTIES
 if (CMAKE_HOST_APPLE)
     target_link_options(tdpgmowner PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
 endif()
+
+# remove the files of these modules built for another module API (see qore_remove_stale_module_api_files())
+foreach(_cppapi_test_module cppapitest cppapiuser forkexita forkexitb apicur apiold tdpgmowner)
+    qore_remove_stale_module_api_files(${_cppapi_test_module})
+endforeach()

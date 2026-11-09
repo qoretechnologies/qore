@@ -14,10 +14,19 @@
 
     A binary module carries the inline code and the type layouts of the %Qore headers that it was compiled with, so
     %Qore loads only a module built for the module API that it implements (@ref QORE_MODULE_API_MAJOR and
-    @ref QORE_MODULE_API_MINOR, which the module sets in its description function); any other module is refused with
-    a \c LOAD-MODULE-ERROR exception that reports the API mismatch.  A module built with the headers of an earlier
-    module API must be rebuilt.  Module API 2.1 replaced 2.0 in %Qore 3.0: modules built with the 2.0 headers handle
-    enum values without the ownership of their declaration that %Qore 3.0 requires.
+    @ref QORE_MODULE_API_MINOR, which the module sets in its description function).  A module file is named
+    <tt>{name}-api-{major}.{minor}.qmod</tt> after the module API of the headers that it was built with, and a module
+    built with the headers of another module API must be rebuilt:
+    - looked up by its feature name (\c %%requires, @ref Qore::load_module() "load_module()"), only the files of the
+      supported module API are considered, so the module is not found; the \c LOAD-MODULE-ERROR exception names each
+      file of the feature built for another module API that is in the module path:
+      <tt>...; found '/usr/lib/qore-modules/xml-api-2.0.qmod' built for module API 2.0: rebuild it for module API
+      2.1</tt>
+    - loaded by its path, it is refused with a \c LOAD-MODULE-ERROR exception that reports the API mismatch
+
+    Module API 2.1 covers all public ABI changes made during %Qore 3.0 development after module API 2.0 was introduced
+    (enum value ownership, new virtual methods in the I/O, iterator and polling classes, the representation of
+    @ref QoreValue, program IDs, among others); a module built with the 2.0 headers is refused.
 
     @note Any change to inline code, or to an exported or inline-visible type or function, in the public headers
     (<tt>include/qore</tt>, outside <tt>include/qore/intern</tt>) that a module compiled with the previous headers would
