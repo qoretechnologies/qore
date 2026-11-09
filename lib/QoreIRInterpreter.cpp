@@ -5008,10 +5008,21 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         return false;
     }
 
+    // The cache outlives the objects whose addresses it holds: a closure's function, its variant and the variant's IR
+    // belong to the Program that parsed it and are freed with it, and the allocator can give their memory and the
+    // Program's to the objects of a Program created after it, so that a closure of the new Program has the addresses
+    // that the cache holds for a closure of the deleted one.  The metadata cached would then be read from freed memory
+    // or from the objects that now live there: the call ran the freed IR of the deleted Program's closure, or another
+    // function's IR with that function's signature.  The ID of a Program is never reused, so the cache is used only
+    // while the Program whose closure it holds is the caller's Program: the caller's Program is alive, and the objects
+    // cached with it, since a variant and its IR are freed only with the Program and the IR of a variant is never
+    // replaced (see UserVariantBase::setCachedIR())
     struct ClosureInlineCache {
         const AbstractQoreNode* node = nullptr;
         UserClosureFunction* function = nullptr;
         QoreProgram* caller_pgm = nullptr;
+        //! the ID of caller_pgm, which is the Program of uvb
+        qore_program_id_t caller_pgm_id = 0;
         const UserVariantBase* uvb = nullptr;
         const QoreIRFunction* callee_ir = nullptr;
         const UserSignature* sig = nullptr;
@@ -5026,9 +5037,11 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     const UserSignature* sig = nullptr;
     const QoreIRIncrementLocalIntInstruction* simple_increment = nullptr;
     unsigned num_params = 0;
+    const qore_program_id_t caller_pgm_id = qore_program_private::get(*caller_pgm)->getProgramId();
     bool use_cached_metadata = closure_inline_cache.node == node
         && closure_inline_cache.function == uf
         && closure_inline_cache.caller_pgm == caller_pgm
+        && closure_inline_cache.caller_pgm_id == caller_pgm_id
         && closure_inline_cache.uvb
         && closure_inline_cache.callee_ir
         && closure_inline_cache.sig
@@ -5070,6 +5083,7 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
             node,
             uf,
             caller_pgm,
+            caller_pgm_id,
             uvb,
             callee_ir,
             sig,

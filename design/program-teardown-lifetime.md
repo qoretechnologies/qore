@@ -87,6 +87,31 @@ cancels or waits for.  Refused work leaves the function in its tier for good (`j
 refused again; only work refused because the compiler stops can be submitted again.  `dbg_close_program_bg_compile()`, `dbg_get_bg_compile_refused_count()` and
 `dbg_program_registered_with_id()` test it.
 
+## Caches that outlive a Program
+
+A cache that is not deleted with a Program (a `thread_local` or process-wide cache) must not identify the
+Program's objects by their addresses alone: when a Program is deleted, the allocator gives the memory of its
+functions, variants, IR and of the Program itself to the objects of the next one, so an object of a later Program
+can have every address that the cache holds.  macOS reuses freed memory at once, so a Program parsed right after
+another with the same code gets the same addresses for its objects in many runs.  Such a cache also holds the ID of
+the Program (`qore_program_private::getProgramId()`, `UserVariantBase::pgm_id`), which is never reused, and is used
+only for the same ID.  The objects cached with the ID stay valid while that Program lives: a variant and its IR are
+freed only with the Program, and the IR of a variant is published once and never replaced
+(`UserVariantBase::setCachedIR()`).
+
+- The IR interpreter's cache of the last closure called inline (`tryExecuteInterpreterInlineIRClosure()`) holds the
+  ID of the caller's Program, which is the Program of the closure's variant;
+- the cache of the last closure that native code ran as a leaf (`tryExecClosureNativeLeaf()`) holds the ID of the
+  Program of the variant.
+
+Before they held the ID, a closure of a new Program with the addresses of a closure of a deleted one ran the freed
+IR of the deleted closure, or the IR and the signature of the function that had been given that memory: a wrong
+result, a `RUNTIME-TYPE-ERROR` for a parameter of another function, an `IR-EXEC-ERROR` or a crash.
+`examples/test/ir/ClosureCacheProgramReuse.qtest` tests it; a test cannot make the allocator reuse the addresses, so
+it creates many Programs, starting each round of them with another heap layout.  The caches that resolve type and
+hashdecl paths in native code (`qore_rt_resolve_hashdecl_path_cached()` and
+`qore_rt_resolve_full_type_path_cached()`) hold a generation that is never reused for the same reason.
+
 ## Where the teardown can wait for ever
 
 Steps 1 and 3 wait without a timeout for the threads in the Program; the teardown hangs if one of them never

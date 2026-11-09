@@ -7342,13 +7342,22 @@ static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
         }
 
         const UserVariantBase* uvb = nullptr;
+        //! the ID of the Program of uvb
+        qore_program_id_t pgm_id = 0;
         int nargs = -1;
         QoreIRCallDirectInstruction descriptor;
     };
+    // The cache outlives the variant and the IR whose addresses it holds: they are freed with their Program, and the
+    // allocator can give their memory to the variant and the IR of a closure of a Program created after it, so equal
+    // addresses do not make the descriptor that of the variant called; its native leaf state, derived from the IR of
+    // the deleted Program, would be used for another closure.  The ID of a Program is never reused, and a variant and
+    // its IR are freed only with their Program, so a variant of the same Program at the same address is the same
+    // variant
     static thread_local NativeClosureLeafCache cache;
-    if (cache.uvb != uvb || cache.nargs != nargs
+    if (cache.uvb != uvb || cache.pgm_id != uvb->pgm_id || cache.nargs != nargs
             || cache.descriptor.cached_callee_ir != callee_ir) {
         cache.uvb = uvb;
+        cache.pgm_id = uvb->pgm_id;
         cache.nargs = nargs;
         cache.descriptor.cached_callee_ir = callee_ir;
         cache.descriptor.cached_uvb = uvb;

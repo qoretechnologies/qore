@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the macOS allocator gives the memory of a deleted Program to the next one at once
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class ClosureCacheProgramReuseTest
+
+#! Regression test: the caches of closure calls are not used for a closure of a deleted Program
+/** The IR interpreter's call of a closure (tryExecuteInterpreterInlineIRClosure()) and the native code's call of a
+    closure that it runs as a leaf (tryExecClosureNativeLeaf()) cache the metadata of the last closure that a thread
+    called, keyed by the addresses of the closure, its function and variant, and its Program.  These objects are
+    freed with the Program, and the allocator gives their memory to the objects of the Program created after it, so a
+    closure of the new Program could have every address that the cache held for a closure of the deleted one: the
+    call then ran the freed IR of the deleted closure, or the IR and signature of another function that had been
+    given the memory (a RUNTIME-TYPE-ERROR for a parameter of another function, a wrong result, an
+    IR-EXEC-ERROR "function has no basic blocks", or a crash).  It was seen in
+    dgc-opaque-object-local-release.qtest, whose "hash reference argument" cycle case parses the same closure in two
+    Programs, one after the other, on macOS, whose allocator reuses freed memory at once.  The caches now also hold
+    the ID of the Program, which is never reused.
+
+    The driver creates a Program for each of many closures in turn, each one with the same code as the one before but
+    a different result, calls it and deletes the Program; it starts each round of Programs with other memory held, so
+    that the addresses of the objects of one Program are those of the one before in some of the rounds.  Whether a
+    round reuses the addresses depends on the allocator, so the test can pass without the fix: it failed in 8 of 10
+    runs on macOS without it, in IR mode or on the IR tier.
+*/
+class ClosureCacheProgramReuseTest inherits QUnit::Test {
+    public {
+        #! the driver script: ARGV[0] is the execution mode of the child Programs, ARGV[1] the number of Programs
+        const Script = '%modern
+%no-child-restrictions
+const Families = (
+    # a closure called by the IR interpreter
+    {"name": "string closure",
+        "code": "%%modern\nstring sub t() { return string sub (int i) { return %s + i; }(1); }\n", "args": ("\"A\"", "\"B\""), "expected": ("A1", "B1")},
+    # a closure that native code runs as a leaf
+    {"name": "int closure", "code": "%%modern\nint sub t() { code f = int sub (int i) { return i %s 1; }; "
+        "return f(10); }\n", "args": ("+", "-"), "expected": (11, 9)},
+);
+const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+ExecMode mode = Modes{ARGV[0]};
+int count = int(ARGV[1]);
+# memory held so that each round of Programs starts with another heap layout
+list<auto> held = ();
+foreach hash<auto> family in (Families) {
+    int wrong = 0;
+    *string first;
+    for (int i = 0; i < count; ++i) {
+        if (!(i % 25)) {
+            held += (new Program(), {"k": i}, (i,), strmul("x", i % 300 + 1));
+        }
+        int k = i % 2;
+        Program p();
+        p.setExecMode(mode);
+        p.parse(sprintf(family.code, family.args[k]), family.name);
+        # several calls, so that JIT and tiered execution run the function as native code
+        for (int n = 0; n < 3; ++n) {
+            try {
+                auto rv = p.callFunction("t");
+                if (rv !== family.expected[k]) {
+                    ++wrong;
+                    if (!first) {
+                        first = sprintf("Program %d returned %y instead of %y", i, rv, family.expected[k]);
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                ++wrong;
+                if (!first) {
+                    first = sprintf("Program %d: %s: %s", i, ex.err, ex.desc);
+                }
+            }
+        }
+        delete p;
+    }
+    printf("%s: %d wrong calls%s\n", family.name, wrong, first ? ("; first: " + first) : "");
+}
+';
+
+        #! the expected output of the driver
+        const Expected = "string closure: 0 wrong calls\nint closure: 0 wrong calls\n";
+
+        #! the number of Programs of each closure in each execution mode
+        /** The cache of the IR interpreter is reached in IR mode and on the IR tier, where Programs are cheap; native
+            compilation makes Programs expensive in JIT and tiered execution
+        */
+        const Counts = {
+            "ast": 100,
+            "ir": 1000,
+            "jit": 100,
+            "tiered": 100,
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("ClosureCacheProgramReuseTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(sprintf("closures of a deleted Program in %s mode", mode), getModeTest(mode));
+        }
+        addTestCase("closures of a deleted Program on the IR tier", \runIrTier());
+        set_return_value(main());
+    }
+
+    #! returns the test case of the given mode
+    /** The mode is a parameter of its own for each closure: a closure created in the loop over the modes would see
+        the loop variable's last value
+    */
+    private code getModeTest(string mode) {
+        return sub () { runMode(mode); };
+    }
+
+    #! runs the driver in the given mode
+    private runMode(string mode) {
+        TmpDir tmp("qore-closure-cache-program-reuse-");
+        string path = writeScript(tmp);
+        assertEq(Expected, ExecModeHarness::run(getCommand(mode, path, Counts{mode})), mode);
+    }
+
+    #! runs the driver with tiered execution on the IR tier
+    runIrTier() {
+        TmpDir tmp("qore-closure-cache-program-reuse-");
+        string path = writeScript(tmp);
+        assertEq(Expected, ExecModeHarness::run_ir_tier(getCommand("tiered", path, Counts.ir)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! returns the command running the driver
+    private string getCommand(string mode, string path, int count) {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s %s %d",
+            libqore_dir, libqore_dir, qore_bin, mode, path, mode, count);
+    }
+
+    #! writes the driver into the directory given and returns its path
+    private static string writeScript(TmpDir tmp) {
+        string path = tmp.path + DirSep + "closure-cache-program-reuse-driver.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit f.close();
+        f.write(Script);
+        return path;
+    }
+}
