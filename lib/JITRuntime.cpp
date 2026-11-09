@@ -8609,6 +8609,10 @@ static uint64_t qore_rt_fold_string_join_checked(
             return toBits(QoreValue());
         }
     }
+    // the AST interpreter also checks when it has joined every value, before it finds that there is no next one
+    if (!(size % 100) && qore_check_cancel(xsink, "string fold join")) {
+        return toBits(QoreValue());
+    }
     return toBits(QoreValue(result.release()));
 }
 

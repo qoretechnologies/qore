@@ -186,11 +186,16 @@ req.push(NOTHING);
                 "slice-remove -> ok 251",
                 "join -> THREAD-CANCELLED: string fold join: cancelled: t",
                 "join-direct -> THREAD-CANCELLED: string fold join: cancelled: t",
+                "join-100 -> THREAD-CANCELLED: string fold join: cancelled: t",
+                "join-99 -> ok 286",
+                "join-take -> THREAD-CANCELLED: string fold join: cancelled: t",
+                "join-drop -> THREAD-CANCELLED: string fold join: cancelled: t",
             ),
             "expression-try": (
                 "map: ok 300",
                 "hmap: caught HASH-KEY-ERROR",
                 "hmap-select: caught HASH-KEY-ERROR",
+                "selector: caught THREAD-CANCELLED",
                 "END",
             ),
             "foreach-cleanup": (
@@ -227,6 +232,17 @@ req.push(NOTHING);
                 "take-99 -> ok 99",
                 "fused-join-all -> THREAD-CANCELLED: string fold join: cancelled: t",
             ),
+            "pipeline-midcancel": (
+                "count -> THREAD-CANCELLED: count operator expression n=251",
+                "take -> THREAD-CANCELLED: take operator expression n=251",
+                "drop -> THREAD-CANCELLED: drop operator expression n=161",
+                "inner-drop -> THREAD-CANCELLED: drop operator expression n=100",
+                "join -> THREAD-CANCELLED: string fold join n=251",
+                "join-take -> THREAD-CANCELLED: string fold join n=251",
+                "foreach-select -> THREAD-CANCELLED: foreach loop n=202",
+                "foreach-map-select -> THREAD-CANCELLED: foreach loop n=202",
+                "foreach-drop -> THREAD-CANCELLED: drop operator expression n=100",
+            ),
         };
 
         #! the result lines of the scripts whose cancelled threads report unhandled exceptions
@@ -260,6 +276,8 @@ req.push(NOTHING);
         addTestCase("an exception in an expression reaches its try block", sub () { scriptTest("expression-try"); });
         addTestCase("foreach cleanup when the iteration check raises", sub () { scriptTest("foreach-cleanup"); });
         addTestCase("streaming operators over more than 100 elements", sub () { scriptTest("streaming", ResultLine); });
+        addTestCase("a cancellation made pending in a pipeline",
+            sub () { scriptTest("pipeline-midcancel", ResultLine); });
         set_return_value(main());
     }
 

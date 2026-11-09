@@ -8410,7 +8410,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
 
 std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
         const QoreAOTLazyClosureIR& lazy_ir, UserVariantBase* uvb,
-        ExceptionSink* xsink, std::string& error) {
+        ExceptionSink* /* xsink: building the IR raises no exception */, std::string& error) {
     if (!lazy_ir.metadata || !lazy_ir.pgm || !uvb) {
         error = "incomplete lazy closure metadata";
         return nullptr;
@@ -8462,19 +8462,16 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
     auto ir = deserializeIRFunction(reader, ptr, end, lazy_ir.pgm,
         read_expr, &lazy_ir.enclosing_locals, error,
         parent_locals, static_cast<int>(lazy_ir.parent_locals.size()),
+        // no cancellation sink: the call of the closure is no cancellation point in the AST interpreter, and the
+        // IR is bounded by the closure's code (issue #5641)
         &closure_locals, false, &lazy_ir.body_locals, lazy_ir.local_owner_pgm,
-        false, xsink);
+        false, nullptr);
     if (!ir) {
         return nullptr;
     }
 
     UserSignature* sig = uvb->getUserSignature();
     for (unsigned p = 0; p < sig->numParams(); ++p) {
-        if (p && !(p % 100)
-                && qore_check_cancel(xsink, "AOT lazy closure IR finalization")) {
-            error = "lazy closure IR finalization was cancelled";
-            return nullptr;
-        }
         if (sig->lv[p]) {
             ir->param_local_vars[static_cast<int>(p)] = sig->lv[p];
         }

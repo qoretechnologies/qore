@@ -19,8 +19,8 @@ sub cancel_me() {
     background sub () { go.waitForZero(); cancel_thread(tid, "t"); cancelled.dec(); }();
     defer_thread_cancel(sub () { go.dec(); cancelled.waitForZero(); });
 }
-Queue log();
-int wtid = background sub () {
+#! runs the cases in a function of its own, which JIT and tiered execution compile before it runs
+sub work(Queue log) {
     try {
         foreach int x in (new It(log)) {
             log.push("iter " + x);
@@ -42,7 +42,10 @@ int wtid = background sub () {
         log.push("catch2: " + ex.err);
     }
     log.push("END");
-}();
+}
+
+Queue log();
+int wtid = background sub () { work(log); }();
 while (True) { string s = log.get(60s); printf("%s\n", s); if (s == "END") break; }
 thread_join(wtid);
 while (log.size()) { printf("after join: %s\n", log.get()); }

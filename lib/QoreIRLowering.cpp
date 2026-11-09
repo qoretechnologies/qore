@@ -10634,7 +10634,10 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
                 operands.push_back(index);
             }
         }
-        auto* inst = builder.createExprOp(QoreIROpcode::ListIndexDynamic, expr, operands, op->loc);
+        // the selectors can raise (a range error, or a cancellation of a range with negative offsets): in a try block
+        // the handler gets the exception
+        auto* inst = withExceptionTarget(builder.createExprOp(QoreIROpcode::ListIndexDynamic, expr, operands,
+            op->loc));
         inst->list_selector_kinds = std::move(selector_kinds);
         return inst->result;
     }
@@ -18717,6 +18720,16 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             root_string_join = true;
         }
     }
+    // the AST interpreter's foldl of strings with a string join expression checks for cancellation every 100 joined
+    // values (QoreFoldlOperatorNode) also when the pipeline is not fused into a string join here: the fold then
+    // counts the values it folded for the check
+    bool generic_string_join = false;
+    if (root_foldl && !root_string_join && root.list_element_type
+            && QoreTypeInfo::parseReturns(root.list_element_type, NT_STRING) == QTI_IDENT) {
+        QoreValue separator;
+        generic_string_join = analyzeStringJoinFoldPattern(*root.fold_expr, separator);
+    }
+    bool count_joined_values = root_string_join || generic_string_join;
 
     std::vector<LazyPipelineStage> stages = source_stages;
     if (root_streaming && !root_terminal) {
@@ -19075,7 +19088,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         }
     }
     // a string join counts the values it joined, for its cancellation check (see the fold path below)
-    if (root_string_join && !count_phi) {
+    if (count_joined_values && !count_phi) {
         count_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
         count_value = count_phi->result;
     }
@@ -19093,36 +19106,6 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             fold_join_started_phi = builder.createPhi({}, loc);
             fold_join_started = fold_join_started_phi->result;
         }
-    }
-
-    // the AST interpreter checks for cancellation in some operators of a pipeline every 100 elements, before it takes
-    // the next element (and so before the stages evaluate it): the streaming operator at the root
-    // (QoreStreamingOperatorNode), a drop operator inside the pipeline while it skips elements
-    // (QoreFunctionalStreamingOperator::skipDropPrefix()), and a string join (QoreFoldlOperatorNode::evalImpl())
-    for (size_t i = 0; i < stages.size(); ++i) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "fused streaming cancellation check lowering")) {
-            error = "fused streaming cancellation check lowering cancelled";
-            return QoreIRValue();
-        }
-        if (root_streaming && !root_terminal && i + 1 == stages.size()) {
-            // the root operator, as the last stage: the stage index counts the values it returned, and a drop
-            // operator also the values it skipped
-            withExceptionTarget(builder.createCheckCancelEvery(stage_indices[i],
-                qore_ir_stream_cancel_point(op->getKind()), stages[i].loc,
-                op->getKind() == QoreStreamingOperatorNode::Drop ? limits[i] : QoreIRValue()));
-        } else if (stages[i].kind == LazyPipelineStage::StreamDrop) {
-            withExceptionTarget(builder.createCheckCancelEvery(stage_indices[i], QoreIRCancelPoint::DropSkip,
-                stages[i].loc, limits[i]));
-        }
-    }
-    if (root_terminal) {
-        // the root index counts the elements that reached the operator
-        withExceptionTarget(builder.createCheckCancelEvery(root_index, qore_ir_stream_cancel_point(op->getKind()),
-            loc));
-    }
-    if (root_string_join) {
-        // the count is the number of values joined
-        withExceptionTarget(builder.createCheckCancelEvery(count_value, QoreIRCancelPoint::StringFoldJoin, loc));
     }
 
     for (size_t i = 0; i < stages.size(); ++i) {
@@ -19157,6 +19140,20 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         type_state_phi ? type_state_phi->result : QoreIRValue()};
     QoreIRValue one = builder.createConstInt(1, loc)->result;
 
+    // the AST interpreter checks for cancellation in some operators of a pipeline every 100 elements, after it has
+    // counted an element and before it takes the next one: the streaming operator at the root
+    // (QoreStreamingOperatorNode: the values it returned, and a drop operator also the values it skipped), a drop
+    // operator inside the pipeline while it skips elements (QoreFunctionalStreamingOperator::skipDropPrefix()), and a
+    // string join (QoreFoldlOperatorNode::evalImpl(): the values it joined); each check is made only on the path that
+    // counted the element, so an element that a stage rejects does not check again
+    auto is_root_stage = [&](size_t i) -> bool {
+        return root_streaming && !root_terminal && i + 1 == stages.size();
+    };
+    auto check_cancel_every = [&](QoreIRValue count, QoreIRCancelPoint point, const QoreProgramLocation* check_loc,
+            QoreIRValue limit = QoreIRValue()) {
+        withExceptionTarget(builder.createCheckCancelEvery(count, point, check_loc, limit));
+    };
+
     for (size_t i = 0; i < stages.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "fused streaming body lowering")) {
             error = "fused streaming body lowering cancelled";
@@ -19167,6 +19164,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             case LazyPipelineStage::StreamTake: {
                 state.stage_indices[i] = builder.createBinaryOp(QoreIROpcode::AddInt, state.stage_indices[i],
                     one, stage.loc)->result;
+                if (is_root_stage(i)) {
+                    check_cancel_every(state.stage_indices[i], QoreIRCancelPoint::Take, stage.loc);
+                }
                 break;
             }
             case LazyPipelineStage::StreamDrop: {
@@ -19186,9 +19186,14 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 builder.createBranchIf(keep, keep_block, drop_block, stage.loc);
 
                 builder.setBlock(drop_block);
+                check_cancel_every(next_stage_index,
+                    is_root_stage(i) ? QoreIRCancelPoint::Drop : QoreIRCancelPoint::DropSkip, stage.loc, limits[i]);
                 add_continue(updated, stage.loc);
 
                 builder.setBlock(keep_block);
+                if (is_root_stage(i)) {
+                    check_cancel_every(next_stage_index, QoreIRCancelPoint::Drop, stage.loc, limits[i]);
+                }
                 state = updated;
                 break;
             }
@@ -19217,6 +19222,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 builder.setBlock(include_block);
                 state.stage_indices[i] = builder.createBinaryOp(QoreIROpcode::AddInt, state.stage_indices[i],
                     one, stage.loc)->result;
+                if (is_root_stage(i)) {
+                    check_cancel_every(state.stage_indices[i], qore_ir_stream_cancel_point(op->getKind()), stage.loc);
+                }
                 break;
             }
             case LazyPipelineStage::Select: {
@@ -19413,8 +19421,11 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             auto* next_join_started_phi = builder.createPhi(
                 {{false_val, init_accum_exit_block}, {true_val, fold_exit_block}}, loc);
             next_state.fold_join_started = next_join_started_phi->result;
+        }
+        if (count_joined_values) {
             QoreIRValue one = builder.createConstInt(1, loc)->result;
             next_state.count = builder.createBinaryOp(QoreIROpcode::AddInt, state.count, one, loc)->result;
+            check_cancel_every(next_state.count, QoreIRCancelPoint::StringFoldJoin, loc);
         }
         add_continue(next_state, loc);
     } else if (op->getKind() == QoreStreamingOperatorNode::Count) {
@@ -19443,6 +19454,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         FusedLoopState next_state = state;
         next_state.count = next_count_phi->result;
         next_state.root_index = builder.createBinaryOp(QoreIROpcode::AddInt, state.root_index, one, loc)->result;
+        // the root index counts the elements that reached the operator
+        check_cancel_every(next_state.root_index, QoreIRCancelPoint::Count, loc);
         add_continue(next_state, loc);
     } else {
         QoreIRValue pred_bool = lower_predicate(op->hasPredicate() ? &op->getPredicate() : nullptr, loc,
@@ -19477,6 +19490,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         builder.setBlock(cont_block);
         FusedLoopState next_state = state;
         next_state.root_index = builder.createBinaryOp(QoreIROpcode::AddInt, state.root_index, one, loc)->result;
+        // the root index counts the elements that reached the operator
+        check_cancel_every(next_state.root_index, qore_ir_stream_cancel_point(op->getKind()), loc);
         add_continue(next_state, loc);
     }
 
@@ -19891,8 +19906,15 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         return false;
     }
     header_block->is_loop_header = true;
-    // the statement checks for cancellation at the start of every iteration, as in the AST interpreter
-    header_block->loop_cancel = QoreIRLoopCancel::Foreach;
+    // the statement checks for cancellation at the start of every iteration of its body, as in the AST interpreter:
+    // on entering the loop and on the branch from the latch, through blocks of their own, as the header is also
+    // entered for every element that a stage skips, which takes no iteration of the body
+    QoreIRBasicBlock* enter_block = createBlock("foreach.fused.enter");
+    if (!enter_block) {
+        error = "IR builder failed to create the fused foreach entry block";
+        return false;
+    }
+    enter_block->loop_cancel = QoreIRLoopCancel::Foreach;
 
     QoreIRValue zero = builder.createConstInt(0, loc)->result;
     QoreIRValue is_null = builder.createBinaryOp(QoreIROpcode::EqInt, iter_val, zero, loc)->result;
@@ -19903,9 +19925,11 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
 
     builder.setBlock(preheader_block);
     {
-        auto* br = builder.createBranch(header_block, loc);
-        setLoopCheckpointExceptionTarget(br, header_block);
+        auto* br = builder.createBranch(enter_block, loc);
+        setLoopCheckpointExceptionTarget(br, enter_block);
     }
+    builder.setBlock(enter_block);
+    builder.createBranch(header_block, loc);
 
     struct FusedForeachState {
         std::vector<QoreIRValue> stage_indices;
@@ -19942,20 +19966,6 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     }
     auto* foreach_index_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
     QoreIRValue foreach_index = foreach_index_phi->result;
-
-    // after the check of the foreach statement on entering the iteration, a drop operator of the pipeline checks for
-    // cancellation every 100 elements while it skips them, before the pipeline takes the next element, as the AST
-    // interpreter's QoreFunctionalStreamingOperator::skipDropPrefix() does
-    for (size_t i = 0; i < stages.size(); ++i) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "fused foreach cancellation check lowering")) {
-            error = "fused foreach cancellation check lowering cancelled";
-            return false;
-        }
-        if (stages[i].kind == LazyPipelineStage::StreamDrop) {
-            withExceptionTarget(builder.createCheckCancelEvery(stage_indices[i], QoreIRCancelPoint::DropSkip,
-                stages[i].loc, limits[i]));
-        }
-    }
 
     for (size_t i = 0; i < stages.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "fused foreach take lowering")) {
@@ -20016,6 +20026,10 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
                 builder.createBranchIf(keep, keep_block, drop_block, stage.loc);
 
                 builder.setBlock(drop_block);
+                // a drop operator of the pipeline checks for cancellation every 100 elements that it skipped, before
+                // the pipeline takes the next element, as QoreFunctionalStreamingOperator::skipDropPrefix() does
+                withExceptionTarget(builder.createCheckCancelEvery(next_stage_index, QoreIRCancelPoint::DropSkip,
+                    stage.loc, limits[i]));
                 add_continue(updated, stage.loc);
 
                 builder.setBlock(keep_block);
@@ -20226,10 +20240,19 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     next_state.foreach_index = next_foreach_index;
     QoreIRBasicBlock* latch_exit_block = builder.getBlock();
     {
-        auto* br = builder.createBranch(header_block, loc);
-        // the cancellation check unwinds the foreach statement through its exception cleanup (see the foreach
-        // statement's latch)
-        setLoopCheckpointExceptionTarget(br, header_block, foreach_exception_cleanup_block);
+        // the next iteration of the body starts in a block of its own that checks for cancellation (see enter_block);
+        // the check unwinds the foreach statement through its exception cleanup (see the foreach statement's latch)
+        QoreIRBasicBlock* again_block = createBlock("foreach.fused.again");
+        if (!again_block) {
+            error = "IR builder failed to create the fused foreach iteration block";
+            return false;
+        }
+        again_block->loop_cancel = QoreIRLoopCancel::Foreach;
+        auto* br = builder.createBranch(again_block, loc);
+        setLoopCheckpointExceptionTarget(br, again_block, foreach_exception_cleanup_block);
+        builder.setBlock(again_block);
+        builder.createBranch(header_block, loc);
+        latch_exit_block = again_block;
     }
     continue_paths.push_back({latch_exit_block, next_state});
 
@@ -20238,7 +20261,7 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
             error = "fused foreach incoming lowering cancelled";
             return false;
         }
-        stage_phis[i]->incoming.push_back({zero, preheader_block});
+        stage_phis[i]->incoming.push_back({zero, enter_block});
         stage_phis[i]->operands.push_back(zero);
         size_t path_count = 0;
         for (const FusedForeachContinuePath& path : continue_paths) {
@@ -20251,7 +20274,7 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         }
     }
 
-    foreach_index_phi->incoming.push_back({zero, preheader_block});
+    foreach_index_phi->incoming.push_back({zero, enter_block});
     foreach_index_phi->operands.push_back(zero);
     size_t path_count = 0;
     for (const FusedForeachContinuePath& path : continue_paths) {

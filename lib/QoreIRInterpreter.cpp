@@ -13981,6 +13981,14 @@ load_local_done:
                         static_cast<int32_t>(expr_inst->list_selector_kinds.size()),
                         selector_bits.data(), string_index_char, xsink));
                     if (xsink && *xsink) {
+                        res.discard(xsink);
+                        if (inst->exception_target) {
+                            cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                            prev_block = block;
+                            block = inst->exception_target;
+                            ip = 0;
+                            break;
+                        }
                         cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;

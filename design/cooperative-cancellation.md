@@ -690,11 +690,16 @@ must check exactly where it does, with its labels, and nowhere else (issue #5641
 expressions (fused map/foldl, hash-key projections, select loops, list construction, literals, string pipelines,
 slice removal) therefore have no cancellation checks, and an expression that the IR lowers into a loop of its own
 checks with `QoreIROpcode::CheckCancelEvery` (an element count, a `QoreIRCancelPoint` and the limit of a drop
-operator) where the AST does, before the next element is taken: the string join of a fused pipeline every 100 joined
-values (`QoreFoldlOperatorNode`); a streaming operator every 100 elements that it took (first, any, all, count) or
-returned (take, takewhile, takeuntil), and a drop operator also every 100 elements that it skipped
-(`QoreStreamingOperatorNode`); a drop operator inside a pipeline only while it skips elements
-(`QoreFunctionalStreamingOperator::skipDropPrefix()`, `QoreIRCancelPoint::DropSkip`).
+operator) where the AST does, after it counted an element and before the next element is taken: the string join of a
+pipeline every 100 joined values (`QoreFoldlOperatorNode`, also when the pipeline is not fused into a string join); a
+streaming operator every 100 elements that it took (first, any, all, count) or returned (take, takewhile, takeuntil),
+and a drop operator also every 100 elements that it skipped (`QoreStreamingOperatorNode`); a drop operator inside a
+pipeline only while it skips elements (`QoreFunctionalStreamingOperator::skipDropPrefix()`,
+`QoreIRCancelPoint::DropSkip`).  The check is made only on the path that counted the element, so an element that a
+stage rejects does not check the same count again.  A foreach statement over a fused pipeline checks once per
+iteration of its body, through blocks of its own (`foreach.fused.enter`, `foreach.fused.again`), as the header of its
+loop is also entered for every element that a stage rejects.  Building the IR of an AOT closure on its first call is
+no cancellation point either.
 
 The IR interpreter, native (JIT and tiered) code and AOT code follow the same rule (issue #5641): the IR lowering
 sets `QoreIRBasicBlock::loop_cancel` on the block that starts an iteration of a loop statement, and the IR interpreter
