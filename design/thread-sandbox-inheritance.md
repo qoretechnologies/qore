@@ -74,7 +74,11 @@ the capture applied, whatever thread calls it — **in addition to** the policy 
 (`QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy)`), so that the stricter one wins and a capture never
 lowers the sandbox of the code that uses it.  A capture made inside a system-policy call is sandboxed
 (`isSandboxed()`) but has no policy manager, as the call has the system policy.  The `QoreSandboxCapture` copy
-constructor derives a capture from a held one without applying it.
+constructor derives a capture from a held one without applying it.  An object that also applies the capture (for its
+call budgets and interrupts) resolves the thread's policy **before** applying it: the applied capture replaces
+`td->inherited_sandbox_context` (an unsandboxed capture clears it), so on a thread that only an inherited sandbox
+governs — a thread started by sandboxed code, or one inside another applied capture — the policy resolved afterwards
+loses that sandbox, and a trusted or looser captured policy would pass checks that it denies.
 
 An applied context never lowers the sandbox of code that runs inside its scope: a sandbox check on the worker uses
 the context's manager together with the managers of the Programs entered after the context was applied (the

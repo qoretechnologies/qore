@@ -1136,7 +1136,11 @@ public:
         only as its outermost caller: on a thread that runs a sandboxed Program of its own, that Program's sandbox
         decides, and inside a system-policy call
         (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") no sandbox
-        does, so a policy check made there would not apply the captured policy.
+        does, so a policy check made there would not apply the captured policy.  If the capture is also applied with
+        QoreSandboxCaptureHelper (for its call budgets and interrupts), resolve the policy of the thread before applying
+        it: the applied capture replaces the context that the thread inherited from the code that started it (an
+        unsandboxed capture clears it), so a thread that only an inherited sandbox governs would otherwise lose that
+        sandbox's policy.
 
         @return the referenced policy manager (the caller owns the reference), or nullptr if no sandbox governed the
         thread that captured the object, or if the object was captured in a system-policy call, which has the system

@@ -40,6 +40,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <poll.h>
@@ -1792,6 +1793,48 @@ nothing sb_capture_applied_check_read(int handle, string path) {
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink);
+    }
+    return QoreValue();
+}
+
+//! Checks read access to a path with one capture applied inside another, as a native bridge does
+/** Applies the outer capture with QoreSandboxCaptureHelper, so that only the inherited context of the outer capture
+    governs the thread, then applies the inner capture and checks the path against the policy of the inner capture
+    (QoreSandboxCapture::getPolicyManagerRef()) and against the policy of the thread.
+
+    @param outer the handle of the capture that governs the thread
+    @param inner the handle of the capture that is applied and checked, as by a policy object
+    @param path the path to check
+    @param thread_first resolve the policy of the thread before applying the inner capture (the documented order) if
+    @ref True; after applying it if @ref False, which loses the policy of the outer capture
+
+    @throw SB-CAPTURE-ERROR unknown handle
+    @throw the exception of QoreSandboxManager::checkFilesystemAccess() if a policy denies the access
+*/
+nothing sb_capture_nested_check_read(int outer, int inner, string path, bool thread_first) {
+    std::shared_ptr<QoreSandboxCapture> outer_capture = sb_capture_get(outer, xsink);
+    if (!outer_capture) {
+        return QoreValue();
+    }
+    std::shared_ptr<QoreSandboxCapture> inner_capture = sb_capture_get(inner, xsink);
+    if (!inner_capture) {
+        return QoreValue();
+    }
+    QoreSandboxCaptureHelper outer_sch(*outer_capture);
+    std::optional<QoreSandboxManagerHelper> thread_policy;
+    if (thread_first) {
+        thread_policy.emplace(QoreSandboxManagerHelper::Policy);
+    }
+    QoreSandboxCaptureHelper inner_sch(*inner_capture);
+    if (!thread_first) {
+        thread_policy.emplace(QoreSandboxManagerHelper::Policy);
+    }
+    ReferenceHolder<QoreSandboxManager> policy(inner_capture->getPolicyManagerRef(), xsink);
+    if (policy && !policy->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
+        return QoreValue();
+    }
+    if (*thread_policy) {
+        (*thread_policy)->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink);
     }
     return QoreValue();
 }

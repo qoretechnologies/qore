@@ -250,7 +250,10 @@ while (true) {
     connection that a sandboxed caller created): check those against
     \c QoreSandboxCapture::getPolicyManagerRef() and against the policy of the current thread, so that the stricter
     one wins, and derive a new capture from a held one with the \c QoreSandboxCapture copy constructor instead of
-    applying it and capturing again.
+    applying it and capturing again.  If you also apply the capture for its call budgets and interrupts, resolve the
+    policy of the current thread before applying it: the applied capture replaces the sandbox context that the thread
+    inherited from the code that started it, so a thread that only an inherited sandbox governs would lose that
+    policy.
 
     @code{.cpp}
     // a check against the policy captured when the object was created, on any thread
