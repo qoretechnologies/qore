@@ -52,11 +52,12 @@ class FusedForeachStageExceptionTest inherits QUnit::Test {
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
-        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
         path = get_script_dir() + "/stage-exception.q";
 
         addTestCase("execution modes", \modesTest());
         addTestCase("AOT executable", \aotTest());
+        addTestCase("review cases: execution modes and AOT", \reviewTest());
         set_return_value(main());
     }
 
@@ -80,6 +81,33 @@ class FusedForeachStageExceptionTest inherits QUnit::Test {
         string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, path));
         assertTrue(is_file(exe), "qcc compiles the script: " + out);
         assertEq(expected(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT");
+    }
+
+    #! runs stage-exception-review.q with the AST interpreter, then in every other execution mode, on the IR tier and
+    #! as an AOT executable, and checks that they give the AST interpreter's output
+    /** The cases: a map stage that creates objects from a source of ints (a select stage, the body and a closure
+        raising, a return), take/drop counts that raise or are negative, an iterator whose next() raises (in a fused
+        and in a plain foreach), and streaming operators in an expression.
+    */
+    private reviewTest() {
+        string script = get_script_dir() + "/stage-exception-review.q";
+        string exp = ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, script));
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, script)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, script)),
+            ExecModeHarness::IRTierName);
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("fused-foreach-stage-exception-review-");
+        string exe = dir.path + "/stage-exception-review";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, script));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT");
     }
 
     #! the expected output: the lines, printed once per iteration
