@@ -1,0 +1,302 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - QUIC/HTTP/3 connections over loopback UDP and the server's HTTP/3 SETTINGS
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+
+%exec-class Http3ExtConnectUnsupportedTest
+
+#! an HTTP server whose HTTP/3 sessions do not advertise SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 9220)
+class NoExtConnectHttpServer inherits HttpServer {
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+    }
+
+    #! turns off extended CONNECT for the sessions that the QUIC sockets of the listeners create from now on
+    /** @return the number of QUIC sockets
+    */
+    int disableH3ExtendedConnect() {
+        fast_routes_lock.lock();
+        on_exit fast_routes_lock.unlock();
+        foreach Socket sock in (quic_udp_sockets.iterator()) {
+            sock.setHttp3ConnectProtocolEnabled(False);
+        }
+        return quic_udp_sockets.size();
+    }
+}
+
+#! counts the requests that reach it and answers extended CONNECT with a tunnel, any other request with a page
+class CountingHandler inherits AbstractHttpSocketHandler {
+    public {
+        Counter connects();
+        Counter requests();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (is_extended_connect(cx, hdr)) {
+            connects.inc();
+            return <HttpResponseInfo>{
+                "code": 200,
+                "streaming": True,
+            };
+        }
+        requests.inc();
+        return makeResponse(200, "page");
+    }
+
+    #! echoes the data of a tunnel until the client ends its stream, then ends the stream
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        Queue stream_data_queue = cx."header-info".stream_data_queue;
+        code send = cx."header-info".send_stream_data;
+        while (True) {
+            auto chunk = stream_data_queue.get(10s);
+            if (!exists chunk) {
+                break;
+            }
+            send(chunk);
+        }
+        send(NOTHING, True);
+        return False;
+    }
+}
+
+#! an HTTP/3 client does not send an extended CONNECT to a server that does not support it (issue #5678)
+/** A client must not send a request with the :protocol pseudo-header unless the server's SETTINGS advertised
+    SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 9220 section 3, RFC 8441 section 4).  The HTTP/3 client sent it regardless;
+    now an HTTP/3 connection reports ready only after the server's SETTINGS, as an HTTP/2 connection does, and an
+    extended CONNECT to a server without the setting fails with HTTP3-EXTENDED-CONNECT-UNSUPPORTED before the request
+    is sent, which callers do not retry on a fresh connection.
+*/
+class Http3ExtConnectUnsupportedTest inherits QUnit::Test {
+    public {
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    private {
+        Logger logger;
+        LogCapture log_capture();
+    }
+
+    constructor() : QUnit::Test("Http3ExtConnectUnsupportedTest", "1.0") {
+        logger = new Logger("h3-ext-connect-unsupported-test", LoggerLevel::getLevelInfo());
+        logger.addAppender(log_capture);
+        addTestCase("HTTPClient: not sent to a server without the setting", \httpClientTest());
+        addTestCase("WebSocketClient: not sent and not retried", \webSocketClientTest());
+        addTestCase("HTTPClient: sent to a server with the setting", \supportedTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+    }
+
+    #! sendHttp3Connect() raises HTTP3-EXTENDED-CONNECT-UNSUPPORTED; the connection still answers other requests
+    httpClientTest() {
+        hash<auto> srv = startServer(False);
+        on_exit delete srv.server;
+        CountingHandler handler = srv.handler;
+
+        HTTPClient client = getClient(srv.port);
+        assertThrows("HTTP3-EXTENDED-CONNECT-UNSUPPORTED", "SETTINGS_ENABLE_CONNECT_PROTOCOL",
+            \client.sendHttp3Connect(), ("/tunnel", NOTHING, "bidi-stream"));
+        assertEq(0, handler.connects.getCount(), "the server got no extended CONNECT");
+
+        # the connection is open: an ordinary request is answered
+        hash<auto> info;
+        string body = client.get("/page", NOTHING, \info);
+        assertEq("page", body, "an ordinary request on the same client");
+        assertEq(1, handler.requests.getCount(), "the server got the ordinary request");
+    }
+
+    #! a WebSocket connection over HTTP/3 fails with HTTP3-EXTENDED-CONNECT-UNSUPPORTED at once, without retries
+    webSocketClientTest() {
+        hash<auto> srv = startServer(False);
+        on_exit delete srv.server;
+        CountingHandler handler = srv.handler;
+
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": "wss://127.0.0.1:" + srv.port,
+            "logger": logger,
+            "http3_mode": "required",
+            "ssl_verify_cert": False,
+            "timeout": 10s,
+            "connect_timeout": 10s,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        log_capture.takeMessages();
+        assertThrows("HTTP3-EXTENDED-CONNECT-UNSUPPORTED", "SETTINGS_ENABLE_CONNECT_PROTOCOL", \wsc.connect());
+        list<string> retries = select log_capture.takeMessages(), $1 =~ /retrying on a fresh connection/;
+        assertEq((), retries, "the refusal is not retried as a connection error");
+        assertEq(0, handler.connects.getCount(), "the server got no extended CONNECT");
+    }
+
+    #! with the setting, the extended CONNECT is sent and answered
+    supportedTest() {
+        hash<auto> srv = startServer(True);
+        on_exit delete srv.server;
+        CountingHandler handler = srv.handler;
+
+        HTTPClient client = getClient(srv.port);
+        hash<auto> resp = client.sendHttp3Connect("/tunnel", NOTHING, "bidi-stream");
+        assertEq(200, resp.status_code, "the server answered the extended CONNECT");
+        assertEq(1, handler.connects.getCount(), "the server got the extended CONNECT");
+        client.sendHttp3StreamData(resp.stream_id, NOTHING, True);
+    }
+
+    #! starts a server with an HTTP/3 listener; ext_connect False turns off extended CONNECT for its HTTP/3 sessions
+    private hash<auto> startServer(bool ext_connect) {
+        NoExtConnectHttpServer server(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        on_error delete server;
+        CountingHandler handler();
+        server.setHandler("counting", "", NOTHING, handler);
+        server.setDefaultHandler("counting", handler);
+        server.waitForAsyncIo();
+
+        hash<auto> h3info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        });
+        server.waitForAsyncIo();
+        if (!ext_connect) {
+            # before any client connects: the setting is read when a session is created
+            assertEq(1, server.disableH3ExtendedConnect(), "the listener has one QUIC socket");
+        }
+        return {
+            "server": server,
+            "handler": handler,
+            "port": h3info.port,
+        };
+    }
+
+    #! returns an HTTP/3 client for the given port
+    private HTTPClient getClient(int port) {
+        return new HTTPClient({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "http3_mode": "required",
+            "timeout": 10s,
+            "connect_timeout": 10s,
+            "ssl_verify_cert": False,
+        });
+    }
+}
+
+#! keeps the messages that the code under test logs
+class LogCapture inherits LoggerAppenderWithLayout {
+    private {
+        list<string> messages;
+        Mutex lck();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    #! returns the messages logged so far and forgets them
+    list<string> takeMessages() {
+        lck.lock();
+        on_exit lck.unlock();
+        list<string> rv = messages;
+        messages = ();
+        return rv;
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            lck.lock();
+            on_exit lck.unlock();
+            messages += params;
+        }
+    }
+}

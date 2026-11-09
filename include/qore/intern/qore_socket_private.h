@@ -2077,6 +2077,12 @@ public:
     */
     bool h2_enable_connect_protocol = true;
 
+    /** When false, the HTTP/3 server sessions of this QUIC socket do not advertise SETTINGS_ENABLE_CONNECT_PROTOCOL
+        (RFC 9220), so clients do not send extended CONNECT requests (WebSocket over HTTP/3).  Read when a server
+        session is created (QuicSession::createServer()).  Defaults to true.
+    */
+    std::atomic<bool> h3_enable_connect_protocol{true};
+
     //! Per-stream callbacks for HTTP/2 client multiplexing
     /** Maps stream_id -> QoreValue callback for response dispatch.
         Used by Http2ClientMultiplexPollOperation to route completed responses

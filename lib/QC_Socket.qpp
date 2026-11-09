@@ -7743,6 +7743,26 @@ nothing Socket::setHttp2ConnectProtocolEnabled(bool enabled = True) [flags=NAMED
     s->setHttp2ConnectProtocolEnabled(enabled);
 }
 
+//! Sets whether the HTTP/3 server sessions of this QUIC socket advertise SETTINGS_ENABLE_CONNECT_PROTOCOL
+/** Applies to the server sessions that the socket creates for the clients that connect after the call.  When
+    \c enabled is @ref False, the sessions do not advertise RFC 9220 extended CONNECT support, so clients do not
+    attempt WebSocket over HTTP/3: a Qore client raises \c HTTP3-EXTENDED-CONNECT-UNSUPPORTED instead of sending the
+    request (see @ref Qore::HTTPClient::sendHttp3Connect() "HTTPClient::sendHttp3Connect()").
+
+    @param enabled @ref True to advertise SETTINGS_ENABLE_CONNECT_PROTOCOL (default), @ref False to disable
+
+    @par Example:
+    @code{.py}
+# a QUIC server whose HTTP/3 sessions do not accept WebSocket connections
+udp_sock.setHttp3ConnectProtocolEnabled(False);
+    @endcode
+
+    @since %Qore 3.0
+*/
+nothing Socket::setHttp3ConnectProtocolEnabled(bool enabled = True) [flags=NAMED_ARGS] {
+    s->setHttp3ConnectProtocolEnabled(enabled);
+}
+
 //! Submits an HTTP/2 CONNECT response through the async I/O controller (RFC 8441)
 /** Queues the CONNECT response in the nghttp2 session without END_STREAM on the
     async I/O controller, keeping the stream open for bidirectional data transfer
@@ -8472,6 +8492,8 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
     @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer, including a connection that has been idle for longer than its idle timeout, whose timer has not run yet (RFC 9000 section 10.1); the request was not sent, and it can be repeated on a new connection
     @throw HTTP3-LOCAL-CLOSE the QUIC connection was closed locally; the request was not sent
     @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server; the request was not sent
+    @throw HTTP3-EXTENDED-CONNECT-UNSUPPORTED the headers have a \c ":protocol" pseudo-header (an extended CONNECT request, RFC 9220), and the server's SETTINGS did not advertise \c SETTINGS_ENABLE_CONNECT_PROTOCOL; the request was not sent
+    @throw HTTP3-EXTENDED-CONNECT-ERROR the headers have a \c ":protocol" pseudo-header, and the server's HTTP/3 SETTINGS have not been received yet; the request was not sent
 
     @since %Qore 3.0
 */

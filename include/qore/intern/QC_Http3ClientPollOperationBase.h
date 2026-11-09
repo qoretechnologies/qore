@@ -249,9 +249,13 @@ public:
         return h3_state.load(std::memory_order_acquire) == H3State::CLOSED;
     }
 
+    //! Returns true once the connection is open and the server's HTTP/3 SETTINGS have been received
+    /** The connection takes requests only after the SETTINGS, as an HTTP/2 connection does: whether the server
+        supports extended CONNECT (RFC 9220) is only known then (see confirmIfSettingsReceived())
+    */
     DLLLOCAL bool isReady() const {
         H3State s = h3_state.load(std::memory_order_acquire);
-        return s == H3State::READING || s == H3State::WAIT_READ;
+        return (s == H3State::READING || s == H3State::WAIT_READ) && h3_confirmed.load(std::memory_order_acquire);
     }
 
     //! Sets the state of the open connection (READING or WAIT_READ) unless it was closed meanwhile; I/O thread only
@@ -447,6 +451,9 @@ private:
     //! True when GOAWAY received from server
     std::atomic<bool> goaway_received{false};
 
+    //! True once the server's HTTP/3 SETTINGS were received after the handshake and the ready callback was fired
+    std::atomic<bool> h3_confirmed{false};
+
     //! A connection migration requested by an application thread with requestMigration()
     struct MigrationRequest {
         enum class State {
@@ -628,6 +635,14 @@ private:
     DLLLOCAL void notifyPendingStreams(const char* err, const char* desc, ExceptionSink* xsink);
     DLLLOCAL void cleanupPendingState();
     DLLLOCAL void fireReadyCallback(ExceptionSink* xsink);
+
+    //! Reports the connection ready once the server's HTTP/3 SETTINGS have been received; I/O thread only
+    /** The SETTINGS frame starts the server's control stream (RFC 9114 section 6.2.1) and can arrive after the QUIC
+        handshake; a client must not send an extended CONNECT request before it (RFC 9220 section 3), so the
+        connection reports ready only then, as an HTTP/2 connection does.  Until then, the connect timeout of the
+        connection's waiters applies.
+    */
+    DLLLOCAL void confirmIfSettingsReceived(ExceptionSink* xsink);
 };
 
 DLLLOCAL QoreClass* initHttp3ClientPollOperationBaseClass(QoreNamespace& qorens);

@@ -5783,6 +5783,11 @@ void QoreSocketObject::setHttp2ConnectProtocolEnabled(bool enable) {
     priv->socket->setHttp2ConnectProtocolEnabled(enable);
 }
 
+void QoreSocketObject::setHttp3ConnectProtocolEnabled(bool enable) {
+    AutoLocker al(priv->m);
+    priv->socket->setHttp3ConnectProtocolEnabled(enable);
+}
+
 int QoreSocketObject::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
         bool end_stream, ExceptionSink* xsink) {
     // Fast path off the blocking controller facade; see

@@ -292,7 +292,8 @@ QoreHashNode* Http3ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
             session_id.store(session->getSessionId(), std::memory_order_release);
         }
 
-        fireReadyCallback(xsink);
+        // ready now if the server's SETTINGS arrived with the handshake, otherwise when they are read
+        confirmIfSettingsReceived(xsink);
         return poll_info;
     }
 
@@ -413,6 +414,11 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 last_poll_info->deref(xsink);
             }
             last_poll_info = poll_info;
+        }
+
+        // the connection is ready once the server's SETTINGS have been read
+        if (!h3_confirmed.load(std::memory_order_acquire)) {
+            confirmIfSettingsReceived(xsink);
         }
 
         // Check for GOAWAY from server
@@ -799,6 +805,20 @@ void Http3ClientPollOperationPriv::cleanupPendingState() {
     if (stream_blocked_waiters > 0) {
         stream_capacity_cond.broadcast();
     }
+}
+
+void Http3ClientPollOperationPriv::confirmIfSettingsReceived(ExceptionSink* xsink) {
+    // plain "//" comments only here: see the note at the top of the file
+    if (h3_confirmed.load(std::memory_order_acquire) || !inner_op) {
+        return;
+    }
+    auto session = inner_op->getSession();
+    if (!session || !session->isRemoteSettingsReceived()) {
+        return;
+    }
+    h3_confirmed.store(true, std::memory_order_release);
+    printd(5, "Http3ClientPollOperationPriv::confirmIfSettingsReceived() server SETTINGS received; ready\n");
+    fireReadyCallback(xsink);
 }
 
 void Http3ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {

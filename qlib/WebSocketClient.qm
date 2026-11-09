@@ -1838,6 +1838,8 @@ ws.connect();
         @throw HTTP2-EXTENDED-CONNECT-UNSUPPORTED with the \c http_version option set to \c "2.0", the HTTP/2 server did
         not advertise \c SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 8441), so it does not support WebSocket connections over
         HTTP/2; this is not retried; with \c http_version \c "auto", the client tries an HTTP/1.1 Upgrade instead
+        @throw HTTP3-EXTENDED-CONNECT-UNSUPPORTED the same for HTTP/3 (RFC 9220), with the \c http_version option set
+        to \c "3.0" or HTTP/3 required by the \c http3_mode option; the extended CONNECT request is not sent
 
         @note An open connection replaced by this call is reported closed after the new connection is open, before
         this method returns
@@ -1859,6 +1861,8 @@ ws.connect();
         @ref websocketclient_lifecycle
         @throw HTTP2-EXTENDED-CONNECT-UNSUPPORTED with the \c http_version option set to \c "2.0", the HTTP/2 server did
         not advertise \c SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 8441); see
+        @ref WebSocketClient::WebSocketClient::connect() "WebSocketClient::connect()"
+        @throw HTTP3-EXTENDED-CONNECT-UNSUPPORTED the same for HTTP/3 (RFC 9220); see
         @ref WebSocketClient::WebSocketClient::connect() "WebSocketClient::connect()"
 
         @since WebSocketClient 2.4

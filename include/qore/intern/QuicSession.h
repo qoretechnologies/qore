@@ -1060,8 +1060,18 @@ public:
     DLLLOCAL void deregisterConnectStreamFrameState(int64_t stream_id);
 
     //! Returns true if extended CONNECT protocol is enabled locally (server)
+    /** A server session advertises it unless its socket disabled it (Socket::setHttp3ConnectProtocolEnabled()); see
+        setupHttp3()
+    */
     DLLLOCAL bool isExtendedConnectSupported() const {
-        return is_server_;  // Server always enables via setupHttp3()
+        return is_server_ && enable_connect_protocol_;
+    }
+
+    //! Returns true once the peer's HTTP/3 SETTINGS frame has been received (RFC 9114 section 7.2.4)
+    /** The SETTINGS frame is the first frame of the peer's control stream; it can arrive after the QUIC handshake
+    */
+    DLLLOCAL bool isRemoteSettingsReceived() const {
+        return remote_settings_received_.load(std::memory_order_acquire);
     }
 
     //! Returns true if remote SETTINGS have been received and enable_connect_protocol was not set
@@ -1970,6 +1980,15 @@ private:
     //! Remote peer settings for extended CONNECT (RFC 9220)
     std::atomic<bool> remote_enable_connect_protocol_{false};
     std::atomic<bool> remote_settings_received_{false};
+
+    //! Whether a server session advertises SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 9220); set before setupHttp3()
+    bool enable_connect_protocol_ = true;
+
+    //! Raises an exception and returns -1 if an extended CONNECT request (RFC 9220) must not be sent now
+    /** A client must not send a request with the :protocol pseudo-header unless the server's SETTINGS advertised
+        SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 9220 section 3, RFC 8441 section 4)
+    */
+    DLLLOCAL int checkExtendedConnectAllowed(ExceptionSink* xsink) const;
 
     //! Stream data received before HTTP/3 layer is initialized (buffered for replay)
     struct BufferedStreamData {

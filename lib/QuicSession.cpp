@@ -1147,9 +1147,30 @@ std::shared_ptr<QuicSession> QuicSession::createServer(
                             ssl_verify_mode, ssl_accept_all_certs, retry_odcid) != 0) {
         return nullptr;
     }
+    // whether the session advertises extended CONNECT (RFC 9220); setupHttp3() runs after the session is created
+    session->enable_connect_protocol_ = sock->h3_enable_connect_protocol.load(std::memory_order_acquire);
     // Clear the temporary socket pointer; it was only needed during init
     session->clearSockPtr();
     return session;
+}
+
+int QuicSession::checkExtendedConnectAllowed(ExceptionSink* xsink) const {
+    if (!remote_settings_received_.load(std::memory_order_acquire)) {
+        // an HTTP/3 client connection reports ready only after the server's SETTINGS (see
+        // Http3ClientPollOperationPriv::handleReading()), so only a request made directly on a QUIC socket gets here
+        xsink->raiseException("HTTP3-EXTENDED-CONNECT-ERROR", "cannot send an extended CONNECT request (RFC 9220): "
+            "the server's HTTP/3 SETTINGS have not been received yet, so it is not known whether the server supports "
+            "it");
+        return -1;
+    }
+    // a definitive answer of the server, with an error code of its own, which callers do not retry on a fresh
+    // connection (issue #5678)
+    if (!remote_enable_connect_protocol_.load(std::memory_order_acquire)) {
+        xsink->raiseException("HTTP3-EXTENDED-CONNECT-UNSUPPORTED", "server does not support extended CONNECT "
+            "protocol (RFC 9220); SETTINGS_ENABLE_CONNECT_PROTOCOL was not advertised");
+        return -1;
+    }
+    return 0;
 }
 
 // ===== SSL Context Setup =====
@@ -1873,8 +1894,8 @@ int QuicSession::setupHttp3(ExceptionSink* xsink) {
     // Disable QPACK dynamic table — eliminates the need for deferred_consume
     h3_settings.qpack_max_dtable_capacity = 0;
     h3_settings.qpack_blocked_streams = 0;
-    // RFC 9220: Server advertises Extended CONNECT support for WebSocket over HTTP/3
-    if (is_server_) {
+    // RFC 9220: Server advertises Extended CONNECT support for WebSocket over HTTP/3 unless its socket disabled it
+    if (is_server_ && enable_connect_protocol_) {
         h3_settings.enable_connect_protocol = 1;
     }
     // RFC 9297: Enable HTTP/3 datagrams (SETTINGS_H3_DATAGRAM)
@@ -2849,6 +2870,13 @@ int64_t QuicSession::submitRequest(const char* method, const char* path,
 int64_t QuicSession::submitRequestStreaming(const char* method, const char* path,
                                             const qore_http_header_pairs_t& headers,
                                             ExceptionSink* xsink) {
+    // RFC 9220: an extended CONNECT request only when the server advertised support for it
+    {
+        const std::string* protocol = qore_find_http_header(headers, ":protocol");
+        if (protocol && !protocol->empty() && checkExtendedConnectAllowed(xsink)) {
+            return -1;
+        }
+    }
     // Build header name-value pairs OUTSIDE the lock (same pattern as submitRequest)
     std::vector<nghttp3_nv> nva;
     nva.reserve(headers.size() + 4);
@@ -2983,6 +3011,9 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
 
 int64_t QuicSession::submitConnectRequest(const char* path, const qore_http_header_pairs_t& headers,
                                            const char* protocol, ExceptionSink* xsink) {
+    if (checkExtendedConnectAllowed(xsink)) {
+        return -1;
+    }
     // Build header name-value pairs OUTSIDE the lock
     // Reserve: 5 pseudo-headers (:method, :path, :scheme, :authority, :protocol) + user headers
     std::vector<nghttp3_nv> nva;
