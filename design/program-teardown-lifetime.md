@@ -15,7 +15,9 @@ that use them, and where the teardown can still wait for ever.  The code is in `
    the Program, and `incThreadCount()` refuses every thread but the tearing-down one once `ptid` is set;
 3. sets `ptid` under `plock` and waits again for every thread in the Program to leave it: threads can enter it
    while the callback runs (the dispatcher threads, a thread calling a call reference into the Program, a method of
-   a class of the Program called from a Program sharing the class); no thread but this one can enter it afterwards;
+   a class of the Program called from a Program sharing the class); no thread but this one can enter it afterwards,
+   except a thread that is in it, whose nested calls into it the teardown waits for as well
+   (`qore_program_private::canEnterIntern()`);
 4. deletes the data: thread resources, the exec-class object, saved objects, opaque targets, local and global
    variables, the namespaces (which release the values of the static class variables, see below), the code.
 
@@ -144,6 +146,21 @@ another Program imports (a public variable inherited by a child Program), when t
 can still use it through the importing Program.  They were released only in the deleting thread, and every other
 thread kept them until it ended, with objects of the deleted Program's classes.
 
+A thread that ends, or whose values are cleared between tasks, releases its values itself, and enters the Program
+owning each variable first, once for all of its values (`Var::tl_pgm`, the Program that parses or loads it,
+identified by its ID; `ThreadData::releaseThreadLocalVarsOfProgram()` and
+`qore_program_private::enterForThreadLocalRelease()`): the Program can be deleted in another thread at the same time,
+and its teardown waits for the thread (step 1 or 3), so the Program can still run the destructors of the values,
+which enter the Programs of their classes as nested calls.  A Program that it
+cannot enter (its teardown has marked it, or it has been deleted) releases the variable itself, or has released it,
+or, for a variable that another Program imports, the last Program holding it does: the thread hands the value over to
+the registry (`ThreadLocalVarRegistry::Entry::orphans`), and the release of the variable releases it.  The values
+were released in whichever state their Program was, often after another thread had deleted it, and their destructors
+raised `PROGRAM-ERROR` (up to 4% of the values of pool workers clearing their values while Programs were deleted).
+The owner of an imported variable that is deleted first releases the value of the deleting thread only; the values of
+the other threads, also those handed over by threads that ended or cleared their values since, are released with
+the last Program importing the variable.
+
 `ThreadLocalVarRegistry` records the value of every thread by the variable's serial (`release_thread_local_var()`).
 No thread uses a variable that is released this way, so the releasing thread takes the value out of the other
 thread's entry without changing that thread's map; the thread erases the empty entry the next time it looks up a
@@ -157,8 +174,10 @@ and a destructor giving a variable a value whose destructor gave it a value agai
 ever, and `ThreadPool::stopWait()` waiting for it.  The registry's lock is a leaf lock: no value is released under it.
 `examples/test/qore/vars/thread-local-program-reuse.qtest` checks the release with the variable's Program in a worker
 thread, reads in a worker thread and in the deleting thread with Programs created one after another, the release at
-the end of a thread, an inherited variable, and the clearing between the tasks of a ThreadPool worker and between the
-callbacks of an AsyncIoController worker.
+the end of a thread, an inherited variable, the clearing between the tasks of a ThreadPool worker and between the
+callbacks of an AsyncIoController worker, an imported variable whose owner is deleted first, and the values that
+threads ending and pool workers release while their Program is deleted (deterministic in its result: every value is
+released while the Program can run its destructor).
 
 ## Where the teardown can wait for ever
 

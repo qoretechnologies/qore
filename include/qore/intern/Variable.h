@@ -98,7 +98,17 @@ union qore_gvar_ref_u {
 };
 
 //! Returns the current thread's value of the thread_local variable with the given serial (Var::tl_serial)
-DLLLOCAL void get_thread_local_lvalue(uint64_t serial, QoreLValue<qore_gvar_ref_u>*& lvar, bool& is_new);
+/** @param serial the serial of the variable
+    @param pgm the Program owning the variable (Var::tl_pgm), for identification only
+    @param pgm_id the ID of \a pgm
+    @param lvar set to the thread's value
+    @param is_new set to true if the thread had no value of the variable
+*/
+DLLLOCAL void get_thread_local_lvalue(uint64_t serial, const QoreProgram* pgm, qore_program_id_t pgm_id,
+        QoreLValue<qore_gvar_ref_u>*& lvar, bool& is_new);
+//! Returns the Program owning a thread_local variable created now, which is the current Program, and its ID
+DLLLOCAL const QoreProgram* qore_get_thread_local_var_owner(qore_program_id_t& pgm_id);
+
 //! Returns true if the current thread is ending and releasing its thread-local values
 DLLLOCAL bool thread_local_vars_finalizing();
 //! Releases the value of every thread of the thread_local variable with the given serial; called when it is deleted
@@ -168,7 +178,23 @@ private:
         have the address of a deleted variable, and was given the value that the deleted variable had in the thread
     */
     uint64_t tl_serial = 0;
+    //! the Program owning a thread_local variable, which it is parsed or loaded in, for identification only
+    /** A thread that ends, or whose values are cleared between tasks, enters it to release its value, so that the
+        Program can still run the value's destructors (see ThreadLocalVarRegistry in lib/thread.cpp); the Program can
+        be deleted before the variable, which another Program can import
+    */
+    const QoreProgram* tl_pgm = nullptr;
+    //! the ID of tl_pgm, which identifies it: its address can be reused by a Program created after it was deleted
+    qore_program_id_t tl_pgm_id = 0;
     DLLLOCAL void del(ExceptionSink* xsink);
+
+    //! Sets the serial and the owning Program of a thread_local variable
+    DLLLOCAL void initThreadLocal() {
+        if (is_thread_local) {
+            tl_serial = qore_get_next_thread_local_var_serial();
+            tl_pgm = qore_get_thread_local_var_owner(tl_pgm_id);
+        }
+    }
 
     // not implemented
     Var(const Var&) = delete;
@@ -195,7 +221,7 @@ protected:
         if (is_thread_local) {
             QoreLValue<qore_gvar_ref_u>* lvar;
             bool is_new;
-            get_thread_local_lvalue(tl_serial, lvar, is_new);
+            get_thread_local_lvalue(tl_serial, tl_pgm, tl_pgm_id, lvar, is_new);
             if (is_new) {
                 if (is_ref) {
                     lvar->set(QV_Ref);
@@ -211,21 +237,21 @@ protected:
 
 public:
     DLLLOCAL Var(const QoreProgramLocation* loc, const char* n_name, bool is_thread_local = false)
-            : loc(loc), name(n_name), pub(false), finalized(false), is_thread_local(is_thread_local),
-              tl_serial(is_thread_local ? qore_get_next_thread_local_var_serial() : 0) {
+            : loc(loc), name(n_name), pub(false), finalized(false), is_thread_local(is_thread_local) {
+        initThreadLocal();
     }
 
     DLLLOCAL Var(const QoreProgramLocation* loc, const char* n_name, QoreParseTypeInfo* n_parseTypeInfo,
             bool is_thread_local = false) : loc(loc), name(n_name), parseTypeInfo(n_parseTypeInfo),
-            pub(false), finalized(false), is_thread_local(is_thread_local),
-            tl_serial(is_thread_local ? qore_get_next_thread_local_var_serial() : 0) {
+            pub(false), finalized(false), is_thread_local(is_thread_local) {
+        initThreadLocal();
     }
 
     DLLLOCAL Var(const QoreProgramLocation* loc, const char* n_name, const QoreTypeInfo* n_typeInfo,
             bool builtin = false, bool is_thread_local = false)
             : loc(loc), name(n_name), pub(false), finalized(false),
-              is_thread_local(is_thread_local), tl_serial(is_thread_local ? qore_get_next_thread_local_var_serial() : 0),
-              builtin(builtin) {
+              is_thread_local(is_thread_local), builtin(builtin) {
+        initThreadLocal();
         const QoreTypeInfo* base_ti;
         no_narrowing = isNoNarrowMarkerType(n_typeInfo, base_ti);
         typeInfo = base_ti;

@@ -35,7 +35,16 @@
       variable read by a destructor while a thread ends can still be assigned in another thread (the ending thread
       made it read-only in every thread);
     - that the values of a public thread_local variable that a child Program inherits are released when the last of the
-      Programs holding the variable is deleted.
+      Programs holding the variable is deleted;
+    - that the destructors run while a ThreadPool or AsyncIoController worker clears the values of its task cannot
+      assign a variable, as at the end of a thread (a destructor giving a variable a value whose destructor gave it
+      one again kept the worker clearing values for ever), and that the next task can;
+    - that the owner of an inherited variable that is deleted first releases the value of the deleting thread only,
+      and the Program importing it the values of the other threads, also of a thread that ended in between;
+    - that the values released by threads that end and by pool workers that clear their values while the variable's
+      Program is deleted in another thread are released while the Program can run their destructors: the threads
+      enter the Program to release them, or hand them over to its teardown (deterministic in its result; before,
+      PROGRAM-ERROR in the destructors of up to 4% of the values).
 */
 class ThreadLocalProgramReuseTest inherits QUnit::Test {
     public {
@@ -91,6 +100,21 @@ Program sub new_program(string code, string label) {
 }
 
 const N = 40;
+
+#! reports its destruction through the closure given; a class of this Program, which lives as long as the driver
+class Tracker {
+    private {
+        code report;
+    }
+
+    constructor(code r) {
+        report = r;
+    }
+
+    destructor() {
+        report();
+    }
+}
 
 # a class whose destructor reports through the closure given
 const DClass = "class D { private { code report; } constructor(code r) { report = r; } destructor() { report(); } }\n";
@@ -257,6 +281,66 @@ const ClearCode = "%modern\nthread_local *string tly;\n"
         "(%y): %y, assigned: %y\n", events, tid == next[0], next[1], next[2]);
     delete p;
 }
+# a public variable whose owner is deleted before the Program importing it: the deletion of the owner releases the
+# value of the deleting thread only, as the importing Program can still use the variable in the other threads; their
+# values are released when the importing Program is deleted, also the value of a thread that ended in between, which
+# the thread could not release in the deleted owner
+{
+    int destroyed = 0;
+    code report = sub () { ++destroyed; };
+    Program owner = new_program("%modern\npublic thread_local *object tlx;\nsub set(object o) { tlx = o; }\n"
+        "object sub child(ExecMode m) { Program c(); c.setExecMode(m); "
+        "c.parse(\"%modern\\nbool sub has() { return exists tlx; }\\n\", \"importer\"); return c; }\n", "owner");
+    Program importer = owner.callFunction("child", mode);
+    Worker w1();
+    on_exit w1.stop();
+    Worker w2();
+    w1.call(auto sub () { owner.callFunction("set", new Tracker(report)); return True; });
+    w2.call(auto sub () { owner.callFunction("set", new Tracker(report)); return True; });
+    owner.callFunction("set", new Tracker(report));
+    delete owner;
+    int with_owner = destroyed;
+    bool kept = w1.call(auto sub () { return importer.callFunction("has"); });
+    w2.stop();
+    int at_end = destroyed - with_owner;
+    delete importer;
+    printf("owner deleted first: released with the owner: %d; kept for the importer in a worker: %y; released when a "
+        "worker ends: %d; released with the importer: %d\n", with_owner, kept, at_end, destroyed - with_owner - at_end);
+}
+
+# the values that threads release when they end, and that pool workers clear between their tasks, while the Program of
+# the variables is deleted in another thread: every value is released while the Program can run its destructor, by
+# the thread, which the teardown waits for, or by the teardown, which the thread hands the value over to
+const StressN = 40;
+const StressThreads = 4;
+{
+    int destroyed = 0;
+    Mutex m();
+    code report = sub () { m.lock(); on_exit m.unlock(); ++destroyed; };
+    ThreadPool tp(StressThreads, StressThreads, StressThreads);
+    int created = 0;
+    for (int n = 0; n < StressN; ++n) {
+        Program p = new_program("%modern\n" + DClass + "thread_local *D tla;\nthread_local *D tlb;\n"
+            "sub set(code r) { tla = new D(r); tlb = new D(r); }\n", "stress-" + n);
+        # each task and thread sets its values; the pool workers clear them after their task, and the threads end
+        # when the Program is deleted, both at the same time as the deletion
+        Counter ready(2 * StressThreads);
+        Counter go(1);
+        list<int> tids = ();
+        for (int t = 0; t < StressThreads; ++t) {
+            tp.submit(sub () { on_exit ready.dec(); p.callFunction("set", report); });
+            tids += background sub () { { on_exit ready.dec(); p.callFunction("set", report); } go.waitForZero(); }();
+        }
+        ready.waitForZero();
+        go.dec();
+        delete p;
+        map thread_join($1), tids;
+        created += 4 * StressThreads;
+    }
+    tp.stopWait();
+    printf("values released by ending threads and pool workers while their Program is deleted: %d of %d\n",
+        destroyed, created);
+}
 printf("done\n");
 ';
     }
@@ -318,6 +402,9 @@ printf("done\n");
                 "task: null, assigned: \"assigned\"\n"
             "async I/O worker values cleared between callbacks: [\"destroyed\", \"DESTRUCTOR-ERROR\"]; read by the "
                 "next callback in the same thread (True): null, assigned: \"assigned\"\n"
+            "owner deleted first: released with the owner: 1; kept for the importer in a worker: True; released when "
+                "a worker ends: 0; released with the importer: 2\n"
+            "values released by ending threads and pool workers while their Program is deleted: 640 of 640\n"
             "done\n";
     }
 
