@@ -81,7 +81,8 @@ public namespace OurVarMod {
         Obj::resetStatic();
     }
 
-    #! a function of the module runs in the Program that calls it, with its restrictions
+    #! a function of the module currently runs in the Program that calls it, with its restrictions (until module
+    #! functions run in the module's Program as methods do)
     public sub set_sx_func(int v) {
         Obj::sx = v;
     }

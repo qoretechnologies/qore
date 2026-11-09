@@ -217,11 +217,11 @@ list<int> l1(1);
 
     A trusted module is one that is not a tenant's own module: a module from the module path, or one that trusted
     code loaded.  The module's own code can still change its state, as can the code of library modules and importers
-    that are not restricted.  A function of the module can change the module's public variables; a static member of
-    a class is changed by a method of the class, which runs in the module's @ref Qore::Program "Program", as a
-    function of a module runs in the @ref Qore::Program "Program" that calls it, with its restrictions.  A module
-    that lets restricted code change a value exports a public function or method that sets it, and so decides what
-    its callers may change:
+    that are not restricted.  A function of the module can change the module's public variables.  A static member of
+    a class is changed by a method of the class, which runs in the module's @ref Qore::Program "Program"; a function
+    of a module currently runs in the @ref Qore::Program "Program" that calls it, with its restrictions, so a function
+    that sets a static member for restricted code calls a method of the class.  A module that lets restricted code
+    change a value exports a public function or method that sets it, and so decides what its callers may change:
     @code{.py}
 public namespace MyModule {
     # every importer can read it; restricted code cannot change it
