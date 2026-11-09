@@ -3618,14 +3618,43 @@ void ensure_unique(QoreValue& v, ExceptionSink* xsink) {
     if (!v.hasNode()) {
         return;
     }
-    AbstractQoreNode* n = v.getInternalNode();
-    if (!n->is_unique()) {
-        AbstractQoreNode* old = n;
-        n = old->realCopy();
-        old->deref(xsink);
-        assert(!*xsink);
-        v = n;
+    qore_value_copy_on_write(v).discard(xsink);
+    assert(!xsink || !*xsink);
+}
+
+QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* copy) {
+    assert(copy);
+    if (v.isOpaque()) {
+        // an object is never copied
+        assert(!v.isOpaqueObject());
+        // the Program responsible for the registration that the copy replaces, if any
+        QoreProgram* owner = qore_program_private::getOpaqueTargetProgram(v.getInternalNode());
+        // registers the copy with the current Program, if any
+        QoreValue rv = v.isOpaqueHash()
+            ? QoreValue::makeOpaqueHash(static_cast<QoreHashNode*>(copy))
+            : QoreValue::makeOpaqueList(static_cast<QoreListNode*>(copy));
+        // the copy keeps the registration's Program: the teardown that breaks a cycle through the reference must not
+        // depend on whether the change copied the container, and a change made by another Program's code would
+        // otherwise give the copy to a Program whose teardown never reaches the cycle
+        if (owner) {
+            qore_program_private::setOpaqueTargetProgram(copy, owner);
+        }
+        // the opaque value took a reference of its own; the copy is not shared, so this does not release it
+        copy->deref(nullptr);
+        return rv;
     }
+    return QoreValue(copy);
+}
+
+QoreValue qore_value_copy_on_write(QoreValue& v) {
+    AbstractQoreNode* n = v.getInternalNode();
+    assert(n && n->getType() != NT_OBJECT);
+    if (n->is_unique()) {
+        return QoreValue();
+    }
+    QoreValue old = v;
+    v = qore_value_with_copy(old, n->realCopy());
+    return old;
 }
 
 // checks for illegal "self" assignments in an object context
