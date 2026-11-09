@@ -113,7 +113,8 @@ public:
     /** @param result the result of the Begin step; ignored with QoreIRListSelectorFlag::Begin
         @param seq the sequence
         @param flags the QoreIRListSelectorFlag flags
-        @param selectors the indexes and the starts and ends of ranges; empty with QoreIRListSelectorFlag::Begin
+        @param selectors the indexes and the starts and ends of ranges; can be empty only with
+        QoreIRListSelectorFlag::Begin
 
         @return the instruction, which has a result only with QoreIRListSelectorFlag::Begin
     */

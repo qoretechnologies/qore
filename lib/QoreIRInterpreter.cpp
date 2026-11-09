@@ -8574,16 +8574,20 @@ next_instruction:
                 break;
             }
             case QoreIROpcode::ListSelectorStep: {
-                // operands: the result of the Begin step, the sequence, the flags, and the selector values
+                // operands: [the result of the Begin step,] the sequence, the flags, and the selector values; only
+                // the Begin step has a result, and no result operand
+                size_t first = inst->result.isValid() ? 0 : 1;
                 uint64_t selector_bits[QORE_IR_LIST_SELECTOR_STEP_MAX * 2];
-                size_t count = inst->operands.size() - 3;
+                size_t count = inst->operands.size() - first - 2;
                 assert(count <= QORE_IR_LIST_SELECTOR_STEP_MAX * 2);
                 for (size_t i = 0; i < count; ++i) {
-                    selector_bits[i] = toBits(getIRValue(values, inst->operands[i + 3]));
+                    selector_bits[i] = toBits(getIRValue(values, inst->operands[first + 2 + i]));
                 }
                 // only the Begin step has a result, which it owns
-                QoreValue res = fromBits(qore_rt_list_selector_step(toBits(getIRValue(values, inst->operands[0])),
-                    toBits(getIRValue(values, inst->operands[1])), getIRValue(values, inst->operands[2]).getAsBigInt(),
+                QoreValue res = fromBits(qore_rt_list_selector_step(
+                    first ? toBits(getIRValue(values, inst->operands[0])) : 0,
+                    toBits(getIRValue(values, inst->operands[first])),
+                    getIRValue(values, inst->operands[first + 1]).getAsBigInt(),
                     selector_bits, static_cast<int32_t>(count), xsink));
                 if (xsink && *xsink) {
                     assert(res.isNothing());

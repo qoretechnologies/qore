@@ -1381,9 +1381,9 @@ int64_t qore_rt_check_cancel_every(int64_t count, int64_t point, int64_t limit, 
 int64_t qore_rt_check_range_bound(uint64_t bound_val, int64_t which, ExceptionSink* xsink);
 
 //! Applies the \a count selector values \a selector_vals of a step of a list of selectors with ranges to the
-//! sequence \a seq_val and adds what they select to \a result_val, which it changes in place, or with
-//! QoreIRListSelectorFlag::Begin returns the empty result for the sequence; see QoreIROpcode::ListSelectorStep.
-//! Returns the result of a Begin step, which the caller owns, and 0 otherwise.
+//! sequence \a seq_val: with QoreIRListSelectorFlag::Begin it makes the result for the sequence and adds what they
+//! select to it, otherwise it adds what they select to \a result_val, which it changes in place; see
+//! QoreIROpcode::ListSelectorStep.  Returns the result of a Begin step, which the caller owns, and 0 otherwise.
 uint64_t qore_rt_list_selector_step(uint64_t result_val, uint64_t seq_val, int64_t flags,
         const uint64_t* selector_vals, int32_t count, ExceptionSink* xsink);
 

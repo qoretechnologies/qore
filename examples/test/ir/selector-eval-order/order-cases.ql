@@ -113,6 +113,41 @@ auto sub release_selected() {
     }
 }
 
+# a local variable or a parameter whose type every selector applies to: the step that applies the first selectors
+# also makes the result
+auto sub local_list_ok() { list<int> m = l; return m[f("a")..f("b", 3), f("c", 0)]; }
+auto sub local_list_later() { list<int> m = l; return m[k..3, f("later")]; }
+auto sub param_string(string m) { return m[f("a")..f("b", 3), k..f("later")]; }
+auto sub param_binary(binary m) { return m[f("a", 0), 1..k, f("later")]; }
+auto sub local_release() {
+    list<auto> m = mk("seq 5");
+    try {
+        take(new T("arg 5"), m[f("a")..2, thr()]);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s\n", ex.err);
+    }
+}
+
+# a typed variable that other code deleted: no selector is evaluated
+list<int> dl = (0, 1, 2);
+sub delete_dl() {
+    delete dl;
+}
+sub delete_ref(reference<list<int>> r) {
+    delete r;
+}
+auto sub deleted_toplevel() {
+    delete_dl();
+    auto r = dl[f("start")..1, 0];
+    dl = (0, 1, 2);
+    return r;
+}
+auto sub deleted_reference() {
+    list<int> m = (0, 1, 2);
+    delete_ref(\m);
+    return m[f("start")..1, 0];
+}
+
 # a sequence that no selector applies to: no selector is evaluated
 auto sub nothing_seq(auto seq) { return seq[f("start")..2, f("later")]; }
 
@@ -157,6 +192,13 @@ sub main() {
         t("release later range", \release_later_range());
         t("release first throw", \release_first_throw());
         t("release selected", \release_selected());
+        t("local list ok", \local_list_ok());
+        t("local list later", \local_list_later());
+        t("param string", auto sub () { return param_string(s); });
+        t("param binary", auto sub () { return param_binary(b); });
+        t("local release", \local_release());
+        t("deleted top-level", \deleted_toplevel());
+        t("deleted reference", \deleted_reference());
         t("nothing", auto sub () { return nothing_seq(); });
         t("hash", auto sub () { return nothing_seq(h); });
         t("int", auto sub () { return nothing_seq(1); });

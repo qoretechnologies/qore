@@ -251,6 +251,8 @@ public:
     */
     QoreIRValue lowerListSelectorSteps(const QoreSquareBracketsOperatorNode* op, QoreIRValue seq,
         const std::vector<QoreValue>& selectors, std::string& error);
+    //! Returns true if the sequence of a list of selectors is always a list, a string or a binary object
+    bool listSelectorSeqAlwaysApplies(const QoreValue& expr) const;
     //! Returns true if a bound of a range operator can evaluate to NOTHING
     bool rangeBoundMayBeNothing(const QoreValue& expr) const;
     QoreIRValue lowerHashObjectDereference(const QoreValue& expr, std::string& error);

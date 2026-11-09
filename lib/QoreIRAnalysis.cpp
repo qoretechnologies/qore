@@ -697,8 +697,9 @@ void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vec
             } else if (qore_ir_opcode_holds_receiver(op) && !inst->operands.empty()) {
                 set_class(inst->operands[0], QORE_IR_RELEASE_RECEIVER);
             } else if (op == QoreIROpcode::ListSelectorStep && inst->result.isValid()) {
-                // the sequence of a list of selectors, which QoreSquareBracketsOperatorNode holds as a receiver
-                set_class(inst->operands[1], QORE_IR_RELEASE_RECEIVER);
+                // the sequence of a list of selectors (operands[0] of the Begin step), which
+                // QoreSquareBracketsOperatorNode holds as a receiver
+                set_class(inst->operands[0], QORE_IR_RELEASE_RECEIVER);
             }
         }
     }

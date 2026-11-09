@@ -26059,24 +26059,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::ListSelectorStep: {
-            // operands: the result of the Begin step, the sequence, the flags, and the selector values
+            // operands: [the result of the Begin step,] the sequence, the flags, and the selector values; only the
+            // Begin step has a result, and no result operand
+            size_t first = inst->result.isValid() ? 0 : 1;
             llvm::Value* args[3];
-            for (size_t i = 0; i < 3; ++i) {
+            args[0] = llvm::ConstantInt::get(i64_type, 0);
+            for (size_t i = 0; i < first + 2; ++i) {
                 auto* operand = getVal(inst->operands[i].id, error);
                 if (!operand) { return false; }
-                args[i] = i == 2
+                args[i + 1 - first] = i == first + 1
                     ? ensureIntTypeInline(operand, inst->operands[i].id)
                     : boxValue(operand, inst->operands[i].id);
             }
-            int num_selectors = static_cast<int>(inst->operands.size()) - 3;
+            int num_selectors = static_cast<int>(inst->operands.size() - first - 2);
             llvm::Value* selector_array = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
             if (num_selectors) {
                 llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
                 selector_array = ab.CreateAlloca(i64_type, llvm::ConstantInt::get(i32_type, num_selectors));
                 for (int i = 0; i < num_selectors; ++i) {
-                    auto* selector = getVal(inst->operands[i + 3].id, error);
+                    size_t op_idx = first + 2 + i;
+                    auto* selector = getVal(inst->operands[op_idx].id, error);
                     if (!selector) { return false; }
-                    llvm::Value* boxed = boxValue(selector, inst->operands[i + 3].id);
+                    llvm::Value* boxed = boxValue(selector, inst->operands[op_idx].id);
                     builder->CreateStore(boxed, builder->CreateGEP(i64_type, selector_array,
                         llvm::ConstantInt::get(i32_type, i)));
                 }

@@ -10731,24 +10731,52 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
     return lowerExprOpOrInvoke(QoreIROpcode::ListIndexDynamic, expr, operands, op->loc, error);
 }
 
+bool QoreIRLowering::listSelectorSeqAlwaysApplies(const QoreValue& expr) const {
+    // a local variable of the function, definitely assigned where it is read, whose declared type is a list, a
+    // string or a binary object; a local variable that other code can reach (a closure-bound or top-level local)
+    // can be deleted by it
+    const VarRefNode* var = dynamic_cast<const VarRefNode*>(expr.getInternalNode());
+    if (!var || var->getType() != VT_LOCAL || !var->ref.id) {
+        return false;
+    }
+    QoreParseAnalysis analysis;
+    if (!getAnalysis(expr, analysis) || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        return false;
+    }
+    const QoreTypeInfo* type = var->ref.id->getTypeInfo();
+    if (QoreTypeInfo::parseReturns(type, NT_NOTHING) != QTI_NOT_EQUAL) {
+        return false;
+    }
+    // a complex list type (list<int>) is not identical to the plain list type, so it is checked by its kind
+    return QoreTypeInfo::isListType(type)
+        || QoreTypeInfo::parseReturns(type, NT_STRING) == QTI_IDENT
+        || QoreTypeInfo::parseReturns(type, NT_BINARY) == QTI_IDENT;
+}
+
 QoreIRValue QoreIRLowering::lowerListSelectorSteps(const QoreSquareBracketsOperatorNode* op, QoreIRValue seq,
         const std::vector<QoreValue>& selectors, std::string& error) {
     assert(!selectors.empty());
     const int64_t string_index_char = op->hasStringIndexChar()
         ? static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar) : 0;
 
-    // the empty result for the sequence, or NOTHING if no selector applies to it: then no selector is evaluated
-    QoreIRValue result = withExceptionTarget(builder.createListSelectorStep(QoreIRValue(), seq,
-        string_index_char | static_cast<int64_t>(QoreIRListSelectorFlag::Begin), {}, op->loc))->result;
-    QoreIRValue no_selectors = builder.createUnaryOp(QoreIROpcode::IsNullOrNothing, result)->result;
-    QoreIRBasicBlock* selector_block = createBlock("selectors");
-    QoreIRBasicBlock* merge_block = createBlock("selectors.merge");
-    if (!selector_block || !merge_block) {
-        error = "IR builder failed to create blocks for a list of selectors";
-        return QoreIRValue();
+    // a sequence that is always a list, a string or a binary object gets the selectors applied by the step that makes
+    // the result; for any other sequence a Begin step makes the empty result first, or NOTHING if no selector applies
+    // to the sequence, and then no selector is evaluated, as in the AST interpreter
+    QoreIRValue result;
+    QoreIRBasicBlock* merge_block = nullptr;
+    if (!listSelectorSeqAlwaysApplies(op->getLeft())) {
+        result = withExceptionTarget(builder.createListSelectorStep(QoreIRValue(), seq,
+            string_index_char | static_cast<int64_t>(QoreIRListSelectorFlag::Begin), {}, op->loc))->result;
+        QoreIRValue no_selectors = builder.createUnaryOp(QoreIROpcode::IsNullOrNothing, result)->result;
+        QoreIRBasicBlock* selector_block = createBlock("selectors");
+        merge_block = createBlock("selectors.merge");
+        if (!selector_block || !merge_block) {
+            error = "IR builder failed to create blocks for a list of selectors";
+            return QoreIRValue();
+        }
+        builder.createBranchIf(no_selectors, merge_block, selector_block);
+        builder.setBlock(selector_block);
     }
-    builder.createBranchIf(no_selectors, merge_block, selector_block);
-    builder.setBlock(selector_block);
 
     // the selectors evaluated and not applied yet: a step applies them before the next selector that can have side
     // effects or raise is evaluated, and the selectors after it that cannot are applied with it
@@ -10762,7 +10790,13 @@ QoreIRValue QoreIRLowering::lowerListSelectorSteps(const QoreSquareBracketsOpera
         if (last) {
             pending_flags |= static_cast<int64_t>(QoreIRListSelectorFlag::Last);
         }
-        withExceptionTarget(builder.createListSelectorStep(result, seq, pending_flags, pending, op->loc));
+        if (!result.isValid()) {
+            // the first step makes the result
+            result = withExceptionTarget(builder.createListSelectorStep(QoreIRValue(), seq,
+                pending_flags | static_cast<int64_t>(QoreIRListSelectorFlag::Begin), pending, op->loc))->result;
+        } else {
+            withExceptionTarget(builder.createListSelectorStep(result, seq, pending_flags, pending, op->loc));
+        }
         pending.clear();
         pending_flags = string_index_char;
         pending_count = 0;
@@ -10805,10 +10839,12 @@ QoreIRValue QoreIRLowering::lowerListSelectorSteps(const QoreSquareBracketsOpera
         ++pending_count;
     }
     apply_pending(true);
-    builder.createBranch(merge_block);
-
+    assert(result.isValid());
+    if (merge_block) {
+        builder.createBranch(merge_block);
+        builder.setBlock(merge_block);
+    }
     // the result of the Begin step, to which the steps have added what the selectors selected
-    builder.setBlock(merge_block);
     return result;
 }
 

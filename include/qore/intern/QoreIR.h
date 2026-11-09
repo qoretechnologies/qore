@@ -923,21 +923,23 @@ enum class QoreIROpcode : uint16_t {
     //! Apply selectors of a list of selectors with ranges (l[a..b, c]) to the sequence, as the AST interpreter does
     //! (QoreSquareBracketsOperatorNode::doSquareBracketsListRange())
     //!
-    //! operands[0] = the result; operands[1] = the sequence; operands[2] = the QoreIRListSelectorFlag flags (native
-    //! int); operands[3...] = the selectors in order: an index, or the start and the end of a range (see
-    //! QoreIRListSelectorFlag::RangeShift).  With QoreIRListSelectorFlag::Begin there is no selector and operands[0]
-    //! is NOTHING: the instruction has a result, an empty list, string or binary object for a sequence of that type
-    //! and NOTHING for any other sequence, to which the AST interpreter applies no selector, so the lowering branches
-    //! past the selectors when it is NOTHING.  Every other step has no result: it applies its selectors to the
-    //! sequence and adds what they select to operands[0], the result of the Begin step, which it changes in place;
-    //! with QoreIRListSelectorFlag::Last a list result also gets the type of the values that it holds.  The result of
-    //! the Begin step is the value of the expression, and it holds the only reference to it, which keeps it unshared.
-    //! The AST interpreter evaluates each selector only after it has applied the previous one, and stops at the first
-    //! exception, so the lowering emits a step before each selector that can have side effects or raise; a step also
-    //! applies the selectors after that one that cannot (constants and reads of int locals), since the order in which
-    //! they are evaluated cannot be observed.  An exception goes to the instruction's exception target (qore#5665).
-    //! A list of selectors none of which can have side effects or raise is lowered as one ListIndexDynamic instruction
-    //! instead.
+    //! With QoreIRListSelectorFlag::Begin: operands[0] = the sequence; operands[1] = the QoreIRListSelectorFlag flags
+    //! (native int); operands[2...] = selectors; the result is an empty list, string or binary object for a sequence
+    //! of that type, with the selectors applied, and NOTHING for any other sequence, to which the AST interpreter
+    //! applies no selector.  A Begin step without selectors comes before the selectors when the type of the sequence
+    //! is not known, and the lowering branches past them when its result is NOTHING; when the sequence is known to be
+    //! a list, a string or a binary object, the first step that applies selectors is the Begin step.  Every other
+    //! step has no result: operands[0] = the result of the Begin step; operands[1] = the sequence; operands[2] = the
+    //! flags; operands[3...] = the selectors; it adds what they select to the result of the Begin step, which it
+    //! changes in place.  The selectors are given in order: an index, or the start and the end of a range (see
+    //! QoreIRListSelectorFlag::RangeShift).  With QoreIRListSelectorFlag::Last a list result also gets the type of the
+    //! values that it holds.  The result of the Begin step is the value of the expression, and it holds the only
+    //! reference to it, which keeps it unshared.  The AST interpreter evaluates each selector only after it has
+    //! applied the previous one, and stops at the first exception, so the lowering emits a step before each selector
+    //! that can have side effects or raise; a step also applies the selectors after that one that cannot (constants
+    //! and reads of int locals), since the order in which they are evaluated cannot be observed.  An exception goes
+    //! to the instruction's exception target (qore#5665).  A list of selectors none of which can have side effects
+    //! or raise is lowered as one ListIndexDynamic instruction instead.
     ListSelectorStep = 420,
 
     // NOTE: When adding new opcodes, assign the next sequential ID (421, 422, ...)
@@ -959,8 +961,8 @@ enum class QoreIRListSelectorFlag : int64_t {
     Last = 1 << 1,
     //! an index of a string selects a character (the parse option no-string-index-char is not set)
     StringIndexChar = 1 << 2,
-    //! the first step, which has no selector: its result is the empty result for the sequence, or NOTHING if no
-    //! selector applies to it
+    //! the first step, which makes the result: the empty result for the sequence with the selectors of the step
+    //! applied, or NOTHING if no selector applies to the sequence
     Begin = 1 << 3,
     //! bit RangeShift + i is set if the selector i of the step is a range, whose start and end are two operands
     RangeShift = 8,
