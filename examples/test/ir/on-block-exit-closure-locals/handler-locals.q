@@ -1,7 +1,7 @@
 %modern
 # the locals that on_block_exit handlers declare and that are closure-bound (referenced or captured by a closure),
-# when the handler runs on an exception and on the normal exit path; see on-block-exit-closure-locals.qtest (the
-# cases that AOT cannot run yet are in handler-modes.q)
+# when the handler runs on an exception and on the normal exit path; see on-block-exit-closure-locals.qtest (handlers
+# that only run on an exception are in handler-modes.q)
 
 #! describes an exception and the exceptions chained to it, which must be only those that the code raised
 string sub chain(hash<ExceptionInfo> ex) {
