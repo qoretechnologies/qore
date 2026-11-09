@@ -1339,10 +1339,18 @@ public:
     //! Raises \c MODULE-VARIABLE-READ-ONLY and returns -1 if the current code may not remove the variable's value
     DLLLOCAL int checkTrustedModuleRemove(ExceptionSink* xsink) const;
 
+    //! Raises \c MODULE-VARIABLE-READ-ONLY and returns -1 if the code of \a writer may not write the variable
+    /** For code that writes for another Program, such as the reflection API (see
+        QoreExternalStaticMember::setValue())
+    */
+    DLLLOCAL int checkTrustedModuleWriter(const QoreProgram* writer, ExceptionSink* xsink) const;
+
 private:
     DLLLOCAL int checkTrustedModuleWriteIntern(const TrustedModuleStatic& tm, LValueHelper& lvh) const;
     //! Returns true if the current code may not write the variable of a class of a trusted module
     DLLLOCAL bool trustedModuleWriteRestricted(const TrustedModuleStatic& tm) const;
+    //! Returns true if the code of \a writer may not write the variable of a class of a trusted module
+    DLLLOCAL static bool trustedModuleWriteRestrictedFor(const TrustedModuleStatic& tm, const QoreProgram* writer);
 
 public:
 

@@ -25,6 +25,11 @@ public namespace OurVarMod {
             sx = v;
         }
 
+        #! creates an object in the module's code, which reflection binds to the module's Program
+        static Obj make() {
+            return new Obj();
+        }
+
         static resetStatic() {
             sx = 1;
             sl = (1, 2, 3);
@@ -53,6 +58,12 @@ public namespace OurVarMod {
     public our Obj o;
     public our G g;
     public our hash<auto> hn;
+    # not exported, but reachable with reflection through the module's namespace
+    our int priv;
+
+    public int sub get_priv() {
+        return priv ?? 0;
+    }
 
     public sub reset() {
         i = 1;

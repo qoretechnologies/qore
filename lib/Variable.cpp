@@ -490,6 +490,29 @@ void qore_raise_module_state_read_only(ExceptionSink* xsink, const char* what, c
         "public function or method that sets it", what, path, module_name, what);
 }
 
+int Var::checkModuleStateWriter(const QoreProgram* writer, const QoreProgram* owner, ExceptionSink* xsink) const {
+    if (writer == owner || !qore_module_state_write_restricted(writer)) {
+        return 0;
+    }
+    if (is_ref) {
+        // an import: the import of a module's public variable, or a chain of imports ending at one
+        for (const Var* v = this; v->is_ref; v = v->val.v.getPtr()) {
+            if (v->module_import) {
+                qore_raise_module_state_read_only(xsink, "public variable", v->module_import->path.c_str(),
+                    v->module_import->module_name.c_str());
+                return -1;
+            }
+        }
+        return 0;
+    }
+    // a variable of the Program of a trusted module, public or not
+    if (owner && qore_program_private::isTrustedModuleProgram(*owner)) {
+        qore_raise_module_state_read_only(xsink, "variable", name.c_str(), getModuleName());
+        return -1;
+    }
+    return 0;
+}
+
 bool Var::moduleVarWriteRestricted() const {
     assert(module_import);
     return qore_module_state_write_restricted(module_import->importer);

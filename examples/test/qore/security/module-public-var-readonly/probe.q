@@ -152,12 +152,39 @@ foreach string ctx in (("sandbox", "no-pc")) {
         "sub static_set() { StaticMember m = get_static(); m.setValue(85); }\n"
         "auto sub static_get() { StaticMember m = get_static(); return m.getValue(); }\n"
         "sub global_set() { GlobalVar v = get_global(); v.setValue(86); }\n"
-        "auto sub global_get() { GlobalVar v = get_global(); return v.getValue(); }\n", "reflection");
+        "auto sub global_get() { GlobalVar v = get_global(); return v.getValue(); }\n"
+        # an object that the module's code created gives the class bound to the module's Program, and the module's
+        # own namespace with its variables, public or not
+        "Class sub obj_class() { OurVarMod::Obj o = OurVarMod::Obj::make(); return Class::getClass(o); }\n"
+        "GlobalVar sub obj_var(string n) { Class c = obj_class(); Namespace ns = c.getNamespace(); "
+            "return ns.getGlobalVar(n); }\n"
+        "sub obj_static_set() { Class c = obj_class(); StaticMember m = c.getStaticMember(\"sx\"); m.setValue(77); }\n"
+        "sub obj_global_set() { GlobalVar v = obj_var(\"i\"); v.setValue(78); }\n"
+        "sub obj_private_set() { GlobalVar v = obj_var(\"priv\"); v.setValue(79); }\n"
+        "auto sub obj_global_get() { GlobalVar v = obj_var(\"i\"); return v.getValue(); }\n", "reflection");
     result("reflection-" + ctx + ".static-set", try_call(p, "static_set"));
     result("reflection-" + ctx + ".static-get", try_read(p, "static_get"));
     result("reflection-" + ctx + ".global-set", try_call(p, "global_set"));
     result("reflection-" + ctx + ".global-get", try_read(p, "global_get"));
-    result("reflection-" + ctx + ".state", OurVarMod::state());
+    result("reflection-" + ctx + ".obj-static-set", try_call(p, "obj_static_set"));
+    result("reflection-" + ctx + ".obj-global-set", try_call(p, "obj_global_set"));
+    result("reflection-" + ctx + ".obj-private-set", try_call(p, "obj_private_set"));
+    result("reflection-" + ctx + ".obj-global-get", try_read(p, "obj_global_get"));
+    result("reflection-" + ctx + ".state", OurVarMod::state() + ":" + OurVarMod::get_priv());
+}
+
+# a module that a Program with PO_NO_PROCESS_CONTROL loads first, whose Program then has the option as well
+{
+    Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+    p.parse("%requires FirstMod\n%requires reflection\n"
+        "Class sub obj_class() { FirstMod::Obj o = FirstMod::Obj::make(); return Class::getClass(o); }\n"
+        "sub static_set() { Class c = obj_class(); StaticMember m = c.getStaticMember(\"sx\"); m.setValue(77); }\n"
+        "sub global_set() { Class c = obj_class(); Namespace ns = c.getNamespace(); GlobalVar v = ns.getGlobalVar(\"i\"); "
+            "v.setValue(78); }\n"
+        "string sub state() { return FirstMod::state(); }\n", "first");
+    result("first-module.static-set", try_call(p, "static_set"));
+    result("first-module.global-set", try_call(p, "global_set"));
+    result("first-module.state", p.callFunction("state"));
 }
 
 # the messages name what is written and the module, and say what to do instead

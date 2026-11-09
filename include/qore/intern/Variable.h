@@ -443,6 +443,13 @@ public:
     */
     DLLLOCAL void setTrustedModuleVarImport(QoreProgram* importer, const char* module_name, const std::string& ns_path);
 
+    //! Raises \c MODULE-VARIABLE-READ-ONLY and returns -1 if the code of \a writer may not write the variable
+    /** For code that writes for another Program, such as the reflection API (see QoreExternalGlobalVar::setValue()):
+        the variable is a trusted module's if it is an import of a module's public variable or a variable of the
+        Program of a trusted module (\a owner)
+    */
+    DLLLOCAL int checkModuleStateWriter(const QoreProgram* writer, const QoreProgram* owner, ExceptionSink* xsink) const;
+
     //! Records that this reference imports into \a importer the same module variable as \a src
     DLLLOCAL void setTrustedModuleVarImport(QoreProgram* importer, const Var& src, const std::string& ns_path) {
         assert(src.module_import);

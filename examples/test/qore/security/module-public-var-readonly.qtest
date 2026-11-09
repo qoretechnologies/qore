@@ -64,8 +64,11 @@ class ModulePublicVarReadOnlyTest inherits QUnit::Test {
         "sandbox-child-state": ModVarForms::InitialState,
     };
 
+    #! the exception code of a reflection access refusal
+    const ReflAccessErr = "REFLECTION-ACCESS-ERROR";
+
     #! the files of the fixture directory that the probes use
-    const FixtureFiles = ("OurVarMod.qm", "LibMod.qm", "Forms.ql", "probe.q", "bypath/PathMod.qm");
+    const FixtureFiles = ("OurVarMod.qm", "LibMod.qm", "FirstMod.qm", "Forms.ql", "probe.q", "bypath/PathMod.qm");
 
     constructor() : QUnit::Test("restricted code cannot change a trusted module's state", "1.0", \ARGV) {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
@@ -188,10 +191,22 @@ class ModulePublicVarReadOnlyTest inherits QUnit::Test {
                 "reflection-" + ctx + ".static-get": "1",
                 "reflection-" + ctx + ".global-set": ModVarForms::ErrCode,
                 "reflection-" + ctx + ".global-get": "1",
-                "reflection-" + ctx + ".state": ModVarForms::InitialState,
+                # through an object that the module created, which binds the class to the module's Program; a Program
+                # with PO_NO_PROCESS_CONTROL has fewer privileges than the Program of a module that the host loaded,
+                # so reflection refuses it access to that Program (see "first-module" for a module that it loaded
+                # first)
+                "reflection-" + ctx + ".obj-static-set": ctx == "sandbox" ? ModVarForms::ErrCode : ReflAccessErr,
+                "reflection-" + ctx + ".obj-global-set": ctx == "sandbox" ? ModVarForms::ErrCode : ReflAccessErr,
+                "reflection-" + ctx + ".obj-private-set": ctx == "sandbox" ? ModVarForms::ErrCode : ReflAccessErr,
+                "reflection-" + ctx + ".obj-global-get": ctx == "sandbox" ? "1" : ReflAccessErr,
+                "reflection-" + ctx + ".state": ModVarForms::InitialState + ":0",
             };
         }
         rv += {
+            # the module's Program has PO_NO_PROCESS_CONTROL from the Program that loaded it first
+            "first-module.static-set": ModVarForms::ErrCode,
+            "first-module.global-set": ModVarForms::ErrCode,
+            "first-module.state": "0:1",
             # the errors name what is written and the module, and say what to do instead
             "message": "ok",
             "message-static": "ok",
