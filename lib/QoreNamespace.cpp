@@ -121,7 +121,7 @@ class ParseCommitRuntimeInitFlagHelper {
 public:
     ParseCommitRuntimeInitFlagHelper(QoreProgram* pgm)
             : p(pgm ? qore_program_private::get(*pgm) : nullptr),
-            old(p ? p->parse_commit_runtime_init : false) {
+            old(p ? p->parse_commit_runtime_init.load() : false) {
         if (p) {
             p->parse_commit_runtime_init = true;
         }

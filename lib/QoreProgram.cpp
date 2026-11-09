@@ -1595,7 +1595,7 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     applyParseOptionImplications();
     if (p_pgm->priv->user_requested_exec_mode
         && pwo.parse_options == p_pgm->priv->pwo.parse_options) {
-        exec_mode = p_pgm->priv->exec_mode;
+        exec_mode = p_pgm->priv->exec_mode.load();
         user_requested_exec_mode = true;
         inherited_user_requested_exec_mode = true;
         inherited_exec_mode_parse_options = pwo.parse_options;
@@ -3878,8 +3878,8 @@ void QoreProgram::parse(const char* code, const char* label, ExceptionSink* xsin
 
 void QoreProgram::parseFile(const char* filename, ExceptionSink* xsink, ExceptionSink* wS, int wm,
         bool only_first_except) {
-    priv->only_first_except = only_first_except;
-    priv->parseFile(filename, xsink, wS, wm);
+    // set with the parse lock held (see qore_program_private::parseFile())
+    priv->parseFile(filename, xsink, wS, wm, only_first_except);
 }
 
 void QoreProgram::parsePending(const QoreString* str, const QoreString* lstr, ExceptionSink* xsink, ExceptionSink* wS,

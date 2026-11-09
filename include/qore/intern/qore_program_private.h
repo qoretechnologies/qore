@@ -597,15 +597,14 @@ public:
     TopLevelStatementBlock sb;
 
     // bit field flags
+    // written only by the thread that holds the parse lock, or before the Program can be reached by other threads;
+    // a flag that another thread can write or read concurrently is an atomic below instead, as a write to a bit field
+    // rewrites its neighbors as well
     bool only_first_except : 1,
-        po_locked : 1,
         po_allow_restrict : 1,
-        exec_class : 1,
         base_object : 1,
         requires_exception : 1,
         parsing_done : 1,
-        parse_commit_runtime_init : 1,
-        parse_commit_in_progress : 1,
         ns_const : 1,
         ns_vars : 1,
         expression_mode : 1,
@@ -619,13 +618,27 @@ public:
     */
     std::atomic<bool> parsing_in_progress{false};
 
+    //! true if the parse options cannot be changed; set by QoreProgram::lockOptions() from any thread
+    std::atomic<bool> po_locked{false};
+
+    //! true if the Program has an exec class; set by QoreProgram::setExecClass() from any thread
+    std::atomic<bool> exec_class{false};
+
+    //! true while the commit of a parse runs initialization code; read by other threads (QoreAOT.cpp)
+    std::atomic<bool> parse_commit_runtime_init{false};
+
+    //! true while the commit of a parse initializes constants; read by other threads (findHashDecl(), findEnum())
+    std::atomic<bool> parse_commit_in_progress{false};
+
     //! Set once the program cleanup callbacks have been run for this Program
     /** There are two teardown entry points - waitForTerminationAndClear() and clearNamespaceData()
         - and the callbacks must run exactly once per Program from whichever gets there first.
     */
     std::atomic<bool> pgm_cleanup_called{false};
 
-    qore_exec_mode_t exec_mode = QEM_AST;
+    //! the execution mode of the Program's code; set again by every commit (applyDefaultExecMode()), and read by other
+    //! threads that call the Program's functions (UserVariantBase::recordFastCallExecution())
+    std::atomic<qore_exec_mode_t> exec_mode{QEM_AST};
     bool user_requested_exec_mode = false;
     bool inherited_user_requested_exec_mode = false;
     // LLVM optimization level applied to this Program's JIT-compiled functions;
@@ -1042,14 +1055,10 @@ public:
             : plock(&ma_recursive),
             sb(this),
             only_first_except(false),
-            po_locked(false),
             po_allow_restrict(true),
-            exec_class(false),
             base_object(false),
             requires_exception(false),
             parsing_done(false),
-            parse_commit_runtime_init(false),
-            parse_commit_in_progress(false),
             ns_const(false),
             ns_vars(false),
             expression_mode(false),
@@ -2271,6 +2280,8 @@ public:
 
         yyscan_t lexer;
         QoreParseState state;
+        // the number of exceptions not shown, reported when the parse lock has been released
+        int skipped = 0;
 
         // before the parse switches to the Program: the caller stays the caller of the code that runs for it
         QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
@@ -2328,12 +2339,14 @@ public:
             parseSink = nullptr;
 #endif
             warnSink = nullptr;
+            // read with the parse lock held, which is released below
+            skipped = only_first_except && exceptions_raised > 1 ? exceptions_raised : 0;
             // release program-level parse lock
         }
 
         yylex_destroy(lexer);
-        if (only_first_except && exceptions_raised > 1)
-            fprintf(stderr, "\n%d exception(s) skipped\n\n", exceptions_raised);
+        if (skipped)
+            fprintf(stderr, "\n%d exception(s) skipped\n\n", skipped);
     }
 
     DLLLOCAL void parse(const QoreString *str, const QoreString *lstr, ExceptionSink* xsink, ExceptionSink* wS,
@@ -2546,23 +2559,20 @@ public:
         }
     }
 
-    DLLLOCAL void parseFile(const char* filename, ExceptionSink* xsink, ExceptionSink* wS, int wm) {
+    DLLLOCAL void parseFile(const char* filename, ExceptionSink* xsink, ExceptionSink* wS, int wm,
+            bool first_except_only = false) {
         QORE_TRACE("QoreProgram::parseFile()");
 
         printd(5, "QoreProgram::parseFile(%s)\n", filename);
 
         FILE *fp;
         if (!(fp = fopen(filename, "r"))) {
-            if ((only_first_except && !exceptions_raised) || !only_first_except)
+            if ((first_except_only && !exceptions_raised) || !first_except_only)
                 xsink->raiseErrnoException("PARSE-EXCEPTION", errno, "cannot open qore script '%s'", filename);
             exceptions_raised++;
             return;
         }
         ON_BLOCK_EXIT(fclose, fp);
-
-        applyModernSourceDefault(filename);
-
-        setScriptPath(filename);
 
         // before the parse switches to the Program: the caller stays the caller of the code that runs for it
         QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
@@ -2574,6 +2584,11 @@ public:
         ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         if (*xsink)
             return;
+
+        // the Program's parse state is changed with the parse lock held, which pch holds
+        only_first_except = first_except_only;
+        applyModernSourceDefault(filename);
+        setScriptPath(filename);
 
         parse(fp, filename, xsink, wS, wm);
     }
