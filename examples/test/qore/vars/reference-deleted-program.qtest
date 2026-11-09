@@ -25,7 +25,9 @@
     The driver takes references to a thread_local variable, a global variable and a closure-bound local variable of a
     Program, and uses them through a local variable, a closure-bound variable and a global variable holding them,
     while the Program lives and after it was deleted, in every execution mode and on the IR tier; each use is made by
-    a function of its own, whose caller handles the exception.  Before the fix, every mode crashed.
+    a function of its own, whose caller handles the exception, and by the function that handles it (#5673: the
+    exception of a read skipped the try of its function in the IR, JIT and tiered modes).  Before the fix, every
+    mode crashed.
 */
 class ReferenceDeletedProgramTest inherits QUnit::Test {
     public {
@@ -35,7 +37,8 @@ class ReferenceDeletedProgramTest inherits QUnit::Test {
 const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
 ExecMode mode = Modes{ARGV[0]};
 
-# each use of a reference is made by a function of its own, and the caller handles the exception it raises
+# each use of a reference is made by a function of its own, and the caller handles the exception it raises; use()
+# also reads the references itself and handles the exception
 
 #! reads the lvalue of a reference held by a local variable (a parameter)
 auto sub read_local(reference r) {
@@ -128,6 +131,22 @@ sub use(string kind, string label, reference r) {
         report(label + ", written in a global variable", write_global(kind));
     } catch (hash<ExceptionInfo> ex) {
         report_error(label + ", written in a global variable", ex);
+    }
+    # the same function reads them and handles the exception
+    try {
+        auto v = r;
+        report(label + ", read here in a local variable", v);
+    } catch (hash<ExceptionInfo> ex) {
+        report_error(label + ", read here in a local variable", ex);
+    }
+    try {
+        switch (kind) {
+            case "thread_local": report(label + ", read here in a global variable", gref_thread_local); break;
+            case "global": report(label + ", read here in a global variable", gref_global); break;
+            default: report(label + ", read here in a global variable", gref_local); break;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        report_error(label + ", read here in a global variable", ex);
     }
 }
 
@@ -227,6 +246,8 @@ printf("done\n");
             "thread_local of a live Program, written in a closure: \"ok\"\n"
             "thread_local of a live Program, read in a global variable: 12\n"
             "thread_local of a live Program, written in a global variable: \"ok\"\n"
+            "thread_local of a live Program, read here in a local variable: 13\n"
+            "thread_local of a live Program, read here in a global variable: 13\n"
             "thread_local of a live Program: 13\n"
             "thread_local of a deleted Program, read in a local variable: PROGRAM-ERROR\n"
             "thread_local of a deleted Program, written in a local variable: PROGRAM-ERROR\n"
@@ -234,12 +255,16 @@ printf("done\n");
             "thread_local of a deleted Program, written in a closure: PROGRAM-ERROR\n"
             "thread_local of a deleted Program, read in a global variable: PROGRAM-ERROR\n"
             "thread_local of a deleted Program, written in a global variable: PROGRAM-ERROR\n"
+            "thread_local of a deleted Program, read here in a local variable: PROGRAM-ERROR\n"
+            "thread_local of a deleted Program, read here in a global variable: PROGRAM-ERROR\n"
             "global of a live Program, read in a local variable: 5\n"
             "global of a live Program, written in a local variable: \"ok\"\n"
             "global of a live Program, read in a closure: 11\n"
             "global of a live Program, written in a closure: \"ok\"\n"
             "global of a live Program, read in a global variable: 12\n"
             "global of a live Program, written in a global variable: \"ok\"\n"
+            "global of a live Program, read here in a local variable: 13\n"
+            "global of a live Program, read here in a global variable: 13\n"
             "global of a live Program: 13\n"
             "global of a deleted Program, read in a local variable: PROGRAM-ERROR\n"
             "global of a deleted Program, written in a local variable: PROGRAM-ERROR\n"
@@ -247,18 +272,24 @@ printf("done\n");
             "global of a deleted Program, written in a closure: PROGRAM-ERROR\n"
             "global of a deleted Program, read in a global variable: PROGRAM-ERROR\n"
             "global of a deleted Program, written in a global variable: PROGRAM-ERROR\n"
+            "global of a deleted Program, read here in a local variable: PROGRAM-ERROR\n"
+            "global of a deleted Program, read here in a global variable: PROGRAM-ERROR\n"
             "local of a live Program, read in a local variable: 1\n"
             "local of a live Program, written in a local variable: \"ok\"\n"
             "local of a live Program, read in a closure: 11\n"
             "local of a live Program, written in a closure: \"ok\"\n"
             "local of a live Program, read in a global variable: 1\n"
             "local of a live Program, written in a global variable: \"ok\"\n"
+            "local of a live Program, read here in a local variable: 12\n"
+            "local of a live Program, read here in a global variable: 13\n"
             "local of a deleted Program, read in a local variable: PROGRAM-ERROR\n"
             "local of a deleted Program, written in a local variable: PROGRAM-ERROR\n"
             "local of a deleted Program, read in a closure: PROGRAM-ERROR\n"
             "local of a deleted Program, written in a closure: PROGRAM-ERROR\n"
             "local of a deleted Program, read in a global variable: PROGRAM-ERROR\n"
             "local of a deleted Program, written in a global variable: PROGRAM-ERROR\n"
+            "local of a deleted Program, read here in a local variable: PROGRAM-ERROR\n"
+            "local of a deleted Program, read here in a global variable: PROGRAM-ERROR\n"
             "done\n";
     }
 

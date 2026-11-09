@@ -827,9 +827,11 @@ private:
         site releases it earlier); the AST interpreter releases it when the expression using it completes
 
         @param cached the value in the local's cache
+        @param inst the load whose exception edge an exception raised by the read takes (the referenced lvalue can be
+        gone), or nullptr if the caller checks for an exception itself
     */
     llvm::Value* emitReferenceLocalRead(const void* key, llvm::Value* cached, llvm::Module& module,
-            llvm::Function* llvm_func);
+            llvm::Function* llvm_func, const QoreIRInstruction* inst = nullptr);
 
     //! Emits the reference flag of a value (an i8, non-zero if the value is a reference) at the builder's position
     /** Only a node can be a reference: qore_rt_value_is_reference() is called for a node only, and not at all for
