@@ -29,8 +29,19 @@ class PlainPageHandler inherits AbstractHttpRequestHandler {
         return <HttpResponseInfo>{
             "code": 200,
             "body": "<html><body>index</body></html>",
-            "hdr": {"Content-Type": MimeTypeHtml},
+            # representation headers, which a refusal of the request must not carry
+            "hdr": {"Content-Type": MimeTypeHtml, "ETag": "\"v1\"", "Set-Cookie": "session=1"},
         };
+    }
+}
+
+#! a server that sends a handler's ordinary 2xx response to an extended CONNECT as it is, as before issue #5667
+class NoRefusalHttpServer inherits HttpServer {
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+    }
+
+    private bool refuseNonTunnelExtendedConnectResponse(hash<auto> cx, hash<auto> hdr, hash<auto> rv) {
+        return False;
     }
 }
 
@@ -115,6 +126,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("HTTP/3 extended CONNECT to a plain handler is refused", sub () { testPlain("3.0"); });
         addTestCase("a WebSocket client reports the refusal over HTTP/2", \testPlainWebSocketClient());
         addTestCase("HTTP/2 extended CONNECT to a WebSocket handler is accepted", sub () { testWebSocket("2.0"); });
+        addTestCase("a subclass can send the handler's response unchanged", sub () { testPlain("2.0", True); });
         addTestCase("HTTP/3 extended CONNECT to a WebSocket handler is accepted", sub () { testWebSocket("3.0"); });
         set_return_value(main());
     }
@@ -127,11 +139,12 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     #! creates a TLS server with HTTP/3 enabled: a WebSocket handler at /ws and a plain handler for every other path
-    private hash<auto> setupServer() {
-        HttpServer server(<HttpServerOptionInfo>{
+    private hash<auto> setupServer(*bool no_refusal) {
+        hash<HttpServerOptionInfo> opts({
             "logger": logger,
             "debug": True,
         });
+        HttpServer server = no_refusal ? new NoRefusalHttpServer(opts) : new HttpServer(opts);
         server.setHandler("ws", "^ws", NOTHING, new EchoWsHandler());
         server.setHandler("plain", "", NOTHING, new PlainPageHandler());
         server.setDefaultHandler("plain", new PlainPageHandler());
@@ -162,8 +175,8 @@ l50Xb2GWQesIt9k5jF5IOw==
     /** The request is made on a stream of HttpClientIo directly, and the status is read from the response that the
         stream received, so that the server's answer is checked whatever a WebSocket client does with it.
     */
-    private testPlain(string http_version) {
-        hash<auto> setup = setupServer();
+    private testPlain(string http_version, *bool no_refusal) {
+        hash<auto> setup = setupServer(no_refusal);
         HttpServer server = setup.server;
         on_exit {
             server.stop();
@@ -194,7 +207,14 @@ l50Xb2GWQesIt9k5jF5IOw==
         # the first event carries the response headers, possibly with the body and the end of the stream
         stream.readData(10s);
         *hash<auto> resp = stream.getResponse();
+        if (no_refusal) {
+            assertEq(200, resp.status_code, http_version + ": the handler's response is sent unchanged");
+            return;
+        }
         assertEq(501, resp.status_code, http_version + ": the CONNECT is refused");
+        hash<auto> rhdr = resp.headers ?? {};
+        assertFalse(exists rhdr.etag, http_version + ": no ETag of the handler's representation");
+        assertFalse(exists rhdr."set-cookie", http_version + ": no Set-Cookie of the handler's response");
     }
 
     #! with an explicitly requested HTTP/2, a WebSocket client reports the refusal
