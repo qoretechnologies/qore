@@ -13323,7 +13323,8 @@ QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, st
     // that a read of a variable gave a reference of its own to; a value borrowed from a variable has no cleanup), see
     // design/temporary-lifetime.md
     QoreValue arg_expr = parse_args ? parse_args->get(0) : args->retrieveEntry(0);
-    if ((arg_expr.getType() == NT_VARREF || qore_ir_expr_is_temporary(arg_expr))
+    if ((arg_expr.getType() == NT_VARREF || arg_expr.getType() == NT_SELF_VARREF
+                || arg_expr.getType() == NT_CLASS_VARREF || qore_ir_expr_is_temporary(arg_expr))
             && !isImmediateCleanupFreeType(getExprTypeInfo(arg_expr))) {
         builder.createReleaseOwnedTemp(operands[0], call->loc);
     }

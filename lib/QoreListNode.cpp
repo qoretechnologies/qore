@@ -38,6 +38,8 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
 #include "qore/intern/VarRefNode.h"
+#include "qore/intern/SelfVarrefNode.h"
+#include "qore/intern/StaticClassVarRefNode.h"
 
 #include <limits>
 #include <algorithm>
@@ -718,12 +720,26 @@ QoreListNode* QoreListNode::sortDescending(const ResolvedCallReferenceNode* fr, 
 
 // evaluates an element of a list that needs evaluation, the argument list of a call; returns a referenced value
 static QoreValue qore_list_eval_entry(const QoreValue& exp, ExceptionSink* xsink) {
-    if (exp.getType() == NT_VARREF
-            && !dynamic_cast<const VarRefNewObjectNode*>(exp.get<const VarRefNode>())) {
-        // a variable given as an argument: the argument list takes the value read over, and it is released when the
-        // call returns, as any argument is, also when the read gives it a reference of its own (see
-        // VarRefNode::evalCallArg()); a declaration that creates an object is evaluated as any other expression
-        return exp.get<const VarRefNode>()->evalCallArg(xsink);
+    // a variable given as an argument: the argument list takes the value read over, and it is released when the call
+    // returns, as any argument is, also when the read gives it a reference of its own (see VarRefNode::evalCallArg())
+    switch (exp.getType()) {
+        case NT_VARREF:
+            return exp.get<const VarRefNode>()->evalCallArg(xsink);
+        case NT_SELF_VARREF:
+            return exp.get<const SelfVarrefNode>()->evalCallArg(xsink);
+        case NT_CLASS_VARREF: {
+            // two classes share the type; an AOT program's reference is resolved at run time
+            const AbstractQoreNode* n = exp.getInternalNode();
+            if (const StaticClassVarRefNode* v = dynamic_cast<const StaticClassVarRefNode*>(n)) {
+                return v->evalCallArg(xsink);
+            }
+            if (const DeferredStaticClassMemberRefNode* v = dynamic_cast<const DeferredStaticClassMemberRefNode*>(n)) {
+                return v->evalCallArg(xsink);
+            }
+            break;
+        }
+        default:
+            break;
     }
     ValueEvalOptimizedRefHolder v(exp, xsink);
     if (*xsink) {

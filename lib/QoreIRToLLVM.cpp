@@ -5711,6 +5711,11 @@ bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::
             auto release_fn = module.getOrInsertFunction("qore_rt_release_reference_read",
                     llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
             builder->CreateCall(release_fn, {ref_read_it->second, boxValue(val_it->second, id), xsink_arg});
+            // a read that a later write to the local can release before its last use took a reference of its own
+            // as well (overwritten_local_reads), in a cleanup slot of the value
+            if (invoke_alloca_map.find(id) != invoke_alloca_map.end()) {
+                releaseCleanupForValueId(id, module);
+            }
         } else {
             releaseCleanupForValueId(id, module);
         }
@@ -12040,6 +12045,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     case QoreIROpcode::LoadClosure:
                     case QoreIROpcode::LoadGlobal:
                     case QoreIROpcode::LoadThreadLocal:
+                    case QoreIROpcode::LoadSelfMember:
+                    case QoreIROpcode::LoadStaticVar:
                         value_defined_by_variable_read.insert(inst_ptr->result.id);
                         break;
                     default:
@@ -32240,6 +32247,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
                 builder->CreateCall(release_fn, {ref_read_it->second, boxValue(val_it->second, value_id),
                     xsink_arg});
+                // the reference of its own that a read overwritten before its last use took (overwritten_local_reads)
+                auto alloca_it = invoke_alloca_map.find(value_id);
+                if (alloca_it != invoke_alloca_map.end() && alloca_it->second) {
+                    llvm::Value* own_slot = alloca_it->second;
+                    llvm::Value* own_val = builder->CreateLoad(i64_type, own_slot);
+                    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), own_slot);
+                    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                    builder->CreateCall(decref_fn, {own_val, xsink_arg});
+                }
                 return true;
             } else {
                 auto alloca_it = invoke_alloca_map.find(value_id);

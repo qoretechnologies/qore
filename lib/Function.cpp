@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
 // for the QCF_NO_DOMAIN_THROW violation reporting mode, checked in ~CodeEvaluationHelper()
@@ -1423,9 +1424,14 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                     self_helper.set(self);
                 }
 
-                p = defaultArgList[i].eval(xsink);
-                if (*xsink) {
-                    return -1;
+                {
+                    // the default value is evaluated by the callee, as a statement of its own: a value that it reads
+                    // or creates is not a temporary of the caller's statement (see design/temporary-lifetime.md)
+                    QoreScopedEvalHolder dv(defaultArgList[i], true, xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
+                    p = dv.takeReferencedValue();
                 }
 
                 // process default argument with accepting type's filter; a typed param is always checked, since a

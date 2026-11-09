@@ -2296,7 +2296,8 @@ static void markIRValueUse(std::vector<uint8_t>& uses, QoreIRValue value) {
     running cleanup code) would get the exception again from a call that the AST interpreter runs to its first check
     point of its own, such as a loop.  A pending cancellation is raised at the program's next check point instead.
 */
-// returns true for an instruction that reads a variable, whose value a call that takes it as an argument releases
+// returns true for an instruction that reads a variable or a member of self, whose value a call that takes it as an
+// argument releases
 // when it returns if the read gave the frame a reference of its own; an implicit argument ($1) is not one: a later $1
 // reads its element slot again
 static bool qore_ir_reads_variable_for_call_arg(QoreIROpcode op) {
@@ -2306,6 +2307,36 @@ static bool qore_ir_reads_variable_for_call_arg(QoreIROpcode op) {
         case QoreIROpcode::LoadClosure:
         case QoreIROpcode::LoadGlobal:
         case QoreIROpcode::LoadThreadLocal:
+        case QoreIROpcode::LoadSelfMember:
+        case QoreIROpcode::LoadStaticVar:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// returns true for an operator whose value holds no reference to its operands, so that an operand read from a local
+// can be borrowed from it for the operator: a conversion to bool, a negation, a comparison, a type test, exists,
+// elements and keys
+static bool qore_ir_operator_keeps_no_operand(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::ToBool:
+        case QoreIROpcode::Not:
+        case QoreIROpcode::IsNullOrNothing:
+        case QoreIROpcode::InstanceOfBool:
+        case QoreIROpcode::ExistsAny:
+        case QoreIROpcode::ExistsBool:
+        case QoreIROpcode::ElementsAny:
+        case QoreIROpcode::ElementsInt:
+        case QoreIROpcode::EqAny:
+        case QoreIROpcode::NeAny:
+        case QoreIROpcode::EqHard:
+        case QoreIROpcode::NeHard:
+        case QoreIROpcode::LtAny:
+        case QoreIROpcode::LeAny:
+        case QoreIROpcode::GtAny:
+        case QoreIROpcode::GeAny:
+        case QoreIROpcode::CmpAny:
             return true;
         default:
             return false;
@@ -2656,8 +2687,9 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
         // a write to the local between the load and the call (o.m(o = new T()), o.m(remove o)) can release the value
         // borrowed; the analysis also sees writes that are not stores (an lvalue path rooted at the local) and the
         // writes through a reference; if it is cancelled, it gives every load, and none is borrowed
-        // the candidates: the loads of IR-only locals used only as the base of a method call; the analysis runs only
-        // for a function that has one
+        // the candidates: the loads of IR-only locals used only as the base of a method call, or used once (as the
+        // operand of an operator that keeps no reference to it, see below); the analysis runs only for a function
+        // that has one
         std::vector<std::pair<const QoreIRBasicBlock*, size_t>> candidates;
         for (const auto& block : func.blocks) {
             const auto& insts = block->instructions;
@@ -2667,7 +2699,9 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                     continue;
                 }
                 const uint32_t rid = load->result.id;
-                if (rid >= bases.size() || !bases[rid]) {
+                // the base of a method call, or the operand of an operator that does not keep it, used once
+                if (rid >= bases.size() || (!bases[rid] && (rid >= func.interpreter_value_use_counts.size()
+                        || func.interpreter_value_use_counts[rid] != 1))) {
                     continue;
                 }
                 const LocalVar* lv = static_cast<const QoreIRLocalInstruction*>(load)->local;
@@ -2696,8 +2730,26 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                     || (next->opcode == QoreIROpcode::Invoke && isDotEvalInvokeOpcode(
                         static_cast<const QoreIRInvokeInstruction*>(next)->invoke_opcode));
                 if (dot_eval && !next->operands.empty() && next->operands[0].id == rid) {
-                    borrowed_bases[rid] = 1;
+                    if (bases[rid]) {
+                        borrowed_bases[rid] = 1;
+                    }
                     break;
+                }
+                // the operand of an operator whose value holds no reference to it is borrowed, as the AST
+                // interpreter and native code borrow a value read from a local: an assignment to the local later in
+                // the statement releases the value, which no part of the statement uses any more
+                if (qore_ir_operator_keeps_no_operand(next->opcode)) {
+                    bool uses = false;
+                    for (const QoreIRValue& op : next->operands) {
+                        if (op.id == rid) {
+                            uses = true;
+                            break;
+                        }
+                    }
+                    if (uses) {
+                        borrowed_bases[rid] = 1;
+                        break;
+                    }
                 }
                 // a write to the local can release the value borrowed (one between the load and the call puts the
                 // load in overwritten)

@@ -38,6 +38,7 @@ computed, before the code that follows runs.
 | key or index of an lvalue | `LValueHelper::doHashObjLValue()`, `doListLValue()` | `lowerExpressionInTempScope()` |
 | expression of a `map` or the map expression of a map-select whose value is not used (each element) | `QoreScopedEvalHolder` | per-iteration `PushTempMark` / `DiscardTemps` |
 | expression of a `background` operator, in the new thread | `op_background_thread()` | the same (the thread evaluates the expression) |
+| default value of a parameter, initializer of a class member, of a static class variable and of a hashdecl member, which the callee or the code that creates the object or hash evaluates while the caller's statement runs | `QoreScopedEvalHolder` (`CodeEvaluationHelper::prepareDefaultArgs()`, `qore_class_private::initMember()`, the static variable initializer, `typed_hash_decl_private`) | evaluated without the caller's temp scope |
 
 An expression evaluated again within the same statement - the expression of a `map` whose value is used, of a
 `select`, of `foldl`, also when a `foreach` statement gets the elements of a `map` one by one - keeps one temporary
@@ -74,7 +75,14 @@ expression results needed to execute a statement while the statement is being ev
   closure-bound or holds a reference to another reference;
 - a read of a closure-bound local, a global or a thread-local variable, which is read under the variable's lock; a
   local that a reference is taken of (`\o`) anywhere in its function is read this way in the whole function, also by
-  a statement that does not use the reference.
+  a statement that does not use the reference;
+- a read of a static class variable (`S::s`, `StaticClassVarRefNode`, `LoadStaticVar`) or of a member of `self`
+  (`m`, `SelfVarrefNode`, `LoadSelfMember`), which is read under the lock of the class or the object.
+
+The first change for qore#5638 (033fd1f8cd) said that static class variables and members of `self` already gave
+the same results in every mode: that was so only for a receiver.  As an operand the AST interpreter released such a
+read when the operator returned while the other modes held it, and as an argument native code (JIT, tiered, a qcc
+executable) held it to the end of the statement; both now follow the rule below.
 
 The statement holds the value as long as it uses it, by what it is used for (David, 2026-11-09):
 
@@ -97,22 +105,37 @@ temporary.
 The IR interpreter and native code keep the result of such a load in the temp scope of the statement until
 `DiscardTemps` (a load through a reference is owned: `qore_local_reference_eval()`, `LoadLocal`).  The AST
 interpreter holds it in the innermost `QoreStatementTempScope` (`VarRefNode::evalImpl()`,
-`QoreStatementTempScope::holdRead()`), which takes a reference of its own: the code that evaluated the variable keeps
-its reference, so a value that it keeps after the scope ends (the scope of a condition, or of an operand that is a
-statement of its own) stays valid.
+`SelfVarrefNode::evalImpl()`, `StaticClassVarRefNode::evalImpl()`, `QoreStatementTempScope::holdRead()`), which takes
+a reference of its own: the code that evaluated the variable keeps its reference, so a value that it keeps after the
+scope ends (the scope of a condition, or of an operand that is a statement of its own) stays valid.  Handing the
+read's reference over to the scope instead would make the value borrowed from the scope, which ends before the code
+that evaluated it is done in the scopes that keep their value (a switch value, an lvalue key, an operand of its own,
+the class cast that gave its operand itself, a26c622cb7), so it is not done.  A scope holds its first four values in
+storage of its own (`InlineCapacity`), so a statement allocates no memory for them.
+
+A value that a callee, or the code that creates an object or a hash, evaluates while the caller's statement runs -
+a default argument, a member initializer, a hashdecl member default, a static variable initializer - is evaluated as
+a statement of its own (see [Statement boundaries](#statement-boundaries)): a read that it makes is not a temporary of
+the caller's statement, which it would otherwise be held by (`dflt() + (gd = NOTHING)` with `*E e = gd` destroyed the
+object after the caller's statement in the AST interpreter only).
 
 An argument is released at the return of the call:
 
 - AST interpreter: the argument list of a call reads a variable given as an argument without handing the value to
-  the statement (`VarRefNode::evalCallArg()`, used by `qore_list_private::eval()`), so the argument list holds the only
-  reference that the read took and releases it when the call returns (`CodeEvaluationHelper`);
-- IR interpreter: a value read by `LoadLocal`, `LoadArg`, `LoadClosure`, `LoadGlobal` or `LoadThreadLocal` and used
+  the statement (`evalCallArg()` of `VarRefNode`, `SelfVarrefNode` and `StaticClassVarRefNode`, used by
+  `qore_list_private::eval()`; a declaration that creates an object, `VarRefNewObjectNode`, overrides it with a normal
+  evaluation), so the argument list holds the only reference that the read took and releases it when the call returns
+  (`CodeEvaluationHelper`);
+- IR interpreter: a value read by `LoadLocal`, `LoadArg`, `LoadClosure`, `LoadGlobal`, `LoadThreadLocal`,
+  `LoadSelfMember` or `LoadStaticVar` and used
   once, as an argument of a call in its block or temp scope, is consumed by the call as a temporary created by a call
   is (`buildValueUseCounts()`: `consumed_call_args`); only a read that owns its value has a cleanup entry to release;
 - native code: such a read is released by `QoreIRToLLVM::releaseConsumedCallArgs()` when the call returns, or passed
   to a `_consume_args` helper with its cleanup slot.  A read through a reference keeps its reference in the slot of
   its read site (`emitReferenceLocalRead()`), which holds the cached value's predecessor when the local holds no
-  reference, so the slot is released only if it holds the value read (`qore_rt_release_reference_read()`);
+  reference, so the slot is released only if it holds the value read (`qore_rt_release_reference_read()`).  A read
+  that a later write to the local can release before its last use takes a second reference of its own, in a cleanup
+  slot of the value (`overwritten_local_reads`: `f(v, \x)`, `f(v, (v = x))`), which is released as well;
 - a builtin conversion that the lowering runs inline (`lowerBuiltinTypeConversion()`: `ToBool`, `ToInt`, `ToFloat`,
   `ToString`) releases its argument after it with `ReleaseOwnedTemp`, as the call it replaces would.
 
@@ -120,7 +143,12 @@ These reads are not held:
 
 - a value borrowed from the variable: a local that holds the value itself, and a variable that holds a weak
   reference, which reads as its target; no mode keeps such a value after the variable is assigned another value in
-  the same statement (`o.name() + (o = NOTHING)` destroys the object before the rest of the statement runs);
+  the same statement (`o.name() + (o = NOTHING)` and `(o && (o = NOTHING))` destroy the object before the rest of the
+  statement runs).  The IR interpreter reads a local's value from its slot cache with a reference of its own, which
+  kept the operand of an operator to the end of the statement; a load of an IR-only local that is used once, as the
+  operand of an operator whose value keeps no reference to it (`ToBool`, `Not`, a comparison, `InstanceOfBool`,
+  `Exists*`, `Elements*`, `IsNullOrNothing`), and that no write to the local can release before it is used, is
+  borrowed as the base of a method call is (`interpreter_borrowed_bases`, `qore_ir_operator_keeps_no_operand()`);
 - the reads made while a reference is resolved: the lvalue expression of a reference is evaluated in the context of
   the code that created the reference, with the temp scope of the statement suspended
   (`QoreStatementTempScopeSuspension`, the first member of `RuntimeReferenceHelperBase`), so the variable that it

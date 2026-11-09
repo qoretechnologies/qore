@@ -758,6 +758,18 @@ QoreValue VarRefNewObjectNode::constructValue(ExceptionSink* xsink) const {
     }
 }
 
+QoreValue VarRefNewObjectNode::evalCallArg(ExceptionSink* xsink) const {
+    bool needs_deref = true;
+    QoreValue v = evalImpl(needs_deref, xsink);
+    if (*xsink) {
+        if (needs_deref) {
+            v.discard(xsink);
+        }
+        return QoreValue();
+    }
+    return needs_deref ? v : v.refSelf();
+}
+
 QoreValue VarRefNewObjectNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);

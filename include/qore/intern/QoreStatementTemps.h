@@ -33,6 +33,7 @@
 #define _QORE_INTERN_QORESTATEMENTTEMPS_H
 
 #include <unordered_map>
+#include <type_traits>
 #include <memory>
 #include <vector>
 
@@ -134,27 +135,32 @@ private:
         const void* site;
         QoreValue value;
     };
+    static_assert(std::is_trivially_copyable<Entry>::value, "the entries are copied as raw memory");
 
     //! the number of temporaries above which the sites are looked up in an index instead of by a scan
     static constexpr size_t IndexThreshold = 16;
-    //! the largest capacity of the vector of entries that an ended scope leaves to the next scope of the thread
-    static constexpr size_t SpareCapacity = 64;
-
-    //! the vector of entries that an ended scope left to the next scope of the thread, so that each statement that
-    //! holds a temporary does not allocate one
-    DLLLOCAL static thread_local std::vector<Entry> spare_entries;
+    //! the number of temporaries that the scope holds without allocating memory: most statements hold a few
+    static constexpr size_t InlineCapacity = 4;
 
     //! the enclosing scope
     QoreStatementTempScope* prev;
     //! the exception sink for the destructors run by releasing the temporaries
     ExceptionSink* xsink;
-    //! the temporaries, in the order of their creation
-    std::vector<Entry> entries;
+    //! the temporaries, in the order of their creation: in inline_entries, or in heap_entries when there are more
+    Entry* entries;
+    //! the number of temporaries held
+    size_t count = 0;
+    //! the number of entries that entries has room for
+    size_t capacity = InlineCapacity;
+    //! the storage of the first temporaries, which needs no initialization
+    alignas(Entry) unsigned char inline_entries[InlineCapacity * sizeof(Entry)];
+    //! the storage of the temporaries when there are more than InlineCapacity
+    std::unique_ptr<Entry[]> heap_entries;
     //! site -> position in entries, for a statement that holds many temporaries (a large hash literal with a chain
     //! in each value, for example), so that each hold does not scan them all
     std::unique_ptr<std::unordered_map<const void*, size_t>> site_index;
 
-    //! returns the position of the entry of the site, or entries.size() if there is none
+    //! returns the position of the entry of the site, or count if there is none
     DLLLOCAL size_t find(const void* site);
 
     //! puts the value at the end of the entries; returns the value that the site held before, if any

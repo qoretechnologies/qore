@@ -93,7 +93,7 @@ public:
 
         @return the value read, referenced for the caller
     */
-    DLLLOCAL QoreValue evalCallArg(ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalCallArg(ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const;
@@ -525,6 +525,9 @@ public:
     DLLLOCAL const QoreValue& getNewArgs() const {
         return new_args;
     }
+
+    //! a declaration that creates an object, given as an argument, is evaluated as any other expression
+    DLLLOCAL virtual QoreValue evalCallArg(ExceptionSink* xsink) const override;
 
 protected:
     enum vrn_type_e : unsigned char {
