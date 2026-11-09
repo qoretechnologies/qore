@@ -51,6 +51,35 @@ temps between the raising statement and the `try` — is released by the
 (`try.merge`), or, if the exception leaves the frame after all, by the full drain
 in `returnAfterUnhandledException()`.
 
+## Leaving the frame: temps before handlers, scope by scope
+
+When an exception (or a `thread_exit`) leaves the frame without a handler in it, every exit path goes through
+`unwindForException()` (directly, or through `returnAfterUnhandledException()`).  It leaves the open scopes of
+blocks with `on_exit` / `on_error` / `on_success` handlers from the innermost, as the AST interpreter unwinds the
+blocks (`StatementBlock::execIntern()`): for each scope it releases the temps of the statements of the block, then
+runs the block's handlers; the temps of the statements that enclose every scope, and the rest of the frame's values,
+are released last (`cleanupValues()`).
+
+`ScopeEnter` records, with the number of handlers registered before the scope (`IRScopeEntry::handler_start`), the
+number of temp scopes open then (`IRScopeEntry::temp_mark_count`): those are the marks of the statements that
+enclose the block, such as the list of the `foreach` whose body the block is.  The marks pushed after it belong to
+the statements of the block, and `releaseScopeTemps()` drains back to the first of them, with its sentinel
+(`cleanupToTempMark()`).  A `LandingPad` drains the same way before it runs the handlers of each scope that the
+exception left inside the `try` body.
+
+Before (issue #5639), the paths that leave the frame did one of two things, neither of them the AST order:
+
+- `returnAfterUnhandledException()`, the exit of the calls, ran all the handlers first and released the values
+  after them, so the temporaries of the statement that raised the exception outlived the `on_exit` handler of its
+  block (`on_exit` then `~temp`, where the AST gives `~temp` then `on_exit`);
+- most other opcodes released all the values first and left the handlers to the scope exit guard, which released the
+  list of a `foreach` statement before the handlers of its body ran, where the AST runs them first.
+
+Native code leaves the frame in the AST order; a function that runs on the IR tier until it is compiled showed the
+IR order in its first calls.  `examples/test/qore/statements/on-exit-temporary-order/on-exit-temporary-order.qtest`
+records the order for exceptions, returns and breaks in every execution mode, on the IR tier of tiered execution and
+as a qcc-compiled executable.
+
 ## Every in-frame branch follows the rule
 
 `QoreIRBuilder::append()` records the builder's `exception_temp_scope_id` - the innermost open mark, or 0 for a

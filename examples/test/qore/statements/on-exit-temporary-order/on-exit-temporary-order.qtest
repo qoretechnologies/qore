@@ -1,0 +1,144 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class OnExitTemporaryOrderTest
+
+#! Tests that the temporaries of a statement are released before the handlers of the blocks it leaves run
+/** When an exception leaves a statement, the AST interpreter releases the statement's temporaries as it unwinds it;
+    the block then runs its on_exit and on_error handlers, and the statements that enclose the block release their
+    temporaries after them, such as the list of a foreach statement whose body has the handlers.  The IR tier ran the
+    handlers of a function that the exception left before it released the temporaries (issue #5639).  The worker
+    records the order of these events when an exception, a return or a break leaves the blocks, and its output must
+    be that of the AST interpreter in every execution mode, on the IR tier of tiered execution and as a qcc-compiled
+    executable.
+*/
+class OnExitTemporaryOrderTest inherits QUnit::Test {
+    public {
+        #! the output of one round of the worker, as with the AST interpreter
+        const Expected = (
+            "exit handler: +t ~t on_exit caught CASE-ERROR",
+            "error handler: +t ~t on_error caught CASE-ERROR",
+            "success handler: +t ~t on_success",
+            "two handlers: +t ~t on_exit 2 on_exit 1 caught CASE-ERROR",
+            "nested blocks: +t ~t inner on_exit outer on_exit caught CASE-ERROR",
+            "nested block local: +local +t ~t inner on_exit ~local outer on_exit caught CASE-ERROR",
+            "function local: +local +t ~t on_exit ~local caught CASE-ERROR",
+            "return raises: +t ~t on_exit caught CASE-ERROR",
+            "loop body raises: +t ~t on_exit caught CASE-ERROR",
+            "method chain: +t ~t on_exit caught CASE-ERROR",
+            "throw statement: +t ~t on_exit caught CASE-ERROR",
+            "if block: +t ~t on_exit caught CASE-ERROR",
+            "switch case: +t ~t on_exit caught CASE-ERROR",
+            "catch rethrows: +t ~t catch on_exit caught CASE-ERROR",
+            "try handler: +t ~t on_exit catch",
+            "destructor raises: ~throwing on_exit caught CASE-ERROR DTOR-ERROR",
+            "caller frame: +caller +t ~t on_exit ~caller caller on_exit caught CASE-ERROR",
+            "foreach in handler block: +l1 +l2 +t ~t ~l2 ~l1 on_exit caught CASE-ERROR",
+            "handler in foreach body: +l +t ~t on_exit ~l caught CASE-ERROR",
+            "handlers in and around foreach: +l +t ~t inner on_error ~l outer on_error caught CASE-ERROR",
+            "division in foreach body: +l +t ~t on_exit ~l caught DIVISION-BY-ZERO",
+            "throw in foreach body: +l +t ~t on_exit ~l caught CASE-ERROR",
+            "rethrow in foreach body: +l +t ~t catch on_exit ~l caught CASE-ERROR",
+            "foreach in loop body: +l +t ~t ~l on_exit caught CASE-ERROR",
+            "foreach body in try: +l +t ~t on_exit ~l catch",
+            "foreach in try: +l +t ~t ~l on_exit catch",
+            "foreach in block with local: +local +l +t ~t ~l ~local on_exit caught CASE-ERROR",
+            "block with local in foreach body: +l +local +t ~t ~local on_exit ~l caught CASE-ERROR",
+            "return value: +t ~t on_exit",
+            "break in condition: +t ~t on_exit",
+            "break in foreach: +l +t ~t on_exit ~l after",
+            "return in foreach: +l +t ~t on_exit ~l",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+        #! the output expected from the worker
+        list<string> expected = ();
+    }
+
+    constructor() : QUnit::Test("OnExitTemporaryOrder", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        # a qore run from the PATH has no directory in its name; its library and qcc are found next to it
+        if (qore_bin !~ /\//) {
+            foreach string dir in ((ENV.PATH ?? "").split(":")) {
+                if (dir && is_executable(dir + "/" + qore_bin)) {
+                    qore_bin = dir + "/" + qore_bin;
+                    break;
+                }
+            }
+        }
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        worker = get_script_dir() + DirSep + "on-exit-temporary-order-worker.q";
+
+        # the worker runs every case in three rounds
+        for (int i = 0; i < 3; ++i) {
+            expected += sprintf("round %d", i);
+            expected += Expected;
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("IR tier", \testIrTier());
+        addTestCase("compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        string ast = run("ast");
+        checkOutput("ast", ast);
+        foreach string mode in ("ir", "jit", "tiered") {
+            string out = run(mode);
+            checkOutput(mode, out);
+            assertEq(ast, out, mode + " as ast");
+        }
+        # tiered execution after promotion to IR and JIT
+        string out = run("tiered", "--jit-ir-threshold=1 --jit-jit-threshold=1 ");
+        checkOutput("tiered, promoted", out);
+        assertEq(ast, out, "tiered, promoted as ast");
+    }
+
+    #! every call of every case runs on the IR tier of tiered execution
+    testIrTier() {
+        checkOutput(ExecModeHarness::IRTierName, ExecModeHarness::run_ir_tier(sprintf(
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=tiered %s", libqore_dir, libqore_dir, qore_bin,
+            worker)));
+    }
+
+    testCompiled() {
+        if (!is_file(qcc_bin)) {
+            testSkip(sprintf("no qcc binary at %y", qcc_bin));
+        }
+        TmpDir tmp("qore-on-exit-temporary-order-");
+        string exe = tmp.path + DirSep + "worker";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe)));
+    }
+
+    private string run(string mode, string opts = "") {
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s%s",
+            libqore_dir, libqore_dir, qore_bin, mode, opts, worker));
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(expected, lines, label + ": " + out);
+    }
+}
