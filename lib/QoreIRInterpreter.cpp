@@ -8391,7 +8391,9 @@ next_instruction:
                             ? entry : QoreValue(entry.getAsBigInt());
                     }
                 }
-                setValueSlotDirect(values, inst->result.id, result);
+                // a value that the NaN-boxed representation cannot hold is a node that the slot owns: it is released
+                // with the slot's cleanup (it leaked; found with the review of qore#5654)
+                setOwnedValueSlot(values, cleanup, inst->result.id, result, xsink);
                 ++ip;
                 break;
             }
@@ -8408,7 +8410,9 @@ next_instruction:
                             ? entry : QoreValue(entry.getAsFloat());
                     }
                 }
-                setValueSlotDirect(values, inst->result.id, result);
+                // a value that the NaN-boxed representation cannot hold is a node that the slot owns: it is released
+                // with the slot's cleanup (it leaked; found with the review of qore#5654)
+                setOwnedValueSlot(values, cleanup, inst->result.id, result, xsink);
                 ++ip;
                 break;
             }
