@@ -2420,6 +2420,28 @@ static const QoreClass* findAOTClassByPathInContext(QoreProgram* pgm, const char
     return findAOTClassByPath(pgm, class_path, pseudo);
 }
 
+//! Returns the method of the class that declares a recorded variant, as the parser bound it
+/** A recorded variant names the class that declares it (variant_class_path), so the method is that class's own
+    method of the name, with the static-ness of the call; only a class without one inherited it.  The class's own
+    method may be private:internal: a lookup through the class hierarchy without a class context skips it and finds
+    a base class method of the same name, whose variant with the same signature text (a method without parameters
+    has an empty one) would then be called instead.
+*/
+static const QoreMethod* findAOTVariantClassLocalMethod(const QoreClass* qc, const char* method_name,
+        bool is_static) {
+    if (!qc || !method_name || !*method_name) {
+        return nullptr;
+    }
+    const char* name = method_name;
+    if (const char* last_sep = strrchr(method_name, ':')) {
+        if (last_sep > method_name && *(last_sep - 1) == ':') {
+            name = last_sep + 1;
+        }
+    }
+    const qore_class_private* qcp = qore_class_private::get(*qc);
+    return is_static ? qcp->parseFindLocalStaticMethod(name) : qcp->parseFindLocalMethod(name);
+}
+
 static const QoreMethod* findAOTMethodByName(const QoreClass* qc, const char* method_name) {
     if (!qc || !method_name || !*method_name) {
         return nullptr;
@@ -2439,7 +2461,12 @@ static const AbstractQoreFunctionVariant* findAOTMethodVariantByRef(
     if (method_ref.variant_class_path && *method_ref.variant_class_path) {
         const QoreClass* variant_qc = findAOTClassByPath(pgm, method_ref.variant_class_path, pseudo);
         if (variant_qc) {
-            if (const QoreMethod* m = findAOTMethodByName(variant_qc, method_ref.method_name)) {
+            const QoreMethod* m = findAOTVariantClassLocalMethod(variant_qc, method_ref.method_name,
+                method->isStatic());
+            if (!m) {
+                m = findAOTMethodByName(variant_qc, method_ref.method_name);
+            }
+            if (m) {
                 variant_method = m;
             }
         }
@@ -2483,9 +2510,13 @@ static const AbstractQoreFunctionVariant* findAOTStaticMethodVariantByRef(
             // signatures).  The static issueModuleCmd operates on getProgram() (the AOT module's
             // own program) instead of the receiver object, sending the command to the wrong
             // QoreProgram.  Match the original method kind: instance -> instance, static -> static.
-            const QoreMethod* m = method->isStatic()
-                ? findAOTStaticCallMethodByName(variant_qc, method_ref.method_name)
-                : findAOTInstanceMethod(variant_qc, method_ref.method_name, nullptr);
+            const QoreMethod* m = findAOTVariantClassLocalMethod(variant_qc, method_ref.method_name,
+                method->isStatic());
+            if (!m) {
+                m = method->isStatic()
+                    ? findAOTStaticCallMethodByName(variant_qc, method_ref.method_name)
+                    : findAOTInstanceMethod(variant_qc, method_ref.method_name, nullptr);
+            }
             if (m) {
                 variant_method = m;
             }
