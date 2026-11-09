@@ -1529,10 +1529,31 @@ QoreSandboxManager* qore_program_private::getSandboxManagerRef() {
     return nullptr;
 }
 
-bool qore_program_has_sandbox_manager(const QoreProgram* pgm) {
-    // only whether there is one is read: the manager itself is not used, so it needs no reference
-    return pgm && qore_program_private::get(*const_cast<QoreProgram*>(pgm))->sandbox_manager.load(
-        std::memory_order_acquire);
+bool qore_program_is_sandboxed(const QoreProgram* pgm) {
+    if (!pgm) {
+        return false;
+    }
+    const qore_program_private* pp = qore_program_private::get(*const_cast<QoreProgram*>(pgm));
+    // the flag is set whenever a manager is set; the manager is read as well, so that the answer never depends on
+    // the order of the two stores
+    return pp->sandboxed.load(std::memory_order_acquire) || pp->sandbox_manager.load(std::memory_order_acquire);
+}
+
+void qore_program_mark_sandboxed(QoreProgram& pgm) {
+    qore_program_private::get(pgm)->sandboxed.store(true, std::memory_order_release);
+}
+
+void qore_program_set_creator_sandbox(QoreProgram& pgm) {
+    // a Program created by sandboxed code: by code of a sandboxed Program, or by any code that a sandbox governs
+    // (trusted library code called by sandboxed code, which can be given the source to parse)
+    if (qore_program_is_sandboxed(getProgram())) {
+        qore_program_mark_sandboxed(pgm);
+        return;
+    }
+    ReferenceHolder<QoreSandboxManager> sm(qore_caller_sandbox_ref(), nullptr);
+    if (sm) {
+        qore_program_mark_sandboxed(pgm);
+    }
 }
 
 //------------------------------------------------------------------------------

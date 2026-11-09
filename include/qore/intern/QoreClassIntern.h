@@ -3649,7 +3649,7 @@ public:
                 // see getReferencedSourceProgram()
                 AutoLocker al(gate.asl_lock);
                 released_spgm.store(pgm);
-                released_sandboxed.store(qore_program_has_sandbox_manager(pgm));
+                released_sandboxed.store(qore_program_is_sandboxed(pgm));
                 taken = spgm.compare_exchange_strong(expected, nullptr);
             }
             if (taken) {
@@ -3665,7 +3665,7 @@ public:
                 p = spgm.load();
                 if (p) {
                     released_spgm.store(p);
-                    released_sandboxed.store(qore_program_has_sandbox_manager(p));
+                    released_sandboxed.store(qore_program_is_sandboxed(p));
                     p = spgm.exchange(nullptr);
                 }
             }

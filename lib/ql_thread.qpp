@@ -52,6 +52,7 @@
 #include <algorithm>
 #include <numeric>
 #include <atomic>
+#include <optional>
 
 // internal struct for call_async thread parameters
 struct CallAsyncParams {
@@ -1332,9 +1333,12 @@ release() {
     function from clear_thread_cancel(), which discards the request irrecoverably: a thread cannot
     re-cancel itself.
 
-    The deferral is released when \a cleanup returns, including when it throws, and calls nest.  The destructor of
-    an object of a sandboxed class released in \a cleanup does not run with cancellation deferred; see
-    @ref cancel_destructors.
+    The deferral is released when \a cleanup returns, including when it throws, and calls nest.
+
+    Sandboxed code is never deferred (see @ref cancel_security): called by code of a sandboxed %Program, this
+    function only calls \a cleanup; called by trusted code, the sandboxed code that \a cleanup calls (a callback, a
+    method of a sandboxed class, the destructor of an object of a sandboxed class) runs with cancellation, program
+    interrupts and sandbox limits not deferred.
 
     @param cleanup the @ref call_reference "call reference" or @ref closure "closure" to call with
     cancellation deferred
@@ -1392,8 +1396,14 @@ auto defer_thread_cancel(code cleanup, ...) [dom=THREAD_CONTROL;flags=MODULE_OWN
     }
     // declared first so that it is destroyed last: the deferral covers the argument list's own
     // teardown, which can run destructors.  The helper's destructor releases it on every path,
-    // including when the call throws.
-    QoreCancelDeferralHelper cdh;
+    // including when the call throws.  Sandboxed code never runs with cancellation deferred (see
+    // "Sandboxed code never runs deferred" in design/cooperative-cancellation.md): called by a sandboxed
+    // Program, the function only calls the code; called by trusted code, the deferral is suspended again
+    // while sandboxed code that the cleanup calls runs (ProgramThreadCountContextHelper)
+    std::optional<QoreCancelDeferralHelper> cdh;
+    if (!qore_program_is_sandboxed(getProgram())) {
+        cdh.emplace();
+    }
     ReferenceHolder<QoreListNode> vargs(xsink);
     // if there are arguments to pass, create the argument list by copying the current list after
     // the callable

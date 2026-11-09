@@ -3573,7 +3573,7 @@ ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
         if (entry_frame.isActive()) {
             entry_frame.exit(xsink);
         }
-        restoreDestructorDeferral();
+        restoreDeferral();
         return;
     }
     // the exit handler runs while the thread is still in the Program, before anything is restored
@@ -3581,22 +3581,26 @@ ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
     restoreContext();
 }
 
-void ProgramThreadCountContextHelper::suspendDestructorDeferral(ThreadData* td) {
-    assert(!dtor_defer_suspended);
+void ProgramThreadCountContextHelper::suspendDeferral(ThreadData* td) {
+    assert(!defer_suspended);
+    saved_defer = td->cancel_defer_count;
     saved_dtor_defer = td->dtor_cancel_defer_count;
+    td->cancel_defer_count = 0;
     td->dtor_cancel_defer_count = 0;
-    dtor_defer_suspended = true;
+    defer_suspended = true;
 }
 
-void ProgramThreadCountContextHelper::restoreDestructorDeferral() {
-    if (!dtor_defer_suspended) {
+void ProgramThreadCountContextHelper::restoreDeferral() {
+    if (!defer_suspended) {
         return;
     }
     ThreadData* td = thread_data.get();
-    // the destructors that ran in between restored the depths they changed
+    // added, not assigned: the deferral pushed for the rest of a thread's life by end_thread_cancellation() can be
+    // pushed while the context is active (the thread function returned in its Program), and stays
     assert(!td->dtor_cancel_defer_count);
-    td->dtor_cancel_defer_count = saved_dtor_defer;
-    dtor_defer_suspended = false;
+    td->cancel_defer_count += saved_defer;
+    td->dtor_cancel_defer_count += saved_dtor_defer;
+    defer_suspended = false;
 }
 
 void ProgramThreadCountContextHelper::restoreContext() {
@@ -3617,7 +3621,7 @@ void ProgramThreadCountContextHelper::restoreContext() {
     }
     // the call budgets started when the Program was entered end with the call
     td->sandbox_budgets.leave(td->tid, this);
-    restoreDestructorDeferral();
+    restoreDeferral();
     td->current_pgm = old_pgm;
     td->tlpd = old_tlpd;
     td->current_pgm_ctx = old_ctx;
@@ -3641,10 +3645,10 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     // variable access, so only skip setup when the current program already has
     // a live thread-local program data frame.
     if (pgm == td->current_pgm && td->tlpd) {
-        // sandboxed code called from the destructor of a trusted class (a builtin class's destructor runs in its
-        // caller's Program) does not get the destructor's deferral
-        if (td->dtor_cancel_defer_count && qore_program_has_sandbox_manager(pgm)) {
-            suspendDestructorDeferral(td);
+        // sandboxed code never runs with cancellation deferred, also when it is called in its own Program from
+        // code that defers it (a builtin class's destructor runs in its caller's Program; thread teardown)
+        if ((td->cancel_defer_count || td->dtor_cancel_defer_count) && qore_program_is_sandboxed(pgm)) {
+            suspendDeferral(td);
         }
         // the current Program is not always the entered one: it is also set to parse or commit a Program, or to
         // look up its metadata, and code that runs then enters the Program here, which runs its entry handler; a
@@ -3699,11 +3703,12 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         ReferenceHolder<QoreSandboxManager> sm(pp->getSandboxManagerRef(), nullptr);
         if (sm) {
             td->sandbox_budgets.enter(td->tid, *sm, this);
-            // sandboxed code called from the destructor of a trusted class does not get the destructor's deferral
-            if (td->dtor_cancel_defer_count) {
-                suspendDestructorDeferral(td);
-            }
         }
+    }
+    // sandboxed code never runs with cancellation deferred (a trusted destructor, a cleanup critical section or thread
+    // teardown that calls it); a Program that sandboxed code created has no manager of its own, so the flag decides
+    if ((td->cancel_defer_count || td->dtor_cancel_defer_count) && qore_program_is_sandboxed(pgm)) {
+        suspendDeferral(td);
     }
 
     // the entry handler runs once the thread is in the Program, and before any of the Program's code, including its
@@ -7573,11 +7578,11 @@ QoreDestructorCancelHelper::~QoreDestructorCancelHelper() {
             --td->dtor_cancel_defer_count;
         }
     } else if (suspended) {
-        // destructors of the class's members ran in between and restored the depths they changed
-        assert(!td->cancel_defer_count);
+        // added, not assigned, as in ProgramThreadCountContextHelper::restoreDeferral(): the code run in between
+        // restored the depths it changed
         assert(!td->dtor_cancel_defer_count);
-        td->cancel_defer_count = saved_defer;
-        td->dtor_cancel_defer_count = saved_dtor_defer;
+        td->cancel_defer_count += saved_defer;
+        td->dtor_cancel_defer_count += saved_dtor_defer;
     }
 }
 

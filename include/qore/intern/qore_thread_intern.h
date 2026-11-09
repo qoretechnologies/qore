@@ -948,8 +948,19 @@ private:
     bool skip_dtor = false;
 };
 
-//! Returns true if the Program has a sandbox manager: code that it defines is sandboxed
-DLLLOCAL bool qore_program_has_sandbox_manager(const QoreProgram* pgm);
+//! Returns true if the code of the Program is sandboxed
+/** True if the Program has or had a sandbox manager, or was created by sandboxed code (see
+    qore_program_set_creator_sandbox()), or is a user module that a sandboxed Program loaded by a path it chose;
+    false for a Program that trusted code created (the host, a module loaded by trusted code).  Never changes from true
+    to false.
+*/
+DLLLOCAL bool qore_program_is_sandboxed(const QoreProgram* pgm);
+
+//! Marks the Program's code as sandboxed (see qore_program_is_sandboxed())
+DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
+
+//! Marks a Program that Qore code creates (Program::constructor()) as sandboxed if its creator is sandboxed
+DLLLOCAL void qore_program_set_creator_sandbox(QoreProgram& pgm);
 
 
 //! Waits on a condition variable until it is signalled, the timeout expires, or the thread is cancelled or interrupted
@@ -1659,26 +1670,29 @@ protected:
     ExceptionSink* xsink = nullptr;
     //! the thread's entry into the Program, for its thread entry and exit handlers
     ThreadEntryHandlerFrame entry_frame;
-    //! the destructor-deferral depth of the thread, saved while code of a Program with a sandbox manager runs
+    //! the cancellation-deferral depths of the thread, saved while code of a sandboxed Program runs
+    unsigned saved_defer = 0;
     unsigned saved_dtor_defer = 0;
     bool restore = false;
     bool init_tlpd = false;
     bool thread_count_incremented = false;
-    //! true if the destructor deferral of the thread was suspended when the Program was entered
-    bool dtor_defer_suspended = false;
+    //! true if the cancellation deferral of the thread was suspended when the Program was entered
+    bool defer_suspended = false;
 
 private:
     //! restores the thread's context as it was before set() switched it
     DLLLOCAL void restoreContext();
 
-    //! Suspends the deferral of a trusted destructor while the code of a Program with a sandbox manager runs
-    /** Sandboxed code that a trusted destructor calls (a method a sandboxed subclass overrides, a callback) must not
-        run with cancellation deferred; see QoreDestructorCancelHelper
+    //! Suspends every cancellation deferral of the thread while the code of a sandboxed Program runs
+    /** Sandboxed code never runs with cancellation deferred: not when a trusted destructor calls it (a method a
+        sandboxed subclass overrides, a callback), and not when trusted code runs it in a cleanup critical section
+        (defer_thread_cancel(), QoreCancelDeferralHelper) or in thread teardown; see QoreDestructorCancelHelper and
+        "Sandboxed code never runs deferred" in design/cooperative-cancellation.md
     */
-    DLLLOCAL void suspendDestructorDeferral(ThreadData* td);
+    DLLLOCAL void suspendDeferral(ThreadData* td);
 
-    //! Restores the deferral suspended by suspendDestructorDeferral()
-    DLLLOCAL void restoreDestructorDeferral();
+    //! Restores the deferral suspended by suspendDeferral()
+    DLLLOCAL void restoreDeferral();
 };
 
 class ProgramRuntimeParseContextHelper {

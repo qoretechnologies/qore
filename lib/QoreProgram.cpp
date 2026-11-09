@@ -4947,6 +4947,8 @@ void QoreProgram::setSandboxManager(QoreSandboxManager* sm) {
         if (sm) {
             // referenced before it is published: a lookup that finds it without the lock must find it alive
             sm->ref();
+            // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
+            priv->sandboxed.store(true, std::memory_order_release);
         }
         old = priv->sandbox_manager.exchange(sm, std::memory_order_acq_rel);
     }

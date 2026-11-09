@@ -4776,12 +4776,12 @@ bool qore_class_private::isSandboxedCode() const {
     }
     // the current Program cannot be deleted while the thread runs in it
     if (p == getProgram()) {
-        return qore_program_has_sandbox_manager(p);
+        return qore_program_is_sandboxed(p);
     }
     // spgm is cleared under the lock before the Program can be freed (see getReferencedSourceProgram())
     AutoLocker al(gate.asl_lock);
     p = spgm.load();
-    return p ? qore_program_has_sandbox_manager(p) : released_sandboxed.load();
+    return p ? qore_program_is_sandboxed(p) : released_sandboxed.load();
 }
 
 void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) const {

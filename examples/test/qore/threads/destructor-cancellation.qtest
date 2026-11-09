@@ -216,6 +216,115 @@ class TrustedGrower {
     }
 }
 
+#! A trusted class whose destructor waits for a gate and then allocates memory without a bound
+class TrustedGateGrower {
+    private {
+        Counter entered;
+        Counter gate;
+    }
+
+    constructor(Counter entered, Counter gate) {
+        self.entered = entered;
+        self.gate = gate;
+    }
+
+    destructor() {
+        entered.dec();
+        # deferred: a cancellation made meanwhile does not end the wait
+        gate.waitForZero();
+        list<string> l = ();
+        while (True) {
+            l += strmul("x", 4096);
+        }
+    }
+}
+
+#! A flag shared between threads
+class DtorFlag {
+    public {
+        bool signalled = False;
+    }
+}
+
+#! A trusted class whose destructor waits once on a Condition and reports whether the wait was signalled
+class TrustedCondWaiter {
+    private {
+        Queue ev;
+        Mutex m;
+        Condition c;
+        Counter entered;
+        DtorFlag state;
+    }
+
+    constructor(Queue ev, Mutex m, Condition c, Counter entered, DtorFlag state) {
+        self.ev = ev;
+        self.m = m;
+        self.c = c;
+        self.entered = entered;
+        self.state = state;
+    }
+
+    destructor() {
+        m.lock();
+        on_exit m.unlock();
+        entered.dec();
+        # one wait: it returns when the Condition is signalled, not when a deferred cancellation is requested
+        int rc = c.wait(m, DestructorCancellationTest::T);
+        ev.push(sprintf("cond:%d:%s", rc, state.signalled ? "signalled" : "spurious"));
+    }
+}
+
+#! A trusted class whose destructor calls sandboxed code in the way given
+class TrustedCaller {
+    public {
+        Queue ev;
+        auto cb;
+        auto obj;
+        *Program other;
+        string kind;
+    }
+
+    constructor(Queue ev, string kind) {
+        self.ev = ev;
+        self.kind = kind;
+    }
+
+    hook() {
+    }
+
+    destructor() {
+        Mutex m();
+        m.lock();
+        m.unlock();
+        ev.push("trusted-locked");
+        switch (kind) {
+            case "closure":
+            case "funcref":
+                cb(ev);
+                break;
+            case "method":
+                obj.hook(ev);
+                break;
+            case "callmethod":
+                call_object_method(obj, "hook", ev);
+                break;
+            case "sort":
+                sort((2, 1), int sub (int a, int b) { cb(ev); return a <=> b; });
+                break;
+            case "map":
+                map cb(ev), (1,);
+                break;
+            case "pgmcall":
+                other.callFunction("hookf", ev);
+                break;
+            case "override":
+                hook();
+                break;
+        }
+        ev.push("trusted-end");
+    }
+}
+
 class DestructorCancellationTest inherits QUnit::Test {
     public {
         #! a limit for every wait of the test; never reached unless a case fails
@@ -290,6 +399,111 @@ sub block_in_destructor(Counter entered) {
 sub grow_in_destructor() {
     TrustedGrower g();
 }
+
+sub gate_grow_in_destructor(Counter entered, Counter gate) {
+    TrustedGateGrower g(entered, gate);
+}
+
+# a Program that the sandboxed code creates has no sandbox manager of its own; its code is sandboxed all the same
+object sub make_in_child(Queue ev, Counter gate) {
+    Program c(PO_NEW_STYLE);
+    c.parse(\"%modern
+class X {
+    private {
+        Queue ev;
+        Counter gate;
+    }
+    constructor(Queue ev, Counter gate) {
+        self.ev = ev;
+        self.gate = gate;
+    }
+    destructor() {
+        ev.push('x-start');
+        Mutex m();
+        m.lock();
+        m.unlock();
+        ev.push('x-locked');
+        gate.waitForZero(30s);
+        ev.push('x-end');
+    }
+}
+object sub mk(Queue ev, Counter gate) {
+    return new X(ev, gate);
+}
+\", \"child\");
+    return c.callFunction(\"mk\", ev, gate);
+}
+
+sub hold_child(Queue ev, Counter gate, Counter ready, Counter block) {
+    object x = make_in_child(ev, gate);
+    ready.dec();
+    block.waitForZero();
+}
+
+# calls from a trusted destructor into sandboxed code
+class SbHook {
+    hook(Queue ev) {
+        ::hookf(ev);
+    }
+}
+
+class SbCaller1 inherits TrustedCaller {
+    constructor(Queue ev) : TrustedCaller(ev, 'override') {
+    }
+    hook() {
+        ::hookf(ev);
+    }
+}
+
+class SbCaller2 inherits SbCaller1 {
+    constructor(Queue ev) : SbCaller1(ev) {
+    }
+    destructor() {
+        ev.push('sb2-dtor');
+    }
+}
+
+sub hookf(Queue ev) {
+    try {
+        Mutex m();
+        m.lock();
+        m.unlock();
+        ev.push('hook-locked');
+    } catch (hash<ExceptionInfo> ex) {
+        ev.push('hook:' + ex.err);
+    }
+}
+
+object sub make_caller(Queue ev, string kind, *Program other) {
+    if (kind == 'override') {
+        return new SbCaller2(ev);
+    }
+    TrustedCaller t(ev, kind);
+    switch (kind) {
+        case 'closure':
+        case 'sort':
+        case 'map':
+            t.cb = sub (Queue e) { hookf(e); };
+            break;
+        case 'funcref':
+            t.cb = \\hookf();
+            break;
+        case 'method':
+        case 'callmethod':
+            t.obj = new SbHook();
+            break;
+        case 'pgmcall':
+            t.other = other;
+            break;
+    }
+    return t;
+}
+
+sub hold_caller(Queue ev, string kind, Counter ready, Counter block, *Program other) {
+    object o = make_caller(ev, kind, other);
+    ready.dec();
+    block.waitForZero();
+}
 ";
 
         #! the execution modes of the sandboxed Programs
@@ -327,8 +541,10 @@ sub grow_in_destructor() {
         addTestCase("a sandboxed object released by a trusted destructor", \sandboxedInTrustedTest());
         addTestCase("a sandboxed object released in a cleanup critical section", \sandboxedInDeferralTest());
         addTestCase("a sandbox wall time limit ends a trusted destructor", \budgetTest());
-        addTestCase("a sandbox wall time limit ends a trusted destructor on a cancelled thread",
-            \budgetCancelledTest());
+        addTestCase("a sandbox memory limit ends a trusted destructor on a cancelled thread", \limitCancelledTest());
+        addTestCase("a class of a Program that sandboxed code created is sandboxed", \childProgramTest());
+        addTestCase("a sandboxed object that outlives its Program", \outlivesProgramTest());
+        addTestCase("sandboxed code called by a trusted destructor is not deferred", \trustedCallsSandboxedTest());
         addTestCase("a sandbox memory limit ends a trusted destructor", \memoryLimitTest());
         addTestCase("the rule holds in AST, IR, JIT and tiered execution", \execModesTest());
         addTestCase("the rule holds in AOT-compiled code", \aotTest());
@@ -372,6 +588,8 @@ sub grow_in_destructor() {
         p.importClass("TrustedRes");
         p.importClass("TrustedBlocker");
         p.importClass("TrustedGrower");
+        p.importClass("TrustedGateGrower");
+        p.importClass("TrustedCaller");
         p.setSandboxManager(sm);
         p.parse(SandboxedSource, "sandboxed");
         return p;
@@ -754,17 +972,22 @@ sub run(Queue ev, DtorGate gate, Counter ready, Counter block) {
         assertEq(0, entered.getCount(), "the destructor ran");
     }
 
-    #! The same on a cancelled thread: the deferred cancellation does not keep the limit from ending the destructor,
-    #! and it is still pending afterwards
-    budgetCancelledTest() {
+    #! A trusted destructor in a sandbox call with a memory limit on a cancelled thread: it waits for a gate after the
+    #! cancellation was requested (the wait is deferred) and then allocates without a bound: the limit ends it, and
+    #! the cancellation is still pending afterwards
+    limitCancelledTest() {
         SandboxManager sm();
-        sm.setWallTimeLimit(500);
+        sm.setMemoryLimit(4 * 1024 * 1024);
         Program p = sandboxed(sm);
         Counter entered(1);
+        Counter gate(1);
+        on_exit if (gate.getCount()) {
+            gate.dec();
+        }
         Queue ev();
         int tid = background sub () {
             try {
-                p.callFunction("block_in_destructor", entered);
+                p.callFunction("gate_grow_in_destructor", entered, gate);
                 ev.push("returned");
             } catch (hash<ExceptionInfo> ex) {
                 ev.push("caught:" + ex.err);
@@ -773,10 +996,132 @@ sub run(Queue ev, DtorGate gate, Counter ready, Counter block) {
             DestructorCancellationTest::checkAgain(ev);
         }();
         assertEq(0, entered.waitForZero(T));
-        # the destructor waits with the cancellation deferred; the request stays pending
         assertTrue(cancel_thread(tid, Reason));
-        expect(ev, ("caught:SANDBOX-TIMEOUT", "pending:True", "again:THREAD-CANCELLED:reason"));
+        gate.dec();
+        expect(ev, ("caught:SANDBOX-MEMORY-LIMIT", "pending:True", "again:THREAD-CANCELLED:reason"));
         thread_join(tid);
+    }
+
+    #! Sandboxed code creates a Program, which has no sandbox manager of its own, and an object of a class of it: on
+    #! a cancelled thread and under an interrupt the destructor of the class is skipped, as for the sandboxed
+    #! Program's own classes
+    childProgramTest() {
+        foreach string mode in (Modes) {
+            foreach string how in (("cancel", "interrupt")) {
+                SandboxManager sm();
+                Program p = sandboxed(sm, mode);
+                Queue ev();
+                Counter gate(1);
+                Counter ready(1);
+                Counter block(1);
+                on_exit {
+                    if (gate.getCount()) {
+                        gate.dec();
+                    }
+                    if (block.getCount()) {
+                        block.dec();
+                    }
+                }
+                Queue result();
+                int tid = background sub () {
+                    try {
+                        p.callFunction("hold_child", ev, gate, ready, block);
+                        result.push("returned");
+                    } catch (hash<ExceptionInfo> ex) {
+                        result.push(ex.err);
+                    }
+                }();
+                assertEq(0, ready.waitForZero(T));
+                if (how == "cancel") {
+                    assertTrue(cancel_thread(tid, Reason));
+                } else {
+                    sm.requestInterrupt();
+                }
+                assertEq(how == "cancel" ? "THREAD-CANCELLED" : "PROGRAM-INTERRUPTED", result.get(T),
+                    mode + " " + how);
+                thread_join(tid);
+                assertEq(0, ev.size(), mode + " " + how + ": the destructor was skipped");
+            }
+        }
+    }
+
+    #! An object of a sandboxed class that outlives its Program is released on a cancelled thread: the Program is
+    #! deleted, and so is its sandbox manager, but its code stays sandboxed: the destructor is skipped
+    outlivesProgramTest() {
+        Queue ev();
+        Counter ready(1);
+        Counter block(1);
+        on_exit if (block.getCount()) {
+            block.dec();
+        }
+        int tid = background sub () {
+            object o;
+            {
+                SandboxManager sm();
+                Program p = sandboxed(sm);
+                o = p.callFunction("make", "SbRes", ev);
+            }
+            ready.dec();
+            try {
+                block.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                ev.push("caught:" + ex.err);
+            }
+            remove o;
+            ev.push("released");
+        }();
+        assertEq(0, ready.waitForZero(T));
+        assertTrue(cancel_thread(tid, Reason));
+        expect(ev, ("caught:THREAD-CANCELLED", "member-start", "member-locked", "member-end", "released"));
+        thread_join(tid);
+    }
+
+    #! The destructor of a trusted class calls sandboxed code in every way, on a cancelled thread and under an
+    #! interrupt: the sandboxed code does not get the destructor's deferral
+    trustedCallsSandboxedTest() {
+        foreach string how in (("cancel", "interrupt")) {
+            foreach string kind in (("closure", "funcref", "method", "callmethod", "sort", "map", "pgmcall",
+                    "override")) {
+                SandboxManager sm();
+                Program p = sandboxed(sm);
+                SandboxManager sm2();
+                Program other = sandboxed(sm2);
+                Queue ev();
+                Counter ready(1);
+                Counter block(1);
+                on_exit if (block.getCount()) {
+                    block.dec();
+                }
+                Queue result();
+                int tid = background sub () {
+                    try {
+                        p.callFunction("hold_caller", ev, kind, ready, block, other);
+                        result.push("returned");
+                    } catch (hash<ExceptionInfo> ex) {
+                        result.push(ex.err);
+                    }
+                }();
+                assertEq(0, ready.waitForZero(T));
+                string err = how == "cancel" ? "THREAD-CANCELLED" : "PROGRAM-INTERRUPTED";
+                if (how == "cancel") {
+                    assertTrue(cancel_thread(tid, Reason));
+                } else {
+                    sm.requestInterrupt();
+                }
+                assertEq(err, result.get(T), how + " " + kind);
+                thread_join(tid);
+                list<string> l = ();
+                while (ev.size()) {
+                    l += ev.get();
+                }
+                string desc = sprintf("%s %s: %y", how, kind, l);
+                assertEq("trusted-locked", l[0], desc);
+                assertEq("trusted-end", l[l.size() - 1], desc);
+                list<string> hooks = l[1..l.size() - 2];
+                assertTrue(hooks.size() > 0, desc);
+                assertEq((), (select hooks, $1 != "hook:" + err), desc);
+            }
+        }
     }
 
     #! A trusted destructor in a sandbox call with a memory limit allocates without a bound: the limit is not
