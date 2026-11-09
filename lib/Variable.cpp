@@ -498,6 +498,11 @@ void Var::remove(LValueRemoveHelper& lvrh) {
 }
 
 void Var::del(ExceptionSink* xsink) {
+    if (is_thread_local) {
+        // the values of every thread are released with the variable
+        release_thread_local_var(tl_serial, xsink);
+        return;
+    }
     QoreLValue<qore_gvar_ref_u>& val = getVal();
 
     if (is_ref) {

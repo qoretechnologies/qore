@@ -97,7 +97,16 @@ union qore_gvar_ref_u {
     DLLLOCAL int write(ExceptionSink* xsink) const;
 };
 
-DLLLOCAL void get_thread_local_lvalue(void* ptr, QoreLValue<qore_gvar_ref_u>*& lvar, bool& is_new, bool& finalized);
+//! Returns the current thread's value of the thread_local variable with the given serial (Var::tl_serial)
+DLLLOCAL void get_thread_local_lvalue(uint64_t serial, QoreLValue<qore_gvar_ref_u>*& lvar, bool& is_new);
+//! Returns true if the current thread is ending and releasing its thread-local values
+DLLLOCAL bool thread_local_vars_finalizing();
+//! Releases the value of every thread of the thread_local variable with the given serial; called when it is deleted
+/** see ThreadLocalVarRegistry in lib/thread.cpp and design/program-teardown-lifetime.md
+*/
+DLLLOCAL void release_thread_local_var(uint64_t serial, ExceptionSink* xsink);
+//! Returns a new serial for a thread_local variable; never 0 and never reused
+DLLLOCAL uint64_t qore_get_next_thread_local_var_serial();
 
 class LValueHelper;
 class QoreVarInfo;
@@ -148,8 +157,17 @@ private:
     bool aot_import = false;            // true for AOT placeholders resolved by link/load context
     bool aot_init_done = false;         // declaration initializer has run for this storage
     bool pub;                           // is this global var public (valid and set for modules only)
-    mutable bool finalized;             // has this var already been cleared during Program destruction?
+    //! has this var already been cleared during Program destruction?
+    /** Set by the Program clearing its variables; a thread that ends finalizes its thread_local variables for itself
+        only (see checkFinalized()): it set this flag, and so made the variable read-only in every other thread
+    */
+    mutable bool finalized;
     bool is_thread_local;               // is this a thread_local var?
+    //! the key of the values of a thread_local variable in each thread; never reused, 0 if not thread_local
+    /** The address of the variable is not a key: a variable of a Program created after another one was deleted can
+        have the address of a deleted variable, and was given the value that the deleted variable had in the thread
+    */
+    uint64_t tl_serial = 0;
     DLLLOCAL void del(ExceptionSink* xsink);
 
     // not implemented
@@ -164,7 +182,8 @@ protected:
     }
 
     DLLLOCAL int checkFinalized(ExceptionSink* xsink) const {
-        if (finalized) {
+        // a thread_local variable is also finalized in a thread that is ending, for that thread only
+        if (finalized || (is_thread_local && thread_local_vars_finalizing())) {
             xsink->raiseException("DESTRUCTOR-ERROR", "illegal variable assignment after second phase of variable " \
                 "destruction");
             return -1;
@@ -176,7 +195,7 @@ protected:
         if (is_thread_local) {
             QoreLValue<qore_gvar_ref_u>* lvar;
             bool is_new;
-            get_thread_local_lvalue((void*)this, lvar, is_new, finalized);
+            get_thread_local_lvalue(tl_serial, lvar, is_new);
             if (is_new) {
                 if (is_ref) {
                     lvar->set(QV_Ref);
@@ -192,18 +211,21 @@ protected:
 
 public:
     DLLLOCAL Var(const QoreProgramLocation* loc, const char* n_name, bool is_thread_local = false)
-            : loc(loc), name(n_name), pub(false), finalized(false), is_thread_local(is_thread_local) {
+            : loc(loc), name(n_name), pub(false), finalized(false), is_thread_local(is_thread_local),
+              tl_serial(is_thread_local ? qore_get_next_thread_local_var_serial() : 0) {
     }
 
     DLLLOCAL Var(const QoreProgramLocation* loc, const char* n_name, QoreParseTypeInfo* n_parseTypeInfo,
             bool is_thread_local = false) : loc(loc), name(n_name), parseTypeInfo(n_parseTypeInfo),
-            pub(false), finalized(false), is_thread_local(is_thread_local) {
+            pub(false), finalized(false), is_thread_local(is_thread_local),
+            tl_serial(is_thread_local ? qore_get_next_thread_local_var_serial() : 0) {
     }
 
     DLLLOCAL Var(const QoreProgramLocation* loc, const char* n_name, const QoreTypeInfo* n_typeInfo,
             bool builtin = false, bool is_thread_local = false)
             : loc(loc), name(n_name), pub(false), finalized(false),
-              is_thread_local(is_thread_local), builtin(builtin) {
+              is_thread_local(is_thread_local), tl_serial(is_thread_local ? qore_get_next_thread_local_var_serial() : 0),
+              builtin(builtin) {
         const QoreTypeInfo* base_ti;
         no_narrowing = isNoNarrowMarkerType(n_typeInfo, base_ti);
         typeInfo = base_ti;
@@ -235,6 +257,15 @@ public:
     DLLLOCAL void remove(LValueRemoveHelper& lvrh);
 
     DLLLOCAL void clearLocal(ExceptionSink* xsink) {
+        // a thread_local variable that no other Program imports is used by no thread when its Program clears it, so
+        // the values of every thread are released, while the Program can still run their destructors; the values of
+        // the other threads of an imported one are released when the last Program holding it releases it (del())
+        if (is_thread_local && reference_count() == 1) {
+            finalized = true;
+            printd(5, "Var::clearLocal() clearing thread_local '%s' %p\n", name.c_str(), this);
+            release_thread_local_var(tl_serial, xsink);
+            return;
+        }
         QoreLValue<qore_gvar_ref_u>& val = getVal();
         if (!is_ref) {
             ValueHolder h(xsink);

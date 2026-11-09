@@ -124,6 +124,31 @@ front-cache entry of an earlier epoch is not used, a context's map is cleared wh
 holds at most `QORE_AOT_PATH_CACHE_MAX_ENTRIES` entries.  `examples/test/ir/AOTPathCacheProgramReuse.qtest` declares
 such subclasses in Programs created one after another.
 
+## Thread-local variables
+
+Each thread keeps its value of a `thread_local` variable in a map of its own (`ThreadData::tlvmap` in
+`lib/thread.cpp`), which only the thread changes.  The key is the variable's serial (`Var::tl_serial`), which is never
+reused: the map was keyed by the variable's address, and a variable of a Program created after another one was deleted
+could have the address of a deleted variable and was given the value (with its type) that the deleted variable had in
+the thread.  In the threads of a shared pool, one Program's code read another Program's values, across sandboxes.
+
+The values of every thread are released with the variable, as the value of a global variable is: when its Program
+clears its variables (`Var::clearLocal()`, while the Program can still run their destructors), or, for a variable that
+another Program imports (a public variable inherited by a child Program), when the last Program holding it releases it
+(`Var::del()`); the Program clearing an imported variable releases its own thread's value only, as the other threads
+can still use it through the importing Program.  They were released only in the deleting thread, and every other
+thread kept them until it ended, with objects of the deleted Program's classes.
+
+`ThreadLocalVarRegistry` records the value of every thread by the variable's serial (`release_thread_local_var()`).
+No thread uses a variable that is released this way, so the releasing thread takes the value out of the other
+thread's entry without changing that thread's map; the thread erases the empty entry the next time it looks up a
+variable (`ThreadData::eraseDeletedThreadLocalVars()`).  A thread that ends, or whose values are cleared between tasks
+(`clear_all_program_thread_local_data()`), takes its entries out of the registry before it releases their values
+(`ThreadData::releaseThreadLocalVars()`), repeatedly while the destructors give its variables values again.  The
+registry's lock is a leaf lock: no value is released under it.  `examples/test/qore/vars/thread-local-program-reuse.qtest`
+checks the release with the variable's Program in a worker thread, reads in a worker thread and in the deleting thread
+with Programs created one after another, the release at the end of a thread, and an inherited variable.
+
 ## Where the teardown can wait for ever
 
 Steps 1 and 3 wait without a timeout for the threads in the Program; the teardown hangs if one of them never

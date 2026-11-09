@@ -386,8 +386,52 @@ typedef std::set<const lvalue_ref*> ref_set_t;
 typedef std::map<int, q_user_tld> u_tld_map_t;
 static Sequence u_tld_seq;
 
-// for thread-local vars
-typedef std::map<void*, QoreLValue<qore_gvar_ref_u>> tlvmap_t;
+// the values of the thread_local variables of a thread, by the serial of the variable (Var::getThreadLocalSerial()),
+// which is never reused; see ThreadLocalVarRegistry
+typedef std::map<uint64_t, QoreLValue<qore_gvar_ref_u>> tlvmap_t;
+
+class ThreadData;
+
+namespace {
+//! The values of the thread_local variables of every thread, by variable
+/** A thread_local variable has a value of its own in each thread that uses it, in the thread's map (ThreadData::tlvmap)
+    under the variable's serial.  The value of each thread is released when the variable is deleted, which is when
+    its Program is deleted (or the last Program that imports it), by the thread deleting it: the registry records
+    the value of every thread for this (release_thread_local_var()).  A thread does not use a deleted variable, so
+    the deleting thread can release its value in another thread's map; it does not change the map, which only its
+    thread changes: the thread erases the empty entry the next time it looks up a variable.  A thread that ends, or
+    whose values are cleared (clear_all_program_thread_local_data()), takes its values out of the registry before it
+    releases them.  A variable's values are released when its Program clears its variables (Var::clearLocal()), or,
+    if another Program imports it, when the last Program holding it releases it (Var::del()).
+
+    The map was keyed by the address of the variable, and its entries were left in every thread but the deleting one:
+    a variable of a Program created after the deleted one could have the address of a deleted variable, and its code
+    read the value that the deleted Program's code had stored in the thread, with its type: values crossed Programs
+    and sandboxes in the threads of a shared pool (see design/program-teardown-lifetime.md).
+
+    The lock is a leaf lock: no user code runs and no other lock is taken under it.
+*/
+struct ThreadLocalVarRegistry {
+    //! a thread's value of a variable
+    struct Holder {
+        ThreadData* td;
+        QoreLValue<qore_gvar_ref_u>* lvar;
+    };
+
+    QoreThreadLock lck;
+    //! the values of the threads by the serial of the variable
+    std::unordered_map<uint64_t, std::vector<Holder>> holders;
+};
+
+ThreadLocalVarRegistry tlv_registry;
+QoreForkThreadLock tlv_registry_fork_handler(tlv_registry.lck, QFLR_LEAF, "thread_local_vars");
+
+std::atomic<uint64_t> tlv_serial_counter{0};
+}
+
+uint64_t qore_get_next_thread_local_var_serial() {
+    return tlv_serial_counter.fetch_add(1, std::memory_order_relaxed) + 1;
+}
 
 static size_t get_stack_size() {
 #ifdef QORE_HAVE_GET_STACK_SIZE
@@ -669,6 +713,12 @@ public:
     // thread-local values
     tlvmap_t tlvmap;
 
+    //! the serials of the deleted variables whose empty entries this thread erases; guarded by tlv_registry.lck
+    std::vector<uint64_t> tlv_deleted;
+
+    //! set when tlv_deleted has serials
+    std::atomic<bool> tlv_deleted_pending{false};
+
     // active exception counter
     unsigned active_exceptions = 0;
 
@@ -813,6 +863,9 @@ public:
 #endif
 
     DLLLOCAL ~ThreadData() {
+        // the registry keeps no pointer into the map of a thread whose data is deleted
+        unregisterThreadLocalVars();
+
         // delete all user TLD
         for (auto& i : u_tld_map) {
             if (i.second.destructor) {
@@ -846,15 +899,94 @@ public:
         return rc;
     }
 
+    //! Erases the empty entries of the deleted variables whose values the thread had
+    /** The deleting thread released the values; the entries are erased by this thread, which alone changes the map
+    */
+    DLLLOCAL void eraseDeletedThreadLocalVars() {
+        std::vector<uint64_t> deleted;
+        {
+            AutoLocker al(tlv_registry.lck);
+            deleted.swap(tlv_deleted);
+            tlv_deleted_pending.store(false, std::memory_order_relaxed);
+        }
+        for (uint64_t serial : deleted) {
+            tlvmap_t::iterator i = tlvmap.find(serial);
+            if (i != tlvmap.end()) {
+                assert(!i->second.hasValue());
+                tlvmap.erase(i);
+            }
+        }
+    }
+
+    //! Releases the thread's values of thread_local variables
+    /** The entries are taken out of the registry first, so that the deletion of a variable in another thread does not
+        release their values as well; the destructors run by the release can give the variables values again, which
+        the next pass releases
+
+        @param xsink for the exceptions of the destructors, or nullptr to handle the exceptions of each value here
+    */
+    DLLLOCAL void releaseThreadLocalVars(ExceptionSink* xsink) {
+        // ends after taking the entries out of the registry when none has a value: no code runs after that
+        while (true) {
+            // the entries of deleted variables are empty
+            unregisterThreadLocalVars();
+            bool assigned = false;
+            for (auto& i : tlvmap) {
+                if (i.second.assigned) {
+                    assigned = true;
+                    break;
+                }
+            }
+            if (!assigned) {
+                break;
+            }
+            for (auto& i : tlvmap) {
+                if (xsink) {
+                    i.second.discard(xsink);
+                } else {
+                    ExceptionSink local_xsink;
+                    i.second.discard(&local_xsink);
+                    local_xsink.handleExceptions();
+                }
+            }
+        }
+    }
+
     DLLLOCAL void del(ExceptionSink* xsink) {
         finalizing = true;
-        for (auto& i : tlvmap) {
-            i.second.discard(xsink);
-        }
+        releaseThreadLocalVars(xsink);
 
         tpd->del(xsink);
         tpd->deref();
         tpd = nullptr;
+        // the destructors run by releasing the thread's Program data can give its thread_local variables values
+        releaseThreadLocalVars(xsink);
+    }
+
+    //! Takes the thread's entries out of the thread_local variable registry without releasing their values
+    /** For a thread whose data is deleted without del(): the registry must not keep pointers into its map
+    */
+    DLLLOCAL void unregisterThreadLocalVars() {
+        AutoLocker al(tlv_registry.lck);
+        for (auto& i : tlvmap) {
+            auto hi = tlv_registry.holders.find(i.first);
+            if (hi == tlv_registry.holders.end()) {
+                continue;
+            }
+            std::vector<ThreadLocalVarRegistry::Holder>& v = hi->second;
+            for (size_t j = 0; j < v.size(); ++j) {
+                if (v[j].td == this) {
+                    v[j] = v.back();
+                    v.pop_back();
+                    break;
+                }
+            }
+            if (v.empty()) {
+                tlv_registry.holders.erase(hi);
+            }
+        }
+        tlv_deleted.clear();
+        tlv_deleted_pending.store(false, std::memory_order_relaxed);
     }
 
     DLLLOCAL void pushName(const char* name) {
@@ -1973,19 +2105,54 @@ void inc_active_exceptions(int diff) {
     td->active_exceptions += diff;
 }
 
-void get_thread_local_lvalue(void* ptr, QoreLValue<qore_gvar_ref_u>*& lvar, bool& is_new, bool& finalized) {
+bool thread_local_vars_finalizing() {
     ThreadData* td = thread_data.get();
-    if (td->finalizing) {
-        finalized = true;
+    return td && td->finalizing;
+}
+
+void get_thread_local_lvalue(uint64_t serial, QoreLValue<qore_gvar_ref_u>*& lvar, bool& is_new) {
+    assert(serial);
+    ThreadData* td = thread_data.get();
+    // erasing the empty entries of deleted variables leaves the entries of the others in place
+    if (td->tlv_deleted_pending.load(std::memory_order_acquire)) {
+        td->eraseDeletedThreadLocalVars();
     }
-    tlvmap_t::iterator i = td->tlvmap.lower_bound(ptr);
-    if (i == td->tlvmap.end() || i->first != ptr) {
-        i = td->tlvmap.insert(i, tlvmap_t::value_type(ptr, QoreLValue<qore_gvar_ref_u>()));
+    tlvmap_t::iterator i = td->tlvmap.lower_bound(serial);
+    if (i == td->tlvmap.end() || i->first != serial) {
+        i = td->tlvmap.insert(i, tlvmap_t::value_type(serial, QoreLValue<qore_gvar_ref_u>()));
         is_new = true;
+        AutoLocker al(tlv_registry.lck);
+        tlv_registry.holders[serial].push_back(ThreadLocalVarRegistry::Holder{td, &i->second});
     } else {
         is_new = false;
     }
     lvar = &i->second;
+}
+
+void release_thread_local_var(uint64_t serial, ExceptionSink* xsink) {
+    if (!serial) {
+        return;
+    }
+    std::vector<QoreValue> values;
+    {
+        AutoLocker al(tlv_registry.lck);
+        auto i = tlv_registry.holders.find(serial);
+        if (i == tlv_registry.holders.end()) {
+            return;
+        }
+        values.reserve(i->second.size());
+        for (ThreadLocalVarRegistry::Holder& h : i->second) {
+            // no thread uses a deleted variable: its value is taken out of the thread's entry, which its thread erases
+            values.push_back(h.lvar->removeValue(true));
+            h.td->tlv_deleted.push_back(serial);
+            h.td->tlv_deleted_pending.store(true, std::memory_order_release);
+        }
+        tlv_registry.holders.erase(i);
+    }
+    // the values are released outside the lock: their destructors can run code
+    for (QoreValue& v : values) {
+        v.discard(xsink);
+    }
 }
 
 QoreProgram* get_set_program_call_context(QoreProgram* new_pgm) {
@@ -6235,11 +6402,7 @@ void clear_all_program_thread_local_data() {
     // generation if subsequent cleanup code (e.g. object destructors) throws
 
     // clear all thread_local variable values without setting the finalizing flag
-    for (auto& i : td->tlvmap) {
-        ExceptionSink xsink;
-        i.second.discard(&xsink);
-        xsink.handleExceptions();
-    }
+    td->releaseThreadLocalVars(nullptr);
     td->tlvmap.clear();
 
     // clear thread-local hash (tld) in all programs this thread has data in
