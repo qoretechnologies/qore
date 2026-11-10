@@ -47,6 +47,7 @@
 #include "qore/intern/QoreModuleSourceFingerprints.h"
 #include "qore/intern/xxhash.h"
 #include "qore/intern/QorePluginRegistry.h"
+#include "qore/intern/QoreSignal.h"
 
 // dlopen() flags
 #define QORE_DLOPEN_FLAGS RTLD_LAZY|RTLD_GLOBAL
@@ -5500,6 +5501,19 @@ void QoreModuleManager::delUser() {
     // module code entered without it leave it first, so that the teardown below waits for every thread in it (see
     // qore_stop_module_uncounted_entries())
     qore_stop_module_uncounted_entries();
+
+#ifdef HAVE_SIGNAL_HANDLING
+    // the signal handlers that module code set belong to the module's Program; the signal thread runs until the end of
+    // the cleanup, so they are removed now: a handler entering a module's Program between the wait for its threads
+    // and the clearing of its data below would run module code on data being destroyed.  A handler that is running
+    // ends first, with the release of the signal thread's local data after it
+    {
+        std::vector<QoreProgram*> mpgms;
+        qore_get_module_lifetime_programs(mpgms);
+        ExceptionSink xsink;
+        QSM.removeProgramHandlers(mpgms, &xsink);
+    }
+#endif
 
     // issue #5164: Phase 1 - clear namespace data on all user module programs before destroying any modules
     // This ensures static variable destructors run while all module programs are still alive, preventing

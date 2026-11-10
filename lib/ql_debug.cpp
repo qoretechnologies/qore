@@ -17055,6 +17055,43 @@ void dbg_hold_source_program_taken(const qore_class_private* cls, QoreProgram* p
 }
 }
 
+//! returns True if a handler is set for the signal
+static QoreValue f_dbg_signal_handler_set(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef HAVE_SIGNAL_HANDLING
+    return QSM.hasHandler(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+#else
+    return false;
+#endif
+}
+
+//! runs code in a native thread registered with Qore as a foreign thread, which is deregistered when the code returns
+/** The call returns once the thread has been deregistered, which deletes its thread data, and has ended.  Returns the
+    error code of an exception raised by the code, or nothing
+*/
+static QoreValue f_dbg_run_in_foreign_thread(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    std::string err;
+    std::thread th([code, &err]() {
+        QoreForeignThreadHelper fth;
+        if (!fth) {
+            err = "FOREIGN-THREAD-ERROR";
+            return;
+        }
+        ExceptionSink txsink;
+        ValueHolder rv(code->invoke(nullptr, &txsink), &txsink);
+        if (txsink) {
+            QoreValue e = txsink.getExceptionErr();
+            err = e.getType() == NT_STRING ? e.get<const QoreStringNode>()->c_str() : "EXCEPTION";
+            txsink.clear();
+        }
+    });
+    th.join();
+    if (err.empty()) {
+        return QoreValue();
+    }
+    return new QoreStringNode(err);
+}
+
 //! arms a hold of the next thread that calls the code of a class of the given Program from another Program
 /** @throw DBG-ARGUMENT-ERROR a hold is already armed
 */
@@ -19919,6 +19956,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_continue_program_teardown", f_dbg_continue_program_teardown, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_signal_handler_set", f_dbg_signal_handler_set, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "sig");
+    qns.addBuiltinVariant("dbg_run_in_foreign_thread", f_dbg_run_in_foreign_thread, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        stringOrNothingTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
     qns.addBuiltinVariant("dbg_hold_source_program_call", f_dbg_hold_source_program_call, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_wait_source_program_call_held", f_dbg_wait_source_program_call_held, QCF_NO_FLAGS,

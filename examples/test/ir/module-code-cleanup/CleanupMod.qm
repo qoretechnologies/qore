@@ -1,0 +1,106 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+#! module for module-code-cleanup.qtest: module code that runs while the module cleanup runs
+/** A signal handler that module code sets belongs to the module's Program, and the thread data that module code
+    saves in a thread holds objects whose destructors run module code when the thread's data is deleted
+*/
+
+%modern
+
+module CleanupMod {
+    version = "1.0";
+    desc = "module code at cleanup test module";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        CleanupMod::Priv::init();
+    };
+}
+
+public namespace CleanupMod {
+namespace Priv {
+    # the script path of the module's Program, which identifies the Program that code runs in
+    our *string module_path;
+    # the Programs that the signal handler ran in
+    our Queue handler_runs;
+    # reports the handler of the signal when the module's data is cleared at the module cleanup; see
+    # arm_cleanup_check()
+    our *CleanupCheck cleanup_check;
+    # counts the calls of the destructor of Holder that ran in the module's Program
+    our Counter holder_calls;
+
+    sub init() {
+        module_path = get_script_path();
+        handler_runs = new Queue();
+        holder_calls = new Counter();
+    }
+
+    string sub program() {
+        return get_script_path() == module_path ? "module" : sprintf("caller %y", get_script_path());
+    }
+
+    #! reports whether the signal has a handler when it is destroyed: when the module cleanup clears the module's data
+    /** The handler that module code set must be gone by then: the signal thread, which runs until the end of the
+        cleanup, would otherwise run module code in the module's Program while its data is destroyed
+    */
+    class CleanupCheck {
+        private {
+            int sig;
+        }
+
+        constructor(int sig) {
+            self.sig = sig;
+        }
+
+        destructor() {
+            stdout.printf("handler set while the module's data is cleared: %y\n",
+                call_function("dbg_signal_handler_set", sig));
+            stdout.sync();
+        }
+    }
+
+    #! an object that module code saves in a thread's data: its destructor runs module code when the data is deleted
+    class Holder {
+        destructor() {
+            if (program() == "module") {
+                holder_calls.inc();
+            }
+        }
+    }
+}
+
+#! sets a handler for the signal, which reports the Program it runs in
+public sub set_handler(int sig) {
+    set_signal_handler(sig, sub (int s) {
+        Priv::handler_runs.push(Priv::program());
+    });
+}
+
+#! returns the Program that the next call of the signal handler ran in
+public string sub wait_handler() {
+    return Priv::handler_runs.get();
+}
+
+#! reports whether the signal has a handler while the module cleanup clears the module's data (debug builds only)
+public sub arm_cleanup_check(int sig) {
+    Priv::cleanup_check = new Priv::CleanupCheck(sig);
+}
+
+#! saves an object in the thread's data whose destructor runs module code when the thread's data is deleted
+public sub keep() {
+    save_thread_data("cleanup-mod-holder", new Priv::Holder());
+}
+
+#! returns the number of destructor calls of the objects saved with keep() that ran in the module's Program
+public int sub holder_calls() {
+    return Priv::holder_calls.getCount();
+}
+
+#! a function of the module
+public int sub f(int x) {
+    return x + 1;
+}
+}
