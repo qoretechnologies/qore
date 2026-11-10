@@ -80,6 +80,16 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par The Implicit Index Is Unset Outside the Code of Its Operator
+    An @ref implicit_index "implicit index" (<tt>$#</tt>) in a function, method or closure called from the code of a
+    map, select or other iterating operator or of a foreach statement, in a fold expression, or at the top level gives
+    @ref nothing instead of the caller's index.
+
+    @par An Operator over a Single Value Gives It the Implicit Index 0
+    A @ref map "map", @ref select "select" or @ref hmap "hash map" over a single value (not a list or an iterator) gives
+    it the @ref implicit_index "implicit index" (<tt>$#</tt>) \c 0, as for a list of one element, instead of leaving
+    the enclosing index.
+
     @par Accepted Sockets Do Not Resolve the Peer's Hostname by Default
     Socket::accept() and Socket::acceptSSL() no longer look up the peer's hostname, so the accepted Socket's
     \c source_host member is @ref nothing unless the listening socket was set with Socket::setSourceHostLookup(); the

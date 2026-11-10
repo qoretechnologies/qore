@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of the implicit index of operators and the code they call
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ImplicitElementScopeTest
+
+#! issue #5690: the implicit index ($#) belongs to the operator or foreach statement whose per-element code encloses it
+/** In a function, method, closure or call reference called from the per-element code of map, select, map-select,
+    hash map, hash map-select, the streaming predicates or a foreach statement, \c $# is unset (NOTHING), as it is in a
+    fold and at the top level; an operator in the called code gives its own elements their index, and the caller's
+    \c $# is the same after the call.  An operator over a single value gives it the index 0.  Before, the AST
+    interpreter gave the called code the caller's index and the compiled modes 0, and a single value the enclosing
+    index.
+
+    implicit-element-scope.q prints the values; the AST interpreter's output must be the expected one, and every other
+    execution mode, the IR tier and AOT executables compiled with -O0 and -O3 must give the same.
+*/
+class ImplicitElementScopeTest inherits QUnit::Test {
+    public {
+        #! the output of the script
+        const Expected = (
+            "top null",
+            "map fn [null, null, null]",
+            "map method [null, null, null]",
+            "map static [null, null, null]",
+            "map closure [null, null, null]",
+            "map closure in body [null, null, null]",
+            "map call ref [null, null, null]",
+            "map method ref [null, null, null]",
+            "select fn [\"a\", \"b\", \"c\"]",
+            "map-select fn [null, null, null]",
+            "map-select pred fn [\"a\", \"b\", \"c\"]",
+            "hash map fn {a: null, b: null, c: null}",
+            "hash map-select fn {a: null, b: null, c: null}",
+            "first fn \"a\"",
+            "any fn False",
+            "all fn True",
+            "count fn 3",
+            "takewhile fn [\"a\", \"b\", \"c\"]",
+            "takeuntil fn [\"a\", \"b\", \"c\"]",
+            "fused fn [null, null]",
+            "foreach fn [\"a\", 0, null, \"b\", 1, null, \"c\", 2, null]",
+            "map single in fn [0, 0, 0]",
+            "map nested in fn [[0, 1], [0, 1], [0, 1]]",
+            "map foreach in fn [[0, null, 1, null], [0, null, 1, null], [0, null, 1, null]]",
+            "after call [[null, 0, [0, 1], 0], [null, 1, [0, 1], 1], [null, 2, [0, 1], 2]]",
+            "own [0, 1, 2]",
+            "own select [\"a\", \"c\"]",
+            "own map-select [0, 2]",
+            "own hash map {a: 0, b: 1, c: 2}",
+            "own count 2",
+            "single map 0",
+            "single select \"s\"",
+            "single map-select 0",
+            "single hash map {s: 0}",
+            "single in map [0, 0, 0]",
+            "fold \"a--\"",
+            "foldr \"c--\"",
+            "function null",
+            "fn args [\"x\", \"y\"]",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("implicit element scope", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/implicit-element-scope.q";
+
+        addTestCase("AST interpreter", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executable -O0", \aotTest(), "-O0");
+        addTestCase("AOT executable -O3", \aotTest(), "-O3");
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter, which the other modes must give
+    private astTest() {
+        list<string> lines = select ast().split("\n"), $1;
+        assertEq(Expected, lines);
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = ast();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, script)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, script)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("implicit-element-scope-aot-");
+        string exe = dir.path + "/implicit-element-scope";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, script));
+        assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
+        assertEq(ast(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+    }
+
+    #! returns the output of the script with the AST interpreter
+    private string ast() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, script));
+    }
+}

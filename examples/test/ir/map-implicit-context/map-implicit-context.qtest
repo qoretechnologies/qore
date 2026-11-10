@@ -59,7 +59,7 @@ class MapImplicitContextTest inherits QUnit::Test {
             "new ma; new mb; del ma; new mc; del mb; ctx ul [\"ma\", \"mb\", \"mc\"]; del mc",
             "new ma; new mb; del ma; new mc; del mb; extract [\"ma0\", \"mb0\", \"mc0\"]; del mc",
             "decl [\"null\", \"null\", \"null\"]",
-            "single $# [[0, null], [1, null], [2, null]]",
+            "single $# [[0, null], [0, null], [0, null]]",
         );
 
         #! parts of the implicit_args line of the AST interpreter: $2 is NOTHING in every map body

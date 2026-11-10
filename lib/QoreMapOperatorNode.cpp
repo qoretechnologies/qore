@@ -129,6 +129,9 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
             QoreTypeInfo::getImplicitArgTypeForIterator(right, iteratorTypeInfo);
 
         ParseImplicitArgTypeHelper pia(implicitArgType);
+        // the code runs for each element with the element's index as $# (qore#5690)
+        QoreParseContextFlagHelper element_flag(parse_context);
+        element_flag.setFlags(PF_IMPLICIT_ELEMENT);
         parse_context.typeInfo = nullptr;
         {
             QoreParseContextAnalysisHelper ah(parse_context);
@@ -313,6 +316,8 @@ bool QoreFunctionalMapSingleValueOperator::getNextImpl(ValueOptionalRefHolder& v
 
     done = true;
 
+    // a single value is the operator's only element: $# is 0, as for a list of one element (qore#5690)
+    ImplicitElementHelper eh(0);
     SingleArgvContextHelper argv_helper(v, xsink);
     v.clear();
     // when the value of the map is not used, each element is a statement of its own, as in the other

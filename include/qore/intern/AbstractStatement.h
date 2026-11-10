@@ -53,6 +53,9 @@
 #define PF_CONST_METHOD          (1 << 10) //!< parsing a const method body
 #define PF_EXISTENCE_CHECK       (1 << 11) //!< parsing the operand of exists; an unassigned value is intentional
 #define PF_IN_TRY                (1 << 12) //!< parsing the body of a try statement of the function being parsed
+//! parsing code that an operator or a foreach statement runs for each element with the element's index as the
+//! implicit element (\c $#); a \c $# parsed without it is unset (qore#5690)
+#define PF_IMPLICIT_ELEMENT      (1 << 13)
 
 // all definitions in this file are private to the library and subject to change
 // forward references

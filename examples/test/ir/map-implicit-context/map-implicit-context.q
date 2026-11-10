@@ -227,7 +227,7 @@ sub chain_inner(Log log, ...) {
     log.add("map-select tl " + fmt(map mk(log, $1).n + ($2 ?? ""), tl, True));
     # the arguments of a declaration's constructor are evaluated with the map's implicit arguments
     log.add("decl " + fmt(map (O o(sprintf("%y", $2))).n, ul));
-    # the body of a map over a single value runs with the enclosing implicit element
+    # a map over a single value gives it the implicit element 0 (qore#5690)
     log.add("single $# " + fmt(map (map ($#, $2), "s"), il));
     # map-select where only one operand needs the implicit argument list
     log.add("map-select one pred " + fmt(map new list<auto>(($1,)), il, $1 % 3 == 0));

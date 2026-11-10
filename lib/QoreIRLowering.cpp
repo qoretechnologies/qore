@@ -15350,7 +15350,8 @@ private:
     then gets an exception cleanup block of its own if a handler of the function encloses it, which restores the
     implicit argument and element and branches to that handler (qore#5680), and otherwise has none, as above
     @param index the index of the element, which is set as the implicit element; invalid for code that runs with the
-    enclosing implicit element (the body of a map over a single value)
+    enclosing implicit element (a method call that the AST interpreter evaluates in code whose implicit element is
+    not known)
     @param lower lowers the code with the implicit argument set (also virtually: <tt>$1</tt> and <tt>$#</tt> are
     lowered to \a element and \a index) and returns a valid value, or an invalid one with \a error set
 */
@@ -16417,10 +16418,9 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         if (!input_val.isValid()) {
             return QoreIRValue();
         }
-        // the body runs with the enclosing implicit element, as the AST interpreter does not set one for a single
-        // value (QoreFunctionalMapSingleValueOperator): that of an enclosing operator that sets it only virtually,
-        // which the implicit context then sets at run time too, or else the one set at run time
-        QoreIRValue single_index = virtual_implicit.active ? virtual_implicit.element : QoreIRValue();
+        // a single value is the map's only element: $# is 0, as for a list of one element
+        // (QoreFunctionalMapSingleValueOperator, qore#5690)
+        QoreIRValue single_index = builder.createConstInt(0, map->loc)->result;
         if (needs_context) {
             // the value of the body, if used, is kept when its temporaries are released
             QoreIRValue body_result = lowerWithImplicitContext(input_val, single_index, map->loc, nullptr, error,
