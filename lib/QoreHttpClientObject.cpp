@@ -1254,18 +1254,14 @@ struct qore_httpclient_priv {
         // Reset the shared_ptr - will delete session if this is the last reference
         if (msock) {
             msock->socket->priv->h2_session.reset();
-            msock->socket->priv->setH2ActiveStreamId(-1);
         }
         h2_stream_id = 0;
         http2_active = false;
     }
 
-    // Sets the active HTTP/2 stream ID on both HTTPClient and socket
+    //! Sets the active HTTP/2 stream ID of the client
     DLLLOCAL void setActiveH2StreamId(int32_t stream_id) {
         h2_stream_id = stream_id;
-        if (msock) {
-            msock->socket->priv->setH2ActiveStreamId(stream_id);
-        }
     }
 
     //! C++ connection manager for async-driven dispatch (Phase P7+).

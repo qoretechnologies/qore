@@ -476,7 +476,7 @@ manager via a back-pointer:
 ```cpp
 // include/qore/intern/QoreHttp1ClientConnection.h
 class Http1ClientConnection : public HttpClientConnectionBase {
-    QoreThreadLock onclose_lock;                     // outermost lock
+    QoreThreadLock onclose_lock;                     // below pool_lock (section 7.2)
     HttpClientConnectionManagerBase* manager_ = nullptr;  // back-pointer
 
     void setManager(HttpClientConnectionManagerBase* mgr);
@@ -507,7 +507,7 @@ Close notification therefore uses an isolated queue:
 1. `onClosedHook` holds the connection's `onclose_lock` and invokes
    `manager_->onConnectionClosed(this)`.
 2. `onConnectionClosed` may take only the manager's short-lived
-   `closed_lock`.  It copies the stable `{connection pointer, pool key}` into
+   `closed_lock` and `create_lock`.  It copies the stable `{connection pointer, pool key}` into
    `closed_connections`, releases that lock, signals creation waiters, and
    returns.  It must not take `pool_lock`, enter another connection method,
    dereference the connection, or enter the controller.
@@ -521,6 +521,15 @@ Close notification therefore uses an isolated queue:
 No path holds `closed_lock` while acquiring `pool_lock` or `onclose_lock`, and
 no path closes or destroys a connection while holding `pool_lock`.  Controller
 operations therefore remain outside all manager locks.
+
+The pool key that the notification copies is set with `onclose_lock` held,
+under `pool_lock` (`setPoolKey()`), so the order is `pool_lock` →
+`onclose_lock` → `closed_lock`/`create_lock`; as the notification never takes
+`pool_lock`, the global async I/O thread waits for `onclose_lock` only while a
+creator sets a key.  A connection whose notification has run gets no key and
+is not pooled: a connection that is still connecting when it is pooled can
+fail on the I/O thread meanwhile, and a notification without the key would
+leave it in the pool.
 
 ### 7.3 Manager / connection lifetime contract
 
@@ -930,7 +939,8 @@ production code.
 The pool manipulates connection state from worker threads;
 `continuePoll` runs on the I/O thread.  Section 7.2 isolates I/O-thread close
 notification from the pool: `onclose_lock` may nest only the independent
-`closed_lock`, while pool and controller work occurs later with neither lock
+`closed_lock` and `create_lock` (and is itself taken under `pool_lock` only to set
+a pool key), while pool and controller work occurs later with neither lock
 held.  The test matrix must include concurrent acquire/release and prove that
 a close callback completes while another thread owns `pool_lock`.
 

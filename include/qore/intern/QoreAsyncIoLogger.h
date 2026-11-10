@@ -33,7 +33,31 @@
 
 #define _QORE_QOREASYNCIOLOGGER_H
 
+#include <atomic>
 #include <cstdarg>
+
+//! The number of async I/O loggers set: the global one and those of the controllers
+/** A message of the async I/O code can only be logged when it is not 0: the code that logs a message checks it
+    first, so that a message that no logger takes costs no lock (a controller logs a message for every submission,
+    for one).  Changed only with qore_async_io_note_logger_change().
+*/
+DLLLOCAL extern std::atomic<int> qore_async_io_logger_count;
+
+//! Returns true if any async I/O logger is set; see qore_async_io_logger_count
+static inline bool qore_async_io_any_logger() {
+    return qore_async_io_logger_count.load(std::memory_order_acquire) > 0;
+}
+
+//! Counts the change of an async I/O logger (the global one or a controller's) from @a old_logger to @a new_logger
+/** Called under the lock of the logger that is changed, so that the changes of one logger are counted in order.
+*/
+static inline void qore_async_io_note_logger_change(const void* old_logger, const void* new_logger) {
+    if (!old_logger && new_logger) {
+        qore_async_io_logger_count.fetch_add(1, std::memory_order_acq_rel);
+    } else if (old_logger && !new_logger) {
+        qore_async_io_logger_count.fetch_sub(1, std::memory_order_acq_rel);
+    }
+}
 
 //! Sets the global async I/O logger
 DLLLOCAL void qore_set_async_io_logger(QoreObject* logger_obj, ExceptionSink* xsink);

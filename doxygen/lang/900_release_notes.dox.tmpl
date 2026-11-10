@@ -98,6 +98,12 @@
     compiled by an earlier \c qcc that exports one is refused when loaded and must be changed and recompiled.  A
     %Program's <tt>public thread_local</tt> variables are still passed to its child Programs.
 
+    @par The Descriptor of a Socket Is Not Available to Qore Code
+    \c Socket::getSocket() is removed and @ref Qore::Socket::getPollableDescriptor() "Socket::getPollableDescriptor()"
+    raises \c SOCKET-DESCRIPTOR-ERROR: every operation on a socket is made by the async I/O controller, which owns
+    its non-blocking descriptor; a poll operation that waits for a socket gives the socket itself
+    (@ref Qore::ExtraPollFdInfo "ExtraPollFdInfo" \c pollable).
+
     @par Destructors Cannot Assign Thread-Local Variables While a Worker Thread Releases Its Values
     A worker thread of a @ref Qore::Thread::ThreadPool "ThreadPool" or of the
     @ref Qore::AsyncIoController "AsyncIoController" releases the values of its @ref thread_local variables between
@@ -4850,7 +4856,7 @@
       initialized or at runtime
       (<a href="https://github.com/qoretechnologies/qore/issues/3561">issue 3561</a>)
     - fixed a bug where different connections on the same @ref Qore::Socket "Socket" object could not be identified;
-      code that relied on @ref Qore::Socket::getSocket() "Socket::getSocket()" is unreliable as the same descriptor
+      code that relied on \c Socket::getSocket() is unreliable as the same descriptor
       can be reassigned
       (<a href="https://github.com/qoretechnologies/qore/issues/3558">issue 3558</a>)
     - fixed a core dump in @ref Qore::FileLineIterator::getFileName() "FileLineIterator::getFileName()"
