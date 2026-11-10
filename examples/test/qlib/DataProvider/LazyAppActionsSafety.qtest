@@ -165,7 +165,8 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("a worker's change is delivered when the reader stopped waiting", \interruptedReaderDeliveryTest());
         addTestCase("a sandboxed thread interrupted when it requests a delivery does not lose it",
             \interruptedDeliveryRequestTest());
-        addTestCase("a registration made at once by a thread that holds the catalog lock", \lockOwnerRegistrationTest());
+        addTestCase("a registration by a thread that holds the catalog lock, refused to sandboxed code",
+            \lockOwnerRegistrationTest());
         addTestCase("only a thread that the catalog started runs as a worker", \untrackedWorkerTest());
         addTestCase("a first load from the module path has a worker, unless restricted; from source and AOT",
             \noWorkerTest());
@@ -1238,13 +1239,28 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         QueueListener listener(get_script_path());
         int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
         on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
+        # trusted code registers the app and an action with a deferred output type; sandboxed code registers nothing
+        # (qore#5632), but a sandboxed reader changes the catalog when it resolves the action's output type
+        string app = "SafeInterruptedRequest_" + get_random_string(8);
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{"name": app, "display_name": app,
+            "short_desc": app, "desc": app, "groups": (AppGroup::DataTransformation,), "logo": "data",
+            "logo_mime_type": MimeTypeSvg, "logo_file_name": "x.svg", "dynamic": True});
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": app, "action": "deferred", "path": "/deferred", "display_name": "deferred",
+            "short_desc": "deferred", "desc": "deferred", "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
         SandboxManager sm();
         on_exit sm.clearInterrupt();
-        # the tenant's sandbox is interrupted when it requests the delivery of its change
+        # the tenant's sandbox is interrupted when it requests the delivery of the change that its read made
         DataProviderActionCatalog::setDeliveryTestHook(sub () { sm.requestInterrupt(); });
         on_exit DataProviderActionCatalog::setDeliveryTestHook();
         Program tenant(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
         tenant.parse("%requires DataProvider\n"
+            "sub read(string app) { DataProviderActionCatalog::getAppActionEx(app, \"deferred\"); }\n"
             "sub reg(string app) {\n"
             "    DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app, \"display_name\": app,\n"
             "        \"short_desc\": app, \"desc\": app, \"groups\": (AppGroup::DataTransformation,),\n"
@@ -1252,11 +1268,11 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
             "        \"dynamic\": True});\n"
             "}\n", "tenant-interrupted-delivery");
         tenant.setSandboxManager(sm);
-        string app = "SafeInterruptedRequest_" + get_random_string(8);
-        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        # the tenant cannot make the change by registering an app
+        assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", \tenant.callFunction(), ("reg", app + "_tenant"));
         int revision = DataProviderActionCatalog::getCatalogRevision();
         try {
-            tenant.callFunction("reg", app);
+            tenant.callFunction("read", app);
         } catch (hash<ExceptionInfo> ex) {
             # the interrupt can end the tenant's call after its change
             assertEq("PROGRAM-INTERRUPTED", ex.err);
@@ -1271,6 +1287,9 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
             }
         }
         assertTrue(call.tid != gettid(), "a worker delivered the change");
+        # the change is the resolved output type
+        assertNothing(DataProviderActionCatalog::getActionsNoInit(app)[0].get_output_type,
+            "the tenant's read resolved the output type");
 %else
         testSkip("the test needs the catalog's test hooks, which only debug builds have");
 %endif
@@ -1282,26 +1301,37 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
         Program tenant(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
         tenant.parse("%requires DataProvider\n"
-            "our int action_runs = 0;\n"
             "sub reg(string app) {\n"
-            "    DataProviderActionCatalog::registerPendingApp(app, sub () {\n"
-            "        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app, \"display_name\": app,\n"
-            "            \"short_desc\": app, \"desc\": app, \"groups\": (AppGroup::DataTransformation,),\n"
-            "            \"logo\": \"data\", \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\",\n"
-            "            \"dynamic\": True});\n"
-            "    });\n"
-            "    DataProviderActionCatalog::registerPendingAppAction(app, \"pend\", sub () { ++action_runs; });\n"
-            "}\n"
-            "int sub action_runs() { return action_runs; }\n", "tenant-lock-owner");
+            "    DataProviderActionCatalog::registerPendingApp(app, sub () {});\n"
+            "}\n", "tenant-lock-owner");
         tenant.setSandboxManager(new SandboxManager());
-        # registrations made under a sandbox run at once, also on a thread that holds the catalog lock
-        DataProviderActionCatalog::runWithCatalogLock(sub () { tenant.callFunction("reg", app); });
+        # sandboxed code registers nothing (qore#5632), also on a thread that holds the catalog lock; the refusal
+        # releases nothing it does not own: the lock is still usable afterwards
+        int revision = DataProviderActionCatalog::getCatalogRevision();
+        assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", \DataProviderActionCatalog::runWithCatalogLock(),
+            (sub () { tenant.callFunction("reg", app); },));
+        assertEq(revision, DataProviderActionCatalog::getCatalogRevision(), "the refusal changed nothing");
+        assertNothing(DataProviderActionCatalog::getApp(app), "nothing was registered");
+
+        # trusted code registers on a thread that holds the catalog lock: the registrations are made in the section
+        # that holds it, and run when the app is read
+        int action_runs = 0;
+        DataProviderActionCatalog::runWithCatalogLock(sub () {
+            DataProviderActionCatalog::registerPendingApp(app, sub () {
+                DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{"name": app, "display_name": app,
+                    "short_desc": app, "desc": app, "groups": (AppGroup::DataTransformation,), "logo": "data",
+                    "logo_mime_type": MimeTypeSvg, "logo_file_name": "x.svg", "dynamic": True});
+            });
+            DataProviderActionCatalog::registerPendingAppAction(app, "pend", sub () { ++action_runs; });
+        });
         assertEq(app, DataProviderActionCatalog::getApp(app).name);
-        assertEq(1, tenant.callFunction("action_runs"));
+        assertEq(1, action_runs);
         assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
         # and are refused as for any thread when they are registered already
         assertThrows("APP-ERROR", "already registered", \DataProviderActionCatalog::runWithCatalogLock(),
-            (sub () { tenant.callFunction("reg", app); },));
+            (sub () {
+                DataProviderActionCatalog::registerPendingApp(app, sub () {});
+            },));
 %else
         testSkip("the test needs the catalog's test hooks, which only debug builds have");
 %endif
