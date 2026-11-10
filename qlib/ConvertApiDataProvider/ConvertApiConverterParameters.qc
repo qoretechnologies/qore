@@ -91,6 +91,27 @@ public class ConvertApiConverterParameters {
         return rv;
     }
 
+    #! Returns a parameter of a converter
+    /** @param converter the converter, as returned by the \c info endpoint
+        @param name the parameter name, compared case-insensitively
+
+        @return the parameter, as returned by the \c info endpoint, or @ref nothing if the converter has no parameter
+        with the name
+    */
+    static *hash<auto> getParameter(hash<auto> converter, string name) {
+        name = name.lwr();
+        foreach auto group in (converter.ConverterParameterGroups) {
+            if (group.typeCode() != NT_HASH) {
+                continue;
+            }
+            foreach auto param in (group.ConverterParameters) {
+                if (param.typeCode() == NT_HASH && param.Name.typeCode() == NT_STRING && param.Name.lwr() == name) {
+                    return param;
+                }
+            }
+        }
+    }
+
     #! Returns the request field for a converter parameter
     /** @param param the parameter, as returned by the \c info endpoint
         @param required @ref True if the field must be given
@@ -106,7 +127,9 @@ public class ConvertApiConverterParameters {
             "desc": ConvertApiConverterParameters::getDescription(param),
         };
         if (param.Type == "Collection" && param.Values.typeCode() == NT_HASH && param.Values) {
-            rv.allowed_values = ConvertApiConverterParameters::getAllowedValues(param);
+            # the values of a list parameter are the values of its elements
+            rv{param.Array ? "element_allowed_values" : "allowed_values"} =
+                ConvertApiConverterParameters::getAllowedValues(param);
         }
         hash<auto> attr;
         # ConvertAPI marks the parameters that most users of a converter set

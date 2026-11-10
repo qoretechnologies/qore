@@ -162,6 +162,24 @@ class FakeConvertApiHandler inherits AbstractHttpRequestHandler {
                     ),
                 },
             );
+        } else if (hdr.path =~ /^info\/html\/to\/(md|jpg)$/) {
+            # html to md converts an HTML file, which it can download from a URL; html to jpg renders a web page
+            list<auto> input = (
+                {"Name": "File", "Label": "File", "Type": "File", "Required": hdr.path =~ /md$/},
+            );
+            if (hdr.path =~ /jpg$/) {
+                input += {"Name": "Url", "Label": "URL to convert", "Type": "Uri", "Representation": "Url"};
+            }
+            rv = (
+                {
+                    "Name": "Chromium",
+                    "SourceFileFormats": ("html",),
+                    "DestinationFileFormats": (hdr.path =~ /md$/ ? "md" : "jpg",),
+                    "ConverterParameterGroups": (
+                        {"Name": "Input", "ConverterParameters": input},
+                    ),
+                },
+            );
         } else if (hdr.path =~ /^info\/data\/to\/qrcode$/) {
             rv = (
                 {
@@ -1018,6 +1036,8 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
                             "Values": {"a": "Mode A", "b": "Mode B"}, "Description": "The mode.",
                             "DescriptionMarkdown": "The `mode`.\r\nMore."},
                         {"Name": "AuthPassword", "Label": "Password", "Type": "String"},
+                        {"Name": "Pages", "Label": "Pages", "Type": "Collection", "Array": True,
+                            "Values": {"odd": "Odd", "even": "Even"}, "Description": "The pages."},
                         {"Name": "Shape", "Label": "Shape", "Type": "Polygon"},
                         {"Name": "StoreFile", "Type": "Bool"},
                         {"Name": "FileName", "Type": "String"},
@@ -1032,7 +1052,7 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         # the input, output and authentication parameters are set by the module, and the names of the action's own
         # fields are not taken
         assertEq(("Data", "OverlayFile", "Images", "Pdfa", "Quality", "Padding", "Color", "Mode", "AuthPassword",
-            "Shape"), keys fields);
+            "Pages", "Shape"), keys fields);
         HashDataType type("test");
         type.addQoreFields(fields);
         hash<string, AbstractDataField> tf = type.getFields();
@@ -1055,6 +1075,12 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         assertEq(("Mode A", "Mode B"), (map $1.display_name, tf.Mode.getAllowedValues()));
         assertEq("The default", tf.Mode.getAllowedValues()[1].desc);
         assertThrows("FIELD-VALUE-ERROR", \tf.Mode.acceptsValue(), ("c",));
+        # the value list of a list parameter applies to its elements
+        assertNothing(fields.Pages.allowed_values);
+        assertEq(("odd", "even"), (map $1.value, fields.Pages.element_allowed_values));
+        assertEq(("odd", "even"), tf.Pages.acceptsValue(("odd", "even")));
+        assertEq(("even",), tf.Pages.acceptsValue("even"));
+        assertThrows("FIELD-VALUE-ERROR", \tf.Pages.acceptsValue(), (("odd", "all"),));
         # labels in title case; descriptions with the range, default and file types; markdown descriptions preferred
         assertEq("Data to Encode", fields.Data.display_name);
         assertEq("Image Quality", fields.Quality.display_name);
@@ -1155,7 +1181,13 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
             "BookmarkMode": "chapters",
         },));
 
-        # a parameter that the converter requires must be given, in its own field or in "parameters"
+        # a parameter that the converter requires must be given, in its own field or in "parameters", and the options
+        # do not require it when "parameters" gives it
+        assertTrue(convert.tryGetActionOptionsWithOptions(action, {"from": "data", "to": "qrcode"}).Data.required);
+        assertFalse(convert.tryGetActionOptionsWithOptions(action, {"from": "data", "to": "qrcode",
+            "parameters": {"data": "https://www.convertapi.com"}}).Data.required);
+        assertFalse(convert.getRequestTypeWithOptions({"from": "data", "to": "qrcode",
+            "parameters": {"Data": "https://www.convertapi.com"}}).getFields().Data.isMandatory());
         assertThrows("INVALID-REQUEST", "Data", \convert.doRequest(), ({"from": "data", "to": "qrcode"},));
         handler.requests = ();
         convert.doRequest({"from": "data", "to": "qrcode", "Data": "https://www.convertapi.com"});
@@ -1175,6 +1207,22 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         convert.doRequest({"from": "html", "to": "pdf", "url": "https://example.com", "PageSize": "a4"});
         posts = select handler.requests, $1.method == "POST";
         assertEq("a4", (select posts[0].body.Parameters, $1.Name == "PageSize")[0].Value);
+
+        # a source URL is the web page to render for a converter that takes a Url parameter (html to jpg), and the
+        # file to download for any other converter, also of an html source (html to md)
+        handler.requests = ();
+        convert.doRequest({"from": "html", "to": "jpg", "url": "https://example.com"});
+        convert.doRequest({"from": "html", "to": "md", "url": "https://example.com/a.html"});
+        posts = select handler.requests, $1.method == "POST";
+        assertEq(("convert/html/to/jpg", "convert/html/to/md"), (map $1.path, posts));
+        pmap = {};
+        map pmap{$1.Name} = $1, posts[0].body.Parameters;
+        assertEq("https://example.com", pmap.Url.Value);
+        assertFalse(pmap.hasKey("File"));
+        pmap = {};
+        map pmap{$1.Name} = $1, posts[1].body.Parameters;
+        assertEq({"Url": "https://example.com/a.html"}, pmap.File.FileValue);
+        assertFalse(pmap.hasKey("Url"));
 
         # the options of convert-pdf-to-image are those of the image format
         AbstractDataProvider images = provider.getChildProviderEx("convert-pdf-to-image");

@@ -127,13 +127,27 @@ public class ConvertApiConvertDataProvider inherits ConvertApiConversionDataProv
     }
 
     #! Returns the request type for the converter given by the \c from and \c to option values
-    /** @param options the option values given so far
+    /** A parameter that the converter requires is optional when the option values give it in \c parameters.
+
+        @param options the option values given so far
 
         @return the request type with the converter's parameters as typed fields (see getConverterRequestType()),
         or the request type of the action if a format is not given yet or the converter's parameters cannot be read
     */
     private *AbstractDataProviderType getRequestTypeWithOptionsImpl(*hash<auto> options) {
-        return getConverterRequestType(options.from, options.to) ?? RequestType;
+        return getConverterRequestType(options.from, options.to,
+            ConvertApiConvertDataProvider::getGivenParameters(options)) ?? RequestType;
+    }
+
+    #! Returns the names of the converter parameters given in the \c parameters field of a request or option values
+    /** @param req the request or the option values
+
+        @return the parameter names in upper case, or @ref nothing if \c parameters is not given
+    */
+    static *hash<string, bool> getGivenParameters(auto req) {
+        if (req.typeCode() == NT_HASH && req.parameters.typeCode() == NT_HASH) {
+            return map {$1.upr(): True}, keys req.parameters;
+        }
     }
 
     #! Returns the request type for the converter of a request, and checks the request with it
@@ -153,11 +167,8 @@ public class ConvertApiConvertDataProvider inherits ConvertApiConversionDataProv
         AbstractDataProviderType rv = RequestType;
         if (req.typeCode() == NT_HASH && req.from.typeCode() == NT_STRING && req.from.val()
             && req.to.typeCode() == NT_STRING && req.to.val()) {
-            *hash<string, bool> given;
-            if (req.parameters.typeCode() == NT_HASH) {
-                given = map {$1.upr(): True}, keys req.parameters;
-            }
-            rv = getConverterRequestType(req.from, req.to, given) ?? AnyParameterRequestType;
+            rv = getConverterRequestType(req.from, req.to, ConvertApiConvertDataProvider::getGivenParameters(req))
+                ?? AnyParameterRequestType;
         }
         if (exists req) {
             try {
@@ -243,10 +254,26 @@ public class ConvertApiConvertDataProvider inherits ConvertApiConversionDataProv
     }
 
     #! Returns the name of the parameter for the \c url field
-    /** The \c html converters render the web page given with the \c Url parameter; all other converters download
-        the source file from the URL
+    /** A converter that renders a web page, such as \c html to \c pdf, takes the URL of the page in its \c Url
+        parameter; all other converters, such as \c html to \c md, download the source file from the URL.
+
+        The converter's description is cached when the request is checked before the conversion (see
+        getRequestTypeWithDataImpl()), so it is read from the cache without another request; if it could not be read,
+        the \c html converters are taken to render the web page.
+
+        @param req the request
+
+        @return \c "Url" if the converter renders the web page of the URL, or @ref nothing if it downloads the source
+        file from it (or the request gives no URL)
     */
     private *string getUrlParameter(hash<auto> req) {
+        if (!req.url.val()) {
+            return;
+        }
+        *hash<auto> converter = getConverterInfoFromCache(req.from, req.to);
+        if (converter) {
+            return ConvertApiConverterParameters::getParameter(converter, "Url").Name;
+        }
         if (req.from.lwr() == "html") {
             return "Url";
         }

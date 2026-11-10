@@ -197,21 +197,38 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
         @throw CONVERTAPI-UNKNOWN-CONVERTER no converter exists for the given formats
     */
     hash<auto> getCachedConverterInfo(string from, string to) {
-        string key = sprintf("%s %s %s", rest.getUrl(), from.lwr(), to.lwr());
-        {
-            AutoLock al(converter_lock);
-            *hash<auto> entry = converter_info_cache{key};
-            if (entry && (entry.timestamp + ConverterCacheTtl) > now_us()) {
-                return entry.converter;
-            }
+        *hash<auto> converter = getConverterInfoFromCache(from, to);
+        if (converter) {
+            return converter;
         }
-        hash<auto> converter = getConverterInfo(from, to);
+        converter = getConverterInfo(from, to);
         AutoLock al(converter_lock);
-        converter_info_cache{key} = {
+        converter_info_cache{ConvertApiDataProviderBase::getConverterInfoCacheKey(rest.getUrl(), from, to)} = {
             "timestamp": now_us(),
             "converter": converter,
         };
         return converter;
+    }
+
+    #! Returns the information about a converter if it is cached, without a request
+    /** @param from the source format
+        @param to the destination format
+
+        @return the converter hash as returned by the \c info endpoint, or @ref nothing if it is not cached (see
+        getCachedConverterInfo())
+    */
+    *hash<auto> getConverterInfoFromCache(string from, string to) {
+        string key = ConvertApiDataProviderBase::getConverterInfoCacheKey(rest.getUrl(), from, to);
+        AutoLock al(converter_lock);
+        *hash<auto> entry = converter_info_cache{key};
+        if (entry && (entry.timestamp + ConverterCacheTtl) > now_us()) {
+            return entry.converter;
+        }
+    }
+
+    #! Returns the key of a converter in the converter information cache
+    private static string getConverterInfoCacheKey(string url, string from, string to) {
+        return sprintf("%s %s %s", url, from.lwr(), to.lwr());
     }
 
     #! Returns a readable label for a source format
