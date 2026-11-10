@@ -3596,6 +3596,45 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module, bool excepti
     }
 }
 
+// documented in QoreIRToLLVM.h
+llvm::BasicBlock* QoreIRToLLVM::getImplicitContextRestoreEdge(llvm::Module& module, llvm::Function* llvm_func,
+        const QoreIRInstruction* inst, llvm::BasicBlock* target) {
+    // an exception that leaves the function from code that runs with an implicit argument set (the predicate of a
+    // streaming operator or of select, with no handler in the function) restores the implicit argument and element,
+    // innermost first, before the statement's temporaries and the frame's values are released, as the AST
+    // interpreter's SingleArgvContextHelper and ImplicitElementHelper restore them when the exception unwinds the
+    // operator: the argument list holds a reference to the element, and the push holds one to the list it restores
+    // (qore#5670); only the error edge has the instructions, so the normal path costs nothing
+    auto open_it = inst ? open_implicit_contexts.find(inst) : open_implicit_contexts.end();
+    if (open_it == open_implicit_contexts.end() || open_it->second.empty()) {
+        return target;
+    }
+    llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
+    auto saved_ip = builder->GetInsertPoint();
+    llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "implicit_context_restore", llvm_func);
+    builder->SetInsertPoint(edge);
+    const std::vector<const QoreIRInstruction*>& pushes = open_it->second;
+    for (size_t i = pushes.size(); i > 0; --i) {
+        const QoreIRInstruction* push = pushes[i - 1];
+        auto val_it = values.find(push->result.id);
+        if (val_it == values.end() || !val_it->second) {
+            continue;
+        }
+        if (push->opcode == QoreIROpcode::PushImplicitArg) {
+            auto pop_fn = module.getOrInsertFunction("qore_rt_pop_implicit_arg",
+                    llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+            builder->CreateCall(pop_fn, {boxValue(val_it->second, push->result.id), xsink_arg});
+        } else {
+            auto pop_fn = module.getOrInsertFunction("qore_rt_pop_implicit_element",
+                    llvm::FunctionType::get(void_type, {i64_type}, false));
+            builder->CreateCall(pop_fn, {val_it->second});
+        }
+    }
+    builder->CreateBr(target);
+    builder->SetInsertPoint(saved_insert, saved_ip);
+    return edge;
+}
+
 void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit) {
     if (exit_temp_cleanup_array && !exit_temp_cleanup_array_overflow
             && exit_temp_cleanup_array_count == exit_temp_cleanup_count
@@ -4166,7 +4205,10 @@ void QoreIRToLLVM::registerPersistentCleanupAlloca(llvm::Value* alloca_ptr) {
 
 // documented in QoreIRToLLVM.h
 void QoreIRToLLVM::registerPositionedIterator(const QoreIRInstruction* inst, llvm::Value* iter_alloca) {
-    if (!current_ir_func) {
+    // the iterator of a functional operator in an expression is released with the statement's temporaries when an
+    // exception leaves the function, before the handlers of the blocks left, as the AST interpreter unwinds the
+    // operator (see QoreIRInstruction::restore_on_exception_exit)
+    if (!current_ir_func || (inst && inst->restore_on_exception_exit)) {
         return;
     }
     auto it = current_ir_func->interpreter_iterator_slot_boundary.find(inst);
@@ -10407,6 +10449,7 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
             error_return_block = llvm::BasicBlock::Create(ctx, "error_return", llvm_func);
         }
         exception_block = getOrderedErrorReturnEdge(module, llvm_func, inst, error_return_block);
+        exception_block = getImplicitContextRestoreEdge(module, llvm_func, inst, exception_block);
     }
     // Inline exception check as direct memory loads instead of function call
     // ExceptionSink::priv at offset 0 -> qore_es_private*
@@ -11598,6 +11641,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     error_return_block = nullptr;
     jit_deopt_block = nullptr;
     current_lowering_block_ = nullptr;
+    // the implicit arguments and elements that an exception leaving the function restores at each instruction (see
+    // getImplicitContextRestoreEdge())
+    qore_ir_find_open_implicit_contexts(func, open_implicit_contexts);
     landingpad_blocks.clear();
     has_on_block_exit_handlers = false;
     bool track_on_block_exit_scope = true;

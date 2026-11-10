@@ -293,7 +293,7 @@ public:
     //! are restored on every path, also when the code raises an exception (see the definition)
     template <typename F>
     QoreIRValue lowerWithImplicitContext(QoreIRValue element, QoreIRValue index, const QoreProgramLocation* loc,
-            QoreIRBasicBlock* loop_cleanup, std::string& error, F&& lower, bool keep_value = false);
+            QoreIRBasicBlock* loop_cleanup, std::string& error, F&& lower);
     QoreIRValue lowerMap(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSelect(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMapSelect(const QoreValue& expr, std::string& error);
@@ -776,14 +776,16 @@ private:
     DLLLOCAL bool expressionReadsWeakCapableLocal(const QoreValue& expr) const;
 
     //! Emits the block that an exception leaving the body of a value foreach loop goes to before \a outer_target
-    /** Releases the element (if valid), the partial result (if valid: the list that a streaming operator built so
-        far), the iterator, the list and the loop variables, in this order, as the AST's foreach statement and streaming
-        operators do when an exception unwinds them, before the handler of the enclosing try block or block with
-        handlers runs.  Without \a outer_target, the exception then leaves the function (a synthetic rethrow).
+    /** Releases the element (if valid), the value that a map expression gave last (if valid: the list holds a
+        reference of its own), the partial result (if valid: the list that a functional operator built so far), the
+        iterator (if valid), the list and the loop variables, in this order, as the AST's foreach statement and
+        functional operators do when an exception unwinds them, before the handler of the enclosing try block or block
+        with handlers runs.  Without \a outer_target, the exception then leaves the function (a synthetic rethrow).
     */
     DLLLOCAL void emitForeachExceptionCleanup(QoreIRBasicBlock* cleanup_block, QoreIRBasicBlock* outer_target,
             QoreIRValue iterator, QoreIRValue list, QoreIRValue element, const LVList* lvars,
-            const QoreProgramLocation* loc, QoreIRValue partial_result = QoreIRValue());
+            const QoreProgramLocation* loc, QoreIRValue partial_result = QoreIRValue(),
+            QoreIRValue element_value = QoreIRValue());
 
     //! Top-level handlers saved before block_handlers is erased
     /** Used by compileAllHandlerIRs() to iterate over handlers that would otherwise

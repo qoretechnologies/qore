@@ -951,6 +951,13 @@ private:
     // cleanup tail (on_block_exit, iterator, preinstantiated, invoke
     // (allocas), local uninstantiation) and a resume that rethrows.
     llvm::BasicBlock* function_common_cleanup = nullptr;
+    //! the flagged PushImplicitArg / PushImplicitElement instructions open at each instruction that leaves the
+    //! function on an exception, outermost first (see qore_ir_find_open_implicit_contexts())
+    std::unordered_map<const QoreIRInstruction*, std::vector<const QoreIRInstruction*>> open_implicit_contexts;
+    //! Returns the block that restores the implicit arguments and elements open at \a inst and then branches to
+    //! \a target, or \a target if none is open
+    llvm::BasicBlock* getImplicitContextRestoreEdge(llvm::Module& module, llvm::Function* llvm_func,
+            const QoreIRInstruction* inst, llvm::BasicBlock* target);
 
     // Phase 2B — incoming edges feeding function_common_cleanup's phi.
     // Populated by createPerInvokeCleanupLP; consumed by

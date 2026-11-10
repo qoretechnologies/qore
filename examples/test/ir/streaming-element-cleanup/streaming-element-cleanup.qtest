@@ -24,9 +24,17 @@
     handler; the source of every streaming operator was released at the end of the statement, where the AST
     interpreter releases it when the operator returns.
 
-    streaming-element-cleanup.q runs each case and logs the release of every object and the objects that were not
-    released exactly once when the case returned.  Its output with the AST interpreter is checked, and it must be the
-    same in every other execution mode, on the IR tier and as an AOT executable.
+    The review of the fix found more (streaming-element-cleanup-review.q): a predicate's temporaries were released
+    before the element on the normal path; a fused map stage that changes the element released the element after the
+    pipeline; fused pipelines and the typed-list map and map-select loops that raised released the source before the
+    list in native code; an iterator's next() that raised released the list before the source (the AST interpreter
+    ends the functional iterator as if the source were exhausted); a destructor of the previous element that raised
+    did not stop the loop in the IR interpreter; the message of a negative take or drop count differed; and code with
+    no handler in the function released its values in another order in the IR interpreter.
+
+    Each script runs its cases and logs the release of every object and the objects that were not released exactly
+    once when the case returned.  Its output with the AST interpreter is checked, and it must be the same in every
+    other execution mode, on the IR tier and as an AOT executable.
 */
 class StreamingElementCleanupTest inherits QUnit::Test {
     public {
@@ -48,6 +56,23 @@ class StreamingElementCleanupTest inherits QUnit::Test {
             "normal_take: released h2; released h3; show 1; released h1; after",
             "normal_it_takewhile: released it2; show 1; released it1; after",
         );
+
+        #! lines of the output of the AST interpreter for the review cases
+        const ReviewAstLines = (
+            "temp_pred_select: released t0; released it2; released t1; itdone it; released t2; r 2; released it1; "
+                "released it3; after",
+            "temp_pred_mapsel: released it1; released t0; released it2; released t1; released m0; released it3; "
+                "itdone it; released m2; released t2; r 2; after",
+            "fmap_take: released it1; itdone it; after",
+            "fused_two_stage: released it3; released it1; released it2; itdone it; catch SELECT/it3; after",
+            "tl_map_new_raises: released n0; released h1; released h2; catch SELECT/h2; after",
+            "next_raises: itdone n; released n1; released n2; catch NEXT/n3; after",
+            "next_raises_nh: itdone n; released n1; released n2; catch NEXT/n3; after",
+            "dtor_raises_normal_any: released x1; itdone x; catch DTOR/x1; after",
+            "fused_stage_raises_nh: released it1; released it2; itdone it; catch STAGE/it2; after",
+            "take_neg: itdone it; catch STREAMING-OPERATOR-ERROR/take operator expression requires a non-negative "
+                "count, got -1; after",
+        );
     }
 
     private {
@@ -55,6 +80,7 @@ class StreamingElementCleanupTest inherits QUnit::Test {
         string qcc_bin;
         string env;
         string script;
+        string review_script;
     }
 
     constructor() : QUnit::Test("streaming element cleanup", "1.0", \ARGV) {
@@ -64,6 +90,7 @@ class StreamingElementCleanupTest inherits QUnit::Test {
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
         env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
         script = get_script_dir() + "/streaming-element-cleanup.q";
+        review_script = get_script_dir() + "/streaming-element-cleanup-review.q";
 
         addTestCase("AST interpreter", \astTest());
         addTestCase("execution modes", \modesTest());
@@ -73,45 +100,57 @@ class StreamingElementCleanupTest inherits QUnit::Test {
 
     #! checks the output of the AST interpreter, which the other modes must give
     private astTest() {
-        string out = ast();
-        list<string> lines = select out.split("\n"), $1;
-        foreach string line in (AstLines) {
-            assertTrue(inlist(line, lines), line);
-        }
-        # no object outlives its case or is released twice in the AST interpreter
-        assertEq(-1, out.find("ERROR:"));
-        # every case runs three times
-        assertEq(3 * StreamingElementCleanupTest::caseCount(lines), lines.size());
+        checkAst(script, AstLines);
+        checkAst(review_script, ReviewAstLines);
     }
 
-    #! runs the script in every execution mode and on the IR tier
+    #! runs the scripts in every execution mode and on the IR tier
     private modesTest() {
-        string exp = ast();
-        foreach string mode in (ExecModeHarness::ExecModes) {
-            if (mode == "ast") {
-                continue;
+        foreach string s in ((script, review_script)) {
+            string exp = ast(s);
+            string name = basename(s);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, s)),
+                    name + " " + mode);
             }
-            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, script)), mode);
+            assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, s)),
+                name + " " + ExecModeHarness::IRTierName);
         }
-        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, script)),
-            ExecModeHarness::IRTierName);
     }
 
-    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    #! compiles the scripts with qcc and checks that the executables give the output of the AST interpreter
     private aotTest() {
         if (!is_file(qcc_bin)) {
             testSkip("qcc is not available at " + qcc_bin);
         }
         TmpDir dir("streaming-element-cleanup-aot-");
-        string exe = dir.path + "/streaming-element-cleanup";
-        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, script));
-        assertTrue(is_file(exe), "qcc compiles the script: " + out);
-        assertEq(ast(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT");
+        foreach string s in ((script, review_script)) {
+            string exe = dir.path + "/" + basename(s);
+            string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, s));
+            assertTrue(is_file(exe), "qcc compiles " + basename(s) + ": " + out);
+            assertEq(ast(s), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), basename(s) + " AOT");
+        }
     }
 
-    #! returns the output of the script with the AST interpreter
-    private string ast() {
-        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, script));
+    #! checks the output of a script with the AST interpreter
+    private checkAst(string s, list<string> expected) {
+        string out = ast(s);
+        list<string> lines = select out.split("\n"), $1;
+        foreach string line in (expected) {
+            assertTrue(inlist(line, lines), line);
+        }
+        # no object outlives its case or is released twice in the AST interpreter
+        assertEq(-1, out.find(" ERROR: "), basename(s));
+        # every case runs three times
+        assertEq(3 * StreamingElementCleanupTest::caseCount(lines), lines.size(), basename(s));
+    }
+
+    #! returns the output of a script with the AST interpreter
+    private string ast(string s) {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, s));
     }
 
     #! returns the number of distinct cases in the output

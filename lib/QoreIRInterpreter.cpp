@@ -1403,7 +1403,34 @@ struct IRActiveIterator {
     uint32_t slot_boundary = 0;
     //! the order in which the frame created its iterators
     uint64_t seq = 0;
+    //! false for the iterator of a functional operator in an expression (see
+    //! QoreIRInstruction::restore_on_exception_exit), true for that of a foreach statement
+    bool foreach = true;
 };
+
+//! Releases the iterators of the functional operators of the expressions that an exception leaves, last created first
+/** The AST interpreter releases an operator's functional iterator, which holds its source, while the exception unwinds
+    the operator, before the statement's temporaries and before the handlers of the blocks left run (qore#5670); the
+    iterators of foreach statements are released at their places among the locals (see releaseActiveIteratorsFrom())
+*/
+static void releaseOperatorIterators(std::unordered_map<FunctionalOperatorInterface*, IRActiveIterator>& iters) {
+    if (iters.empty()) {
+        return;
+    }
+    std::vector<std::pair<FunctionalOperatorInterface*, uint64_t>> released;
+    for (const auto& entry : iters) {
+        if (!entry.second.foreach) {
+            released.emplace_back(entry.first, entry.second.seq);
+        }
+    }
+    std::sort(released.begin(), released.end(), [](const auto& a, const auto& b) {
+        return a.second > b.second;
+    });
+    for (auto& [iter, seq] : released) {
+        iters.erase(iter);
+        delete iter;
+    }
+}
 
 //! Releases the active iterators placed at or after \a pos (see IRActiveIterator), last placed first
 static void releaseActiveIteratorsFrom(std::unordered_map<FunctionalOperatorInterface*, IRActiveIterator>& iters,
@@ -2605,6 +2632,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
         qore_ir_build_exception_release_groups(func, release_groups);
         func.interpreter_exception_release_groups = std::move(release_groups);
     }
+    qore_ir_find_open_implicit_contexts(func, func.interpreter_open_implicit_contexts);
     func.interpreter_operand_use_counts = std::move(operand_use_counts);
     func.interpreter_param_slot_ids = std::move(param_slot_ids);
     func.interpreter_param_local_vars = std::move(param_local_vars);
@@ -6760,7 +6788,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto addActiveIterator = [&](FunctionalOperatorInterface* iter, const QoreIRInstruction* create_inst) {
         auto it = func.interpreter_iterator_slot_boundary.find(create_inst);
         active_iterators[iter] = IRActiveIterator{it != func.interpreter_iterator_slot_boundary.end()
-            ? it->second : 0, iterator_seq++};
+            ? it->second : 0, iterator_seq++, !create_inst || !create_inst->restore_on_exception_exit};
     };
     auto& on_block_exit_handlers = frame.on_block_exit_handlers;
     // Catch exception stack for rethrow support
@@ -7769,7 +7797,42 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // values first released the temporaries of a statement in a foreach body before the handlers of the body ran,
     // but its list after them; running the handlers first released the temporaries of the statement that raised the
     // exception after the handlers.
+    // restores the implicit arguments and elements open at the instruction that raised the exception leaving the
+    // frame, innermost first, before the frame's values are released, as the AST interpreter's
+    // SingleArgvContextHelper and ImplicitElementHelper restore them when the exception unwinds the operator: the
+    // argument list holds a reference to the element (qore#5670); the slot of a push holds the context to restore,
+    // and the frame's release of the slots releases the push's reference to the list.  The contexts open at each
+    // instruction are known from the IR (QoreIRFunction::interpreter_open_implicit_contexts), so the normal path does
+    // nothing for them
+    auto restoreImplicitContexts = [&]() {
+        if (func.interpreter_open_implicit_contexts.empty() || !block || ip >= block->instructions.size()) {
+            return;
+        }
+        auto it = func.interpreter_open_implicit_contexts.find(block->instructions[ip].get());
+        if (it == func.interpreter_open_implicit_contexts.end()) {
+            return;
+        }
+        for (size_t i = it->second.size(); i > 0; --i) {
+            const QoreIRInstruction* push = it->second[i - 1];
+            uint32_t id = push->result.id;
+            if (id >= values.size()) {
+                continue;
+            }
+            if (push->opcode == QoreIROpcode::PushImplicitElement) {
+                save_implicit_element(static_cast<int>(values[id].getAsBigInt()));
+                continue;
+            }
+            // as PopImplicitArg does
+            const QoreListNode* current = thread_get_implicit_args();
+            if (current) {
+                const_cast<QoreListNode*>(current)->deref(xsink);
+            }
+            thread_set_implicit_args(values[id].get<QoreListNode>());
+        }
+    };
     auto unwindForException = [&]() {
+        restoreImplicitContexts();
+        releaseOperatorIterators(active_iterators);
         while (!scope_stack.empty()) {
             releaseScopeTemps(scope_stack.back());
             fireScopeExits(scope_stack.size() - 1);
@@ -12639,6 +12702,18 @@ load_local_done:
                 }
                 // Restore old context
                 thread_set_implicit_args(old_argv);
+                // the reference that the push took to the restored list is released now, as native code releases it
+                // (qore_rt_pop_implicit_arg()): kept to the end of the statement, it kept the list, and the element
+                // of an enclosing operator that the list holds, alive after the operator ended (qore#5670)
+                {
+                    uint32_t old_id = inst->operands[0].id;
+                    if (old_id < values.size() && hasCleanupEntry(cleanup, old_id)) {
+                        removeAllCleanupEntries(cleanup, old_id);
+                        QoreValue old_ref = values[old_id];
+                        values[old_id] = QoreValue();
+                        old_ref.discard(xsink);
+                    }
+                }
                 ++ip;
                 break;
             }
@@ -12949,6 +13024,32 @@ load_local_done:
                     ip = 0;
                     break;
                 }
+                // the element of the previous iteration is released before the next one is taken, as the AST
+                // interpreter releases each element when its iteration ends and native code releases the element's
+                // slot before qore_rt_iterator_next(); an exception that its destructor raises leaves the loop with
+                // the iterator still alive, which the loop's exception cleanup or the frame releases (qore#5670)
+                // (the slot keeps its place among the frame's temporaries, which an exception releases in order)
+                // (only a node has a reference to release, so a loop over scalars does nothing more here)
+                {
+                    uint32_t elem_id = iter_inst->result.id;
+                    if (elem_id < values.size() && values[elem_id].hasNode() && hasCleanupEntry(cleanup, elem_id)) {
+                        QoreValue elem = values[elem_id];
+                        values[elem_id] = QoreValue();
+                        elem.discard(xsink);
+                        if (xsink && *xsink) {
+                            if (inst->exception_target) {
+                                cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
+                                prev_block = block;
+                                block = inst->exception_target;
+                                ip = 0;
+                                break;
+                            }
+                            unwindForException();
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                    }
+                }
                 ValueOptionalRefHolder val(xsink);
                 bool done = iter->getNext(val, xsink);
                 if (xsink && *xsink) {
@@ -12974,28 +13075,7 @@ load_local_done:
                     delete iter;
                     // Clear the iterator value so we don't double-delete
                     setValueSlot(values, iter_inst->iterator.id, QoreValue(static_cast<int64_t>(0)), xsink);
-                    // the last element is released when the loop ends, as the AST interpreter releases each element
-                    // when its iteration ends and native code releases the element's slot here (the next call of
-                    // qore_rt_iterator_next() releases the previous element and stores NOTHING when it is done)
-                    uint32_t elem_id = iter_inst->result.id;
-                    if (elem_id < values.size() && hasCleanupEntry(cleanup, elem_id)) {
-                        removeAllCleanupEntries(cleanup, elem_id);
-                        QoreValue elem = values[elem_id];
-                        values[elem_id] = QoreValue();
-                        elem.discard(xsink);
-                        if (xsink && *xsink) {
-                            if (inst->exception_target) {
-                                cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
-                                prev_block = block;
-                                block = inst->exception_target;
-                                ip = 0;
-                                break;
-                            }
-                            unwindForException();
-                            cleanupLocalCaches();
-                            return false;
-                        }
-                    }
+                    // the last element was released above, before the iterator was asked for another one
                     prev_block = block;
                     block = iter_inst->done_target;
                     ip = 0;
