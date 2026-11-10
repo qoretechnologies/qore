@@ -789,6 +789,22 @@ LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_
     }
 }
 
+LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove, void (*hook)(void*),
+        void* hook_arg)
+        : vl(xsink), root_hook(hook), root_hook_arg(hook_arg) {
+    if (!exp.isNothing() && exp.hasNode()) {
+        try {
+            doLValue(exp, for_remove);
+        } catch (...) {
+            ref_pgms.release(nullptr);
+            throw;
+        }
+    }
+    // the hook is not called if a key or an index of the path raised an exception
+    assert(!root_hook || *xsink || exp.isNothing() || !exp.hasNode());
+    root_hook = nullptr;
+}
+
 LValueHelper::LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
@@ -1821,6 +1837,10 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
         vl.del();
     }
     qore_type_t ntype = n.getType();
+    // the root of the lvalue is resolved and locked after the keys and indices of its path have been evaluated
+    if (ntype != NT_OPERATOR) {
+        runRootHook();
+    }
     //printd(5, "LValueHelper::doLValue() n: %s (%d)\n", n.getFullTypeName(), n.getType());
     if (ntype == NT_VARREF) {
         const VarRefNode* v = n.get<const VarRefNode>();
@@ -1941,6 +1961,10 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
         vl.del();
     }
     qore_type_t ntype = n.getType();
+    // the root of the lvalue is resolved and locked after the keys and indices of its path have been evaluated
+    if (ntype != NT_OPERATOR) {
+        runRootHook();
+    }
     if (ntype == NT_VARREF) {
         const VarRefNode* v = n.get<const VarRefNode>();
         if (v->getLValue(*this, for_remove)) {
@@ -3375,6 +3399,96 @@ LValueRemoveHelper::LValueRemoveHelper(const ReferenceNode& ref, ExceptionSink* 
         doRemove(lvalue_ref::get(&ref)->vexp);
 }
 
+namespace {
+//! The selectors of a remove or delete expression with square brackets, evaluated before the lvalue is locked
+/** The selectors are evaluated when the keys and indices of the path to the lvalue have been evaluated, and before its
+    root is resolved and locked (LValueHelper's root hook), as the other execution modes and the expression as a value
+    evaluate them, so that a selector can read the lvalue (qore#5696).  The selectors are evaluated in order up to the
+    first that raises an exception, which is kept in an exception sink of its own while the lvalue is resolved and the
+    values of the earlier selectors are removed, and is raised when the removal ends, before any exception raised
+    since.  The values of the selectors are released then, after the lvalue's lock.
+*/
+class LValueRemoveSelectors {
+public:
+    //! the expressions of the selectors \a first and \a second (the bounds of a range), or of \a first only
+    LValueRemoveSelectors(const QoreValue& first, const QoreValue* second, ExceptionSink* xsink)
+            : first(&first), second(second), xsink(xsink) {
+    }
+
+    //! the expressions of a list of selectors
+    LValueRemoveSelectors(const QoreParseListNode::nvec_t& list, ExceptionSink* xsink)
+            : list(&list), xsink(xsink) {
+    }
+
+    ~LValueRemoveSelectors() {
+        // the exception of a selector is raised before any exception raised since
+        if (sel_xsink) {
+            ExceptionSink since;
+            since.assimilate(*xsink);
+            xsink->assimilate(sel_xsink);
+            xsink->assimilate(since);
+        }
+        for (QoreValue& v : values) {
+            v.discard(xsink);
+        }
+    }
+
+    //! the root hook of LValueHelper: evaluates the selectors
+    static void eval(void* arg) {
+        static_cast<LValueRemoveSelectors*>(arg)->evalIntern();
+    }
+
+    //! returns true if a selector raised an exception
+    bool raised() const {
+        return static_cast<bool>(sel_xsink);
+    }
+
+    //! the number of selectors evaluated without an exception
+    size_t size() const {
+        return values.size();
+    }
+
+    //! the value of the selector \a i
+    const QoreValue& operator[](size_t i) const {
+        assert(i < values.size());
+        return values[i];
+    }
+
+private:
+    const QoreValue* first = nullptr;
+    const QoreValue* second = nullptr;
+    const QoreParseListNode::nvec_t* list = nullptr;
+    ExceptionSink* xsink;
+    ExceptionSink sel_xsink;
+    std::vector<QoreValue> values;
+
+    void evalIntern() {
+        if (list) {
+            values.reserve(list->size());
+            for (const QoreValue& selector : *list) {
+                if (evalOne(selector)) {
+                    break;
+                }
+            }
+            return;
+        }
+        if (!evalOne(*first) && second) {
+            evalOne(*second);
+        }
+    }
+
+    //! evaluates one selector; returns -1 if it raised an exception
+    int evalOne(const QoreValue& selector) {
+        ValueEvalOptimizedRefHolder rh(selector, &sel_xsink);
+        if (sel_xsink) {
+            return -1;
+        }
+        values.push_back(rh.takeReferencedValue());
+        return 0;
+    }
+};
+}
+
 QoreValue LValueRemoveHelper::removeValue() {
     assert(!*xsink);
     return rv.removeValue(for_del);
@@ -3624,28 +3738,29 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
         return;
     }
 
-    // get the bracket expression
-    ValueEvalOptimizedRefHolder rh(op->getRight(), xsink);
-    if (*xsink)
+    // the bracket expression is evaluated after the path to the lvalue and before its lock (qore#5696)
+    const QoreValue index_expr = op->getRight();
+    LValueRemoveSelectors sel(index_expr, nullptr, xsink);
+
+    // dereference any list elements removed outside the lock
+    ReferenceHolder<QoreListNode> holder(xsink);
+
+    LValueHelper lvh(op->getLeft(), xsink, true, &LValueRemoveSelectors::eval, &sel);
+    if (!lvh || sel.raised())
         return;
+    assert(sel.size() == 1);
+    const QoreValue& rh = sel[0];
 
     int64 ind = 0;
     int64 original_ind = 0;
     const QoreListNode* rl = nullptr;
     bool negative_offsets = op->hasNegativeOffsets();
-    if (rh->getType() == NT_LIST) {
-        rl = rh->get<const QoreListNode>();
+    if (rh.getType() == NT_LIST) {
+        rl = rh.get<const QoreListNode>();
     } else {
-        ind = rh->getAsBigInt();
+        ind = rh.getAsBigInt();
         original_ind = ind;
     }
-
-    // dereference any list elements removed outside the lock
-    ReferenceHolder<QoreListNode> holder(xsink);
-
-    LValueHelper lvh(op->getLeft(), xsink, true);
-    if (!lvh)
-        return;
     lvh.startContainerRemoval();
 
     switch (lvh.getType()) {
@@ -3795,11 +3910,15 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
 }
 
 void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, const QoreParseListNode* pln) {
+    // the selectors are evaluated after the path to the lvalue and before its lock, up to the first that raises an
+    // exception, which is raised when what the earlier ones selected has been removed (qore#5696, qore#5675)
+    LValueRemoveSelectors sel(pln->getValues(), xsink);
     // dereference any list elements removed outside the lock
     ReferenceHolder<QoreListNode> holder(xsink);
     bool negative_offsets = op->hasNegativeOffsets();
+    const QoreParseListNode::nvec_t& vl = pln->getValues();
 
-    LValueHelper lvh(op->getLeft(), xsink, true);
+    LValueHelper lvh(op->getLeft(), xsink, true, &LValueRemoveSelectors::eval, &sel);
     if (!lvh)
         return;
     lvh.startContainerRemoval();
@@ -3815,16 +3934,12 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
             bool vcommon = false;
             ReferenceHolder<QoreListNode> v(new QoreListNode(autoTypeInfo), xsink);
 
-            const QoreParseListNode::nvec_t& vl = pln->getValues();
 
             direct_list = true;
             // keep a set of offsets removed to remove them from the list in reverse order
             ind_set_t iset;
-            for (unsigned i = 0; i < vl.size(); ++i) {
-                ValueEvalOptimizedRefHolder rh(vl[i], xsink);
-                if (*xsink) {
-                    break;
-                }
+            for (unsigned i = 0; i < sel.size(); ++i) {
+                const QoreValue* rh = &sel[i];
                 bool is_range = (vl[i].getType() == NT_OPERATOR &&
                     dynamic_cast<const QoreRangeOperatorNode*>(vl[i].getInternalNode()));
                 if (is_range) {
@@ -3870,14 +3985,11 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
             SimpleRefHolder<QoreStringNode> v(new QoreStringNode(str->getEncoding()));
             size_t len = str->length();
 
-            const QoreParseListNode::nvec_t& vl = pln->getValues();
 
             // keep a set of offsets removed to remove them from the list in reverse order
             ind_set_t iset;
-            for (unsigned i = 0; i < vl.size(); ++i) {
-                ValueEvalOptimizedRefHolder rh(vl[i], xsink);
-                if (*xsink)
-                    break;
+            for (unsigned i = 0; i < sel.size(); ++i) {
+                const QoreValue* rh = &sel[i];
                 bool is_range = (vl[i].getType() == NT_OPERATOR
                     && dynamic_cast<const QoreRangeOperatorNode*>(vl[i].getInternalNode()));
                 if (is_range) {
@@ -3918,14 +4030,11 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
             BinaryNode* bin = lvh.getValue().get<BinaryNode>();
             SimpleRefHolder<BinaryNode> v(new BinaryNode);
 
-            const QoreParseListNode::nvec_t& vl = pln->getValues();
 
             // keep a set of offsets removed to remove them from the list in reverse order
             ind_set_t iset;
-            for (unsigned i = 0; i < vl.size(); ++i) {
-                ValueEvalOptimizedRefHolder rh(vl[i], xsink);
-                if (*xsink)
-                    break;
+            for (unsigned i = 0; i < sel.size(); ++i) {
+                const QoreValue* rh = &sel[i];
                 bool is_range = (vl[i].getType() == NT_OPERATOR
                     && dynamic_cast<const QoreRangeOperatorNode*>(vl[i].getInternalNode()));
                 if (is_range) {
@@ -3949,6 +4058,11 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
         }
     }
 
+    // a value that is not a list, a string or a binary object is removed as a whole, unless a selector raised an
+    // exception
+    if (sel.raised()) {
+        return;
+    }
     bool static_assignment = false;
     QoreValue tmp = lvh.remove(static_assignment);
     if (static_assignment)
@@ -3961,18 +4075,18 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
 }
 
 void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op) {
-    // we must evaluate range arguments before acquiring any lvalue locks in LValueHelper
-    ValueEvalOptimizedRefHolder start_index(op->get(1), xsink);
-    if (*xsink)
-        return;
-    ValueEvalOptimizedRefHolder stop_index(op->get(2), xsink);
-    if (*xsink)
-        return;
+    // the bounds of the range are evaluated after the path to the lvalue and before its lock (qore#5696)
+    const QoreValue start_expr = op->get(1);
+    const QoreValue stop_expr = op->get(2);
+    LValueRemoveSelectors sel(start_expr, &stop_expr, xsink);
 
     // find variable ptr, exit if doesn't exist anyway
-    LValueHelper lvh(op->get(0), xsink, true);
-    if (!lvh)
+    LValueHelper lvh(op->get(0), xsink, true, &LValueRemoveSelectors::eval, &sel);
+    if (!lvh || sel.raised())
         return;
+    assert(sel.size() == 2);
+    const QoreValue* start_index = &sel[0];
+    const QoreValue* stop_index = &sel[1];
     lvh.startContainerRemoval();
 
     bool broken_list_range = static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE);

@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class RemoveSelectorsLockTest
+
+#! issue #5696: remove and delete evaluate their selectors before the lvalue is locked
+/** The AST interpreter evaluated the selectors of a remove or delete expression with square brackets on a global
+    (and on an object member or a static class variable) while it held the lvalue's lock, so a selector that read the
+    same lvalue asserted in a debug build and deadlocked in a release build.  The selectors are now evaluated after
+    the keys of the path to the lvalue and before its lock, as in the other execution modes.
+
+    The script next to the test runs in every execution mode, on the IR tier and as AOT executables, and its output
+    must be that of the AST interpreter; each run has a time limit, so that a deadlock fails the test.
+*/
+class RemoveSelectorsLockTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "remove-cases";
+
+        #! the time limit of a run of the script, in seconds
+        const TimeLimit = 120;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("remove and delete selectors before the lvalue lock", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter
+    private astTest() {
+        string out = astOutput();
+        assertEq(17, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "every case ran");
+        # a selector reads the global after its earlier selectors, before anything is removed
+        assertTrue(out =~ /^global list read:\n  read g \[1, 2, 3, 4\]\n  = \[\[1, 4\], \[2, 3\]\]\n/, "read");
+        # a selector that writes the global changes the list that is removed from
+        assertTrue(out =~ /\nglobal list write:\n  grow g \[1, 2, 3, 4, 99\]\n  = \[\[1, 99\], \[2, 3, 4\]\]\n/,
+            "write");
+        # a later selector that raises an exception: what the earlier ones selected is removed
+        assertTrue(out =~ /\nglobal partial:\n  sel a\n  read g \[1, 2, 3, 4\]\n  caught RANGE-ERROR\n  = \[2, 3\]\n/,
+            "partial removal");
+        # the keys of the path are evaluated before the selectors and the index
+        assertTrue(out =~ /\npath order index:\n  key a\n  sel x\n/, "path before index");
+        assertTrue(out =~ /\npath order range:\n  key a\n  sel x\n  sel y\n/, "path before range");
+        assertEq((), (select out.split("\n"), $1 =~ /^  ! /), "no case raised an exception");
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s timeout %d %s --exec-mode=%s %s", env, TimeLimit, qore_bin,
+                mode, scriptPath())), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s timeout %d %s --exec-mode=tiered %s", env, TimeLimit,
+            qore_bin, scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exp = astOutput();
+        TmpDir dir("remove-selectors-lock-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s timeout %d %s", env, TimeLimit, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string astOutput() {
+        return ExecModeHarness::run(sprintf("%s timeout %d %s --exec-mode=ast %s", env, TimeLimit, qore_bin,
+            scriptPath()));
+    }
+}

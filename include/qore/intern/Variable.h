@@ -831,6 +831,21 @@ private:
     };
     std::unique_ptr<MemberLValue> member_lvalue;
     bool assignment_only = false;
+    //! called once, before the root of the lvalue (a variable, a member of self, a static class variable or a
+    //! reference) is resolved and locked, when the keys and indices of the path to it have been evaluated (see the
+    //! constructor with a root hook)
+    void (*root_hook)(void*) = nullptr;
+    //! the argument of root_hook
+    void* root_hook_arg = nullptr;
+
+    //! runs the root hook once, if any
+    DLLLOCAL void runRootHook() {
+        if (root_hook) {
+            void (*hook)(void*) = root_hook;
+            root_hook = nullptr;
+            hook(root_hook_arg);
+        }
+    }
 public:
     //! how a helper made with ReadAccess resolves the lvalue
     enum read_access_e : uint8_t {
@@ -886,6 +901,15 @@ public:
         bool for_assignment = false);
     DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove = false,
         bool for_assignment = false);
+    //! resolves the lvalue \a exp and calls \a hook with \a hook_arg once, before its root is resolved and locked
+    /** The keys and indices of the path to the root are evaluated before the hook is called, in the order in which
+        the other constructors evaluate them; code that the hook runs, such as the selectors of a remove or delete
+        expression, can read the lvalue without its lock (qore#5696).  The hook is not called if the evaluation of a
+        key or an index raises an exception; it must not raise exceptions in \a xsink, which the resolution of the
+        lvalue that follows it uses.
+    */
+    DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove, void (*hook)(void*),
+        void* hook_arg);
     DLLLOCAL LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false,
         bool for_assignment = false);
     DLLLOCAL LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false,
