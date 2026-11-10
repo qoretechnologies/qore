@@ -12,6 +12,30 @@ sub fan(*date<absolute> d) { printf("fan %y\n", d); }
 sub frn(*date<relative> d) { printf("frn %y\n", d); }
 sub fa2(int i, date<absolute> d) { printf("fa2 %d %y\n", i, d); }
 sub fhot(date<absolute> d) { }
+sub fhotn(*date<relative> d) { }
+int sub fhoti(date<absolute> d) { return 1; }
+
+# callers that compile a direct call of the hot callees, also inside a try block
+sub call_fhot(date d) { fhot(d); }
+sub call_shot(date d) { C::shot(d); }
+sub call_fhotn(*date d) { fhotn(d); }
+int sub call_fhoti(date d) { return fhoti(d) + 1; }
+sub call_fhot_try(date d) {
+    try {
+        fhot(d);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("try fhot %s\n", ex.err);
+        throw ex.err, ex.desc;
+    }
+}
+sub call_shot_try(date d) {
+    try {
+        C::shot(d);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("try shot %s\n", ex.err);
+        throw ex.err, ex.desc;
+    }
+}
 
 hashdecl AbsHash {
     date<absolute> a;
@@ -58,20 +82,31 @@ class AOTDateSubtypeParamsProbe {
         }
 
         # hot callees: called often enough with valid arguments to run natively before the invalid call
+        # the compiled fast entry calls of the callers check the kind of a date argument (#5730)
+        int sum = 0;
         list<hash<auto>> hot = (
             {"name": "hot fhot(date)", "call": sub (date d) { fhot(d); }},
             {"name": "hot C::shot(date)", "call": sub (date d) { C::shot(d); }},
+            {"name": "hot call_fhot(date)", "call": sub (date d) { call_fhot(d); }},
+            {"name": "hot call_shot(date)", "call": sub (date d) { call_shot(d); }},
+            {"name": "hot call_fhoti(date)", "call": sub (date d) { sum += call_fhoti(d); }},
+            {"name": "hot call_fhot_try(date)", "call": sub (date d) { call_fhot_try(d); }},
+            {"name": "hot call_shot_try(date)", "call": sub (date d) { call_shot_try(d); }},
+            {"name": "hot call_fhotn(*date)", "call": sub (*date d) { call_fhotn(d); }, "ok": (drel, nothing_date),
+                "bad": dabs},
         );
         foreach hash<auto> h in (hot) {
+            list<auto> ok = h.ok ?? (dabs,);
             for (int i = 0; i < 50; ++i) {
-                h.call(dabs);
+                h.call(ok[i % ok.size()]);
             }
             try {
-                h.call(drel);
+                h.call(h.bad ?? drel);
                 printf("%s: no error\n", h.name);
             } catch (hash<ExceptionInfo> ex) {
                 printf("%s: %s\n", h.name, ex.err);
             }
         }
+        printf("sum %d\n", sum);
     }
 }

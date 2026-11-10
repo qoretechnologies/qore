@@ -20,7 +20,7 @@
 class AOTDateSubtypeParamsTest inherits QUnit::Test {
     public {
         #! the number of cases in probe.q whose invalid call must raise RUNTIME-TYPE-ERROR
-        const NumCases = 13;
+        const NumCases = 19;
     }
 
     private {
@@ -45,6 +45,8 @@ class AOTDateSubtypeParamsTest inherits QUnit::Test {
         assertFalse(out =~ /no error/, out);
     }
 
+    #! runs probe.q in each mode; run() runs it with ExecModeHarness::TraceEnv, whose QORE_JIT_SYNC_COMPILE=1 and
+    #! QORE_JIT_THRESHOLD=1 compile the hot callees before their invalid call in jit and tiered mode
     sourceModes() {
         string expected = getAst();
         foreach string mode in ("ir", "jit", "tiered") {
