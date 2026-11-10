@@ -379,6 +379,14 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_list_set_scanned_type", reinterpret_cast<void*>(&qore_rt_list_set_scanned_type) },
     { "qore_rt_list_append_element", reinterpret_cast<void*>(&qore_rt_list_append_element) },
     { "qore_rt_check_cancel_every", reinterpret_cast<void*>(&qore_rt_check_cancel_every) },
+    { "qore_rt_check_range_bound", reinterpret_cast<void*>(&qore_rt_check_range_bound) },
+    { "qore_rt_list_selector_step", reinterpret_cast<void*>(&qore_rt_list_selector_step) },
+    { "qore_rt_iterator_create_selectors", reinterpret_cast<void*>(&qore_rt_iterator_create_selectors) },
+    { "qore_rt_selector_iterator_pending", reinterpret_cast<void*>(&qore_rt_selector_iterator_pending) },
+    { "qore_rt_selector_iterator_feed", reinterpret_cast<void*>(&qore_rt_selector_iterator_feed) },
+    { "qore_rt_selector_iterator_next", reinterpret_cast<void*>(&qore_rt_selector_iterator_next) },
+    { "qore_rt_exception_suspend", reinterpret_cast<void*>(&qore_rt_exception_suspend) },
+    { "qore_rt_exception_resume", reinterpret_cast<void*>(&qore_rt_exception_resume) },
     { "qore_rt_list_append_element_throwing",
         reinterpret_cast<void*>(&qore_rt_list_append_element_throwing) },
     { "qore_rt_list_set_scanned_type_by_type_path",
@@ -992,6 +1000,14 @@ extern "C" DLLEXPORT void qore_rt_incref(uint64_t val) {
 extern "C" DLLEXPORT void qore_rt_decref(uint64_t val, ExceptionSink* xsink) {
     QoreValue v = fromBits(val);
     v.discard(xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_release_reference_read(uint64_t* slot, uint64_t val, ExceptionSink* xsink) {
+    if (!val || *slot != val) {
+        return;
+    }
+    *slot = 0;
+    qore_rt_decref(val, xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_decref_nothrow(uint64_t val) {
@@ -2426,17 +2442,24 @@ static QoreValue qore_rt_build_selector_range_values(int64 start, int64 stop, bo
     return *xsink ? QoreValue() : rv.release();
 }
 
+//! The description of the RANGE-ERROR that the range operator (..) raises for a start that evaluated to NOTHING
+static constexpr const char* QORE_RT_RANGE_START_NOTHING
+    = "the start expression of the range operator (..) evaluated to NOTHING";
+//! The description of the RANGE-ERROR that the range operator (..) raises for an end that evaluated to NOTHING
+static constexpr const char* QORE_RT_RANGE_END_NOTHING
+    = "the end expression of the range operator (..) evaluated to NOTHING";
+
 static QoreValue qore_rt_build_selector_range(const QoreValue& seq, QoreValue start, QoreValue stop,
         bool negative_offsets, ExceptionSink* xsink) {
     // a range in a list of selectors is evaluated as the range operator (..) first, which raises an exception for a
     // bound that evaluates to NOTHING, as the AST interpreter's QoreSquareBracketsOperatorNode does before it resolves
     // negative offsets; resolving them first took a missing bound as the start or the end of the list (qore#5656)
     if (start.isNothing()) {
-        xsink->raiseException("RANGE-ERROR", "the start expression of the range operator (..) evaluated to NOTHING");
+        xsink->raiseException("RANGE-ERROR", QORE_RT_RANGE_START_NOTHING);
         return QoreValue();
     }
     if (stop.isNothing()) {
-        xsink->raiseException("RANGE-ERROR", "the end expression of the range operator (..) evaluated to NOTHING");
+        xsink->raiseException("RANGE-ERROR", QORE_RT_RANGE_END_NOTHING);
         return QoreValue();
     }
     if (negative_offsets && (start.getAsBigInt() < 0 || stop.getAsBigInt() < 0)) {
@@ -2460,6 +2483,221 @@ static QoreValue qore_rt_build_selector_range(const QoreValue& seq, QoreValue st
     return qore_rt_build_selector_range_values(s, e, false, xsink);
 }
 
+extern "C" DLLEXPORT int64_t qore_rt_check_range_bound(uint64_t bound_val, int64_t which, ExceptionSink* xsink) {
+    if (!fromBits(bound_val).isNothing()) {
+        return 0;
+    }
+    xsink->raiseException("RANGE-ERROR", which == static_cast<int64_t>(QoreIRRangeBound::End)
+        ? QORE_RT_RANGE_END_NOTHING : QORE_RT_RANGE_START_NOTHING);
+    return 1;
+}
+
+//! Computes the indices that the range \a first..\a second of a list of selectors selects from \a seq
+/** As qore_rt_build_selector_range() does, without building a list: a bound that is NOTHING raises RANGE-ERROR, the
+    start first; with negative offsets a range with a negative bound gives its effective range in \a seq, which can be
+    empty; otherwise the indices from the start to the end, both included.
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+static int qore_rt_selector_range_bounds(const QoreValue& seq, const QoreValue& first, const QoreValue& second,
+        bool negative_offsets, int64& start, int64& stop, bool& empty, ExceptionSink* xsink) {
+    if (first.isNothing()) {
+        xsink->raiseException("RANGE-ERROR", QORE_RT_RANGE_START_NOTHING);
+        return -1;
+    }
+    if (second.isNothing()) {
+        xsink->raiseException("RANGE-ERROR", QORE_RT_RANGE_END_NOTHING);
+        return -1;
+    }
+    start = first.getAsBigInt();
+    stop = second.getAsBigInt();
+    empty = false;
+    if (negative_offsets && (start < 0 || stop < 0)) {
+        int64 effective_start;
+        int64 effective_stop;
+        int64 seq_size;
+        bool has_range = QoreSquareBracketsRangeOperatorNode::getEffectiveRange(seq, effective_start,
+            effective_stop, seq_size, first, second,
+            static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE), negative_offsets, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if (!has_range) {
+            empty = true;
+            return 0;
+        }
+        start = effective_start;
+        stop = effective_stop;
+    }
+    return 0;
+}
+
+namespace {
+//! Folds the types of the values that a list of selectors selects from a list into their common type
+/** As QoreSquareBracketsOperatorNode::doSquareBracketsListRange() does; the result list gets the list type of the
+    common type (see qore_rt_list_selector_step())
+*/
+struct QoreRtSelectorTypeFold {
+    const QoreTypeInfo* vtype = nullptr;
+    bool vcommon = false;
+    bool have_value = false;
+
+    //! Folds the type of the next value; returns false once the values have no common type
+    bool add(const QoreTypeInfo* ti) {
+        if (!have_value) {
+            vtype = ti;
+            vcommon = true;
+            have_value = true;
+        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, ti)) {
+            vcommon = false;
+        }
+        return vcommon;
+    }
+};
+}
+
+//! Returns the empty result of a list of selectors for the sequence \a seq, or NOTHING if no selector applies to it
+/** The AST interpreter applies a list of selectors with ranges only to a list, a string or a binary object, and
+    evaluates no selector for any other value (QoreSquareBracketsOperatorNode::doSquareBracketsListRange())
+*/
+static QoreValue qore_rt_new_list_selector_result(const QoreValue& seq) {
+    switch (seq.getType()) {
+        case NT_LIST:
+            return new QoreListNode(autoTypeInfo);
+        case NT_STRING:
+            return new QoreStringNode;
+        case NT_BINARY:
+            return new BinaryNode;
+        default:
+            break;
+    }
+    return QoreValue();
+}
+
+//! Adds the value that the index \a index selects from the sequence \a seq to \a result
+/** @param result the result of qore_rt_new_list_selector_result() for \a seq
+    @param fold the type fold of the values added to a list result, or nullptr if they are folded later
+
+    @return 0 for OK, -1 if an exception was raised
+
+    Inlined into its callers: qore_rt_list_selector_step() runs it, through qore_rt_apply_list_selector(), for each
+    value that a list of selectors built eagerly selects, which costs no call of its own (qore#5675)
+*/
+static QORE_ALWAYS_INLINE int qore_rt_add_selected_value(const QoreValue& result, const QoreValue& seq,
+        const QoreValue& index, bool string_index_char, bool negative_offsets, QoreRtSelectorTypeFold* fold,
+        ExceptionSink* xsink) {
+    ValueHolder entry(QoreSquareBracketsOperatorNode::doSquareBrackets(seq, index, false, string_index_char,
+        negative_offsets, xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    switch (result.getType()) {
+        case NT_LIST: {
+            if (fold) {
+                fold->add(entry->getTypeInfo());
+            }
+            const_cast<QoreListNode*>(result.get<const QoreListNode>())->push(entry.release(), xsink);
+            return *xsink ? -1 : 0;
+        }
+
+        case NT_STRING: {
+            if (!entry->isNothing()) {
+                QoreStringValueHelper str(*entry);
+                qore_string_private::get(*const_cast<QoreStringNode*>(result.get<const QoreStringNode>()))
+                    ->concat(*str);
+            }
+            return 0;
+        }
+
+        case NT_BINARY: {
+            BinaryNode* ret = const_cast<BinaryNode*>(result.get<const BinaryNode>());
+            switch (entry->getType()) {
+                case NT_INT: {
+                    unsigned char c = static_cast<unsigned char>(entry->getAsBigInt());
+                    ret->append(&c, 1);
+                    break;
+                }
+                case NT_BINARY:
+                    ret->append(entry->get<BinaryNode>());
+                    break;
+                default:
+                    assert(entry->getType() == NT_NOTHING);
+                    break;
+            }
+            return 0;
+        }
+
+        default:
+            assert(false);
+            break;
+    }
+    return 0;
+}
+
+//! Applies one selector of a list of selectors to the sequence \a seq and adds what it selects to \a result
+/** A range adds the value of each index from its start to its end, in order, as
+    QoreSquareBracketsOperatorNode::doSquareBracketsListRange() and qore_rt_list_index_selectors() add them; it raises
+    RANGE-ERROR for a bound that is NOTHING, and with negative offsets it checks for cancellation every 100 indexes
+    ("negative offset range selector"), as they do.
+
+    @param result the result of qore_rt_new_list_selector_result() for \a seq, to which the selected values are added
+    @param seq the sequence
+    @param is_range true if the selector is a range from \a first to \a second, false if it is the index \a first
+    @param fold the type fold of the values added to a list result, or nullptr if they are folded later
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+static int qore_rt_apply_list_selector(const QoreValue& result, const QoreValue& seq, bool is_range,
+        const QoreValue& first, const QoreValue& second, bool string_index_char, bool negative_offsets,
+        QoreRtSelectorTypeFold* fold, ExceptionSink* xsink) {
+    if (!is_range) {
+        return qore_rt_add_selected_value(result, seq, first, string_index_char, negative_offsets, fold, xsink);
+    }
+    // the range operator (..) raises an exception for a bound that evaluates to NOTHING (qore#5656)
+    if (first.isNothing()) {
+        xsink->raiseException("RANGE-ERROR", QORE_RT_RANGE_START_NOTHING);
+        return -1;
+    }
+    if (second.isNothing()) {
+        xsink->raiseException("RANGE-ERROR", QORE_RT_RANGE_END_NOTHING);
+        return -1;
+    }
+    int64 start = first.getAsBigInt();
+    int64 stop = second.getAsBigInt();
+    bool check_cancel = false;
+    if (negative_offsets && (start < 0 || stop < 0)) {
+        int64 seq_size;
+        if (!QoreSquareBracketsRangeOperatorNode::getEffectiveRange(seq, start, stop, seq_size, first, second,
+                static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE), negative_offsets, xsink)) {
+            return *xsink ? -1 : 0;
+        }
+        if (*xsink) {
+            return -1;
+        }
+        check_cancel = true;
+    }
+    int64 step = start <= stop ? 1 : -1;
+    unsigned cancel_check = 0;
+    for (int64 i = start;; i += step) {
+        if (check_cancel && ++cancel_check % 100 == 0
+                && qore_check_cancel(xsink, "negative offset range selector")) {
+            return -1;
+        }
+        if (qore_rt_add_selected_value(result, seq, QoreValue(i), string_index_char, negative_offsets, fold,
+                xsink)) {
+            return -1;
+        }
+        if (i == stop) {
+            break;
+        }
+    }
+    return 0;
+}
+
+// applies a list of selectors whose evaluation cannot be observed (see QoreIROpcode::ListSelectorStep); it applies them
+// as qore_rt_list_selector_step() applies one selector after the other, with a loop of its own for each type of
+// sequence, which keeps this common case as fast as it is
 extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8_t* kinds,
         int32_t count, const uint64_t* selector_bits, int32_t string_index_char, ExceptionSink* xsink) {
     QoreValue left = fromBits(left_bits);
@@ -2605,6 +2843,301 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, c
     }
 
     return toBits(QoreValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_selector_step(uint64_t result_val, uint64_t seq_val, int64_t flags,
+        const uint64_t* selector_vals, int32_t count, ExceptionSink* xsink) {
+    QoreValue seq = fromBits(seq_val);
+    ValueHolder created(xsink);
+    QoreValue result;
+    if (flags & static_cast<int64_t>(QoreIRListSelectorFlag::Begin)) {
+        created = qore_rt_new_list_selector_result(seq);
+        // a Begin step with selectors is emitted only for a sequence that the selectors apply to (see
+        // QoreIRLowering::listSelectorSeqAlwaysApplies())
+        if (!count || created->isNothing()) {
+            return toBits(created.release());
+        }
+        result = *created;
+    } else {
+        // the result of the Begin step, which holds the reference to it; it is changed in place
+        result = fromBits(result_val);
+    }
+
+    bool last = flags & static_cast<int64_t>(QoreIRListSelectorFlag::Last);
+    // the values are folded as they are added when this step adds every value of a list result
+    QoreRtSelectorTypeFold fold;
+    bool fold_here = last && result.getType() == NT_LIST && result.get<const QoreListNode>()->empty();
+    bool string_index_char = flags & static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar);
+    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
+    int32_t vi = 0;
+    for (unsigned i = 0; vi < count; ++i) {
+        assert(i < QORE_IR_LIST_SELECTOR_STEP_MAX);
+        bool is_range = flags & (static_cast<int64_t>(1)
+            << (static_cast<int64_t>(QoreIRListSelectorFlag::RangeShift) + i));
+        QoreValue first = fromBits(selector_vals[vi++]);
+        QoreValue second;
+        if (is_range) {
+            assert(vi < count);
+            second = fromBits(selector_vals[vi++]);
+        }
+        if (qore_rt_apply_list_selector(result, seq, is_range, first, second, string_index_char, negative_offsets,
+                fold_here ? &fold : nullptr, xsink)) {
+            return 0;
+        }
+    }
+    if (last && result.getType() == NT_LIST) {
+        // the values are folded in the order in which they were added, as qore_rt_list_index_selectors() folds them
+        // while it adds them; the list gets the list type of their common type, which accepts the list as it is,
+        // so it needs no further check
+        QoreListNode* ret = result.get<QoreListNode>();
+        if (!fold_here) {
+            ConstListIterator li(ret);
+            while (li.next()) {
+                if (!fold.add(li.getValue().getTypeInfo())) {
+                    break;
+                }
+            }
+        }
+        const QoreTypeInfo* vtype = fold.vtype;
+        if (!vtype || vtype == anyTypeInfo) {
+            vtype = autoTypeInfo;
+        }
+        qore_list_private::get(*ret)->complexTypeInfo = qore_get_complex_list_type(vtype);
+    }
+    return toBits(created.release());
+}
+
+namespace {
+//! The iterator of a list of selectors with ranges (seq[a..b, c]) that a foreach statement or a functional or
+//! streaming operator uses as its source (QoreIROpcode::IteratorCreateSelectors)
+/** It iterates the sequence as the AST interpreter does (QoreSquareBracketsOperatorNode::getFunctionalIteratorImpl()):
+    a list lazily, as QoreFunctionalSquareBracketsComplexOperator does, a string or a binary object as the single value
+    that the selectors select, and any other value as no value, without evaluating any selector.  The compiled code
+    evaluates the selectors: it asks the iterator with qore_rt_selector_iterator_pending() which selector it needs
+    before each qore_rt_iterator_next(), evaluates it, and gives its value to qore_rt_selector_iterator_feed(), so
+    that each selector is evaluated only when the values of the previous ones have been used (qore#5675).
+*/
+class QoreRtSelectorIterator : public FunctionalOperatorInterface {
+public:
+    QoreRtSelectorIterator(QoreValue n_seq, int64_t flags, int64_t n_count, ExceptionSink* xs)
+            : seq(n_seq.refSelf(), xs), count(n_count),
+            string_index_char(flags & static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar)),
+            negative_offsets(flags & static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets)), xsink(xs) {
+        switch (seq->getType()) {
+            case NT_LIST:
+                mode = Lazy;
+                break;
+            case NT_STRING:
+            case NT_BINARY:
+                mode = Eager;
+                result = qore_rt_new_list_selector_result(*seq);
+                break;
+            default:
+                mode = None;
+                break;
+        }
+    }
+
+    virtual ~QoreRtSelectorIterator() {
+        pending_index.discard(xsink);
+        result.discard(xsink);
+    }
+
+    //! Returns the index of the selector needed next, or -1 if none is needed: the iterator has the next value, or
+    //! it has given every value
+    int64_t pending() const {
+        switch (mode) {
+            case Lazy:
+                if (has_pending || in_range) {
+                    return -1;
+                }
+                break;
+            case Eager:
+                break;
+            case None:
+                return -1;
+        }
+        return next_selector < count ? next_selector : -1;
+    }
+
+    //! Applies the value of the next selector; returns -1 if an exception was raised
+    int feed(bool is_range, const QoreValue& first, const QoreValue& second, ExceptionSink* xs) {
+        assert(mode != None);
+        assert(pending() == next_selector);
+        ++next_selector;
+        if (mode == Eager) {
+            return qore_rt_apply_list_selector(result, *seq, is_range, first, second, string_index_char,
+                negative_offsets, nullptr, xs);
+        }
+
+        if (!is_range) {
+            // the element is read from the sequence, which the iterator holds, when it is given
+            pending_index = first.refSelf();
+            has_pending = true;
+            return 0;
+        }
+
+        // the indices of a range are those that the list of selectors selects as a value: a bound that is NOTHING
+        // raises RANGE-ERROR, the start first, and with negative offsets a range with a negative bound gives the
+        // indices of its effective range in the sequence (QoreFunctionalSquareBracketsComplexOperator; qore#5688);
+        // they are computed as they are used
+        int64 start;
+        int64 stop;
+        bool empty;
+        if (qore_rt_selector_range_bounds(*seq, first, second, negative_offsets, start, stop, empty, xs)) {
+            return -1;
+        }
+        if (!empty) {
+            in_range = true;
+            range_index = start;
+            range_stop = stop;
+            range_step = start <= stop ? 1 : -1;
+        }
+        return 0;
+    }
+
+    //! Gives the next value if the iterator has one; returns true if it has none now: it needs the next selector
+    //! (pending()) or it has given every value.  The iterator is not deleted (see qore_rt_selector_iterator_next()).
+    virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xs) override {
+        switch (mode) {
+            case None:
+                return true;
+            case Eager:
+                if (result_given || next_selector < count) {
+                    return true;
+                }
+                result_given = true;
+                val.setValue(result, true);
+                result = QoreValue();
+                return false;
+            case Lazy:
+                break;
+        }
+        if (has_pending) {
+            ValueHolder index(pending_index, xs);
+            pending_index = QoreValue();
+            has_pending = false;
+            val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*seq, *index, false, string_index_char,
+                negative_offsets, xs), true);
+            return false;
+        }
+        if (!in_range) {
+            return true;
+        }
+        QoreValue index(range_index);
+        if (range_index == range_stop) {
+            in_range = false;
+        } else {
+            range_index += range_step;
+        }
+        val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*seq, index, false, string_index_char,
+            negative_offsets, xs), true);
+        return false;
+    }
+
+    virtual const QoreTypeInfo* getValueTypeImpl() const override {
+        switch (seq->getType()) {
+            case NT_LIST: return seq->get<const QoreListNode>()->getValueTypeInfo();
+            case NT_STRING: return string_index_char ? charTypeInfo : stringTypeInfo;
+            case NT_BINARY: return binaryTypeInfo;
+        }
+        return nothingTypeInfo;
+    }
+
+private:
+    enum Mode {
+        //! a list: each selector is evaluated when the values of the previous ones have been used
+        Lazy,
+        //! a string or a binary object: every selector is evaluated, and the result is the single value given
+        Eager,
+        //! any other value: no selector is evaluated, and no value is given
+        None,
+    };
+
+    //! the sequence
+    ValueHolder seq;
+    //! the result of a string or binary sequence
+    QoreValue result;
+    //! the index of a single selector of a lazy sequence, while its value has not been given
+    QoreValue pending_index;
+    //! the number of selectors
+    int64_t count;
+    //! the next index, the last index and the step of the current range of a lazy sequence
+    int64 range_index = 0;
+    int64 range_stop = 0;
+    int64 range_step = 1;
+    Mode mode;
+    int64_t next_selector = 0;
+    bool string_index_char;
+    bool negative_offsets;
+    bool has_pending = false;
+    bool in_range = false;
+    bool result_given = false;
+    ExceptionSink* xsink;
+};
+}
+
+extern "C" DLLEXPORT void* qore_rt_iterator_create_selectors(uint64_t seq_bits, int64_t flags, int64_t count,
+        ExceptionSink* xsink) {
+    // a sequence that is not a list, a string or a binary object gives no value and no selector is evaluated: no
+    // iterator, as for NOTHING, so that a functional operator's value is NOTHING, as in the AST interpreter
+    switch (fromBits(seq_bits).getType()) {
+        case NT_LIST:
+        case NT_STRING:
+        case NT_BINARY:
+            break;
+        default:
+            return nullptr;
+    }
+    return new QoreRtSelectorIterator(fromBits(seq_bits), flags, count, xsink);
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_selector_iterator_pending(void* iter_ptr) {
+    if (!iter_ptr) {
+        return -1;
+    }
+    return static_cast<QoreRtSelectorIterator*>(reinterpret_cast<FunctionalOperatorInterface*>(iter_ptr))
+        ->pending();
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_selector_iterator_feed(void* iter_ptr, int64_t flags, uint64_t first_bits,
+        uint64_t second_bits, ExceptionSink* xsink) {
+    assert(iter_ptr);
+    return static_cast<QoreRtSelectorIterator*>(reinterpret_cast<FunctionalOperatorInterface*>(iter_ptr))
+        ->feed(flags & static_cast<int64_t>(QoreIRListSelectorFlag::Range), fromBits(first_bits),
+            fromBits(second_bits), xsink) ? 1 : 0;
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_selector_iterator_next(void* iter_ptr, uint64_t* out_value,
+        ExceptionSink* xsink) {
+    *out_value = 0;  // VAL_NOTHING
+    if (!iter_ptr) {
+        return 1;
+    }
+    ValueOptionalRefHolder val(xsink);
+    if (reinterpret_cast<FunctionalOperatorInterface*>(iter_ptr)->getNext(val, xsink) || (xsink && *xsink)) {
+        return 1;
+    }
+    *out_value = toBits(val.takeReferencedValue());
+    return 0;
+}
+
+extern "C" DLLEXPORT void* qore_rt_exception_suspend(ExceptionSink* xsink) {
+    std::unique_ptr<ExceptionSink> saved(new ExceptionSink);
+    saved->assimilate(*xsink);
+    return saved.release();
+}
+
+extern "C" DLLEXPORT void qore_rt_exception_resume(void* handle, ExceptionSink* xsink) {
+    std::unique_ptr<ExceptionSink> saved(reinterpret_cast<ExceptionSink*>(handle));
+    if (!saved) {
+        return;
+    }
+    // the exceptions set aside come first, then those raised since, as they are raised in the AST interpreter
+    ExceptionSink since;
+    since.assimilate(*xsink);
+    xsink->assimilate(*saved);
+    xsink->assimilate(since);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_unary_op(int opcode, uint64_t operand, ExceptionSink* xsink) {
@@ -3976,16 +4509,41 @@ static bool qore_rt_aot_path_cache_receiver_serial(const QoreTypeInfo* ti, uint6
     return false;
 }
 
-//! Makes room for an entry in a context's path cache; called with its mutex held
-/** The entries of the receivers of destroyed classes are never found again; a cache that is full evicts an entry
-    for each new one, instead of being cleared, which made a working set larger than the cache resolve every path
-    again
+//! Adds an entry to a context's path cache; called with its mutex held
+/** The entries of the receivers of destroyed classes are never found again; a cache that is full evicts its oldest
+    entry for each new one (first in, first out): clearing the full cache made a working set larger than the cache
+    resolve every path again, and evicting the entry that the map iterates first evicted the newest entries, so a live
+    working set in a cache full of dead entries found its entries in about 40% of its calls.
+
+    @param cache the cache
+    @param order the keys of the cache in the order they were added
+    @param key the key of the new entry
+    @param value its value
 */
-template <typename M>
-static void qore_rt_aot_path_cache_make_room(M& cache) {
-    if (cache.size() >= QORE_AOT_PATH_CACHE_MAX_ENTRIES) {
-        cache.erase(cache.begin());
+template <typename M, typename V>
+static void qore_rt_aot_path_cache_add(M& cache, QoreAOTPathCacheOrder& order, QoreAOTHashDeclPathCacheKey&& key,
+        V value) {
+    // the ring is allocated once, before the cache changes
+    if (order.keys.capacity() < QORE_AOT_PATH_CACHE_MAX_ENTRIES) {
+        order.keys.reserve(QORE_AOT_PATH_CACHE_MAX_ENTRIES);
     }
+    // the entry is added first, so that a failure leaves the cache as it was; another thread may have added it since
+    // the caller missed it
+    auto r = cache.emplace(std::move(key), value);
+    if (!r.second) {
+        return;
+    }
+    const QoreAOTHashDeclPathCacheKey* k = &r.first->first;
+    if (order.keys.size() < QORE_AOT_PATH_CACHE_MAX_ENTRIES) {
+        order.keys.push_back(k);
+        return;
+    }
+    // the cache was full: its oldest entry is evicted
+    auto oldest = cache.find(*order.keys[order.next]);
+    assert(oldest != cache.end());
+    cache.erase(oldest);
+    order.keys[order.next] = k;
+    order.next = (order.next + 1) % QORE_AOT_PATH_CACHE_MAX_ENTRIES;
 }
 
 //! Resolves a hashdecl path of an AOT context for the receiver given, without the caches
@@ -4088,8 +4646,7 @@ static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext*
 
     {
         std::lock_guard<std::mutex> lock(ctx->hashdecl_path_cache_mutex);
-        qore_rt_aot_path_cache_make_room(ctx->hashdecl_path_cache);
-        ctx->hashdecl_path_cache.emplace(std::move(key), hd);
+        qore_rt_aot_path_cache_add(ctx->hashdecl_path_cache, ctx->hashdecl_path_cache_order, std::move(key), hd);
     }
     if (!disable_front_cache) {
         front_entry.generation = ctx->hashdecl_cache_generation;
@@ -4412,8 +4969,7 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
 
     {
         std::lock_guard<std::mutex> lock(ctx->type_path_cache_mutex);
-        qore_rt_aot_path_cache_make_room(ctx->type_path_cache);
-        ctx->type_path_cache.emplace(std::move(key), type_info);
+        qore_rt_aot_path_cache_add(ctx->type_path_cache, ctx->type_path_cache_order, std::move(key), type_info);
     }
     front_entry = {ctx->hashdecl_cache_generation, epoch, type_path, receiver_type_info, type_info};
     return type_info;
@@ -7507,38 +8063,40 @@ static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
             || !uvb->isStaticallyFastCallEligible()) {
         return false;
     }
-    const QoreIRFunction* callee_ir = uvb->getCachedIR();
-    const UserSignature* sig = uvb->getUserSignature();
-    if (!callee_ir || !sig) {
-        return false;
-    }
 
     struct NativeClosureLeafCache {
         NativeClosureLeafCache()
             : descriptor(nullptr, nullptr, nullptr, QoreValue()) {
         }
 
-        const UserVariantBase* uvb = nullptr;
-        //! the id of the Program of the variant, which is never reused
-        qore_program_id_t pgm_id = 0;
+        //! the serial of the variant that the descriptor is for; 0 if none (serials start at 1)
+        uint64_t serial = 0;
         int nargs = -1;
         QoreIRCallDirectInstruction descriptor;
     };
+    // The cache outlives the variant and the IR it holds: they are freed with the closure function, with their Program
+    // or while it lives (the code of an Expression), and the allocator can give their memory to the closure function
+    // parsed next, so a variant at the address of the one cached can be another one; the native leaf state of the
+    // descriptor, derived from the IR of the freed variant, was used for another closure then.  The cache is
+    // therefore keyed by the serial of the variant, which is never reused (UserVariantBase::serial): the variant with
+    // the serial cached is the variant cached, and its IR, which is never replaced (UserVariantBase::setCachedIR()),
+    // the IR cached
     static thread_local NativeClosureLeafCache cache;
-    // the entry is found by the id of the variant's Program as well: the variant and its IR live as long as their
-    // Program, but the variant and IR of a Program created after it was deleted can have their addresses, and the
-    // descriptor's analysis of the deleted IR (the leaf's operation) and its return type would then be used for them
-    // (see tryExecuteInterpreterInlineIRClosure())
-    const qore_program_id_t pgm_id = uvb->pgm_id;
 #ifdef DEBUG
-    if (cache.uvb == uvb && cache.descriptor.cached_callee_ir == callee_ir && cache.pgm_id != pgm_id) {
+    // a variant at the address of the one cached with another serial is another variant; counted for tests that
+    // reproduce the reuse of a freed closure's addresses (dbg_closure_call_cache_program_misses())
+    if (cache.serial && cache.descriptor.cached_uvb == uvb && cache.serial != uvb->serial) {
         qore_dbg_closure_call_cache_program_misses.fetch_add(1, std::memory_order_relaxed);
     }
 #endif
-    if (cache.uvb != uvb || cache.pgm_id != pgm_id || cache.nargs != nargs
-            || cache.descriptor.cached_callee_ir != callee_ir) {
-        cache.uvb = uvb;
-        cache.pgm_id = pgm_id;
+    if (cache.serial != uvb->serial || cache.nargs != nargs) {
+        // an entry is made only with the variant's IR, so a call that finds its entry has it
+        const QoreIRFunction* callee_ir = uvb->getCachedIR();
+        const UserSignature* sig = uvb->getUserSignature();
+        if (!callee_ir || !sig) {
+            return false;
+        }
+        cache.serial = uvb->serial;
         cache.nargs = nargs;
         cache.descriptor.cached_callee_ir = callee_ir;
         cache.descriptor.cached_uvb = uvb;
@@ -10983,14 +11541,37 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     }
 }
 
-//! returns the Program a user function runs in when it is called from the current context
-/** This is the Program an AST call runs the function in (see FunctionCallNode::evalImpl() and
-    UserVariantExecHelper): the call's explicit Program, if any, otherwise the Program the caller runs in.  A function
-    defined in another Program, such as a module function called from a script, runs in the caller's Program and
-    with its restrictions (see QoreRtUserCallOverrideHelper), not in the Program that defined it.
+//! returns true if a call of a user function with the explicit Program \a call_pgm needs to enter that Program first
+/** A call made in another Program (QoreProgram::callFunction()) of a function that the Program does not define (an
+    imported function) is made from that Program: the slow call path enters it first (see
+    QoreFunction::evalFunction()), so that its restrictions and its sandbox apply as for a call that its own code makes
 */
-static QoreProgram* qore_rt_function_execution_program(QoreProgram* explicit_pgm, QoreProgram* caller_pgm,
-        const UserVariantBase* uvb) {
+static bool qore_rt_call_needs_call_program(const QoreProgram* call_pgm, const UserVariantBase* uvb) {
+    return call_pgm && call_pgm != uvb->pgm && call_pgm != getProgram();
+}
+
+//! returns the Program a user function runs in when it is called from the current context
+/** A user function runs in the Program that defined it, as an AST call runs it (see QoreFunction::evalFunction() and
+    qore_get_function_pgm_context()), and as a method runs in the source Program of its class: a module function
+    called from a script runs in the module's Program.  \a holder keeps that Program until the thread has left it, as
+    it can be deleted in another thread; it must be declared before the ProgramThreadCountContextHelper that enters the
+    Program.  If the variant has no Program, the call runs in its explicit Program, otherwise in the caller's.
+
+    @return the Program, or nullptr with an exception raised in \a xsink if the Program that defined the function is
+    being deleted
+*/
+static QORE_ALWAYS_INLINE QoreProgram* qore_rt_function_execution_program(QoreProgram* explicit_pgm,
+        QoreProgram* caller_pgm, const UserVariantBase* uvb, QoreSourceProgramHolder& holder, ExceptionSink* xsink) {
+    // the explicit Program of the call is kept by the caller (QoreProgram::callFunction())
+    holder.setVariant(uvb, caller_pgm, explicit_pgm);
+    if (QoreProgram* pgm = holder.get()) {
+        return pgm;
+    }
+    if (holder.sourceDeleted()) {
+        xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and therefore "
+            "cannot be accessed at runtime");
+        return nullptr;
+    }
     if (explicit_pgm) {
         return explicit_pgm;
     }
@@ -10999,58 +11580,33 @@ static QoreProgram* qore_rt_function_execution_program(QoreProgram* explicit_pgm
 
 //! sets the runtime parse options override of a fast call of a user variant as UserVariantBase::eval() does
 /** See qore_get_user_call_runtime_po_override(): a user variant that runs in a Program other than the one that
-    defined it is restricted with the executing Program's restrictions, module code also with its caller's, and
-    otherwise any override of the caller is cleared for the call.
+    defined it is restricted with the executing Program's restrictions, module code runs with its module's options
+    (and a sandboxed caller's restrictions), a call of module code by code of the same module keeps the override in
+    effect, and otherwise any override of the caller is cleared for the call.
 */
 class QoreRtUserCallOverrideHelper {
 public:
     //! \a caller_pgm is the Program the call was made from, before it switched to \a exec_pgm
-    DLLLOCAL QoreRtUserCallOverrideHelper(QoreProgram* exec_pgm, const UserVariantBase* uvb, QoreProgram* caller_pgm)
-            : helper(get(exec_pgm, uvb, caller_pgm)) {
+    DLLLOCAL QORE_ALWAYS_INLINE QoreRtUserCallOverrideHelper(QoreProgram* exec_pgm, const UserVariantBase* uvb,
+            QoreProgram* caller_pgm) {
+        qore_set_user_call_runtime_po_override(helper, exec_pgm, uvb, nullptr, caller_pgm);
     }
 
 private:
     RuntimeParseOptionsOverrideHelper helper;
-
-    DLLLOCAL static QoreCallParseOptionsOverride get(QoreProgram* exec_pgm, const UserVariantBase* uvb,
-            QoreProgram* caller_pgm) {
-        QoreCallParseOptionsOverride o;
-        qore_get_user_call_runtime_po_override(exec_pgm, uvb, runtime_get_effective_parse_options_for(caller_pgm),
-            caller_pgm, o);
-        return o;
-    }
-};
-
-//! Holds a reference to the Program of a variant taken with qore_rt_method_execution_program()
-class QoreRtVariantProgramHolder {
-public:
-    DLLLOCAL QoreRtVariantProgramHolder(ExceptionSink* xsink) : xsink(xsink) {
-    }
-
-    DLLLOCAL ~QoreRtVariantProgramHolder() {
-        if (pgm) {
-            pgm->deref(xsink);
-        }
-    }
-
-    QoreRtVariantProgramHolder(const QoreRtVariantProgramHolder&) = delete;
-    QoreRtVariantProgramHolder& operator=(const QoreRtVariantProgramHolder&) = delete;
-
-    QoreProgram* pgm = nullptr;
-    ExceptionSink* xsink;
 };
 
 //! Returns the Program that a method runs in, as for the calls made without native code
 /** \a holder keeps the source Program of the class until the thread has left it, as it can be deleted in another
     thread (see qore_get_method_pgm_context()).  If the method does not switch to it, the method runs in the Program of
-    its variant, as UserVariantExecHelper::getExecutionProgram() does; that Program is taken by ID with a reference in
-    \a vholder, as it can be deleted as well.  Both holders must be declared before the ProgramThreadCountContextHelper
-    that enters the Program.
+    its variant, as UserVariantExecHelper::getExecutionProgram() does; \a vholder keeps that Program, as it can be
+    deleted as well (see QoreSourceProgramHolder::setVariant(), which a function call uses too).  Both holders must be
+    declared before the ProgramThreadCountContextHelper that enters the Program.
 
     @return the Program, or nullptr with an exception raised in \a xsink
 */
 static QoreProgram* qore_rt_method_execution_program(const QoreMethod* method, const UserVariantBase* uvb,
-        QoreSourceProgramHolder& holder, QoreRtVariantProgramHolder& vholder, ExceptionSink* xsink) {
+        QoreSourceProgramHolder& holder, QoreSourceProgramHolder& vholder, ExceptionSink* xsink) {
     const QoreClass* qc = method ? method->getClass() : nullptr;
     if (qc) {
         QoreProgram* pgm = qore_get_method_pgm_context(*qc, holder);
@@ -11058,23 +11614,15 @@ static QoreProgram* qore_rt_method_execution_program(const QoreMethod* method, c
             return pgm;
         }
     }
-    QoreProgram* pgm = uvb->pgm;
-    if (!pgm) {
-        return pgm;
+    if (!uvb->pgm) {
+        return nullptr;
     }
-    // the current Program, and a Program that this thread deletes, which runs the code of its classes (destructors)
-    // without a reference, as its last one can have been released, are allocated; the ID tells the variant's Program
-    // from a later one at the same address
-    if ((pgm == getProgram() || qore_program_torn_down_by_current_thread(pgm))
-            && pgm->getProgramId() == uvb->pgm_id) {
-        return pgm;
-    }
-    vholder.pgm = qore_program_private::getReferencedProgram(pgm, uvb->pgm_id);
-    if (!vholder.pgm) {
+    vholder.setVariant(uvb);
+    if (vholder.sourceDeleted()) {
         xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and therefore "
             "cannot be accessed at runtime");
     }
-    return vholder.pgm;
+    return vholder.get();
 }
 
 // --- Fast call parameter instantiation helper ---
@@ -11262,8 +11810,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     }
 
     // If the callee has neither JIT nor IR, fall back to the slow path.
-    // This can happen in tiered compilation when the callee hasn't been promoted yet.
-    if (!uvb->hasCachedFunction() && !uvb->getCachedIR()) {
+    // This can happen in tiered compilation when the callee hasn't been promoted yet.  A call made in another Program
+    // of a function that it does not define takes the slow path as well, which enters that Program first.
+    if ((!uvb->hasCachedFunction() && !uvb->getCachedIR()) || qore_rt_call_needs_call_program(pgm, uvb)) {
         return qore_rt_call_function_direct(func, variant, pgm, args, nargs, xsink);
     }
 
@@ -11273,7 +11822,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     // Capture caller's program before ptcch switch, for QoreJITStackLocation.
     // See qore_rt_call_static_method_direct for the rationale.
     QoreProgram* caller_pgm = getProgram();
-    QoreProgram* exec_pgm = qore_rt_function_execution_program(pgm, caller_pgm, uvb);
+    QoreSourceProgramHolder exec_pgm_holder(xsink);
+    QoreProgram* exec_pgm = qore_rt_function_execution_program(pgm, caller_pgm, uvb, exec_pgm_holder, xsink);
+    // a Program is returned unless an exception was raised
+    if (!exec_pgm && *xsink) {
+        return toBits(QoreValue());
+    }
 
     // Set up program thread context (only if program differs from caller's program, or if the caller's program is
     // current but not entered and has thread entry handlers to run)
@@ -11281,7 +11835,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     if (exec_pgm != caller_pgm
             || (qore_program_private::hasThreadEntryHandlers(*exec_pgm) && thread_entry_pending(exec_pgm))) {
         ptcch.emplace(xsink, exec_pgm, true);
-        if (*xsink) {
+        // the Program is entered unless an exception was raised
+        if (!ptcch->entered() && *xsink) {
             return toBits(QoreValue());
         }
     }
@@ -11724,7 +12279,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
 
     // Capture caller's program before ptcch switch.
     QoreProgram* caller_pgm = getProgram();
-    QoreProgram* exec_pgm = qore_rt_function_execution_program(nullptr, caller_pgm, uvb);
+    QoreSourceProgramHolder exec_pgm_holder(xsink);
+    QoreProgram* exec_pgm = qore_rt_function_execution_program(nullptr, caller_pgm, uvb, exec_pgm_holder, xsink);
+    // a Program is returned unless an exception was raised
+    if (!exec_pgm && *xsink) {
+        return toBits(QoreValue());
+    }
 
     // Set up program thread context
     ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
@@ -11852,8 +12412,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
     // and callee programs are the same, but keep the pattern consistent).
     QoreProgram* caller_pgm = getProgram();
 
-    // Set up program thread context: a recursive call runs where its caller runs, as an AST call does
-    QoreProgram* exec_pgm = qore_rt_function_execution_program(nullptr, caller_pgm, uvb);
+    // Set up program thread context: a recursive call runs in the Program that defined the function, which is the
+    // one its caller runs in
+    QoreSourceProgramHolder exec_pgm_holder(xsink);
+    QoreProgram* exec_pgm = qore_rt_function_execution_program(nullptr, caller_pgm, uvb, exec_pgm_holder, xsink);
+    // a Program is returned unless an exception was raised
+    if (!exec_pgm && *xsink) {
+        return toBits(QoreValue());
+    }
     ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
     if (*xsink) {
         return toBits(QoreValue());
@@ -12123,7 +12689,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
     // Capture caller's program before ptcch switch.
     QoreProgram* caller_pgm = getProgram();
     QoreSourceProgramHolder exec_pgm_holder(xsink);
-    QoreRtVariantProgramHolder exec_variant_pgm_holder(xsink);
+    QoreSourceProgramHolder exec_variant_pgm_holder(xsink);
     QoreProgram* exec_pgm = qore_rt_method_execution_program(method, uvb, exec_pgm_holder, exec_variant_pgm_holder,
         xsink);
 
@@ -14380,6 +14946,15 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         const LVPathStep& last_step, LVUnaryOp unary_op,
         ExceptionSink* xsink) {
     const bool is_delete = (unary_op == LVUnaryOp::Delete);
+    // a negative index counts from the end with negative offsets, as in the AST interpreter (do_list_value(),
+    // do_string_value() and do_binary_value() in Variable.cpp); the option is read for the first negative index only
+    int negative_offsets_state = -1;
+    auto negative_offsets = [&negative_offsets_state]() -> bool {
+        if (negative_offsets_state < 0) {
+            negative_offsets_state = runtime_check_parse_option(PO_NEGATIVE_OFFSETS) ? 1 : 0;
+        }
+        return negative_offsets_state != 0;
+    };
 
     // Helper: push an int operand OR iterate a list operand (range-produced)
     // pushing its entries onto the caller-provided ind-collector.  Matches
@@ -14414,6 +14989,9 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
             if (each_index(operand, [&](int64_t ind, bool is_range) -> bool {
                 QoreValue p{};
                 bool push;
+                if (ind < 0 && negative_offsets()) {
+                    ind += static_cast<int64_t>(l->size());
+                }
                 if (ind >= 0 && ind < (int64_t)l->size()) {
                     iset.insert(ind);
                     p = l->getReferencedEntry(ind);
@@ -14484,6 +15062,9 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
             bool had_error = false;
             if (each_index(operand, [&](int64_t ind, bool /*is_range*/) -> bool {
                 if (had_error) return true;
+                if (ind < 0 && negative_offsets()) {
+                    ind += static_cast<int64_t>(len);
+                }
                 if (ind >= 0 && ind < (int64_t)len) {
                     iset.insert(ind);
                     int cp = str->getUnicodePoint(ind, xsink);
@@ -14532,6 +15113,9 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         std::set<int64_t, std::greater<int64_t>> iset;
         for (const QoreValue& operand : last_step.slice_values) {
             if (each_index(operand, [&](int64_t ind, bool /*is_range*/) -> bool {
+                if (ind < 0 && negative_offsets()) {
+                    ind += static_cast<int64_t>(bin->size());
+                }
                 if (ind >= 0 && ind < (int64_t)bin->size()) {
                     iset.insert(ind);
                     bin->substr(**v, ind, 1);
@@ -16001,7 +16585,10 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
     if (!resolved_uvb && target.variant) {
         resolved_uvb = target.variant->getUserVariantBase();
     }
-    if (resolved_uvb && resolved_uvb->isStaticallyFastCallEligible()) {
+    // a call made in another Program of a function that it does not define is made from that Program, which the
+    // call path enters first (see QoreFunction::evalFunction())
+    if (resolved_uvb && resolved_uvb->isStaticallyFastCallEligible()
+            && !qore_rt_call_needs_call_program(target.pgm, resolved_uvb)) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_direct_aot", "function", "use");
         const UserVariantBase* uvb = resolved_uvb;
 
@@ -16010,7 +16597,13 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
 
         // Capture caller's program before ptcch switch.
         QoreProgram* caller_pgm = getProgram();
-        QoreProgram* exec_pgm = qore_rt_function_execution_program(target.pgm, caller_pgm, uvb);
+        QoreSourceProgramHolder exec_pgm_holder(xsink);
+        QoreProgram* exec_pgm = qore_rt_function_execution_program(target.pgm, caller_pgm, uvb, exec_pgm_holder,
+            xsink);
+        // a Program is returned unless an exception was raised
+        if (!exec_pgm && *xsink) {
+            return toBits(QoreValue());
+        }
 
         // Set up program thread context (only if program differs from caller's program, or if the caller's program
         // is current but not entered and has thread entry handlers to run)
@@ -16018,7 +16611,8 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         if (exec_pgm != caller_pgm
                 || (qore_program_private::hasThreadEntryHandlers(*exec_pgm) && thread_entry_pending(exec_pgm))) {
             ptcch.emplace(xsink, exec_pgm, true);
-            if (*xsink) {
+            // the Program is entered unless an exception was raised
+            if (!ptcch->entered() && *xsink) {
                 return toBits(QoreValue());
             }
         }
@@ -17693,7 +18287,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     // Capture caller's program before ptcch switch.
     QoreProgram* caller_pgm = getProgram();
     QoreSourceProgramHolder exec_pgm_holder(xsink);
-    QoreRtVariantProgramHolder exec_variant_pgm_holder(xsink);
+    QoreSourceProgramHolder exec_variant_pgm_holder(xsink);
     QoreProgram* exec_pgm = qore_rt_method_execution_program(method, uvb, exec_pgm_holder, exec_variant_pgm_holder,
         xsink);
 
@@ -19161,7 +19755,7 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
     // current_pgm at push time.
     QoreProgram* caller_pgm = getProgram();
     QoreSourceProgramHolder exec_pgm_holder(xsink);
-    QoreRtVariantProgramHolder exec_variant_pgm_holder(xsink);
+    QoreSourceProgramHolder exec_variant_pgm_holder(xsink);
     QoreProgram* exec_pgm = qore_rt_method_execution_program(method, uvb, exec_pgm_holder, exec_variant_pgm_holder,
         xsink);
 

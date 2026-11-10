@@ -112,7 +112,7 @@
     - @ref map "map" (non-hash version): allows the @ref expressions "map expression" to be evaluated in place when nested with other functional operators or used with a @ref foreach "foreach statement"
     - @ref select "select": allows the filtered result list to be created and iterated in place when nested with other functional operators or used with a @ref foreach "foreach statement" rather than returning a temporary list
     - @ref keys "keys": allows the @ref hash "hash" or @ref object "object" to be iterated in place when nested with other functional operators or used with a @ref foreach "foreach statement" rather than returning a temporary list of hash keys or accessible object members
-    - @ref range_operator ".. (range operator)" and @ref list_element_operator "[]" with a range or multiple values: allow the operand to be iterated in place when nested with other functional operators or used with a @ref foreach "foreach statement" rather than returning a temporary list/string/binary object
+    - @ref range_operator ".. (range operator)" and @ref list_element_operator "[]" with a range or multiple values: allow the operand to be iterated in place when nested with other functional operators or used with a @ref foreach "foreach statement" rather than returning a temporary list/string/binary object; a list of selectors is evaluated one selector at a time as its elements are used, and gives the same elements as the expression as a value, including ranges with negative or out-of-range endpoints
     - @ref streaming_take "take", @ref streaming_drop "drop", @ref streaming_takewhile "takewhile", and @ref streaming_takeuntil "takeuntil": allow a streaming prefix, skip, or boundary stage to be iterated in place when nested with another functional or streaming consumer
 
     The following operators and statements support lazy evaluation for iteration:
@@ -450,7 +450,10 @@ list<int> l1 = new list<int>(2);
       by the code that starts the thread is not seen by the expression, and <tt>map <b>background</b> f($1), list</tt> starts a
       thread for each element of \a list with the element as the argument; an implicit argument of an operator in the background
       expression that iterates, such as the <tt>$1</tt> of <tt><b>background</b> f(map $1 * 2, list)</tt>, is that operator's
-    - it is not possible to pass local variables by reference anywhere in a background expression (a parse exception will be thrown)
+    - a reference to a local variable (<tt>\\l</tt>), or a @ref closure "closure" that captures it, shares the variable with the
+      new thread, as the variable becomes a closure-bound variable protected by a lock (see
+      @ref references_overview "references"); this is the only way a background expression can modify a local variable of the
+      code that starts the thread
     - closure values created in object scope are checked before the new thread is started; if the captured object is valid,
       its scope is prolonged until the background expression has finished executing
     - an object named directly by the background expression is referenced before the new thread is started, so the object's

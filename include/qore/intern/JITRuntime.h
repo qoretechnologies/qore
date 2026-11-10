@@ -165,6 +165,10 @@ void qore_rt_incref(uint64_t val);
 
 //! Decrement reference count; may throw via xsink
 void qore_rt_decref(uint64_t val, ExceptionSink* xsink);
+//! Releases the reference that a read through a reference took, kept in the slot of its read site, if the slot holds
+//! the value (a call that took the value as an argument returns); the slot holds another value if the local held no
+//! reference at the read, whose value is the cached value of the local
+void qore_rt_release_reference_read(uint64_t* slot, uint64_t val, ExceptionSink* xsink);
 
 //! Decrement reference count; never throws (for landing pad cleanup)
 void qore_rt_decref_nothrow(uint64_t val);
@@ -1383,6 +1387,41 @@ int64_t qore_rt_list_append_element(uint64_t list_val, uint64_t value_val, int64
 //! \a point; with a positive drop \a limit, the count is the number skipped below the limit and the number after
 //! the skipped ones otherwise; returns 1 if an exception was raised.  See QoreIROpcode::CheckCancelEvery.
 int64_t qore_rt_check_cancel_every(int64_t count, int64_t point, int64_t limit, ExceptionSink* xsink);
+
+//! Raises RANGE-ERROR if \a bound_val, the QoreIRRangeBound \a which of a range operator, is NOTHING; returns 1 if
+//! an exception was raised.  See QoreIROpcode::CheckRangeBound.
+int64_t qore_rt_check_range_bound(uint64_t bound_val, int64_t which, ExceptionSink* xsink);
+
+//! Applies the \a count selector values \a selector_vals of a step of a list of selectors with ranges to the
+//! sequence \a seq_val: with QoreIRListSelectorFlag::Begin it makes the result for the sequence and adds what they
+//! select to it, otherwise it adds what they select to \a result_val, which it changes in place; see
+//! QoreIROpcode::ListSelectorStep.  Returns the result of a Begin step, which the caller owns, and 0 otherwise.
+uint64_t qore_rt_list_selector_step(uint64_t result_val, uint64_t seq_val, int64_t flags,
+        const uint64_t* selector_vals, int32_t count, ExceptionSink* xsink);
+
+//! Creates the iterator of a list of selectors with ranges for the sequence \a seq_bits; see
+//! QoreIROpcode::IteratorCreateSelectors
+void* qore_rt_iterator_create_selectors(uint64_t seq_bits, int64_t flags, int64_t count, ExceptionSink* xsink);
+
+//! Returns the index of the selector that the iterator of a list of selectors needs next, or -1; see
+//! QoreIROpcode::SelectorIteratorPending
+int64_t qore_rt_selector_iterator_pending(void* iter_ptr);
+
+//! Gives the next value of the iterator of a list of selectors in \a out_value; returns 1 if it has none now, without
+//! deleting the iterator; see QoreIROpcode::IteratorNextSelectors
+int64_t qore_rt_selector_iterator_next(void* iter_ptr, uint64_t* out_value, ExceptionSink* xsink);
+
+//! Gives the iterator of a list of selectors the value of its next selector; returns 1 if an exception was raised.
+//! See QoreIROpcode::SelectorIteratorFeed.
+int64_t qore_rt_selector_iterator_feed(void* iter_ptr, int64_t flags, uint64_t first_bits, uint64_t second_bits,
+        ExceptionSink* xsink);
+
+//! Sets the exceptions of \a xsink aside and returns their handle; see QoreIROpcode::ExceptionSuspend
+void* qore_rt_exception_suspend(ExceptionSink* xsink);
+
+//! Raises again the exceptions set aside by qore_rt_exception_suspend() before those raised since, and frees the
+//! handle; see QoreIROpcode::ExceptionResume
+void qore_rt_exception_resume(void* handle, ExceptionSink* xsink);
 
 //! Throwing form of qore_rt_list_append_element() for native code that unwinds with QoreJITException
 int64_t qore_rt_list_append_element_throwing(uint64_t list_val, uint64_t value_val, int64_t state,

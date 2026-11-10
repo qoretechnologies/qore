@@ -39,13 +39,14 @@
 QoreHashNode* QoreSSLBase::X509_NAME_to_hash(X509_NAME* n) {
     QoreHashNode* h = new QoreHashNode(autoTypeInfo);
     for (int i = 0; i < X509_NAME_entry_count(n); i++) {
-        X509_NAME_ENTRY *e = X509_NAME_get_entry(n, i);
+        // these accessors return const pointers in OpenSSL 4 and non-const ones before, so the types follow the headers
+        auto* e = X509_NAME_get_entry(n, i);
 
-        ASN1_OBJECT *ko = X509_NAME_ENTRY_get_object(e);
+        auto* ko = X509_NAME_ENTRY_get_object(e);
         char key[OBJ_BUF_LEN + 1];
 
         OBJ_obj2txt(key, OBJ_BUF_LEN, ko, 0);
-        ASN1_STRING *val = X509_NAME_ENTRY_get_data(e);
+        auto* val = X509_NAME_ENTRY_get_data(e);
 #ifdef HAVE_OPENSSL_INIT_CRYPTO
         //printd(5, "do_X509_name() %s=%s\n", key, ASN1_STRING_get0_data(val));
         h->setKeyValue(key, new QoreStringNode((const char *)ASN1_STRING_get0_data(val)), 0);
