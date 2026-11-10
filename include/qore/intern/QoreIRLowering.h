@@ -456,7 +456,9 @@ private:
         selectors have side effects is also evaluated before the iteration when the operator's expressions only
         compute values from numeric elements (qore_ir_consumer_expr_is_pure()), as neither side can observe the other.
         Any other consumer iterates a list of stable selectors over a list whose values hold no reference lazily as
-        well (useSelectorSegmentLoop()), which gives the same values without building the list of them (qore#5711).
+        well (useSelectorSegmentLoop()) when it has at least as many ranges as single indices, which gives the same
+        values without building the list of them; a list with more single indices is built first, as a lazy single
+        index costs a step of the iteration protocol where the list costs one element (qore#5711).
     */
     bool decideLazySelectorSource(const QoreValue& source, const std::vector<LazyPipelineStage>& stages,
         const std::vector<const QoreValue*>& consumer_exprs, const QoreValue* written_lvalue = nullptr,

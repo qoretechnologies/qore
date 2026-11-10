@@ -39,13 +39,13 @@ class SelectorSegmentLoopTest inherits QUnit::Test {
             "seg_map_bool", "seg_foreach_stable");
 
         #! the functions of ShapeScript whose stable selectors are evaluated into a list first
-        const ListFunctions = ("list_map_stable_indices",);
+        const ListFunctions = ("list_foreach_stable_indices",);
 
         #! the functions of ShapeScript that use the iterator
         const IteratorFunctions = ("iter_map_string", "iter_foreach_auto");
 
         #! the output of ShapeScript
-        const ShapeOutput = "[10, [2, 3, 4, 5], [1, null, 3], 7.5, [False, True], 10, [2, 4, 6, 8], [\"ax\", \"bx\", "
+        const ShapeOutput = "[10, [2, 3, 4, 5], [1, null, 3], 7.5, [False, True], 10, 10, [\"ax\", \"bx\", "
             "\"cx\"], 3]\n";
     }
 
@@ -90,7 +90,12 @@ class SelectorSegmentLoopTest inherits QUnit::Test {
         # a list-typed variable that holds NOTHING (%loose-types)
         out = astOutput(LooseScript);
         lines = out.split("\n");
-        assertEq(11, (select lines, $1 =~ /^[a-z][a-z ]*:$/).size(), "loose cases");
+        assertEq(16, (select lines, $1 =~ /^[a-z][a-z ]*:$/).size(), "loose cases");
+        assertTrue(out =~ /\nmap impure:\n  = null\n/, "map with an impure expression");
+        assertTrue(out =~ /\nselect impure:\n  = null\n/, "select with an impure expression");
+        assertTrue(out =~ /\nfoldl impure:\n  = null\n/, "foldl with an impure expression");
+        assertTrue(out =~ /\nfe stable lazy:\n  = "done"\n/, "stable selectors in foreach");
+        assertTrue(out =~ /\nmap stable lazy:\n  = null\n/, "stable selectors in map");
         # a list of selectors with a range, iterated lazily: no selector is evaluated and no value is given
         assertTrue(out =~ /\nfe local selectors:\n  = "done"\n/, "foreach");
         assertTrue(out =~ /\nmap local:\n  = null\n/, "map");

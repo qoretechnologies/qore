@@ -53,9 +53,14 @@ int sub seg_foreach_stable() {
     return t;
 }
 
-list<int> sub list_map_stable_indices() {
+int sub list_foreach_stable_indices() {
     int n = f(3);
-    return map $1 * 2, li[0, 1, 2, n..3];
+    int t = 0;
+    # more single indices than ranges: the list of values is built first
+    foreach int x in (li[0, 1, 2, n..3]) {
+        t += x;
+    }
+    return t;
 }
 
 list<string> sub iter_map_string() {
@@ -71,4 +76,4 @@ int sub iter_foreach_auto() {
 }
 
 printf("%y\n", (seg_foreach_int(), seg_map_int(), seg_select_or_nothing(), seg_foldl_float(), seg_map_bool(),
-    seg_foreach_stable(), list_map_stable_indices(), iter_map_string(), iter_foreach_auto()));
+    seg_foreach_stable(), list_foreach_stable_indices(), iter_map_string(), iter_foreach_auto()));

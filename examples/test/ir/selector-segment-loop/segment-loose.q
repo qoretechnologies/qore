@@ -23,6 +23,11 @@ int sub f(string tag, int rv) {
     return rv;
 }
 
+#! an impure consumer of a value that can be NOTHING
+int sub g(*int v) {
+    return v ?? 0;
+}
+
 #! runs a case and prints its result or its exception
 sub t(string name, code<auto()> c) {
     printf("%s:\n", name);
@@ -56,6 +61,20 @@ sub main() {
     t("map local stable", auto sub () { list<int> l; int n = 1; return map $1, l[0, n..2]; });
     t("select local", auto sub () { list<int> l; return select l[f("a", 0)..f("b", 2)], $1 > 0; });
     t("foldl local", auto sub () { list<int> l; return foldl $1 + $2, l[f("a", 0), f("b", 1)..f("c", 2)]; });
+    # impure consumers: the lazy pipeline of a list of selectors, which a sequence that is NOTHING does not enter
+    t("map impure", auto sub () { list<int> l; return map g($1), l[f("a", 0), f("b", 1)..f("c", 2)]; });
+    t("select impure", auto sub () { list<int> l; return select l[f("a", 0), f("b", 1)..f("c", 2)], g($1) > 0; });
+    t("foldl impure", auto sub () { list<int> l; return foldl $1 + g($2), l[f("a", 0), f("b", 1)..f("c", 2)]; });
+    # stable selectors with a range, iterated lazily
+    t("fe stable lazy", auto sub () {
+        list<int> l;
+        int n = 0;
+        foreach auto x in (l[n, n..n + 2]) {
+            printf("  body %y\n", x);
+        }
+        return "done";
+    });
+    t("map stable lazy", auto sub () { list<int> l; int n = 1; return map g($1), l[0, n..2]; });
     t("fe member float", auto sub () {
         Holder h();
         foreach auto x in (h.lf[f("a", 0)..f("b", 1)]) {
