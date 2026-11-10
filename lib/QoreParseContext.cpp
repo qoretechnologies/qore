@@ -43,9 +43,7 @@
     \c delete or \c remove is reported unassigned.
 */
 bool QoreParseContext::isLocalDefinitelyAssigned(LocalVar* local) const {
-    // a local that is ever the operand of delete or remove can be without a value at a read that the forward pass
-    // of the parse sees as assigned, for example after a delete and a continue in a loop body (qore#5665)
-    return local && !local->everDeleted() && local->isAssignedAtParseEnd();
+    return local && local->isAssignedAtParseEnd();
 }
 
 bool QoreParseContext::needsGuardForLocal(LocalVar* local) const {
