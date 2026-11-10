@@ -2620,6 +2620,36 @@ public:
     }
 
     // returns true if setting for the first time, false if not
+    //! instantiates the top-level local variables of the Program for a thread that has entered it before
+    /** Called without the lock, as for an entry with the thread's data cached (see
+        ThreadProgramData::findModuleProgramData())
+    */
+    DLLLOCAL void instantiateThreadVarData(ThreadLocalProgramData& tlpd) {
+        if (!tlpd.inst) {
+            doTopLevelInstantiation(tlpd);
+        } else {
+            // Catch up on new top-level vars added after the tlpd was first
+            // initialized. Two scenarios:
+            //  1. REPL mode (PO_ALLOW_REPARSE): new statements may add vars.
+            //  2. A runtime context-switch into this program fired before its
+            //     parse finished — e.g. a reflection callback during another
+            //     module's init creates the tlpd with a partial LVList, and
+            //     the remaining top-level vars (like `x` in `%requires Foo;
+            //     string x = ...;`) are added to the LVList afterwards.
+            //     Without this, those vars never get instantiated and any
+            //     later access walks off the lvstack.
+            const LVList* lvl = sb.getLVList();
+            if (lvl && lvl->size() > tlpd.inst_count) {
+                doTopLevelInstantiation(tlpd);
+            }
+        }
+    }
+
+    //! instantiates the top-level local variables of the Program for a thread whose data is cached
+    DLLLOCAL static void instantiateThreadVarData(QoreProgram& pgm, ThreadLocalProgramData& tlpd) {
+        pgm.priv->instantiateThreadVarData(tlpd);
+    }
+
     DLLLOCAL bool setThreadVarData(ThreadProgramData* td, ThreadLocalProgramData*& new_tlpd, bool run) {
         SafeLocker sl(tlock);
         // wait for data to finished being cleared if applicable
@@ -2664,24 +2694,7 @@ public:
         printd(5, "qore_program_private::setThreadVarData() (not first) this: %p pgm: %p td: %p run: %s inst: %s\n", this, pgm, td, run ? "true" : "false", tlpd->inst ? "true" : "false");
 
         if (run) {
-            if (!tlpd->inst) {
-                doTopLevelInstantiation(*tlpd);
-            } else {
-                // Catch up on new top-level vars added after the tlpd was first
-                // initialized. Two scenarios:
-                //  1. REPL mode (PO_ALLOW_REPARSE): new statements may add vars.
-                //  2. A runtime context-switch into this program fired before its
-                //     parse finished — e.g. a reflection callback during another
-                //     module's init creates the tlpd with a partial LVList, and
-                //     the remaining top-level vars (like `x` in `%requires Foo;
-                //     string x = ...;`) are added to the LVList afterwards.
-                //     Without this, those vars never get instantiated and any
-                //     later access walks off the lvstack.
-                const LVList* lvl = sb.getLVList();
-                if (lvl && lvl->size() > tlpd->inst_count) {
-                    doTopLevelInstantiation(*tlpd);
-                }
-            }
+            instantiateThreadVarData(*tlpd);
         }
 
         return false;
@@ -4680,6 +4693,12 @@ private:
     */
 
     DLLLOCAL qore_debug_program_private* getDebugProgram(AutoQoreCounterDec& ad) {
+        // a Program without a debug program takes no lock: this runs on every entry of a thread into the Program, and
+        // a debug program attached concurrently is found as if the lock had been taken just before it was attached
+        // (attachDebug() marks the thread's data for a pending attach under the lock in any case)
+        if (!dpgm.load(std::memory_order_acquire)) {
+            return nullptr;
+        }
         AutoLocker al(tlock);
         //QoreAutoRWReadLocker al(&lck_debug_program);
         qore_debug_program_private* ret = dpgm.load(std::memory_order_relaxed);

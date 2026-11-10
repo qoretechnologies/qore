@@ -5496,6 +5496,11 @@ void QoreModuleManager::delUser() {
         }
     }
 
+    // calls into module code take the thread count of the module's Program again from now on, and the threads in
+    // module code entered without it leave it first, so that the teardown below waits for every thread in it (see
+    // qore_stop_module_uncounted_entries())
+    qore_stop_module_uncounted_entries();
+
     // issue #5164: Phase 1 - clear namespace data on all user module programs before destroying any modules
     // This ensures static variable destructors run while all module programs are still alive, preventing
     // use-after-free when a shared class's static vars are destroyed by the last module to clear them

@@ -20,6 +20,9 @@ module BarrierMod {
     };
 }
 
+# each thread has its own value in the module's Program
+thread_local int tl_count;
+
 public namespace BarrierMod {
 namespace Priv {
     # the script path of the module's Program, which identifies the Program that code runs in
@@ -94,6 +97,11 @@ public auto sub func_callback(code c) {
     return Priv::run(c);
 }
 
+#! increments the module's thread-local counter of the calling thread and returns it
+public int sub func_thread_count() {
+    return ++tl_count;
+}
+
 #! returns an object that module code created
 public RWLock sub func_make_lock() {
     return new RWLock();
@@ -134,6 +142,10 @@ public class Probe {
 
     static auto callback(code c) {
         return Priv::run(c);
+    }
+
+    static int threadCount() {
+        return ++tl_count;
     }
 
     static RWLock makeLock() {

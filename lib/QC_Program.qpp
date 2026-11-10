@@ -3800,6 +3800,9 @@ list<int> l = pgm.getThreadList();
 
     @return a list of thread IDs active in this Program
 
+    @note the %Program of a user module does not list the threads that run its code for calls from other Programs;
+    those threads are listed by the Programs that called it (see @ref user_module_runtime_context)
+
     @since %Qore 0.8.13
 */
 list<int> Program::getThreadList() [flags=CONSTANT] {

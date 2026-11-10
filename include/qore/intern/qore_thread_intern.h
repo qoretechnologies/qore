@@ -1028,6 +1028,17 @@ DLLLOCAL bool qore_module_lifetime_active();
 //! thread can run Qore code, before the binary modules are deleted
 DLLLOCAL void qore_release_module_program_pins();
 
+//! Stops the entries into Programs with module lifetime without their thread count, and waits for the threads in such
+//! entries to leave them
+/** Entering the Program of a module takes neither the Program's lock nor its thread count while module lifetime is in
+    effect (see ProgramThreadCountContextHelper::set()): the Program is deleted only by the module manager's cleanup,
+    which calls this first, so that every later entry takes the thread count, and the Program's teardown waits for the
+    threads in its code as usual.  Each thread counts its own entries, so concurrent calls into a module's code do not
+    contend for a lock.  Called by QoreModuleManager::delUser() before it clears the data of the module Programs;
+    idempotent
+*/
+DLLLOCAL void qore_stop_module_uncounted_entries();
+
 //! Marks a Program that Qore code creates (Program::constructor()) as sandboxed if its creator is sandboxed
 DLLLOCAL void qore_program_set_creator_sandbox(QoreProgram& pgm);
 
@@ -1745,6 +1756,9 @@ protected:
     bool restore = false;
     bool init_tlpd = false;
     bool thread_count_incremented = false;
+    //! true if the context entered a Program with module lifetime without its thread count; see
+    //! qore_module_uncounted_entry()
+    bool module_uncounted = false;
     //! true if the cancellation deferral of the thread was suspended when the Program was entered
     bool defer_suspended = false;
 
@@ -2176,6 +2190,18 @@ private:
 
    ThreadData* td;
 
+   //! a cached local data of the thread in a Program with module lifetime; see findModuleProgramData()
+   struct ModuleProgramDataCacheEntry {
+      const QoreProgram* pgm = nullptr;
+      ThreadLocalProgramData* tlpd = nullptr;
+   };
+   static constexpr unsigned ModuleProgramDataCacheSize = 8;
+   //! accessed by the thread itself only
+   ModuleProgramDataCacheEntry module_pgm_cache[ModuleProgramDataCacheSize];
+   unsigned module_pgm_cache_next = 0;
+   //! set when the thread's data is deleted (del()), after which the cache is neither used nor filled
+   bool module_pgm_cache_disabled = false;
+
 public:
    //! initializes the lock again in a child process created with fork(), where the thread does not exist
    DLLLOCAL void reinitLockAfterFork() {
@@ -2232,6 +2258,30 @@ public:
    DLLLOCAL void freeAllThreadData(ExceptionSink* xsink);
 
    DLLLOCAL void delProgram(QoreProgram* pgm);
+
+   //! returns the thread's local data of a Program with module lifetime cached by cacheModuleProgramData(), or nullptr
+   /** Only for an entry into the Program without its thread count (see qore_stop_module_uncounted_entries()): the
+       Program is not torn down while such entries are allowed, so the thread's local data in it stays in place until
+       the thread ends.  Called in the thread itself only
+   */
+   DLLLOCAL ThreadLocalProgramData* findModuleProgramData(const QoreProgram* pgm) const {
+      for (const ModuleProgramDataCacheEntry& e : module_pgm_cache) {
+         if (e.pgm == pgm) {
+            return e.tlpd;
+         }
+      }
+      return nullptr;
+   }
+
+   //! caches the thread's local data of a Program with module lifetime; see findModuleProgramData()
+   DLLLOCAL void cacheModuleProgramData(const QoreProgram* pgm, ThreadLocalProgramData* tlpd) {
+      if (module_pgm_cache_disabled) {
+         return;
+      }
+      module_pgm_cache[module_pgm_cache_next] = {pgm, tlpd};
+      module_pgm_cache_next = (module_pgm_cache_next + 1) % ModuleProgramDataCacheSize;
+   }
+
    //! saves the thread's data for the current Program and sets the thread's local Program data
    /** @param runtime true to instantiate the Program's top-level local variables for the thread
 

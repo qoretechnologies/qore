@@ -128,6 +128,50 @@ auto sub run() { return BarrierMod::func_async(\\defined()); }", "user");
     printf("sandboxed: async reference to a function of a deleted Program: %y\n", user.callFunction("run"));
 }
 
+# concurrent calls into module code from several threads of a sandboxed and of an unrestricted Program; the
+# arguments of the background call are evaluated in the calling thread
+sub concurrent_call(Queue q, Program p, bool run) {
+    try {
+        if (run) {
+            # every call ran in the module's Program, and the thread's counter in it counted only the thread's calls
+            hash<auto> r = p.callFunction("run", 2000);
+            q.push(r == {"module": True, "count": 4000} ? "ok" : sprintf("%y", r));
+        } else {
+            hash<auto> r = p.callFunction("probes");
+            q.push(r."function program" == "module" && r."method program" == "module" ? "ok" : sprintf("%y", r));
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        q.push(ex.err);
+    }
+}
+
+{
+    Program c(PO_NEW_STYLE);
+    c.parse("%requires BarrierMod
+hash<auto> sub run(int n) {
+    hash<auto> h;
+    int count;
+    for (int i = 0; i < n; ++i) {
+        h{BarrierMod::func_program()} = True;
+        h{BarrierMod::Probe::program()} = True;
+        BarrierMod::func_thread_count();
+        count = BarrierMod::Probe::threadCount();
+    }
+    h.count = count;
+    return h;
+}", "concurrent");
+    Queue q();
+    for (int t = 0; t < 4; ++t) {
+        background concurrent_call(q, c, True);
+        background concurrent_call(q, callers.sandboxed, False);
+    }
+    hash<string, int> results;
+    for (int i = 0; i < 8; ++i) {
+        ++results{q.get()};
+    }
+    printf("concurrent calls: %y\n", results);
+}
+
 # the main Program calling the module directly, which compiled with AOT is a native call into the module
 printf("main: function program: %y\n", BarrierMod::func_program());
 printf("main: method program: %y\n", BarrierMod::Probe::program());

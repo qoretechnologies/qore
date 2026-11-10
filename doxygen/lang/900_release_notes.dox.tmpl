@@ -109,7 +109,8 @@
     of a sandboxed caller also apply to the module code that it calls.  Parse options alone are not a run-time
     boundary for module code: to keep code from reaching functionality through modules, give its %Program a
     @ref Qore::SandboxManager "SandboxManager" or @ref Qore::PO_NO_MODULES "PO_NO_MODULES"; see
-    @ref user_module_runtime_context.
+    @ref user_module_runtime_context.  Calls into module code take no lock of the module's %Program, so many threads
+    can call a module concurrently without contending for it.
 
     @par Temporary Values Live Until the End of Their Statement
     A value that an expression creates and nothing else refers to, such as the object returned by a call in a chain of

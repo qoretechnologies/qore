@@ -1738,6 +1738,12 @@ public class Lookup {
     runs with @ref Qore::Program::run() "Program::run()", for example) runs in that %Program with that
     %Program's restrictions.  The module's \c init and \c del closures run with the module's own options.
 
+    Calls into module code take no lock of the module's @ref Qore::Program "Program", so that any number of threads
+    can call a module concurrently.  The threads running module code for calls from other Programs therefore count as
+    threads of the calling Programs only: @ref Qore::Program::getThreadList() "Program::getThreadList()" of the
+    module's %Program does not list them, and the module's %Program waits for them only when the modules are deleted
+    at the end of the process.
+
     The @ref background "background" operator in module code is checked against the module's own options when the
     module is parsed, so module code can start threads for a caller with
     @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL", also threads that run the caller's code.  Such threads are

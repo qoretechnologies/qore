@@ -427,6 +427,9 @@ public:
     qore_program_id_t runtime_po_app_pgm_id = 0;
     //! true while module code runs for a sandboxed caller; see QoreCallParseOptionsOverride::sandboxed
     bool runtime_po_sandboxed = false;
+    //! the number of entries of the thread into Programs with module lifetime that took no thread count; see
+    //! qore_module_uncounted_entry(); written by the thread, read by qore_stop_module_uncounted_entries()
+    std::atomic<unsigned> module_uncounted{0};
     int tid;
 
     VLock vlock;     // for deadlock detection
@@ -1331,6 +1334,13 @@ void ThreadProgramData::freeAllThreadData(ExceptionSink* xsink) {
 }
 
 void ThreadProgramData::del(ExceptionSink* xsink) {
+    // the thread's local data in the Programs is deleted now: the cache of the data of module Programs must not return
+    // it to the destructors that run below
+    module_pgm_cache_disabled = true;
+    for (ModuleProgramDataCacheEntry& e : module_pgm_cache) {
+        e = ModuleProgramDataCacheEntry();
+    }
+
     // free the thread's thread-local data in all Program families first, as the old per-Program finalization did
     freeAllThreadData(xsink);
 
@@ -3599,6 +3609,100 @@ ProgramThreadCountContextHelper::ProgramThreadCountContextHelper(ExceptionSink* 
     set(xsink, pgm, runtime);
 }
 
+namespace {
+//! the state of the entries into Programs with module lifetime without their thread count
+struct ModuleUncountedEntries {
+    //! true until qore_stop_module_uncounted_entries()
+    std::atomic<bool> active{true};
+    //! the waiter in qore_stop_module_uncounted_entries() waits on it; threads leaving their last entry notify it
+    /** A leaf lock: no other lock is taken while it is held
+    */
+    std::mutex m;
+    std::condition_variable cond;
+    //! incremented under \a m by each notification, so that the waiter, which checks the threads without \a m, misses
+    //! none
+    unsigned gen = 0;
+    QoreForkStdMutex fork_handler{m, QFLR_LEAF, "module_uncounted_entries", QFLM_ACQUIRE, {&cond}};
+
+    void notify() {
+        {
+            std::lock_guard<std::mutex> l(m);
+            ++gen;
+        }
+        cond.notify_all();
+    }
+};
+
+ModuleUncountedEntries& module_uncounted_entries() {
+    // never destroyed: threads can leave module code while static objects are destroyed
+    static ModuleUncountedEntries* e = new ModuleUncountedEntries;
+    return *e;
+}
+
+//! enters a Program with module lifetime without its thread count, if such entries are still allowed
+/** The thread counts its own entries; the sequentially consistent increment and load pair with the store and the
+    loads of qore_stop_module_uncounted_entries(), so either the stopping thread sees the entry, or the entry sees that
+    entries without the thread count have stopped and takes the thread count instead
+*/
+bool qore_module_uncounted_entry(ThreadData* td) {
+    ModuleUncountedEntries& e = module_uncounted_entries();
+    if (!e.active.load(std::memory_order_acquire)) {
+        return false;
+    }
+    td->module_uncounted.fetch_add(1, std::memory_order_seq_cst);
+    if (e.active.load(std::memory_order_seq_cst)) {
+        return true;
+    }
+    // stopped meanwhile: the entry takes the thread count
+    if (td->module_uncounted.fetch_sub(1, std::memory_order_seq_cst) == 1) {
+        e.notify();
+    }
+    return false;
+}
+
+//! leaves an entry made with qore_module_uncounted_entry()
+void qore_module_uncounted_exit(ThreadData* td) {
+    if (td->module_uncounted.fetch_sub(1, std::memory_order_seq_cst) == 1) {
+        ModuleUncountedEntries& e = module_uncounted_entries();
+        if (!e.active.load(std::memory_order_seq_cst)) {
+            e.notify();
+        }
+    }
+}
+}
+
+void qore_stop_module_uncounted_entries() {
+    ModuleUncountedEntries& e = module_uncounted_entries();
+    e.active.store(false, std::memory_order_seq_cst);
+    ThreadData* self = thread_data.get();
+    while (true) {
+        unsigned gen;
+        {
+            std::lock_guard<std::mutex> l(e.m);
+            gen = e.gen;
+        }
+        // the threads are checked with the thread list lock held, which keeps their thread data in place, but without
+        // the leaf lock
+        bool busy = false;
+        {
+            QoreThreadListIterator i;
+            while (i.next()) {
+                ThreadData* td = thread_list.getThreadData(*i);
+                if (td && td != self && td->module_uncounted.load(std::memory_order_seq_cst)) {
+                    busy = true;
+                    break;
+                }
+            }
+        }
+        if (!busy) {
+            return;
+        }
+        // a thread that has left its last entry since the generation was read has notified already
+        std::unique_lock<std::mutex> l(e.m);
+        e.cond.wait(l, [&e, gen]() -> bool { return e.gen != gen; });
+    }
+}
+
 ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
     if (!restore) {
         printd(5, "ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() this:%p cur_ctx:%p no restore\n", this, old_ctx);
@@ -3662,6 +3766,8 @@ void ProgramThreadCountContextHelper::restoreContext() {
 
     if (thread_count_incremented) {
         qore_program_private::decThreadCount(*pgm, td->tid, xsink);
+    } else if (module_uncounted) {
+        qore_module_uncounted_exit(td);
     }
 }
 
@@ -3710,18 +3816,39 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     // incThreadCount() is invalid while parsing_in_progress is set.
     const bool skip_thread_count = pp->parsingLocked();
     if (!skip_thread_count) {
-        // try to increment thread count
-        if (pp->incThreadCount(xsink)) {
-            printd(5, "ProgramThreadCountContextHelper::set() failed\n");
-            return;
+        // the Program of a module is deleted only by the module manager's cleanup, which stops these entries first:
+        // a call into module code then needs neither the Program's lock nor its thread count, so concurrent calls do
+        // not contend for them (see qore_stop_module_uncounted_entries())
+        if (runtime && pp->module_lifetime.load(std::memory_order_acquire) && qore_module_uncounted_entry(td)) {
+            module_uncounted = true;
+        } else {
+            // try to increment thread count
+            if (pp->incThreadCount(xsink)) {
+                printd(5, "ProgramThreadCountContextHelper::set() failed\n");
+                return;
+            }
+            thread_count_incremented = true;
         }
-        thread_count_incremented = true;
     }
 
     // set up thread stacks
     restore = true;
     td->current_pgm = pgm;
-    init_tlpd = td->tpd->saveProgram(runtime); // set new td->tlpd
+    // the thread's local data in a module's Program stays in place while entries without the thread count are
+    // allowed: it is cached in the thread, which then takes no lock of the Program (see findModuleProgramData())
+    ThreadLocalProgramData* cached_tlpd = module_uncounted ? td->tpd->findModuleProgramData(pgm) : nullptr;
+    if (cached_tlpd) {
+        td->tlpd = cached_tlpd;
+        init_tlpd = false;
+        if (runtime) {
+            qore_program_private::instantiateThreadVarData(*pgm, *cached_tlpd);
+        }
+    } else {
+        init_tlpd = td->tpd->saveProgram(runtime); // set new td->tlpd
+        if (module_uncounted) {
+            td->tpd->cacheModuleProgramData(pgm, td->tlpd);
+        }
+    }
     if (init_tlpd && runtime) {
         // the thread initialization code runs on the thread's first entry that succeeds
         td->tlpd->thread_init_pending = true;
