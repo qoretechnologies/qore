@@ -2709,18 +2709,10 @@ static const QoreTypeInfo* qore_background_hash_value_type(const QoreTypeInfo* h
     return vti ? get_or_nothing_type_check(vti) : nullptr;
 }
 
-//! returns the type of an element of a list, string or binary of the given type, or nullptr if it is not known
+//! returns the type of an element of a list of the given type, or nullptr if it is not known
 static const QoreTypeInfo* qore_background_element_type(const QoreTypeInfo* container_ti) {
-    if (const QoreTypeInfo* eti = QoreTypeInfo::getReturnComplexListOrNothing(container_ti)) {
-        return get_or_nothing_type_check(eti);
-    }
-    if (QoreTypeInfo::isType(container_ti, NT_STRING)) {
-        return stringOrNothingTypeInfo;
-    }
-    if (QoreTypeInfo::isType(container_ti, NT_BINARY)) {
-        return bigIntOrNothingTypeInfo;
-    }
-    return nullptr;
+    const QoreTypeInfo* eti = QoreTypeInfo::getReturnComplexListOrNothing(container_ti);
+    return eti ? get_or_nothing_type_check(eti) : nullptr;
 }
 
 //! returns true if the expression is the local variable self
@@ -2741,7 +2733,9 @@ static qore_background_lvalue_e qore_background_lvalue_walk(QoreValue n, const Q
     switch (n.getType()) {
         case NT_VARREF: {
             const VarRefNode* vrn = n.get<const VarRefNode>();
-            if (vrn->getType() != VT_LOCAL) {
+            // the background operator takes the value of every variable but a global one when the thread starts (a
+            // local, closure-bound or thread-local variable; see copy_value_and_resolve_lvar_refs())
+            if (vrn->getType() == VT_GLOBAL) {
                 return qore_background_lvalue_e::SHARED;
             }
             ti = vrn->getParseTypeInfo();

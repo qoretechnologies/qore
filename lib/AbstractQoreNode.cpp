@@ -37,6 +37,12 @@
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/AbstractStatement.h"
 #include "qore/intern/QoreDeferredRelease.h"
+#include "qore/intern/BackgroundLValueRootNode.h"
+#include "qore/intern/QoreSquareBracketsOperatorNode.h"
+#include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
+#include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
+#include "qore/intern/QoreCastOperatorNode.h"
+#include "qore/intern/SelfVarrefNode.h"
 
 #include <cassert>
 #include <cstdio>
@@ -672,6 +678,95 @@ QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xs
 }
 
 namespace {
+//! Sets whether the copy in progress is copying the access path of an lvalue, for as long as it exists
+class BackgroundLValuePathHelper {
+public:
+    BackgroundLValuePathHelper(BackgroundClosureCaptureHelper* copy, bool path) : copy(copy),
+            prev(copy ? copy->setLValuePath(path) : false) {
+    }
+
+    ~BackgroundLValuePathHelper() {
+        if (copy) {
+            copy->setLValuePath(prev);
+        }
+    }
+
+    BackgroundLValuePathHelper(const BackgroundLValuePathHelper&) = delete;
+    BackgroundLValuePathHelper& operator=(const BackgroundLValuePathHelper&) = delete;
+
+private:
+    BackgroundClosureCaptureHelper* copy;
+    bool prev;
+};
+}
+
+QoreValue copy_lvalue_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink) {
+    BackgroundLValuePathHelper ph(background_closure_capture_helper, true);
+    return copy_value_and_resolve_lvar_refs(n, xsink);
+}
+
+QoreValue copy_value_and_resolve_lvar_refs_not_lvalue(const QoreValue& n, ExceptionSink* xsink) {
+    BackgroundLValuePathHelper ph(background_closure_capture_helper, false);
+    return copy_value_and_resolve_lvar_refs(n, xsink);
+}
+
+//! Returns true if the node is a step of an lvalue's access path, whose first operand is the next step
+static bool qore_background_lvalue_path_step(const AbstractQoreNode* node) {
+    return dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)
+        || dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)
+        || dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)
+        || dynamic_cast<const QoreCastOperatorNode*>(node);
+}
+
+//! Copies a node of an lvalue's access path (see copy_lvalue_and_resolve_lvar_refs())
+/** @return true if the node was copied (or an exception was raised), false if it is copied as any other value
+*/
+static bool qore_copy_background_lvalue_path(RuntimeConfig& rc, const QoreValue& n, QoreValue& rv,
+        ExceptionSink* xsink) {
+    const QoreTypeInfo* type_info = nullptr;
+    switch (n.getType()) {
+        case NT_VARREF: {
+            const VarRefNode* var_ref = n.get<const VarRefNode>();
+            // a global variable is shared with the thread; it is not taken
+            if (var_ref->getType() == VT_GLOBAL) {
+                return false;
+            }
+            type_info = var_ref->getParseTypeInfo();
+            break;
+        }
+        case NT_SELF_VARREF:
+            type_info = n.get<const SelfVarrefNode>()->getParseTypeInfo();
+            break;
+        case NT_PARSE_LIST:
+            // the lvalues of a list assignment
+            return false;
+        case NT_OPERATOR:
+            if (qore_background_lvalue_path_step(n.getInternalNode())) {
+                return false;
+            }
+            // fallthrough
+        default: {
+            // any other expression is a value: its operands are not steps of the path
+            BackgroundLValuePathHelper ph(background_closure_capture_helper, false);
+            rv = copy_value_and_resolve_lvar_refs(rc, n, xsink);
+            return true;
+        }
+    }
+    // the root of the path: the value that the thread takes, as an lvalue of the variable's declared type
+    ValueEvalRefHolder vh(rc, n, xsink);
+    if (*xsink) {
+        return true;
+    }
+    // the value is released by the check if it raises an exception
+    QoreValue v = check_background_closure_capture(vh.takeReferencedValue(), xsink);
+    if (*xsink) {
+        return true;
+    }
+    rv = new BackgroundLValueRootNode(n.get<const ParseNode>()->loc, v, type_info);
+    return true;
+}
+
+namespace {
 //! Counts an operator that binds implicit arguments around the operand being copied, for as long as it exists
 /** The count is that of the copy in progress (BackgroundClosureCaptureHelper), so a background expression that code
     evaluated by the copy starts is copied with its own.
@@ -708,6 +803,14 @@ QoreValue copy_value_and_resolve_lvar_refs_bound_implicit(const QoreValue& n, Ex
 QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink) {
     if (!n.hasNode()) {
         return n.refSelf();
+    }
+
+    // the access path of the lvalue of an lvalue operator (issue #5723)
+    if (background_closure_capture_helper && background_closure_capture_helper->inLValuePath()) {
+        QoreValue rv;
+        if (qore_copy_background_lvalue_path(rc, n, rv, xsink)) {
+            return rv;
+        }
     }
 
     switch (n.getType()) {

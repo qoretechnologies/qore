@@ -1804,8 +1804,9 @@
       AST interpreter and modified a copy in the other execution modes; it is now a parse error, as elsewhere in the
       expression
     - modifying an element or member of a local variable or member in a @ref background "background" expression crashed
-      the AST interpreter; a value that the thread copies is now refused at parse time, a member of an object is modified
-      in the object in every execution mode, and a value of unknown type is refused
+      the AST interpreter, and \c /=, \c -- of the AST interpreter's background copies were \c *= and \c ++; a value that
+      the thread copies is now refused at parse time, a member of an object is modified in the object in every execution
+      mode, and a value of unknown type is refused
     - the smallest integer divided by \c -1 (@ref division_operator "/", @ref modulo_operator "%") crashed with
       \c SIGFPE
     - methods implemented by @ref Qore::SQL::AbstractDatasource "AbstractDatasource",

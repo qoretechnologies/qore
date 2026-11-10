@@ -698,6 +698,9 @@ private:
     // suppressObjectScan())
     bool no_object_scan = false;
 
+    //! the value of the root of the lvalue of a background expression, which the lvalue refers to (issue #5723)
+    QoreValue bg_root_value;
+
     //! set when the lvalue was changed other than by the removal; see disableRemovalScanSkip()
     bool removal_no_skip = false;
     //! set when members were removed from an object; see objectRemoved()

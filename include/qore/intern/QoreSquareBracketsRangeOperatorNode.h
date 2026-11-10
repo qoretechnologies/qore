@@ -60,10 +60,10 @@ public:
         ValueHolder n_e0(copy_value_and_resolve_lvar_refs(e[0], xsink), xsink);
         if (*xsink)
             return 0;
-        ValueHolder n_e1(copy_value_and_resolve_lvar_refs(e[1], xsink), xsink);
+        ValueHolder n_e1(copy_value_and_resolve_lvar_refs_not_lvalue(e[1], xsink), xsink);
         if (*xsink)
             return 0;
-        ValueHolder n_e2(copy_value_and_resolve_lvar_refs(e[2], xsink), xsink);
+        ValueHolder n_e2(copy_value_and_resolve_lvar_refs_not_lvalue(e[2], xsink), xsink);
         if (*xsink)
             return 0;
         return new QoreSquareBracketsRangeOperatorNode(loc, n_e0.release(), n_e1.release(), n_e2.release());

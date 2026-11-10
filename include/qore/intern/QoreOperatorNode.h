@@ -50,6 +50,8 @@ private:
    /** see copy_value_and_resolve_lvar_refs_bound_implicit()
    */
    unsigned bound_implicit_depth = 0;
+   //! true while the copy is copying the access path of an lvalue (see copy_lvalue_and_resolve_lvar_refs())
+   bool lvalue_path = false;
    bool release = false;
 
 public:
@@ -76,6 +78,18 @@ public:
       return bound_implicit_depth != 0;
    }
 
+   //! Returns true while the copy is copying the access path of an lvalue (see copy_lvalue_and_resolve_lvar_refs())
+   DLLLOCAL bool inLValuePath() const {
+      return lvalue_path;
+   }
+
+   //! Sets whether the copy is copying the access path of an lvalue; returns the previous state
+   DLLLOCAL bool setLValuePath(bool path) {
+      bool rv = lvalue_path;
+      lvalue_path = path;
+      return rv;
+   }
+
    DLLLOCAL std::vector<QoreObject*> takeObjects() {
       std::vector<QoreObject*> rv(std::move(objects));
       release = true;
@@ -85,6 +99,15 @@ public:
 
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink);
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink);
+//! Copies the lvalue operand of an lvalue operator of a background expression (issue #5723)
+/** As copy_value_and_resolve_lvar_refs(), except that its access path is kept: the nodes of its steps ([], ., casts
+    and slices) are copied, and the variable or member at its root is replaced by a BackgroundLValueRootNode holding the
+    value that the thread takes, with the variable's declared type
+*/
+DLLLOCAL QoreValue copy_lvalue_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink);
+//! As copy_value_and_resolve_lvar_refs() for an operand that is not the next step of an lvalue's access path
+/** The key, index or other operand of a step of an lvalue's access path is a value */
+DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs_not_lvalue(const QoreValue& n, ExceptionSink* xsink);
 
 //! Copies an operand that an operator evaluates with implicit arguments of its own, for the background operator
 /** The background operator copies its expression with the values of the local variables and of the implicit
@@ -244,7 +267,10 @@ public:
 
     template <class O>
     DLLLOCAL O* copyBackgroundExplicit(ExceptionSink* xsink) const {
-        ValueHolder n_exp(copy_value_and_resolve_lvar_refs(exp, xsink), xsink);
+        // the operand of an lvalue operator is an lvalue (issue #5723)
+        ValueHolder n_exp(std::is_base_of<LValueOperatorNode, T>::value
+            ? copy_lvalue_and_resolve_lvar_refs(exp, xsink)
+            : copy_value_and_resolve_lvar_refs(exp, xsink), xsink);
         if (*xsink)
             return nullptr;
         return new O(this->loc, n_exp.release());
@@ -307,7 +333,10 @@ public:
 
     template <class O>
     DLLLOCAL O* copyBackgroundExplicit(ExceptionSink* xsink) const {
-        ValueHolder n_exp(copy_value_and_resolve_lvar_refs(exp, xsink), xsink);
+        // the operand of an lvalue operator is an lvalue (issue #5723)
+        ValueHolder n_exp(std::is_base_of<LValueOperatorNode, T>::value
+            ? copy_lvalue_and_resolve_lvar_refs(exp, xsink)
+            : copy_value_and_resolve_lvar_refs(exp, xsink), xsink);
         if (*xsink)
             return nullptr;
         return new O(this->loc, n_exp.release());
@@ -383,10 +412,14 @@ public:
 
     template <class O>
     DLLLOCAL O* copyBackgroundExplicit(ExceptionSink* xsink) const {
-        ValueHolder n_left(copy_value_and_resolve_lvar_refs(left, xsink), xsink);
+        // the left operand of an lvalue operator is an lvalue, and the left operand of a step of an lvalue's access
+        // path is the next step; the right operand is a value (issue #5723)
+        ValueHolder n_left(std::is_base_of<LValueOperatorNode, T>::value
+            ? copy_lvalue_and_resolve_lvar_refs(left, xsink)
+            : copy_value_and_resolve_lvar_refs(left, xsink), xsink);
         if (*xsink)
             return nullptr;
-        ValueHolder n_right(copy_value_and_resolve_lvar_refs(right, xsink), xsink);
+        ValueHolder n_right(copy_value_and_resolve_lvar_refs_not_lvalue(right, xsink), xsink);
         if (*xsink)
             return nullptr;
         return new O(this->loc, n_left.release(), n_right.release());

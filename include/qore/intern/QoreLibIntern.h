@@ -1009,9 +1009,11 @@ DLLLOCAL int check_const_method_lvalue(const QoreProgramLocation* loc, QoreValue
 
 //! what a background expression would modify with an lvalue (see parse_check_background_lvalue())
 enum class qore_background_lvalue_e {
-    //! a variable shared with the thread (a global, a reference), or an object reached through the path: allowed
+    //! a global variable, which the thread shares, or an object reached through the path: allowed
     SHARED,
-    //! a local variable of the code that starts the thread, or a value contained in it: refused
+    //! a local, closure-bound or thread-local variable of the code that starts the thread, or a value contained in
+    //! it, which the thread takes when it starts: refused (a local declared as a reference, such as
+    //! reference<list<int>>, is a local too)
     LOCAL,
     //! a member of the object of the code that starts the thread, or a value contained in it: refused
     MEMBER,
@@ -1020,9 +1022,9 @@ enum class qore_background_lvalue_e {
 };
 
 //! Returns what the lvalue of a modification in a background expression modifies, by its access path (issue #5723)
-/** The background operator takes the values of the locals and of the members of the code that starts the thread when
-    the thread starts, so a modification of one of them, or of a value it contains (an element of a list, a key of a
-    hash, a character of a string), changes only the thread's copy: it is refused.  A step of the path whose type is
+/** The background operator takes the values of the local, closure-bound and thread-local variables and of the members
+    of the code that starts the thread when the thread starts, so a modification of one of them, or of a value it
+    contains (an element of a list, a key of a hash), changes only the thread's copy: it is refused.  A step of the path whose type is
     an object makes the rest of the path a part of that object, which the thread shares: the modification is allowed,
     as a method call on the object is.  A step whose type is not known (auto, any, no type) could be either.
 */

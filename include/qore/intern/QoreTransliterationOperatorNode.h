@@ -54,7 +54,8 @@ public:
     }
 
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const {
-        ValueHolder n_exp(copy_value_and_resolve_lvar_refs(exp, xsink), xsink);
+        // the operand is an lvalue, whose access path is kept (issue #5723)
+        ValueHolder n_exp(copy_lvalue_and_resolve_lvar_refs(exp, xsink), xsink);
         if (*xsink)
             return nullptr;
         return new QoreTransliterationOperatorNode(loc, n_exp.release(), regex->refSelf());
