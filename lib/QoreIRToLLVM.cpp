@@ -6924,7 +6924,88 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
         }
         return true;
     };
-    for (const auto& node : info.int_expression.nodes) {
+    // every node is checked before anything is emitted: a summary that cannot be emitted is declined (the callee
+    // is called) with no instruction or block created, as a failure after the fallback and hash projection blocks
+    // are created would leave them without terminators; a comparison or a string predicate is an i1 that only a
+    // Select condition takes, as the summary has no bool -> int conversion; the summary builder and the module file
+    // import produce no other use of one, and these checks keep the emitter from relying on that
+    const std::vector<AOTIntExpressionNodeInfo>& expr_nodes = info.int_expression.nodes;
+    std::vector<bool> node_is_bool;
+    node_is_bool.reserve(expr_nodes.size());
+    for (size_t i = 0; i < expr_nodes.size(); ++i) {
+        const auto& node = expr_nodes[i];
+        auto is_boxed_arg = [&](int param) {
+            return param >= 0 && static_cast<size_t>(param) < native_args.size()
+                && getFastEntryParamKind(info, static_cast<unsigned>(param)) == BatchCalleeParamKind::Boxed
+                && native_args[static_cast<size_t>(param)]->getType() == i64_type;
+        };
+        auto is_int_operand = [&](size_t index) {
+            return index < i && !node_is_bool[index];
+        };
+        bool operands_valid;
+        switch (node.kind) {
+            case AOTIntExpressionNodeKind::Param:
+                operands_valid = node.param >= 0 && static_cast<size_t>(node.param) < native_args.size()
+                    && native_args[static_cast<size_t>(node.param)]->getType() == i64_type;
+                break;
+            case AOTIntExpressionNodeKind::Constant:
+                operands_valid = true;
+                break;
+            case AOTIntExpressionNodeKind::ListSize:
+            case AOTIntExpressionNodeKind::StringSize:
+            case AOTIntExpressionNodeKind::StringLength:
+            case AOTIntExpressionNodeKind::HashKeyInt:
+            case AOTIntExpressionNodeKind::HashKeyStringSize:
+            case AOTIntExpressionNodeKind::HashKeyStringLength:
+                operands_valid = is_boxed_arg(node.param);
+                break;
+            case AOTIntExpressionNodeKind::StringStartsWith:
+            case AOTIntExpressionNodeKind::StringEndsWith:
+            case AOTIntExpressionNodeKind::StringContains:
+                operands_valid = is_boxed_arg(node.param) && is_boxed_arg(node.lhs);
+                break;
+            case AOTIntExpressionNodeKind::StringFind:
+            case AOTIntExpressionNodeKind::StringRFind:
+                operands_valid = is_boxed_arg(node.param) && is_boxed_arg(node.lhs)
+                    && (node.rhs == UINT8_MAX || is_int_operand(node.rhs));
+                break;
+            case AOTIntExpressionNodeKind::Neg:
+                operands_valid = is_int_operand(node.lhs);
+                break;
+            case AOTIntExpressionNodeKind::Select:
+                operands_valid = node.lhs < i && node_is_bool[node.lhs] && is_int_operand(node.rhs)
+                    && is_int_operand(node.third);
+                break;
+            case AOTIntExpressionNodeKind::Add:
+            case AOTIntExpressionNodeKind::Sub:
+            case AOTIntExpressionNodeKind::Mul:
+            case AOTIntExpressionNodeKind::Div:
+            case AOTIntExpressionNodeKind::Mod:
+            case AOTIntExpressionNodeKind::And:
+            case AOTIntExpressionNodeKind::Or:
+            case AOTIntExpressionNodeKind::Xor:
+            case AOTIntExpressionNodeKind::Shl:
+            case AOTIntExpressionNodeKind::Shr:
+            case AOTIntExpressionNodeKind::Eq:
+            case AOTIntExpressionNodeKind::Ne:
+            case AOTIntExpressionNodeKind::Lt:
+            case AOTIntExpressionNodeKind::Le:
+            case AOTIntExpressionNodeKind::Gt:
+            case AOTIntExpressionNodeKind::Ge:
+                operands_valid = is_int_operand(node.lhs) && is_int_operand(node.rhs);
+                break;
+            default:
+                operands_valid = false;
+                break;
+        }
+        if (!operands_valid) {
+            return nullptr;
+        }
+        node_is_bool.push_back((node.kind >= AOTIntExpressionNodeKind::Eq
+                && node.kind <= AOTIntExpressionNodeKind::Ge)
+            || (node.kind >= AOTIntExpressionNodeKind::StringStartsWith
+                && node.kind <= AOTIntExpressionNodeKind::StringContains));
+
         bool hash_projection =
             node.kind == AOTIntExpressionNodeKind::HashKeyInt
             || node.kind
@@ -6955,14 +7036,6 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                         "QORE_DISABLE_AOT_HASH_STRING_MEASURE_IMPORT")) {
                 return nullptr;
             }
-            if (node.kind != AOTIntExpressionNodeKind::HashKeyInt
-                    && (getFastEntryParamKind(info,
-                            static_cast<unsigned>(node.param))
-                            != BatchCalleeParamKind::Boxed
-                        || native_args[static_cast<size_t>(node.param)]->getType()
-                            != i64_type)) {
-                return nullptr;
-            }
         }
         if (string_operation
                 && (!add_optional_source(node.param)
@@ -6987,9 +7060,7 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
         llvm::Value* assigned = nullptr;
         for (unsigned param : optional_source_params) {
             llvm::Value* source = native_args[param];
-            if (source->getType() != i64_type) {
-                return nullptr;
-            }
+            assert(source->getType() == i64_type);
             llvm::Value* current = builder->CreateICmpNE(source,
                 llvm::ConstantInt::get(i64_type, VAL_NOTHING));
             assigned = assigned ? builder->CreateAnd(assigned, current) : current;
@@ -7018,9 +7089,7 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                 continue;
             }
             llvm::Value* base = native_args[static_cast<size_t>(param)];
-            if (base->getType() != i64_type) {
-                return nullptr;
-            }
+            assert(base->getType() == i64_type);
             std::vector<llvm::Constant*> keys;
             std::vector<llvm::Constant*> hashes64;
             std::vector<llvm::Constant*> hashes32;
@@ -7098,14 +7167,9 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
         }
     }
     for (const auto& [param, nodes] : string_hash_groups) {
-        if (param < 0 || static_cast<size_t>(param) >= native_args.size()
-                || getFastEntryParamKind(info,
-                    static_cast<unsigned>(param))
-                    != BatchCalleeParamKind::Boxed
-                || native_args[static_cast<size_t>(param)]->getType()
-                    != i64_type) {
-            return nullptr;
-        }
+        assert(param >= 0 && static_cast<size_t>(param) < native_args.size()
+            && getFastEntryParamKind(info, static_cast<unsigned>(param)) == BatchCalleeParamKind::Boxed
+            && native_args[static_cast<size_t>(param)]->getType() == i64_type);
         llvm::Value* base = native_args[static_cast<size_t>(param)];
         std::vector<llvm::Constant*> keys;
         std::vector<llvm::Constant*> hashes64;
@@ -7186,33 +7250,17 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
     }
 
     std::vector<llvm::Value*> values;
-    values.reserve(info.int_expression.nodes.size());
-    for (const auto& node : info.int_expression.nodes) {
+    values.reserve(expr_nodes.size());
+    for (const auto& node : expr_nodes) {
         llvm::Value* value = nullptr;
         if (node.kind == AOTIntExpressionNodeKind::Param) {
-            if (node.param < 0
-                    || static_cast<size_t>(node.param) >= native_args.size()) {
-                return nullptr;
-            }
             value = native_args[static_cast<size_t>(node.param)];
-            if (value->getType() != i64_type) {
-                return nullptr;
-            }
         } else if (node.kind == AOTIntExpressionNodeKind::Constant) {
             value = llvm::ConstantInt::get(i64_type, node.constant);
         } else if (node.kind == AOTIntExpressionNodeKind::ListSize
                 || node.kind == AOTIntExpressionNodeKind::StringSize
                 || node.kind == AOTIntExpressionNodeKind::StringLength) {
-            if (node.param < 0
-                    || static_cast<size_t>(node.param) >= native_args.size()
-                    || getFastEntryParamKind(info, static_cast<unsigned>(node.param))
-                        != BatchCalleeParamKind::Boxed) {
-                return nullptr;
-            }
             llvm::Value* base = native_args[static_cast<size_t>(node.param)];
-            if (base->getType() != i64_type) {
-                return nullptr;
-            }
             if (node.kind == AOTIntExpressionNodeKind::ListSize) {
                 auto helper = module.getOrInsertFunction("qore_rt_list_size",
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
@@ -7239,25 +7287,15 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                     == AOTIntExpressionNodeKind::HashKeyStringSize
                 || node.kind
                     == AOTIntExpressionNodeKind::HashKeyStringLength) {
-            if (node.param < 0
-                    || static_cast<size_t>(node.param) >= native_args.size()
-                    || getFastEntryParamKind(info, static_cast<unsigned>(node.param))
-                        != BatchCalleeParamKind::Boxed) {
-                return nullptr;
-            }
             llvm::Value* base = native_args[static_cast<size_t>(node.param)];
-            if (base->getType() != i64_type) {
-                return nullptr;
-            }
             auto batched = batched_hash_values.find(values.size());
             if (batched != batched_hash_values.end()) {
                 value = batched->second;
                 values.push_back(value);
                 continue;
             }
-            if (node.kind != AOTIntExpressionNodeKind::HashKeyInt) {
-                return nullptr;
-            }
+            // the string measure projections are always batched
+            assert(node.kind == AOTIntExpressionNodeKind::HashKeyInt);
             llvm::Value* key = builder->CreateGlobalString(node.key,
                 "int_expression_hash_key");
             QoreIRPrecomputedStringHash hash = qore_ir_precompute_string_hash(node.key);
@@ -7280,20 +7318,8 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
             value = builder->CreateCall(to_int, {boxed});
         } else if (node.kind >= AOTIntExpressionNodeKind::StringStartsWith
                 && node.kind <= AOTIntExpressionNodeKind::StringRFind) {
-            if (node.param < 0
-                    || static_cast<size_t>(node.param) >= native_args.size()
-                    || node.lhs >= native_args.size()
-                    || getFastEntryParamKind(info, static_cast<unsigned>(node.param))
-                        != BatchCalleeParamKind::Boxed
-                    || getFastEntryParamKind(info, node.lhs)
-                        != BatchCalleeParamKind::Boxed) {
-                return nullptr;
-            }
             llvm::Value* base = native_args[static_cast<size_t>(node.param)];
             llvm::Value* pattern = native_args[node.lhs];
-            if (base->getType() != i64_type || pattern->getType() != i64_type) {
-                return nullptr;
-            }
             bool predicate = node.kind <= AOTIntExpressionNodeKind::StringContains;
             if (predicate) {
                 int operation = node.kind == AOTIntExpressionNodeKind::StringStartsWith ? 0
@@ -7318,10 +7344,7 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                     ? 0 : -1;
                 llvm::Value* offset = node.rhs == UINT8_MAX
                     ? static_cast<llvm::Value*>(llvm::ConstantInt::get(i64_type, default_offset))
-                    : node.rhs < values.size() ? values[node.rhs] : nullptr;
-                if (!offset || offset->getType() != i64_type) {
-                    return nullptr;
-                }
+                    : values[node.rhs];
                 const char* name = node.kind == AOTIntExpressionNodeKind::StringFind
                     ? (native_string_helpers
                         ? "qore_rt_pseudo_string_find_native_noguard"
@@ -7341,26 +7364,10 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                 }
             }
         } else if (node.kind == AOTIntExpressionNodeKind::Neg) {
-            if (node.lhs >= values.size()
-                    || values[node.lhs]->getType() != i64_type) {
-                return nullptr;
-            }
             value = builder->CreateNeg(values[node.lhs]);
         } else {
-            if (node.lhs >= values.size() || node.rhs >= values.size()) {
-                return nullptr;
-            }
             llvm::Value* lhs = values[node.lhs];
             llvm::Value* rhs = values[node.rhs];
-            if (node.kind == AOTIntExpressionNodeKind::Select) {
-                if (node.third >= values.size() || lhs->getType() != i1_type
-                        || rhs->getType() != i64_type
-                        || values[node.third]->getType() != i64_type) {
-                    return nullptr;
-                }
-            } else if (lhs->getType() != i64_type || rhs->getType() != i64_type) {
-                return nullptr;
-            }
             switch (node.kind) {
                 case AOTIntExpressionNodeKind::Add:
                     value = builder->CreateAdd(lhs, rhs);
@@ -7430,9 +7437,13 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                     value = builder->CreateSelect(lhs, rhs, values[node.third]);
                     break;
                 default:
+                    // the node kinds are checked before anything is emitted
+                    assert(false);
                     return nullptr;
             }
         }
+        assert(value);
+        assert(value->getType() == (node_is_bool[values.size()] ? i1_type : i64_type));
         values.push_back(value);
     }
     llvm::Value* result = values.back();
@@ -7470,33 +7481,90 @@ llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
                 > QORE_AOT_FLOAT_EXPRESSION_MAX_NODES) {
         return nullptr;
     }
+    // every node is checked before anything is emitted: a summary that cannot be emitted is declined (the callee
+    // is called) with no instruction or block created, as a failure after the hash projection blocks are created
+    // would leave them without terminators; a BoolParam node (a bool parameter as i1) is only a Select condition,
+    // as the summary has no bool -> float conversion; the summary builder and the module file import produce no
+    // other use of one, and these checks keep the emitter from relying on that
+    const std::vector<AOTFloatExpressionNodeInfo>& expr_nodes = info.float_expression.nodes;
+    std::vector<bool> node_is_bool;
+    node_is_bool.reserve(expr_nodes.size());
+    std::map<int8_t, std::vector<size_t>> hash_groups;
+    for (size_t i = 0; i < expr_nodes.size(); ++i) {
+        const auto& node = expr_nodes[i];
+        auto param_kind_is = [&](BatchCalleeParamKind kind) {
+            return node.param >= 0 && static_cast<size_t>(node.param) < native_args.size()
+                && getFastEntryParamKind(info, static_cast<unsigned>(node.param)) == kind;
+        };
+        auto is_float_operand = [&](size_t index) {
+            return index < i && !node_is_bool[index];
+        };
+        bool is_bool = false;
+        switch (node.kind) {
+            case AOTFloatExpressionNodeKind::Param:
+                if (!param_kind_is(BatchCalleeParamKind::NativeFloat)
+                        || native_args[static_cast<size_t>(node.param)]->getType() != double_type) {
+                    return nullptr;
+                }
+                break;
+            case AOTFloatExpressionNodeKind::BoolParam: {
+                if (!param_kind_is(BatchCalleeParamKind::NativeBool)) {
+                    return nullptr;
+                }
+                llvm::Type* type = native_args[static_cast<size_t>(node.param)]->getType();
+                if (type != i64_type && type != i1_type) {
+                    return nullptr;
+                }
+                is_bool = true;
+                break;
+            }
+            case AOTFloatExpressionNodeKind::Constant:
+                break;
+            case AOTFloatExpressionNodeKind::HashKeyFloat:
+                if (!param_kind_is(BatchCalleeParamKind::Boxed)
+                        || native_args[static_cast<size_t>(node.param)]->getType() != i64_type) {
+                    return nullptr;
+                }
+                hash_groups[node.param].push_back(i);
+                break;
+            case AOTFloatExpressionNodeKind::Neg:
+                if (!is_float_operand(node.lhs)) {
+                    return nullptr;
+                }
+                break;
+            case AOTFloatExpressionNodeKind::Select:
+                if (node.lhs >= i || !node_is_bool[node.lhs] || !is_float_operand(node.rhs) || node.param < 0
+                        || !is_float_operand(static_cast<size_t>(node.param))) {
+                    return nullptr;
+                }
+                break;
+            case AOTFloatExpressionNodeKind::Add:
+            case AOTFloatExpressionNodeKind::Sub:
+            case AOTFloatExpressionNodeKind::Mul:
+            case AOTFloatExpressionNodeKind::Div:
+                if (!is_float_operand(node.lhs) || !is_float_operand(node.rhs)) {
+                    return nullptr;
+                }
+                break;
+            default:
+                return nullptr;
+        }
+        node_is_bool.push_back(is_bool);
+    }
+    // the summary computes the float return value, not a bool parameter
+    if (node_is_bool.back()) {
+        return nullptr;
+    }
+    if (!hash_groups.empty()
+            && (!fallback_fn || q_env_is_set("QORE_DISABLE_AOT_FLOAT_HASH_PROJECTION"))) {
+        return nullptr;
+    }
+
     llvm::Module& module = *builder->GetInsertBlock()->getModule();
     std::unordered_map<size_t, llvm::Value*> hash_values;
-    std::map<int8_t, std::vector<size_t>> hash_groups;
-    for (size_t i = 0; i < info.float_expression.nodes.size(); ++i) {
-        const auto& node = info.float_expression.nodes[i];
-        if (node.kind == AOTFloatExpressionNodeKind::HashKeyFloat) {
-            hash_groups[node.param].push_back(i);
-        }
-    }
     llvm::BasicBlock* fallback_bb = nullptr;
     llvm::BasicBlock* merge_bb = nullptr;
     if (!hash_groups.empty()) {
-        if (!fallback_fn
-                || q_env_is_set("QORE_DISABLE_AOT_FLOAT_HASH_PROJECTION")) {
-            return nullptr;
-        }
-        for (const auto& [param, nodes] : hash_groups) {
-            (void)nodes;
-            if (param < 0 || static_cast<size_t>(param) >= native_args.size()
-                    || getFastEntryParamKind(info,
-                        static_cast<unsigned>(param))
-                        != BatchCalleeParamKind::Boxed
-                    || native_args[static_cast<size_t>(param)]->getType()
-                        != i64_type) {
-                return nullptr;
-            }
-        }
         llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
         fallback_bb = llvm::BasicBlock::Create(
             ctx, "aot.float.hash.fallback", llvm_func);
@@ -7570,98 +7638,60 @@ llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
         }
     }
     std::vector<llvm::Value*> values;
-    values.reserve(info.float_expression.nodes.size());
+    values.reserve(expr_nodes.size());
     bool expression_may_throw = false;
-    for (const auto& node : info.float_expression.nodes) {
+    for (const auto& node : expr_nodes) {
         llvm::Value* value = nullptr;
-        if (node.kind == AOTFloatExpressionNodeKind::Param) {
-            if (node.param < 0
-                    || static_cast<size_t>(node.param) >= native_args.size()) {
-                return nullptr;
-            }
-            value = native_args[static_cast<size_t>(node.param)];
-            if (value->getType() != double_type
-                    || getFastEntryParamKind(info,
-                        static_cast<unsigned>(node.param))
-                        != BatchCalleeParamKind::NativeFloat) {
-                return nullptr;
-            }
-        } else if (node.kind == AOTFloatExpressionNodeKind::BoolParam) {
-            if (node.param < 0
-                    || static_cast<size_t>(node.param) >= native_args.size()
-                    || getFastEntryParamKind(info,
-                        static_cast<unsigned>(node.param))
-                        != BatchCalleeParamKind::NativeBool) {
-                return nullptr;
-            }
-            value = native_args[static_cast<size_t>(node.param)];
-            if (value->getType() == i64_type) {
-                value = builder->CreateICmpNE(
-                    value, llvm::ConstantInt::get(i64_type, 0));
-            } else if (value->getType() != i1_type) {
-                return nullptr;
-            }
-        } else if (node.kind == AOTFloatExpressionNodeKind::Constant) {
-            value = llvm::ConstantFP::get(double_type, node.constant);
-        } else if (node.kind
-                == AOTFloatExpressionNodeKind::HashKeyFloat) {
-            auto found = hash_values.find(values.size());
-            if (found == hash_values.end()) {
-                return nullptr;
-            }
-            value = found->second;
-        } else if (node.kind == AOTFloatExpressionNodeKind::Neg) {
-            if (node.lhs >= values.size()
-                    || values[node.lhs]->getType() != double_type) {
-                return nullptr;
-            }
-            value = builder->CreateFNeg(values[node.lhs]);
-        } else if (node.kind == AOTFloatExpressionNodeKind::Select) {
-            if (node.lhs >= values.size() || node.rhs >= values.size()
-                    || node.param < 0
-                    || static_cast<size_t>(node.param) >= values.size()
-                    || values[node.lhs]->getType() != i1_type
-                    || values[node.rhs]->getType() != double_type
-                    || values[static_cast<size_t>(node.param)]->getType()
-                        != double_type) {
-                return nullptr;
-            }
-            value = builder->CreateSelect(values[node.lhs],
-                values[node.rhs], values[static_cast<size_t>(node.param)]);
-        } else {
-            if (node.lhs >= values.size() || node.rhs >= values.size()) {
-                return nullptr;
-            }
-            llvm::Value* lhs = values[node.lhs];
-            llvm::Value* rhs = values[node.rhs];
-            if (lhs->getType() != double_type || rhs->getType() != double_type) {
-                return nullptr;
-            }
-            switch (node.kind) {
-                case AOTFloatExpressionNodeKind::Add:
-                    value = builder->CreateFAdd(lhs, rhs);
-                    break;
-                case AOTFloatExpressionNodeKind::Sub:
-                    value = builder->CreateFSub(lhs, rhs);
-                    break;
-                case AOTFloatExpressionNodeKind::Mul:
-                    value = builder->CreateFMul(lhs, rhs);
-                    break;
-                case AOTFloatExpressionNodeKind::Div: {
-                    expression_may_throw = true;
-                    auto helper = module.getOrInsertFunction("qore_rt_div_float",
-                        llvm::FunctionType::get(double_type,
-                            {double_type, double_type, ptr_type}, false));
-                    value = builder->CreateCall(helper, {lhs, rhs, xsink_arg});
-                    break;
+        switch (node.kind) {
+            case AOTFloatExpressionNodeKind::Param:
+                value = native_args[static_cast<size_t>(node.param)];
+                break;
+            case AOTFloatExpressionNodeKind::BoolParam:
+                value = native_args[static_cast<size_t>(node.param)];
+                if (value->getType() == i64_type) {
+                    value = builder->CreateICmpNE(value, llvm::ConstantInt::get(i64_type, 0));
                 }
-                default:
-                    return nullptr;
+                break;
+            case AOTFloatExpressionNodeKind::Constant:
+                value = llvm::ConstantFP::get(double_type, node.constant);
+                break;
+            case AOTFloatExpressionNodeKind::HashKeyFloat: {
+                auto found = hash_values.find(values.size());
+                assert(found != hash_values.end());
+                value = found->second;
+                break;
+            }
+            case AOTFloatExpressionNodeKind::Neg:
+                value = builder->CreateFNeg(values[node.lhs]);
+                break;
+            case AOTFloatExpressionNodeKind::Select:
+                value = builder->CreateSelect(values[node.lhs], values[node.rhs],
+                    values[static_cast<size_t>(node.param)]);
+                break;
+            case AOTFloatExpressionNodeKind::Add:
+                value = builder->CreateFAdd(values[node.lhs], values[node.rhs]);
+                break;
+            case AOTFloatExpressionNodeKind::Sub:
+                value = builder->CreateFSub(values[node.lhs], values[node.rhs]);
+                break;
+            case AOTFloatExpressionNodeKind::Mul:
+                value = builder->CreateFMul(values[node.lhs], values[node.rhs]);
+                break;
+            case AOTFloatExpressionNodeKind::Div: {
+                expression_may_throw = true;
+                auto helper = module.getOrInsertFunction("qore_rt_div_float",
+                    llvm::FunctionType::get(double_type,
+                        {double_type, double_type, ptr_type}, false));
+                value = builder->CreateCall(helper, {values[node.lhs], values[node.rhs], xsink_arg});
+                break;
             }
         }
+        assert(value);
+        assert(value->getType() == (node.kind == AOTFloatExpressionNodeKind::BoolParam ? i1_type : double_type));
         values.push_back(value);
     }
     llvm::Value* result = values.back();
+    assert(result->getType() == double_type);
     if (hash_groups.empty()) {
         if (proven_nothrow && !expression_may_throw) {
             *proven_nothrow = true;

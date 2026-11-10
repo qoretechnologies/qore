@@ -10964,6 +10964,48 @@ static bool qore_aot_collect_int_expression_summaries(
         return mapped.empty() ? -1 : mapped.back();
     };
 
+    // a walk that reaches a return proves that the function returns a value of its return kind that is never
+    // NOTHING, so the fast entry returns it natively whether or not the summary can be emitted; the summary is
+    // stored only if it can be: a comparison or a string predicate is an i1 that only a Select condition takes
+    // (the summary has no bool -> int conversion), so one used as an operand or a Select value leaves the
+    // function to be called (ex: "(a == b) * 3 + a"); returns true if the summary was stored
+    auto store_summary = [&](BatchCalleeInfo& info, AOTIntExpressionInfo& expression,
+            BatchCalleeReturnKind return_kind) -> bool {
+        info.never_returns_nothing = true;
+        info.return_kind = return_kind;
+        info.approach_b_eligible = true;
+        std::vector<bool> node_is_bool;
+        node_is_bool.reserve(expression.nodes.size());
+        for (const auto& node : expression.nodes) {
+            auto is_bool = [&](uint8_t index) {
+                assert(index < node_is_bool.size());
+                return node_is_bool[index];
+            };
+            bool well_typed = true;
+            if (node.kind == AOTIntExpressionNodeKind::Select) {
+                well_typed = is_bool(node.lhs) && !is_bool(node.rhs) && !is_bool(node.third);
+            } else if (node.kind == AOTIntExpressionNodeKind::Neg) {
+                well_typed = !is_bool(node.lhs);
+            } else if (node.kind == AOTIntExpressionNodeKind::StringFind
+                    || node.kind == AOTIntExpressionNodeKind::StringRFind) {
+                well_typed = node.rhs == UINT8_MAX || !is_bool(node.rhs);
+            } else if (node.kind != AOTIntExpressionNodeKind::Param
+                    && node.kind != AOTIntExpressionNodeKind::Constant
+                    && node.kind != AOTIntExpressionNodeKind::ListSize
+                    && node.kind != AOTIntExpressionNodeKind::StringSize
+                    && node.kind != AOTIntExpressionNodeKind::StringLength
+                    && !is_hash_projection(node.kind) && !is_string_operation(node.kind)) {
+                well_typed = !is_bool(node.lhs) && !is_bool(node.rhs);
+            }
+            if (!well_typed) {
+                return false;
+            }
+            node_is_bool.push_back(is_bool_node(node.kind));
+        }
+        info.int_expression = std::move(expression);
+        return true;
+    };
+
     enum class BoxedSourceParamKind : uint8_t {
         None,
         List,
@@ -11632,12 +11674,9 @@ static bool qore_aot_collect_int_expression_summaries(
                     state = VisitState::Failed;
                     return false;
                 }
-                callee->second.int_expression = std::move(expression);
-                callee->second.never_returns_nothing = true;
-                callee->second.return_kind = proven_return_kind;
-                callee->second.approach_b_eligible = true;
-                state = VisitState::Success;
-                return true;
+                bool stored = store_summary(callee->second, expression, proven_return_kind);
+                state = stored ? VisitState::Success : VisitState::Failed;
+                return stored;
             }
             if (func->blocks.size() == 4) {
                 auto get_arm_values = [&](const QoreIRBasicBlock* block,
@@ -11782,12 +11821,9 @@ static bool qore_aot_collect_int_expression_summaries(
                     state = VisitState::Failed;
                     return false;
                 }
-                callee->second.int_expression = std::move(expression);
-                callee->second.never_returns_nothing = true;
-                callee->second.return_kind = proven_return_kind;
-                callee->second.approach_b_eligible = true;
-                state = VisitState::Success;
-                return true;
+                bool stored = store_summary(callee->second, expression, proven_return_kind);
+                state = stored ? VisitState::Success : VisitState::Failed;
+                return stored;
             }
             auto get_return = [&](const QoreIRBasicBlock* block) -> int {
                 std::unordered_map<uint32_t, int> block_values = values;
@@ -11826,12 +11862,9 @@ static bool qore_aot_collect_int_expression_summaries(
                 state = VisitState::Failed;
                 return false;
             }
-            callee->second.int_expression = std::move(expression);
-            callee->second.never_returns_nothing = true;
-            callee->second.return_kind = proven_return_kind;
-            callee->second.approach_b_eligible = true;
-            state = VisitState::Success;
-            return true;
+            bool stored = store_summary(callee->second, expression, proven_return_kind);
+            state = stored ? VisitState::Success : VisitState::Failed;
+            return stored;
         }
 
         const QoreIRReturnInstruction* ret = nullptr;
@@ -11867,12 +11900,9 @@ static bool qore_aot_collect_int_expression_summaries(
             state = VisitState::Failed;
             return false;
         }
-        callee->second.int_expression = std::move(expression);
-        callee->second.never_returns_nothing = true;
-        callee->second.return_kind = proven_return_kind;
-        callee->second.approach_b_eligible = true;
-        state = VisitState::Success;
-        return true;
+        bool stored = store_summary(callee->second, expression, proven_return_kind);
+        state = stored ? VisitState::Success : VisitState::Failed;
+        return stored;
     };
 
     for (const auto& [variant, func] : functions) {
@@ -12400,10 +12430,45 @@ static bool qore_aot_collect_float_expression_summaries(
             state = VisitState::Failed;
             return false;
         }
-        callee->second.float_expression = std::move(expression);
+        // the walk proves that the function returns a float that is never NOTHING, so the fast entry returns it
+        // natively whether or not the summary can be emitted; the summary is stored only if it can be: a BoolParam
+        // node is an i1 that only a Select condition takes (the summary has no bool -> float conversion), so a
+        // bool parameter as an operand, a Select value or the result (a function that returns its bool parameter
+        // as a float converts it: True -> 1.0) leaves the function to be called
         callee->second.never_returns_nothing = true;
         callee->second.return_kind = proven_return_kind;
         callee->second.approach_b_eligible = true;
+        auto is_bool_param = [&](size_t index) {
+            assert(index < expression.nodes.size());
+            return expression.nodes[index].kind == AOTFloatExpressionNodeKind::BoolParam;
+        };
+        bool well_typed = !is_bool_param(expression.nodes.size() - 1);
+        for (size_t i = 0; well_typed && i < expression.nodes.size(); ++i) {
+            const auto& node = expression.nodes[i];
+            switch (node.kind) {
+                case AOTFloatExpressionNodeKind::Select:
+                    assert(node.param >= 0);
+                    well_typed = is_bool_param(node.lhs) && !is_bool_param(node.rhs)
+                        && !is_bool_param(static_cast<size_t>(node.param));
+                    break;
+                case AOTFloatExpressionNodeKind::Neg:
+                    well_typed = !is_bool_param(node.lhs);
+                    break;
+                case AOTFloatExpressionNodeKind::Add:
+                case AOTFloatExpressionNodeKind::Sub:
+                case AOTFloatExpressionNodeKind::Mul:
+                case AOTFloatExpressionNodeKind::Div:
+                    well_typed = !is_bool_param(node.lhs) && !is_bool_param(node.rhs);
+                    break;
+                default:
+                    break;
+            }
+        }
+        if (!well_typed) {
+            state = VisitState::Failed;
+            return false;
+        }
+        callee->second.float_expression = std::move(expression);
         state = VisitState::Success;
         return true;
     };
