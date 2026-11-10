@@ -1,0 +1,48 @@
+True float(softbool): 1.0
+True float(bool): 1.0
+True int(softbool): 1
+True number(softbool): 1
+True softfloat = softbool: 1.0
+True softint = softbool: 1
+True softnumber = softbool: 1
+True return bool as softint: 1
+True softbool + 0.5: 1.5
+True softbool * 3: 3
+True softbool + 1n: 2
+True bool as softfloat argument: 1.0
+True softint join (bool): 1
+True softint join (int): 7
+True softfloat join (bool): 1.0
+True softfloat join (float): 2.5
+True softint ternary (bool): 1
+True softint ternary (int): 9
+True softfloat ternary (bool): 1.0
+True softfloat ternary (float): 9.5
+True loop sum: [4, 4.0]
+True float(!bool): 0.0
+False float(softbool): 0.0
+False float(bool): 0.0
+False int(softbool): 0
+False number(softbool): 0
+False softfloat = softbool: 0.0
+False softint = softbool: 0
+False softnumber = softbool: 0
+False return bool as softint: 0
+False softbool + 0.5: 0.5
+False softbool * 3: 0
+False softbool + 1n: 1
+False bool as softfloat argument: 0.0
+False softint join (bool): 0
+False softint join (int): 7
+False softfloat join (bool): 0.0
+False softfloat join (float): 2.5
+False softint ternary (bool): 0
+False softint ternary (int): 9
+False softfloat ternary (bool): 0.0
+False softfloat ternary (float): 9.5
+False loop sum: [0, 0.0]
+False float(!bool): 1.0
+float(1 < 2): 1.0
+float(2 < 1): 0.0
+int(1 < 2): 1
+loop softfloat = comparison: 1.0
