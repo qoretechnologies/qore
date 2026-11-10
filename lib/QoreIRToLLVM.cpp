@@ -13412,6 +13412,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         val = builder->CreatePtrToInt(val, i64_type);
                     } else if (val->getType() == i64_type) {
                         val = ensureIntType(val, inc.value.id);
+                    } else if (val->getType() == i1_type) {
+                        // a native bool is 0 or 1, not -1 for True, as in ensureIntType() (issue #5716)
+                        val = builder->CreateZExt(val, i64_type);
                     } else if (val->getType()->isIntegerTy()) {
                         val = builder->CreateSExtOrTrunc(val, i64_type);
                     } else if (val->getType()->isFloatingPointTy()) {
