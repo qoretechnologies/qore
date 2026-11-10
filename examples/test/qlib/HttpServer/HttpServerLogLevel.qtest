@@ -42,6 +42,30 @@ class CaptureAppender inherits LoggerAppenderWithLayout {
     }
 }
 
+#! a server that reimplements log(): it keeps the messages that it is given
+class LoggingServer inherits HttpServer {
+    private {
+        Mutex lck();
+        list<string> messages = ();
+    }
+
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+    }
+
+    log(string fmt, ...) {
+        AutoLock al(lck);
+        messages += vsprintf(fmt, argv);
+    }
+
+    #! returns and clears the messages given to log() so far
+    list<string> take() {
+        AutoLock al(lck);
+        list<string> rv = messages;
+        messages = ();
+        return rv;
+    }
+}
+
 class QuickHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         return <HttpResponseInfo>{"code": 200, "body": "ok", "hdr": {"Content-Type": MimeTypeText}};
@@ -53,6 +77,10 @@ class HttpServerLogLevelTest inherits QUnit::Test {
         addTestCase("messages at an enabled level are logged", \testEnabled());
         addTestCase("messages at a disabled level are not logged", \testDisabled());
         addTestCase("debug messages of the I/O controller", \testDebug());
+        addTestCase("a listener without a logger does not pass a message to a server that drops it",
+            \testListenerWithoutLogger());
+        addTestCase("a server without a logger that reimplements log() gets the listener's messages",
+            \testServerReimplementsLog());
         set_return_value(main());
     }
 
@@ -81,6 +109,47 @@ class HttpServerLogLevelTest inherits QUnit::Test {
         server.stop();
         delete server;
         return appender.take();
+    }
+
+    #! serves two requests with a LoggingServer and returns the messages given to its log() method
+    private list<string> runLoggingServer(*Logger logger) {
+        LoggingServer server(logger ? <HttpServerOptionInfo>{"logger": logger} : <HttpServerOptionInfo>{});
+        QuickHandler handler();
+        server.setHandler("handler", "", NOTHING, handler);
+        server.setDefaultHandler("handler", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+
+        for (int i = 0; i < 2; ++i) {
+            Socket s();
+            s.connect("127.0.0.1:" + port, 10s);
+            on_exit s.close();
+            s.send("GET /x HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+            hash<auto> hdr = s.readHTTPHeader(10s);
+            assertEq(200, hdr.status_code, "the request is answered");
+            assertEq("ok", s.recv(int(hdr."content-length"), 10s));
+        }
+        server.stop();
+        list<string> rv = server.take();
+        delete server;
+        return rv;
+    }
+
+    #! the listener has no logger of its own: its messages go to the server, which drops them at the ERROR level, so
+    #! the listener neither builds them nor passes them on
+    testListenerWithoutLogger() {
+        Logger logger("log-level-test", LoggerLevel::getLevelError());
+        CaptureAppender appender();
+        logger.addAppender(appender);
+        list<string> messages = runLoggingServer(logger);
+        assertEq(0, count(messages, "sendReply:"), "no listener message reaches the server: " + messages.join("\n"));
+        assertEq(0, elements appender.take(), "nothing is logged at the ERROR level");
+    }
+
+    #! a server without a logger can reimplement log(): it gets every message of the listener
+    testServerReimplementsLog() {
+        list<string> messages = runLoggingServer();
+        assertEq(2, count(messages, "sendReply: code=200"), "one message per request: " + messages.join("\n"));
     }
 
     private static int count(list<string> messages, string pattern) {

@@ -80,6 +80,8 @@ all within 0.2%; independent of the load of the host):
 |---|---|---|
 | before | 8.74 M | 10.83 M |
 | `getContentEncodingPreferences()` cached by header value | 7.75 M (-11%) | 9.84 M (-9%) |
+| 2026-11-10, branch of #5587 with develop merged (re-measured) | 7.42 M | |
+| a listener without a logger of its own builds no message that the server's logger drops (`HttpListener::log()`; the benchmark's server logger is at the ERROR level, so the four INFO messages of each request were built and passed to the server for nothing) | 7.07 M (-4.7%) | |
 
 ## Calls that no longer go to the I/O thread
 
