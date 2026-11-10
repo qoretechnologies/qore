@@ -864,9 +864,11 @@ extern void qoreAOTPruneClosureIRBodyLocals(QoreIRFunction* closure_ir, const Us
         const LVarSet* vlist);
 extern bool qoreAOTPrepareClosureIRLocalSlots(QoreIRFunction* closure_ir, const UserSignature* sig,
         const LVarSet* vlist);
+#ifdef DEBUG
 //! Appends the parameters that the background helpers in \a func own, in instruction order (see
 //! qoreAOTForEachBackgroundHelperParam() in QoreAOTBinary.cpp)
 extern void qoreAOTCollectBackgroundHelperParams(const QoreIRFunction& func, std::vector<const LocalVar*>& params);
+#endif
 
 static constexpr const char* AOT_CLASS_REF_MODULE_PREFIX = "@qore-module:";
 
@@ -18005,8 +18007,8 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         // the runtime binds this body's slots to the variables of the serialized IR by index: both must have the same
         // variable in each slot, or a local of one is bound to another variable (a reservation made in only one of the
         // two lowerings reorders the table); the parameters of background helpers are created by each lowering, so
-        // the parameter at each position of one lowering is the one at the same position of the other, with the same
-        // name and type
+        // the parameter at each position of one lowering is the one at the same position of the other (both lowerings
+        // walk the same code in the same order and name the parameters by position, so the type is the real check)
         {
             std::string closure_error;
             std::unique_ptr<QoreIRFunction> serialized_ir(::lowerClosureForSerialization(variant, &closure_error));
