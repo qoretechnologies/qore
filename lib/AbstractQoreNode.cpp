@@ -42,6 +42,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <type_traits>
 #include <vector>
 
 #define TRACK_REFS 0
@@ -827,14 +828,21 @@ struct DeferredRelease {
 };
 
 //! The nested releases of a thread
+/** It has no destructor: a thread's thread-local objects are destroyed before the releases that the end of the
+    thread or of the process still makes (at exit(), the destructors of static objects run after those of the main
+    thread's thread-local objects, and release the code of the Programs that they hold), which would then use a
+    destroyed state.  The list of deferred releases exists only while the outermost release makes them.
+*/
 struct ReleaseState {
     //! the number of releases in progress on the thread's stack
-    unsigned depth = 0;
-    //! the releases nested too deeply to make on the stack, made by the outermost release
-    std::vector<DeferredRelease> deferred;
+    unsigned depth;
+    //! the releases nested too deeply to make on the stack, made by the outermost release; nullptr when there are none
+    std::vector<DeferredRelease>* deferred;
 };
+static_assert(std::is_trivially_destructible<ReleaseState>::value, "the release state of a thread is used until "
+    "the thread's last release, after its thread-local objects have been destroyed");
 
-thread_local ReleaseState t_release;
+thread_local ReleaseState t_release = {0, nullptr};
 }
 
 //! Makes releases; a friend of AbstractQoreNode, whose destructor is protected
@@ -888,26 +896,40 @@ private:
 void release(const DeferredRelease& r, ExceptionSink* xsink) {
     ReleaseState& state = t_release;
     if (state.depth >= QORE_RELEASE_RECURSION_DEPTH) {
-        state.deferred.push_back(r);
+        if (!state.deferred) {
+            state.deferred = new std::vector<DeferredRelease>;
+        }
+        state.deferred->push_back(r);
         return;
     }
     {
         ReleaseDepthHelper rdh(state);
         QoreNodeReleaser::releaseNow(r, xsink);
     }
-    if (state.depth || state.deferred.empty()) {
+    if (state.depth || !state.deferred) {
         return;
     }
     // the outermost release makes the deferred releases; the depth counts one level, so that what each of them
     // releases in turn nests on the stack up to the same bound and defers the rest to this loop
     ReleaseDepthHelper rdh(state);
+    // the list is freed when the last deferred release has been made; if one throws, the rest stay for the next
+    // outermost release
+    struct DeferredListHelper {
+        ReleaseState& state;
+        ~DeferredListHelper() {
+            if (state.deferred->empty()) {
+                delete state.deferred;
+                state.deferred = nullptr;
+            }
+        }
+    } dlh{state};
     // a deferred release can have been requested with an exception sink by a nested release when the outermost
     // release has none, as a statement's has not: an exception it raises is then handled as an unhandled exception
     ExceptionSink local_xsink;
     ExceptionSink* drain_xsink = xsink ? xsink : &local_xsink;
-    while (!state.deferred.empty()) {
-        DeferredRelease next = state.deferred.back();
-        state.deferred.pop_back();
+    while (!state.deferred->empty()) {
+        DeferredRelease next = state.deferred->back();
+        state.deferred->pop_back();
         QoreNodeReleaser::releaseNow(next, drain_xsink);
     }
 }
