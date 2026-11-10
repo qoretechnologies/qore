@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - module manager loading of source and AOT modules, dlopen of AOT qmods and reload of injected modules
 
 # Copyright 2026 Qore Technologies, s.r.o.
 
@@ -37,8 +38,8 @@ class ModuleLoadFailureCleanupTest inherits QUnit::Test {
         const Missing = "no_such_binary_module_for_5706";
 
         #! the output of every run
-        const Expected = "load 1: LOAD-MODULE-ERROR
-load 2: LOAD-MODULE-ERROR
+        const Expected = "load 1: LOAD-MODULE-ERROR: names the missing module
+load 2: LOAD-MODULE-ERROR: names the missing module
 good: 1
 ";
     }
@@ -62,6 +63,8 @@ good: 1
         addTestCase("a source module that fails after loading a module leaves no registration",
             \testSourceModule());
         addTestCase("an AOT module that fails after loading a module leaves no registration", \testAotModule());
+        addTestCase("a failed reload of a module keeps the registration of the module it replaces",
+            \testFailedReload());
         addTestCase("a failed load is not a successful one", \testNegative());
         set_return_value(main());
     }
@@ -92,19 +95,20 @@ public namespace %s {
 
     private string script() {
         return "%modern
-sub load(string feature, string label) {
+sub load(string feature, string label, string missing) {
     try {
         Program p();
         p.parse(\"%requires \" + feature + \"\\n\", \"load\");
         printf(\"%s: loaded\\n\", label);
     } catch (hash<ExceptionInfo> ex) {
-        printf(\"%s: %s\\n\", label, ex.err);
+        printf(\"%s: %s: %s\\n\", label, ex.err, index(ex.desc, missing) != -1 ? \"names the missing module\" : ex.desc);
     }
 }
 
 string feature = ARGV[0];
-load(feature, \"load 1\");
-load(feature, \"load 2\");
+string missing = ARGV[1];
+load(feature, \"load 1\", missing);
+load(feature, \"load 2\", missing);
 Program p();
 p.parse(\"%requires CleanupGood\\nint sub get() { return CleanupGood::Value; }\", \"good\");
 printf(\"good: %d\\n\", p.callFunction(\"get\"));
@@ -112,16 +116,17 @@ printf(\"good: %d\\n\", p.callFunction(\"get\"));
     }
 
     #! runs the script in a child with only the given module directories in the module path
-    private hash<ExecModeHarness::ModeRunResult> run(string module_path, string feature, string mode) {
+    private hash<ExecModeHarness::ModeRunResult> run(string module_path, string feature, string missing,
+            string mode) {
         return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
-            "QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s %s", libqore_dir,
-            libqore_dir, libqore_dir, module_path, qore_bin, mode, script_path, feature), True);
+            "QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s %s %s", libqore_dir,
+            libqore_dir, libqore_dir, module_path, qore_bin, mode, script_path, feature, missing), True);
     }
 
     testSourceModule() {
         # the module path must provide the features that the child script itself needs: none
         foreach string mode in (ExecModeHarness::ExecModes) {
-            hash<ExecModeHarness::ModeRunResult> r = run(src_dir, "CleanupFailSource", mode);
+            hash<ExecModeHarness::ModeRunResult> r = run(src_dir, "CleanupFailSource", Missing, mode);
             assertEq(0, r.rc, sprintf("source, %s: exit status; output: %s", mode, r.out));
             assertEq(Expected, r.stdout, sprintf("source, %s: output", mode));
         }
@@ -136,16 +141,69 @@ printf(\"good: %d\\n\", p.callFunction(\"get\"));
         }
         # CleanupGood stays a source module; json is found by no module directory
         foreach string mode in (ExecModeHarness::ExecModes) {
-            hash<ExecModeHarness::ModeRunResult> r = run(qmod_dir + ":" + src_dir, "CleanupFailAot", mode);
+            hash<ExecModeHarness::ModeRunResult> r = run(qmod_dir + ":" + src_dir, "CleanupFailAot", "json", mode);
             assertEq(0, r.rc, sprintf("AOT, %s: exit status; output: %s", mode, r.out));
             assertEq(Expected, r.stdout, sprintf("AOT, %s: output", mode));
         }
     }
 
+    #! a failed reload_module() of an injected module that another module requires (#5706)
+    /** The previous module stays registered while the new one loads, so the failed load must leave its registration,
+        and the registrations of its dependents, as they were: the module manager asserted at exit in a debug build
+        when it released them
+    */
+    testFailedReload() {
+        string dir = tmp.path + "/reload";
+        mkdir(dir);
+        string good = moduleCode("ReloadF", "%requires CleanupGood\n");
+        writeFile(dir + "/CleanupGood.qm", moduleCode("CleanupGood", ""));
+        writeFile(dir + "/ReloadF.qm", good);
+        writeFile(dir + "/ReloadH.qm", moduleCode("ReloadH", "%requires ReloadF\n"));
+        string bad = moduleCode("ReloadF", "%requires CleanupGood\n%requires " + Missing + "\n");
+        string reload_script = dir + "/reload.q";
+        writeFile(reload_script, sprintf("%%modern
+%%no-child-restrictions
+%%allow-injection
+Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+p.loadApplyToUserModule(\"ReloadF\");
+Program p2(PO_NO_CHILD_PO_RESTRICTIONS);
+p2.loadApplyToUserModule(\"ReloadH\");
+sub write(string contents) {
+    File f();
+    f.open2(\"%s/ReloadF.qm\", O_WRONLY | O_TRUNC);
+    f.write(contents);
+    f.close();
+}
+write(\"%s\");
+try {
+    reload_module(\"ReloadF\");
+    print(\"reload 1: ok\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"reload 1: %%s: %%s\\n\", ex.err, ex.desc =~ /%s/ ? \"missing\" : ex.desc);
+}
+write(\"%s\");
+reload_module(\"ReloadF\");
+print(\"reload 2: ok\\n\");
+", dir, escapeForScript(bad), Missing, escapeForScript(good)));
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s %s -b --enable-debug "
+                "--exec-mode=%s %s", libqore_dir, libqore_dir, libqore_dir, dir, qore_bin, mode, reload_script), True);
+            assertEq(0, r.rc, sprintf("reload, %s: exit status; output: %s", mode, r.out));
+            assertEq("reload 1: LOAD-MODULE-ERROR: missing\nreload 2: ok\n", r.stdout,
+                sprintf("reload, %s: output", mode));
+        }
+    }
+
+    #! returns the text for a double-quoted string literal in generated Qore code
+    private string escapeForScript(string text) {
+        return replace(replace(replace(text, "\\", "\\\\"), "\"", "\\\""), "\n", "\\n");
+    }
+
     testNegative() {
         # without the missing requirement, the module loads: the checks above test the failure, not the harness
         writeFile(src_dir + "/CleanupOk.qm", moduleCode("CleanupOk", "%requires CleanupGood\n"));
-        hash<ExecModeHarness::ModeRunResult> r = run(src_dir, "CleanupOk", "ast");
+        hash<ExecModeHarness::ModeRunResult> r = run(src_dir, "CleanupOk", "none", "ast");
         assertEq(0, r.rc, "ok module: exit status");
         assertEq("load 1: loaded\nload 2: loaded\ngood: 1\n", r.stdout, "ok module: output");
     }

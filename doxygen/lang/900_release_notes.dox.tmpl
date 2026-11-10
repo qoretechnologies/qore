@@ -1502,6 +1502,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::reload_module() "reload_module()" of a module that other modules require corrupted the module
+      dependency records when the reload failed or when it succeeded, which stopped a debug build with an assertion
+      at exit; the records of the module that the reload replaces are now kept until the module is deleted
     - Qore did not compile with OpenSSL 4, and libqore did not link when the Brotli and LZ4 library directories that
       pkg-config gives were not on the linker's default search path (as with Homebrew on Apple Silicon); libqore now
       links them by their full paths

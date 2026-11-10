@@ -1694,6 +1694,7 @@ QoreUserModuleDefContextHelper::QoreUserModuleDefContextHelper(const char* name,
         ExceptionSink& xs)
         : mod_name(name), old_name(set_module_context_name(name)), old_path(set_module_context_path(path)),
         pgm(qore_program_private::get(*p)), po(0), xsink(xs), dup(false) {
+    QMM.getUserModuleRegistration(name, saved_reg);
 }
 
 bool QoreModuleManager::isUserModuleContext(const char* name) {
@@ -5735,7 +5736,14 @@ void QoreModuleManager::deleteUserModule(module_map_t::iterator i) {
     delOrig(m->getNext());
     //printd(5, "QoreModuleManager::deleteUserModule() deleting '%s' %p\n", i->first, m);
     umset.erase(m->getName());
-    removeUserModuleDependency(m->getName(), m->getOrigName());
+    // a module that a reload replaced is registered under a private name, and the dependencies it shares with the
+    // module that replaced it are registered under its original name, which that module now owns: they are removed
+    // when that module is deleted
+    const char* orig_name = m->getOrigName();
+    if (orig_name && map.find(orig_name) != map.end()) {
+        orig_name = nullptr;
+    }
+    removeUserModuleDependency(m->getName(), orig_name);
     map.erase(i);
     delete m;
 }
