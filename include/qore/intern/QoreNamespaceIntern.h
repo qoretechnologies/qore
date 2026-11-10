@@ -51,6 +51,14 @@
 #include <vector>
 #include <list>
 
+//! the guidance given when a module declares a public thread_local variable or an AOT module image holds one
+/** A module's public variable is one variable shared by every Program that imports the module (qore#5662).
+*/
+#define QORE_MODULE_PUBLIC_THREAD_LOCAL_HELP "a module's public variable is one variable shared by every Program " \
+    "that imports the module, so any importer could set a value on a thread that any other importer reads on the " \
+    "same thread; keep it private (declare it without 'public') and export public functions or methods that read " \
+    "and set it"
+
 class qore_root_ns_private;
 class qore_ns_private;
 class qore_class_private;
@@ -723,11 +731,50 @@ public:
     }
 
     DLLLOCAL void scanMergeCommittedNamespace(const qore_ns_private& mns, QoreModuleContext& qmc) const;
-    DLLLOCAL void copyMergeCommittedNamespace(const qore_ns_private& mns);
+    //! Merges the exported declarations of a module's namespace into this namespace of an importing Program
+    /** @param mns the module's namespace
+        @param module_var_importer the importing Program if the module is trusted, whose references to the module's
+        public variables are then read-only when it is restricted (qore#5664), otherwise nullptr
+    */
+    DLLLOCAL void copyMergeCommittedNamespace(const qore_ns_private& mns, QoreProgram* module_var_importer);
+
+    //! Marks the references to trusted modules' public variables that a new Program got with this namespace
+    /** Called for each namespace of a new Program's root namespace copied from \a src_pgm (qore#5664)
+        @param importer the new Program
+        @param src_trusted_module true if the namespace was copied from the Program of a trusted module
+    */
+    DLLLOCAL void markCopiedModuleVarImports(QoreProgram* importer, bool src_trusted_module);
 
     DLLLOCAL int parseInitGlobalVars();
 
     DLLLOCAL int checkGlobalVarDecl(Var* v, const NamedScope& vname);
+
+    //! raises a parse exception if a public thread_local variable is declared in a module
+    /** A module's public variable is one variable shared by every Program that imports the module, so a public
+        thread_local variable would let any importer set a value on a thread that any other importer reads on the same
+        thread (qore#5662).  A public thread_local variable of a Program, which the Program passes to the child Programs
+        it creates, is allowed.
+
+        @return 0 if the declaration is allowed, -1 if a parse exception was raised
+    */
+    DLLLOCAL static int checkPublicThreadLocalDecl(const Var& v);
+
+    //! appends the path of each public thread_local variable in an exported namespace tree to a list
+    /** A module parsed from source cannot declare one (see checkPublicThreadLocalDecl()); an AOT module image compiled
+        before the declaration was refused, by a qcc with the same AOT runtime identity, can still hold one, and the
+        module merge refuses it (see qore_root_ns_private::scanMergeCommittedNamespace()).
+
+        The check is not made when the image's GLOBALS section is deserialized: the deserializer is an AOT runtime
+        identity input, and with a changed identity every image compiled before the change is refused anyway, so a
+        check there could never see such an image.
+
+        @param mns the namespace to scan, with its exported subnamespaces
+        @param path the namespace path of \a mns, ending with \c "::", or empty for the root namespace
+        @param list the list to append to: each path is quoted and separated from the previous one by \c ", "
+    */
+    DLLLOCAL static void scanExportedThreadLocals(const qore_ns_private& mns, const std::string& path,
+            std::string& list);
+
     DLLLOCAL void parseAddGlobalVarDecl(const QoreProgramLocation* loc, char* name, const QoreTypeInfo* typeInfo,
             QoreParseTypeInfo* parseTypeInfo, bool pub, qore_var_t type);
 
@@ -2453,9 +2500,16 @@ public:
         // always set the module public flag to true in the root namespace
         pub = true;
 
+        // the references to trusted modules' public variables that the copy made are read-only in a restricted
+        // Program, as when it imports the modules (qore#5664)
+        markCopiedModuleVarImportsFrom(old);
+
         // rebuild root indexes - only for committed objects
         rebuildAllIndexes();
     }
+
+    //! Marks the references to trusted modules' public variables in this new root namespace copied from \a src
+    DLLLOCAL void markCopiedModuleVarImportsFrom(const qore_root_ns_private& src);
 
     DLLLOCAL ~qore_root_ns_private() {
     }
@@ -2520,6 +2574,12 @@ public:
         Var* var = tns.var_list.import(v, xsink, readonly, import_as);
         if (!var) {
             return;
+        }
+        // a trusted module's public variable that the source Program imported stays read-only in this Program when
+        // it is restricted, whatever the source Program allows (qore#5664)
+        if (v->isTrustedModuleVarImport()) {
+            assert(pgm);
+            var->setTrustedModuleVarImport(pgm, *v, tns.path);
         }
         varmap.update(var->getName(), &tns, var);
     }
@@ -3089,12 +3149,25 @@ public:
 
     DLLLOCAL static void scanMergeCommittedNamespace(const RootQoreNamespace& ns, const RootQoreNamespace& mns,
             QoreModuleContext& qmc) {
+        // every module merge (source, AOT, and runtime) scans the module first, so this check covers each of them;
+        // all the variables are named in one error
+        std::string public_thread_locals;
+        qore_ns_private::scanExportedThreadLocals(*(mns.priv), std::string(), public_thread_locals);
+        if (!public_thread_locals.empty()) {
+            qmc.error("the module was compiled by an earlier version of qcc and exports public thread_local " \
+                "variable(s) %s; it must be changed and recompiled: " QORE_MODULE_PUBLIC_THREAD_LOCAL_HELP,
+                public_thread_locals.c_str());
+        }
         ns.priv->scanMergeCommittedNamespace(*(mns.priv), qmc);
     }
 
+    //! Merges the exported declarations of a module's root namespace into the root namespace of an importing Program
     DLLLOCAL static void copyMergeCommittedNamespace(RootQoreNamespace& ns, const RootQoreNamespace& mns) {
-        ns.priv->copyMergeCommittedNamespace(*(mns.priv));
+        ns.rpriv->copyMergeCommittedModuleNamespace(*mns.rpriv);
     }
+
+    //! Merges a module's root namespace into this root namespace; see copyMergeCommittedNamespace()
+    DLLLOCAL void copyMergeCommittedModuleNamespace(const qore_root_ns_private& mns);
 
     DLLLOCAL static Var* runtimeFindGlobalVar(const RootQoreNamespace& rns, const char* vname, const qore_ns_private*& vns) {
         return rns.rpriv->runtimeFindGlobalVar(vname, vns);

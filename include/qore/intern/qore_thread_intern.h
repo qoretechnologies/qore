@@ -37,6 +37,7 @@
 class RuntimeConfig;
 
 #include <atomic>
+#include <functional>
 #include <vector>
 #include <set>
 #include <map>
@@ -901,6 +902,95 @@ DLLLOCAL void delete_thread_local_data();
 */
 DLLLOCAL void end_thread_cancellation(bool terminating = false);
 
+//! Applies the cancellation rule for destructors to the destructor of one class in an object's class hierarchy
+/** Used around the code of each class's own destructor (not its base classes', which have their own helper); see
+    "Destructors" in design/cooperative-cancellation.md:
+
+    - a trusted class (defined by a Program without a sandbox manager, or a builtin class): cancellation and program
+      interrupts are deferred while its destructor runs, so the destructor completes on a cancelled or interrupted
+      thread; the pending request is left untouched and is raised at the first cancellation point after the
+      destructor returns.  A sandbox limit (an expired call budget, a memory limit) is never deferred, and code of a
+      Program with a sandbox manager that the destructor calls does not get the deferral
+      (ProgramThreadCountContextHelper suspends it)
+    - a sandboxed class (defined by a Program with a sandbox manager): its destructor never runs under any
+      cancellation deferral; if a request is pending that a cancellation point would deliver (a thread cancellation
+      in scope, a program interrupt or a sandbox limit), skip() is true and the destructor is not run: the object's
+      members and private data are released as when it is obliterated
+
+    Only the thread that creates the helper reads or writes the state it changes.
+*/
+class QoreDestructorCancelHelper {
+public:
+    //! Applies the rule for a class whose code is (\a sandboxed true) or is not governed by a sandbox manager
+    DLLLOCAL QoreDestructorCancelHelper(bool sandboxed);
+
+    //! Restores the deferral state of the thread
+    DLLLOCAL ~QoreDestructorCancelHelper();
+
+    //! True if the destructor of the class must not run
+    DLLLOCAL bool skip() const {
+        return skip_dtor;
+    }
+
+    DLLLOCAL QoreDestructorCancelHelper(const QoreDestructorCancelHelper&) = delete;
+    DLLLOCAL QoreDestructorCancelHelper& operator=(const QoreDestructorCancelHelper&) = delete;
+
+private:
+    //! the thread's data, or nullptr if the thread has none (then nothing is changed)
+    ThreadData* td = nullptr;
+    //! the deferral depths of the thread, saved while a sandboxed destructor runs
+    unsigned saved_defer = 0;
+    unsigned saved_dtor_defer = 0;
+    //! true if the destructor deferral of a trusted class was pushed
+    bool pushed = false;
+    //! true if the deferral of the thread was suspended for a sandboxed class
+    bool suspended = false;
+    //! true if the destructor must not run
+    bool skip_dtor = false;
+};
+
+//! The deadline of a wait with a timeout whose condition wait can end before the timeout without its predicate
+/** A condition wait can end early: a spurious wakeup, a wakeup for a cancellation request that is not delivered (out
+    of the thread's scope, or for another Program's interrupt), or another waiter that took what it waited for.  A
+    caller that waits again must wait only for the rest of its timeout, so that the timeout is not restarted.
+*/
+class QoreWaitDeadline {
+public:
+    //! A deadline \a timeout_ms from now if \a timeout_ms is positive, otherwise none
+    DLLLOCAL explicit QoreWaitDeadline(int64 timeout_ms) : deadline_us(timeout_ms > 0
+            ? q_get_monotonic_us() + timeout_ms * 1000 : 0) {
+    }
+
+    //! True if there is a deadline
+    DLLLOCAL bool active() const {
+        return deadline_us;
+    }
+
+    //! The timeout in ms of the next wait: at least 1 before the deadline, 0 once it has passed; needs a deadline
+    DLLLOCAL int64 remainingMs() const {
+        assert(deadline_us);
+        int64 remaining_us = deadline_us - q_get_monotonic_us();
+        return remaining_us <= 0 ? 0 : (remaining_us + 999) / 1000;
+    }
+
+private:
+    int64 deadline_us;
+};
+
+//! Returns true if the code of the Program is sandboxed
+/** True if the Program has or had a sandbox manager, or was created by sandboxed code (see
+    qore_program_set_creator_sandbox()), or is a user module that a sandboxed Program loaded by a path it chose;
+    false for a Program that trusted code created (the host, a module loaded by trusted code).  Never changes from true
+    to false.
+*/
+DLLLOCAL bool qore_program_is_sandboxed(const QoreProgram* pgm);
+
+//! Marks the Program's code as sandboxed (see qore_program_is_sandboxed())
+DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
+
+//! Marks a Program that Qore code creates (Program::constructor()) as sandboxed if its creator is sandboxed
+DLLLOCAL void qore_program_set_creator_sandbox(QoreProgram& pgm);
+
 
 //! Waits on a condition variable until it is signalled, the timeout expires, or the thread is cancelled or interrupted
 /** The implementation of QoreCondition::waitWithInterrupt(); a cancellation request
@@ -947,7 +1037,8 @@ DLLLOCAL int qore_cancellable_sleep(int64 usecs, ExceptionSink* xsink, const cha
 
     Unlike delete_thread_local_data(), this does not unregister the thread from any
     QoreProgram or set the finalizing flag — the thread continues to be available for
-    new tasks.
+    new tasks.  While it clears the data, the code it runs (destructors) cannot assign the
+    thread's thread_local variables, as at the end of a thread (see thread_local_vars_finalizing()).
 */
 DLLLOCAL void clear_all_program_thread_local_data();
 DLLLOCAL void parse_cond_push(bool mark = false);
@@ -1609,13 +1700,29 @@ protected:
     ExceptionSink* xsink = nullptr;
     //! the thread's entry into the Program, for its thread entry and exit handlers
     ThreadEntryHandlerFrame entry_frame;
+    //! the cancellation-deferral depths of the thread, saved while code of a sandboxed Program runs
+    unsigned saved_defer = 0;
+    unsigned saved_dtor_defer = 0;
     bool restore = false;
     bool init_tlpd = false;
     bool thread_count_incremented = false;
+    //! true if the cancellation deferral of the thread was suspended when the Program was entered
+    bool defer_suspended = false;
 
 private:
     //! restores the thread's context as it was before set() switched it
     DLLLOCAL void restoreContext();
+
+    //! Suspends every cancellation deferral of the thread while the code of a sandboxed Program runs
+    /** Sandboxed code never runs with cancellation deferred: not when a trusted destructor calls it (a method a
+        sandboxed subclass overrides, a callback), and not when trusted code runs it in a cleanup critical section
+        (defer_thread_cancel(), QoreCancelDeferralHelper) or in thread teardown; see QoreDestructorCancelHelper and
+        "Sandboxed code never runs deferred" in design/cooperative-cancellation.md
+    */
+    DLLLOCAL void suspendDeferral(ThreadData* td);
+
+    //! Restores the deferral suspended by suspendDeferral()
+    DLLLOCAL void restoreDeferral();
 };
 
 class ProgramRuntimeParseContextHelper {
@@ -1659,10 +1766,63 @@ protected:
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread is exhausted; see thread.cpp
 DLLLOCAL int check_stack(ExceptionSink* xsink);
 
+//! Keeps the Program of a reference while the reference's lvalue is used
+/** A reference can outlive the Program whose lvalue it refers to: a function of the Program can return one, and the
+    Program's variables and code are freed with the Program, while the reference keeps their addresses
+    (lvalue_ref::pgm and its lvalue expression).  Its Program is identified by its ID as well (lvalue_ref::pgm_id), as
+    a Program created after it was deleted can have its address, and a reference to a lvalue of a deleted Program
+    raises PROGRAM-ERROR: its use entered the freed Program and crashed.
+
+    The Program is referenced while the helper exists, unless it is the current Program, which the thread is in, or
+    one that the current thread deletes.  A helper that enters another Program (\a enter) keeps its teardown from
+    deleting its data while the helper exists, which raises PROGRAM-ERROR as well once the teardown has marked it;
+    RuntimeReferenceHelperBase enters it with its context.
+*/
+class QoreReferenceProgramHelper {
+public:
+    //! Takes the Program of the reference; raises PROGRAM-ERROR in \a xsink if it has been deleted
+    /** @param r the reference
+        @param xsink for exceptions; also used to release the Program
+        @param enter true to enter the Program without switching to it (its thread count)
+    */
+    DLLLOCAL QoreReferenceProgramHelper(const lvalue_ref& r, ExceptionSink* xsink, bool enter);
+
+    DLLLOCAL ~QoreReferenceProgramHelper();
+
+    DLLLOCAL QoreReferenceProgramHelper(const QoreReferenceProgramHelper&) = delete;
+    DLLLOCAL QoreReferenceProgramHelper& operator=(const QoreReferenceProgramHelper&) = delete;
+
+    //! Returns false if the reference's Program has been deleted, or could not be entered
+    DLLLOCAL operator bool() const {
+        return valid;
+    }
+
+    //! Returns the reference's Program, or nullptr if it has none or has been deleted
+    DLLLOCAL QoreProgram* getProgram() const {
+        return valid ? pgm : nullptr;
+    }
+
+private:
+    //! the Program of the reference, if it is valid
+    QoreProgram* pgm = nullptr;
+    //! the reference taken to the Program, if any
+    QoreProgram* ref = nullptr;
+    ExceptionSink* xsink;
+    bool valid = true;
+    bool entered = false;
+};
+
 class RuntimeReferenceHelperBase {
 public:
     DLLLOCAL RuntimeReferenceHelperBase(const lvalue_ref& r, ExceptionSink* n_xsink)
-            : ref(&r), pch(n_xsink, r.pgm, true), osh(r.self, r.cls) {
+            : ref(&r), pgm_holder(r, n_xsink, false), pch(n_xsink, pgm_holder.getProgram(), true),
+              osh(r.self, r.cls) {
+        // the Program of the reference has been deleted
+        if (!pgm_holder) {
+            ref = nullptr;
+            valid = false;
+            return;
+        }
         //printd(5, "RuntimeReferenceHelperBase::RuntimeReferenceHelperBase() this: %p vexp: %p %s %d\n", this,
         //  r.vexp, get_type_name(r.vexp), get_node_type(r.vexp));
         // a reference is resolved by evaluating its lvalue expression, which can be a reference itself; each step of a
@@ -1692,6 +1852,8 @@ public:
 
 protected:
     const lvalue_ref* ref;
+    //! keeps the reference's Program; declared before pch, which enters it and leaves it before it is released
+    QoreReferenceProgramHelper pgm_holder;
     ProgramThreadCountContextHelper pch;
     ObjectSubstitutionHelper osh;
     bool valid = true;
@@ -2168,6 +2330,12 @@ DLLLOCAL const pthread_mutexattr_t* qore_recursive_mutex_attr();
 DLLLOCAL extern thread_local int qore_thread_counter_share;
 //! the count that the current thread adds to tp_thread_counter (an external-lifecycle thread until it is joined)
 DLLLOCAL extern thread_local int qore_tp_thread_counter_share;
+
+#ifdef DEBUG
+//! called by QoreThreadList::cancelThread() before it publishes a claimed cancellation request, if set; tests use it
+//! to publish after the thread has ended (dbg_cancel_thread_after_end())
+DLLLOCAL extern thread_local std::function<void()>* qore_dbg_cancel_before_publish;
+#endif
 
 #ifdef QORE_HAVE_THREAD_NAME
 DLLLOCAL void q_set_thread_name(const char* name);

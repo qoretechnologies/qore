@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of on_block_exit handlers and their closure-bound locals
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class OnBlockExitClosureLocalsTest
+
+#! issue #5653: a closure-bound local declared in an on_block_exit handler is instantiated when the handler runs
+/** A function lowers its on_exit, on_error and on_success handlers inline on its normal exit paths, so it has slots
+    for the variables that its handlers declare; the IR function of a handler, which runs on an exception, started
+    with all of these slots marked pre-instantiated.  The IR interpreter skips the instantiation of a pre-instantiated
+    local, so a closure-bound local of the handler (referenced with \c \\var or captured by a closure) had no value
+    container, and the handler stopped at its first access with an LVALUE-ERROR, which was not reported: the handler
+    did nothing.
+
+    The IR interpreter also wrote such a variable back to the function's slot after the handler, when it had been
+    uninstantiated, which raised an LVALUE-ERROR that was chained to the exception that ran the handler (or reported
+    as unhandled after a thread_exit); and it skipped handlers whose closure-bound variable was a catch, foreach, for
+    or switch variable, which have no InstantiateLocal.  The scripts print each exception with the exceptions chained
+    to it.
+
+    The scripts next to the test run each kind of handler on both paths in every execution mode and on the IR tier,
+    and as AOT executables, and their output must be that of the AST interpreter.  handler-modes.q has handlers that
+    only run on an exception, which are never lowered inline: their own locals had no slots in the function, so qcc
+    could not compile a closure whose handler references one (qore#5657), and AOT gave wrong results for loops in
+    them (qore#5658).
+*/
+class OnBlockExitClosureLocalsTest inherits QUnit::Test {
+    public {
+        #! the output of each script with the AST interpreter, which every execution mode and AOT must give
+        const ScriptResults = {
+            "handler-locals": (
+                "closure ref exit: exit ref l=[1, 2, 3]",
+                "closure ref exit: exit l=[1, 2]; caught X",
+                "closure capture exit: inner normal",
+                "closure capture exit: inner on exception; caught Z",
+                "function capture exit: returned; function exit 14",
+                "function capture exit: function exit 14; caught F",
+                "nested handlers: error outer; outer/inner; caught N",
+                "recursive handler: depth 2; depth 1; depth 0; caught R",
+                "success and parent: exit parent; success+parent",
+                "success and parent: exit parent; caught S",
+                "catch variable: catch variable INNER; after the try; caught M",
+                "thread_exit in a closure: on_exit closure",
+                "thread_exit in a thread function: on_exit function",
+            ),
+            "handler-modes": (
+                "closure ref error: error i=11; caught Y",
+                "loop in handler: loop [0, 10, 20]; caught L",
+                "foreach variable: foreach 0; foreach 1; after the loop; caught FE",
+                "statement variables: for [2, 2]; switch; while 0; while 3; caught SV",
+                "loop typed list: exit [0, 1, 2]; caught TL",
+                "two handlers: exit [0, 1, 2]",
+                "two handlers: error [0, 1]; exit [0, 1, 2]; caught TH",
+            ),
+        };
+
+        #! each script prints its lines this many times
+        const Iterations = 3;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("on_block_exit handler closure locals", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+
+        addTestCase("execution modes", sub () { modesTest("handler-locals"); });
+        addTestCase("AOT executable", sub () { aotTest("handler-locals"); });
+        addTestCase("execution modes: handlers that only run on an exception", sub () { modesTest("handler-modes"); });
+        # qcc could not compile the on_error case (qore#5657), and AOT gave wrong results for the loops (qore#5658)
+        addTestCase("AOT executable: handlers that only run on an exception", sub () { aotTest("handler-modes"); });
+        set_return_value(main());
+    }
+
+    #! runs a script next to the test in every execution mode and on the IR tier, and checks that it gives the output
+    #! of the AST interpreter
+    private modesTest(string name) {
+        string path = scriptPath(name);
+        string exp = expected(name);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, path)),
+                name + ": " + mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, path)),
+            name + ": " + ExecModeHarness::IRTierName);
+    }
+
+    #! compiles a script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string name) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("on-block-exit-closure-locals-aot-");
+        string exe = dir.path + "/" + name;
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, scriptPath(name)));
+        assertTrue(is_file(exe), name + ": qcc compiles the script: " + out);
+        assertEq(expected(name), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), name + ": AOT");
+    }
+
+    private string scriptPath(string name) {
+        return get_script_dir() + "/" + name + ".q";
+    }
+
+    #! the expected output of a script: its lines, printed once per iteration
+    private string expected(string name) {
+        string block = (foldl $1 + "\n" + $2, ScriptResults{name}) + "\n";
+        return strmul(block, Iterations);
+    }
+}

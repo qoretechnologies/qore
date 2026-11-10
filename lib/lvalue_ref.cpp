@@ -34,21 +34,61 @@
 #include "qore/Qore.h"
 #include "qore/intern/lvalue_ref.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreClassIntern.h"
 
 lvalue_ref::lvalue_ref(QoreValue lvexp, const QoreTypeInfo* typeInfo, QoreObject* self, const void* lvid,
         const qore_class_private* cls) : vexp(lvexp),
         typeInfo(QoreTypeInfo::hasType(typeInfo) ? qore_get_complex_reference_type(typeInfo) : nullptr), self(self),
-        pgm(getProgram()), lvalue_id(lvid), cls(cls) {
+        pgm(getProgram()), pgm_id(pgm ? pgm->getProgramId() : 0), lvalue_id(lvid), cls(cls) {
     //printd(5, "lvalue_ref::lvalue_ref() this: %p vexp: %p self: %p pgm: %p\n", this, vexp, self, pgm);
     if (self)
         self->tRef();
 }
 
 lvalue_ref::lvalue_ref(const lvalue_ref& old) : vexp(old.vexp.refSelf()), typeInfo(old.typeInfo), self(old.self),
-        pgm(old.pgm), lvalue_id(old.lvalue_id), cls(old.cls) {
+        pgm(old.pgm), pgm_id(old.pgm_id), lvalue_id(old.lvalue_id), cls(old.cls) {
     //printd(5, "lvalue_ref::lvalue_ref() this: %p vexp: %p self: %p pgm: %p\n", this, vexp, self, pgm);
     if (self)
         self->tRef();
+}
+
+QoreReferenceProgramHelper::QoreReferenceProgramHelper(const lvalue_ref& r, ExceptionSink* xsink, bool enter)
+        : xsink(xsink) {
+    QoreProgram* p = r.pgm;
+    if (!p) {
+        return;
+    }
+    // the current Program, which the thread is in, and a Program that the current thread deletes (whose destructors
+    // can use references to its lvalues after its last reference was released), are allocated and keep their data
+    // while the thread uses them; the ID tells the reference's Program from a later one at the same address
+    if ((p == ::getProgram() || qore_program_torn_down_by_current_thread(p)) && p->getProgramId() == r.pgm_id) {
+        pgm = p;
+        return;
+    }
+    pgm = ref = qore_program_private::getReferencedProgram(p, r.pgm_id);
+    if (!pgm) {
+        xsink->raiseException("PROGRAM-ERROR", "the Program of the lvalue that the reference refers to has "
+            "already been deleted and therefore cannot be accessed at runtime");
+        valid = false;
+        return;
+    }
+    if (enter) {
+        // the Program's teardown waits until the lvalue has been used
+        if (qore_program_private::incThreadCount(*pgm, xsink)) {
+            valid = false;
+            return;
+        }
+        entered = true;
+    }
+}
+
+QoreReferenceProgramHelper::~QoreReferenceProgramHelper() {
+    if (entered) {
+        qore_program_private::decThreadCount(*pgm, q_gettid(), xsink);
+    }
+    if (ref) {
+        ref->deref(xsink);
+    }
 }
 
 bool lvalue_ref::scanReference(RSetHelper& rsh) {

@@ -1280,6 +1280,21 @@ public:
     //! the name of the class, for the error that checkOwnerReleased() raises
     const char* owner_class_name = nullptr;
 
+    //! What a static variable of a class of a trusted module records about the module (qore#5664)
+    struct TrustedModuleStatic {
+        //! the ID of the Program of the module that declares the class, whose code may always write the variable
+        qore_program_id_t pgm_id;
+        //! the name of the module
+        std::string module_name;
+        //! the path of the variable, ex: \c "MyModule::MyClass::var"
+        std::string path;
+    };
+    //! Set once for a static variable of a class of a trusted module, and then never changed until it is destroyed
+    /** Every Program that imports the module shares the variable; see checkTrustedModuleWrite().  Reads never look at
+        it.
+    */
+    std::atomic<TrustedModuleStatic*> trusted_module{nullptr};
+
     DLLLOCAL QoreVarInfo(const QoreProgramLocation* loc, const QoreTypeInfo* n_typeinfo = nullptr,
             QoreParseTypeInfo* n_parseTypeInfo = nullptr, QoreValue e = QoreValue(), ClassAccess n_access = Public) :
         QoreMemberInfoBaseAccess(loc, n_typeinfo, n_parseTypeInfo, e, n_access), finalized(false) {
@@ -1295,7 +1310,49 @@ public:
 
     DLLLOCAL ~QoreVarInfo() {
         assert(!val.hasValue());
+        delete trusted_module.load(std::memory_order_relaxed);
     }
+
+    //! Records that the variable belongs to a class of a trusted module; the first record is kept
+    /** @param pgm_id the ID of the module's Program
+        @param module_name the name of the module, or nullptr if unknown
+        @param class_path the path of the class, ex: \c "MyModule::MyClass"
+        @param var_name the name of the variable
+    */
+    DLLLOCAL void setTrustedModule(qore_program_id_t pgm_id, const char* module_name, const std::string& class_path,
+            const char* var_name);
+
+    //! Checks a write to the variable when it belongs to a class of a trusted module (qore#5664)
+    /** The code of the module's Program may always write it; the code of another Program may not when that Program
+        is sandboxed or has \c PO_NO_PROCESS_CONTROL set (see qore_program_private::restrictsModuleVarWrites())
+
+        @param lvh the helper resolving the variable: one that only reads it is not refused (see
+        LValueHelper::ReadAccess)
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int checkTrustedModuleWrite(LValueHelper& lvh) const {
+        TrustedModuleStatic* tm = trusted_module.load(std::memory_order_acquire);
+        return tm ? checkTrustedModuleWriteIntern(*tm, lvh) : 0;
+    }
+
+    //! Raises \c MODULE-VARIABLE-READ-ONLY and returns -1 if the current code may not remove the variable's value
+    DLLLOCAL int checkTrustedModuleRemove(ExceptionSink* xsink) const;
+
+    //! Raises \c MODULE-VARIABLE-READ-ONLY and returns -1 if the code of \a writer may not write the variable
+    /** For code that writes for another Program, such as the reflection API (see
+        QoreExternalStaticMember::setValue())
+    */
+    DLLLOCAL int checkTrustedModuleWriter(const QoreProgram* writer, ExceptionSink* xsink) const;
+
+private:
+    DLLLOCAL int checkTrustedModuleWriteIntern(const TrustedModuleStatic& tm, LValueHelper& lvh) const;
+    //! Returns true if the current code may not write the variable of a class of a trusted module
+    DLLLOCAL bool trustedModuleWriteRestricted(const TrustedModuleStatic& tm) const;
+    //! Returns true if the code of \a writer may not write the variable of a class of a trusted module
+    DLLLOCAL static bool trustedModuleWriteRestrictedFor(const TrustedModuleStatic& tm, const QoreProgram* writer);
+
+public:
 
     //! evaluates the variable's initializer if it has not been evaluated yet
     /** @param name the variable's name, for error messages
@@ -1392,6 +1449,10 @@ public:
     DLLLOCAL int getLValue(LValueHelper& lvh, const char* name = "<static variable>") {
         // checked before evalInit(), which runs the initializer, and again under the lock (see below)
         if (checkOwnerReleased(name, lvh.vl.xsink)) {
+            return -1;
+        }
+        // a static variable of a class of a trusted module is shared by every Program that imports it (qore#5664)
+        if (checkTrustedModuleWrite(lvh)) {
             return -1;
         }
         if (get_cb) {
@@ -2476,12 +2537,18 @@ public:
     */
     std::atomic<QoreProgram*> spgm{nullptr};
 
-    //! the source Program that released the class with deleteClassData(), for identification only
+    //! the ID of the source Program that released the class with deleteClassData(), or 0
     /** Set before spgm is cleared there: from then on, the namespace of the class is destroyed with that Program in
         its thread, so method calls in other threads do not use it (see qore_get_method_pgm_context() and
-        getMethodForEval()); never dereferenced
+        getMethodForEval()).  The ID identifies the Program: its address can be given to a Program created after it
+        was deleted, which would have been taken for it.
     */
-    std::atomic<const QoreProgram*> released_spgm{nullptr};
+    std::atomic<qore_program_id_t> released_spgm_id{0};
+
+    //! true if the source Program had a sandbox manager when it released the class (see isSandboxedCode())
+    /** Set with released_spgm_id, under gate.asl_lock
+    */
+    std::atomic<bool> released_sandboxed{false};
 
     // if the souorce program should be dereference when the class is destroyed
     bool deref_source_program = true;
@@ -3643,7 +3710,8 @@ public:
             {
                 // see getReferencedSourceProgram()
                 AutoLocker al(gate.asl_lock);
-                released_spgm.store(pgm);
+                released_spgm_id.store(pgm->getProgramId());
+                released_sandboxed.store(qore_program_is_sandboxed(pgm));
                 taken = spgm.compare_exchange_strong(expected, nullptr);
             }
             if (taken) {
@@ -3658,7 +3726,8 @@ public:
                 AutoLocker al(gate.asl_lock);
                 p = spgm.load();
                 if (p) {
-                    released_spgm.store(p);
+                    released_spgm_id.store(p->getProgramId());
+                    released_sandboxed.store(qore_program_is_sandboxed(p));
                     p = spgm.exchange(nullptr);
                 }
             }
@@ -3667,6 +3736,14 @@ public:
             }
         }
     }
+
+    //! Returns true if the code of the class is sandboxed: it was defined by a Program with a sandbox manager
+    /** A builtin class, and a class of a Program without a sandbox manager (system and module code), is trusted.  The
+        sandbox manager of the source Program is read when called, so a manager set after the class was parsed counts;
+        once the source Program has released the class, the state it had then is used.  Decides the cancellation rule
+        for the class's destructor (see QoreDestructorCancelHelper).
+    */
+    DLLLOCAL bool isSandboxedCode() const;
 
     //! Returns a reference to the source Program of the class, or nullptr if it has released the class or is deleted
     /** spgm is cleared under gate.asl_lock in deleteClassData() before the Program can be freed, so the Program read

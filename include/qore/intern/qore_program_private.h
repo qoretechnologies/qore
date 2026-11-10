@@ -40,6 +40,7 @@ extern QoreHashNode* ENV;
 #include <deque>
 
 #include "qore/intern/ParserSupport.h"
+#include "qore/intern/ProgramThreadHub.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QC_AutoReadLock.h"
@@ -482,6 +483,17 @@ public:
     unsigned thread_count = 0;   // number of threads currently running in this Program
     // A cancellation wave includes preregistered workers and descendants until the Program becomes idle.
     bool cancel_new_threads = false;
+    //! the generation of the Program's activity: incremented under plock when thread_count becomes or stops being 0
+    /** Transitions are published after plock is released, so they can reach the thread hub out of order; the hub
+        keeps the newest one (see ProgramThreadHub::activityChanged())
+    */
+    uint64_t activity_gen = 0;
+    //! publishes the lifecycle events of the Program's background threads; see
+    //! design/program-thread-lifecycle-events.md
+    /** Created by the qore_program_private constructor and released by its destructor; it outlives the Program while
+        threads that have left the Program have not published their FINISHED event.
+    */
+    ProgramThreadHub* thread_hub = nullptr;
     //! the references released by threads that deleted this Program while running its code: tid -> count
     /** A thread that deletes the Program while it runs the Program's code, or while it holds its parse lock (code
         that the parse commit runs, a constant initializer for example), cannot wait for itself to leave that code or
@@ -948,6 +960,15 @@ public:
         program with no manager, and sm_lock is shared by every thread running in the program.
     */
     std::atomic<QoreSandboxManager*> sandbox_manager{nullptr};
+
+    //! true if the code of the Program is sandboxed; never cleared once set (see qore_program_is_sandboxed())
+    /** Set when a sandbox manager is set on the Program, when the Program is created by code that a sandbox governs
+        or by a sandboxed Program (Program::constructor()), and for a user module that a sandboxed Program loads by a
+        path it chose (inherit_module_sandbox_manager()).  A Program that sandboxed code creates has no manager of its
+        own (the code it runs is governed by its callers), so the manager alone cannot tell that its code is not
+        trusted; the flag also outlives the manager, which is cleared when the Program is deleted.
+    */
+    std::atomic<bool> sandboxed{false};
 
     // define map
     dmap_t dmap;
@@ -1513,6 +1534,56 @@ public:
     */
     DLLLOCAL QoreSandboxManager* getSandboxManagerRef();
 
+    //! Returns true if the Program's code may not change the state of trusted modules (qore#5664)
+    /** The state of a trusted module is its public variables and the static members of its classes: one value that
+        every importer shares, so a sandboxed Program, and a Program that may not control the process
+        (\c PO_NO_PROCESS_CONTROL), may only read it.  A child Program inherits PO_NO_PROCESS_CONTROL from its parent
+        (unless the parent has PO_NO_CHILD_PO_RESTRICTIONS, which a restricted Program must never have).  The Program
+        of a library module is not restricted by its parse options, which it inherits from the Program that loaded it
+        first, but only by being sandboxed, which it never is.
+
+        Decided when the state is written, as the sandbox manager and the parse options can be set after the code that
+        writes it was parsed and the module imported; reads never call it.
+    */
+    DLLLOCAL static bool restrictsModuleVarWrites(const QoreProgram& pgm) {
+        const qore_program_private* pp = pgm.priv;
+        if (isSandboxedForModuleState(*pp)) {
+            return true;
+        }
+        return !pp->library_module && pp->pwo.parse_options.hasAny(QoreParseOptions(PO_NO_PROCESS_CONTROL));
+    }
+
+    //! Returns true if the Program is sandboxed, for restrictsModuleVarWrites()
+    /** A Program with a sandbox manager is sandboxed; where the Program also has a permanent \c sandboxed flag, which
+        a Program that sandboxed code creates gets as well (qore#5659), the flag counts too (see
+        programSandboxedFlag())
+    */
+    DLLLOCAL static bool isSandboxedForModuleState(const qore_program_private& pp) {
+        return pp.sandbox_manager.load(std::memory_order_acquire) || programSandboxedFlag(pp, 0);
+    }
+
+    //! Returns the permanent \c sandboxed flag of the Program where the Program has one (qore#5659)
+    template <typename T>
+    DLLLOCAL static auto programSandboxedFlag(const T& pp, int)
+            -> decltype(pp.sandboxed.load(std::memory_order_acquire)) {
+        return pp.sandboxed.load(std::memory_order_acquire);
+    }
+
+    //! Without the \c sandboxed flag, only a sandbox manager makes a Program sandboxed
+    template <typename T>
+    DLLLOCAL static bool programSandboxedFlag(const T&, long) {
+        return false;
+    }
+
+    //! Returns true if the Program is the Program of a trusted module (see restrictsModuleVarWrites())
+    /** A module whose Program has a sandbox manager is the module of a tenant, which only that tenant can import
+        (see QoreModuleManager::mayUseTenantModule()), so its variables are not shared with other importers
+    */
+    DLLLOCAL static bool isTrustedModuleProgram(const QoreProgram& pgm) {
+        const qore_program_private* pp = pgm.priv;
+        return pp->pwo.parse_options.hasAny(QoreParseOptions(PO_IN_MODULE)) && !isSandboxedForModuleState(*pp);
+    }
+
     DLLLOCAL void waitForTerminationAndClear(ExceptionSink* xsink);
 
     // called when the program's ref count = 0 (but the dc count may not go to 0 yet)
@@ -1521,6 +1592,8 @@ public:
     // called when starting a new thread before the new thread is started, to avoid race conditions
     // once the new thread has been started, the TID is registered in startThread()
     DLLLOCAL int preregisterNewThread(ExceptionSink* xsink) {
+        // declared before the lock, so that a transition is published after it is released
+        ProgramThreadActivityPublisher activity;
         // grab program-level lock
         AutoLocker al(plock);
 
@@ -1530,12 +1603,16 @@ public:
             return -1;
         }
 
-        ++thread_count;
+        if (!thread_count++) {
+            activityTransitionIntern(activity, false);
+        }
         return 0;
     }
 
     // called when thread startup fails after preregistration
     DLLLOCAL void cancelPreregistration() {
+        // declared before the lock, so that a transition is published after it is released
+        ProgramThreadActivityPublisher activity;
         // grab program-level lock
         AutoLocker al(plock);
 
@@ -1543,9 +1620,41 @@ public:
         --thread_count;
         if (!thread_count) {
             cancel_new_threads = false;
+            activityTransitionIntern(activity, true);
         }
         if (thread_waiting) {
             pcond.broadcast();
+        }
+    }
+
+    //! subscribes a queue to the Program's thread lifecycle events; the queue's reference is taken
+    DLLLOCAL QoreHashNode* subscribeThreadEvents(Queue* queue, int64 events, ExceptionSink* xsink) {
+        // the interest is recorded before the activity state is read: a transition made after the state is read is
+        // then published to the subscription (see ProgramThreadHub::subscribe())
+        if (events & QORE_PTE_ACTIVITY) {
+            thread_hub->addActivityInterest();
+        }
+        uint64_t gen;
+        bool idle;
+        {
+            AutoLocker al(plock);
+            gen = activity_gen;
+            idle = !thread_count;
+        }
+        return thread_hub->subscribe(queue, events, gen, idle, xsink);
+    }
+
+    //! records a transition between idle and active; called with plock held when thread_count became or stopped
+    //! being 0
+    /** @param activity the publisher, declared before plock was taken, that publishes the transition if a
+        subscription takes ACTIVITY events
+        @param idle true if the Program became idle
+    */
+    DLLLOCAL void activityTransitionIntern(ProgramThreadActivityPublisher& activity, bool idle) {
+        assert(thread_hub);
+        uint64_t gen = ++activity_gen;
+        if (thread_hub->hasActivityInterest()) {
+            activity.set(thread_hub, gen, idle);
         }
     }
 
@@ -1579,14 +1688,48 @@ public:
     }
     */
 
+    //! Enters the Program to release the current thread's value of one of its thread_local variables
+    /** A thread that ends, or whose values are cleared between tasks, releases its values in the Program owning the
+        variable (see ThreadLocalVarRegistry in lib/thread.cpp): its teardown waits for the thread to leave it with
+        decThreadCount(QoreProgram&, int, ExceptionSink*), as for every thread in the Program, so that it can still
+        run the destructors of the value.  No code of the Program runs and the thread's current Program does not
+        change: the destructors enter the Programs of their classes themselves, which they can while the thread is
+        in the Program, also once the teardown has marked it (see canEnterIntern()).
+
+        @return true if the thread entered the Program, false if its teardown has passed the point after which no
+        other thread can enter it (it releases the variable itself then, or has released it)
+    */
+    DLLLOCAL bool enterForThreadLocalRelease() {
+        int tid = q_gettid();
+        AutoLocker al(plock);
+        if (!canEnterIntern(tid)) {
+            return false;
+        }
+        ++tidmap[tid];
+        ++thread_count;
+        return true;
+    }
+
+    //! Returns true if the given thread can enter the Program; called with plock held
+    /** Once the teardown has marked the Program (ptid, see waitForTerminationAndClear()), no other thread can enter it,
+        but a thread that is in it can enter it again: the teardown waits for it to leave, and its nested calls into
+        the Program, as those of the destructors of the thread_local values that it releases in the Program when it
+        ends (see enterForThreadLocalRelease()), must not fail while the Program's data is valid
+    */
+    DLLLOCAL bool canEnterIntern(int tid) const {
+        return !ptid || ptid == tid || tidmap.find(tid) != tidmap.end();
+    }
+
     // returns 0 for OK, -1 for error
     DLLLOCAL int incThreadCount(ExceptionSink* xsink) {
         int tid = q_gettid();
 
+        // declared before the lock, so that a transition is published after it is released
+        ProgramThreadActivityPublisher activity;
         // grab program-level lock
         AutoLocker al(plock);
 
-        if (ptid && ptid != tid) {
+        if (!canEnterIntern(tid)) {
             xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and therefore "
                 "cannot be accessed at runtime");
             return -1;
@@ -1597,7 +1740,9 @@ public:
         }
 
         ++tidmap[tid];
-        ++thread_count;
+        if (!thread_count++) {
+            activityTransitionIntern(activity, false);
+        }
         return 0;
     }
 
@@ -1605,10 +1750,12 @@ public:
     DLLLOCAL void incThreadCount() {
         int tid = q_gettid();
 
+        // declared before the lock, so that a transition is published after it is released
+        ProgramThreadActivityPublisher activity;
         // grab program-level lock
         AutoLocker al(plock);
 
-        if (ptid && ptid != tid) {
+        if (!canEnterIntern(tid)) {
             throw QoreStandardException("PROGRAM-ERROR", "the Program accessed has already been deleted and "
                 "therefore cannot be accessed at runtime");
         }
@@ -1618,7 +1765,9 @@ public:
         }
 
         ++tidmap[tid];
-        ++thread_count;
+        if (!thread_count++) {
+            activityTransitionIntern(activity, false);
+        }
     }
 
     //! Decrements the thread count of the given thread
@@ -1630,6 +1779,9 @@ public:
         and that it must release now that it has left the code; 0 if it did not delete the Program
     */
     DLLLOCAL unsigned decThreadCount(int tid, bool& clear) {
+        // declared before the lock, so that a transition is published after it is released; it holds a reference to
+        // the hub, as another thread can destroy the Program once the lock has been released
+        ProgramThreadActivityPublisher activity;
         // grab program-level lock
         AutoLocker al(plock);
 
@@ -1647,6 +1799,7 @@ public:
         assert(thread_count > 0);
         if (!--thread_count) {
             cancel_new_threads = false;
+            activityTransitionIntern(activity, true);
         }
         // Wake individual-thread waiters as well as whole-Program waiters.
         if (thread_waiting) {
@@ -3539,6 +3692,27 @@ public:
         pgm.priv->cancelPreregistration();
     }
 
+    //! subscribes a queue to the Program's thread lifecycle events; see Program::subscribeThreadEvents()
+    /** @param queue the queue; the reference is taken, also on error
+    */
+    DLLLOCAL static QoreHashNode* subscribeThreadEvents(QoreProgram& pgm, Queue* queue, int64 events,
+            ExceptionSink* xsink) {
+        return pgm.priv->subscribeThreadEvents(queue, events, xsink);
+    }
+
+    //! removes a subscription to the Program's thread lifecycle events
+    DLLLOCAL static bool unsubscribeThreadEvents(QoreProgram& pgm, int64 id, ExceptionSink* xsink) {
+        return pgm.priv->thread_hub->unsubscribe(id, xsink);
+    }
+
+    //! returns a new reference to the lifecycle event hub of the Program
+    DLLLOCAL static ProgramThreadHub* refThreadHub(QoreProgram& pgm) {
+        ProgramThreadHub* hub = pgm.priv->thread_hub;
+        assert(hub);
+        hub->ref();
+        return hub;
+    }
+
     // called from the new thread once the thread has been started (after preregisterNewThread())
     DLLLOCAL static bool registerNewThread(QoreProgram& pgm, int tid) {
         return pgm.priv->registerNewThread(tid);
@@ -4879,6 +5053,10 @@ DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticEditInfo(QoreNamespace& ns)
 DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticFixInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_RuntimeDiagnosticInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ProgramThreadEventOptions(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ProgramThreadInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ProgramThreadSubscription(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ProgramThreadEvent(QoreNamespace& ns);
 
 //! Builds precise structured metadata for assignment and append type errors
 DLLLOCAL QoreDiagnosticMetadata qore_make_lvalue_type_diagnostic(const QoreValue& left,

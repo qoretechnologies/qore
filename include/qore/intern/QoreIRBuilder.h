@@ -101,6 +101,11 @@ public:
     //! value type; see QoreIROpcode::ListAppendElement
     QoreIRInstruction* createListAppendElement(QoreIRValue list, QoreIRValue value, QoreIRValue state,
         const QoreProgramLocation* loc = nullptr);
+    //! Checks for cancellation when \a count is a positive multiple of 100; see QoreIROpcode::CheckCancelEvery
+    /** @param limit the limit of a drop operator, or an invalid value for none
+    */
+    QoreIRInstruction* createCheckCancelEvery(QoreIRValue count, QoreIRCancelPoint point,
+        const QoreProgramLocation* loc = nullptr, QoreIRValue limit = QoreIRValue());
     //! Sets the type of a select result list from its values; see QoreIROpcode::ListSetScannedType
     /** @param list the result list
         @param element_type the element type of the list created by the AST interpreter; ignored when \a source is

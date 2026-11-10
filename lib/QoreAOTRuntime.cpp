@@ -2420,6 +2420,28 @@ static const QoreClass* findAOTClassByPathInContext(QoreProgram* pgm, const char
     return findAOTClassByPath(pgm, class_path, pseudo);
 }
 
+//! Returns the method of the class that declares a recorded variant, as the parser bound it
+/** A recorded variant names the class that declares it (variant_class_path), so the method is that class's own
+    method of the name, with the static-ness of the call; only a class without one inherited it.  The class's own
+    method may be private:internal: a lookup through the class hierarchy without a class context skips it and finds
+    a base class method of the same name, whose variant with the same signature text (a method without parameters
+    has an empty one) would then be called instead.
+*/
+static const QoreMethod* findAOTVariantClassLocalMethod(const QoreClass* qc, const char* method_name,
+        bool is_static) {
+    if (!qc || !method_name || !*method_name) {
+        return nullptr;
+    }
+    const char* name = method_name;
+    if (const char* last_sep = strrchr(method_name, ':')) {
+        if (last_sep > method_name && *(last_sep - 1) == ':') {
+            name = last_sep + 1;
+        }
+    }
+    const qore_class_private* qcp = qore_class_private::get(*qc);
+    return is_static ? qcp->parseFindLocalStaticMethod(name) : qcp->parseFindLocalMethod(name);
+}
+
 static const QoreMethod* findAOTMethodByName(const QoreClass* qc, const char* method_name) {
     if (!qc || !method_name || !*method_name) {
         return nullptr;
@@ -2439,7 +2461,12 @@ static const AbstractQoreFunctionVariant* findAOTMethodVariantByRef(
     if (method_ref.variant_class_path && *method_ref.variant_class_path) {
         const QoreClass* variant_qc = findAOTClassByPath(pgm, method_ref.variant_class_path, pseudo);
         if (variant_qc) {
-            if (const QoreMethod* m = findAOTMethodByName(variant_qc, method_ref.method_name)) {
+            const QoreMethod* m = findAOTVariantClassLocalMethod(variant_qc, method_ref.method_name,
+                method->isStatic());
+            if (!m) {
+                m = findAOTMethodByName(variant_qc, method_ref.method_name);
+            }
+            if (m) {
                 variant_method = m;
             }
         }
@@ -2483,9 +2510,13 @@ static const AbstractQoreFunctionVariant* findAOTStaticMethodVariantByRef(
             // signatures).  The static issueModuleCmd operates on getProgram() (the AOT module's
             // own program) instead of the receiver object, sending the command to the wrong
             // QoreProgram.  Match the original method kind: instance -> instance, static -> static.
-            const QoreMethod* m = method->isStatic()
-                ? findAOTStaticCallMethodByName(variant_qc, method_ref.method_name)
-                : findAOTInstanceMethod(variant_qc, method_ref.method_name, nullptr);
+            const QoreMethod* m = findAOTVariantClassLocalMethod(variant_qc, method_ref.method_name,
+                method->isStatic());
+            if (!m) {
+                m = method->isStatic()
+                    ? findAOTStaticCallMethodByName(variant_qc, method_ref.method_name)
+                    : findAOTInstanceMethod(variant_qc, method_ref.method_name, nullptr);
+            }
             if (m) {
                 variant_method = m;
             }
@@ -8346,11 +8377,19 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             return nullptr;
         }
         const char* block_name = reader.readStringRef(ptr);
-        bool is_loop_header = QoreAOTBinaryReader::readU8(ptr) != 0;
+        // bit 0: is_loop_header; bits 1-3: loop_cancel (see serializeIRFunction())
+        uint8_t block_flags = QoreAOTBinaryReader::readU8(ptr);
+        uint8_t loop_cancel = static_cast<uint8_t>(block_flags >> 1);
+        if (loop_cancel > QORE_IR_LOOP_CANCEL_MAX) {
+            error = "invalid loop cancellation kind " + std::to_string(loop_cancel) + " in block "
+                + std::to_string(i) + " of function " + func->name;
+            return nullptr;
+        }
         uint16_t num_insts = QoreAOTBinaryReader::readU16(ptr);
 
         func->blocks[i]->name = block_name ? block_name : "";
-        func->blocks[i]->is_loop_header = is_loop_header;
+        func->blocks[i]->is_loop_header = (block_flags & 1) != 0;
+        func->blocks[i]->loop_cancel = static_cast<QoreIRLoopCancel>(loop_cancel);
 
         for (int j = 0; j < num_insts; ++j) {
             if (checkCancel()) {
@@ -8402,7 +8441,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
 
 std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
         const QoreAOTLazyClosureIR& lazy_ir, UserVariantBase* uvb,
-        ExceptionSink* xsink, std::string& error) {
+        ExceptionSink* /* xsink: building the IR raises no exception */, std::string& error) {
     if (!lazy_ir.metadata || !lazy_ir.pgm || !uvb) {
         error = "incomplete lazy closure metadata";
         return nullptr;
@@ -8454,19 +8493,16 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
     auto ir = deserializeIRFunction(reader, ptr, end, lazy_ir.pgm,
         read_expr, &lazy_ir.enclosing_locals, error,
         parent_locals, static_cast<int>(lazy_ir.parent_locals.size()),
+        // no cancellation sink: the call of the closure is no cancellation point in the AST interpreter, and the
+        // IR is bounded by the closure's code (issue #5641)
         &closure_locals, false, &lazy_ir.body_locals, lazy_ir.local_owner_pgm,
-        false, xsink);
+        false, nullptr);
     if (!ir) {
         return nullptr;
     }
 
     UserSignature* sig = uvb->getUserSignature();
     for (unsigned p = 0; p < sig->numParams(); ++p) {
-        if (p && !(p % 100)
-                && qore_check_cancel(xsink, "AOT lazy closure IR finalization")) {
-            error = "lazy closure IR finalization was cancelled";
-            return nullptr;
-        }
         if (sig->lv[p]) {
             ir->param_local_vars[static_cast<int>(p)] = sig->lv[p];
         }

@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of the exception edges of fused foreach pipelines
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class FusedForeachStageExceptionTest
+
+#! issue #5655: an exception raised by a stage of a fused foreach pipeline unwinds the foreach statement first
+/** IR fuses the stages of a pipeline that a foreach statement iterates (map, select, take, drop) into the loop.  The
+    block that releases the element, the iterator, the source and the loop variables before an enclosing handler runs
+    covered only the body: an exception raised by a stage expression went to the handler directly, and they were
+    released after it (in the IR interpreter, native code and AOT), where the AST interpreter releases them while it
+    unwinds the foreach statement.
+
+    The script next to the test logs the destruction of the elements of each pipeline, runs it in every execution
+    mode, on the IR tier and as an AOT executable, and its output must be that of the AST interpreter.
+*/
+class FusedForeachStageExceptionTest inherits QUnit::Test {
+    public {
+        #! the output of stage-exception.q with the AST interpreter, which every execution mode and AOT must give
+        const Expected = (
+            "map first: released h1; catch STAGE h1; after try",
+            "map later: iter h1; released h2; released h1; catch STAGE h2; after try",
+            "select stage: iter h1; released h2; released h1; catch SELECT h2; after try",
+            "take drop: iter h2; released h1; released h3; released h2; catch STAGE h3; after try",
+            "captured loop variable: iter h1; released h2; catch STAGE h2; closures [\"h1\"]; released h1; after try",
+            "body throws: iter h1; iter h2; released h1; released h2; catch BODY h2; after try",
+            "nested try: iter h1; inner catch INNER h1; iter h2; released h1; released h2; after try",
+        );
+
+        #! the script prints its lines this many times
+        const Iterations = 3;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string path;
+    }
+
+    constructor() : QUnit::Test("fused foreach stage exceptions", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        path = get_script_dir() + "/stage-exception.q";
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executable", \aotTest());
+        addTestCase("review cases: execution modes and AOT", \reviewTest());
+        set_return_value(main());
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = expected();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, path)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, path)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("fused-foreach-stage-exception-aot-");
+        string exe = dir.path + "/stage-exception";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, path));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        assertEq(expected(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT");
+    }
+
+    #! runs stage-exception-review.q with the AST interpreter, then in every other execution mode, on the IR tier and
+    #! as an AOT executable, and checks that they give the AST interpreter's output
+    /** The cases: a map stage that creates objects from a source of ints (a select stage, the body and a closure
+        raising, a return), take/drop counts that raise or are negative, an iterator whose next() raises (in a fused
+        and in a plain foreach), and streaming operators in an expression.
+    */
+    private reviewTest() {
+        string script = get_script_dir() + "/stage-exception-review.q";
+        string exp = ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, script));
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, script)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, script)),
+            ExecModeHarness::IRTierName);
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("fused-foreach-stage-exception-review-");
+        string exe = dir.path + "/stage-exception-review";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, script));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT");
+    }
+
+    #! the expected output: the lines, printed once per iteration
+    private string expected() {
+        return strmul((foldl $1 + "\n" + $2, Expected) + "\n", Iterations);
+    }
+}

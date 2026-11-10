@@ -1,0 +1,290 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - cancellation, program interrupts and sandbox limits of waits in cleanup critical sections
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Sandboxed code never runs with cancellation deferred (issue #5634; see "Sandboxed code never runs deferred" in
+# design/cooperative-cancellation.md): a cleanup critical section of trusted code (defer_thread_cancel(), as the
+# DataProvider watch providers use around observer notifications and checkpoint persistence), defer_thread_cancel()
+# called by sandboxed code itself, and thread teardown do not defer a cancellation, a program interrupt or a sandbox
+# limit for the sandboxed code that they run.  Trusted code keeps its deferral.
+#
+# Every wait of sandboxed code here is bounded by a time that the cases never reach when the code is stopped as it
+# must be; no case depends on timing.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+# loaded by the test, the sandboxed Programs share the trusted module
+%requires DataProvider
+
+%exec-class SandboxedCodeDeferralTest
+
+class SandboxedCodeDeferralTest inherits QUnit::Test {
+    public {
+        #! a limit for every wait of the test; never reached unless a case fails
+        const T = 30s;
+
+        #! the code of the sandboxed Programs
+        const Source = "%modern
+%requires DataProvider
+
+class W inherits DataProvider::AbstractWatchDataProviderBase {
+    constructor() : AbstractWatchDataProviderBase(3600) {
+    }
+    private pollOnce() {
+    }
+    saveCheckpoint() {
+        persistCheckpoint({'a': 1});
+    }
+    string getName() {
+        return 'sandboxed-watch';
+    }
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return <DataProvider::DataProviderInfo>{
+            'name': getName(),
+            'supports_observable': True,
+        };
+    }
+}
+
+class O inherits DataProvider::Observer {
+    private {
+        Counter entered;
+    }
+    constructor(Counter entered) {
+        self.entered = entered;
+    }
+    update(string event_id, hash<auto> data_) {
+        entered.dec();
+        Counter c(1);
+        c.waitForZero(30s);
+        throw 'NOT-STOPPED', 'the observer was not stopped';
+    }
+}
+
+sub observer(Counter entered) {
+    W w();
+    w.registerObserver(new O(entered));
+    w.notifyObservers('x', {});
+}
+
+sub checkpoint(Counter entered) {
+    W w();
+    w.setCheckpointPersistence(NOTHING, sub (hash<auto> cp) {
+        entered.dec();
+        Counter c(1);
+        c.waitForZero(30s);
+        throw 'NOT-STOPPED', 'the checkpoint was not stopped';
+    });
+    w.saveCheckpoint();
+}
+";
+
+        #! the code of sandboxed Programs that have the THREAD_CONTROL domain
+        const ThreadControlSource = Source + "
+sub defer(Counter entered) {
+    defer_thread_cancel(sub () {
+        entered.dec();
+        Counter c(1);
+        c.waitForZero(30s);
+        throw 'NOT-STOPPED', 'the deferred code was not stopped';
+    });
+}
+
+code sub waiter(Counter entered) {
+    return sub () {
+        entered.dec();
+        Counter c(1);
+        c.waitForZero(30s);
+        throw 'NOT-STOPPED', 'the code was not stopped';
+    };
+}
+
+sub resource(Counter entered, Queue result) {
+    set_thread_resource(sub () {
+        entered.dec();
+        try {
+            Counter c(1);
+            c.waitForZero(30s);
+            result.push('NOT-STOPPED');
+        } catch (hash<ExceptionInfo> ex) {
+            result.push(ex.err);
+        }
+    });
+}
+";
+    }
+
+    constructor() : QUnit::Test("SandboxedCodeDeferralTest", "1.0", \ARGV) {
+        addTestCase("a sandboxed observer notified in a cleanup critical section", \observerTest());
+        addTestCase("a sandboxed checkpoint persisted in a cleanup critical section", \checkpointTest());
+        addTestCase("defer_thread_cancel() called by sandboxed code", \sandboxedDeferTest());
+        addTestCase("sandboxed code called by trusted code in defer_thread_cancel()", \trustedDeferTest());
+        addTestCase("a sandboxed thread resource run in thread teardown", \threadResourceTest());
+        addTestCase("trusted code keeps its deferral", \trustedKeepsDeferralTest());
+
+        set_return_value(main());
+    }
+
+    #! returns a sandboxed Program
+    private Program sandboxed(SandboxManager sm, bool thread_control = False) {
+        Program p(PO_NEW_STYLE | (thread_control ? 0 : PO_NO_THREAD_CONTROL));
+        p.setSandboxManager(sm);
+        p.parse(thread_control ? ThreadControlSource : Source, "sandboxed");
+        return p;
+    }
+
+    #! runs \a func of a new sandboxed Program on a thread, stops it with \a how once its code waits, and returns the
+    #! exception that ended the call
+    private string stop(string func, string how, bool thread_control = False) {
+        SandboxManager sm();
+        if (how == "limit") {
+            sm.setWallTimeLimit(300);
+        }
+        Program p = sandboxed(sm, thread_control);
+        Counter entered(1);
+        Queue result();
+        int tid = background sub () {
+            try {
+                p.callFunction(func, entered);
+                result.push("returned");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err + ": " + ex.desc);
+            }
+        }();
+        assertEq(0, entered.waitForZero(T));
+        if (how == "cancel") {
+            assertTrue(cancel_thread(tid, "test"));
+        } else if (how == "interrupt") {
+            sm.requestInterrupt();
+        }
+        string rv = result.get(T);
+        thread_join(tid);
+        return rv;
+    }
+
+    #! the exception expected when sandboxed code is stopped with \a how
+    private static string expected(string how) {
+        switch (how) {
+            case "limit": return "SANDBOX-TIMEOUT";
+            case "interrupt": return "PROGRAM-INTERRUPTED";
+        }
+        return "THREAD-CANCELLED";
+    }
+
+    #! AbstractWatchDataProviderBase::notifyObservers() runs the observers in defer_thread_cancel(); a sandboxed
+    #! observer that waits is stopped all the same
+    observerTest() {
+        foreach string how in (("limit", "interrupt", "cancel")) {
+            string rv = stop("observer", how);
+            assertRegex(expected(how), rv, how);
+            assertNRegex("NOT-STOPPED", rv, how);
+        }
+    }
+
+    #! AbstractWatchDataProviderBase::persistCheckpoint() runs the persistence callback in defer_thread_cancel(),
+    #! which refuses a callback of a Program without the THREAD_CONTROL domain, so the sandbox has it
+    checkpointTest() {
+        foreach string how in (("limit", "interrupt", "cancel")) {
+            string rv = stop("checkpoint", how, True);
+            assertRegex(expected(how), rv, how);
+            assertNRegex("NOT-STOPPED", rv, how);
+        }
+    }
+
+    #! A sandbox with the THREAD_CONTROL domain calls defer_thread_cancel(): the function calls the code, but does not
+    #! defer anything for it
+    sandboxedDeferTest() {
+        foreach string how in (("limit", "interrupt", "cancel")) {
+            string rv = stop("defer", how, True);
+            assertRegex("^" + expected(how), rv, how);
+        }
+    }
+
+    #! Trusted code calls sandboxed code in defer_thread_cancel(): the sandboxed code is not deferred
+    trustedDeferTest() {
+        foreach string how in (("limit", "interrupt", "cancel")) {
+            SandboxManager sm();
+            if (how == "limit") {
+                sm.setWallTimeLimit(300);
+            }
+            Program p = sandboxed(sm, True);
+            Counter entered(1);
+            Queue result();
+            int tid = background sub () {
+                code c = p.callFunction("waiter", entered);
+                try {
+                    defer_thread_cancel(c);
+                    result.push("returned");
+                } catch (hash<ExceptionInfo> ex) {
+                    result.push(ex.err);
+                }
+            }();
+            assertEq(0, entered.waitForZero(T));
+            if (how == "cancel") {
+                assertTrue(cancel_thread(tid, "test"));
+            } else if (how == "interrupt") {
+                sm.requestInterrupt();
+            }
+            assertEq(expected(how), result.get(T), how);
+            thread_join(tid);
+        }
+    }
+
+    #! A thread resource that sandboxed code set runs when the thread ends, where teardown defers cancellation: the
+    #! sandbox's wall time limit stops it
+    threadResourceTest() {
+        SandboxManager sm();
+        sm.setWallTimeLimit(300);
+        Program p = sandboxed(sm, True);
+        Counter entered(1);
+        Queue result();
+        int tid = background sub () {
+            p.callFunction("resource", entered, result);
+        }();
+        assertEq(0, entered.waitForZero(T));
+        assertEq("SANDBOX-TIMEOUT", result.get(T));
+        thread_join(tid);
+    }
+
+    #! Trusted code locks a Mutex in defer_thread_cancel() on a cancelled thread: the deferral holds
+    trustedKeepsDeferralTest() {
+        Counter ready(1);
+        Counter block(1);
+        on_exit if (block.getCount()) {
+            block.dec();
+        }
+        Queue result();
+        int tid = background sub () {
+            try {
+                ready.dec();
+                block.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                result.push("caught:" + ex.err);
+            }
+            defer_thread_cancel(sub () {
+                Mutex m();
+                m.lock();
+                m.unlock();
+                result.push("locked");
+            });
+            try {
+                Mutex m();
+                m.lock();
+                result.push("not-raised");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push("again:" + ex.err);
+            }
+        }();
+        assertEq(0, ready.waitForZero(T));
+        assertTrue(cancel_thread(tid, "test"));
+        assertEq("caught:THREAD-CANCELLED", result.get(T));
+        assertEq("locked", result.get(T));
+        assertEq("again:THREAD-CANCELLED", result.get(T));
+        thread_join(tid);
+    }
+}

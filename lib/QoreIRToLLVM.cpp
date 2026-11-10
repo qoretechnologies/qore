@@ -49,7 +49,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 417,
+static_assert(QORE_IR_MAX_OPCODE == 418,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -3332,6 +3332,16 @@ void QoreIRToLLVM::syncLocalsToRuntimeForHandlers(llvm::Module& module) {
         if (weak_assigned_locals.count(key)) {
             continue;
         }
+        // A local declared with a reference type lives on the runtime stack too (see readsThroughReference()): the
+        // runtime stack holds the reference that its declaration bound, and its native cache, which is never read,
+        // holds the value of its last store or NOTHING before its declaration.  Publishing the cache assigned that
+        // value to the variable before its declaration (a block of a catch, or the body of a loop in its next
+        // iteration), so that the declaration assigned the reference to the referenced type (RUNTIME-TYPE-ERROR) or
+        // through the reference it held (OBJECT-ALREADY-DELETED once its object was deleted), as LocalVarValue
+        // resolves an assignment to a variable that has a value.
+        if (readsThroughReference(local)) {
+            continue;
+        }
 
         ensureLocalCacheFresh(key, module, builder->GetInsertBlock()->getParent());
 
@@ -3419,6 +3429,11 @@ llvm::Value* QoreIRToLLVM::beginNativeHandlerSlotCache(llvm::Module& module) {
             // Like a closure-use local, a weak-assigned local that is not IR-only lives on the runtime stack, and
             // its alloca can be stale (see syncLocalsToRuntimeForHandlers()), so it is not seeded from the alloca;
             // handlers read it from the runtime stack.
+            continue;
+        }
+        if (readsThroughReference(local)) {
+            // a local declared with a reference type lives on the runtime stack, and its alloca is never read (see
+            // syncLocalsToRuntimeForHandlers()): handlers read it from the runtime stack
             continue;
         }
 
@@ -4957,6 +4972,14 @@ bool QoreIRToLLVM::canReloadLocalFromRuntime(const void* key, bool honor_reload_
     if (weak_assigned_locals.count(key)) {
         return false;
     }
+    // a local declared with a reference type lives on the runtime stack: every load reads it there and every store
+    // writes it there (see readsThroughReference()), so its native cache is never read, and a reload would read the
+    // referenced lvalue (qore_rt_load_local()), which raises an exception if the lvalue is gone, as for a member of
+    // a deleted object: the scope exit of a block of a loop body whose object a reference local of it refers to was
+    // deleted raised OBJECT-ALREADY-DELETED when a handler made the frame reload its local caches
+    if (readsThroughReference(var_ptr)) {
+        return false;
+    }
 
     bool is_entry_local = entry_locals_set.count(key) > 0;
     bool is_pre_instantiated = pre_instantiated_locals && pre_instantiated_locals->count(key);
@@ -5255,7 +5278,7 @@ llvm::Value* QoreIRToLLVM::emitValueIsReference(llvm::Value* value, QoreIRValue 
 
 // documented in QoreIRToLLVM.h
 llvm::Value* QoreIRToLLVM::emitReferenceLocalRead(const void* key, llvm::Value* cached, llvm::Module& module,
-        llvm::Function* llvm_func) {
+        llvm::Function* llvm_func, const QoreIRInstruction* inst) {
     llvm::AllocaInst* ref_flag = localReferenceFlag(key, llvm_func);
     assert(ref_flag);
     llvm::Type* i8_type = llvm::Type::getInt8Ty(ctx);
@@ -5296,6 +5319,11 @@ llvm::Value* QoreIRToLLVM::emitReferenceLocalRead(const void* key, llvm::Value* 
     builder->CreateCall(decref_fn, {old_previous, xsink_arg});
     builder->CreateBr(released_bb);
     builder->SetInsertPoint(released_bb);
+    if (inst) {
+        // the referenced lvalue can be gone (a member of a deleted object, a variable of a deleted Program): the
+        // exception raised goes to the load's exception target, as in the AST interpreter
+        emitExceptionCheck(module, llvm_func, inst);
+    }
     llvm::BasicBlock* read_end_bb = builder->GetInsertBlock();
     builder->CreateBr(done_bb);
     builder->SetInsertPoint(done_bb);
@@ -13798,6 +13826,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
     auto load_local_int_for_fused = [&](LocalVar* local, const void* key,
             LocalAllocaMap::iterator alloca_it,
             const char* name) -> llvm::Value* {
+        // a local whose type allows a reference reads the referenced lvalue if it holds one, which raises an
+        // exception if the lvalue is gone: the runtime reads below are followed by the check that takes the fused
+        // instruction's exception edge, as for LoadLocal; a local of another type cannot raise, and is not checked
+        const bool may_hold_reference = local && (!QoreTypeInfo::hasType(local->getTypeInfo())
+            || QoreTypeInfo::isReference(local->getTypeInfo()));
+        auto check_reference_read = [&]() {
+            if (may_hold_reference) {
+                emitExceptionCheck(module, llvm_func, inst);
+            }
+        };
         if (local && local->closureUse()) {
             llvm::Value* boxed;
             if (aot_mode) {
@@ -13821,6 +13859,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
             builder->CreateCall(decref_fn, {boxed, xsink_arg});
+            check_reference_read();
             return rv;
         }
 
@@ -13859,6 +13898,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             builder->CreateCall(decref_fn, {loaded, xsink_arg});
             builder->CreateBr(done_bb);
             builder->SetInsertPoint(done_bb);
+            check_reference_read();
             return rv;
         }
 
@@ -13885,7 +13925,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             // a local of no type holding a reference reads as the referenced lvalue, as LoadLocal reads it
             if (localReferenceFlag(key, llvm_func)) {
-                raw = emitReferenceLocalRead(key, raw, module, llvm_func);
+                raw = emitReferenceLocalRead(key, raw, module, llvm_func, inst);
             }
             // an integer in the boxed value is converted inline, without the runtime call
             return emitBoxedToIntInline(raw);
@@ -13913,6 +13953,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
         builder->CreateCall(decref_fn, {boxed, xsink_arg});
+        check_reference_read();
         return rv;
     };
 
@@ -14846,6 +14887,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool is_native_int = native_int_locals.count(key) > 0;
             bool is_native_float = native_float_locals.count(key) > 0;
             bool is_native_bool = native_bool_locals.count(key) > 0;
+            // a local whose type allows a reference reads the referenced lvalue if it holds one, which raises an
+            // exception if the lvalue is gone (a member of a deleted object, a variable of a deleted Program): the
+            // runtime helpers that read it are followed by the check that takes the load's exception edge, as the
+            // AST interpreter handles the exception at the read
+            bool may_hold_reference = linst->local
+                && (!QoreTypeInfo::hasType(linst->local->getTypeInfo())
+                    || QoreTypeInfo::isReference(linst->local->getTypeInfo()));
 
             // Closure-bound locals must always be read from the runtime stack
             // because closures can modify the value between IR instructions.
@@ -14900,6 +14948,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             local_cleanup_allocas[key].push_back(ca);
                         }
                     }
+                }
+                if (may_hold_reference) {
+                    emitExceptionCheck(module, llvm_func, inst);
                 }
                 return true;
             }
@@ -15000,6 +15051,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(result, inst->result.id, llvm_func);
+                if (may_hold_reference) {
+                    emitExceptionCheck(module, llvm_func, inst);
+                }
                 return true;
             }
 
@@ -15025,6 +15079,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(result, inst->result.id, llvm_func);
+                if (may_hold_reference) {
+                    emitExceptionCheck(module, llvm_func, inst);
+                }
                 return true;
             }
 
@@ -15055,6 +15112,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(result, inst->result.id, llvm_func);
+                if (may_hold_reference) {
+                    emitExceptionCheck(module, llvm_func, inst);
+                }
                 return true;
             }
 
@@ -15201,7 +15261,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // holds no reference reads its cache as any other; the value read is owned, and kept for
                     // its consumers until the next read at this site (see emitReferenceLocalRead())
                     if (localReferenceFlag(key, llvm_func)) {
-                        loaded = emitReferenceLocalRead(key, loaded, module, llvm_func);
+                        loaded = emitReferenceLocalRead(key, loaded, module, llvm_func, inst);
                     }
                     nanboxed_values.insert(inst->result.id);
                     if (assigned_non_nothing_locals.count(key)) {
@@ -16932,10 +16992,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 error = "branch target block not found";
                 return false;
             }
-            if (br->target && br->target->is_loop_header) {
+            // a loop statement checks for cancellation at the start of every iteration with its own label, as the
+            // AST interpreter does; the loops of expressions such as map do not (see QoreIRBasicBlock::loop_cancel)
+            if (br->target && br->target->loop_cancel != QoreIRLoopCancel::None) {
                 auto check_cancel = module.getOrInsertFunction("qore_rt_check_cancel",
                         llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-                llvm::Value* operation = builder->CreateGlobalString("IR loop", "loop_cancel_operation");
+                llvm::Value* operation = builder->CreateGlobalString(
+                    qore_ir_loop_cancel_operation(br->target->loop_cancel), "loop_cancel_operation");
                 builder->CreateCall(check_cancel, {xsink_arg, operation});
                 emitExceptionCheck(module, llvm_func, inst);
             }
@@ -25291,6 +25354,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            // the AOT helper raises AOT-TYPE-ERROR when the element type path does not resolve; the exception goes
+            // to the handler of an enclosing try block (the instruction's exception target)
+            if (aot_mode && inst->element_type) {
+                emitExceptionCheck(module, llvm_func, inst);
+            }
             return true;
         }
         case QoreIROpcode::ListAppend: {
@@ -25490,6 +25558,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     typed_list_data_ptrs[inst->result.id] =
                         builder->CreateCall(data_helper, {result}, "typed_output_data");
                 }
+            } else if (aot_mode && inst->element_type) {
+                // the AOT helper raises AOT-TYPE-ERROR when the element type path does not resolve
+                emitExceptionCheck(module, llvm_func, inst);
             }
             return true;
         }
@@ -26016,6 +26087,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_hash_set_common_type",
                     llvm::FunctionType::get(void_type, {i64_type, i64_type}, false));
             builder->CreateCall(helper, {hash_boxed, state_int});
+            return true;
+        }
+        case QoreIROpcode::CheckCancelEvery: {
+            auto* count = getVal(inst->operands[0].id, error);
+            if (!count) { return false; }
+            auto* point = getVal(inst->operands[1].id, error);
+            if (!point) { return false; }
+            auto* limit = getVal(inst->operands[2].id, error);
+            if (!limit) { return false; }
+            llvm::Value* count_int = ensureIntTypeInline(count, inst->operands[0].id);
+            llvm::Value* point_int = ensureIntTypeInline(point, inst->operands[1].id);
+            llvm::Value* limit_int = ensureIntTypeInline(limit, inst->operands[2].id);
+            auto helper = module.getOrInsertFunction("qore_rt_check_cancel_every",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, ptr_type}, false));
+            builder->CreateCall(helper, {count_int, point_int, limit_int, xsink_arg});
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::ListAppendElement: {
@@ -34662,7 +34749,6 @@ bool QoreIRToLLVM::emitFusedMapFoldLoop(const QoreIRInstruction* inst, llvm::Mod
     llvm::Value* size = builder->CreateCall(size_helper, {list_boxed});
     llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
     llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
-    llvm::Value* checkpoint_interval = llvm::ConstantInt::get(i64_type, 100);
 
     std::string empty_name = std::string(label) + "_empty";
     std::string init_name = std::string(label) + "_init";
@@ -34672,8 +34758,6 @@ bool QoreIRToLLVM::emitFusedMapFoldLoop(const QoreIRInstruction* inst, llvm::Mod
     llvm::BasicBlock* empty_bb = llvm::BasicBlock::Create(ctx, empty_name, llvm_func);
     llvm::BasicBlock* init_bb = llvm::BasicBlock::Create(ctx, init_name, llvm_func);
     llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, loop_name, llvm_func);
-    llvm::BasicBlock* checkpoint_bb = llvm::BasicBlock::Create(
-        ctx, std::string(label) + "_checkpoint", llvm_func);
     llvm::BasicBlock* load_bb = llvm::BasicBlock::Create(
         ctx, std::string(label) + "_load", llvm_func);
     llvm::BasicBlock* box_bb = llvm::BasicBlock::Create(ctx, box_name, llvm_func);
@@ -34722,24 +34806,10 @@ bool QoreIRToLLVM::emitFusedMapFoldLoop(const QoreIRInstruction* inst, llvm::Mod
     llvm::Type* elem_type = is_float ? double_type : i64_type;
     llvm::PHINode* idx_phi = builder->CreatePHI(i64_type, 2, "idx");
     llvm::PHINode* acc_phi = builder->CreatePHI(elem_type, 2, "acc");
-    llvm::PHINode* checkpoint_phi = builder->CreatePHI(i64_type, 2, "checkpoint_remaining");
-    llvm::Value* next_checkpoint = builder->CreateSub(checkpoint_phi, one);
-    builder->CreateCondBr(builder->CreateICmpEQ(next_checkpoint, zero), checkpoint_bb, load_bb);
-
-    builder->SetInsertPoint(checkpoint_bb);
-    auto check_cancel = module.getOrInsertFunction("qore_rt_check_cancel",
-            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-    llvm::Value* operation = builder->CreateGlobalString(
-        "fused map/foldl loop", "fused_fold_cancel_operation");
-    builder->CreateCall(check_cancel, {xsink_arg, operation});
-    emitExceptionCheck(module, llvm_func, inst);
-    llvm::BasicBlock* checkpoint_end = builder->GetInsertBlock();
+    // the AST interpreter's map and foldl do not check for cancellation (design/cooperative-cancellation.md)
     builder->CreateBr(load_bb);
 
     builder->SetInsertPoint(load_bb);
-    llvm::PHINode* load_checkpoint = builder->CreatePHI(i64_type, 2, "next_checkpoint");
-    load_checkpoint->addIncoming(next_checkpoint, loop_bb);
-    load_checkpoint->addIncoming(checkpoint_interval, checkpoint_end);
     llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_phi);
     llvm::Value* boxed = builder->CreateLoad(i64_type, entry);
 
@@ -34773,8 +34843,6 @@ bool QoreIRToLLVM::emitFusedMapFoldLoop(const QoreIRInstruction* inst, llvm::Mod
     idx_phi->addIncoming(next_idx, loop_end);
     acc_phi->addIncoming(first_mapped, init_end);
     acc_phi->addIncoming(next_acc, loop_end);
-    checkpoint_phi->addIncoming(checkpoint_interval, init_end);
-    checkpoint_phi->addIncoming(load_checkpoint, loop_end);
 
     builder->SetInsertPoint(box_bb);
     llvm::PHINode* final_acc = builder->CreatePHI(elem_type, 2,

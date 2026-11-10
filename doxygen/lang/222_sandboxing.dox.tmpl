@@ -245,6 +245,17 @@ authenticate();
     around direct native implementations. Foreign runtime I/O that does not use Qore's policy checks remains outside
     this mechanism; provenance is execution context, not data taint tracking.
 
+    @subsection sandbox_module_state Module State
+
+    The public variables of a module and the static members of its classes are shared by every Program that imports
+    the module.  The code of a sandboxed Program, and of a Program with @ref Qore::PO_NO_PROCESS_CONTROL set, can read
+    the public variables and static members of a trusted module but not change them, also through a reference or a
+    closure that it creates; a write raises \c MODULE-VARIABLE-READ-ONLY.  The rule is decided on the Program whose
+    code writes: a function of a trusted Program that sandboxed code calls writes as usual.  The rule protects the
+    variable or static member, not the objects that it refers to, which keep the access control of their classes;
+    hashes and lists are copy-on-write values.  A module that lets such code change a value exports a function or
+    method that sets it.  See @ref module_public_variables.
+
     @subsection sandbox_module_init Module Initialization
 
     In this section, code that is not trusted is code that a sandbox governs, and code whose parse options restrict a
@@ -763,9 +774,11 @@ try {
       large list, or a blocking call into a library that is not interruptible, is stopped when it returns, as with
       @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()".  A database query that a driver can cancel
       when the sandbox is interrupted is not cancelled by a timeout; the timeout is raised when the query returns.
-    - @ref Qore::defer_thread_cancel() "defer_thread_cancel()" defers a timeout like any other cancellation, so that
-      cleanup code can finish; do not give sandboxed code the \c THREAD_CONTROL functional domain
-      (@ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") if it must not be able to postpone its timeout.
+    - @ref Qore::defer_thread_cancel() "defer_thread_cancel()" in trusted code defers a timeout like any other
+      cancellation, so that cleanup code can finish; sandboxed code is never deferred, also when it has the
+      \c THREAD_CONTROL functional domain or when trusted code calls it in a cleanup section (see
+      @ref cancel_security).  The destructor of a trusted class, which completes on a cancelled thread, does not defer
+      a timeout or a memory limit; see @ref cancel_destructors.
     - If the resources to track a call's limits cannot be allocated, the call fails with \c SANDBOX-ERROR
       instead of running without them: at its next cancellation point, and, if it has a stack limit, at its next
       call.  The exception names the limits that cannot be enforced, and its \c arg hash has a key for each of them
@@ -911,7 +924,9 @@ sm.clearInterrupt();
     - <b>Standard I/O</b>: StdoutOutputStream::write(), StderrOutputStream::write()
     - <b>Database operations</b>: Datasource transaction lock acquisition
 
-    When interrupted, a \c PROGRAM-INTERRUPTED exception is raised.
+    When interrupted, a \c PROGRAM-INTERRUPTED exception is raised.  The destructors of the sandboxed program's
+    classes do not run while the interrupt is pending, and the destructors of trusted classes (builtin classes and
+    the classes of programs without a sandbox manager) complete before it is raised; see @ref cancel_destructors.
     For external process functions (system(), backquote(), and the backquote operator), a SandboxManager also
     starts the child in a new process group so that requestInterrupt() can terminate the entire process group.
     When the call is interrupted, every process in the group is sent \c SIGKILL before the call returns, including a

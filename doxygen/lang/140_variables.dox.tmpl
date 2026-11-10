@@ -188,6 +188,63 @@ list<int> l1(1);
 
     When defining a @ref user_modules "user module", the \b our keyword can be preceded by @ref mod_public "public", which means that the global variable will be available (imported) in the @ref Qore::Program "Program" object importing the module.  See @ref mod_public "public" for more information.
 
+    @subsection module_public_variables Restricted Code Cannot Change a Module's State
+    A module's public variable, and a static member of a class that a module declares, is one value that every
+    @ref Qore::Program "Program" importing the module shares.  Restricted code can read the public variables and
+    static members of a trusted module but cannot change them.  The rule is decided on the
+    @ref Qore::Program "Program" whose code writes, the importer; restricted code is the code of:
+    - a sandboxed @ref Qore::Program "Program": one with a @ref Qore::SandboxManager "SandboxManager";
+    - a @ref Qore::Program "Program" with @ref Qore::PO_NO_PROCESS_CONTROL set, which
+      @ref Qore::PO_NO_EXTERNAL_ACCESS and @ref Qore::PO_LOCKDOWN also set; a child @ref Qore::Program "Program"
+      inherits the option from the @ref Qore::Program "Program" that creates it.
+
+    The code of other @ref Qore::Program "Programs" that are not restricted, such as a function of the host that
+    sandboxed code calls, writes as usual: it decides what it lets its callers change.
+
+    Every form of write raises a \c MODULE-VARIABLE-READ-ONLY exception and leaves the value unchanged: assignment,
+    compound assignment, \c ++ and \c --, @ref push "push", @ref pop "pop", @ref shift "shift",
+    @ref unshift "unshift", @ref splice "splice", @ref extract "extract", @ref remove "remove", @ref delete "delete",
+    writes to an element or member reached through the variable or static member, writes through a
+    @ref lvalue_references "reference" or a closure created in restricted code, and the
+    \c setValue() methods of the @ref reflectionintro "reflection" API.  The rule is checked when the value is
+    written, so it also applies when the sandbox manager or the parse option is set after the code was parsed or the
+    module imported.
+
+    The rule protects the variable or static member itself, not the objects that it refers to: an object keeps the
+    access control of its class, and code that holds it, as the value read or through any other variable, can change
+    its members and call its methods.  Hashes and lists are values (copy-on-write): changing one that was read from a
+    module's variable changes only the copy.
+
+    A trusted module is one that is not a tenant's own module: a module from the module path, or one that trusted
+    code loaded.  The module's own code can still change its state, as can the code of library modules and importers
+    that are not restricted.  A function of the module can change the module's public variables.  A static member of
+    a class is changed by a method of the class, which runs in the module's @ref Qore::Program "Program"; a function
+    of a module currently runs in the @ref Qore::Program "Program" that calls it, with its restrictions, so a function
+    that sets a static member for restricted code calls a method of the class.  A module that lets restricted code
+    change a value exports a public function or method that sets it, and so decides what its callers may change:
+    @code{.py}
+public namespace MyModule {
+    # every importer can read it; restricted code cannot change it
+    public our int limit;
+
+    # the module checks what its callers set
+    public sub set_limit(int v) {
+        if (v < 0) {
+            throw "LIMIT-ERROR", sprintf("invalid limit %d", v);
+        }
+        limit = v;
+    }
+}
+    @endcode
+
+    Reading the value directly or through a reference is always allowed.  A reference to an element of such a value
+    reads the element without creating it, and a reference to such a value can be passed for a typed
+    @ref lvalue_references "reference" parameter when the value already has the parameter's type; a value that the
+    type rejects raises the usual type error, and a value that the parameter's type would convert raises
+    \c MODULE-VARIABLE-READ-ONLY, as the conversion would change it.
+
+    @since %Qore 3.0
+
     @section thread_local_variables Thread-Local Global Variables
 
     @subsection thread_local The "thread_local" Keyword
@@ -205,9 +262,30 @@ list<int> l1(1);
     @ref qore_namespaces "namespaces" cannot be initialized at the same time as the declaration, but instead have to be
     initialized elsewhere.
 
-    When defining a @ref user_modules "user module", the <tt><b>thread_local</b></tt> keyword can be preceded by
-    @ref mod_public "public", which means that the <tt><b>thread_local</b></tt> variable will be available (imported) in
-    @ref Qore::Program "Program" objects importing the module.  See @ref mod_public "public" for more information.
+    In a @ref Qore::Program "Program", the <tt><b>thread_local</b></tt> keyword can be preceded by
+    @ref mod_public "public", which means that the <tt><b>thread_local</b></tt> variable is passed to the directly
+    created child @ref Qore::Program "Program" objects of the Program; each thread still has its own value, which the
+    parent and child Programs share.
+
+    A @ref user_modules "user module" may not declare a <tt><b>public thread_local</b></tt> variable; doing so raises
+    a \c MODULE-PUBLIC-THREAD-LOCAL parse exception.  A module's public variable is one variable shared by every
+    @ref Qore::Program "Program" that imports the module, so any importer could set a value on a thread that any other
+    importer reads on the same thread.  Instead, keep the variable private to the module and export public functions
+    or methods that read and set it, so the module decides what its callers may see and change:
+    @code{.py}
+public namespace MyModule {
+    # private to the module: one value per thread
+    thread_local *int request_id;
+
+    public *int sub get_request_id() {
+        return request_id;
+    }
+
+    public sub set_request_id(int id) {
+        request_id = id;
+    }
+}
+    @endcode
 
     @note
     - <tt><b>thread_local</b></tt> global variables are always thread local, even if referenced in a

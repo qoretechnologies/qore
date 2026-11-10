@@ -312,6 +312,9 @@ var.setValue(val);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the global variable has been destroyed
     @throw RUNTIME-TYPE-ERROR value type is not compatible with the global variable's type
+    @throw MODULE-VARIABLE-READ-ONLY the variable is a trusted module's, and the calling code's
+    @ref Qore::Program "Program" is sandboxed or has @ref Qore::PO_NO_PROCESS_CONTROL set (see
+    @ref module_public_variables)
     @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program whose values the calling code may not read or write (see @ref reflection_caller_privilege)
 */
 nothing GlobalVar::setValue(auto val) {
@@ -327,7 +330,9 @@ nothing GlobalVar::setValue(auto val) {
     }
 
     // the global variable ptr must be valid
-    v->var->setValue(val, xsink);
+    // the module-state rule applies to the calling code's Program, not to the variable's Program that the write runs
+    // in (qore#5664)
+    v->var->setValue(val, caller.getProgram(), v->pgm, xsink);
 }
 
 //! Returns a global variable object corresponding to the name or namespace-justified path provided as an argument
