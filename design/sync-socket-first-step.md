@@ -254,9 +254,10 @@ though section 1 removes the round trip from the calls that need no wait.
 #### As implemented (phase 3)
 
 Measured on `design/benchmarks/5587/socket-wait-loop.qr`, a ping-pong between two threads over one connection in
-which every receive waits (two waiting calls per round trip), with `strace -f -k -e trace=futex` for the call sites:
-44 `futex` calls per round trip, 31 of them from the release of the controller's references on a callback worker
-(the dispatch, and the worker's wake and wait), 6.5 from the result `Queue`.
+which every receive waits (two waiting calls per round trip), with `strace -f -k -e trace=futex` for the call sites,
+on the branch with the first steps of section 1 (where the sends complete on the calling thread): 44 `futex` calls
+per round trip, 31 of them from the release of the controller's references on a callback worker (the dispatch, and
+the worker's wake and wait), 6.5 from the result `Queue`.
 
 - **The synchronous caller releases the controller's references.**  `exec()` gives the operation an
   `AsyncIoSyncRelease`; the references that the I/O thread drops for the operation (`PollInfo::cleanup()`, the
@@ -279,10 +280,12 @@ which every receive waits (two waiting calls per round trip), with `strace -f -k
   controller's lock to find that out.  A process-wide count of the loggers set (`qore_async_io_logger_count`) is checked
   first.
 
-Result: 9 `futex` calls per round trip instead of 44, and 288K user-space instructions instead of 325K; the time per
-round trip did not change (about 25 µs, Python about 7.5 µs on the same host): the worker's wakes were not on the
-critical path, which is two thread wakes per waiting call (the I/O thread by `epoll`, then the caller by the `Queue`)
-where a blocking `recv()` has one.  The rest of the instructions are spread thinly (allocation, hashing of string keys,
+Result, on the branch with the first steps: 9 `futex` calls per round trip instead of 44, and 288K user-space
+instructions instead of 325K; the time per round trip did not change (about 25 µs, Python about 7.5 µs on the same
+host): the worker's wakes were not on the critical path, which is two thread wakes per waiting call (the I/O thread
+by `epoll`, then the caller by the `Queue`) where a blocking `recv()` has one.  Without the first steps (every send
+and receive goes to the controller), 2026-11-10, release build: 18.4 `futex` calls, 444K user-space instructions and
+about 50 µs per round trip.  The rest of the instructions are spread thinly (allocation, hashing of string keys,
 building the operation object, the submission hash and the result hash).  Reaching Python's time needs the waiting
 call to wait on its own thread, which is a change of the architecture (the controller would hand the wait to the
 caller, with its cancellation, close and timeout handling) and is not part of this design.
