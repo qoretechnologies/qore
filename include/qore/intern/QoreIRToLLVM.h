@@ -958,6 +958,10 @@ private:
     //! \a target, or \a target if none is open
     llvm::BasicBlock* getImplicitContextRestoreEdge(llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst, llvm::BasicBlock* target);
+    //! Emits, at the insertion point, the restoration of the implicit arguments and elements open at \a inst,
+    //! innermost first, on a path where an exception leaves the function from \a inst (see
+    //! getImplicitContextRestoreEdge())
+    void emitImplicitContextRestore(llvm::Module& module, const QoreIRInstruction* inst);
 
     // Phase 2B — incoming edges feeding function_common_cleanup's phi.
     // Populated by createPerInvokeCleanupLP; consumed by
@@ -1415,6 +1419,15 @@ private:
     // release (last registered first) gives another order; otherwise \a target itself
     llvm::BasicBlock* getOrderedErrorReturnEdge(llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst, llvm::BasicBlock* target);
+
+    // Gives in \a temps the cleanup allocas of the temporaries that getOrderedErrorReturnEdge() releases for \a inst,
+    // in their order; returns false if the error return's own release gives their order, or with too many of them
+    bool getOrderedErrorReturnTemps(const QoreIRInstruction* inst, std::vector<llvm::Value*>& temps);
+
+    // Emits, at the insertion point, the release of \a temps (from getOrderedErrorReturnTemps()), in their order: a
+    // throw or a synthetic rethrow that leaves the function releases them so before the statement's exit cleanup,
+    // as an exception check does on its edge
+    void emitOrderedErrorReturnTemps(llvm::Module& module, const std::vector<llvm::Value*>& temps);
 
     // Gives the cleanup allocas of a statement's temporaries, registered since \a start, in the order of their release
     // when an exception leaves the statement (see qore_ir_order_exception_release()); returns true if it differs from

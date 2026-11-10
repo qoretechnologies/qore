@@ -3613,6 +3613,18 @@ llvm::BasicBlock* QoreIRToLLVM::getImplicitContextRestoreEdge(llvm::Module& modu
     auto saved_ip = builder->GetInsertPoint();
     llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "implicit_context_restore", llvm_func);
     builder->SetInsertPoint(edge);
+    emitImplicitContextRestore(module, inst);
+    builder->CreateBr(target);
+    builder->SetInsertPoint(saved_insert, saved_ip);
+    return edge;
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitImplicitContextRestore(llvm::Module& module, const QoreIRInstruction* inst) {
+    auto open_it = inst ? open_implicit_contexts.find(inst) : open_implicit_contexts.end();
+    if (open_it == open_implicit_contexts.end()) {
+        return;
+    }
     const std::vector<const QoreIRInstruction*>& pushes = open_it->second;
     for (size_t i = pushes.size(); i > 0; --i) {
         const QoreIRInstruction* push = pushes[i - 1];
@@ -3630,9 +3642,6 @@ llvm::BasicBlock* QoreIRToLLVM::getImplicitContextRestoreEdge(llvm::Module& modu
             builder->CreateCall(pop_fn, {val_it->second});
         }
     }
-    builder->CreateBr(target);
-    builder->SetInsertPoint(saved_insert, saved_ip);
-    return edge;
 }
 
 void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit) {
@@ -3748,8 +3757,35 @@ bool QoreIRToLLVM::orderExceptionTemps(size_t start, bool observable_only, std::
 
 llvm::BasicBlock* QoreIRToLLVM::getOrderedErrorReturnEdge(llvm::Module& module, llvm::Function* llvm_func,
         const QoreIRInstruction* inst, llvm::BasicBlock* target) {
-    if (!inst || !inst->temp_scope_id || temp_cleanup_marks.empty() || exception_release_groups.empty()) {
+    std::vector<llvm::Value*> temps;
+    if (!getOrderedErrorReturnTemps(inst, temps)) {
         return target;
+    }
+    llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
+    auto saved_ip = builder->GetInsertPoint();
+    llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
+    builder->SetInsertPoint(edge);
+    emitOrderedErrorReturnTemps(module, temps);
+    builder->CreateBr(target);
+    builder->SetInsertPoint(saved_insert, saved_ip);
+    return edge;
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitOrderedErrorReturnTemps(llvm::Module& module, const std::vector<llvm::Value*>& temps) {
+    auto helper = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    for (llvm::Value* alloca_ptr : temps) {
+        llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
+        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
+        builder->CreateCall(helper, {val, xsink_arg});
+    }
+}
+
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::getOrderedErrorReturnTemps(const QoreIRInstruction* inst, std::vector<llvm::Value*>& temps) {
+    if (!inst || !inst->temp_scope_id || temp_cleanup_marks.empty() || exception_release_groups.empty()) {
+        return false;
     }
     const TempCleanupMark* mark = nullptr;
     for (size_t i = temp_cleanup_marks.size(); i > 0; --i) {
@@ -3764,26 +3800,9 @@ llvm::BasicBlock* QoreIRToLLVM::getOrderedErrorReturnEdge(llvm::Module& module, 
     // (a generated literal of thousands of calls) keeps the error return's order rather than take compile time
     // quadratic in its size
     static constexpr size_t MaxOrderedErrorReturnTemps = 256;
-    std::vector<llvm::Value*> temps;
-    if (!mark || pending_ssa_cleanup.size() > mark->pending_ssa_count
-            || invoke_result_allocas.size() - mark->invoke_alloca_count > MaxOrderedErrorReturnTemps
-            || !orderExceptionTemps(mark->invoke_alloca_count, true, temps)) {
-        return target;
-    }
-    llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
-    auto saved_ip = builder->GetInsertPoint();
-    llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
-    builder->SetInsertPoint(edge);
-    auto helper = module.getOrInsertFunction("qore_rt_decref",
-            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-    for (llvm::Value* alloca_ptr : temps) {
-        llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
-        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
-        builder->CreateCall(helper, {val, xsink_arg});
-    }
-    builder->CreateBr(target);
-    builder->SetInsertPoint(saved_insert, saved_ip);
-    return edge;
+    return mark && pending_ssa_cleanup.size() <= mark->pending_ssa_count
+        && invoke_result_allocas.size() - mark->invoke_alloca_count <= MaxOrderedErrorReturnTemps
+        && orderExceptionTemps(mark->invoke_alloca_count, true, temps);
 }
 
 void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
@@ -14216,6 +14235,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_div_int",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
             llvm::Value* exc_result = builder->CreateCall(helper, {l_int, r_int, xsink_arg});
+            // a division by zero raises here, on the path that only a zero (or overflowing) divisor takes: to the
+            // instruction's handler in this frame or out of the function, before the code after it runs, as the AST
+            // interpreter raises it (see DivAssignInt); an exception left pending ran the code after it, and a
+            // functional operator's next() then took it for its own (qore#5670)
+            emitExceptionCheck(module, llvm_func, inst);
+            llvm::BasicBlock* div_zero_end_bb = builder->GetInsertBlock();
             builder->CreateBr(div_merge_bb);
 
             // Normal path: native division
@@ -14226,7 +14251,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Merge results
             builder->SetInsertPoint(div_merge_bb);
             llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "div_result");
-            phi->addIncoming(exc_result, div_zero_bb);
+            phi->addIncoming(exc_result, div_zero_end_bb);
             phi->addIncoming(div_result, div_ok_bb);
             values[inst->result.id] = phi;
             return true;
@@ -14258,6 +14283,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_mod_int",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
             llvm::Value* exc_result = builder->CreateCall(helper, {l_int, r_int, xsink_arg});
+            // as for DivInt
+            emitExceptionCheck(module, llvm_func, inst);
+            llvm::BasicBlock* mod_zero_end_bb = builder->GetInsertBlock();
             builder->CreateBr(mod_merge_bb);
 
             // Normal path: native modulo
@@ -14268,7 +14296,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Merge results
             builder->SetInsertPoint(mod_merge_bb);
             llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "mod_result");
-            phi->addIncoming(exc_result, mod_zero_bb);
+            phi->addIncoming(exc_result, mod_zero_end_bb);
             phi->addIncoming(mod_result, mod_ok_bb);
             values[inst->result.id] = phi;
             return true;
@@ -14324,6 +14352,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_div_float",
                     llvm::FunctionType::get(double_type, {double_type, double_type, ptr_type}, false));
             llvm::Value* exc_result = builder->CreateCall(helper, {l_float, r_float, xsink_arg});
+            // as for DivInt
+            emitExceptionCheck(module, llvm_func, inst);
+            llvm::BasicBlock* fdiv_zero_end_bb = builder->GetInsertBlock();
             builder->CreateBr(fdiv_merge_bb);
 
             // Normal path: native division
@@ -14334,7 +14365,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Merge results
             builder->SetInsertPoint(fdiv_merge_bb);
             llvm::PHINode* phi = builder->CreatePHI(double_type, 2, "fdiv_result");
-            phi->addIncoming(exc_result, fdiv_zero_bb);
+            phi->addIncoming(exc_result, fdiv_zero_end_bb);
             phi->addIncoming(div_result, fdiv_ok_bb);
             values[inst->result.id] = phi;
             return true;
@@ -19937,6 +19968,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
             // No exception target: execute on_block_exit, uninstantiate locals and return NOTHING
+            // the implicit arguments that the throw leaves are restored first (see getImplicitContextRestoreEdge()),
+            // and the statement's temporaries are released in the order of an exception check's exit (see
+            // getOrderedErrorReturnEdge())
+            emitImplicitContextRestore(module, inst);
+            {
+                std::vector<llvm::Value*> temps;
+                if (getOrderedErrorReturnTemps(inst, temps)) {
+                    emitOrderedErrorReturnTemps(module, temps);
+                }
+            }
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
             // the AST
             emitExitStatementCleanup(module, true, true);
@@ -19993,6 +20034,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
             // No outer handler: return from function; caller sees exception in xsink
+            // the implicit arguments that the exception leaves are restored first (see getImplicitContextRestoreEdge()),
+            // and the statement's temporaries are released as for a throw
+            emitImplicitContextRestore(module, inst);
+            {
+                std::vector<llvm::Value*> temps;
+                if (getOrderedErrorReturnTemps(inst, temps)) {
+                    emitOrderedErrorReturnTemps(module, temps);
+                }
+            }
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
             // the AST
             emitExitStatementCleanup(module, true, true);

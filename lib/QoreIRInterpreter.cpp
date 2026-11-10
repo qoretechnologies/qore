@@ -7770,8 +7770,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // restores the implicit arguments and elements open at the instruction that raised the exception leaving the
     // frame, innermost first, before the frame's values are released, as the AST interpreter's
     // SingleArgvContextHelper and ImplicitElementHelper restore them when the exception unwinds the operator: the
-    // argument list holds a reference to the element (qore#5670); the slot of a push holds the context to restore,
-    // and the frame's release of the slots releases the push's reference to the list.  The contexts open at each
+    // argument list holds a reference to the element (qore#5670); the slot of a push borrows the context to restore.
+    // The contexts open at each
     // instruction are known from the IR (QoreIRFunction::interpreter_open_implicit_contexts), so the normal path does
     // nothing for them
     auto restoreImplicitContexts = [&]() {
@@ -12621,11 +12621,11 @@ load_local_done:
             }
             case QoreIROpcode::PushImplicitArg: {
                 QoreValue val = getIRValue(values, inst->operands[0]);
-                // Save old context
+                // Save old context: the slot borrows it, as the thread's context does not change hands until the
+                // PopImplicitArg that restores it (or the frame's exit, see restoreImplicitContexts) runs, and only
+                // its owner releases it after that; taking a reference cost every element a reference, a cleanup
+                // entry and their release (qore#5670)
                 const QoreListNode* old_argv = thread_get_implicit_args();
-                if (old_argv) {
-                    const_cast<QoreListNode*>(old_argv)->ref();
-                }
                 // Create new argv with val as $1
                 QoreListNode* new_argv = nullptr;
                 if (!val.isNothing()) {
@@ -12634,10 +12634,7 @@ load_local_done:
                 }
                 thread_set_implicit_args(new_argv);
                 // Store old context as result for later restoration
-                setValueSlot(values, inst->result.id, QoreValue(const_cast<QoreListNode*>(old_argv)), xsink);
-                if (old_argv) {
-                    cleanup.push_back(inst->result.id);
-                }
+                setValueSlotDirect(values, inst->result.id, QoreValue(const_cast<QoreListNode*>(old_argv)));
                 ++ip;
                 break;
             }
@@ -12672,18 +12669,6 @@ load_local_done:
                 }
                 // Restore old context
                 thread_set_implicit_args(old_argv);
-                // the reference that the push took to the restored list is released now, as native code releases it
-                // (qore_rt_pop_implicit_arg()): kept to the end of the statement, it kept the list, and the element
-                // of an enclosing operator that the list holds, alive after the operator ended (qore#5670)
-                {
-                    uint32_t old_id = inst->operands[0].id;
-                    if (old_id < values.size() && hasCleanupEntry(cleanup, old_id)) {
-                        removeAllCleanupEntries(cleanup, old_id);
-                        QoreValue old_ref = values[old_id];
-                        values[old_id] = QoreValue();
-                        old_ref.discard(xsink);
-                    }
-                }
                 ++ip;
                 break;
             }
@@ -12999,10 +12984,12 @@ load_local_done:
                 // slot before qore_rt_iterator_next(); an exception that its destructor raises leaves the loop with
                 // the iterator still alive, which the loop's exception cleanup or the frame releases (qore#5670)
                 // (the slot keeps its place among the frame's temporaries, which an exception releases in order)
-                // (only a node has a reference to release, so a loop over scalars does nothing more here)
+                // (only a node has a reference to release, and the slot owns the element that it holds: the
+                // instructions that take it over or release it clear the slot)
                 {
                     uint32_t elem_id = iter_inst->result.id;
-                    if (elem_id < values.size() && values[elem_id].hasNode() && hasCleanupEntry(cleanup, elem_id)) {
+                    assert(elem_id < values.size());
+                    if (values[elem_id].hasNode()) {
                         QoreValue elem = values[elem_id];
                         values[elem_id] = QoreValue();
                         elem.discard(xsink);
@@ -13050,9 +13037,10 @@ load_local_done:
                     block = iter_inst->done_target;
                     ip = 0;
                 } else {
-                    // Store current value in result and branch to continue
-                    // Use setValueSlot since this executes in a loop
-                    setValueSlot(values, iter_inst->result.id, val.takeReferencedValue(), xsink);
+                    // Store current value in result and branch to continue; the previous element was released
+                    // above, so the slot holds no node
+                    assert(!values[iter_inst->result.id].hasNode());
+                    setValueSlotDirect(values, iter_inst->result.id, val.takeReferencedValue());
                     cleanup.push_back(iter_inst->result.id);
                     prev_block = block;
                     block = iter_inst->continue_target;
