@@ -550,6 +550,11 @@ public:
     //! the number of entries of the thread into Programs with module lifetime that took no thread count; see
     //! qore_module_uncounted_entry(); written by the thread, read by qore_stop_module_uncounted_entries()
     std::atomic<unsigned> module_uncounted{0};
+    //! non-zero while the thread runs work that the module cleanup handed over (a ThreadPool task that the cleanup
+    //! thread submitted, a background thread that it started, or such work of such work): the Programs of the modules,
+    //! which the cleanup closes to other threads, stay open to it; see qore_close_module_programs().  Only the thread
+    //! itself reads or writes it
+    unsigned module_cleanup_delegate = 0;
     int tid;
     //! the number of Programs whose data the thread deletes; see qore_reference_program_needs_entry()
     unsigned pgm_teardown_depth = 0;
@@ -1960,6 +1965,9 @@ public:
     std::vector<QoreObject*> closure_objs;
     //! the sandbox of the starting code, which governs the new thread as its outermost caller, or nullptr
     std::unique_ptr<QoreInheritedSandbox> sandbox;
+    //! true if the starting thread runs the module cleanup or work that it handed over; the new thread is then part
+    //! of the cleanup (see qore_module_cleanup_delegation())
+    bool module_cleanup_delegate = qore_module_cleanup_delegation();
     int tid;
     const QoreProgramLocation* loc;
     //! the identity of the thread for its Program's lifecycle events
@@ -4148,9 +4156,11 @@ std::atomic<bool> module_uncounted_active{true};
 std::atomic<int> module_programs_closed_tid{-1};
 
 //! returns true if the Programs of the modules are closed to the given thread; see qore_close_module_programs()
+/** They stay open to the thread that runs the module cleanup and to the threads that run the work it handed over
+*/
 bool qore_module_programs_closed(const ThreadData* td) {
     int tid = module_programs_closed_tid.load(std::memory_order_seq_cst);
-    return tid >= 0 && tid != td->tid;
+    return tid >= 0 && tid != td->tid && !td->module_cleanup_delegate;
 }
 
 //! enters a Program with module lifetime without its thread count, if such entries are still allowed
@@ -4190,6 +4200,32 @@ static QORE_INTERN_NOINLINE void qore_raise_module_programs_closed(ExceptionSink
 
 void qore_close_module_programs() {
     module_programs_closed_tid.store(q_gettid(), std::memory_order_seq_cst);
+}
+
+bool qore_module_cleanup_delegation() {
+    // the load pairs with the store of qore_close_module_programs(): the thread that runs the cleanup made it, and a
+    // thread running work that it handed over was started or given the work after it
+    if (module_programs_closed_tid.load(std::memory_order_seq_cst) < 0) {
+        return false;
+    }
+    ThreadData* td = thread_data.get();
+    return td && !qore_module_programs_closed(td);
+}
+
+QoreModuleCleanupDelegateHelper::QoreModuleCleanupDelegateHelper(bool delegate) {
+    if (delegate) {
+        td = thread_data.get();
+        assert(td);
+        ++td->module_cleanup_delegate;
+    }
+}
+
+void QoreModuleCleanupDelegateHelper::reset() {
+    if (td) {
+        assert(td->module_cleanup_delegate);
+        --td->module_cleanup_delegate;
+        td = nullptr;
+    }
 }
 
 void qore_stop_module_uncounted_entries() {
@@ -6639,6 +6675,9 @@ namespace {
             // taken from btp because btp is deleted before the thread's data
             std::unique_ptr<QoreInheritedSandbox> sandbox(std::move(btp->sandbox));
             QoreInheritedSandboxHelper sandbox_helper(sandbox ? &sandbox->ctx : nullptr);
+            // a thread that the module cleanup started can enter the Programs of the modules, which the cleanup
+            // closes to other threads, for its whole life, including the deletion of its data
+            QoreModuleCleanupDelegateHelper cleanup_delegate(btp->module_cleanup_delegate);
 
             ExceptionSink xsink;
 
@@ -6772,6 +6811,7 @@ namespace {
                 tclist.exec();
 
                 // the thread's data is deleted next; the inherited sandbox stops counting the thread here
+                cleanup_delegate.reset();
                 sandbox_helper.reset();
                 sandbox.reset();
 
