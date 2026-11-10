@@ -342,8 +342,16 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v24: a string value that is not in UTF-8 is serialized with its encoding (QoreAOTValueTag::VT_STRING_ENC), and a
 //!      string constant in an expression that is not in UTF-8 or that has a null byte is a CONST_VALUE and not a
 //!      CONST_STRING, whose text ends at the first null byte and which is rebuilt in the default encoding.
+//! v25: a recorded `%module-cmd` directive (MODULE_COMMANDS section) has the restricting parse options that were in
+//!      force at the directive after its command (two u64: the low and the high 64 bits), so that the command is
+//!      replayed with the restrictions that the interpreted program had when it issued it (QoreModuleCommandContext).
+//!      A v9-v24 directive has none: its command is replayed with the parse options that the program is declared
+//!      with, which are a superset.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 24;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 25;
+//! First format version whose recorded `%module-cmd` directives have the parse options in force at them (see v25
+//! above).
+constexpr uint16_t QORE_AOT_MODULE_CMD_OPTIONS_VERSION = 25;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -1793,10 +1801,17 @@ void serializeModulePathLists(QoreAOTBinaryWriter& writer,
 struct AOTModuleCommand {
     std::string module;
     std::string command;
+    //! true if the restricting parse options in force at the directive are recorded (v25 and later)
+    bool has_options = false;
+    //! the low 64 bits of the restricting parse options in force at the directive
+    int64_t options_lo = 0;
+    //! the high 64 bits of the restricting parse options in force at the directive
+    int64_t options_hi = 0;
 };
 
 //! Serialize `%module-cmd` directives into the MODULE_COMMANDS section.
-/** Wire format: `u32 count`, then `count × (module StringRef, command StringRef)`.
+/** Wire format: `u32 count`, then `count × (module StringRef, command StringRef, u64 options_lo, u64 options_hi)`
+    (the two options words are v25; before it an entry was the two string references only).
     `feature_flags` is ORed with `QORE_AOT_FEAT_MODULE_COMMANDS` when commands are emitted.
 */
 void serializeModuleCommands(QoreAOTBinaryWriter& writer,

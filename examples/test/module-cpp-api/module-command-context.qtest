@@ -68,6 +68,9 @@ class ModuleCommandContextTest inherits QUnit::Test {
             + "32 sandboxed, via module, legacy: RUNTIME-COMMAND-ERROR\n"
             + "33 restricted, via module:    ok | sandboxed=0\n"
             + "34 restricted, via module, code: ok\n"
+            + "35 module directive, trusted loader:      ok | origin=0 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "36 module directive, no-filesystem loader: ok | origin=0 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "37 module directive, sandboxed loader:    ok | origin=0 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
             + "";
 
         #! the replay program: the helper that reads the history, and the output line
@@ -195,6 +198,12 @@ class ModuleCommandContextTest inherits QUnit::Test {
             assertEq(ReplayRestricted, replay("replay-restricted", "%modern\n%no-filesystem\n"
                 "%module-cmd(cmdctxaware) record\n" + ReplayBody, opt),
                 sprintf("-O%s: replay of a program declared with %%no-filesystem", opt));
+            # the directive comes before the option: the replayed command has only what was in force at the directive,
+            # as when the program is interpreted; the "path" command is refused for code without the filesystem, so the
+            # program would not load if its command were replayed with the options that it is declared with
+            assertEq("loaded\n", replay("replay-first", "%modern\n%module-cmd(cmdctxaware) path\n%no-filesystem\n"
+                "printf(\"loaded\\n\");\n", opt),
+                sprintf("-O%s: replay of a program with the directive before %%no-filesystem", opt));
             # a module that does not declare support gets a replayed command that nothing restricts
             assertEq(ReplayTrusted, replay("replay-legacy", "%modern\n%module-cmd(cmdctxlegacy) record\n"
                 + replace(ReplayBody, "cmdctxaware", "cmdctxlegacy"), opt),
@@ -213,5 +222,14 @@ class ModuleCommandContextTest inherits QUnit::Test {
         assertFalse(is_file(exe), "qcc wrote no executable");
         assertTrue(out =~ /PARSE-COMMAND-ERROR/ && out =~ /cmd_caller_aware/,
             "the error names the command error and the missing declaration: " + out);
+
+        # the same directive after the option is refused by the module that declares support: the command is the
+        # restricted code's own
+        string path2 = write("refused-path.q", "%modern\n%no-filesystem\n%module-cmd(cmdctxaware) path\n");
+        string exe2 = tmp.path + "/refused-path";
+        string out2 = compile(path2, exe2, "0", \rc);
+        assertTrue(rc != 0, "qcc fails for the path command: " + out2);
+        assertFalse(is_file(exe2), "qcc wrote no executable for the path command");
+        assertTrue(out2 =~ /CMDCTX-DENIED/, "the error is the module's: " + out2);
     }
 }

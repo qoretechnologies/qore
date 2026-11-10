@@ -20539,6 +20539,8 @@ void serializeModuleCommands(QoreAOTBinaryWriter& writer,
     for (const AOTModuleCommand& cmd : commands) {
         writer.writeStringRef(cmd.module.c_str());
         writer.writeStringRef(cmd.command.c_str());
+        writer.writeU64(static_cast<uint64_t>(cmd.options_lo));
+        writer.writeU64(static_cast<uint64_t>(cmd.options_hi));
     }
     writer.endSection(sec_idx);
 }
@@ -20565,7 +20567,10 @@ bool readModuleCommands(const QoreAOTBinaryReader& reader,
     const uint8_t* ptr = sec_data;
     const uint8_t* end = sec_data + sec->size;
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
-    uint32_t max_entries = (sec->size - 4) / 8;
+    // a v25 entry has the restricting parse options in force at the directive after its two strings
+    const bool has_options = reader.getHeader().version >= QORE_AOT_MODULE_CMD_OPTIONS_VERSION;
+    const uint32_t entry_min_size = has_options ? 24 : 8;
+    uint32_t max_entries = (sec->size - 4) / entry_min_size;
     if (count > max_entries) {
         error = "module-command count " + std::to_string(count) + " exceeds section capacity";
         return false;
@@ -20578,7 +20583,17 @@ bool readModuleCommands(const QoreAOTBinaryReader& reader,
             error = "invalid module-command entry at index " + std::to_string(i);
             return false;
         }
-        commands.push_back(AOTModuleCommand{module, command});
+        AOTModuleCommand cmd{module, command};
+        if (has_options) {
+            if (end - ptr < 16) {
+                error = "truncated module-command entry at index " + std::to_string(i);
+                return false;
+            }
+            cmd.has_options = true;
+            cmd.options_lo = static_cast<int64_t>(QoreAOTBinaryReader::readU64(ptr));
+            cmd.options_hi = static_cast<int64_t>(QoreAOTBinaryReader::readU64(ptr));
+        }
+        commands.push_back(std::move(cmd));
     }
     if (ptr != end) {
         error = "module-command section has " + std::to_string(end - ptr) + " trailing byte(s)";

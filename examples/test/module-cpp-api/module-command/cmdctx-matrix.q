@@ -189,3 +189,27 @@ printf("23 legacy, parse, after:      %s | %s\n", parse_cmd("%module-cmd(cmdctxl
         (history("cmdctxaware") =~ x/(sandboxed=\d)/)[0]);
     printf("34 restricted, via module, code: %s\n", issue_via_module(r, "cmdctxaware", "code"));
 }
+
+#! loads a module whose source has a %module-cmd directive into a new Program, and returns "ok" or the exception code
+string sub load_in_program(string name, int po, bool sandboxed) {
+    try {
+        Program p(po | PO_NEW_STYLE);
+        if (sandboxed) {
+            SandboxManager sm();
+            p.setSandboxManager(sm);
+        }
+        p.parse("%requires " + name + "\n", "load");
+        return "ok";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+# the directive in the source of a module is library code: it is judged by the module's own Program (and the sandbox
+# that governs the loader as for any library module), not by the parse options of the code that loads the module
+printf("35 module directive, trusted loader:      %s | %s\n", load_in_program("CmdCtxDirectiveA", 0, False),
+    history("cmdctxaware"));
+printf("36 module directive, no-filesystem loader: %s | %s\n",
+    load_in_program("CmdCtxDirectiveB", PO_NO_FILESYSTEM, False), history("cmdctxaware"));
+printf("37 module directive, sandboxed loader:    %s | %s\n", load_in_program("CmdCtxDirectiveC", 0, True),
+    history("cmdctxaware"));

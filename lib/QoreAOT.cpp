@@ -2050,7 +2050,8 @@ static bool appendModulePathListSections(QoreAOTBinaryWriter& writer,
             return false;
         }
         const auto& cmd = pp->module_parse_commands[i];
-        commands.push_back(AOTModuleCommand{cmd.module, cmd.command});
+        commands.push_back(AOTModuleCommand{cmd.module, cmd.command, true, cmd.options.getLo(),
+            cmd.options.getHi()});
     }
     serializeModuleCommands(writer, commands, feature_flags);
     // the functional domains the Program's code uses: loading a module checks them against the restrictions of the

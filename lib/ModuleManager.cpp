@@ -6124,9 +6124,14 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
     }
 
     // the code that issues the command is the Program being parsed: it has the parse options in force at the
-    // directive and, as a parse can be run by restricted code, the restrictions of the code running the parse
-    // (issue #5699)
-    QoreParseOptions po = pgm->getParseOptions() | runtime_get_parse_options();
+    // directive and, as a parse can be run by restricted code, the restrictions of the code running the parse.  The
+    // source of a module that is being loaded is library code, judged as module code is everywhere in Qore: by the
+    // sandbox that governs it, not by parse options, which here are only what the module's Program inherited from the
+    // code that loads it; that code does not issue the commands that the module's source issues (issue #5699)
+    QoreParseOptions po;
+    if (!get_module_def_context()) {
+        po = pgm->getParseOptions() | runtime_get_parse_options();
+    }
     bool sandboxed = qore_caller_is_sandboxed();
     if (const QoreModuleCommandContext* outer = QoreModuleCommandContext::get()) {
         po |= outer->getParseOptions();
@@ -6135,7 +6140,8 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
     QoreModuleCommandContext ctx(QoreModuleCommandContext::MC_PARSE, pgm, pgm, po, sandboxed);
     QoreModuleCommandScope scope(ctx);
     mi->issueModuleCmd(loc, cmd, pgm->getParseExceptionSink());
-    qore_program_private::get(*pgm)->addModuleParseCommand(mname, cmd);
+    // a compiled program replays the command with the restrictions that were in force at the directive
+    qore_program_private::get(*pgm)->addModuleParseCommand(mname, cmd, ctx.getParseOptions());
 }
 
 #define QORE_MAX_MODULE_ERROR_DESC 200
