@@ -519,13 +519,16 @@ public:
     }
 
 protected:
+    // references
+    mutable QoreReferenceCounter refs;
     //! the identity of this private hashdecl instance for the lifetime of the process
-    /** Unlike the address, which a later hashdecl can reuse after this one is freed, no other private hashdecl,
+    /** Declared after refs so that the reference count stays at the start of the object, as ref() and deref()
+        are frequent; it must be declared before the types, as their constructors take it.
+
+        Unlike the address, which a later hashdecl can reuse after this one is freed, no other private hashdecl,
         class or enum ever has this serial number (see qore_get_type_identity_serial()).
     */
     const uint64_t instance_serial = qore_get_next_class_instance_serial();
-    // references
-    mutable QoreReferenceCounter refs;
     const QoreProgramLocation* loc;
     std::string name;
     std::string path;
@@ -586,19 +589,23 @@ protected:
         }
 
         //! compares a key with live type arguments as the key made from them would compare: <0, 0 or >0
+        /** Every key of a generic hashdecl's cache and every lookup has one type argument per type parameter
+            (getParameterizedHashDecl() checks the number), so the sizes are not compared.
+        */
         DLLLOCAL static int compare(const parameterized_hashdecl_key_t& a, const std::vector<const QoreTypeInfo*>& b) {
-            size_t n = a.size() < b.size() ? a.size() : b.size();
-            for (size_t i = 0; i < n; ++i) {
-                const QoreTypeInfo* bt = b[i];
-                if (a[i].first != bt) {
-                    return std::less<const QoreTypeInfo*>()(a[i].first, bt) ? -1 : 1;
+            assert(a.size() == b.size());
+            const std::pair<const QoreTypeInfo*, uint64_t>* ai = a.data();
+            for (const QoreTypeInfo* bt : b) {
+                if (ai->first != bt) {
+                    return std::less<const QoreTypeInfo*>()(ai->first, bt) ? -1 : 1;
                 }
                 uint64_t bs = qore_get_type_identity_serial(bt);
-                if (a[i].second != bs) {
-                    return a[i].second < bs ? -1 : 1;
+                if (ai->second != bs) {
+                    return ai->second < bs ? -1 : 1;
                 }
+                ++ai;
             }
-            return a.size() == b.size() ? 0 : (a.size() < b.size() ? -1 : 1);
+            return 0;
         }
     };
     mutable std::mutex parameterized_hashdecl_cache_lock;
