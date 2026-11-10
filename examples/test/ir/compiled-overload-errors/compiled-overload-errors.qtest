@@ -32,7 +32,7 @@
 class CompiledOverloadErrorsTest inherits QUnit::Test {
     public {
         #! the scripts
-        const Scripts = ("conversions", "call-kinds", "reresolve", "unassigned", "private-static");
+        const Scripts = ("conversions", "call-kinds", "reresolve", "unassigned", "private-static", "builtins", "assigned", "named");
     }
 
     private {
@@ -54,7 +54,33 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
             addTestCase(script + ": AOT executable -O0", sub () { aotTest(script, "-O0"); });
             addTestCase(script + ": AOT executable -O3", sub () { aotTest(script, "-O3"); });
         }
+        addTestCase("named call binding conflict", \namedBindingConflictTest());
         set_return_value(main());
+    }
+
+    #! a named call whose variant can be resolved at run time to a variant with other parameter names at the
+    #! positions of its arguments is a parse error; the same call with positional arguments is not
+    namedBindingConflictTest() {
+        string decl = "%modern\n"
+            "class C { public { int mi; } }\n"
+            "string sub nf5(int a, string b) { return \"nf5(int a, string b)\"; }\n"
+            "string sub nf5(*int x, string y) { return \"nf5(*int x, string y)\"; }\n";
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("NAMED-CALL-NOT-SUPPORTED", "nf5\\(\\*int x, string y\\)", \p.parse(),
+                (decl + "string sub t() { C c(); return nf5(a: c.mi, b: \"s\"); }\n", "named-conflict"));
+        }
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse(decl + "string sub t() { C c(); return nf5(c.mi, \"s\"); }\n", "positional");
+            assertEq("nf5(*int x, string y)", p.callFunction("t"));
+        }
+        {
+            # an argument that always has a value is bound at parse time
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse(decl + "string sub t() { return nf5(a: 1, b: \"s\"); }\n", "named-literal");
+            assertEq("nf5(int a, string b)", p.callFunction("t"));
+        }
     }
 
     #! returns the output of the AST interpreter for the script

@@ -41,6 +41,7 @@ class ExceptionSink;
 struct QoreProgramLocation;
 class QoreIRFunction;
 class AbstractStatement;
+class FunctionEntry;
 class QoreIRBackgroundInstruction;
 struct QoreAOTContext;
 class QoreIRLValuePathInstruction;
@@ -2142,6 +2143,22 @@ static inline bool qore_rt_builtin_conversion_accepts(int kind, qore_type_t t) {
     @return true with the result in \a rv, false if the builtin raised an exception
 */
 DLLLOCAL bool qore_rt_builtin_conversion_call(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink);
+
+//! Calls the single-argument builtin function with the given qualified name (ex: \c "Qore::length") with a value
+/** The builtin resolves its variant with the value, as the AST interpreter does, so a value that no variant accepts
+    raises the error of the AST interpreter (RUNTIME-OVERLOAD-ERROR); the fast paths of the builtins in the compiled
+    modes call it for the values that they do not handle themselves
+
+    @return true with the result in \a rv, false if the call raised an exception
+*/
+DLLLOCAL bool qore_rt_builtin_function_call(const char* qualified_name, QoreValue val, QoreValue& rv,
+        ExceptionSink* xsink);
+
+//! Returns true if the function entry is a builtin function of the Qore namespace and has no user variants
+/** The compiled modes take the fast path of a builtin (ex: length()) only for a call that this function is called by;
+    a user or module function with the same name is called normally
+*/
+DLLLOCAL bool qore_rt_is_qore_builtin_function(const FunctionEntry* fe);
 
 extern "C" {
 DLLEXPORT uint64_t qore_rt_to_string_checked(uint64_t val_bits, ExceptionSink* xsink);

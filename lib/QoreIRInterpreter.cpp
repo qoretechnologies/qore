@@ -16500,11 +16500,18 @@ load_local_done:
                 QoreValue res;
                 bool called_external = false;  // Track if we called external code
                 if (direct_inst->pseudo) {
-                    const auto* synthetic_global_call =
-                        direct_inst->fallback_method_name
+                    // a type check, not a dynamic_cast, which compares type names on every pseudo-method call: only
+                    // FunctionCallNode (NT_FUNCTION_CALL) and ProgramFunctionCallNode (NT_PROGRAM_FUNC_CALL) have
+                    // these types
+                    const AbstractQoreNode* synthetic_node = direct_inst->fallback_method_name
                             && direct_inst->expr.hasNode()
-                        ? dynamic_cast<const FunctionCallNode*>(
-                            direct_inst->expr.getInternalNode()) : nullptr;
+                        ? direct_inst->expr.getInternalNode() : nullptr;
+                    const auto* synthetic_global_call = synthetic_node
+                            && (synthetic_node->getType() == NT_FUNCTION_CALL
+                                || synthetic_node->getType() == NT_PROGRAM_FUNC_CALL)
+                        ? static_cast<const FunctionCallNode*>(synthetic_node) : nullptr;
+                    assert(synthetic_global_call == (synthetic_node
+                        ? dynamic_cast<const FunctionCallNode*>(synthetic_node) : nullptr));
                     // Fast-path optimizations for common pseudo-methods
                     const char* method_name = direct_inst->method
                         ? direct_inst->method->getName()

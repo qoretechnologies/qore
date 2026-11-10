@@ -1,0 +1,18 @@
+literal: f(int)
+call: f(int)
+conditional: f(int)
+param: f(int)
+removed param: f(*string) null
+loop 0: f(int)
+loop 1: f(*string) null
+reference-cleared: f(*string) null
+reference-cleared store: RUNTIME-TYPE-ERROR
+reference loop 0: f(int)
+reference loop 1: f(*string) null
+closure-removed: f(*string) null
+branch True: f(int)
+branch False: f(*string) null
+base ctor: B(int)
+unassigned member: f(*string) null
+assigned member: f(int)
+removed member: f(*string) null

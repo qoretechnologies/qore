@@ -1046,6 +1046,12 @@ static const char* qore_llvm_get_single_arg_fast_builtin_helper(
     if (!name) {
         return nullptr;
     }
+    // the helpers return what the Qore builtin returns: they handle the values that its variants take without
+    // conversion and call the builtin with any other value, so its variant resolution, soft-type conversions and
+    // errors are those of the AST interpreter; a user or module function with the same name is called normally
+    if (!qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
+        return nullptr;
+    }
     if (!strcmp(name, "length")) {
         return "qore_fast_length";
     }
@@ -14867,36 +14873,39 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction(helper_name, ft);
             auto helper_throwing = module.getOrInsertFunction(throwing_name, ft);
             if (inst->opcode == QoreIROpcode::ToStringChecked) {
-                // inline fast path: an int is converted directly; any other value goes to the checked helper (a short
-                // string is converted by the helper too, as the pseudo-methods called on the result take a string node)
-                auto* int_bb = llvm::BasicBlock::Create(ctx, "checked_str_int", llvm_func);
-                auto* slow_bb = llvm::BasicBlock::Create(ctx, "checked_str_slow", llvm_func);
-                auto* merge_bb = llvm::BasicBlock::Create(ctx, "checked_str_merge", llvm_func);
-                llvm::Value* tag16 = builder->CreateLShr(val, llvm::ConstantInt::get(i64_type, 48));
-                llvm::Value* is_int48 = builder->CreateICmpEQ(tag16, llvm::ConstantInt::get(i64_type, 0xFFF9));
-                builder->CreateCondBr(is_int48, int_bb, slow_bb);
-
-                builder->SetInsertPoint(int_bb);
-                llvm::Value* payload = builder->CreateAnd(val, llvm::ConstantInt::get(i64_type, PAYLOAD_MASK));
-                llvm::Value* shifted = builder->CreateShl(payload, llvm::ConstantInt::get(i64_type, 16));
-                llvm::Value* int_value = builder->CreateAShr(shifted, llvm::ConstantInt::get(i64_type, 16));
-                auto int_to_string = module.getOrInsertFunction("qore_rt_int_to_string",
-                    llvm::FunctionType::get(i64_type, {i64_type}, false));
-                llvm::Value* int_result = builder->CreateCall(int_to_string, {int_value});
-                llvm::BasicBlock* int_end = builder->GetInsertBlock();
-                builder->CreateBr(merge_bb);
-
-                builder->SetInsertPoint(slow_bb);
-                llvm::Value* slow_result = emitMaybeInvoke(helper, helper_throwing, {val, xsink_arg}, module,
-                    llvm_func, inst);
-                emitExceptionCheck(module, llvm_func, inst);
-                llvm::BasicBlock* slow_end = builder->GetInsertBlock();
-                builder->CreateBr(merge_bb);
-
-                builder->SetInsertPoint(merge_bb);
-                auto* result = builder->CreatePHI(i64_type, 2);
-                result->addIncoming(int_result, int_end);
-                result->addIncoming(slow_result, slow_end);
+                // the checked helper converts every boxed value, an int too: no inline branch, so that a loop that
+                // converts keeps the shape of the unchecked conversion (a single call) and LLVM can still unswitch it
+                // on its loop-invariant conditions (a reference argument, for example); an inline int branch made the
+                // loop too large for that, and a release of the unused reference read ran in every iteration
+                llvm::Value* result = emitMaybeInvoke(helper, helper_throwing, {val, xsink_arg}, module, llvm_func,
+                    inst);
+                // the helper returns a string node, or no value (VAL_NOTHING) only when it raised an exception: the
+                // exception is checked on that path only, which keeps the loop small
+                {
+                    auto* raised_bb = llvm::BasicBlock::Create(ctx, "checked_str_raised", llvm_func);
+                    auto* ok_bb = llvm::BasicBlock::Create(ctx, "checked_str_ok", llvm_func);
+                    builder->CreateCondBr(builder->CreateICmpEQ(result,
+                        llvm::ConstantInt::get(i64_type, VAL_NOTHING)), raised_bb, ok_bb,
+                        llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
+                    builder->SetInsertPoint(raised_bb);
+                    // the path leaves the loop that it is in, so that LLVM still unswitches the loop on its
+                    // loop-invariant conditions: the helper makes sure that an exception is raised, and the
+                    // exception check then always branches to the error target
+                    bool check_branches = !(deferred_exception_checking && !inst->exception_target)
+                        && !skip_next_exception_check;
+                    if (check_branches) {
+                        auto ensure_fn = module.getOrInsertFunction("qore_rt_ensure_exception",
+                            llvm::FunctionType::get(void_type, {ptr_type}, false));
+                        builder->CreateCall(ensure_fn, {xsink_arg});
+                    }
+                    emitExceptionCheck(module, llvm_func, inst);
+                    if (check_branches) {
+                        builder->CreateUnreachable();
+                    } else {
+                        builder->CreateBr(ok_bb);
+                    }
+                    builder->SetInsertPoint(ok_bb);
+                }
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(result, inst->result.id, llvm_func);

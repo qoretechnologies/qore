@@ -709,8 +709,6 @@ extern "C" DLLEXPORT uint64_t qore_fast_now_ms(ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_now(ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_time(ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink* xsink);
-extern "C" DLLEXPORT uint64_t qore_fast_tolower(uint64_t arg_bits, ExceptionSink* xsink);
-extern "C" DLLEXPORT uint64_t qore_fast_toupper(uint64_t arg_bits, ExceptionSink* xsink);
 // Phase 5.2c: Pseudo-method fast-calls (read-only, non-mutating)
 extern "C" DLLEXPORT uint64_t qore_fast_any_size(uint64_t arg_bits, ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_hash_keys(uint64_t arg_bits, ExceptionSink* xsink);
@@ -718,9 +716,6 @@ extern "C" DLLEXPORT uint64_t qore_fast_hash_values(uint64_t arg_bits, Exception
 // Phase 5.3: Additional fast-path optimizations
 extern "C" DLLEXPORT uint64_t qore_fast_trim(uint64_t arg_bits, ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_abs(uint64_t arg_bits, ExceptionSink* xsink);
-extern "C" DLLEXPORT uint64_t qore_fast_first(uint64_t arg_bits, ExceptionSink* xsink);
-extern "C" DLLEXPORT uint64_t qore_fast_last(uint64_t arg_bits, ExceptionSink* xsink);
-extern "C" DLLEXPORT uint64_t qore_fast_hash_exists(uint64_t hash_bits, uint64_t key_bits, ExceptionSink* xsink);
 static size_t qore_short_string_utf8_length(QoreValue v);
 
 // Fast string comparison helper matching QoreString::compare() semantics
@@ -5011,11 +5006,18 @@ __attribute__((noinline, cold)) bool qore_rt_builtin_conversion_call(int kind, Q
         ExceptionSink* xsink) {
     static const char* names[] = {"Qore::string", "Qore::int", "Qore::float"};
     assert(kind >= 0 && kind <= QORE_RT_BUILTIN_CONVERSION_FLOAT);
+    return qore_rt_builtin_function_call(names[kind], val, rv, xsink);
+}
+
+__attribute__((noinline, cold)) bool qore_rt_builtin_function_call(const char* qualified_name, QoreValue val,
+        QoreValue& rv, ExceptionSink* xsink) {
+    assert(!strncmp(qualified_name, "Qore::", 6));
     QoreProgram* pgm = getProgram();
-    const QoreFunction* func = pgm ? reinterpret_cast<const QoreFunction*>(pgm->findFunction(names[kind])) : nullptr;
+    const QoreFunction* func = pgm ? reinterpret_cast<const QoreFunction*>(pgm->findFunction(qualified_name))
+        : nullptr;
     if (!func) {
         xsink->raiseException("RUNTIME-OVERLOAD-ERROR", "no variant matching '%s(%s)' can be found",
-            names[kind] + 6, val.getTypeName());
+            qualified_name + 6, val.getTypeName());
         return false;
     }
     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
@@ -5178,6 +5180,17 @@ bool qore_rt_builtin_conversion_checked(int kind, QoreValue val, QoreValue& rv, 
             rv = f;
             return true;
         }
+    }
+}
+
+//! Makes sure that an exception is raised, for a path of generated code that is taken only after one was raised
+/** The checked string conversion returns no value only when it raised an exception; the generated code then branches
+    to its error target unconditionally (see the ToStringChecked lowering in QoreIRToLLVM.cpp)
+*/
+extern "C" DLLEXPORT __attribute__((cold)) void qore_rt_ensure_exception(ExceptionSink* xsink) {
+    if (!*xsink) {
+        xsink->raiseException("JIT-ERROR", "internal error: a checked string conversion returned no value without "
+            "raising an exception");
     }
 }
 
@@ -9958,9 +9971,10 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
     }
 
     // Phase 5: Fast-call detection for builtins
-    // Skip QoreListNode allocation for builtins with fast-call variants
+    // Skip QoreListNode allocation for builtins with fast-call variants; only for a call of the Qore builtin, never of
+    // a user or module function with the same name, and each fast path returns what the builtin returns
     if (auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
-        const char* fname = call->getName();
+        const char* fname = qore_rt_is_qore_builtin_function(call->getFunctionEntry()) ? call->getName() : nullptr;
         if (fname) {
             // Zero-argument fast-call functions (highest priority - no arg unpacking needed)
             if (nargs == 0) {
@@ -9990,16 +10004,6 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
                     return qore_fast_trim(args[0], xsink);
                 } else if (!strcmp(fname, "abs")) {
                     return qore_fast_abs(args[0], xsink);
-                } else if (!strcmp(fname, "first")) {
-                    return qore_fast_first(args[0], xsink);
-                } else if (!strcmp(fname, "last")) {
-                    return qore_fast_last(args[0], xsink);
-                }
-            }
-            // Two-argument fast-call functions
-            else if (nargs == 2) {
-                if (!strcmp(fname, "exists")) {
-                    return qore_fast_hash_exists(args[0], args[1], xsink);
                 }
             }
         }
@@ -10104,41 +10108,42 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args(uint64_t expr_bits,
 
 // --- Phase 5: Fast-call builtin variants (skip QoreListNode allocation) ---
 
+bool qore_rt_is_qore_builtin_function(const FunctionEntry* fe) {
+    if (!fe || !fe->hasBuiltin() || fe->getFunction()->hasUser()) {
+        return false;
+    }
+    const qore_ns_private* ns = fe->getNamespace();
+    return ns && ns->parent && ns->parent->root && ns->name == "Qore";
+}
+
+//! Returns the result of a single-argument builtin function called with a value that its fast path does not handle
+static __attribute__((noinline, cold)) uint64_t qore_fast_builtin_call(const char* qualified_name, QoreValue arg,
+        ExceptionSink* xsink) {
+    QoreValue rv;
+    if (!qore_rt_builtin_function_call(qualified_name, arg, rv, xsink)) {
+        return toBits(QoreValue());
+    }
+    return toBits(rv);
+}
+
+// The fast paths of the single-argument builtins below handle only the values that the builtin's variants take
+// without conversion and return what the builtin returns for them; any other value is passed to the builtin itself,
+// which converts it as a soft type or raises the error of the AST interpreter
+
+//! The fast path of strlen(): a string, or no value
 extern "C" DLLEXPORT uint64_t qore_fast_strlen(uint64_t arg_bits, ExceptionSink* xsink) {
     QoreValue arg = fromBits(arg_bits);
-
     if (arg.isShortString()) {
         return toBits(static_cast<int64_t>(arg.shortStringLen()));
     }
-
-    // Handle null/nothing
-    if (!arg.hasNode()) {
-        return toBits(0);
+    if (arg.hasNode() && arg.getInternalNode()->getType() == NT_STRING) {
+        return toBits(static_cast<int64_t>(static_cast<const QoreStringNode*>(arg.getInternalNode())->strlen()));
     }
-
-    // Get string value (softstring auto-converts to string)
-    const QoreStringNode* str = nullptr;
-    if (auto* s = dynamic_cast<const QoreStringNode*>(arg.getInternalNode())) {
-        str = s;
-    } else {
-        // For non-string types, try to convert via string conversion
-        // This matches the behavior of the QPP strlen(softstring) function
-        QoreString temp;
-        int err = 0;
-        arg.getInternalNode()->getAsString(temp, -1, xsink);
-        if (*xsink) {
-            return toBits(QoreValue());
-        }
-        // For non-string-like values, return 0 (matches NOOP variant behavior)
-        return toBits(0);
+    if (arg.isNothing()) {
+        return toBits(static_cast<int64_t>(0));
     }
-
-    // Return string length as a 64-bit integer
-    int64_t len = static_cast<int64_t>(str->strlen());
-    return toBits(len);
+    return qore_fast_builtin_call("Qore::strlen", arg, xsink);
 }
-
-// --- Phase 5.2a: Zero-argument fast-call functions (highest impact) ---
 
 extern "C" DLLEXPORT uint64_t qore_fast_now_us(ExceptionSink* xsink) {
     // Returns current date/time with microsecond precision
@@ -10170,105 +10175,25 @@ extern "C" DLLEXPORT uint64_t qore_fast_time(ExceptionSink* xsink) {
 
 // --- Phase 5.2b: Single-argument string functions ---
 
+//! The fast path of length(): a string, a binary, or no value
 extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink* xsink) {
-    // Returns length of string or binary data
-    // Equivalent to: int length(softstring str) { return str->length(); }
     QoreValue arg = fromBits(arg_bits);
-
     if (arg.isShortString()) {
         return toBits(static_cast<int64_t>(qore_short_string_utf8_length(arg)));
     }
-
-    // Handle null/nothing
-    if (!arg.hasNode()) {
-        return toBits(0);
+    if (arg.hasNode()) {
+        const AbstractQoreNode* node = arg.getInternalNode();
+        if (node->getType() == NT_STRING) {
+            return toBits(static_cast<int64_t>(static_cast<const QoreStringNode*>(node)->length()));
+        }
+        if (node->getType() == NT_BINARY) {
+            return toBits(static_cast<int64_t>(static_cast<const BinaryNode*>(node)->size()));
+        }
+    } else if (arg.isNothing()) {
+        return toBits(static_cast<int64_t>(0));
     }
-
-    const AbstractQoreNode* node = arg.getInternalNode();
-
-    // Handle string
-    if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
-        return toBits(static_cast<int64_t>(str->length()));
-    }
-
-    // Handle binary
-    if (auto* bin = dynamic_cast<const BinaryNode*>(node)) {
-        return toBits(static_cast<int64_t>(bin->size()));
-    }
-
-    // For other types, try string conversion length
-    QoreString temp;
-    int err = 0;
-    node->getAsString(temp, -1, xsink);
-    if (*xsink) {
-        return toBits(QoreValue());
-    }
-    return toBits(static_cast<int64_t>(temp.length()));
+    return qore_fast_builtin_call("Qore::length", arg, xsink);
 }
-
-extern "C" DLLEXPORT uint64_t qore_fast_tolower(uint64_t arg_bits, ExceptionSink* xsink) {
-    // Returns lowercase version of string
-    // Equivalent to: softstring tolower(softstring str) { return str->tolower(); }
-    QoreValue arg = fromBits(arg_bits);
-
-    // Handle null/nothing
-    if (!arg.hasNode()) {
-        return toBits(QoreValue());
-    }
-
-    const AbstractQoreNode* node = arg.getInternalNode();
-
-    // Handle string directly
-    if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
-        QoreStringNode* result = str->copy();
-        result->tolwr();
-        return toBits(result);
-    }
-
-    // For non-string types, convert to string first
-    QoreStringNode* temp = new QoreStringNode;
-    int err = 0;
-    node->getAsString(*temp, -1, xsink);
-    if (*xsink) {
-        temp->deref(xsink);
-        return toBits(QoreValue());
-    }
-    temp->tolwr();
-    return toBits(temp);
-}
-
-extern "C" DLLEXPORT uint64_t qore_fast_toupper(uint64_t arg_bits, ExceptionSink* xsink) {
-    // Returns uppercase version of string
-    // Equivalent to: softstring toupper(softstring str) { return str->toupper(); }
-    QoreValue arg = fromBits(arg_bits);
-
-    // Handle null/nothing
-    if (!arg.hasNode()) {
-        return toBits(QoreValue());
-    }
-
-    const AbstractQoreNode* node = arg.getInternalNode();
-
-    // Handle string directly
-    if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
-        QoreStringNode* result = str->copy();
-        result->toupr();
-        return toBits(result);
-    }
-
-    // For non-string types, convert to string first
-    QoreStringNode* temp = new QoreStringNode;
-    int err = 0;
-    node->getAsString(*temp, -1, xsink);
-    if (*xsink) {
-        temp->deref(xsink);
-        return toBits(QoreValue());
-    }
-    temp->toupr();
-    return toBits(temp);
-}
-
-// --- Phase 5.2c: Pseudo-method fast-calls ---
 
 extern "C" DLLEXPORT uint64_t qore_fast_any_size(uint64_t arg_bits, ExceptionSink* xsink) {
     // Returns size of any collection (hash, list) or length of string
@@ -10365,147 +10290,32 @@ extern "C" DLLEXPORT uint64_t qore_fast_hash_values(uint64_t arg_bits, Exception
 
 // --- Phase 5.3: Additional fast-path optimizations ---
 
+//! The fast path of trim() with one argument: a string node
 extern "C" DLLEXPORT uint64_t qore_fast_trim(uint64_t arg_bits, ExceptionSink* xsink) {
-    // Returns trimmed version of string (whitespace removed from both ends)
-    // Equivalent to: softstring trim(softstring str) { return str->trim(); }
     QoreValue arg = fromBits(arg_bits);
-
-    // Handle null/nothing
-    if (!arg.hasNode()) {
-        return toBits(QoreValue());
-    }
-
-    const AbstractQoreNode* node = arg.getInternalNode();
-
-    // Handle string directly
-    if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
-        QoreStringNode* result = str->copy();
+    if (arg.hasNode() && arg.getInternalNode()->getType() == NT_STRING) {
+        QoreStringNode* result = static_cast<const QoreStringNode*>(arg.getInternalNode())->copy();
         result->trim();
         return toBits(result);
     }
-
-    // For non-string types, convert to string first
-    QoreStringNode* temp = new QoreStringNode;
-    int err = 0;
-    node->getAsString(*temp, -1, xsink);
-    if (*xsink) {
-        temp->deref(xsink);
-        return toBits(QoreValue());
-    }
-    temp->trim();
-    return toBits(temp);
+    return qore_fast_builtin_call("Qore::trim", arg, xsink);
 }
 
+//! The fast path of abs(): an int, a float or a number
 extern "C" DLLEXPORT uint64_t qore_fast_abs(uint64_t arg_bits, ExceptionSink* xsink) {
-    // Returns absolute value of int or float
-    // Equivalent to: number abs(number n) { return n < 0 ? -n : n; }
     QoreValue arg = fromBits(arg_bits);
-
-    // Handle integers
-    if (arg.getType() == QV_Int) {
+    if (arg.getType() == NT_INT) {
         int64_t val = arg.getAsBigInt();
         return toBits(val < 0 ? -val : val);
     }
-
-    // Handle floats
-    if (arg.getType() == QV_Float) {
-        double val = arg.getAsFloat();
-        return toBits(val < 0.0 ? -val : val);
+    if (arg.getType() == NT_FLOAT) {
+        return toBits(fabs(arg.getAsFloat()));
     }
-
-    // Handle null/nothing
-    if (!arg.hasNode()) {
-        return toBits(QoreValue());
+    if (arg.hasNode() && arg.getInternalNode()->getType() == NT_NUMBER) {
+        return toBits(qore_number_private::doUnary(*static_cast<const QoreNumberNode*>(arg.getInternalNode()),
+            mpfr_abs));
     }
-
-    const AbstractQoreNode* node = arg.getInternalNode();
-
-    // Handle number nodes
-    if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
-        return toBits(qore_number_private::doUnary(*num, mpfr_abs));
-    }
-
-    // Fallback for other numeric types: try conversion to int then float
-    // This matches the behavior of the abs() builtin
-    return toBits(QoreValue());
-}
-
-extern "C" DLLEXPORT uint64_t qore_fast_first(uint64_t arg_bits, ExceptionSink* xsink) {
-    // Returns first element of list
-    // Equivalent to: any first(list<any> l) { return l.size() ? l[0] : nothing; }
-    QoreValue arg = fromBits(arg_bits);
-
-    // Handle null/nothing
-    if (!arg.hasNode()) {
-        return toBits(QoreValue());
-    }
-
-    const AbstractQoreNode* node = arg.getInternalNode();
-
-    // Handle list
-    if (auto* list = dynamic_cast<const QoreListNode*>(node)) {
-        if (list->size() > 0) {
-            QoreValue result = list->retrieveEntry(0);
-            if (result.needsRef()) {
-                result.refSelf();
-            }
-            return toBits(result);
-        }
-    }
-
-    return toBits(QoreValue());
-}
-
-extern "C" DLLEXPORT uint64_t qore_fast_last(uint64_t arg_bits, ExceptionSink* xsink) {
-    // Returns last element of list
-    // Equivalent to: any last(list<any> l) { return l.size() ? l[l.size()-1] : nothing; }
-    QoreValue arg = fromBits(arg_bits);
-
-    // Handle null/nothing
-    if (!arg.hasNode()) {
-        return toBits(QoreValue());
-    }
-
-    const AbstractQoreNode* node = arg.getInternalNode();
-
-    // Handle list
-    if (auto* list = dynamic_cast<const QoreListNode*>(node)) {
-        size_t size = list->size();
-        if (size > 0) {
-            QoreValue result = list->retrieveEntry(size - 1);
-            if (result.needsRef()) {
-                result.refSelf();
-            }
-            return toBits(result);
-        }
-    }
-
-    return toBits(QoreValue());
-}
-
-extern "C" DLLEXPORT uint64_t qore_fast_hash_exists(uint64_t hash_bits, uint64_t key_bits, ExceptionSink* xsink) {
-    // Returns true if hash key exists
-    // Equivalent to: bool exists(hash<auto, auto> h, string key) { return h.exists(key); }
-    QoreValue hash_val = fromBits(hash_bits);
-    QoreValue key_val = fromBits(key_bits);
-
-    // Handle null/nothing hash
-    if (!hash_val.hasNode()) {
-        return toBits(false);
-    }
-
-    const AbstractQoreNode* hash_node = hash_val.getInternalNode();
-
-    // Handle hash
-    if (auto* hash = dynamic_cast<const QoreHashNode*>(hash_node)) {
-        QoreHashKeyHelper key_str(key_val, xsink);
-        if (*xsink) {
-            return toBits(false);
-        }
-        return toBits(hash->existsKey(key_str.c_str()));
-    }
-
-    return toBits(false);
+    return qore_fast_builtin_call("Qore::abs", arg, xsink);
 }
 
 // --- Direct function call (resolved at parse time, skips AST round-trip) ---

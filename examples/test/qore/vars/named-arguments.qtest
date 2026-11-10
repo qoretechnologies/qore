@@ -359,11 +359,22 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq("RUNTIME-OVERLOAD-ERROR", positional_err, "positional runtime type error");
         assertThrows(positional_err, "no variant matching", sub () { na_required(b: 2, a: bad); });
 
-        # an overloaded target whose variant depends on runtime argument types is still rejected
-        assertThrows("NAMED-CALL-NOT-SUPPORTED", "overloaded target is ambiguous", sub () {
+        # an overloaded target whose variant depends on runtime argument types is resolved at runtime among the
+        # variants with the same parameter names at the positions of the arguments
+        {
             Program p(PO_NEW_STYLE);
-            p.parse("sub o(int a, int c = 3) {} sub o(string a, int c = 3) {} auto x = 1; o(x, c: 9);",
-                "overloaded-runtime-typed");
+            p.parse("string sub o(int a, int c = 3) { return sprintf(\"o(int) %y %y\", a, c); } "
+                "string sub o(string a, int c = 3) { return sprintf(\"o(string) %y %y\", a, c); } "
+                "string sub t(auto x) { return o(x, c: 9); }", "overloaded-runtime-typed");
+            assertEq("o(int) 1 9", p.callFunction("t", 1), "overloaded named call resolved at runtime: int");
+            assertEq("o(string) \"s\" 9", p.callFunction("t", "s"),
+                "overloaded named call resolved at runtime: string");
+        }
+        # ... and rejected when a variant with other parameter names at those positions could be selected
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "but o\\(string b, int c = 3\\)", sub () {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub o(int a, int c = 3) {} sub o(string b, int c = 3) {} sub t(auto x) { o(x, c: 9); }",
+                "overloaded-runtime-typed-other-names");
         });
 
         # untyped parameters (only allowed without %require-types) are skipped the same way

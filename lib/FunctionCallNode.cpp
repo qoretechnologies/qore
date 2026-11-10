@@ -601,6 +601,8 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
 
     // argument type list
     type_vec_t argTypeInfo;
+    // for each argument, true if it always has a value of its type
+    arg_value_vec_t args_with_value;
 
     // initialize arguments and setup argument type list (argTypeInfo)
     if (num_args) {
@@ -614,6 +616,12 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         }
         parsed_arg_type_info = argTypeInfo;
         parse_args = nullptr;
+        if (args) {
+            args_with_value.reserve(args->size());
+            for (size_t i = 0, e = args->size(); i < e; ++i) {
+                args_with_value.push_back(parse_arg_always_has_value(args->retrieveEntry(i)));
+            }
+        }
 
     }
     parse_context.typeInfo = nullptr;
@@ -682,12 +690,16 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         type_param_instantiation.clear();
         variant = named_args
             ? func->parseFindVariantNamed(loc, argTypeInfo, arg_names, class_ctx, err, named_binding,
-                receiver_type_info, &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr)
+                receiver_type_info, &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr,
+                &args_with_value)
             : func->parseFindVariant(loc, argTypeInfo, class_ctx, err, receiver_type_info,
-                &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr);
+                &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr,
+                &args_with_value);
 
         if (named_args) {
-            if (!variant) {
+            // a call whose variant is resolved at run time keeps the binding of its arguments (see
+            // QoreFunction::parseFindVariantNamed())
+            if (!variant && !named_binding.variant) {
                 if (!err) {
                     qore_program_private::makeParseException(parse_context.pgm, *loc, "NAMED-CALL-NOT-SUPPORTED",
                         new QoreStringNode("named arguments require a parse-time-resolved signature in this version; "

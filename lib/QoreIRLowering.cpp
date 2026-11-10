@@ -6976,8 +6976,10 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
             ? var->ref.id->getTypeInfo() : nullptr;
         facts.type_info = analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
             ? analysis.known_type : declared_type;
+        // a local that is the target of a reference or captured by a closure can be cleared where the parse does not
+        // see it (see getAnalysis()), so its parse-end state does not make it assigned either
         bool local_definitely_assigned = parse_context && var->getType() == VT_LOCAL && var->ref.id
-            && parse_context->isLocalDefinitelyAssigned(var->ref.id);
+            && !var->ref.id->closureUse() && parse_context->isLocalDefinitelyAssigned(var->ref.id);
         bool plain_local = declared_type && !QoreTypeInfo::getReferenceTarget(declared_type);
         bool definitely_assigned = analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
             || (local_definitely_assigned && plain_local);

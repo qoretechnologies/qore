@@ -26,7 +26,12 @@ string sub example(string str) {
     A variant is selected at parse time only when the declared types guarantee that it matches at run time; when an
     argument might not match it, as an argument returned as a reference from a call (a value of a
     <tt>reference&lt;</tt><em>type</em><tt>&gt;</tt> type, which a parameter of the referenced type does not accept),
-    the variant is resolved at run time with the evaluated arguments.  A variant selected at parse time can still not
+    the variant is resolved at run time with the evaluated arguments.  When another variant accepts no value for an
+    argument that the best match does not accept no value for, the best match is selected at parse time only if the
+    argument always has a value: a literal value, a constant, a call, a new object, a closure or reference, a
+    conditional expression of such expressions, or a local variable or parameter that is assigned on every path to
+    the call and not removed or deleted since; for a member, a global variable, a variable of a closure or another
+    expression, the variant is resolved at run time.  A variant selected at parse time can still not
     match at run time only because of the state of a value, which declared types do not describe: an argument that has
     no value (a member or variable of the type that was not assigned) or a deleted object; then the variant is resolved
     again at run time, as for a call resolved at run time, with the arguments as given.
