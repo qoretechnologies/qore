@@ -90,14 +90,22 @@ printf(\"%d\\n\", aot_hook_target(40, 2));
         return backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe));
     }
 
+    #! skips the test case if qcc cannot compile the program; the cases that expect a failed build need it to tell one
+    private skipWithoutQcc() {
+        int rc;
+        string exe = tmp.path + "/probe";
+        string out = compile(exe, "0", "", \rc);
+        if (rc || !is_file(exe)) {
+            testSkip("qcc is not available or cannot compile the program: " + out);
+        }
+    }
+
     testCompiles() {
+        skipWithoutQcc();
         foreach string opt in (OptLevels) {
             string exe = exeName("plain", opt);
             int rc;
             string out = compile(exe, opt, "", \rc);
-            if (!is_file(exe) && !rc) {
-                testSkip("qcc is not available: " + out);
-            }
             assertEq(0, rc, "qcc -O" + opt + " exit status: " + out);
             assertTrue(is_file(exe), "qcc -O" + opt + " wrote the executable");
             assertEq(Expected, runExe(exe), "-O" + opt + " executable output");
@@ -105,6 +113,7 @@ printf(\"%d\\n\", aot_hook_target(40, 2));
     }
 
     testHookNoMatch() {
+        skipWithoutQcc();
         foreach string opt in (OptLevels) {
             string exe = exeName("nomatch", opt);
             int rc;
@@ -115,6 +124,7 @@ printf(\"%d\\n\", aot_hook_target(40, 2));
     }
 
     testFunctionFailure() {
+        skipWithoutQcc();
         foreach string opt in (OptLevels) {
             string exe = exeName("function", opt);
             int rc;
@@ -127,6 +137,7 @@ printf(\"%d\\n\", aot_hook_target(40, 2));
     }
 
     testToplevelFailure() {
+        skipWithoutQcc();
         foreach string opt in (OptLevels) {
             string exe = exeName("toplevel", opt);
             int rc;
@@ -139,6 +150,7 @@ printf(\"%d\\n\", aot_hook_target(40, 2));
     }
 
     testQoreCompileFailure() {
+        skipWithoutQcc();
         string exe = tmp.path + "/qore-compile";
         int rc;
         string out = run(sprintf("%s QORE_AOT_TEST_FAIL_LOWERING=_toplevel %s -b --compile --output %s %s", env,
