@@ -53,6 +53,13 @@ class TimeoutDateUntypedOperandTest inherits QUnit::Test {
             + "printf(\"15 map over mixed:          %y\\n\", (map $1 + t, (d, 3, 4s)));\n"
             + "printf(\"16 map select:              %y\\n\", (map $1 + t, (d, 3s), $1 > 2s));\n"
             + "printf(\"17 map index expression:    %y\\n\", (map $1 + t, (d, 3s))[1]);\n"
+            + "list<auto> l = (1, 2);\n"
+            + "string s = \"x\";\n"
+            + "float fl = 1.5;\n"
+            + "printf(\"18 map over strings:        %y\\n\", (map $1 + t, (s, \"y\")));\n"
+            + "printf(\"19 map over floats:         %y\\n\", (map $1 + t, (fl, 2.5)));\n"
+            + "printf(\"20 untyped list plus:       %y\\n\", (map $1 + t, (l,)));\n"
+            + "printf(\"21 date plus timeout twice: %y\\n\", d + t + t);\n"
             + "";
 
         const Expected = "01 direct plus:             <time: 2 seconds 5 milliseconds>\n"
@@ -72,6 +79,10 @@ class TimeoutDateUntypedOperandTest inherits QUnit::Test {
             + "15 map over mixed:          [<time: 2 seconds 5 milliseconds>, 8, <time: 4 seconds 5 milliseconds>]\n"
             + "16 map select:              [<time: 3 seconds 5 milliseconds>]\n"
             + "17 map index expression:    <time: 3 seconds 5 milliseconds>\n"
+            + "18 map over strings:        [\"x5\", \"y5\"]\n"
+            + "19 map over floats:         [6.5, 7.5]\n"
+            + "20 untyped list plus:       [[1, 2, 5]]\n"
+            + "21 date plus timeout twice: <time: 2 seconds 10 milliseconds>\n"
             + "";
     }
 
@@ -110,14 +121,24 @@ class TimeoutDateUntypedOperandTest inherits QUnit::Test {
         }
     }
 
+    #! compiles the program with qcc at the given optimization level, returns the executable
+    private string compile(string opt, reference<string> out) {
+        string exe = sprintf("%s/program.O%s", tmp.path, opt);
+        out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O%s -o %s %s 2>&1",
+            libqore_dir, libqore_dir, libqore_dir, qcc_bin, opt, exe, src));
+        return exe;
+    }
+
     testCompiled() {
+        # a build without qcc has nothing to compile; a failure at a later level is a failure
+        string first_out;
+        if (!is_file(compile("0", \first_out))) {
+            testSkip("qcc is not available or cannot compile the program: " + first_out);
+        }
         foreach string opt in (("0", "3")) {
-            string exe = sprintf("%s/program.O%s", tmp.path, opt);
-            string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O%s -o %s %s "
-                "2>&1", libqore_dir, libqore_dir, libqore_dir, qcc_bin, opt, exe, src));
-            if (!is_file(exe)) {
-                testSkip("qcc is not available or cannot compile: " + out);
-            }
+            string out;
+            string exe = compile(opt, \out);
+            assertTrue(is_file(exe), sprintf("qcc -O%s compiled an executable: %s", opt, out));
             hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
                 "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe), True);
             assertEq(0, r.rc, sprintf("qcc -O%s: exit status: %s", opt, r.out));
