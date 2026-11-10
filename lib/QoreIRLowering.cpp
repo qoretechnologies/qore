@@ -924,7 +924,8 @@ static bool qoreIrGetSinglePositionalCallArgNoHoles(const FunctionCallBase* call
 }
 
 static bool qoreIrIsAssignedPlainListLocal(LocalVar* local) {
-    if (!local || local->closureUse() || !local->isAssigned()) {
+    // a local that is ever deleted or removed can be without a value where the parse saw it assigned (qore#5665)
+    if (!local || local->closureUse() || local->everDeleted() || !local->isAssigned()) {
         return false;
     }
     const QoreTypeInfo* type_info = local->parseGetTypeInfo();
@@ -932,7 +933,8 @@ static bool qoreIrIsAssignedPlainListLocal(LocalVar* local) {
 }
 
 static bool qoreIrIsAssignedPlainStringLocal(LocalVar* local) {
-    if (!local || local->closureUse() || !local->isAssigned()) {
+    // a local that is ever deleted or removed can be without a value where the parse saw it assigned (qore#5665)
+    if (!local || local->closureUse() || local->everDeleted() || !local->isAssigned()) {
         return false;
     }
     const QoreTypeInfo* type_info = local->parseGetTypeInfo();
@@ -6282,11 +6284,15 @@ bool QoreIRLowering::getAnalysis(const QoreValue& expr, QoreParseAnalysis& analy
             // takes a "reference<string>" argument), at a point the analysis does not see - even before the read,
             // in an earlier iteration of a loop.  Such a read can be NOTHING whatever its declared type, so it
             // must not let compiled code skip the checks for NOTHING.
+            // The state comes from a single forward pass of the parse, so it also misses a delete or remove of the
+            // variable later in a loop body, which leaves the variable without a value at this read in the next
+            // iteration: a local that is ever the operand of delete or remove is not definitely assigned anywhere
+            // (qore#5665).
             const VarRefNode* var = dynamic_cast<const VarRefNode*>(node);
             if (var) {
                 qore_var_t var_type = var->getType();
                 if ((var_type == VT_LOCAL || var_type == VT_CLOSURE || var_type == VT_LOCAL_TS)
-                        && var->ref.id && var->ref.id->closureUse()) {
+                        && var->ref.id && (var->ref.id->closureUse() || var->ref.id->everDeleted())) {
                     analysis.clearFlag(QoreParseAnalysis::DefinitelyAssigned);
                     analysis.clearFlag(QoreParseAnalysis::NeverNothing);
                 }
@@ -10169,6 +10175,51 @@ QoreIRValue QoreIRLowering::lowerShiftRightEquals(const QoreValue& expr, std::st
     return result;
 }
 
+//! Returns true if evaluating \a expr can neither have side effects nor raise an exception
+/** Constants, and reads of local variables of an integer type; the IR can evaluate such an expression before or
+    after other expressions without a difference that the program could observe.  The AST interpreter evaluates each
+    selector of a list of selectors, and the end of a range, only after the code before it has run without an
+    exception (qore#5665).
+*/
+static bool qore_ir_selector_eval_is_inert(const QoreValue& expr) {
+    if (!expr.hasNode()) {
+        return true;
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (node->is_value()) {
+        return true;
+    }
+    if (auto* range = dynamic_cast<const QoreRangeOperatorNode*>(node)) {
+        return qore_ir_selector_eval_is_inert(range->getLeft())
+            && qore_ir_selector_eval_is_inert(range->getRight());
+    }
+    if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+        switch (var->getType()) {
+            case VT_LOCAL:
+            case VT_LOCAL_TS:
+            case VT_CLOSURE:
+                break;
+            default:
+                return false;
+        }
+        const QoreTypeInfo* ti = var->ref.id ? var->ref.id->getTypeInfo() : nullptr;
+        return ti == bigIntTypeInfo || ti == bigIntOrNothingTypeInfo || ti == softBigIntTypeInfo
+            || ti == softBigIntOrNothingTypeInfo;
+    }
+    return false;
+}
+
+bool QoreIRLowering::rangeBoundMayBeNothing(const QoreValue& expr) const {
+    if (!expr.hasNode()) {
+        return expr.isNothing();
+    }
+    if (expr.getInternalNode()->is_value()) {
+        return false;
+    }
+    QoreParseAnalysis analysis;
+    return !getAnalysis(expr, analysis) || !analysis.hasFlag(QoreParseAnalysis::NeverNothing);
+}
+
 QoreIRValue QoreIRLowering::lowerRange(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* op = dynamic_cast<const QoreRangeOperatorNode*>(node);
@@ -10184,6 +10235,12 @@ QoreIRValue QoreIRLowering::lowerRange(const QoreValue& expr, std::string& error
         return QoreIRValue();
     }
     QoreValue right_expr = op->getRight();
+    // the AST interpreter checks the start for NOTHING before it evaluates the end
+    // (QoreRangeOperatorNode::getFunctionalIteratorImpl()), so an end with side effects does not run when the start is
+    // NOTHING (qore#5665); the range operation raises the same error when the end cannot have side effects
+    if (!qore_ir_selector_eval_is_inert(right_expr) && rangeBoundMayBeNothing(left_expr)) {
+        withExceptionTarget(builder.createCheckRangeBound(left, QoreIRRangeBound::Start, op->loc));
+    }
     QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
         return QoreIRValue();
@@ -10333,6 +10390,14 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
         if (!lhs.isValid()) {
             return QoreIRValue();
         }
+        // the AST interpreter evaluates each selector only after it has applied the previous one, and none for a
+        // sequence that no selector applies to (QoreSquareBracketsOperatorNode::doSquareBracketsListRange()); the
+        // selectors are evaluated before one instruction applies them all only if the order cannot be observed
+        for (const QoreValue& selector : range_selectors) {
+            if (!qore_ir_selector_eval_is_inert(selector)) {
+                return lowerListSelectorSteps(op, lhs, range_selectors, error);
+            }
+        }
         std::vector<QoreIRValue> operands{lhs};
         std::vector<uint8_t> selector_kinds;
         selector_kinds.reserve(range_selectors.size());
@@ -10394,6 +10459,127 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
     }
     std::vector<QoreIRValue> operands{lhs, rhs};
     return lowerExprOpOrInvoke(QoreIROpcode::ListIndexDynamic, expr, operands, op->loc, error);
+}
+
+bool QoreIRLowering::listSelectorSeqAlwaysApplies(const QoreValue& expr) const {
+    // a local variable of the function, definitely assigned where it is read, whose declared type is a list, a
+    // string or a binary object; a local variable that other code can reach (a closure-bound or top-level local, or
+    // one passed by reference) can be deleted by it, and getAnalysis() then reports it as not definitely assigned.
+    // A variable of such a type is without a value only before it is assigned and after it is the operand of delete
+    // or remove; the definite-assignment state is from a single forward pass of the parse, which does not see a
+    // delete or remove later in a loop body that leaves the variable without a value in the next iteration, so a
+    // variable that is ever deleted or removed does not qualify (qore#5665)
+    const VarRefNode* var = dynamic_cast<const VarRefNode*>(expr.getInternalNode());
+    if (!var || var->getType() != VT_LOCAL || !var->ref.id || var->ref.id->everDeleted()) {
+        return false;
+    }
+    QoreParseAnalysis analysis;
+    if (!getAnalysis(expr, analysis) || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        return false;
+    }
+    const QoreTypeInfo* type = var->ref.id->getTypeInfo();
+    if (QoreTypeInfo::parseReturns(type, NT_NOTHING) != QTI_NOT_EQUAL) {
+        return false;
+    }
+    // a complex list type (list<int>) is not identical to the plain list type, so it is checked by its kind
+    return QoreTypeInfo::isListType(type)
+        || QoreTypeInfo::parseReturns(type, NT_STRING) == QTI_IDENT
+        || QoreTypeInfo::parseReturns(type, NT_BINARY) == QTI_IDENT;
+}
+
+QoreIRValue QoreIRLowering::lowerListSelectorSteps(const QoreSquareBracketsOperatorNode* op, QoreIRValue seq,
+        const std::vector<QoreValue>& selectors, std::string& error) {
+    assert(!selectors.empty());
+    const int64_t string_index_char = op->hasStringIndexChar()
+        ? static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar) : 0;
+
+    // a sequence that is always a list, a string or a binary object gets the selectors applied by the step that makes
+    // the result; for any other sequence a Begin step makes the empty result first, or NOTHING if no selector applies
+    // to the sequence, and then no selector is evaluated, as in the AST interpreter
+    QoreIRValue result;
+    QoreIRBasicBlock* merge_block = nullptr;
+    if (!listSelectorSeqAlwaysApplies(op->getLeft())) {
+        result = withExceptionTarget(builder.createListSelectorStep(QoreIRValue(), seq,
+            string_index_char | static_cast<int64_t>(QoreIRListSelectorFlag::Begin), {}, op->loc))->result;
+        QoreIRValue no_selectors = builder.createUnaryOp(QoreIROpcode::IsNullOrNothing, result)->result;
+        QoreIRBasicBlock* selector_block = createBlock("selectors");
+        merge_block = createBlock("selectors.merge");
+        if (!selector_block || !merge_block) {
+            error = "IR builder failed to create blocks for a list of selectors";
+            return QoreIRValue();
+        }
+        builder.createBranchIf(no_selectors, merge_block, selector_block);
+        builder.setBlock(selector_block);
+    }
+
+    // the selectors evaluated and not applied yet: a step applies them before the next selector that can have side
+    // effects or raise is evaluated, and the selectors after it that cannot are applied with it
+    std::vector<QoreIRValue> pending;
+    int64_t pending_flags = string_index_char;
+    size_t pending_count = 0;
+    auto apply_pending = [&](bool last) {
+        if (!pending_count) {
+            return;
+        }
+        if (last) {
+            pending_flags |= static_cast<int64_t>(QoreIRListSelectorFlag::Last);
+        }
+        if (!result.isValid()) {
+            // the first step makes the result
+            result = withExceptionTarget(builder.createListSelectorStep(QoreIRValue(), seq,
+                pending_flags | static_cast<int64_t>(QoreIRListSelectorFlag::Begin), pending, op->loc))->result;
+        } else {
+            withExceptionTarget(builder.createListSelectorStep(result, seq, pending_flags, pending, op->loc));
+        }
+        pending.clear();
+        pending_flags = string_index_char;
+        pending_count = 0;
+    };
+
+    for (size_t i = 0; i < selectors.size(); ++i) {
+        if (!qore_ir_selector_eval_is_inert(selectors[i])) {
+            apply_pending(false);
+        } else if (pending_count == QORE_IR_LIST_SELECTOR_STEP_MAX) {
+            apply_pending(false);
+        }
+        if (auto* range = dynamic_cast<const QoreRangeOperatorNode*>(selectors[i].getInternalNode())) {
+            pending_flags |= static_cast<int64_t>(1)
+                << (static_cast<int64_t>(QoreIRListSelectorFlag::RangeShift) + pending_count);
+            QoreValue start_expr = range->getLeft();
+            QoreValue end_expr = range->getRight();
+            QoreIRValue start = lowerExpression(start_expr, error);
+            if (!start.isValid()) {
+                return QoreIRValue();
+            }
+            // the AST interpreter checks the start for NOTHING before it evaluates the end
+            // (QoreRangeOperatorNode::getFunctionalIteratorImpl()); the step checks the end before the next selector
+            // that can have side effects is evaluated
+            if (!qore_ir_selector_eval_is_inert(end_expr) && rangeBoundMayBeNothing(start_expr)) {
+                withExceptionTarget(builder.createCheckRangeBound(start, QoreIRRangeBound::Start, range->loc));
+            }
+            QoreIRValue end = lowerExpression(end_expr, error);
+            if (!end.isValid()) {
+                return QoreIRValue();
+            }
+            pending.push_back(start);
+            pending.push_back(end);
+        } else {
+            QoreIRValue index = lowerExpression(selectors[i], error);
+            if (!index.isValid()) {
+                return QoreIRValue();
+            }
+            pending.push_back(index);
+        }
+        ++pending_count;
+    }
+    apply_pending(true);
+    assert(result.isValid());
+    if (merge_block) {
+        builder.createBranch(merge_block);
+        builder.setBlock(merge_block);
+    }
+    // the result of the Begin step, to which the steps have added what the selectors selected
+    return result;
 }
 
 static bool qore_ir_is_explicit_hash_value_type(const QoreTypeInfo* type_info) {
