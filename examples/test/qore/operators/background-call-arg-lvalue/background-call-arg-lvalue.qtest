@@ -68,6 +68,25 @@ const Places = {
     "call argument in a hash argument": "background record(q, 0, {\"k\": wrap((%s))})",
 };
 
+#! modifications of a member of the object of the code that starts the thread in call arguments, by name; %s is the
+#! modification
+const MemberModifications = {
+    "assignment": "x = 5",
+    "+= through self": "self.x += 2",
+    "++ (post)": "x++",
+};
+
+#! the code of a closure that modifies a local of the code that starts the thread, which it captures and so shares
+const ClosureShared = "
+int sub closure_shared() {
+    int i = 1;
+    Counter c(1);
+    background sub () { i += 41; c.dec(); }();
+    c.waitForZero();
+    return i;
+}
+";
+
 #! Regression test for issue #5698: a background expression may not modify a local of the code that starts the thread
 /** The background operator refused the modification of a local variable of the code that starts the thread only
     outside of the arguments of a call: call arguments were parsed without the background flag, so a modification
@@ -83,8 +102,10 @@ class BackgroundCallArgLvalueTest inherits QUnit::Test {
             ExecMode em = mode.value;
             addTestCase("modifications refused: " + name, sub () { checkRefused(name, em); });
             addTestCase("allowed forms: " + name, sub () { checkAllowed(name, em); });
+            addTestCase("member modifications refused: " + name, sub () { checkMembersRefused(name, em); });
         }
         addTestCase("qcc refuses a modification in a call argument", \checkQcc());
+        addTestCase("qcc: a reference and a closure share a local", \checkQccShared());
 
         set_return_value(main());
     }
@@ -107,10 +128,30 @@ class BackgroundCallArgLvalueTest inherits QUnit::Test {
         }
     }
 
+    private checkMembersRefused(string mode, ExecMode em) {
+        foreach hash<auto> modification in (MemberModifications.pairIterator()) {
+            foreach hash<auto> place in (Places.pairIterator()) {
+                # a method call of the object (r.record()) has no object member as its target here
+                if (place.key == "method argument") {
+                    continue;
+                }
+                string expr = sprintf(place.value, modification.value);
+                string label = sprintf("%s: member %s (%s): %s", mode, modification.key, place.key, expr);
+                Program p(PO_NEW_STYLE | PO_NO_TOP_LEVEL_STATEMENTS);
+                p.setExecMode(em);
+                assertThrows("PARSE-EXCEPTION", "illegal member modification with the background operator",
+                    sub () {
+                        p.parse(Decls + sprintf("class M { private { int x = 1; } "
+                            "m() { Queue q(); Recorder r(1); %s; } }\n", expr), label);
+                    }, NOTHING, label);
+            }
+        }
+    }
+
     private checkAllowed(string mode, ExecMode em) {
         Program p(PO_NEW_STYLE | PO_NO_TOP_LEVEL_STATEMENTS);
         p.setExecMode(em);
-        p.parse(Decls + "
+        p.parse(Decls + ClosureShared + "
 list<auto> sub by_reference() {
     list<auto> l = (1, 2, 3);
     thread_join(background set_ref(\\l));
@@ -132,10 +173,45 @@ list<auto> sub values_taken() {
 ", mode);
         # a reference argument shares the local explicitly
         assertEq((1, 2, 3, 4), p.callFunction("by_reference"), mode + ": reference argument");
+        # a closure that captures a local shares it: the code that starts the thread sees the change
+        assertEq(42, p.callFunction("closure_shared"), mode + ": closure sharing a local");
         # a closure's own locals can be modified
         assertEq(4, p.callFunction("closure_locals"), mode + ": closure locals");
         # reading the locals takes their values when the thread starts
         assertEq((2, (1, 2, 3)), p.callFunction("values_taken"), mode + ": values read");
+    }
+
+    private checkQccShared() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string src = dir + "/shared.q";
+        File f();
+        f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Decls + ClosureShared + "
+list<auto> sub by_reference() {
+    list<auto> l = (1, 2, 3);
+    thread_join(background set_ref(\\l));
+    return l;
+}
+printf(\"%y %y\\n\", closure_shared(), by_reference());
+");
+        f.close();
+        foreach int opt in ((0, 3)) {
+            string program = sprintf("%s/shared-O%d", dir, opt);
+            string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt,
+                shellQuote(program), shellQuote(src)));
+            assertTrue(is_file(program), sprintf("-O%d: compiled: %s", opt, output));
+            assertEq("42 [1, 2, 3, 4]\n", backquote(shellQuote(program) + " 2>&1"), sprintf("qcc -O%d", opt));
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
     }
 
     private checkQcc() {

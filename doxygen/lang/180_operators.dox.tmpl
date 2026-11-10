@@ -450,7 +450,10 @@ list<int> l1 = new list<int>(2);
       by the code that starts the thread is not seen by the expression, and <tt>map <b>background</b> f($1), list</tt> starts a
       thread for each element of \a list with the element as the argument; an implicit argument of an operator in the background
       expression that iterates, such as the <tt>$1</tt> of <tt><b>background</b> f(map $1 * 2, list)</tt>, is that operator's
-    - it is not possible to pass local variables by reference anywhere in a background expression (a parse exception will be thrown)
+    - a reference to a local variable (<tt>\\l</tt>), or a @ref closure "closure" that captures it, shares the variable with the
+      new thread, as the variable becomes a closure-bound variable protected by a lock (see
+      @ref references_overview "references"); this is the only way a background expression can modify a local variable of the
+      code that starts the thread
     - closure values created in object scope are checked before the new thread is started; if the captured object is valid,
       its scope is prolonged until the background expression has finished executing
     - an object named directly by the background expression is referenced before the new thread is started, so the object's
