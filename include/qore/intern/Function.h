@@ -456,6 +456,13 @@ class RuntimeConfig;
 
 #define ARG_DEF   (1 << 0)
 #define ARG_OTHER (1 << 1)
+//! with ARG_OTHER: the check of a fixed variant before another variant may be searched for the arguments
+/** Used only by CodeEvaluationHelper::init(), which sets CodeEvaluationHelper::fixed_func first: if an argument
+    must be converted and the function can find another variant, the original value of every argument converted in
+    place is kept until the check ends, and a failed check restores them, so that the search and the variant that it
+    finds get the arguments as given (see CodeEvaluationHelper::prepareOtherArgsRestorable())
+*/
+#define ARG_RESTORE (1 << 2)
 
 class RuntimeParseOptionsOverrideHelper;
 
@@ -515,58 +522,15 @@ public:
         ct = n_ct;
     }
 
-    //! The original values of the arguments that prepareDefaultArgs() converted in place for a fixed variant
-    /** A plain struct with no constructor or destructor, so that it adds no cleanup to the return paths of the call
-        (CodeEvaluationHelper::init() is on every call's path): the caller sets \c n and \c more to zero before the
-        check (the caller sets only \c func); prepareDefaultArgs() initializes it when it saves the first value, if
-        the function can find another variant, and reports that in its return code,
-        and the caller consumes it with finishArgUndo() right after the check.  Up to \c INLINE values are kept in
-        place; more go to a heap list.
-    */
-    struct ArgUndo {
-        static constexpr unsigned INLINE = 4;
-        //! the function called; set by the caller: values are saved only if it can find another variant
-        const QoreFunction* func;
-        //! the number of values saved in place
-        unsigned n;
-        //! the argument index of each value saved in place
-        unsigned idx[INLINE];
-        //! the values saved in place (constructed with placement new), each with a reference
-        alignas(QoreValue) unsigned char buf[sizeof(QoreValue) * INLINE];
-        //! the values beyond \c INLINE, or nullptr
-        std::vector<std::pair<unsigned, QoreValue>>* more;
+    //! Evaluates default arguments (ARG_DEF) and checks and converts the given ones (ARG_OTHER) for \a variant
+    /** With ARG_RESTORE (see there), the arguments that a failed check converted in place are restored to the
+        values given, if the function of the call (\c fixed_func) can find another variant for them.
 
-        DLLLOCAL QoreValue* val(unsigned i) {
-            return reinterpret_cast<QoreValue*>(buf) + i;
-        }
-
-        DLLLOCAL void save(unsigned i, QoreValue v) {
-            if (n < INLINE) {
-                idx[n] = i;
-                new (val(n)) QoreValue(v);
-                ++n;
-                return;
-            }
-            if (!more) {
-                more = new std::vector<std::pair<unsigned, QoreValue>>;
-            }
-            more->push_back(std::make_pair(i, v));
-        }
-    };
-
-    /** @param undo if not null, the original value of every argument converted in place is saved here (with a
-        reference) before it is converted, so that a failed check of a fixed variant can restore the arguments before
-        another variant is searched for them (see finishArgUndo()); @a undo is initialized only when a value is saved
-
-        @return 0 for OK, -1 for an error; with @a undo, 1 for OK and -2 for an error when values were saved in it
+        @return 0 for OK, -1 for an error (raised in \a xsink, or with ARG_RESTORE in the call's exception sink if
+        releasing or restoring a saved value raised one)
     */
     DLLLOCAL int prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
-        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type, ArgUndo* undo = nullptr);
-
-    //! Restores (@a restore) or releases the values saved in @a undo and empties it
-    /** Called only if a value was saved; out of line, as it is not on a call's common path.
-    */
-    DLLLOCAL void finishArgUndo(ArgUndo& undo, bool restore);
+        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type);
 
     //! process default arguments for a function, method, or closure call
     /** @param xsink the exception sink to use
@@ -685,6 +649,9 @@ protected:
     //! (direct calls, method calls, call references, closures) the switch happens before the dom check, so the
     //! check runs against the target/creation Program's options
     unsigned call_flags;
+    //! the function of the call, set by init() for the check of the arguments of a fixed variant with ARG_RESTORE,
+    //! and read only then
+    const QoreFunction* fixed_func;
     const QoreTypeInfo* returnTypeInfo; // saved return type info
     const QoreTypeInfo* receiver_type_info = nullptr;
     QoreProgram* pgm = nullptr; // program used when evaluated (to find stacks for references)
@@ -736,8 +703,33 @@ protected:
     DLLLOCAL int findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
         const qore_class_private* cctx);
 
+    //! the variant search of findVariant() with the QRFV_* filter of the call flags (not 0); out of line, as it is
+    //! not on a call's common path
+    DLLLOCAL QORE_INTERN_NOINLINE const AbstractQoreFunctionVariant* findFilteredVariant(const QoreFunction* func,
+        const qore_class_private* class_ctx);
+
     DLLLOCAL int setTypeParamInstantiation(const AbstractQoreFunctionVariant* variant,
         const AbstractFunctionSignature* sig);
+
+    //! the original values of the arguments converted in place by a check with ARG_RESTORE; see Function.cpp
+    class ArgSave;
+
+    //! the implementation of prepareDefaultArgs() from argument \a start; with \a save_args, every argument is saved
+    //! in \a save before it is converted
+    template <bool save_args>
+    DLLLOCAL int prepareArgsIntern(ExceptionSink* xsink, AbstractFunctionSignature* sig, bool is_copy,
+        QoreObject* self, int arg_type, unsigned start, ArgSave* save);
+
+    //! converts argument \a start to \a pti, its parameter type, which does not accept the argument without a
+    //! filter if it was given (\a arg_exists), and checks and converts the arguments after it, for a check with
+    //! ARG_RESTORE whose function can find another variant
+    /** Every argument is saved before it is converted; the saved values are restored if the check fails, and
+        released if it succeeds.  Out of line, as it is not on a call's common path.
+
+        @return 0 for OK, -1 for an error (see prepareDefaultArgs())
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE int prepareOtherArgsRestorable(ExceptionSink* xsink, AbstractFunctionSignature* sig,
+        unsigned start, const QoreTypeInfo* pti, bool arg_exists);
 
     DLLLOCAL void setCallName(const QoreFunction* func);
 };
@@ -1665,10 +1657,15 @@ struct IList : public ilist_t {
 #define QRFV_EXPORTED_ONLY (1 << 1)
 //! call flag of CodeEvaluationHelper and QoreFunction::evalFunction(): defer the switch of the runtime parse options
 /** to the called Program until the functional-domain check has been made with the caller's (a deliberate
-    cross-Program QoreProgram::callFunction()); the other bits of the call flags are QRFV_* variant filters, so that
-    one argument carries both
+    cross-Program QoreProgram::callFunction()); the bits in QRFV_MASK of the call flags are QRFV_* variant filters,
+    so that one argument carries both
 */
-#define QCEF_DEFER_DOMAIN_PO (1u << 31)
+#define QCEF_DEFER_DOMAIN_PO (1u << 8)
+//! the bits of the call flags of CodeEvaluationHelper that hold the QRFV_* variant filter
+/** The filter has a byte of its own, and QCEF_DEFER_DOMAIN_PO is outside it, so that each is read with a single
+    byte access on a call's path
+*/
+#define QRFV_MASK 0xffu
 
 class QoreFunction : protected QoreReferenceCounter {
 friend class QoreFunctionIterator;

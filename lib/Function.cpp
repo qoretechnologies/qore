@@ -1115,6 +1115,9 @@ void CodeEvaluationHelper::setCallName(const QoreFunction* func) {
 
 void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx) {
+    // for the check of the arguments of a fixed variant (ARG_RESTORE); stored here, where the function is still in
+    // a register, as a store later would have to reload it
+    fixed_func = func;
     sandbox_provenance.set(self);
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
@@ -1197,24 +1200,15 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
 
         const AbstractQoreFunctionVariant* v = variant;
         ExceptionSink xsink2;
-        // the original values of the arguments that the check below converts for the fixed variant, kept if the
-        // check can fail over to another variant (initialized by prepareDefaultArgs() when it saves the first value,
-        // which it reports with 1 or -2), and consumed right after the check
-        ArgUndo undo;
-        undo.func = func;
-        // first process all non-default args; no evaluation, so we can try to find another variant
-        int prep_rc = prepareDefaultArgs(&xsink2, variant, sig, is_copy, self, ARG_OTHER, &undo);
-        if (prep_rc && (prep_rc > 0 || prep_rc == -2)) {
-            // a failed check restores the arguments that it converted, so another variant is searched for and
-            // called with the arguments as given; otherwise they stay converted for the fixed variant
-            prep_rc = prep_rc > 0 ? 0 : -1;
-            finishArgUndo(undo, prep_rc);
+        // first process all non-default args; no evaluation, so we can try to find another variant: a failed check
+        // restores the arguments that it converted, so another variant is searched for and called with the
+        // arguments as given; otherwise they stay converted for the fixed variant (fixed_func is set above)
+        if (prepareDefaultArgs(&xsink2, variant, sig, is_copy, self, ARG_OTHER | ARG_RESTORE)) {
+            // releasing or restoring the original value of a converted argument raised an exception
             if (*xsink) {
                 xsink2.clear();
                 return;
             }
-        }
-        if (prep_rc) {
             // if no match can be found, return with the exception raised
             if (findVariant(func, variant, cctx)) {
                 xsink2.clear();
@@ -1329,9 +1323,12 @@ int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQo
         class_ctx = nullptr;
     }
 
-    variant = func->runtimeFindVariant(xsink, getArgs(), call_flags & ~QCEF_DEFER_DOMAIN_PO, class_ctx,
-        receiver_type_info,
-        &type_param_instantiation, explicit_type_param_instantiation, &variant_content_dependent);
+    // the search with no variant filter, the usual case, can use a specialization of the search for no filter;
+    // the search with a filter is out of line
+    variant = (call_flags & QRFV_MASK)
+        ? findFilteredVariant(func, class_ctx)
+        : func->runtimeFindVariant(xsink, getArgs(), 0, class_ctx, receiver_type_info, &type_param_instantiation,
+            explicit_type_param_instantiation, &variant_content_dependent);
     if (!variant) {
         assert(*xsink);
         return -1;
@@ -1349,6 +1346,12 @@ int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQo
         }
     }
     return 0;
+}
+
+const AbstractQoreFunctionVariant* CodeEvaluationHelper::findFilteredVariant(const QoreFunction* func,
+        const qore_class_private* class_ctx) {
+    return func->runtimeFindVariant(xsink, getArgs(), call_flags & QRFV_MASK, class_ctx, receiver_type_info,
+        &type_param_instantiation, explicit_type_param_instantiation, &variant_content_dependent);
 }
 
 int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVariant* variant,
@@ -1391,37 +1394,121 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     return 0;
 }
 
-void CodeEvaluationHelper::finishArgUndo(ArgUndo& undo, bool restore) {
-    assert(undo.n);
-    // the values beyond the inline ones were saved last; restore in the reverse order of saving
-    if (undo.more) {
-        for (auto i = undo.more->rbegin(), e = undo.more->rend(); i != e; ++i) {
-            if (restore) {
-                QoreValue& p = tmp.getEntryReference(i->first);
-                p.discard(xsink);
-                p = i->second;
-            } else {
-                i->second.discard(xsink);
-            }
-        }
-        delete undo.more;
-        undo.more = nullptr;
-    }
-    for (unsigned j = undo.n; j > 0; --j) {
-        QoreValue* v = undo.val(j - 1);
-        if (restore) {
-            QoreValue& p = tmp.getEntryReference(undo.idx[j - 1]);
-            p.discard(xsink);
-            p = *v;
-        } else {
-            v->discard(xsink);
-        }
-    }
-    undo.n = 0;
+//! converts argument \a i to parameter type \a pti, which does not accept its value without a filter
+/** As QoreTypeInfo::acceptInputParam(), without its tests, which the caller has made; out of line, so that the
+    argument check of a call stays as small as its common path, where no argument is converted
+*/
+static QORE_INTERN_NOINLINE void qore_convert_param(const QoreTypeInfo* pti, unsigned i, const char* name,
+        QoreValue& p, ExceptionSink* xsink) {
+    assert(QoreTypeInfo::hasType(pti) && !pti->acceptsRuntimeValueWithoutFilter(p));
+    pti->acceptInputIntern(xsink, "parameter", false, i, name, p);
 }
 
-int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
-        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type, ArgUndo* undo) {
+//! The original values of the arguments that a check with ARG_RESTORE converted in place
+/** Each value is held with a reference until the check ends; restore() puts them back in the argument list, and the
+    destructor releases those not restored.  Up to \c INLINE values are kept in place, uninitialized until used, more
+    in a heap list that exists only when needed.
+
+    A value that holds a node, the usual case of a value that a conversion replaces, is referenced and released with
+    the node directly: QoreValue::refSelf() and QoreValue::discard() do the same for it, through calls of their own
+    and the tests for enum values and opaque references, which are made here once.
+*/
+class CodeEvaluationHelper::ArgSave {
+public:
+    DLLLOCAL ArgSave(QoreListNodeEvalOptionalRefHolder& tmp, ExceptionSink* xsink) : tmp(tmp), xsink(xsink) {
+    }
+
+    DLLLOCAL ~ArgSave() {
+        if (more) {
+            for (auto& i : *more) {
+                release(i.second);
+            }
+            delete more;
+        }
+        for (unsigned j = 0; j < n; ++j) {
+            release(val(j));
+        }
+    }
+
+    //! saves \a v, the value of argument \a i, with a reference of its own
+    DLLLOCAL void save(unsigned i, const QoreValue& v) {
+        if (n < INLINE) {
+            idx[n] = i;
+            new (&val(n)) QoreValue(v);
+            ref(v);
+            ++n;
+            return;
+        }
+        if (!more) {
+            more = new std::vector<std::pair<unsigned, QoreValue>>;
+        }
+        // the reference is taken once the value has a place, so that it cannot leak
+        more->emplace_back(i, v);
+        ref(v);
+    }
+
+    //! puts the saved values back in the argument list, in the reverse order of saving
+    DLLLOCAL void restore() {
+        if (more) {
+            while (!more->empty()) {
+                std::pair<unsigned, QoreValue> i = more->back();
+                more->pop_back();
+                set(i.first, i.second);
+            }
+        }
+        while (n) {
+            --n;
+            set(idx[n], val(n));
+        }
+    }
+
+private:
+    static constexpr unsigned INLINE = 4;
+    QoreListNodeEvalOptionalRefHolder& tmp;
+    //! the call's exception sink
+    ExceptionSink* xsink;
+    //! the number of values saved in place
+    unsigned n = 0;
+    //! the argument index of each value saved in place
+    unsigned idx[INLINE];
+    //! the values saved in place, constructed when saved
+    alignas(QoreValue) unsigned char buf[sizeof(QoreValue) * INLINE];
+    //! the values beyond \c INLINE, or nullptr
+    std::vector<std::pair<unsigned, QoreValue>>* more = nullptr;
+
+    DLLLOCAL QoreValue& val(unsigned i) {
+        return reinterpret_cast<QoreValue*>(buf)[i];
+    }
+
+    //! takes a reference for the saved copy of \a v
+    DLLLOCAL static void ref(const QoreValue& v) {
+        if (v.isPointer() && !v.isOpaque()) {
+            v.getPtr()->ref();
+        } else {
+            v.ref();
+        }
+    }
+
+    //! releases the reference of the saved value \a v
+    DLLLOCAL void release(QoreValue& v) {
+        if (v.isPointer() && !v.isOpaque()) {
+            v.getPtr()->deref(xsink);
+        } else {
+            v.discard(xsink);
+        }
+    }
+
+    DLLLOCAL void set(unsigned i, QoreValue v) {
+        QoreValue& p = tmp.getEntryReference(i);
+        p.discard(xsink);
+        p = v;
+    }
+};
+
+template <bool save_args>
+QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::prepareArgsIntern(ExceptionSink* xsink,
+        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type, unsigned start,
+        ArgSave* save) {
     const arg_vec_t& defaultArgList = sig->getDefaultArgList();
     const type_vec_t& typeList = sig->getTypeList();
 
@@ -1431,9 +1518,7 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
     }
     OptionalObjectOnlySubstitutionHelper self_helper;
     bool self_set = false;
-    // true once a value has been saved in undo
-    bool undo_saved = false;
-    for (unsigned i = 0; i < max; ++i) {
+    for (unsigned i = start; i < max; ++i) {
         const QoreTypeInfo* paramTypeInfo = nullptr;
         auto get_param_type_info = [&]() -> const QoreTypeInfo* {
             if (!paramTypeInfo && i < typeList.size()) {
@@ -1456,7 +1541,7 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
             }
         }
         if (use_default_arg) {
-            if (arg_type & ARG_DEF) {
+            if (!save_args && (arg_type & ARG_DEF)) {
                 QoreValue& p = tmp.getEntryReference(i);
 
                 // issue #3240: set self in case the default arg expression references a member of the current object
@@ -1512,33 +1597,64 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                 if (arg_exists && pti->acceptsRuntimeValueWithoutFilter(n)) {
                     continue;
                 }
-                // test for change or incompatibility
-                QoreValue& p = tmp.getEntryReference(i);
-                if (undo) {
-                    // keep the original value: the check may fail on a later argument and another variant be
-                    // searched for with the arguments as given
-                    if (!undo_saved) {
-                        if (!undo->func->mayFindAnotherVariant()) {
-                            // the search finds the same variant: nothing to restore
-                            undo = nullptr;
-                        } else {
-                            undo->n = 0;
-                            undo->more = nullptr;
-                            undo_saved = true;
-                        }
+                if (!save_args && __builtin_expect(arg_type & ARG_RESTORE, 0)) {
+                    // the check may fail on a later argument, and another variant be searched for with the
+                    // arguments as given, unless the search can only find the same variant
+                    if (fixed_func->mayFindAnotherVariant()) {
+                        return prepareOtherArgsRestorable(xsink, sig, i, pti, arg_exists);
                     }
-                    if (undo) {
-                        undo->save(i, p.refSelf());
-                    }
+                    arg_type &= ~ARG_RESTORE;
                 }
-                QoreTypeInfo::acceptInputParam(pti, i, sig->getName(i), p, xsink);
+                // test for change or incompatibility; a given argument has been tested above already
+                QoreValue& p = tmp.getEntryReference(i);
+                if (!arg_exists && pti->acceptsRuntimeValueWithoutFilter(p)) {
+                    continue;
+                }
+                if (save_args) {
+                    save->save(i, p);
+                }
+                qore_convert_param(pti, i, sig->getName(i), p, xsink);
                 if (*xsink) {
-                    return undo_saved ? -2 : -1;
+                    return -1;
                 }
             }
         }
     }
-    return undo_saved ? 1 : 0;
+    return 0;
+}
+
+int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
+        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type) {
+    return prepareArgsIntern<false>(xsink, sig, is_copy, self, arg_type, 0, nullptr);
+}
+
+int CodeEvaluationHelper::prepareOtherArgsRestorable(ExceptionSink* xsink, AbstractFunctionSignature* sig,
+        unsigned start, const QoreTypeInfo* pti, bool arg_exists) {
+    assert(!*this->xsink);
+    int rc;
+    {
+        ArgSave save(tmp, this->xsink);
+        // argument start has been tested by the caller, unless it was not given (as in prepareArgsIntern())
+        QoreValue& p = tmp.getEntryReference(start);
+        if (arg_exists || !pti->acceptsRuntimeValueWithoutFilter(p)) {
+            save.save(start, p);
+            pti->acceptInputIntern(xsink, "parameter", false, start, sig->getName(start), p);
+        }
+        // the arguments after it, if any: self is used only to evaluate default arguments (ARG_DEF), and is_copy
+        // only for argument 0, which is not among them
+        if (*xsink) {
+            rc = -1;
+        } else if (start + 1 < QORE_MAX(sig->getDefaultArgList().size(), sig->getTypeList().size())) {
+            rc = prepareArgsIntern<true>(xsink, sig, false, nullptr, ARG_OTHER, start + 1, &save);
+        } else {
+            rc = 0;
+        }
+        if (rc) {
+            save.restore();
+        }
+        // the values not restored are released here
+    }
+    return (rc || *this->xsink) ? -1 : 0;
 }
 
 int CodeEvaluationHelper::processDefaultArgs(ExceptionSink* xsink, const QoreFunction* func,

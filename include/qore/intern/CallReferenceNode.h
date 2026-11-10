@@ -364,12 +364,16 @@ private:
     QoreObject* obj;
     std::string method;
     const qore_class_private* qc;
-    //! the Program of the code that created the reference, or nullptr if there was none
+    //! the Program of the code that created the reference, or nullptr if there was none, with PGM_WEAK_REF set if
+    //! the reference holds a weak reference to it
     /** A call runs the method as a direct call in this Program would: called from another Program, the method runs
         in this one with its parse options; see execValue().  Held with a weak reference unless it is the object's
-        Program, which the object holds while the reference holds the object
+        Program, which the object holds while the reference holds the object.  The flag is in the pointer, so that
+        the destructor tests one value that it loads anyway
     */
-    QoreProgram* pgm;
+    uintptr_t pgm_ref;
+    //! set in \c pgm_ref if the reference holds a weak reference to the Program
+    static constexpr uintptr_t PGM_WEAK_REF = 1;
 
     DLLLOCAL virtual ~RunTimeObjectMethodReferenceNode();
 };
@@ -411,18 +415,23 @@ private:
     QoreObject* obj;
     const QoreMethod* method;
     const qore_class_private* qc;
-    //! for a user method, or a builtin method of an object of the Program that creates the reference: the Program of
-    //! the object when the reference was created, else nullptr
-    /** The method runs in the Program that defines its class; this one is used only when that Program has released
-        the class; see execValue()
+    //! the Program of the reference, with PGM_CREATOR set if it is the Program of the code that created it
+    /** Without PGM_CREATOR (a user method, or a builtin method of an object of the Program that creates the
+        reference): the Program of the object when the reference was created, or nullptr; the method runs in the
+        Program that defines its class, and this one is used only when that Program has released the class.  Also
+        nullptr for a builtin method of a reference created with no Program, which runs with none.
+
+        With PGM_CREATOR (a builtin method of an object of another Program): the Program of the code that created the
+        reference, held with a weak reference; a call runs the method as a direct call in this Program would, not in
+        the Program of the object, which for a builtin object is the Program it was created for (a reflection handle
+        is created in the Program that it describes).
+
+        See execValue().  One tagged pointer keeps the reference as small as a reference with a single Program, and
+        a call and the destructor test the case in the value that they load anyway
     */
-    QoreProgram* obj_pgm = nullptr;
-    //! for a builtin method: the Program of the code that created the reference (weak reference), else nullptr
-    /** A call runs the method as a direct call in this Program would, not in the Program of the object, which for a
-        builtin object is the Program it was created for (a reflection handle is created in the Program that it
-        describes); see execValue()
-    */
-    QoreProgram* pgm = nullptr;
+    uintptr_t pgm_ref;
+    //! set in \c pgm_ref if it is the Program of the code that created the reference
+    static constexpr uintptr_t PGM_CREATOR = 1;
 
     //! sets up the Program of the reference; \a creator is the Program of the code that creates it
     DLLLOCAL void init(QoreProgram* creator);
