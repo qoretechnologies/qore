@@ -114,7 +114,7 @@
     |@ref no-char-type "%no-char-type"|Disables the @ref char_type "char" builtin type name and \c c'...' / \c c"..." char literals for source compatibility; equivalent to @ref QoreParseOptions::NO_CHAR_TYPE<br/><br/>Since %Qore 3.0
     |@ref no-string-index-char "%no-string-index-char"|Preserves historical \c string[i] behavior where a single string index returns \c *string instead of \c *char; equivalent to @ref QoreParseOptions::NO_STRING_INDEX_CHAR<br/><br/>Since %Qore 3.0
     |@ref negative-offsets "%negative-offsets"|Interprets negative list, string, binary, and buffer indexes and slice endpoints as offsets from the end; implied by @ref modern "%modern"; equivalent to @ref QoreParseOptions::NEGATIVE_OFFSETS<br/><br/>Since %Qore 3.0
-    |@ref no-negative-offsets "%no-negative-offsets"|Restores legacy behavior where negative list, binary, and buffer indexes are not from-end offsets and negative range endpoints are literal values; use this after @ref modern "%modern" for compatibility with old code<br/><br/>Since %Qore 3.0
+    |@ref no-negative-offsets "%no-negative-offsets"|Restores legacy behavior where negative list, binary, and buffer indexes are not from-end offsets and negative range endpoints are literal values, for compatibility with old code; cannot be used while @ref modern "%modern" is in effect<br/><br/>Since %Qore 3.0
     |@ref no-process-control "%no-process-control"|Disallows access to functions that would affect the current process (see @ref no-process-control "%no-process-control" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_PROCESS_CONTROL and the <tt>-</tt><tt>-no-process-control</tt> command line option
     |@ref no-reflection "%no-reflection"|Disallows access to the reflection API provided by the @ref reflectionintro "reflection" module; equivalent to parse option @ref Qore::PO_NO_REFLECTION<br/><br/>Since %Qore 0.9
     |@ref no-subroutine-defs "%no-subroutine-defs"|Disallows subroutine (function) definitions; equivalent to parse option @ref Qore::PO_NO_SUBROUTINE_DEFS and the <tt>-</tt><tt>-no-subroutine-defs</tt> command line option
@@ -508,6 +508,8 @@
     compatibility.  New code should use \c cast<hash>(...) / \c cast<list>(...) for hard container
     assertions instead.  Not included in @ref modern "%modern".
 
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
+
     @since %Qore 3.0
 
     <hr>
@@ -524,6 +526,8 @@
 
     @par Description:
     Use old pre-0.9.4 broken @ref cast "cast<>" operator handling where @ref nothing would be accepted without an error
+
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
 
     @see @ref correct-cast "%correct-cast"
 
@@ -544,6 +548,8 @@
     @par Description:
     Use old pre-0.8.12 broken @ref int_type "int" and @ref softint_type "softint" runtime handling where type errors were ignored at runtime.
 
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
+
     @see @ref correct-int-assignments "%correct-int-assignments"
 
     @since %Qore 0.8.12
@@ -562,6 +568,8 @@
 
     @par Description:
     Use old pre-0.8.12 broken list parsing where certain lists without parentheses would be rewritten to make top-level statements like <tt>list l = 1, 2, 3;</tt> valid.
+
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
 
     @see @ref correct-list-parsing "%correct-list-parsing"
 
@@ -582,6 +590,8 @@
     @par Description:
     Use old pre-2.0 broken list range operator where out-of-range values would result in returning @ref NOTHING
     values, breaking strongly-typed lists and contrary to the behavior of the same operator on a string
+
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
 
     @see @ref correct-list-range "%correct-list-range"
 
@@ -617,6 +627,8 @@
     1 \| 2 ^ 3 & 5 = 3
     @endcode
 
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
+
     @see @ref correct-logic-precedence "%correct-logic-precedence"
 
     @since %Qore 0.8.12
@@ -637,6 +649,8 @@
     Enables legacy namespace resolution behavior where symbol resolution prefers the shortest path and can
     allow user-defined symbols to shadow symbols in the @ref Qore "Qore" namespace.
 
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
+
     @see @ref correct-namespace-resolution "%correct-namespace-resolution"
 
     @since %Qore 3.0
@@ -656,6 +670,8 @@
     @par Description:
     Use old pre-0.8.13 handling of break/continue: continue statements in a switch behave like a break statement,
     both @ref break "break" and @ref continue "continue" behave like @ref return "return" when used outside of a loop.
+
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
 
     @since %Qore 0.8.13
 
@@ -678,6 +694,8 @@
 
     This option is provided for backwards compatibility with code that relies on the old behavior where
     \c auto variables could be assigned values of different types without parse-time errors.
+
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
 
     @par Example:
     Without this option, the following code would fail at parse time:
@@ -735,6 +753,8 @@ i+ =4;
     @endcode
     When this parse directive is set; the above code is accepted.
 
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
+
     @see @ref correct-operators "%correct-operators"
 
     @since %Qore 0.8.12
@@ -754,6 +774,8 @@ i+ =4;
     @par Description:
     Include the upper limit in @ref Qore::range() "range()" and @ref Qore::xrange() "xrange()" as with %Qore before 0.9.5
 
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
+
     @see @ref correct-range "%correct-range"
 
     @since %Qore 0.9.5
@@ -772,6 +794,8 @@ i+ =4;
 
     @par Description:
     Do not enforce @ref reference_type "reference" and @ref reference_or_nothing_type "*reference" type restrictions as with pre-0.8.13; when this option is in effect, the @ref reference_type "reference" and @ref reference_or_nothing_type "*reference" type restrictions are ignored and have no type restrictions.
+
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
 
     @since %Qore 0.8.3
 
@@ -797,6 +821,8 @@ i+ =4;
     as @ref softint_or_nothing_type "*softint") accept \c NULL as @ref nothing "NOTHING" with or without this option,
     and @ref softlist_type "softlist" converts it to an empty list.
 
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
+
     @see @ref correct-soft-types "%correct-soft-types"
 
     @since %Qore 3.0
@@ -815,6 +841,8 @@ i+ =4;
 
     @par Description:
     Use pre-0.9 sprintf format handling where no argument is handled differently than @ref nothing
+
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
 
     @see @ref correct-sprintf "%correct-sprintf"
 
@@ -835,6 +863,8 @@ i+ =4;
     @par Description:
     Use pre-1.17 varargs handling where varargs are detected based on the function or method body, and the vararg flag
     is set by default on all @ref abstract "abstract" methods.
+
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
 
     @see @ref correct-varargs "%correct-varargs"
 
@@ -1598,6 +1628,14 @@ sub validate_input(int value, int max_value) {
 
     Because @ref streaming-any "%streaming-any" is enabled, \c any is parsed as the @ref streaming_any "any streaming operator" in expression contexts while remaining available as the @ref any_type "any" type name in declarations for compatibility. In @ref modern "%modern" code, use @ref auto_type "auto" for unrestricted declarations unless complex runtime type stripping is specifically required.
 
+    @anchor modern_option_consistency
+    @par Consistent Parse Options:
+    \c %%modern guarantees a consistent set of parse options, which the @ref execution_modes "compiled execution modes" rely on.  While it is in effect:
+    - the compatibility options that change the meaning of code cannot be set: @ref broken-cast "%broken-cast", @ref broken-int-assignments "%broken-int-assignments", @ref broken-list-parsing "%broken-list-parsing", @ref broken-list-range "%broken-list-range", @ref broken-logic-precedence "%broken-logic-precedence", @ref broken-loop-statement "%broken-loop-statement", @ref broken-namespace-resolution "%broken-namespace-resolution", @ref broken-narrowed-types "%broken-narrowed-types", @ref broken-operators "%broken-operators", @ref broken-range "%broken-range", @ref broken-references "%broken-references", @ref broken-sprintf "%broken-sprintf", @ref broken-varargs "%broken-varargs", @ref broken-soft-types "%broken-soft-types", @ref broken-auto-cast "%broken-auto-cast", @ref strict-bool-eval "%strict-bool-eval" and @ref no-string-index-char "%no-string-index-char"
+    - the options that it implies cannot be disabled while it stays in effect: @ref no-negative-offsets "%no-negative-offsets", and disabling @ref no-summarize "%no-summarize" or @ref streaming-any "%streaming-any" through the API
+
+    Such a parse directive raises a \c PARSE-OPTION-ERROR parse exception, and such a call of Program::setParseOptions(), Program::disableParseOptions(), Program::replaceParseOptions() or of the Program constructor (also for a child Program that has \c %%modern from its parent) raises an \c OPTION-ERROR exception.  \c %%modern itself, taking effect after such an option was set (a \c %%modern directive after it, @ref Qore::PO_MODERN given with Program::setParseOptions(), a child Program created with @ref Qore::PO_MODERN whose parent has the option), turns the option off.  Disabling one of the options that make up \c %%modern (@ref old-style "%old-style", @ref loose-args "%loose-args", @ref require-dollar "%require-dollar", @ref assume-global "%assume-global") turns \c %%modern off for the rest of the parse context, after which the compatibility options can be used; this is how legacy code in a file that is parsed in \c %%modern mode by its extension opts out.  Options that do not change the meaning of code, such as warnings, restrictions and keyword opt-outs, can be set as before.
+
     @par File Extension:
     Starting with %Qore 3.0, files with any extension except <tt>.q</tt> automatically enable \c %%modern mode without requiring any parse directive. This includes conventional extensions such as <tt>.qr</tt>, <tt>.qc</tt>, <tt>.qm</tt>, <tt>.qtest</tt>, <tt>.qsd</tt>, <tt>.qfd</tt>, <tt>.qrd</tt>, <tt>.qore</tt>, as well as files with no extension at all. Only files whose filename ends in exactly <tt>.q</tt> stay in legacy mode by default, preserving backward compatibility for existing scripts.
 
@@ -2307,6 +2345,8 @@ string value = c("legacy");
     @par Description:
     Preserves the historical single-index string behavior where \c string[i] returns \c *string. Without this option, \c string[i] returns \c *char while string ranges and list indexes still return strings.
 
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
+
     @par Example:
     @code{.py}
 %no-string-index-char
@@ -2333,7 +2373,7 @@ string value = c("legacy");
 
     Invalid negative indexes remain invalid after normalization.  Reads return @ref nothing for out-of-range single indexes; lvalue assignment and single-index removal raise the same index exceptions as other invalid negative lvalue indexes.
 
-    This option is implied by @ref modern "%modern". Use @ref no-negative-offsets "%no-negative-offsets" after @ref modern "%modern" to preserve legacy negative-index behavior in a compatibility file.
+    This option is implied by @ref modern "%modern", and cannot be disabled while @ref modern "%modern" is in effect (see @ref modern_option_consistency); a compatibility file that depends on legacy negative-index behavior uses @ref no-negative-offsets "%no-negative-offsets" without @ref modern "%modern".
 
     @par Example:
     @code{.py}
@@ -2365,11 +2405,13 @@ binary b = <102030>[-2..-1];        # <2030>
     n/a (clears @ref QoreParseOptions::NEGATIVE_OFFSETS)
 
     @par Description:
-    Clears @ref negative-offsets "%negative-offsets" in the current parse context. Use this directive after @ref modern "%modern" when a source file depends on legacy negative-index behavior, for example expecting list and binary single indexes below zero to return @ref nothing instead of addressing from the end.
+    Clears @ref negative-offsets "%negative-offsets" in the current parse context, for a source file that depends on legacy negative-index behavior, for example expecting list and binary single indexes below zero to return @ref nothing instead of addressing from the end.
+
+    This directive cannot be used while @ref modern "%modern" is in effect, which implies @ref negative-offsets "%negative-offsets": it raises a \c PARSE-OPTION-ERROR parse exception there (see @ref modern_option_consistency); legacy code that depends on it is parsed without @ref modern "%modern" (as a <tt>.q</tt> file, or after @ref old-style "%old-style").
 
     @par Example:
     @code{.py}
-%modern
+%old-style
 %no-negative-offsets
 
 assertEq(NOTHING, (10, 20, 30)[-1]);
@@ -2932,6 +2974,8 @@ if (str)
     @endcode \n
     If <tt>%%strict-bool-eval</tt> is set, then %Qore's boolean evaluation will evaluate \c "hello" in a strict mathematical sense and convert it to 0, which is @ref False "False", so nothing would be printed out, but when <tt>%%perl-bool-eval</tt> is enabled, this will be @ref True "True" (following the rules for <string>::val()).\n\n
     %Qore's strict mathematical boolean evaluation was the default prior to %Qore 0.8.6, however it was considered non-intuitive and a design bug, and therefore the default behavior of the language was changed to a more intuitive form of boolean evaluation as documented in @ref perl-bool-eval "%perl-bool-eval".
+
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" turns it off when it takes effect (see @ref modern_option_consistency).
 
     @note also affects the @ref Qore::boolean(auto) "boolean(auto)" function
 

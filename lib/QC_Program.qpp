@@ -1594,6 +1594,10 @@ Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
         return;
     }
 
+    if (qore_program_private::checkNewProgramModernOptions(independent ? nullptr : getProgram(), parse_options,
+            xsink)) {
+        return;
+    }
     QoreProgram* pgm = new QoreProgram(independent ? nullptr : getProgram(), parse_options);
     //pgm->registerQoreObject(self, xsink);
     assert(!xsink->isEvent());
@@ -1625,6 +1629,10 @@ Program pgm(opts);
  */
 Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool independent)
         [dom=EMBEDDED_LOGIC; flags=NAMED_ARGS] {
+    if (qore_program_private::checkNewProgramModernOptions(independent ? nullptr : getProgram(), parse_options->get(),
+            xsink)) {
+        return;
+    }
     QoreProgram* pgm = new QoreProgram(independent ? nullptr : getProgram(), parse_options->get());
     assert(!xsink->isEvent());
     program_set_independent_creator(*pgm, independent);

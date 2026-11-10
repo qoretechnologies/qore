@@ -1152,12 +1152,80 @@ public:
     DLLLOCAL const QoreProgramLocation* getLocation(const QoreProgramLocation&, int sline, int eline,
         int scol, int ecol);
 
+    //! Returns true if the parse options have every option of %modern (PO_MODERN)
+    DLLLOCAL static bool isModern(const QoreParseOptions& po) {
+        return (po & PO_MODERN) == PO_MODERN;
+    }
+
+    //! The options that %modern implies beyond its own (PO_MODERN); they cannot be disabled while it is in effect
+    /** %modern guarantees a consistent set of parse options, which the compiled execution modes rely on (issue #5682)
+    */
+    DLLLOCAL static QoreParseOptions modernImpliedOptions() {
+        return QoreParseOptions::NO_SUMMARIZE | QoreParseOptions::STREAMING_ANY | PO_NEGATIVE_OFFSETS;
+    }
+
+    //! The compatibility options that change the meaning of code; they cannot be set while %modern is in effect
+    /** %modern turns them off when it takes effect (applyParseOptionImplications()); see issue #5682
+    */
+    DLLLOCAL static QoreParseOptions modernIncompatibleOptions() {
+        return QoreParseOptions(PO_BROKEN_NARROWED_TYPES | PO_STRICT_BOOLEAN_EVAL | PO_BROKEN_LIST_PARSING
+                | PO_BROKEN_LOGIC_PRECEDENCE | PO_BROKEN_INT_ASSIGNMENTS | PO_BROKEN_OPERATORS
+                | PO_BROKEN_LOOP_STATEMENT | PO_BROKEN_REFERENCES | PO_BROKEN_SPRINTF | PO_BROKEN_CAST
+                | PO_BROKEN_NAMESPACE_RESOLUTION | PO_BROKEN_RANGE | PO_BROKEN_VARARGS | PO_BROKEN_LIST_RANGE)
+            | QoreParseOptions::BROKEN_SOFT_TYPES | QoreParseOptions::BROKEN_AUTO_CAST
+            | QoreParseOptions::NO_STRING_INDEX_CHAR;
+    }
+
+    //! Appends the parse directives of the given options to the string, separated by ", "
+    DLLLOCAL static void describeParseOptions(const QoreParseOptions& po, QoreString& str);
+
+    //! Returns the options of the change that %modern does not allow with the given parse options, if any
+    /** While %modern is in effect, a compatibility option that changes the meaning of code cannot be set
+        (\a set true), and an option that %modern implies cannot be disabled (\a set false) while %modern stays in
+        effect; disabling one of %modern's own options (%old-style, %loose-args, ...) turns %modern off, which is
+        allowed (issue #5682)
+    */
+    DLLLOCAL static QoreParseOptions getModernConflict(const QoreParseOptions& current, const QoreParseOptions& po,
+            bool set) {
+        if (!isModern(current)) {
+            return QoreParseOptions();
+        }
+        if (set) {
+            return po & modernIncompatibleOptions();
+        }
+        if (po & PO_MODERN) {
+            return QoreParseOptions();
+        }
+        return po & modernImpliedOptions();
+    }
+
+    //! Raises the exception for a change of parse options that %modern does not allow; see getModernConflict()
+    /** @return -1 if the change is not allowed, with the exception raised, 0 if it is allowed
+    */
+    DLLLOCAL static int checkModernConflict(const QoreParseOptions& current, const QoreParseOptions& po, bool set,
+            const char* what, ExceptionSink* xsink);
+
+    //! Raises the parse exception for a parse directive that %modern does not allow; see getModernConflict()
+    DLLLOCAL int parseCheckModernConflict(const QoreProgramLocation* loc, const QoreParseOptions& po, bool set);
+
+    //! Raises an exception if the options of a new Program request a compatibility option that %modern does not allow
+    /** The Program has %modern from the options given or from its parent (issue #5682)
+
+        @return -1 if the options are not allowed, with the exception raised, 0 if they are
+    */
+    DLLLOCAL static int checkNewProgramModernOptions(const QoreProgram* parent, const QoreParseOptions& po,
+            ExceptionSink* xsink);
+
     // apply parse-option bit implications that cannot be encoded in the int64 PO_* macros
+    /** %modern implies further options and turns off the compatibility options that change the meaning of code
+        (issue #5682): a Program that takes %modern on (a %modern directive, a file parsed in %modern mode by its
+        extension, PO_MODERN given by the API or inherited by a child Program) drops them; setting them while %modern
+        is in effect is refused (getModernConflict())
+    */
     DLLLOCAL void applyParseOptionImplications() {
-        if ((pwo.parse_options & PO_MODERN) == PO_MODERN) {
-            pwo.parse_options |= QoreParseOptions::NO_SUMMARIZE;
-            pwo.parse_options |= QoreParseOptions::STREAMING_ANY;
-            pwo.parse_options |= PO_NEGATIVE_OFFSETS;
+        if (isModern(pwo.parse_options)) {
+            pwo.parse_options |= modernImpliedOptions();
+            pwo.parse_options &= ~modernIncompatibleOptions();
         }
     }
 
@@ -3109,6 +3177,9 @@ public:
             xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
             return -1;
         }
+        if (checkModernConflict(pwo.parse_options, po, true, "Program::setParseOptions()", xsink)) {
+            return -1;
+        }
 
         setParseOptionsIntern(po);
         return 0;
@@ -3138,6 +3209,9 @@ public:
             xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
             return -1;
         }
+        if (checkModernConflict(pwo.parse_options, po, false, "Program::disableParseOptions()", xsink)) {
+            return -1;
+        }
 
         disableParseOptionsIntern(po);
         return 0;
@@ -3150,6 +3224,10 @@ public:
             return -1;
         }
 
+        // the options given must be consistent: %modern with no compatibility option that changes the meaning of code
+        if (checkModernConflict(po, po, true, "Program::replaceParseOptions()", xsink)) {
+            return -1;
+        }
         //printd(5, "qore_program_private::replaceParseOptions() this: %p pgm: %p replacing po: %lld with po: %lld\n", this, pgm, pwo.parse_options, po);
         replaceParseOptionsIntern(po);
         return 0;
@@ -3163,6 +3241,9 @@ public:
             parse_error(*loc, "parse options have been locked on this program object");
             return -1;
         }
+        if (parseCheckModernConflict(loc, po, true)) {
+            return -1;
+        }
 
         setParseOptionsIntern(po);
         return 0;
@@ -3173,6 +3254,9 @@ public:
         // note: disabling PO_POSITIVE_OPTION is more restrictive so let's allow to disable
         if (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked && !po_allow_restrict) {
             parse_error(*loc, "parse options have been locked on this program object");
+            return -1;
+        }
+        if (parseCheckModernConflict(loc, po, false)) {
             return -1;
         }
 

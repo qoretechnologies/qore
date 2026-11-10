@@ -1,0 +1,186 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - checks the parse options of Programs that the test creates, and runs scripts in child processes in every mode
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ModernOptionConsistencyTest
+
+#! %modern guarantees a consistent set of parse options (issue #5682)
+/** While %modern is in effect, the compatibility options that change the meaning of code cannot be set, and the options
+    that it implies cannot be disabled while it stays in effect; %modern taking effect turns the compatibility options
+    off; disabling one of %modern's own options (%old-style, ...) turns %modern off, after which they can be used.  The
+    same applies to parse directives, the Program API and child Programs, in every execution mode and in AOT
+    executables.
+*/
+class ModernOptionConsistencyTest inherits QUnit::Test {
+    public {
+        #! the parse directives that cannot be set while %modern is in effect, with their parse options
+        const Refused = {
+            "broken-cast": PO_BROKEN_CAST,
+            "broken-int-assignments": PO_BROKEN_INT_ASSIGNMENTS,
+            "broken-list-parsing": PO_BROKEN_LIST_PARSING,
+            "broken-list-range": PO_BROKEN_LIST_RANGE,
+            "broken-logic-precedence": PO_BROKEN_LOGIC_PRECEDENCE,
+            "broken-loop-statement": PO_BROKEN_LOOP_STATEMENT,
+            "broken-namespace-resolution": PO_BROKEN_NAMESPACE_RESOLUTION,
+            "broken-narrowed-types": PO_BROKEN_NARROWED_TYPES,
+            "broken-operators": PO_BROKEN_OPERATORS,
+            "broken-range": PO_BROKEN_RANGE,
+            "broken-references": PO_BROKEN_REFERENCES,
+            "broken-sprintf": PO_BROKEN_SPRINTF,
+            "broken-varargs": PO_BROKEN_VARARGS,
+            "broken-soft-types": NOTHING,
+            "broken-auto-cast": NOTHING,
+            "strict-bool-eval": PO_STRICT_BOOLEAN_EVAL,
+            "no-string-index-char": NOTHING,
+        };
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string dir;
+    }
+
+    constructor() : QUnit::Test("modern option consistency", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        dir = get_script_dir();
+        addTestCase("directives after %modern", \directivesAfterModern());
+        addTestCase("%modern after a directive", \modernAfterDirective());
+        addTestCase("opting out with %old-style", \optOut());
+        addTestCase("options that stay settable", \settable());
+        addTestCase("API", \api());
+        addTestCase("child Programs", \children());
+        addTestCase("scripts in every mode", \scriptModes());
+        addTestCase("scripts as AOT executables", \scriptAot());
+        set_return_value(main());
+    }
+
+    directivesAfterModern() {
+        foreach string d in (keys Refused) {
+            Program p(PO_MODERN);
+            assertThrows("PARSE-OPTION-ERROR", "%" + d + " cannot be used while %modern is in effect", \p.parse(),
+                ("%" + d + "\n", "refused-" + d), d);
+        }
+        Program p(PO_MODERN);
+        assertThrows("PARSE-OPTION-ERROR", "%negative-offsets cannot be disabled while %modern is in effect",
+            \p.parse(), ("%no-negative-offsets\n", "no-negative-offsets"));
+        # the %modern directive in the code is the same
+        Program p2(PO_NEW_STYLE);
+        assertThrows("PARSE-OPTION-ERROR", "%broken-range cannot be used", \p2.parse(),
+            ("%modern\n%broken-range\n", "directive-modern"));
+    }
+
+    modernAfterDirective() {
+        foreach hash<auto> i in (Refused.pairIterator()) {
+            if (!exists i.value) {
+                continue;
+            }
+            Program p(PO_NEW_STYLE);
+            p.parse("%" + i.key + "\n%modern\nint sub opts() { return get_parse_options(); }\n", "reset-" + i.key);
+            int po = p.callFunction("opts");
+            assertEq(0, po & i.value, i.key + " is turned off by %modern");
+            assertEq(PO_MODERN, po & PO_MODERN, i.key + ": %modern is in effect");
+        }
+    }
+
+    optOut() {
+        Program p(PO_MODERN);
+        p.parse("%old-style\n%no-negative-offsets\n%broken-range\n"
+            "list sub r() { return ((1, 2, 3)[-1], range(1, 3)); }\n", "opt-out");
+        assertEq((NOTHING, (1, 2, 3)), p.callFunction("r"));
+    }
+
+    settable() {
+        Program p(PO_MODERN);
+        p.parse("%no-terminal-io\n%no-enum\n%disable-warning unreferenced-variable\n%no-char-type\n"
+            "%allow-statement-no-effect\nint sub f() { return 1; }\n", "settable");
+        assertEq(1, p.callFunction("f"));
+    }
+
+    api() {
+        {
+            Program p(PO_MODERN);
+            assertThrows("OPTION-ERROR", "Program::setParseOptions\\(\\): %broken-list-parsing cannot be set",
+                \p.setParseOptions(), PO_BROKEN_LIST_PARSING);
+            assertThrows("OPTION-ERROR", "%no-string-index-char cannot be set", \p.setParseOptions(),
+                new ParseOptions("no-string-index-char"));
+            assertThrows("OPTION-ERROR", "Program::disableParseOptions\\(\\): %negative-offsets cannot be disabled",
+                \p.disableParseOptions(), new ParseOptions("negative-offsets"));
+            assertThrows("OPTION-ERROR", "%no-summarize cannot be disabled", \p.disableParseOptions(),
+                new ParseOptions("no-summarize"));
+            # disabling one of %modern's own options turns %modern off
+            p.disableParseOptions(PO_STRICT_ARGS);
+            p.setParseOptions(PO_BROKEN_LIST_PARSING);
+            assertEq(PO_BROKEN_LIST_PARSING, p.getParseOptions() & PO_BROKEN_LIST_PARSING);
+        }
+        {
+            Program p(PO_NEW_STYLE | PO_BROKEN_RANGE);
+            p.setParseOptions(PO_MODERN);
+            assertEq(0, p.getParseOptions() & PO_BROKEN_RANGE, "PO_MODERN turns the option off");
+        }
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("OPTION-ERROR", "Program::replaceParseOptions\\(\\): %broken-cast cannot be set",
+                \p.replaceParseOptions(), PO_MODERN | PO_BROKEN_CAST);
+            p.replaceParseOptions(PO_NEW_STYLE | PO_BROKEN_CAST);
+            assertEq(PO_BROKEN_CAST, p.getParseOptions() & PO_BROKEN_CAST);
+        }
+        assertThrows("OPTION-ERROR", "Program::constructor\\(\\): %broken-range cannot be set", sub () {
+            Program p(PO_MODERN | PO_BROKEN_RANGE);
+        });
+    }
+
+    children() {
+        # this Program allows other options for its children; a child created by a Program that does not has its
+        # options too
+        Program parent(PO_MODERN);
+        parent.parse("sub child_with(int po) { Program p(po); }\n"
+            "int sub modern_child_of_legacy() { Program p(PO_NEW_STYLE | PO_BROKEN_RANGE); "
+            "return p.getParseOptions(); }\n", "parent");
+        assertThrows("OPTION-ERROR", "Program::constructor\\(\\): %broken-range cannot be set",
+            \parent.callFunction(), ("child_with", PO_BROKEN_RANGE));
+        Program legacy(PO_NEW_STYLE | PO_BROKEN_RANGE);
+        legacy.parse("int sub modern_child() { Program p(PO_MODERN); return p.getParseOptions(); }\n", "legacy");
+        int po = legacy.callFunction("modern_child");
+        assertEq(PO_MODERN, po & PO_MODERN, "the child has %modern");
+        assertEq(0, po & PO_BROKEN_RANGE, "%modern turns the inherited option off");
+    }
+
+    scriptModes() {
+        # code without %modern runs in the AST interpreter only (the other execution modes and AOT need %modern)
+        assertEq(ReadOnlyFile::readTextFile(dir + "/opt-out.expected"), ExecModeHarness::run(sprintf("%s %s "
+            "--exec-mode=ast %s/opt-out.qr", env, qore_bin, dir)), "opt-out: the AST interpreter");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s/refused.qr", env, qore_bin, mode, dir),
+                ExecModeHarness::NativeCheck::None);
+            assertRegex("PARSE-OPTION-ERROR: %negative-offsets cannot be disabled while %modern is in effect", out,
+                "refused: " + mode);
+        }
+    }
+
+    scriptAot() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("modern-option-consistency-aot-");
+        string refused = tmp.path + "/refused";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s/refused.qr", env, qcc_bin, refused, dir));
+        assertFalse(is_file(refused), "qcc refuses the script");
+        assertRegex("PARSE-OPTION-ERROR: %negative-offsets cannot be disabled while %modern is in effect", out,
+            "refused: AOT");
+    }
+}

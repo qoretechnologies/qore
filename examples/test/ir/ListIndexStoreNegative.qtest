@@ -104,20 +104,18 @@ t();
     }
 
     testNegativeIndexNoNegativeOffsets() {
-        string code = "
-%no-negative-offsets
-sub t() {
-    *list<auto> l;
-    try {
-        l[-1] = 99;
-        printf(\"no exception\\n\");
-    } catch (hash<ExceptionInfo> ex) {
-        printf(\"%s\\n\", ex.err);
-    }
-}
-t();
-";
-        assertSameInAllModes(code, "NEGATIVE-LIST-INDEX\n", "negative index with %no-negative-offsets");
+        # %no-negative-offsets cannot be used while %modern is in effect, which the execution modes other than AST
+        # need (issue #5682): the directive is refused in every mode
+        foreach string mode in (Modes) {
+            TmpFile script();
+            script.file.write("%modern\n%no-negative-offsets\nlist<auto> l = (1,);\nl[-1] = 99;\n");
+            script.file.close();
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s",
+                ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0], mode, script.path));
+            assertNeq(0, r.rc, "refused: " + mode);
+            assertRegex("PARSE-OPTION-ERROR: %negative-offsets cannot be disabled while %modern is in effect",
+                r.stderr + r.out, "refused: " + mode);
+        }
     }
 
     testNegativeIndexAutoVivify() {
