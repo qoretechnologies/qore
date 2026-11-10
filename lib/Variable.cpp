@@ -984,8 +984,11 @@ LValueHelper::~LValueHelper() {
         o->tDeref();
     }
 
-    // the value of the root of a background lvalue, which nothing refers to any more (issue #5723)
-    bg_root_value.discard(vl.xsink);
+    // the value of the root of a background lvalue, which nothing refers to any more (issue #5723); only the lvalues
+    // of background expressions have one, so the others do not call discard()
+    if (bg_root_value.hasNode()) {
+        bg_root_value.discard(vl.xsink);
+    }
 }
 
 void LValueHelper::removedValue(const QoreValue& v) {
