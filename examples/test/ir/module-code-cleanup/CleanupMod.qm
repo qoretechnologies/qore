@@ -1,0 +1,225 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+#! module for module-code-cleanup.qtest: module code that runs while the module cleanup runs
+/** A signal handler that module code sets belongs to the module's Program, and the thread data that module code
+    saves in a thread holds objects whose destructors run module code when the thread's data is deleted
+*/
+
+%modern
+
+module CleanupMod {
+    version = "1.0";
+    desc = "module code at cleanup test module";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        CleanupMod::Priv::init();
+    };
+}
+
+public namespace CleanupMod {
+namespace Priv {
+    # the script path of the module's Program, which identifies the Program that code runs in
+    our *string module_path;
+    # the Programs that the signal handler ran in
+    our Queue handler_runs;
+    # reports the handler of the signal when the module's data is cleared at the module cleanup; see
+    # arm_cleanup_check()
+    our *CleanupCheck cleanup_check;
+    # counts the calls of the destructor of Holder that ran in the module's Program
+    our Counter holder_calls;
+    # calls module code from another thread while the module cleanup clears the module's data; see
+    # arm_cleanup_entry_check()
+    our *CleanupEntryCheck cleanup_entry_check;
+    # hands work that calls module code to other threads while the module cleanup clears the module's data; see
+    # arm_cleanup_delegate_check()
+    our *CleanupDelegateCheck cleanup_delegate_check;
+
+    sub init() {
+        module_path = get_script_path();
+        handler_runs = new Queue();
+        holder_calls = new Counter();
+    }
+
+    string sub program() {
+        return get_script_path() == module_path ? "module" : sprintf("caller %y", get_script_path());
+    }
+
+    #! reports whether the signal has a handler when it is destroyed: when the module cleanup clears the module's data
+    /** The handler that module code set must be gone by then: the signal thread, which runs until the end of the
+        cleanup, would otherwise run module code in the module's Program while its data is destroyed
+    */
+    class CleanupCheck {
+        private {
+            int sig;
+        }
+
+        constructor(int sig) {
+            self.sig = sig;
+        }
+
+        destructor() {
+            stdout.printf("handler set while the module's data is cleared: %y\n",
+                call_function("dbg_signal_handler_set", sig));
+            stdout.sync();
+        }
+    }
+
+    #! calls module code from a foreign thread through a Program that is not a module's when it is destroyed: when the
+    #! module cleanup clears the module's data
+    /** The module's Program is closed to every thread but the one that runs the cleanup by then, so the call fails,
+        while the cleanup thread can still call module code
+    */
+    class CleanupEntryCheck {
+        private {
+            Program pgm;
+        }
+
+        constructor() {
+            pgm = new Program(PO_NEW_STYLE);
+            pgm.parse("%requires CleanupMod\nint sub run() { return CleanupMod::f(1); }", "cleanup-entry-check");
+        }
+
+        destructor() {
+            stdout.printf("another thread while the module's data is cleared: %y\n",
+                call_function("dbg_run_in_foreign_thread", pgm.getCallReference("run")));
+            stdout.printf("the cleanup thread while the module's data is cleared: %y\n", CleanupMod::f(1));
+            stdout.sync();
+        }
+    }
+
+    #! hands work that calls module code to other threads when it is destroyed: when the module cleanup clears the
+    #! module's data
+    /** The code that hands the work over runs in a Program that is not a module's, so the work calls module code
+        from another Program, and each call reports the exception it raises instead of failing its thread.  The work
+        that the cleanup thread hands over (a ThreadPool task, a background thread, and a task of such a task) can
+        call module code, as the cleanup thread can; the same work handed over by a foreign thread cannot
+    */
+    class CleanupDelegateCheck {
+        public {
+            #! the code of the Program that hands the work over; every function returns the result of the call of
+            #! module code that the work made, or the code of the exception it raised
+            const Code = "%new-style
+%requires CleanupMod
+auto sub call() {
+    try {
+        return CleanupMod::f(1);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+auto sub pool_task() {
+    ThreadPool tp(1);
+    Queue q();
+    tp.submit(sub () { q.push(call()); });
+    auto rv = q.get();
+    tp.stopWait();
+    return rv;
+}
+auto sub background_thread() {
+    Queue q();
+    background q.push(call());
+    return q.get();
+}
+auto sub nested_pool_task() {
+    ThreadPool tp(1);
+    Queue q();
+    tp.submit(sub () { q.push(pool_task()); });
+    auto rv = q.get();
+    tp.stopWait();
+    return rv;
+}
+# for a foreign thread, which reports the code of an exception and nothing else: the result is raised if it is the
+# code of an exception
+sub raise(auto rv) {
+    if (rv.typeCode() == NT_STRING) {
+        throw rv;
+    }
+}
+sub foreign_pool_task() {
+    raise(pool_task());
+}
+sub foreign_background_thread() {
+    raise(background_thread());
+}
+";
+        }
+
+        private {
+            Program pgm;
+        }
+
+        constructor() {
+            pgm = new Program(PO_NEW_STYLE);
+            pgm.parse(Code, "cleanup-delegate-check");
+        }
+
+        destructor() {
+            stdout.printf("a ThreadPool task of the cleanup thread: %y\n", pgm.callFunction("pool_task"));
+            stdout.printf("a background thread of the cleanup thread: %y\n", pgm.callFunction("background_thread"));
+            stdout.printf("a ThreadPool task of a ThreadPool task of the cleanup thread: %y\n",
+                pgm.callFunction("nested_pool_task"));
+            stdout.printf("a ThreadPool task of a foreign thread: %y\n",
+                call_function("dbg_run_in_foreign_thread", pgm.getCallReference("foreign_pool_task")));
+            stdout.printf("a background thread of a foreign thread: %y\n",
+                call_function("dbg_run_in_foreign_thread", pgm.getCallReference("foreign_background_thread")));
+            stdout.sync();
+        }
+    }
+
+    #! an object that module code saves in a thread's data: its destructor runs module code when the data is deleted
+    class Holder {
+        destructor() {
+            if (program() == "module") {
+                holder_calls.inc();
+            }
+        }
+    }
+}
+
+#! sets a handler for the signal, which reports the Program it runs in
+public sub set_handler(int sig) {
+    set_signal_handler(sig, sub (int s) {
+        Priv::handler_runs.push(Priv::program());
+    });
+}
+
+#! returns the Program that the next call of the signal handler ran in
+public string sub wait_handler() {
+    return Priv::handler_runs.get();
+}
+
+#! reports whether the signal has a handler while the module cleanup clears the module's data (debug builds only)
+public sub arm_cleanup_check(int sig) {
+    Priv::cleanup_check = new Priv::CleanupCheck(sig);
+}
+
+#! calls module code from another thread while the module cleanup clears the module's data (debug builds only)
+public sub arm_cleanup_entry_check() {
+    Priv::cleanup_entry_check = new Priv::CleanupEntryCheck();
+}
+
+#! hands work that calls module code to other threads while the module cleanup clears the module's data (debug builds
+#! only)
+public sub arm_cleanup_delegate_check() {
+    Priv::cleanup_delegate_check = new Priv::CleanupDelegateCheck();
+}
+
+#! saves an object in the thread's data whose destructor runs module code when the thread's data is deleted
+public sub keep() {
+    save_thread_data("cleanup-mod-holder", new Priv::Holder());
+}
+
+#! returns the number of destructor calls of the objects saved with keep() that ran in the module's Program
+public int sub holder_calls() {
+    return Priv::holder_calls.getCount();
+}
+
+#! a function of the module
+public int sub f(int x) {
+    return x + 1;
+}
+}

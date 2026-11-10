@@ -254,6 +254,29 @@ public:
         return s == H3State::READING || s == H3State::WAIT_READ;
     }
 
+    //! Waits for the server's HTTP/3 SETTINGS before an extended CONNECT request (RFC 9220); raises and returns -1 on
+    //! timeout
+    /** The connection is ready at the end of the QUIC handshake, and the server's SETTINGS, the first frame of its
+        control stream (RFC 9114 section 6.2.1), can arrive after it; a client must not send an extended CONNECT
+        before the SETTINGS advertised SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 9220 section 3), and every other request
+        is sent at once (RFC 9114 section 7.2.4.2).  The wait ends when the SETTINGS arrive or the connection is
+        closed (then the submission reports why), or at the connect deadline (see setConnectTimeout()), with
+        HTTP3-EXTENDED-CONNECT-ERROR.  The I/O thread and the continuePoll() workers never wait, as the I/O thread
+        reads the SETTINGS: there, a request made before the SETTINGS arrived gets HTTP3-EXTENDED-CONNECT-ERROR from
+        QuicSession::checkExtendedConnectAllowed()
+    */
+    DLLLOCAL int waitForExtendedConnectSettings(ExceptionSink* xsink);
+
+    //! Sets the connect timeout, which also bounds the wait of an extended CONNECT for the server's SETTINGS
+    /** Called once at construction, before the connection starts; the deadline is the time of the call plus the
+        timeout (see waitForExtendedConnectSettings()); 0 or less means no deadline
+    */
+    DLLLOCAL void setConnectTimeout(int64_t connect_timeout_ms) {
+        settings_deadline_us = connect_timeout_ms > 0
+            ? q_clock_getmicros_monotonic() + connect_timeout_ms * 1000
+            : 0;
+    }
+
     //! Sets the state of the open connection (READING or WAIT_READ) unless it was closed meanwhile; I/O thread only
     /** H3State::CLOSED is final.  Other threads close the operation too: a submitting thread records a refused
         submission with setSubmitError(), and abort() runs on any thread.  Such a close can happen while the I/O
@@ -447,6 +470,11 @@ private:
     //! True when GOAWAY received from server
     std::atomic<bool> goaway_received{false};
 
+    //! The deadline of the wait of an extended CONNECT for the server's SETTINGS (monotonic us; 0 = none)
+    /** The start of the connection plus its connect timeout (see setConnectTimeout()); immutable after construction
+    */
+    int64_t settings_deadline_us = 0;
+
     //! A connection migration requested by an application thread with requestMigration()
     struct MigrationRequest {
         enum class State {
@@ -628,6 +656,9 @@ private:
     DLLLOCAL void notifyPendingStreams(const char* err, const char* desc, ExceptionSink* xsink);
     DLLLOCAL void cleanupPendingState();
     DLLLOCAL void fireReadyCallback(ExceptionSink* xsink);
+
+    //! Wakes the threads waiting for the server's SETTINGS when the connection is closed
+    DLLLOCAL void wakeSettingsWaiters();
 };
 
 DLLLOCAL QoreClass* initHttp3ClientPollOperationBaseClass(QoreNamespace& qorens);

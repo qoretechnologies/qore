@@ -996,6 +996,10 @@ public:
     */
     std::atomic<bool> sandboxed{false};
 
+    //! true if the Program stays allocated while any code can run: a module's Program (see
+    //! qore_program_set_module_lifetime()); never cleared once set
+    std::atomic<bool> module_lifetime{false};
+
     // define map
     dmap_t dmap;
 
@@ -1795,6 +1799,19 @@ public:
         return !ptid || ptid == tid || (ptid > 0 && tidmap.find(tid) != tidmap.end());
     }
 
+    //! Returns true if another thread has deleted the Program or is deleting it, so that no new thread can enter it
+    /** A deleted Program stays allocated and registered while any thread holds a reference to it: a thread that
+        calls one of its functions from another Program holds one until the call has left it (see
+        QoreSourceProgramHolder), also when the call fails because the Program is deleted.  Whether the Program can
+        still be referenced therefore depends on the timing of other threads; this does not.  Code scheduled to run
+        in a new thread cannot run in a Program for which this returns true.
+    */
+    DLLLOCAL bool deletedByOtherThread() const {
+        int tid = q_gettid();
+        AutoLocker al(plock);
+        return ptid && ptid != tid;
+    }
+
     //! Takes the parse lock without waiting for another thread that holds it
     /** @return 0 if the lock was taken (also if this thread holds it already), 1 if another thread holds it, -1 if
         the Program is deleted or being deleted by another thread (\c PROGRAM-ERROR is raised then)
@@ -2113,6 +2130,11 @@ public:
 
     DLLLOCAL bool parsingLocked() const {
         return parse_tid == q_gettid();
+    }
+
+    //! returns true if the given thread, which is the current thread, holds the parse lock
+    DLLLOCAL bool parsingLocked(int tid) const {
+        return parse_tid == tid;
     }
 
     // called only with plock held
@@ -2949,6 +2971,36 @@ public:
     }
 
     // returns true if setting for the first time, false if not
+    //! instantiates the top-level local variables of the Program for a thread that has entered it before
+    /** Called without the lock, as for an entry with the thread's data cached (see
+        ThreadProgramData::findModuleProgramData())
+    */
+    DLLLOCAL void instantiateThreadVarData(ThreadLocalProgramData& tlpd) {
+        if (!tlpd.inst) {
+            doTopLevelInstantiation(tlpd);
+        } else {
+            // Catch up on new top-level vars added after the tlpd was first
+            // initialized. Two scenarios:
+            //  1. REPL mode (PO_ALLOW_REPARSE): new statements may add vars.
+            //  2. A runtime context-switch into this program fired before its
+            //     parse finished — e.g. a reflection callback during another
+            //     module's init creates the tlpd with a partial LVList, and
+            //     the remaining top-level vars (like `x` in `%requires Foo;
+            //     string x = ...;`) are added to the LVList afterwards.
+            //     Without this, those vars never get instantiated and any
+            //     later access walks off the lvstack.
+            const LVList* lvl = sb.getLVList();
+            if (lvl && lvl->size() > tlpd.inst_count) {
+                doTopLevelInstantiation(tlpd);
+            }
+        }
+    }
+
+    //! instantiates the top-level local variables of the Program for a thread whose data is cached
+    DLLLOCAL static void instantiateThreadVarData(QoreProgram& pgm, ThreadLocalProgramData& tlpd) {
+        pgm.priv->instantiateThreadVarData(tlpd);
+    }
+
     DLLLOCAL bool setThreadVarData(ThreadProgramData* td, ThreadLocalProgramData*& new_tlpd, bool run) {
         SafeLocker sl(tlock);
         // wait for data to finished being cleared if applicable
@@ -2993,24 +3045,7 @@ public:
         printd(5, "qore_program_private::setThreadVarData() (not first) this: %p pgm: %p td: %p run: %s inst: %s\n", this, pgm, td, run ? "true" : "false", tlpd->inst ? "true" : "false");
 
         if (run) {
-            if (!tlpd->inst) {
-                doTopLevelInstantiation(*tlpd);
-            } else {
-                // Catch up on new top-level vars added after the tlpd was first
-                // initialized. Two scenarios:
-                //  1. REPL mode (PO_ALLOW_REPARSE): new statements may add vars.
-                //  2. A runtime context-switch into this program fired before its
-                //     parse finished — e.g. a reflection callback during another
-                //     module's init creates the tlpd with a partial LVList, and
-                //     the remaining top-level vars (like `x` in `%requires Foo;
-                //     string x = ...;`) are added to the LVList afterwards.
-                //     Without this, those vars never get instantiated and any
-                //     later access walks off the lvstack.
-                const LVList* lvl = sb.getLVList();
-                if (lvl && lvl->size() > tlpd->inst_count) {
-                    doTopLevelInstantiation(*tlpd);
-                }
-            }
+            instantiateThreadVarData(*tlpd);
         }
 
         return false;
@@ -4011,6 +4046,23 @@ public:
         return pgm.priv;
     }
 
+    //! returns true if the code of the Program is sandboxed (see qore_program_is_sandboxed()), inline
+    DLLLOCAL static bool isSandboxed(const QoreProgram* pgm) {
+        if (!pgm) {
+            return false;
+        }
+        const qore_program_private* pp = pgm->priv;
+        // the flag is set whenever a manager is set; the manager is read as well, so that the answer never depends on
+        // the order of the two stores
+        return pp->sandboxed.load(std::memory_order_acquire) || pp->sandbox_manager.load(std::memory_order_acquire);
+    }
+
+    //! returns the parse options of the Program, as QoreProgram::getParseOptions() does, without a call into the
+    //! library's exported interface
+    DLLLOCAL static const QoreParseOptions& getParseOptions(const QoreProgram& pgm) {
+        return pgm.priv->pwo.parse_options;
+    }
+
     //! returns true if the Program's constructor has run to completion
     /** A Program is reachable from code running inside its own constructor - see the "constructed"
         member - and must not be selected as a thread's runtime context until it is complete;
@@ -4067,6 +4119,11 @@ public:
     DLLLOCAL static void addSignal(QoreProgram& pgm, int sig) {
         assert(pgm.priv->sigset.find(sig) == pgm.priv->sigset.end());
         pgm.priv->sigset.insert(sig);
+    }
+
+    //! returns the signals of the Program's handlers; locking is done by the signal manager
+    DLLLOCAL static int_set_t getSignals(const QoreProgram& pgm) {
+        return pgm.priv->sigset;
     }
 
     // locking is done by the signal manager
@@ -5020,6 +5077,12 @@ private:
     */
 
     DLLLOCAL qore_debug_program_private* getDebugProgram(AutoQoreCounterDec& ad) {
+        // a Program without a debug program takes no lock: this runs on every entry of a thread into the Program, and
+        // a debug program attached concurrently is found as if the lock had been taken just before it was attached
+        // (attachDebug() marks the thread's data for a pending attach under the lock in any case)
+        if (!dpgm.load(std::memory_order_acquire)) {
+            return nullptr;
+        }
         AutoLocker al(tlock);
         //QoreAutoRWReadLocker al(&lck_debug_program);
         qore_debug_program_private* ret = dpgm.load(std::memory_order_relaxed);

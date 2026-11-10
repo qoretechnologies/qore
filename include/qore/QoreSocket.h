@@ -2130,6 +2130,16 @@ int MyPollable::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) cons
     */
     DLLEXPORT void setHttp2ConnectProtocolEnabled(bool enable);
 
+    //! Sets whether the HTTP/3 server sessions of this QUIC socket advertise SETTINGS_ENABLE_CONNECT_PROTOCOL
+    /** Applies to the server sessions created after the call. When \c enable is \c false, the sessions do not
+        advertise RFC 9220 extended CONNECT support, so clients do not attempt WebSocket over HTTP/3.
+
+        @param enable \c true to advertise SETTINGS_ENABLE_CONNECT_PROTOCOL (default), \c false to disable
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void setHttp3ConnectProtocolEnabled(bool enable);
+
     DLLEXPORT int sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
             bool end_stream, ExceptionSink* xsink);
     DLLEXPORT BinaryNode* readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);

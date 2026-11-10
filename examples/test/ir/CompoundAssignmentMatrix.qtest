@@ -2,6 +2,10 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
+#
+# The script of some 1600 checks runs in every execution mode, on the IR tier and as a qcc executable: 190 s on an
+# idle machine with a debug build, which leaves too little of the default 300 s budget on a loaded CI host.
+# test-timeout: 900
 
 %modern
 %no-child-restrictions

@@ -215,7 +215,8 @@ string sub go() {
 
     #! createEvalProgram() while another thread parses code in the Program: each call either copies the Program between
     #! two parses or is refused, and a parse is refused while a copy runs; the outcome of each depends on timing, the
-    #! rule does not (the copy holds the Program's parse lock; see ProgramControl::createEvalProgram())
+    #! rule does not (the copy holds the Program's parse lock; see ProgramControl::createEvalProgram()).  A function
+    #! of the copy that the Program defined runs in the Program, so a call of it is refused while code is parsed there
     concurrentParseTest() {
         Program base(PO_NEW_STYLE | PO_ALLOW_DEBUGGER);
         # an evaluation Program can be parsed again and again
@@ -236,17 +237,22 @@ string sub go() {
                 }
             }
         }();
-        hash<string, bool> copy_errors;
+        # the refusals of each step: the copy, and the call of the copied function
+        hash<string, hash<string, bool>> copy_errors = {"copy": {}, "call": {}};
         int copied = 0;
         while (done.getCount()) {
+            string step = "copy";
             try {
                 Program e = pc.createEvalProgram(PO_NEW_STYLE);
                 # the copy has the code of every parse that completed before it, and is usable
                 e.parse("int sub e() { return f0(); }", "e");
+                # f0() runs in the Program that defined it, as an inherited function does, which the other thread
+                # may be parsing code in
+                step = "call";
                 assertEq(0, e.callFunction("e"));
                 ++copied;
             } catch (hash<ExceptionInfo> ex) {
-                copy_errors{ex.err + ": " + ex.desc} = True;
+                copy_errors{step}{ex.err + ": " + ex.desc} = True;
             }
         }
         thread_join(tid);
@@ -254,8 +260,11 @@ string sub go() {
         foreach string err in (keys parse_errors) {
             assertRegex("^PARSE-ERROR: cannot parse while threads are active", err);
         }
-        foreach string err in (keys copy_errors) {
+        foreach string err in (keys copy_errors.copy) {
             assertRegex("^PROGRAM-ERROR: the Program is currently undergoing parsing", err);
+        }
+        foreach string err in (keys copy_errors.call) {
+            assertRegex("^PROGRAM-ERROR: the Program accessed is currently undergoing parsing", err);
         }
         assertGt(0, copied + parsed);
     }

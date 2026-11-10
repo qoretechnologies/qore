@@ -1,0 +1,43 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+#! module for reference-module-program-entry.qtest: returns references to variables of the module's Program
+/** The references are created in module code, so they refer to lvalues of the module's Program; the test uses them
+    from the script's Program
+*/
+
+%modern
+
+module RefEntryMod {
+    version = "1.0";
+    desc = "reference to a module lvalue test module";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+thread_local *int tlx;
+our *int gx;
+
+public namespace RefEntryMod {
+#! returns a reference to a thread_local variable of the module's Program
+public reference<*int> sub get_tl() {
+    return \tlx;
+}
+
+#! returns a reference to a global variable of the module's Program
+public reference<*int> sub get_g() {
+    return \gx;
+}
+
+#! returns the value of the module's global variable, read by module code
+public *int sub read_g() {
+    return gx;
+}
+
+#! returns the current thread's value of the module's thread_local variable, read by module code
+public *int sub read_tl() {
+    return tlx;
+}
+}

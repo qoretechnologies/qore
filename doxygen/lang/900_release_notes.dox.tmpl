@@ -110,19 +110,17 @@
     arguments or with a parent class listed before the final method's class that declares or inherits its name;
     both are now parse errors.
 
-    @par Module Code Runs with the Restrictions of Its Caller
-    A method of a user-module class, a closure created in module code and the module code they call run with the
-    restrictions of their caller as well as their own, and a module function looks up names at run time in its
-    caller's %Program, where only the module's exported names exist; see @ref user_module_runtime_context.
+    @par Module Code Runs in the Module's Program
+    User code called from another %Program, such as a module function, a method of a module class or a function
+    imported with @ref Qore::Program::importFunction() "Program::importFunction()", runs in the %Program that defined
+    it with that %Program's names and options, governed by the caller's @ref Qore::SandboxManager "SandboxManager"
+    and, for module code, by a sandboxed caller's restrictions (see @ref user_module_runtime_context).
 
     @par Temporary Values Live Until the End of Their Statement
-    A value that an expression creates and nothing else refers to, such as the object returned by a call in a chain of
-    member accesses and method calls, lives until the end of its statement instead of until the call that used it
-    returns; code that relies on such an object being destroyed earlier must assign it to a variable.  A value read
-    through a reference, or from a global, thread-local, static class or closure-bound variable or a member of the
-    current object, also lives until the end of its statement when it is the receiver of a call or a member access
-    or the operand of an operator, even if the statement assigns the variable another value; given to a call as an
-    argument, it is released when the call returns, as every argument is.  See @ref temporary_lifetime.
+    A value that an expression creates and nothing else refers to, such as an object returned by a call in a chain of
+    member accesses and method calls, or a value read through a reference and used as a receiver or an operand, lives
+    until the end of its statement; given to a call as an argument, it is released when the call returns.  Code that
+    relies on earlier destruction must assign the value to a variable; see @ref temporary_lifetime.
 
     @par Data Provider Types Restored From Their Descriptions Can Be Cyclic and Shared
     \c DataProvider::AbstractDataProviderType::get() restores each type of a description once, so a recursive type is
@@ -1524,10 +1522,16 @@
     - using a @ref lvalue_references "reference" to a lvalue of a deleted @ref Qore::Program "Program", which a
       function of the Program can return, crashed; it now raises a \c PROGRAM-ERROR exception (see
       @ref references_overview)
+    - calling a @ref call_reference "call reference" to a function of a deleted @ref Qore::Program "Program", made in
+      that Program (for example returned by one of its functions), crashed or returned a wrong value; it now raises a
+      \c PROGRAM-ERROR exception, as a call of a reference made in a Program that imported the function does
     - a thread running the code of a @ref Qore::Program "Program" whose deletion waited for it could not call into the
       Program again through the code of another Program (\c PROGRAM-ERROR); see @ref threads_and_program_deletion
     - in the IR, JIT and tiered execution modes, leaving the scope of a variable holding a reference to a lvalue that
       was gone, such as a member of a deleted object, raised an exception that the AST interpreter does not raise
+    - Qore did not compile with OpenSSL 4, and libqore did not link when the Brotli and LZ4 library directories that
+      pkg-config gives were not on the linker's default search path (as with Homebrew on Apple Silicon); libqore now
+      links them by their full paths
     - a timed wait of @ref Qore::Thread::Counter "Counter", @ref Qore::Thread::Queue "Queue",
       @ref Qore::Thread::Mutex "Mutex", @ref Qore::Thread::RWLock "RWLock" or @ref Qore::Thread::Gate "Gate" woken
       without what it waited for (another waiter took it first, or another %Program's interrupt woke it) waited for
@@ -1684,11 +1688,9 @@
       could be a value that the variable's type does not store (ex: <tt>any v; (v += <StatInfo>{}).fullType()</tt>
       gave \c "hash<StatInfo>" while \c v holds a plain \c hash); the result is now the value the variable holds, as
       with the AST interpreter
-    - in the IR, JIT and tiered execution modes, a closure could run the code of a closure that had been freed: the
-      closure of an @ref Qore::Expression "Expression" evaluated after another Expression with a closure had been
-      deleted, and a closure of a @ref Qore::Program "Program" created after another Program had been deleted; the call
-      gave a wrong result, a \c RUNTIME-TYPE-ERROR for a parameter of another function or an \c IR-EXEC-ERROR, or
-      crashed; a closure now runs its own code
+    - in the IR, JIT and tiered execution modes, a closure of an @ref Qore::Expression "Expression" or a
+      @ref Qore::Program "Program" created after another one had been deleted could run the freed closure's code,
+      giving wrong results, exceptions or a crash; a closure now runs its own code (see @ref closure)
     - in the IR execution mode, and where the JIT and tiered modes use the IR interpreter, a \c thread_local variable
       read after an assignment or an in-place change in the same function could give a value it does not hold, such
       as the unconverted value assigned or its value before the change; the variable's value is now given, as with
@@ -1849,6 +1851,9 @@
       \c LVALUE-ERROR or used no value for the variable instead of the value it had when the thread started; with the
       IR, JIT, tiered and AOT execution modes this happened with <tt>new hash<K, V>(...)</tt> and
       <tt>new list<T>(...)</tt>
+    - modifying a local variable in an argument of a call in a @ref background "background" expression crashed the
+      AST interpreter and modified a copy in the other execution modes; it is now a parse error, as elsewhere in the
+      expression
     - the smallest integer divided by \c -1 (@ref division_operator "/", @ref modulo_operator "%") crashed with
       \c SIGFPE
     - methods implemented by @ref Qore::SQL::AbstractDatasource "AbstractDatasource",
