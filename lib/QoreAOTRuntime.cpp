@@ -4082,7 +4082,12 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (ref1 && *ref1) {
                     std::string type_error;
                     QoreAOTTypeResolver type_resolver(pgm);
-                    const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
+                    // a type parameter of the function (hash<string, T> in a generic function) is owned by its
+                    // signature
+                    const UserSignature* new_signature = uvb ? uvb->getUserSignature() : nullptr;
+                    const QoreTypeInfo* ti = new_signature
+                        ? type_resolver.resolveForSignature(ref1, type_error, new_signature)
+                        : type_resolver.resolve(ref1, type_error);
                     if (ti) {
                         // Convert call_args to QoreParseListNode for NewComplexHashNode
                         QoreParseListNode* pln = nullptr;
@@ -4139,7 +4144,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (ref1 && *ref1) {
                     std::string type_error;
                     QoreAOTTypeResolver type_resolver(pgm);
-                    const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
+                    // see COMPLEX_HASH_NEW
+                    const UserSignature* new_signature = uvb ? uvb->getUserSignature() : nullptr;
+                    const QoreTypeInfo* ti = new_signature
+                        ? type_resolver.resolveForSignature(ref1, type_error, new_signature)
+                        : type_resolver.resolve(ref1, type_error);
                     if (ti) {
                         NewComplexListNode* ncl = new NewComplexListNode(&loc_builtin, ti, arg_val);
                         ctx->exprs[i] = toBitsNB(QoreValue(ncl));
