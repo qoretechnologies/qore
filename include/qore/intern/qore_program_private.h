@@ -1771,12 +1771,17 @@ public:
 
     //! see enterWithoutContext(); \a tid is the current thread's TID
     DLLLOCAL bool enterWithoutContext(int tid) {
+        // declared before the lock, so that a transition is published after it is released
+        ProgramThreadActivityPublisher activity;
         AutoLocker al(plock);
         if (!canEnterIntern(tid)) {
             return false;
         }
         ++tidmap[tid];
-        ++thread_count;
+        // decThreadCount() publishes the transition to idle, so the transition to active is published here as well
+        if (!thread_count++) {
+            activityTransitionIntern(activity, false);
+        }
         return true;
     }
 
@@ -1880,6 +1885,8 @@ public:
     DLLLOCAL int incThreadCountForCopy(ExceptionSink* xsink) {
         assert(xsink);
         int tid = q_gettid();
+        // declared before the lock, so that a transition is published after it is released
+        ProgramThreadActivityPublisher activity;
         AutoLocker al(plock);
         if (ptid) {
             xsink->raiseException("PROGRAM-ERROR", "the Program has already been deleted; its code cannot be "
@@ -1887,7 +1894,10 @@ public:
             return -1;
         }
         ++tidmap[tid];
-        ++thread_count;
+        // decThreadCount() publishes the transition to idle, so the transition to active is published here as well
+        if (!thread_count++) {
+            activityTransitionIntern(activity, false);
+        }
         return 0;
     }
 
