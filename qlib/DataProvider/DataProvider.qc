@@ -607,6 +607,7 @@ public class DataProvider {
                 factory_module_map{new_class_name} = new_module_name;
             }
             factory_cache{name} = factory;
+            DataProviderSandboxState::factoryRegistered(name, new_module_name);
             return True;
         });
 
@@ -624,15 +625,31 @@ public class DataProvider {
                     if (exists previous_module_name) {
                         factory_module_map{previous_class_name} = previous_module_name;
                     }
+                    DataProviderSandboxState::factoryRegistered(name, previous_module_name);
                 } else {
                     remove factory_cache{name};
+                    DataProviderSandboxState::factoryRemoved(name);
                 }
                 return True;
             });
         });
     }
 
-    #! Returns the given data provider factory or @ref nothing if not present
+    #! Returns the given factory, refusing it to a sandboxed caller if its module registers an app with uncontrolled I/O
+    /** @throw PROVIDER-ERROR the given provider factory is unknown
+        @throw APP-SANDBOX-ACCESS-DENIED see DataProviderActionCatalog::checkFactorySandboxAccess()
+    */
+    private:internal static AbstractDataProviderFactory getCheckedFactoryEx(string name) {
+        AbstractDataProviderFactory factory = DataProvider::getFactoryEx(name);
+        # the common path: one lookup, no lock
+        if (DataProviderSandboxState::refused_factories{name} && SandboxManager::isSandboxed()) {
+            DataProviderActionCatalog::checkFactorySandboxAccess(name,
+                DataProviderSandboxState::refused_factories{name}, True);
+        }
+        return factory;
+    }
+
+        #! Returns the given data provider factory or @ref nothing if not present
     static *AbstractDataProviderFactory getFactory(string name) {
         DataProvider::checkRequest();
         *AbstractDataProviderFactory factory;
@@ -687,7 +704,8 @@ public class DataProvider {
         AbstractDataProvider provider;
         {
             list<string> path_list = path.split("/");
-            provider = DataProvider::getFactoryEx(shift path_list).createWithTemplate(template_options, options);
+            provider = DataProvider::getCheckedFactoryEx(shift path_list).createWithTemplate(template_options,
+                options);
             map provider = provider.getChildProviderEx($1), path_list;
         }
         return provider;
@@ -706,7 +724,7 @@ public class DataProvider {
         AbstractDataProvider provider;
         {
             list<string> path_list = path.split("/");
-            provider = DataProvider::getFactoryEx(shift path_list).getProviderFromExample(example, options);
+            provider = DataProvider::getCheckedFactoryEx(shift path_list).getProviderFromExample(example, options);
             map provider = provider.getChildProviderEx($1), path_list;
         }
         return provider;
@@ -725,7 +743,7 @@ public class DataProvider {
         AbstractDataProvider provider;
         {
             list<string> path_list = path.split("/");
-            provider = DataProvider::getFactoryEx(shift path_list).getProviderFromExample(example, options);
+            provider = DataProvider::getCheckedFactoryEx(shift path_list).getProviderFromExample(example, options);
             map provider = provider.getChildProviderEx($1), path_list;
         }
         return provider;
@@ -741,7 +759,7 @@ public class DataProvider {
         AbstractDataProvider provider;
         {
             list<string> path_list = path.split("/");
-            provider = DataProvider::getFactoryEx(shift path_list).create(options);
+            provider = DataProvider::getCheckedFactoryEx(shift path_list).create(options);
             map provider = provider.getChildProviderEx($1), path_list;
         }
         return provider;
@@ -760,7 +778,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromString("db{datasource=orac
     */
     static AbstractDataProvider getFactoryObjectFromString(string name) {
         hash<FactoryInfo> info = DataProvider::getFactoryInfoFromString(name);
-        AbstractDataProvider provider = DataProvider::getFactoryEx(info.name).create(info.options);
+        AbstractDataProvider provider = DataProvider::getCheckedFactoryEx(info.name).create(info.options);
         map provider = provider.getChildProviderEx($1), info.path_list;
         return provider;
     }
@@ -796,6 +814,10 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
             }
         }
         if (factory) {
+            if (DataProviderSandboxState::refused_factories{info.name} && SandboxManager::isSandboxed()) {
+                DataProviderActionCatalog::checkFactorySandboxAccess(info.name,
+                    DataProviderSandboxState::refused_factories{info.name}, True);
+            }
             AbstractDataProvider provider = factory.create(info.options);
             map provider = provider.getChildProvider($1), info.path_list;
             return provider;
@@ -2382,6 +2404,7 @@ if (action.data_provider_info) {
             if (!factory) {
                 return False;
             }
+            DataProviderSandboxState::factoryRemoved(name);
             # the factory's QoreProgram may already be destroyed if module init failed;
             # handle PROGRAM-ERROR gracefully during rollback cleanup
             try {

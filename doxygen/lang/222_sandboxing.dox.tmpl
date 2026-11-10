@@ -692,11 +692,16 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
 
     A data provider app declares this when it is registered: \c external_io in its
     @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo" says that it does I/O that the sandbox does not
-    see, and \c sandbox_aware that it has been audited to check all of that I/O against its caller's policy.  Data
-    provider consumers refuse a sandboxed caller an app that sets \c external_io without \c sandbox_aware, with an
-    \c APP-SANDBOX-ACCESS-DENIED exception naming the app, using
+    see, and \c sandbox_aware that it has been audited to check all of that I/O against its caller's policy.  A
+    sandboxed caller is refused an app that sets \c external_io without \c sandbox_aware, with an
+    \c APP-SANDBOX-ACCESS-DENIED exception naming the app: the data provider catalog refuses it itself the providers
+    of such an app's actions and the factories of the module that registers it, and data provider consumers that
+    serve a sandboxed caller on another thread apply the rule with
     @ref DataProvider::DataProviderActionCatalog::checkSandboxAccess() "DataProviderActionCatalog::checkSandboxAccess()";
-    trusted callers are not affected.
+    trusted callers are not affected.  A Program that is only restricted with parse options (ex:
+    @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" or
+    @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM") and has no @ref Qore::SandboxManager "SandboxManager" is not
+    sandboxed for this rule; such a Program cannot use the \c jni module's Java classes itself.
 
     @section sandbox_resources Resource Limits
 

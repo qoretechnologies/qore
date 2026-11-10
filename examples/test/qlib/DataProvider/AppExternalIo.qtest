@@ -17,6 +17,10 @@
 %define NoMsgPack
 %endtry
 
+%try-module process >= 2.2
+%define NoProcess
+%endtry
+
 %exec-class AppExternalIoTest
 
 #! Tests the external I/O declarations of data provider apps and the rule for sandboxed callers
@@ -61,9 +65,20 @@ public class AppExternalIoTest inherits QUnit::Test {
         string registration_module = normalize_dir(get_script_dir()) + "/ProviderIndexEnvironmentMapFixture.qm";
         # registers the fixture apps
         string fixture_module = normalize_dir(get_script_dir()) + "/ProviderIndexExternalIoFixture.qm";
+        # registers a factory and an app with external I/O that is not sandbox-aware
+        string external_factory_module = normalize_dir(get_script_dir()) + "/ExternalIoFactoryFixture.qm";
+        # registers a factory and an app with sandbox-aware external I/O
+        string aware_factory_module = normalize_dir(get_script_dir()) + "/SandboxAwareFactoryFixture.qm";
+        # an index published by origin/develop's DataProvider before the declarations existed
+        string develop_index = normalize_dir(get_script_dir()) + "/ProviderIndexDevelopFixture";
 
         # environment variables changed by the tests and their original values
         hash<string, auto> saved_env;
+
+        # the index directory of the environment, restored when the test ends
+        *string ambient_index_dir;
+        # an empty index directory used instead of it
+        string empty_index_dir;
     }
 
     constructor() : Test("DataProvider app external I/O declarations", "1.0") {
@@ -71,18 +86,39 @@ public class AppExternalIoTest inherits QUnit::Test {
         addTestCase("the declarations must be booleans and cannot change on re-registration",
             \registrationNegativeTest());
         addTestCase("isSandboxAllowed() decides by the declarations", \allowedTest());
+        addTestCase("the decision by name is made from the registered app", \byNameTest());
+        addTestCase("info that is not a typed app never decides", \untypedTest());
         addTestCase("a trusted caller is never refused", \trustedTest());
         addTestCase("an explicitly sandboxed caller is refused an undeclared external I/O app",
             \explicitSandboxedTest());
         addTestCase("a sandboxed caller is refused an undeclared external I/O app", \sandboxedTest());
         addTestCase("a system-policy capability called by sandboxed code is refused unless it says it is trusted",
             \capabilityTest());
+        addTestCase("the catalog refuses sandboxed code the providers of such an app's actions", \centralActionTest());
+        addTestCase("the catalog refuses sandboxed code the factories of a module with such an app",
+            \centralFactoryTest());
         addTestCase("the declarations survive the provider index", \indexRoundTripTest());
+        addTestCase("an index published before the declarations existed is read", \developIndexTest());
         addTestCase("an index of an app that is not registered reports it as unavailable", \indexMissingAppTest());
         set_return_value(main());
     }
 
-    #! Returns the info of a test app with the given declarations
+    #! Isolates the test from an ambient provider index: by-name decisions read the index for apps not loaded
+    globalSetUp() {
+        ambient_index_dir = getenv(ProviderIndexEnvVar);
+        empty_index_dir = make_tmp_dir();
+        ProviderIndexUtil::setEnvironmentVariable(empty_index_dir);
+        resetIndexState();
+    }
+
+    globalTearDown() {
+        if (ambient_index_dir) {
+            ProviderIndexUtil::setEnvironmentVariable(ambient_index_dir);
+        }
+        remove_tree(empty_index_dir);
+    }
+
+        #! Returns the info of a test app with the given declarations
     private static hash<DataProviderAppInfo> appInfo(string app, hash<auto> decl = {}) {
         return cast<hash<DataProviderAppInfo>>({
             "name": app,
@@ -165,10 +201,59 @@ public class AppExternalIoTest inherits QUnit::Test {
         foreach hash<auto> c in (Combinations) {
             assertEq(c.allowed, DataProviderActionCatalog::isSandboxAllowed(appInfo("AppExternalIoAllowed", c.decl)),
                 sprintf("%y", c.decl));
-            # the info as the provider index returns it: a plain hash
-            assertEq(c.allowed, DataProviderActionCatalog::isSandboxAllowed({"name": "x"} + c.decl),
-                sprintf("%y (plain hash)", c.decl));
         }
+    }
+
+    byNameTest() {
+        foreach hash<auto> c in (Combinations) {
+            string name = newName("AppExternalIoByName");
+            DataProviderActionCatalog::registerApp(appInfo(name, c.decl));
+            assertEq(c.allowed, DataProviderActionCatalog::isSandboxAllowed(name), sprintf("%y", c.decl));
+            # the registered app decides, not info that a caller gives
+            hash<DataProviderAppInfo> forged = appInfo(name, {"external_io": True, "sandbox_aware": True});
+            assertTrue(DataProviderActionCatalog::isSandboxAllowed(forged));
+            if (c.allowed) {
+                DataProviderActionCatalog::checkSandboxAccess(name, True);
+            } else {
+                assertRefused(appInfo(name), sub () { DataProviderActionCatalog::checkSandboxAccess(name, True); },
+                    sprintf("%y", c.decl));
+            }
+            DataProviderActionCatalog::checkSandboxAccess(name, False);
+            DataProviderActionCatalog::checkSandboxAccess(name);
+        }
+        # an app that is registered nowhere cannot be decided on: sandboxed callers are refused it
+        string unknown = newName("AppExternalIoUnknown");
+        assertFalse(DataProviderActionCatalog::isSandboxAllowed(unknown));
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "not registered", \DataProviderActionCatalog::checkSandboxAccess(),
+            (unknown, True));
+        DataProviderActionCatalog::checkSandboxAccess(unknown, False);
+        Program p = getSandboxed();
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "not registered", sub () {
+            p.callFunction("through", sub () { DataProviderActionCatalog::checkSandboxAccess(unknown); });
+        });
+    }
+
+    untypedTest() {
+        # a plain hash is not an app's registered info: it is rejected, never decided on
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub () {
+            auto info = {"name": "x", "external_io": True};
+            DataProviderActionCatalog::isSandboxAllowed(info);
+        });
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub () {
+            auto info = {"name": "x", "external_io": True};
+            DataProviderActionCatalog::checkSandboxAccess(info, True);
+        });
+        # a stringified boolean cannot be made into a declaration that allows the app
+        foreach hash<auto> decl in ({"external_io": "false"}, {"external_io": True, "sandbox_aware": "true"},
+                {"external_io": 0}, {"sandbox_aware": "1"}) {
+            assertThrows("RUNTIME-TYPE-ERROR", sub () { appInfo("AppExternalIoString", decl); }, NOTHING,
+                sprintf("%y", decl));
+        }
+        # a wrong typed hash is not an app's info
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub () {
+            auto info = <ExceptionInfo>{"err": "x", "desc": "y"};
+            DataProviderActionCatalog::isSandboxAllowed(info);
+        });
     }
 
     trustedTest() {
@@ -233,6 +318,63 @@ public class AppExternalIoTest inherits QUnit::Test {
         }));
     }
 
+    centralActionTest() {
+        load_module(external_factory_module);
+        load_module(aware_factory_module);
+        Program p = getSandboxed();
+        hash<DataProviderActionInfo> external = DataProviderActionCatalog::getAppActionEx(
+            "QoreTestExternalIoFactoryApp", "run");
+        hash<DataProviderActionInfo> aware = DataProviderActionCatalog::getAppActionEx(
+            "QoreTestSandboxAwareFactoryApp", "run");
+        # sandboxed code that uses the catalog directly is refused, with no consumer involved
+        assertRefused(DataProviderActionCatalog::getAppEx("QoreTestExternalIoFactoryApp"), sub () {
+            p.callFunction("through", sub () { DataProviderActionCatalog::getDataProviderForAction(external); });
+        }, "sandboxed: external I/O");
+        assertEq("SandboxAwareFixtureProvider", p.callFunction("through", auto sub () {
+            return DataProviderActionCatalog::getDataProviderForAction(aware).getName();
+        }), "sandboxed: sandbox-aware");
+        # trusted code is not refused
+        assertEq("ExternalIoFixtureProvider", DataProviderActionCatalog::getDataProviderForAction(external).getName());
+        assertEq("SandboxAwareFixtureProvider", DataProviderActionCatalog::getDataProviderForAction(aware).getName());
+    }
+
+    centralFactoryTest() {
+        load_module(external_factory_module);
+        load_module(aware_factory_module);
+        Program p = getSandboxed();
+        string app = "QoreTestExternalIoFactoryApp";
+        # every factory getter that creates a provider
+        hash<string, code> getters = {
+            "getFactoryObject": auto sub (string f) { return DataProvider::getFactoryObject(f); },
+            "getFactoryObjectFromString": auto sub (string f) { return DataProvider::getFactoryObjectFromString(f); },
+            "getFactoryObjectFromStringUseEnv": auto sub (string f) {
+                return DataProvider::getFactoryObjectFromStringUseEnv(f);
+            },
+            "getFactoryObjectWithTemplate": auto sub (string f) {
+                return DataProvider::getFactoryObjectWithTemplate(f, NOTHING, NOTHING);
+            },
+        };
+        foreach hash<auto> g in (getters.pairIterator()) {
+            code get = g.value;
+            try {
+                p.callFunction("through", sub () { get("qoretestexternalio"); });
+                fail(g.key + ": the factory was not refused");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("APP-SANDBOX-ACCESS-DENIED", ex.err, g.key);
+                assertRegex(app, ex.desc, g.key + ": the error names the app");
+                assertRegex("qoretestexternalio", ex.desc, g.key + ": the error names the factory");
+            }
+            assertEq("SandboxAwareFixtureProvider", p.callFunction("through", auto sub () {
+                return get("qoretestsandboxaware").getName();
+            }), g.key + ": sandbox-aware");
+            # a factory of a module without such an app
+            assertEq("NullDataProvider", p.callFunction("through", auto sub () { return get("null").getName(); }),
+                g.key + ": null factory");
+            # trusted code is not refused
+            assertEq("ExternalIoFixtureProvider", get("qoretestexternalio").getName(), g.key + ": trusted");
+        }
+    }
+
     indexRoundTripTest() {
 %ifdef NoMsgPack
         testSkip("no MessagePack support");
@@ -241,14 +383,23 @@ public class AppExternalIoTest inherits QUnit::Test {
         on_exit remove_tree(dir);
         on_exit restoreEnv();
 
+%ifdef NoProcess
+        testSkip("no process module 2.2 or later");
+%endif
         setEnv("QORE_DATA_PROVIDERS", registration_module);
         setEnv("QORE_PROVIDER_INDEX_FIXTURE_MODULE", fixture_module);
+        # a worker process loads the fixture module and writes the metadata of its apps: the apps are not registered
+        # in this process, so what is read below comes from the index
         ProviderIndex::createDataProviderIndex(NOTHING, dir, <ProviderIndexCreateOptions>{
             "load_known_factories": False,
             "load_typescript_actions": False,
-            "workers": 0,
+            "workers": 1,
             "apps": keys FixtureApps,
         });
+        hash<string, bool> registered = map {$1: True}, DataProviderActionCatalog::getAppNamesNoInit();
+        foreach string app in (keys FixtureApps) {
+            assertFalse(registered{app} ?? False, app + ": only in the index");
+        }
 
         ProviderIndexUtil::setEnvironmentVariable(dir);
         resetIndexState();
@@ -259,11 +410,13 @@ public class AppExternalIoTest inherits QUnit::Test {
             hash<auto> decl = FixtureDeclarations{i.key};
             assertEq(decl.external_io, app.external_io, i.key + ": external_io read from the index");
             assertEq(decl.sandbox_aware, app.sandbox_aware, i.key + ": sandbox_aware read from the index");
-            assertEq(i.value, DataProviderActionCatalog::isSandboxAllowed(app), i.key + ": decision from the index");
+            # by name: the registered info, here the index's
+            assertEq(i.value, DataProviderActionCatalog::isSandboxAllowed(i.key), i.key + ": decision from the index");
+            string name = i.key;
             if (i.value) {
-                DataProviderActionCatalog::checkSandboxAccess(app, True);
+                DataProviderActionCatalog::checkSandboxAccess(name, True);
             } else {
-                assertRefused(app, sub () { DataProviderActionCatalog::checkSandboxAccess(app, True); },
+                assertRefused(app, sub () { DataProviderActionCatalog::checkSandboxAccess(name, True); },
                     i.key + ": refused from the index");
             }
         }
@@ -277,6 +430,10 @@ public class AppExternalIoTest inherits QUnit::Test {
         # unavailable; the build raised a RUNTIME-TYPE-ERROR, as the list of apps to index was left without a value
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        # no ambient provider modules: only the app filter decides what is indexed
+        setEnv("QORE_DATA_PROVIDERS");
+        setEnv("QORE_PROVIDER_INDEX_FIXTURE_MODULE");
         string app = newName("AppExternalIoNotRegistered");
         hash<auto> info = ProviderIndex::createDataProviderIndex(NOTHING, dir, <ProviderIndexCreateOptions>{
             "load_known_factories": False,
@@ -289,6 +446,37 @@ public class AppExternalIoTest inherits QUnit::Test {
         assertFalse(report.complete, "the index is not complete");
         assertEq((app,), map $1.app, report.unavailable, "the missing app is reported as unavailable");
         assertEq(0, info.summary.apps, "no app is indexed");
+    }
+
+    developIndexTest() {
+%ifdef NoMsgPack
+        testSkip("no MessagePack support");
+%endif
+        # the fixture is read from a copy, so that reading it cannot change the committed files
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        Dir src();
+        src.chdir(develop_index);
+        foreach string file in (src.listFiles()) {
+            copy_file(develop_index + DirSep + file, dir + DirSep + file);
+        }
+        # ProviderIndexUtil reads the index directory from its own environment
+        *string prev_index_dir = getenv(ProviderIndexEnvVar);
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        on_exit if (prev_index_dir) {
+            ProviderIndexUtil::setEnvironmentVariable(prev_index_dir);
+        }
+        # the index of an earlier test case may be in use: read this one instead of it
+        hash<ProviderIndexReloadInfo> reload = ProviderIndexUtil::reloadIndex();
+        assertTrue(reload.reloaded, sprintf("reloaded: %y", reload.error));
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+        foreach string app in ("QoreTestIndexHealthyApp", "QoreTestIndexPartialApp") {
+            *hash<auto> info = ProviderIndexUtil::tryGetAppInfo(app);
+            assertEq(app, info.name, app + ": read");
+            assertNothing(info.external_io, app + ": no declaration");
+            assertNothing(info.sandbox_aware, app + ": no declaration");
+            assertTrue(DataProviderActionCatalog::isSandboxAllowed(app), app + ": allowed");
+        }
     }
 
     #! Sets a process environment variable until restoreEnv() is called

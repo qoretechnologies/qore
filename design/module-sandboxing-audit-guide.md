@@ -710,15 +710,28 @@ Java code may be offered to sandboxed callers only if an audit confirms all of t
 
 A data provider app whose actions do I/O that Qore does not see (Java, Python, JavaScript, native client
 libraries) sets `external_io` in its `DataProviderAppInfo`. It sets `sandbox_aware` only after an audit against
-the rules above confirms that all of that I/O is checked. Data provider consumers call
-`DataProviderActionCatalog::checkSandboxAccess(app[, sandboxed])` before using an app for a caller; it raises
-`APP-SANDBOX-ACCESS-DENIED` for a sandboxed caller when `external_io` is set without `sandbox_aware`, and never
-refuses trusted callers. Without an explicit `sandboxed` argument, the caller is sandboxed if
+the rules above confirms that all of that I/O is checked. A sandboxed caller is refused an app with `external_io`
+and without `sandbox_aware` (`APP-SANDBOX-ACCESS-DENIED`); trusted callers are never refused.
+
+The catalog enforces this itself, for code that a sandbox governs:
+`DataProviderActionCatalog::getDataProviderForAction()` refuses the provider of such an app's action (and of an app
+that is not registered), and `DataProvider::getFactoryObject()` and the other factory getters that create a provider
+refuse a factory whose class belongs to a module that registers such an app. The flag is per app: a factory of a
+module without such an app is not refused, and an action that a module contributes to another module's app is decided
+by that app. The checks are one hash lookup on the common path, with no lock.
+
+Consumers that serve a sandboxed caller on a thread its sandbox does not govern call
+`DataProviderActionCatalog::checkSandboxAccess(app_name, sandboxed)` before using an app for the caller. They pass the
+app's name, so the registered info decides, never a hash the caller supplied, and decide `sandboxed` from what they
+know about the caller, never from a value the caller supplied. Without an explicit `sandboxed` argument, the caller
+is sandboxed if
 `SandboxManager::isSandboxed()` is true, which also sees the sandbox through a policy barrier or a system-policy
 capability, so the default fails closed; trusted code that uses the app on purpose in a capability passes `False`,
 and a consumer that serves a tenant from a trusted thread passes `True`. (`isSandboxed()` is used, rather than
 `isGoverned()`, because it is not restricted, so the DataProvider module can be loaded first by a Program with
-`PO_NO_UNCONTROLLED_APIS`.)
+`PO_NO_UNCONTROLLED_APIS`.) A Program that is only restricted with parse options (`PO_NO_UNCONTROLLED_APIS`,
+`PO_NO_NETWORK`, `PO_NO_FILESYSTEM`) and has no `SandboxManager` is not sandboxed for this rule; it cannot use the
+jni module's Java classes itself.
 
 Audit findings for apps:
 
@@ -726,7 +739,13 @@ Audit findings for apps:
    unchecked
 2. **Unaudited `sandbox_aware`**: setting `sandbox_aware` without the audit removes the only protection
 3. **Consumers that skip the check**: every path that runs an action, or creates a provider or a connection for an
-   app, on behalf of a caller applies `checkSandboxAccess()`
+   app, on behalf of a sandboxed caller on a thread its sandbox does not govern applies `checkSandboxAccess()`
+4. **Forwarded decisions**: a consumer that passes `checkSandboxAccess()` a `sandboxed` value, or app info, that its
+   caller supplied lets the caller decide for itself
+5. **Direct use of a provider module's classes**: sandboxed code that loads a provider module and creates its
+   connection or provider classes itself does not go through the catalog; a module with an `external_io` app must
+   refuse sandboxed callers in its own entry points as well (its connection and provider constructors, with
+   `DataProviderActionCatalog::checkSandboxAccess(<app name>)`)
 
 #### Common Java audit findings
 
