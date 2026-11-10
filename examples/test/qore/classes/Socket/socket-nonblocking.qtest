@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - non-blocking socket descriptors from their creation and for accepted sockets (accept4 or fcntl)
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SocketNonBlockingTest
+
+#! Tests that the sockets of the library are non-blocking from their creation and stay so
+/** Every operation on a socket is a step of a poll operation of the async I/O controller, which handles EAGAIN, and
+    the I/O threads expect the socket to be non-blocking.  A socket used to be made blocking again by the calls on
+    other threads than the I/O threads, and an accepted socket was returned blocking, which cost two fcntl() calls
+    per operation; see design/async-socket-io.md, "Sync I/O on Born-Non-Blocking Sockets".  The state of the
+    descriptor is read with dbg_socket_is_nonblocking() (debug builds, not on Windows).
+*/
+class SocketNonBlockingTest inherits QUnit::Test {
+    public {
+        const Timeout = 30s;
+    }
+
+    constructor() : QUnit::Test("SocketNonBlockingTest", "1.0", \ARGV) {
+        addTestCase("listening, connected and accepted sockets are non-blocking", \testCreated());
+        addTestCase("a socket stays non-blocking after calls on several threads", \testAfterCalls());
+        addTestCase("a reopened socket is non-blocking", \testReopened());
+        set_return_value(main());
+    }
+
+    #! returns the state of the descriptor, or skips the test where it cannot be read
+    private *bool isNonBlocking(Socket s) {
+        try {
+            return call_function("dbg_socket_is_nonblocking", s);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                testSkip("debug build required for dbg_socket_is_nonblocking()");
+            }
+            rethrow;
+        }
+    }
+
+    private Socket listener() {
+        Socket s();
+        s.bindINET("127.0.0.1", 0);
+        s.listen();
+        return s;
+    }
+
+    testCreated() {
+        Socket l = listener();
+        on_exit l.close();
+        *bool nb = isNonBlocking(l);
+        if (!exists nb) {
+            testSkip("the state of a descriptor cannot be read on this platform");
+        }
+        assertTrue(nb, "a listening socket is non-blocking");
+
+        Socket c();
+        c.connect("127.0.0.1:" + l.getPort(), Timeout);
+        on_exit c.close();
+        assertTrue(isNonBlocking(c), "a connected socket is non-blocking");
+
+        Socket a = l.accept(Timeout);
+        on_exit a.close();
+        assertTrue(isNonBlocking(a), "an accepted socket is non-blocking before any operation on it");
+    }
+
+    testAfterCalls() {
+        Socket l = listener();
+        on_exit l.close();
+        if (!exists isNonBlocking(l)) {
+            testSkip("the state of a descriptor cannot be read on this platform");
+        }
+        Socket c();
+        c.connect("127.0.0.1:" + l.getPort(), Timeout);
+        on_exit c.close();
+        Socket a = l.accept(Timeout);
+        on_exit a.close();
+
+        # calls on the main thread
+        c.setNoDelay(True);
+        c.send("one");
+        assertEq("one", a.recv(3, Timeout));
+        assertTrue(isNonBlocking(c), "the client after calls on the main thread");
+        assertTrue(isNonBlocking(a), "the accepted socket after calls on the main thread");
+
+        # calls on other threads
+        Counter done(2);
+        background sub () {
+            on_exit done.dec();
+            a.send("two");
+        }();
+        background sub () {
+            on_exit done.dec();
+            c.getPeerInfo(False);
+            c.getRecvTimeout();
+        }();
+        done.waitForZero();
+        assertEq("two", c.recv(3, Timeout));
+        assertTrue(isNonBlocking(c), "the client after calls on other threads");
+        assertTrue(isNonBlocking(a), "the accepted socket after calls on other threads");
+    }
+
+    testReopened() {
+        Socket l = listener();
+        on_exit l.close();
+        if (!exists isNonBlocking(l)) {
+            testSkip("the state of a descriptor cannot be read on this platform");
+        }
+        Socket c();
+        c.connect("127.0.0.1:" + l.getPort(), Timeout);
+        l.accept(Timeout).close();
+        c.close();
+        # the same object, a new descriptor
+        c.connect("127.0.0.1:" + l.getPort(), Timeout);
+        on_exit c.close();
+        Socket a = l.accept(Timeout);
+        on_exit a.close();
+        assertTrue(isNonBlocking(c), "a socket connected again is non-blocking");
+        c.send("x");
+        assertEq("x", a.recv(1, Timeout));
+    }
+}
