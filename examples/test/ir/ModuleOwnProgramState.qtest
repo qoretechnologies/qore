@@ -408,11 +408,30 @@ foreach string f in (\"module_put_user_get\", \"user_put_module_get\", \"user_on
         return script_path;
     }
 
+    #! skips the test if a binary module that the Mapper and DataProvider modules require is not available
+    /** A partial build (without logger_bin, msgpack or xml, for example) cannot load those modules at all; the test
+        then has nothing to check, which is not a failure of the code under test.  Any other load failure is one.
+    */
+    private skipIfBinaryDependencyMissing() {
+        string probe = tmp.path + "/dependency-probe.q";
+        writeFile(probe, "%requires Mapper\n%requires DataProvider\n");
+        hash<ExecModeHarness::ModeRunResult> r = runScriptQuiet(qlib_src_dir + ":" + qlib_dir, probe);
+        if (r.rc) {
+            *list<*string> m = (r.out =~ x/feature '([^']+)' is not builtin and no module with this name could be found/);
+            if (m) {
+                testSkip(sprintf("the binary module %y that the Mapper and DataProvider modules require is not "
+                    "available", m[0]));
+            }
+        }
+    }
+
     testSourceQlib() {
+        skipIfBinaryDependencyMissing();
         checkAllModes(prepare(), qlib_src_dir + ":" + qlib_dir, "source");
     }
 
     testAotQlib() {
+        skipIfBinaryDependencyMissing();
         *string aot_dir = getQlibAotDir();
         if (!aot_dir) {
             testSkip("the build has no AOT forms of the Mapper and DataProvider modules that load in this Qore");
