@@ -545,6 +545,249 @@ auto sub remove_cleared_bound() {
     return m;
 }
 
+# --- an int local range bound that can be NOTHING at the read: not assigned on every path, or cleared later in a
+# loop body; the range raises RANGE-ERROR only when it is reached, after the elements of the earlier selectors
+# (qore#5675) ---
+
+#! False: the locals that only its branch assigns stay NOTHING
+bool cond = False;
+
+auto sub unassigned_foreach() {
+    int i;
+    if (cond) {
+        i = 1;
+    }
+    list<auto> rv = ();
+    try {
+        foreach int x in (l[0, i..4]) {
+            rv += use("body", x);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        print("  caught " + ex.err + "\n");
+    }
+    return rv;
+}
+
+auto sub unassigned_map() {
+    int i;
+    if (cond) {
+        i = 1;
+    }
+    return map use("map", $1), l[0, i..4];
+}
+
+auto sub unassigned_pure_map() {
+    int i;
+    if (cond) {
+        i = 1;
+    }
+    return map $1 * 2, l[0, i..4];
+}
+
+auto sub unassigned_select() {
+    int i;
+    if (cond) {
+        i = 1;
+    }
+    return select l[0, i..4], use("select", $1) > 0;
+}
+
+auto sub unassigned_foldl() {
+    int i;
+    if (cond) {
+        i = 1;
+    }
+    return foldl use("foldl", $1 + $2), l[0, 1, i..4];
+}
+
+auto sub unassigned_take() {
+    int i;
+    if (cond) {
+        i = 1;
+    }
+    return take 1, l[0, i..4];
+}
+
+auto sub unassigned_end_take() {
+    int i;
+    if (cond) {
+        i = 4;
+    }
+    return take 1, l[0, 1..i];
+}
+
+auto sub unassigned_remove() {
+    list<int> m = (10, 11, 12, 13, 14);
+    int i;
+    if (cond) {
+        i = 1;
+    }
+    try {
+        remove m[0, i..4];
+    } catch (hash<ExceptionInfo> ex) {
+        print("  caught " + ex.err + "\n");
+    }
+    return m;
+}
+
+auto sub unassigned_arithmetic_take() {
+    # NOTHING + 1 is 1: the bound does not raise
+    int i;
+    if (cond) {
+        i = 3;
+    }
+    return take 3, l[0, i + 1..4];
+}
+
+auto sub loop_delete_foreach() {
+    int i = 1;
+    list<auto> rv = ();
+    for (int n = 0; n < 2; ++n) {
+        try {
+            foreach int x in (l[0, i..2]) {
+                rv += use("body " + n, x);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            print("  caught " + ex.err + "\n");
+        }
+        delete i;
+    }
+    return rv;
+}
+
+auto sub loop_remove_take() {
+    int i = 1;
+    list<auto> rv = ();
+    for (int n = 0; n < 2; ++n) {
+        try {
+            rv += take 1, l[0, i..2];
+        } catch (hash<ExceptionInfo> ex) {
+            print("  caught " + ex.err + "\n");
+        }
+        remove i;
+    }
+    return rv;
+}
+
+auto sub loop_delete_map() {
+    int i = 1;
+    list<auto> rv = ();
+    for (int n = 0; n < 2; ++n) {
+        try {
+            rv += map use("map " + n, $1), l[0, i..2];
+        } catch (hash<ExceptionInfo> ex) {
+            print("  caught " + ex.err + "\n");
+        }
+        delete i;
+    }
+    return rv;
+}
+
+auto sub loop_delete_remove() {
+    list<int> m = (10, 11, 12, 13, 14, 15, 16);
+    int i = 1;
+    for (int n = 0; n < 2; ++n) {
+        try {
+            remove m[0, i..2];
+        } catch (hash<ExceptionInfo> ex) {
+            print("  caught " + ex.err + "\n");
+        }
+        delete i;
+    }
+    return m;
+}
+
+auto sub loop_catch_delete_seq() {
+    # a typed list local deleted in a catch block and then continue: in the next iteration it is NOTHING where the
+    # parse saw it assigned (qore#5665)
+    list<int> m = (10, 11, 12, 13);
+    list<auto> rv = ();
+    for (int n = 0; n < 3; ++n) {
+        try {
+            foreach int x in (m[0, f("a " + n, 1)..2]) {
+                rv += use("body " + n, x);
+            }
+            if (n == 0) {
+                throw "X";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            delete m;
+            continue;
+        }
+    }
+    return rv;
+}
+
+auto sub loop_catch_delete_bound() {
+    int i = 1;
+    list<auto> rv = ();
+    for (int n = 0; n < 3; ++n) {
+        try {
+            rv += map use("map " + n, $1), l[0, i..2];
+            if (n == 0) {
+                throw "X";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "X") {
+                print("  caught " + ex.err + "\n");
+            }
+            delete i;
+            continue;
+        }
+    }
+    return rv;
+}
+
+auto sub assigned_take() {
+    # assigned on every path and never cleared: the stable form
+    int i;
+    if (cond) {
+        i = 1;
+    } else {
+        i = 2;
+    }
+    return take 2, l[0, i..4];
+}
+
+# --- a map pattern (map $1 * c, ...) of a list of selectors in a try block: compiled without an invoke of the map
+# opcode, which native code and AOT do not lower (qore#5675) ---
+
+auto sub try_map_scale(int a, int e) {
+    try {
+        return map $1 * 2, l[0, a..e];
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+auto sub try_map_offset(int a, int e) {
+    try {
+        return map $1 + 1, l[0, a..e];
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+auto sub try_map_square_select(int a, int e) {
+    try {
+        return map $1 * $1, (select l[0, a..e], $1 > 0);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+auto sub try_map_scale_unassigned() {
+    int i;
+    if (cond) {
+        i = 1;
+    }
+    try {
+        return map $1 * 2, l[0, i..3];
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
 # --- iterated elements are the elements of the value: a list of selectors with a range that a foreach statement or
 # an operator iterates gives the elements that it gives as a value, for every bound (qore#5688) ---
 
@@ -832,6 +1075,26 @@ sub main() {
         t("none select", \none_select());
         t("none take", \none_take());
         t("remove cleared bound", \remove_cleared_bound());
+        t("unassigned foreach", \unassigned_foreach());
+        t("unassigned map", \unassigned_map());
+        t("unassigned pure map", \unassigned_pure_map());
+        t("unassigned select", \unassigned_select());
+        t("unassigned foldl", \unassigned_foldl());
+        t("unassigned take", \unassigned_take());
+        t("unassigned end take", \unassigned_end_take());
+        t("unassigned remove", \unassigned_remove());
+        t("unassigned arithmetic take", \unassigned_arithmetic_take());
+        t("loop delete foreach", \loop_delete_foreach());
+        t("loop remove take", \loop_remove_take());
+        t("loop delete map", \loop_delete_map());
+        t("loop delete remove", \loop_delete_remove());
+        t("loop catch delete seq", \loop_catch_delete_seq());
+        t("loop catch delete bound", \loop_catch_delete_bound());
+        t("assigned take", \assigned_take());
+        t("try map scale", auto sub () { return try_map_scale(1, 3); });
+        t("try map offset", auto sub () { return try_map_offset(2, 4); });
+        t("try map square select", auto sub () { return try_map_square_select(1, 2); });
+        t("try map scale unassigned", \try_map_scale_unassigned());
         t("pure map", \pure_map());
         t("pure map raises", \pure_map_raises());
         t("pure select", \pure_select());

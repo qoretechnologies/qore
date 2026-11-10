@@ -7860,6 +7860,23 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             || (result.id < return_protected_slots.size() && return_protected_slots[result.id]);
     };
 
+    // Verbose IR lowering diagnostics: enable with QORE_IR_DEBUG env var; read once per call, not per instruction
+    static constinit QoreEnvFlag ir_verbose_enabled_env("QORE_IR_DEBUG");
+    const bool ir_verbose_enabled = ir_verbose_enabled_env.get();
+
+    // defined outside the dispatch loop, so that the dispatch of each instruction does not set up its captures
+    auto raiseMissingAOTExpr = [&func, xsink](const QoreIRInstruction* inst, const QoreIRBasicBlock* block, size_t ip,
+            const char* what, const QoreValue& expr) {
+        const QoreProgramLocation* loc = inst->loc;
+        int line = loc ? loc->start_line + loc->offset : -1;
+        xsink->raiseException("IR-EXEC-ERROR",
+            "%s expression not resolved in AOT IR: function='%s' block='%s' ip=%zu opcode=%s(%d) "
+            "result_slot=%d expr_type=%s source=%s:%d",
+            what, func.name.c_str(), block->name.c_str(), ip,
+            getOpcodeName(static_cast<int>(inst->opcode)), static_cast<int>(inst->opcode),
+            inst->result.id, expr.getTypeName(), loc ? loc->getFileValue() : "", line);
+    };
+
     while (block) {
         if (ip >= block->instructions.size()) {
             if (xsink) {
@@ -7957,11 +7974,6 @@ next_instruction:
             *rl_cache.loc_ptr = inst->loc;
             last_ephemeral_line = inst->cached_start_line;
         }
-        // Verbose IR lowering diagnostics: enable with QORE_IR_DEBUG env var
-        // Zero-cost when disabled: single static bool check only initialized once
-        static constinit QoreEnvFlag ir_verbose_enabled_env("QORE_IR_DEBUG");
-        const bool ir_verbose_enabled = ir_verbose_enabled_env.get();
-
         // Log instruction execution for diagnostics (zero-cost path when disabled)
         if (ir_verbose_enabled && func.name.find("monitor") != std::string::npos) {
             fprintf(stderr, "[IR-INSTR-PRE-%zu] func='%s' op=%d(%s) ", ip, func.name.c_str(),
@@ -7969,17 +7981,6 @@ next_instruction:
             fprintf(stderr, "result_slot=%d\n", inst->result.id);
             fflush(stderr);
         }
-
-        auto raiseMissingAOTExpr = [&](const char* what, const QoreValue& expr) {
-            const QoreProgramLocation* loc = inst->loc;
-            int line = loc ? loc->start_line + loc->offset : -1;
-            xsink->raiseException("IR-EXEC-ERROR",
-                "%s expression not resolved in AOT IR: function='%s' block='%s' ip=%zu opcode=%s(%d) "
-                "result_slot=%d expr_type=%s source=%s:%d",
-                what, func.name.c_str(), block->name.c_str(), ip,
-                getOpcodeName(static_cast<int>(inst->opcode)), static_cast<int>(inst->opcode),
-                inst->result.id, expr.getTypeName(), loc ? loc->getFileValue() : "", line);
-        };
 
         switch (inst->opcode) {
             case QoreIROpcode::ConstInt: {
@@ -11252,7 +11253,7 @@ load_local_done:
                     : nhd_inst->expr.getInternalNode();
                 const NewHashDeclNode* nhd = dynamic_cast<const NewHashDeclNode*>(node);
                 if (!nhd) {
-                    raiseMissingAOTExpr("new hashdecl", nhd_inst->expr);
+                    raiseMissingAOTExpr(inst, block, ip, "new hashdecl", nhd_inst->expr);
                     unwindForException();
                     cleanupLocalCaches();
                     return false;
@@ -11281,7 +11282,7 @@ load_local_done:
                     : nch_inst->expr.getInternalNode();
                 const NewComplexHashNode* nch = dynamic_cast<const NewComplexHashNode*>(node);
                 if (!nch) {
-                    raiseMissingAOTExpr("new complex hash", nch_inst->expr);
+                    raiseMissingAOTExpr(inst, block, ip, "new complex hash", nch_inst->expr);
                     unwindForException();
                     cleanupLocalCaches();
                     return false;
@@ -11310,7 +11311,7 @@ load_local_done:
                     : ncl_inst->expr.getInternalNode();
                 const NewComplexListNode* ncl = dynamic_cast<const NewComplexListNode*>(node);
                 if (!ncl) {
-                    raiseMissingAOTExpr("new complex list", ncl_inst->expr);
+                    raiseMissingAOTExpr(inst, block, ip, "new complex list", ncl_inst->expr);
                     unwindForException();
                     cleanupLocalCaches();
                     return false;
@@ -11338,7 +11339,7 @@ load_local_done:
                     : ncb_inst->expr.getInternalNode();
                 const NewComplexBufferNode* ncb = dynamic_cast<const NewComplexBufferNode*>(node);
                 if (!ncb) {
-                    raiseMissingAOTExpr("new complex buffer", ncb_inst->expr);
+                    raiseMissingAOTExpr(inst, block, ip, "new complex buffer", ncb_inst->expr);
                     unwindForException();
                     cleanupLocalCaches();
                     return false;

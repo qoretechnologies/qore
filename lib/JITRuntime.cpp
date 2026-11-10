@@ -2564,8 +2564,11 @@ static QoreValue qore_rt_new_list_selector_result(const QoreValue& seq) {
     @param is_range true if the selector is a range from \a first to \a second, false if it is the index \a first
 
     @return 0 for OK, -1 if an exception was raised
+
+    Inlined into its callers: qore_rt_list_selector_step() runs it for each selector of a list of selectors that is
+    built eagerly, which costs no call of its own (qore#5675)
 */
-static int qore_rt_apply_list_selector(const QoreValue& result, const QoreValue& seq, bool is_range,
+static QORE_ALWAYS_INLINE int qore_rt_apply_list_selector(const QoreValue& result, const QoreValue& seq, bool is_range,
         const QoreValue& first, const QoreValue& second, bool string_index_char, bool negative_offsets,
         ExceptionSink* xsink) {
     ValueHolder selector(xsink);

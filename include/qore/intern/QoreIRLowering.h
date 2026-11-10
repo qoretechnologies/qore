@@ -253,6 +253,12 @@ public:
         const std::vector<QoreValue>& selectors, std::string& error);
     //! Returns true if a bound of a range operator can evaluate to NOTHING
     bool rangeBoundMayBeNothing(const QoreValue& expr) const;
+    //! Returns true if the map pattern opcodes (MapScaleInt, ...) can raise for the list \a list_expr
+    /** Their runtime helpers raise only for an iterator object, whose exceptions they report; for a list, a value of
+        another type or NOTHING they cannot, so in a try block they need no Invoke, which native code and AOT do not
+        lower for them (qore#5675)
+    */
+    bool mapPatternListMayRaise(const QoreValue& list_expr) const;
     //! A list of selectors with ranges (seq[a..b, c]) that a foreach statement or a functional or streaming
     //! operator iterates lazily, as the AST interpreter does (see QoreIROpcode::IteratorCreateSelectors)
     struct LazySelectorSource {

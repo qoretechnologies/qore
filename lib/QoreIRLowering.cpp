@@ -890,7 +890,8 @@ static bool qoreIrGetSinglePositionalCallArgNoHoles(const FunctionCallBase* call
 }
 
 static bool qoreIrIsAssignedPlainListLocal(LocalVar* local) {
-    if (!local || local->closureUse() || !local->isAssigned()) {
+    // a local that is ever deleted or removed can be without a value where the parse saw it assigned (qore#5665)
+    if (!local || local->closureUse() || local->everDeleted() || !local->isAssigned()) {
         return false;
     }
     const QoreTypeInfo* type_info = local->parseGetTypeInfo();
@@ -898,7 +899,8 @@ static bool qoreIrIsAssignedPlainListLocal(LocalVar* local) {
 }
 
 static bool qoreIrIsAssignedPlainStringLocal(LocalVar* local) {
-    if (!local || local->closureUse() || !local->isAssigned()) {
+    // a local that is ever deleted or removed can be without a value where the parse saw it assigned (qore#5665)
+    if (!local || local->closureUse() || local->everDeleted() || !local->isAssigned()) {
         return false;
     }
     const QoreTypeInfo* type_info = local->parseGetTypeInfo();
@@ -6592,11 +6594,15 @@ bool QoreIRLowering::getAnalysis(const QoreValue& expr, QoreParseAnalysis& analy
             // takes a "reference<string>" argument), at a point the analysis does not see - even before the read,
             // in an earlier iteration of a loop.  Such a read can be NOTHING whatever its declared type, so it
             // must not let compiled code skip the checks for NOTHING.
+            // The state comes from a single forward pass of the parse, so it also misses a delete or remove of the
+            // variable later in a loop body, which leaves the variable without a value at this read in the next
+            // iteration: a local that is ever the operand of delete or remove is not definitely assigned anywhere
+            // (qore#5665).
             const VarRefNode* var = dynamic_cast<const VarRefNode*>(node);
             if (var) {
                 qore_var_t var_type = var->getType();
                 if ((var_type == VT_LOCAL || var_type == VT_CLOSURE || var_type == VT_LOCAL_TS)
-                        && var->ref.id && var->ref.id->closureUse()) {
+                        && var->ref.id && (var->ref.id->closureUse() || var->ref.id->everDeleted())) {
                     analysis.clearFlag(QoreParseAnalysis::DefinitelyAssigned);
                     analysis.clearFlag(QoreParseAnalysis::NeverNothing);
                 }
@@ -10458,42 +10464,80 @@ QoreIRValue QoreIRLowering::lowerShiftRightEquals(const QoreValue& expr, std::st
 //! The locals that the stable selectors of a list of selectors read; see qore_ir_selector_is_stable()
 typedef std::vector<const LocalVar*> qore_ir_selector_locals_t;
 
+//! Where a stable selector expression is used; see qore_ir_selector_is_stable()
+enum class qore_ir_selector_use_e {
+    //! a selector (an index): NOTHING selects nothing
+    Index,
+    //! the start or the end of a range: NOTHING raises RANGE-ERROR
+    RangeBound,
+    //! an operand of +, - or *: NOTHING is an operand like 0 and does not raise
+    Operand,
+};
+
+//! Returns true if \a var is a read of an int local that is never NOTHING there
+/** The read is definitely assigned at parse time (QoreParseAnalysis::DefinitelyAssigned, which follows branches), and
+    nothing that the parse state at the read does not see can clear the local: no closure captures it and no reference
+    to it is taken (LocalVar::closureUse()), and the code never clears it with delete or remove, which would make it
+    NOTHING when the read runs again in a later iteration of a loop (LocalVar::everDeleted(), qore#5665) (qore#5675).
+*/
+static bool qore_ir_int_local_read_is_never_nothing(const VarRefNode* var) {
+    if (var->getType() != VT_LOCAL || !var->ref.id || var->ref.id->closureUse() || var->ref.id->everDeleted()) {
+        return false;
+    }
+    const QoreTypeInfo* ti = var->ref.id->getTypeInfo();
+    return (ti == bigIntTypeInfo || ti == softBigIntTypeInfo)
+        && var->getParseAnalysis().hasFlag(QoreParseAnalysis::DefinitelyAssigned);
+}
+
 //! Returns true if \a expr is a selector whose value cannot be changed by the code that iterates the list of selectors
 //! except through the locals it adds to \a locals, and whose evaluation has no side effects and cannot raise
 /** A stable selector is a constant, a read of an int local that no closure captures and of which no reference is
-    taken (LocalVar::closureUse(); nothing but the function's own code can assign it), or the sum, difference or
-    negation of such int values.  A range bound must not be NOTHING, which raises RANGE-ERROR.  A list of stable
-    selectors that the consumer's code does not write gives the same elements whether it is evaluated before the
-    iteration or lazily during it (qore#5675).
+    taken (LocalVar::closureUse(); nothing but the function's own code can assign it), or the sum, difference, product
+    or negation of such int values.  A range bound must not be NOTHING, which raises RANGE-ERROR: a local that is a
+    range bound must be never NOTHING at its read (qore_ir_int_local_read_is_never_nothing()), not only declared int,
+    which a local that is not assigned on every path is not.  A list of stable selectors that the consumer's code does
+    not write gives the same elements whether it is evaluated before the iteration or lazily during it (qore#5675).
 */
-static bool qore_ir_selector_is_stable(const QoreValue& expr, bool range_bound, qore_ir_selector_locals_t& locals) {
+static bool qore_ir_selector_is_stable(const QoreValue& expr, qore_ir_selector_use_e use,
+        qore_ir_selector_locals_t& locals) {
     if (!expr.hasNode()) {
-        return !(range_bound && expr.isNothing());
+        return !(use == qore_ir_selector_use_e::RangeBound && expr.isNothing());
     }
     const AbstractQoreNode* node = expr.getInternalNode();
     if (node->is_value()) {
-        return !(range_bound && expr.isNothing());
+        return !(use == qore_ir_selector_use_e::RangeBound && expr.isNothing());
     }
     if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
         if (var->getType() != VT_LOCAL || !var->ref.id || var->ref.id->closureUse()) {
             return false;
         }
         const QoreTypeInfo* ti = var->ref.id->getTypeInfo();
-        if (ti == bigIntTypeInfo || ti == softBigIntTypeInfo
-                || (!range_bound && (ti == bigIntOrNothingTypeInfo || ti == softBigIntOrNothingTypeInfo))) {
-            locals.push_back(var->ref.id);
-            return true;
+        bool ok;
+        switch (use) {
+            case qore_ir_selector_use_e::Index:
+                ok = ti == bigIntTypeInfo || ti == softBigIntTypeInfo || ti == bigIntOrNothingTypeInfo
+                    || ti == softBigIntOrNothingTypeInfo;
+                break;
+            case qore_ir_selector_use_e::RangeBound:
+                ok = qore_ir_int_local_read_is_never_nothing(var);
+                break;
+            case qore_ir_selector_use_e::Operand:
+                ok = ti == bigIntTypeInfo || ti == softBigIntTypeInfo;
+                break;
         }
-        return false;
+        if (ok) {
+            locals.push_back(var->ref.id);
+        }
+        return ok;
     }
     if (dynamic_cast<const QorePlusOperatorNode*>(node) || dynamic_cast<const QoreMinusOperatorNode*>(node)
             || dynamic_cast<const QoreMultiplicationOperatorNode*>(node)) {
         auto* op = static_cast<const QoreBinaryOperatorNode<>*>(node);
-        return qore_ir_selector_is_stable(op->getLeft(), true, locals)
-            && qore_ir_selector_is_stable(op->getRight(), true, locals);
+        return qore_ir_selector_is_stable(op->getLeft(), qore_ir_selector_use_e::Operand, locals)
+            && qore_ir_selector_is_stable(op->getRight(), qore_ir_selector_use_e::Operand, locals);
     }
     if (auto* op = dynamic_cast<const QoreUnaryMinusOperatorNode*>(node)) {
-        return qore_ir_selector_is_stable(op->getExp(), true, locals);
+        return qore_ir_selector_is_stable(op->getExp(), qore_ir_selector_use_e::Operand, locals);
     }
     return false;
 }
@@ -10529,7 +10573,7 @@ static bool qore_ir_selector_eval_is_inert(const QoreValue& expr) {
             || dynamic_cast<const QoreMultiplicationOperatorNode*>(node)
             || dynamic_cast<const QoreUnaryMinusOperatorNode*>(node)) {
         qore_ir_selector_locals_t locals;
-        return qore_ir_selector_is_stable(expr, true, locals);
+        return qore_ir_selector_is_stable(expr, qore_ir_selector_use_e::Operand, locals);
     }
     return false;
 }
@@ -11092,6 +11136,16 @@ bool QoreIRLowering::decideLazySelectorSource(const QoreValue& source, const std
     if (!op || !dynamic_cast<const QoreParseListNode*>(op->getRight().getInternalNode())) {
         return false;
     }
+    // the AST interpreter builds the string or binary that a list of selectors selects from a string or a binary
+    // before the iteration (QoreSquareBracketsOperatorNode::getFunctionalIteratorImpl() iterates only lists), so a
+    // sequence of such a static type is built first, with the code of an eager list of selectors
+    {
+        QoreValue left = op->getLeft();
+        const QoreTypeInfo* left_type = getGuaranteedTypeForValue(&left, nullptr);
+        if (left_type && (QoreTypeInfo::isType(left_type, NT_STRING) || QoreTypeInfo::isType(left_type, NT_BINARY))) {
+            return false;
+        }
+    }
     std::vector<QoreValue> selectors;
     if (!collectListIndexRangeSelectors(op->getRight(), selectors)) {
         return false;
@@ -11102,12 +11156,12 @@ bool QoreIRLowering::decideLazySelectorSource(const QoreValue& source, const std
     bool lazy = false;
     for (const QoreValue& selector : selectors) {
         if (auto* range = dynamic_cast<const QoreRangeOperatorNode*>(selector.getInternalNode())) {
-            if (!qore_ir_selector_is_stable(range->getLeft(), true, locals)
-                    || !qore_ir_selector_is_stable(range->getRight(), true, locals)) {
+            if (!qore_ir_selector_is_stable(range->getLeft(), qore_ir_selector_use_e::RangeBound, locals)
+                    || !qore_ir_selector_is_stable(range->getRight(), qore_ir_selector_use_e::RangeBound, locals)) {
                 lazy = true;
                 break;
             }
-        } else if (!qore_ir_selector_is_stable(selector, false, locals)) {
+        } else if (!qore_ir_selector_is_stable(selector, qore_ir_selector_use_e::Index, locals)) {
             lazy = true;
             break;
         }
@@ -11173,9 +11227,9 @@ bool QoreIRLowering::getLazySelectorSource(const QoreValue& expr, LazySelectorSo
         lazy = false;
         for (const QoreValue& selector : selectors) {
             auto* range = dynamic_cast<const QoreRangeOperatorNode*>(selector.getInternalNode());
-            if (range ? !qore_ir_selector_is_stable(range->getLeft(), true, locals)
-                    || !qore_ir_selector_is_stable(range->getRight(), true, locals)
-                    : !qore_ir_selector_is_stable(selector, false, locals)) {
+            if (range ? !qore_ir_selector_is_stable(range->getLeft(), qore_ir_selector_use_e::RangeBound, locals)
+                    || !qore_ir_selector_is_stable(range->getRight(), qore_ir_selector_use_e::RangeBound, locals)
+                    : !qore_ir_selector_is_stable(selector, qore_ir_selector_use_e::Index, locals)) {
                 lazy = true;
                 break;
             }
@@ -13842,13 +13896,12 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
                 // always holds an int
                 if (qore_ir_selector_eval_is_inert(selector)) {
                     auto* range = dynamic_cast<const QoreRangeOperatorNode*>(selector.getInternalNode());
-                    // an int local that no closure captures and of which no reference is taken: a callee can
-                    // remove a local through a reference, which makes it NOTHING
+                    // an int local that is never NOTHING at the read: a local that is not assigned on every path,
+                    // that the code clears, or that a callee can remove through a reference can be NOTHING
+                    // (qore_ir_int_local_read_is_never_nothing())
                     auto bound_may_be_nothing = [this](const QoreValue& bound) -> bool {
                         if (auto* var = dynamic_cast<const VarRefNode*>(bound.getInternalNode())) {
-                            const QoreTypeInfo* ti = var->ref.id ? var->ref.id->getTypeInfo() : nullptr;
-                            if (var->getType() == VT_LOCAL && !var->ref.id->closureUse()
-                                    && (ti == bigIntTypeInfo || ti == softBigIntTypeInfo)) {
+                            if (qore_ir_int_local_read_is_never_nothing(var)) {
                                 return false;
                             }
                         }
@@ -16327,7 +16380,7 @@ QoreIRValue QoreIRLowering::lowerMapImpl(const QoreValue& expr, std::string& err
                     }
 
                     QoreIRValue result;
-                    if (!exception_stack.empty()) {
+                    if (!exception_stack.empty() && mapPatternListMayRaise(inner_select->getLeft())) {
                         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
                         if (!normal_block) {
                             error = "IR builder failed to create invoke continuation block";
@@ -16367,7 +16420,7 @@ QoreIRValue QoreIRLowering::lowerMapImpl(const QoreValue& expr, std::string& err
         }
 
         QoreIRValue result;
-        if (!exception_stack.empty()) {
+        if (!exception_stack.empty() && mapPatternListMayRaise(map->getRight())) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
                 error = "IR builder failed to create invoke continuation block";
@@ -16387,6 +16440,18 @@ QoreIRValue QoreIRLowering::lowerMapImpl(const QoreValue& expr, std::string& err
 
     // Native IR lowering with implicit argument context ($1, $#)
     return lowerMapNative(map, expr, error);
+}
+
+bool QoreIRLowering::mapPatternListMayRaise(const QoreValue& list_expr) const {
+    // a list of selectors gives a list, a string, a binary, a hash or NOTHING, never an object
+    if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(list_expr.getInternalNode())) {
+        if (dynamic_cast<const QoreParseListNode*>(op->getRight().getInternalNode())) {
+            return false;
+        }
+    }
+    QoreParseAnalysis analysis;
+    return !getAnalysis(list_expr, analysis) || !analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        || !QoreTypeInfo::isType(analysis.known_type, NT_LIST);
 }
 
 QoreIRValue QoreIRLowering::lowerSelectImpl(const QoreValue& expr, std::string& error) {
