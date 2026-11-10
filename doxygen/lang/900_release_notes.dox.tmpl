@@ -1477,6 +1477,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Qore did not compile with OpenSSL 4, and libqore did not link when the Brotli and LZ4 library directories that
+      pkg-config gives were not on the linker's default search path (as with Homebrew on Apple Silicon); libqore now
+      links them by their full paths
     - a @ref cast "cast" as the lvalue of @ref remove "remove" or @ref delete "delete" (ex: <tt>remove cast<int>(x)</tt>)
       or in the lvalue of a @ref lvalue_references "reference" aborted debug builds or gave wrong results; it is now a
       parse error, as a cast is not storage that can be removed or referred to
