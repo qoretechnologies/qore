@@ -1554,9 +1554,10 @@
     - with the AST interpreter, @ref remove "remove" and @ref delete "delete" with a list of selectors whose later
       selector raised an exception leaked the removed values, and a list of selectors with ranges iterated by
       \c foreach or a functional operator could read a list that the loop had released, which could crash
-    - with the AST interpreter, a temporary value that is the operand of an operator (ex: the hash in
-      <tt>f(h + {"a": o})</tt>) was released when the operator returned; it now lives until the end of the
-      statement, as every temporary does in every execution mode
+    - with the AST interpreter, a temporary value that is the operand of an arithmetic, comparison, logical or other
+      operator, or the condition of <tt>?:</tt> (ex: the object in <tt>f(new T() == x, g())</tt>), was released when
+      the operator returned; it now lives until the end of the statement, as in the other execution modes (see
+      @ref temporary_lifetime)
     - a @ref cast "cast" as the lvalue of @ref remove "remove" or @ref delete "delete" (ex: <tt>remove cast<int>(x)</tt>)
       or in the lvalue of a @ref lvalue_references "reference" aborted debug builds or gave wrong results; it is now a
       parse error, as a cast is not storage that can be removed or referred to
@@ -1650,10 +1651,10 @@
     - in AOT-compiled code, a function called directly from compiled code left an entry on the runtime stack for each
       local variable of its own that is visible to the runtime at each call, so a loop of such calls in top-level code
       took time quadratic in the number of iterations, and memory grew with it
-    - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the operands of a
-      comparison, \c instanceof, \c exists or a slice, for the source of a functional operator and for the elements of
-      a list or hash literal were destroyed when the statement ended (ex: <tt>f(new T("a") == new T("b"), g())</tt>
-      destroyed them after \c g() ran); they are now destroyed when they have been used, as with the AST interpreter
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the sequence of a
+      slice, for the source of a functional operator and for the elements of a list or hash literal were destroyed
+      when the statement ended (ex: <tt>f(map $1.n, mk(), g())</tt> destroyed them after \c g() ran); they are now
+      destroyed when they have been used, as with the AST interpreter
     - in the IR execution mode, the last element of a \c map or \c select over an iterator was destroyed when the
       statement ended, and in every compiled mode an exception that left a fused pipeline of functional operators for
       a \c catch block released the pipeline's source after the block; both are now released as with the AST

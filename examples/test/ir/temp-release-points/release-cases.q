@@ -46,6 +46,10 @@ string sub raise() {
     throw "X";
 }
 
+string sub g3(auto a, auto b, auto c) {
+    return "g3";
+}
+
 #! runs a case
 sub t(string name, code<auto()> c) {
     printf("%s:\n", name);
@@ -114,8 +118,30 @@ sub main() {
         hash<auto> h = {};
         string s = f1(h + {"a": o}) + (o = NOTHING) + mark("op");
     });
-    t("operand of equals", auto sub () { bool b = (new E("eq") == NOTHING); mark("eq"); });
-    t("operand of and", auto sub () { bool b = (new E("and") && True); mark("and"); });
+    t("operand of equals", auto sub () { string s = f1(new E("eq") == NOTHING) + mark("eq"); });
+    t("operand of and", auto sub () { string s = f1(new E("and") && True) + mark("and"); });
+    # two temporary operands are released in the reverse order of their creation
+    t("two operands", auto sub () { string s = f1(new E("l") == new E("r")) + mark("two"); });
+    # the operand that an operator created for an earlier element is released when it is created again
+    t("operand in map", auto sub () { list<auto> r = map (new E("m" + $1) == mark("m" + $1)), (1, 2); });
+    # an exception after the operator: the interrupted argument list is released first
+    t("operand exception", auto sub () { string s = g3(new E("arg"), new E("op") == NOTHING, raise()); });
+    # the condition of ?:
+    t("condition", auto sub () { string s = f1(1) + ((new E("q")) ? mark("q") : ""); });
+    # a statement in a try block, or with a branch, continues in other blocks after a call
+    t("try block", auto sub () {
+        auto o = new E("try");
+        try {
+            string s = f1((o,)) + (o = NOTHING) + mark("try");
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  ! %s\n", ex.err);
+        }
+    });
+    t("branch", auto sub () {
+        auto o = new E("br");
+        bool c = True;
+        string s = f1((o,)) + (c ? (o = NOTHING) : "") + mark("br");
+    });
     # an exception after the release
     t("exception", auto sub () {
         auto o = new E("ex");

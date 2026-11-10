@@ -219,6 +219,14 @@ DLLLOCAL const LocalVar* qore_ir_get_written_local(
 DLLLOCAL bool qore_ir_find_local_reads_overwritten_before_use(const QoreIRFunction& func,
     std::unordered_set<uint32_t>& result);
 
+//! Returns true for a read of a plain local: not through a reference, not of a closure-bound or a top-level local
+/** In a function that creates no reference, such a local is written only by the instructions that
+    qore_ir_get_written_local() gives, whether its storage is IR-only or AST-visible (a local of a statement in a try
+    block, whose calls carry their expressions, is AST-visible), so a read of it whose statement writes it later can
+    be released after its last use, as the AST interpreter borrows the value (qore#5712).
+*/
+DLLLOCAL bool qore_ir_is_plain_local_read(const QoreIRLocalInstruction& load);
+
 //! The release class of a value that is the receiver of an operation (see qore_ir_build_exception_release_groups())
 constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
 
@@ -226,14 +234,16 @@ constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
 /** When an exception leaves an expression, the AST interpreter unwinds its evaluation: the arguments of each call (and
     the elements of each list or hash) whose evaluation the exception interrupted are released with their argument
     list, first argument first, the innermost call's first, and an operand that an operator holds is released as the
-    operator is unwound; a receiver (the object of a method call, the container of [] or {}, the value of a
-    cast), which the statement holds until it ends (QoreStatementTempScope::holdReceiver()), is released last, last
-    held first.  An engine that releases a statement's temporaries last registered first gives another order
+    operator is unwound; a receiver (the object of a method call, the container of [] or {}, the value of a cast) and
+    an operand that the statement holds (of an arithmetic, bitwise, shift, comparison, logical, regex, keys,
+    elements, exists, instanceof or unary operator, or the condition of ?: - QoreOperandEvalHolder), which the
+    statement holds until it ends (QoreStatementTempScope::holdReceiver()), are released last, last held first.  An engine that releases a statement's temporaries last registered first gives another order
     (f(new T("a"), new T("b"), thr()) destroys b before a).
 
     Each value used once gets a class: 1 + the serial (in block and instruction order) of the instruction whose argument
     list (the arguments of a call, the elements of a list or a hash) it is in, QORE_IR_RELEASE_RECEIVER if it is a
-    receiver, or 0 if it is released on its own (an operand of any other instruction, or a value used more than once);
+    receiver or an operand that the statement holds, or 0 if it is released on its own (an operand of any other
+    instruction, or a value used more than once);
     an incoming value of a Phi in an argument list that has no class of its own gets the Phi's, as the Phi's value is
     the incoming value, which an engine can keep in the incoming value's own slot.
 

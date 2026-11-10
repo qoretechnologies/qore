@@ -4012,13 +4012,20 @@ public:
         the value in the AST interpreter: f((o,)) + (o = NOTHING) + mark(), o.n + (o = NOTHING) + mark().  For such
         a read whose uses are all later in its block and only take values from it (MakeList, MakeHash,
         MakeHashConstKeys, HashKeyAccess, AddAny; not a slice, which the AST interpreter iterates from the
-        sequence as the source of a functional operator), ReleaseOwnedTemp is inserted after its last use; a read used as a call argument is
+        sequence as the source of a functional operator), ReleaseOwnedTemp is inserted after its last use when the
+        statement can write the local later, in the read's block or in a block the statement continues in (a try
+        block, &&, || and ?: split a statement into blocks); a read used as a call argument is
         released when the call returns instead (see the IR interpreter's buildValueUseCounts()).  The pass can run
         again on the same function (qore#5712).
 
         Must run after computeIROnlyLocals().
     */
     void releasePlainLocalReadsBeforeWrites();
+
+    //! returns true if the statement of temp scope \a scope can write \a local after instruction \a start of
+    //! \a block, in that block or in a block that the statement continues in (see releasePlainLocalReadsBeforeWrites())
+    bool statementWritesLocalAfter(const QoreIRBasicBlock* block, size_t start, const LocalVar* local,
+        uint32_t scope) const;
 
     //! Derives the handler's own closure-bound parent-slot locals from its IR, for an artifact without them
     /** These are the closure-bound parent-slot locals that the handler instantiates or uninstantiates itself.  This is

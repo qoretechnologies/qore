@@ -327,16 +327,14 @@ static bool qore_ir_expr_is_temporary(const QoreValue& expr) {
         || dynamic_cast<const QoreHashMapSelectOperatorNode*>(node));
 }
 
-//! Releases the temporaries that the operands of an operator gave once the operator has run
-/** The AST interpreter evaluates the operands of an operator into holders that the operator releases when it returns,
-    last operand first (ex: <tt>f(new T("a") == new T("b"), g())</tt> destroys b and a before g() runs); the compiled
-    modes release a statement's temporaries when the statement ends, unless an instruction releases them earlier.  A
-    comparison, \c instanceof, \c exists and a slice give a value that holds no reference to an operand's temporary
-    (a slice references the elements, not the sequence), so the temporary that an operand gave
-    (qore_ir_expr_is_temporary()) is released after the operator with ReleaseOwnedTemp, which releases a value only
-    when the frame owns it as a temporary.  The value of another operand can be a variable's, an implicit argument's
-    (<tt>$1</tt>, whose element slot the next use reads again) or an operator's that the operator holds itself.  An
-    operand whose type cannot hold an object runs no destructor when it is released, so it needs no instruction.
+//! Releases the temporary sequence of a slice once the slice has been made
+/** The AST interpreter evaluates the sequence of a slice into a holder that the slice releases when it returns; the
+    compiled modes release a statement's temporaries when the statement ends, unless an instruction releases them
+    earlier.  A slice gives a value that holds no reference to the sequence (it references the elements), so the
+    temporary that the sequence gave (qore_ir_expr_is_temporary()) is released after the slice with ReleaseOwnedTemp,
+    which releases a value only when the frame owns it as a temporary.  The operands of the other operators live until
+    the end of the statement in every execution mode (qore#5712).  An operand whose type cannot hold an object runs no
+    destructor when it is released, so it needs no instruction.
 
     @param operands the operands in the order of their release (the last evaluated first), with their expressions
 */
@@ -9538,9 +9536,6 @@ QoreIRValue QoreIRLowering::lowerLogicalEquals(const QoreValue& expr, std::strin
             QoreIROpcode::EqInt, QoreIROpcode::EqFloat, QoreIROpcode::EqAny);
     }
     QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, eq->loc, error);
-    if (result.isValid()) {
-        qore_ir_release_operator_operand_temps(builder, {{right, eq->getRight()}, {left, eq->getLeft()}}, eq->loc);
-    }
     return result;
 }
 
@@ -9570,9 +9565,6 @@ QoreIRValue QoreIRLowering::lowerLogicalNotEquals(const QoreValue& expr, std::st
             QoreIROpcode::NeInt, QoreIROpcode::NeFloat, QoreIROpcode::NeAny);
     }
     QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, ne->loc, error);
-    if (result.isValid()) {
-        qore_ir_release_operator_operand_temps(builder, {{right, ne->getRight()}, {left, ne->getLeft()}}, ne->loc);
-    }
     return result;
 }
 
@@ -9592,9 +9584,6 @@ QoreIRValue QoreIRLowering::lowerLogicalAbsoluteEquals(const QoreValue& expr, st
         return QoreIRValue();
     }
     QoreIRValue result = lowerBinaryOpOrInvoke(QoreIROpcode::EqHard, expr, left, right, eq->loc, error);
-    if (result.isValid()) {
-        qore_ir_release_operator_operand_temps(builder, {{right, eq->getRight()}, {left, eq->getLeft()}}, eq->loc);
-    }
     return result;
 }
 
@@ -9614,9 +9603,6 @@ QoreIRValue QoreIRLowering::lowerLogicalAbsoluteNotEquals(const QoreValue& expr,
         return QoreIRValue();
     }
     QoreIRValue result = lowerBinaryOpOrInvoke(QoreIROpcode::NeHard, expr, left, right, ne->loc, error);
-    if (result.isValid()) {
-        qore_ir_release_operator_operand_temps(builder, {{right, ne->getRight()}, {left, ne->getLeft()}}, ne->loc);
-    }
     return result;
 }
 
@@ -9646,9 +9632,6 @@ QoreIRValue QoreIRLowering::lowerLogicalLessThan(const QoreValue& expr, std::str
             QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny);
     }
     QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, lt->loc, error);
-    if (result.isValid()) {
-        qore_ir_release_operator_operand_temps(builder, {{right, lt->getRight()}, {left, lt->getLeft()}}, lt->loc);
-    }
     return result;
 }
 
@@ -9678,9 +9661,6 @@ QoreIRValue QoreIRLowering::lowerLogicalLessThanOrEquals(const QoreValue& expr, 
             QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny);
     }
     QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, le->loc, error);
-    if (result.isValid()) {
-        qore_ir_release_operator_operand_temps(builder, {{right, le->getRight()}, {left, le->getLeft()}}, le->loc);
-    }
     return result;
 }
 
@@ -9710,9 +9690,6 @@ QoreIRValue QoreIRLowering::lowerLogicalGreaterThan(const QoreValue& expr, std::
             QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny);
     }
     QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, gt->loc, error);
-    if (result.isValid()) {
-        qore_ir_release_operator_operand_temps(builder, {{right, gt->getRight()}, {left, gt->getLeft()}}, gt->loc);
-    }
     return result;
 }
 
@@ -9742,9 +9719,6 @@ QoreIRValue QoreIRLowering::lowerLogicalGreaterThanOrEquals(const QoreValue& exp
             QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny);
     }
     QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, ge->loc, error);
-    if (result.isValid()) {
-        qore_ir_release_operator_operand_temps(builder, {{right, ge->getRight()}, {left, ge->getLeft()}}, ge->loc);
-    }
     return result;
 }
 
@@ -9774,9 +9748,6 @@ QoreIRValue QoreIRLowering::lowerLogicalComparison(const QoreValue& expr, std::s
             QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny);
     }
     QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, cmp->loc, error);
-    if (result.isValid()) {
-        qore_ir_release_operator_operand_temps(builder, {{right, cmp->getRight()}, {left, cmp->getLeft()}}, cmp->loc);
-    }
     return result;
 }
 
@@ -11933,9 +11904,6 @@ QoreIRValue QoreIRLowering::lowerInstanceOf(const QoreValue& expr, std::string& 
     }
     std::vector<QoreIRValue> operands{operand};
     QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::InstanceOfBool, expr, operands, op->loc, error);
-    if (result.isValid()) {
-        qore_ir_release_operator_operand_temps(builder, {{operand, op->getExp()}}, op->loc);
-    }
     return result;
 }
 
@@ -12734,9 +12702,6 @@ QoreIRValue QoreIRLowering::lowerExists(const QoreValue& expr, std::string& erro
         opcode = QoreIROpcode::ExistsBool;
     }
     QoreIRValue result = lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
-    if (result.isValid()) {
-        qore_ir_release_operator_operand_temps(builder, {{operand, op->getExp()}}, op->loc);
-    }
     return result;
 }
 
@@ -12761,9 +12726,6 @@ QoreIRValue QoreIRLowering::lowerElements(const QoreValue& expr, std::string& er
         opcode = QoreIROpcode::ElementsInt;
     }
     QoreIRValue result = lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
-    if (result.isValid()) {
-        qore_ir_release_operator_operand_temps(builder, {{operand, op->getExp()}}, op->loc);
-    }
     return result;
 }
 

@@ -827,6 +827,14 @@ static void collectLocalsFromExpr(const QoreValue& expr,
         return;
     }
 
+    // Binary lvalue operators (=, +=, ... in an expression: f(x = g())); a reference that the right side creates is
+    // found when it is walked
+    if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<LValueOperatorNode>*>(node)) {
+        collectLocalsFromExpr(binop->getLeft(), ast_locals, unknown_node_found, ref_created);
+        collectLocalsFromExpr(binop->getRight(), ast_locals, unknown_node_found, ref_created);
+        return;
+    }
+
     // Binary int-specific operators (inherit separately from QoreBinaryOperatorNode<>)
     if (auto* binop = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
         collectLocalsFromExpr(binop->getLeft(), ast_locals, unknown_node_found, ref_created);

@@ -639,6 +639,54 @@ static bool qore_ir_opcode_builds_container(QoreIROpcode op) {
     }
 }
 
+// returns true for an operation whose operands the AST interpreter holds until the end of the statement, as it holds
+// a receiver (QoreOperandEvalHolder: the operands of an arithmetic, bitwise, shift, comparison, logical, regex,
+// keys, elements, exists, instanceof or unary operator, and the condition of ?:, qore#5712); the typed forms of these
+// operations take only values that hold no reference, whose release cannot be observed
+static bool qore_ir_opcode_holds_operands(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::AddAny:
+        case QoreIROpcode::SubAny:
+        case QoreIROpcode::MulAny:
+        case QoreIROpcode::DivAny:
+        case QoreIROpcode::ModAny:
+        case QoreIROpcode::AndAny:
+        case QoreIROpcode::OrAny:
+        case QoreIROpcode::XorAny:
+        case QoreIROpcode::ShlAny:
+        case QoreIROpcode::ShrAny:
+        case QoreIROpcode::EqAny:
+        case QoreIROpcode::NeAny:
+        case QoreIROpcode::EqHard:
+        case QoreIROpcode::NeHard:
+        case QoreIROpcode::LtAny:
+        case QoreIROpcode::LeAny:
+        case QoreIROpcode::GtAny:
+        case QoreIROpcode::GeAny:
+        case QoreIROpcode::CmpAny:
+        case QoreIROpcode::Not:
+        case QoreIROpcode::ToBool:
+        case QoreIROpcode::RegexMatchAny:
+        case QoreIROpcode::RegexMatchBool:
+        case QoreIROpcode::RegexNMatchBool:
+        case QoreIROpcode::RegexExtractAny:
+        case QoreIROpcode::RegexExtractList:
+        case QoreIROpcode::KeysAny:
+        case QoreIROpcode::KeysList:
+        case QoreIROpcode::KeysHash:
+        case QoreIROpcode::ExistsAny:
+        case QoreIROpcode::ExistsBool:
+        case QoreIROpcode::ElementsAny:
+        case QoreIROpcode::ElementsInt:
+        case QoreIROpcode::InstanceOfBool:
+        case QoreIROpcode::UnaryPlusAny:
+        case QoreIROpcode::UnaryMinusAny:
+            return true;
+        default:
+            return false;
+    }
+}
+
 // documented in QoreIRAnalysis.h
 void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vector<uint32_t>& groups) {
     groups.assign(static_cast<size_t>(func.max_value_id) + 1, 0);
@@ -697,6 +745,10 @@ void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vec
                 }
             } else if (qore_ir_opcode_holds_receiver(op) && !inst->operands.empty()) {
                 set_class(inst->operands[0], QORE_IR_RELEASE_RECEIVER);
+            } else if (qore_ir_opcode_holds_operands(op)) {
+                for (const QoreIRValue& operand : inst->operands) {
+                    set_class(operand, QORE_IR_RELEASE_RECEIVER);
+                }
             } else if (op == QoreIROpcode::ListSelectorStep && inst->result.isValid()) {
                 // the sequence of a list of selectors (operands[0] of the Begin step), which
                 // QoreSquareBracketsOperatorNode holds as a receiver
@@ -17626,9 +17678,77 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
     return fusions.size() + switch_fusions.size();
 }
 
+// documented in QoreIRAnalysis.h
+bool qore_ir_is_plain_local_read(const QoreIRLocalInstruction& load) {
+    return load.local && !load.is_ref && !load.is_closure && !load.local->closureUse() && !load.local->isTopLevel()
+        && !QoreTypeInfo::isReference(load.local->getTypeInfo());
+}
+
+// documented in QoreIR.h
+bool QoreIRFunction::statementWritesLocalAfter(const QoreIRBasicBlock* block, size_t start, const LocalVar* local,
+        uint32_t scope) const {
+    // the end of the statement: the release of its temporaries
+    auto ends_statement = [scope](const QoreIRInstruction* inst) -> bool {
+        return (inst->opcode == QoreIROpcode::DiscardTemps || inst->opcode == QoreIROpcode::DiscardTempsKeep)
+            && inst->temp_scope_id == scope;
+    };
+    // scans the instructions of a block from start; returns 1 for a write, -1 for the end of the statement, 0 for
+    // the end of the block
+    auto scan = [&](const QoreIRBasicBlock* b, size_t from) -> int {
+        for (size_t j = from; j < b->instructions.size(); ++j) {
+            const QoreIRInstruction* next = b->instructions[j].get();
+            if (qore_ir_get_written_local(next) == local) {
+                return 1;
+            }
+            if (ends_statement(next)) {
+                return -1;
+            }
+        }
+        return 0;
+    };
+    int rc = scan(block, start);
+    if (rc) {
+        return rc > 0;
+    }
+    // the statement continues in other blocks (a call that can raise an exception ends a block in a try block, as
+    // do &&, || and ?:); a write on any path counts, and so does a search that exceeds its budget, as releasing the
+    // read after its last use when the local is not written only releases the frame's reference, while the variable
+    // keeps the value
+    constexpr size_t Budget = 64;
+    std::vector<const QoreIRBasicBlock*> work;
+    std::unordered_set<const QoreIRBasicBlock*> visited{block};
+    auto push_successors = [&](const QoreIRBasicBlock* b) {
+        if (b->instructions.empty()) {
+            return;
+        }
+        qore_ir_visit_successors(*b->instructions.back(), [&](QoreIRBasicBlock* succ) {
+            if (succ && visited.insert(succ).second) {
+                work.push_back(succ);
+            }
+        });
+    };
+    push_successors(block);
+    size_t searched = 0;
+    while (!work.empty()) {
+        if (++searched > Budget) {
+            return true;
+        }
+        const QoreIRBasicBlock* b = work.back();
+        work.pop_back();
+        rc = scan(b, 0);
+        if (rc > 0) {
+            return true;
+        }
+        if (!rc) {
+            push_successors(b);
+        }
+    }
+    return false;
+}
+
 // documented in QoreIR.h
 void QoreIRFunction::releasePlainLocalReadsBeforeWrites() {
-    if (ir_only_locals.empty() || detectCreatesReference()) {
+    if (detectCreatesReference()) {
         return;
     }
     // the uses of each value, by the instruction that uses it
@@ -17654,16 +17774,19 @@ void QoreIRFunction::releasePlainLocalReadsBeforeWrites() {
                 return false;
         }
     };
+    size_t check_count = 0;
     for (const auto& block : blocks) {
         auto& insts = block->instructions;
         for (size_t i = 0; i < insts.size(); ++i) {
+            if (++check_count % 100 == 0) {
+                (void)qore_check_cancel(nullptr, "IR release of local reads before writes");
+            }
             const QoreIRInstruction* inst = insts[i].get();
             if (inst->opcode != QoreIROpcode::LoadLocal || !inst->result.isValid()) {
                 continue;
             }
             const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
-            if (!load->local || load->is_ref || load->is_closure
-                    || !ir_only_locals.count(reinterpret_cast<const void*>(load->local))) {
+            if (!qore_ir_is_plain_local_read(*load)) {
                 continue;
             }
             auto uses_it = uses.find(load->result.id);
@@ -17693,30 +17816,21 @@ void QoreIRFunction::releasePlainLocalReadsBeforeWrites() {
             if (!eligible) {
                 continue;
             }
-            // already released by an earlier run of the pass
-            if (last_use + 1 < insts.size() && insts[last_use + 1]->opcode == QoreIROpcode::ReleaseOwnedTemp
-                    && !insts[last_use + 1]->operands.empty()
-                    && insts[last_use + 1]->operands[0].id == load->result.id) {
+            // already released by an earlier run of the pass: the releases inserted after the last use of reads
+            // with the same last use follow it
+            bool released = false;
+            for (size_t j = last_use + 1; j < insts.size() && insts[j]->opcode == QoreIROpcode::ReleaseOwnedTemp; ++j) {
+                if (!insts[j]->operands.empty() && insts[j]->operands[0].id == load->result.id) {
+                    released = true;
+                    break;
+                }
+            }
+            if (released) {
                 continue;
             }
             // the statement writes the local after the read, before it ends
             const uint32_t scope = inst->temp_scope_id;
-            if (!scope) {
-                continue;
-            }
-            bool written = false;
-            for (size_t j = i + 1; j < insts.size(); ++j) {
-                const QoreIRInstruction* next = insts[j].get();
-                if (qore_ir_get_written_local(next) == load->local) {
-                    written = true;
-                    break;
-                }
-                if ((next->opcode == QoreIROpcode::DiscardTemps || next->opcode == QoreIROpcode::DiscardTempsKeep)
-                        && next->temp_scope_id == scope) {
-                    break;
-                }
-            }
-            if (!written) {
+            if (!scope || !statementWritesLocalAfter(block.get(), i + 1, load->local, scope)) {
                 continue;
             }
             auto release = std::make_unique<QoreIRInstruction>(QoreIROpcode::ReleaseOwnedTemp);
@@ -17804,10 +17918,9 @@ void qore_ir_find_observable_temp_call_args(const QoreIRFunction& func, std::vec
         }
         if (def->opcode == QoreIROpcode::LoadLocal) {
             const auto* load = static_cast<const QoreIRLocalInstruction*>(def);
-            // a read that is not an IR-only local's lives until the end of the statement; the value of an IR-only
-            // local that the statement does not write stays in the local
-            if (!load->local || load->is_ref || load->is_closure
-                    || !func.ir_only_locals.count(reinterpret_cast<const void*>(load->local))) {
+            // a read through a reference, or of a closure-bound or top-level local, lives until the end of the
+            // statement; the value of a plain local that the statement does not write stays in the local
+            if (func.detectCreatesReference() || !qore_ir_is_plain_local_read(*load)) {
                 return false;
             }
             return written_later(it->second.block, it->second.pos, load->local, def->temp_scope_id);

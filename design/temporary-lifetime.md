@@ -82,12 +82,18 @@ temporaries of the innermost scope of the thread.  The chain nodes hand their re
   `QoreComplexListCastOperatorNode`; a class cast gives its operand itself)
 - `ParseObjectMethodReferenceNode` (`\obj.method()`)
 
-The operators hand the operands that they evaluated to it in the same way when they are done with them
+The operators hand the operands that they evaluate to it in the same way, as soon as each is evaluated
 (`QoreOperandEvalHolder`): the arithmetic, bitwise, shift, comparison, logical, regex, `keys`, `elements`, `exists`,
-`instanceof` and unary operators.  So in `f(h + {"a": o}) + (o = NOTHING) + mark()` the hash literal, an operand of
+`instanceof` and unary operators, and `?:` its condition.  Holding a value when it is created, as the compiled modes
+register a temporary when the instruction that creates it runs, gives the same order of release: the right operand
+before the left one, and the operand that an operator created for an earlier element of a functional operator when
+the operand is evaluated again.  So in `f(h + {"a": o}) + (o = NOTHING) + mark()` the hash literal, an operand of
 `+`, lives until the end of the statement, and the object is destroyed after `mark()`, as in the other execution
 modes (David, 2026-11-10, qore#5712: "all chains, whole statement").  An operand that the operator takes into its
-result is not held, and the operands of a functional operator's expression are held by the scope of each element.
+result is not held, and the operands of a functional operator's expression are held by the scope of each element.  When
+an exception leaves the statement, these operands are released with the receivers, after the argument lists that the
+exception interrupted; the compiled modes order them the same way (`qore_ir_build_exception_release_groups()` puts the
+operands of the corresponding instructions in the receiver class).
 
 A value borrowed from a variable is not held by these nodes, and a value that a read of a variable gives a
 reference of its own to is held by the variable reference itself (see [Values read from
@@ -118,7 +124,8 @@ The statement holds the value as long as it uses it, by what it is used for (Dav
 
 - the receiver of a chain (a method call, a member or element access, a cast, a call reference and the callee of a
   call through a call reference), the operand of an operator (`!v`, `v && ...`, `v ? ... : ...`, `exists`,
-  `instanceof`, a comparison, `keys`, `elements`, `??`, `?*`, a slice), the source of a functional operator, the
+  `instanceof`, a comparison, `keys`, `elements`, `??`, `?*`; not the sequence of a slice, which the slice releases
+  when it has been made), the source of a functional operator, the
   value of an assignment, an element of a literal and the value of a `return` statement live until the end of the
   statement (a `return` statement releases its temporaries before the `on_exit` handlers run).  So in
   `auto v = \o; string s = v.name() + (o = NOTHING) + mark();` the object that `v` gave is destroyed after `mark()`
@@ -196,16 +203,20 @@ that release was removed, so a method chain keeps its receivers to the end of th
 reference that a load of a weak local variable takes is still released at its last use (`weak_load_result_ids`,
 `weak_load_temp_slots`): in the AST interpreter, a variable read is not held either.
 
-A read of an IR-only local (`ir_only_locals`: no closure binds it and no reference reaches it) holds a reference of
-the frame, while the AST interpreter borrows the value from the variable; the two differ only when the statement writes
-the variable after the read, which destroys the value in the AST interpreter (qore#5712):
+A read of a plain local (`qore_ir_is_plain_local_read()`: not through a reference, not of a closure-bound or a
+top-level local, in a function that creates no reference; its storage can be IR-only or AST-visible, as for the
+locals of a statement in a `try` block, whose calls carry their expressions) holds a reference of the frame, while
+the AST interpreter borrows the value from the variable; the two differ only when the statement writes the variable
+after the read, which destroys the value in the AST interpreter (qore#5712):
 
 - a read that is a call argument is released when the call returns (`read_needs_release_at_return()` in the IR
   interpreter's `buildValueUseCounts()`);
 - a read whose uses are all later in its block and only take values from it - an element of a list or hash literal
   (`MakeList`, `MakeHash`, `MakeHashConstKeys`), the receiver of a member read (`HashKeyAccess`) and an operand of
-  `AddAny` - is released after its last use: `QoreIRFunction::releasePlainLocalReadsBeforeWrites()`, which runs after
-  `computeIROnlyLocals()`, inserts `ReleaseOwnedTemp`.  So `f((o,)) + (o = NOTHING) + mark()` and
+  `AddAny` - is released after its last use when the statement can write the local later, in the read's block or in a
+  block that the statement continues in (a `try` block, `&&`, `||` and `?:` split a statement into blocks):
+  `QoreIRFunction::releasePlainLocalReadsBeforeWrites()`, which runs after `computeIROnlyLocals()`, inserts
+  `ReleaseOwnedTemp`.  So `f((o,)) + (o = NOTHING) + mark()` and
   `o.n + (o = NOTHING) + mark()` destroy the object before `mark()` runs.  A slice is not such a use: as the source of
   a functional operator, the AST interpreter iterates the sequence itself (`map $1, l[0..(l = ()).size()]`).
 

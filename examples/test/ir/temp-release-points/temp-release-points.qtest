@@ -50,12 +50,20 @@ class TempReleasePointsTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(26, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
+        assertEq(32, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
         assertTrue(out =~ /^list literal:\n  dtor lit\n  mark lit\n/, "list literal");
         assertTrue(out =~ /\nmember:\n  dtor mem\n  mark mem\n/, "member");
         assertTrue(out =~ /\nno write:\n  mark nw\n  dtor nw\n/, "no write");
         assertTrue(out =~ /\nremove receiver:\n  mark rr\n  dtor rr\n/, "receiver of a chain");
         assertTrue(out =~ /\noperand of plus:\n  mark op\n  dtor op\n/, "operand of an operator");
+        assertTrue(out =~ /\noperand of equals:\n  mark eq\n  dtor eq\n/, "operand of equals");
+        assertTrue(out =~ /\noperand of and:\n  mark and\n  dtor and\n/, "operand of and");
+        assertTrue(out =~ /\ntwo operands:\n  mark two\n  dtor r\n  dtor l\n/, "two operands, right first");
+        assertTrue(out =~ /\noperand in map:\n  mark m1\n  dtor m1\n  mark m2\n  dtor m2\n/, "operand in map");
+        assertTrue(out =~ /\noperand exception:\n  dtor arg\n  dtor op\n  ! X\n/, "operand and an exception");
+        assertTrue(out =~ /\ncondition:\n  mark q\n  dtor q\n/, "condition of ?:");
+        assertTrue(out =~ /\ntry block:\n  dtor try\n  mark try\n/, "try block");
+        assertTrue(out =~ /\nbranch:\n  dtor br\n  mark br\n/, "branch");
     }
 
     #! runs the script in every execution mode and on the IR tier

@@ -712,16 +712,15 @@ a statement with more than 256 temporaries keeps the error return's order, as ea
 orders the temporaries registered before it).
 `ExceptionTempReleaseOrder.qtest`.
 
-The AST interpreter evaluates the operands of an operator into holders that the operator releases
-when it returns, and a functional operator (`map`, `select`, `foldl`, `foldr`, map-select and the
-hash `map` operators) holds its source until it returns, so `f(new T("a") == new T("b"), g())`
-destroys `b` and `a` before `g()` runs. The compiled modes release a statement's temporaries when
-the statement ends unless an instruction releases them earlier, so the lowering emits
-`ReleaseOwnedTemp` for the operands of comparisons, `instanceof`, `exists` and slices that are calls
-once the operator has run (`qore_ir_release_operator_operand_temps()`; their values hold no reference
-to an operand's temporary; another operand's value can be a variable's or an implicit argument's,
-whose element slot a later `$1` reads again, and an operand whose type cannot hold an object is
-skipped), and for the value of
+The temporary operands of an operator live until the end of the statement in every mode (qore#5712:
+`f(new T("a") == new T("b"), g())` destroys `b` and `a` after `f()` returns; see
+`design/temporary-lifetime.md`).  A slice releases its sequence when it returns, and a functional operator
+(`map`, `select`, `foldl`, `foldr`, map-select and the hash `map` operators) holds its source until it
+returns. The compiled modes release a statement's temporaries when the statement ends unless an
+instruction releases them earlier, so the lowering emits `ReleaseOwnedTemp` for the sequence of a slice
+that is a call once the slice has been made (`qore_ir_release_operator_operand_temps()`; the slice holds
+no reference to the sequence, and a sequence whose type cannot hold an object is skipped), and for the
+value of
 the source of `map`, `select`, map-select and the hash `map` operators once the operator is lowered
 (`QoreIRLowering::FunctionalSourceRelease`, which records the source's value in `lowerExpression()`;
 the iterator of the loop holds a reference of its own). Only a temporary list is released (a call, a
