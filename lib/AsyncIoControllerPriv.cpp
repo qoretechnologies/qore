@@ -1283,7 +1283,7 @@ QoreCallDispatcher::~QoreCallDispatcher() {
 
 AsyncIoSandboxContext capture_async_io_sandbox_context() {
     std::shared_ptr<QoreSandboxContext> ctx = std::make_shared<QoreSandboxContext>();
-    if (ctx->manager || ctx->policy_manager) {
+    if (ctx->manager || ctx->policy_manager || ctx->module_cleanup_delegate) {
         return ctx;
     }
     return AsyncIoSandboxContext();
@@ -1914,6 +1914,13 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // The helper keeps the sink it is given for its destructor, which reports there the exceptions of the
         // Program's thread exit handler and of clearing a Program deleted while the helper was active, so the sink
         // must outlive the helper; exceptions left in it then are handled when it goes out of scope.
+        //
+        // Work that the module cleanup handed over (see qore_close_module_programs()) is part of the cleanup: its
+        // callbacks and the release of its references below can enter the Programs of the modules, as the thread that
+        // handed it over can; so the delegation is declared before the item's Program is entered and outlives the
+        // release
+        QoreModuleCleanupDelegateHelper cleanup_delegate(async_item.sandbox_ctx
+            && async_item.sandbox_ctx->module_cleanup_delegate);
         ExceptionSink pgm_guard_xsink;
         std::unique_ptr<ProgramThreadCountContextHelper> pgm_guard;
         if (async_item.pgm) {
@@ -1930,8 +1937,10 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // A step of a poll operation is governed by the sandbox of the code that submitted the operation, not by
         // the context of this worker: without it, a connection made here (to follow a redirect, retry a failed
         // connection, or try another address) would not be checked against the sandbox (see AsyncIoSandboxContext)
+        // (a context kept only for the module cleanup's delegation has no sandbox to apply: the sandbox lookups of the
+        // worker then resolve normally)
         std::unique_ptr<QoreSandboxContextHelper> sandbox_guard;
-        if (async_item.sandbox_ctx) {
+        if (async_item.sandbox_ctx && (async_item.sandbox_ctx->manager || async_item.sandbox_ctx->policy_manager)) {
             sandbox_guard.reset(new QoreSandboxContextHelper(*async_item.sandbox_ctx));
         }
 

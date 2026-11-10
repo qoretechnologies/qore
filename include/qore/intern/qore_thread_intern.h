@@ -669,6 +669,10 @@ public:
     QoreSandboxManager* provenance_policy_manager = nullptr;
     //! The call budgets of the capturing thread (referenced) for a continuation, empty otherwise
     QoreSandboxBudgetList budgets;
+    //! True for a continuation that the module cleanup hands over (qore_module_cleanup_delegation() in the capturing
+    //! thread): it can enter the Programs of the modules while the cleanup has closed them, applied with
+    //! QoreModuleCleanupDelegateHelper (see qore_close_module_programs())
+    bool module_cleanup_delegate = false;
 };
 
 //! Makes the sandbox manager lookups of the current thread return a captured context while the object exists
@@ -1227,14 +1231,17 @@ DLLLOCAL void qore_stop_module_uncounted_entries();
     threads that run it: a ThreadPool task that the cleanup thread submits (a destructor that the cleanup runs can
     submit a task and wait for its result, which would otherwise wait forever) and a background thread that it starts,
     and in turn such work of such work (see qore_module_cleanup_delegation() and QoreModuleCleanupDelegateHelper).
-    Work handed over by any other thread is refused
+    So does an asynchronous I/O operation or a timer that the cleanup thread adds to the asynchronous I/O controller
+    (QoreSandboxContext::module_cleanup_delegate): its callbacks run on the controller's workers.  Work handed over by
+    any other thread is refused
 */
 DLLLOCAL void qore_close_module_programs();
 
 //! Returns true if the Programs of the modules are closed (see qore_close_module_programs()) and the calling thread
 //! can still enter them: it runs the module cleanup, or work that the cleanup handed over
-/** Called by the code that hands work to another thread, in the handing thread (ThreadTask, the background operator):
-    the work then enters the Programs of the modules as the handing thread can (see QoreModuleCleanupDelegateHelper)
+/** Called by the code that hands work to another thread, in the handing thread (QoreSandboxContext for a ThreadPool
+    task and the asynchronous I/O controller, the background operator): the work then enters the Programs of the
+    modules as the handing thread can (see QoreModuleCleanupDelegateHelper)
 */
 DLLLOCAL bool qore_module_cleanup_delegation();
 

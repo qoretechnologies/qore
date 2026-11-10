@@ -279,11 +279,14 @@ class QoreSandboxContext;
 //! The sandbox context of the thread that submitted a poll operation
 /** Captured by AsyncIoControllerPriv::submit() and applied with QoreSandboxContextHelper around every step of the
     operation that runs on a callback worker, so that the operation, and any connection it makes there, is governed by
-    the sandbox of the code that submitted it and not by the context of the worker; empty if no sandbox applies.
+    the sandbox of the code that submitted it and not by the context of the worker; empty if no sandbox applies and the
+    operation is not work that the module cleanup hands over (QoreSandboxContext::module_cleanup_delegate), whose
+    callbacks can enter the Programs of the modules while the cleanup has closed them (QoreModuleCleanupDelegateHelper).
 */
 typedef std::shared_ptr<const QoreSandboxContext> AsyncIoSandboxContext;
 
 //! Captures the sandbox of the current thread for work continued on a callback worker; empty if no sandbox governs it
+//! and the thread does not run the module cleanup or work that the cleanup handed over
 /** A nested capture keeps a context that is applied, so work submitted by a step of another operation inherits that
     operation's sandbox.
 */

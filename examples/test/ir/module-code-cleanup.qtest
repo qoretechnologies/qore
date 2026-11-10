@@ -89,8 +89,11 @@ class ModuleCodeCleanupTest inherits QUnit::Test {
                 "a ThreadPool task of the cleanup thread: 2\n"
                 "a background thread of the cleanup thread: 2\n"
                 "a ThreadPool task of a ThreadPool task of the cleanup thread: 2\n"
+                "an asynchronous I/O timer of the cleanup thread: 2\n"
+                "an asynchronous I/O timer of a ThreadPool task of the cleanup thread: 2\n"
                 "a ThreadPool task of a foreign thread: \"PROGRAM-ERROR\"\n"
-                "a background thread of a foreign thread: \"PROGRAM-ERROR\"\n", r.out, mode);
+                "a background thread of a foreign thread: \"PROGRAM-ERROR\"\n"
+                "an asynchronous I/O timer of a foreign thread: \"PROGRAM-ERROR\"\n", r.out, mode);
         }
     }
 

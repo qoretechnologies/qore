@@ -5138,6 +5138,8 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     if (capture_budgets && td) {
         td->sandbox_budgets.capture(budgets);
     }
+    // a continuation of work that the module cleanup runs is part of the cleanup (see qore_close_module_programs())
+    module_cleanup_delegate = capture_budgets && qore_module_cleanup_delegation();
     ReferenceHolder<QoreSandboxManager> current(find_thread_sandbox_manager_ref_intern(&pgm_id), nullptr);
     assert(!current || pgm_id);
     ReferenceHolder<QoreSandboxManager> policy(find_thread_sandbox_manager_ref_intern(nullptr, true), nullptr);

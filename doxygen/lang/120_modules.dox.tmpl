@@ -1752,8 +1752,9 @@ public class Lookup {
     waits for them only when the modules are deleted at the end of the process.  Once the modules' data is being
     deleted then, no other thread can enter module code: a call from a thread that is still running (a signal handler
     of another %Program, a thread pool or a foreign thread) raises \c PROGRAM-ERROR.  The work that the deletion itself
-    hands to other threads is not refused: a @ref Qore::Thread::ThreadPool "ThreadPool" task submitted, or a
-    @ref background "background" thread started, by a destructor that runs while the modules are deleted can call
+    hands to other threads is not refused: a @ref Qore::Thread::ThreadPool "ThreadPool" task submitted, a
+    @ref background "background" thread started, or a timer or an asynchronous I/O operation added to the
+    @ref Qore::AsyncIoController "AsyncIoController", by a destructor that runs while the modules are deleted can call
     module code.
 
     The @ref background "background" operator in module code is checked against the module's own options when the

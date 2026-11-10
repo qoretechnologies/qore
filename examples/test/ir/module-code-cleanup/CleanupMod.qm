@@ -95,8 +95,9 @@ namespace Priv {
     #! module's data
     /** The code that hands the work over runs in a Program that is not a module's, so the work calls module code
         from another Program, and each call reports the exception it raises instead of failing its thread.  The work
-        that the cleanup thread hands over (a ThreadPool task, a background thread, and a task of such a task) can
-        call module code, as the cleanup thread can; the same work handed over by a foreign thread cannot
+        that the cleanup thread hands over (a ThreadPool task, a background thread, a timer of the asynchronous I/O
+        controller, and such work of such work) can call module code, as the cleanup thread can; the same work handed
+        over by a foreign thread cannot
     */
     class CleanupDelegateCheck {
         public {
@@ -132,6 +133,19 @@ auto sub nested_pool_task() {
     tp.stopWait();
     return rv;
 }
+auto sub async_timer() {
+    Queue q();
+    AsyncIoController::addTimer(now_us(), sub () { q.push(call()); });
+    return q.get();
+}
+auto sub pool_task_timer() {
+    ThreadPool tp(1);
+    Queue q();
+    tp.submit(sub () { q.push(async_timer()); });
+    auto rv = q.get();
+    tp.stopWait();
+    return rv;
+}
 # for a foreign thread, which reports the code of an exception and nothing else: the result is raised if it is the
 # code of an exception
 sub raise(auto rv) {
@@ -144,6 +158,9 @@ sub foreign_pool_task() {
 }
 sub foreign_background_thread() {
     raise(background_thread());
+}
+sub foreign_async_timer() {
+    raise(async_timer());
 }
 ";
         }
@@ -162,10 +179,15 @@ sub foreign_background_thread() {
             stdout.printf("a background thread of the cleanup thread: %y\n", pgm.callFunction("background_thread"));
             stdout.printf("a ThreadPool task of a ThreadPool task of the cleanup thread: %y\n",
                 pgm.callFunction("nested_pool_task"));
+            stdout.printf("an asynchronous I/O timer of the cleanup thread: %y\n", pgm.callFunction("async_timer"));
+            stdout.printf("an asynchronous I/O timer of a ThreadPool task of the cleanup thread: %y\n",
+                pgm.callFunction("pool_task_timer"));
             stdout.printf("a ThreadPool task of a foreign thread: %y\n",
                 call_function("dbg_run_in_foreign_thread", pgm.getCallReference("foreign_pool_task")));
             stdout.printf("a background thread of a foreign thread: %y\n",
                 call_function("dbg_run_in_foreign_thread", pgm.getCallReference("foreign_background_thread")));
+            stdout.printf("an asynchronous I/O timer of a foreign thread: %y\n",
+                call_function("dbg_run_in_foreign_thread", pgm.getCallReference("foreign_async_timer")));
             stdout.sync();
         }
     }
