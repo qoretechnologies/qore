@@ -41,7 +41,8 @@ print_usage () {
   echo "  QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN"
   echo "                           Set to '1' to leave out the tests that declare '# test-exec-mode: children'"
   echo "                           (needs --exec-mode in QORE_TEST_OPTS): their child processes set their own"
-  echo "                           execution mode, so a run in the default mode makes the same checks."
+  echo "                           execution mode or run in the default mode, so a run in the default mode makes"
+  echo "                           the same checks."
   echo "  QORE_TEST_PLATFORM_SUBSET"
   echo "                           Set to 'macos' to run only the tests that declare '# test-platform: macos - <why>'"
   echo "                           (the macOS CI job sets it): the tests whose checks depend on the platform."
@@ -215,7 +216,9 @@ fi
 # execution mode (--exec-mode) with ExecModeHarness.qm, so the execution mode of the test itself changes nothing they
 # check: a run whose tests all get an execution mode (an --exec-mode option in QORE_TEST_OPTS) leaves them out when
 # QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN=1, as a run in the default mode runs the same child processes.  A harness test
-# with checks of its own declares "# test-exec-mode: parent" and always runs.
+# with checks of its own declares "# test-exec-mode: parent" and always runs.  A test that does not use the harness
+# declares "children" when its checks run in child processes of its own binary started without an execution mode,
+# which run in the default mode in every job.
 # examples/test/runner/test_exec_mode_markers.py checks the declarations.
 if [ "${QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN}" = "1" ]; then
     case " $QORE_TEST_OPTS " in
