@@ -581,6 +581,8 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     refs.state_queue = state_queue;
     refs.state_queue_obj = state_queue_obj;
     refs.spop_base = spop_base;
+    // taken before the context is released below
+    refs.module_cleanup_delegate = async_io_module_cleanup_delegate(sandbox_ctx);
     sock_obj = nullptr;
     sock = nullptr;
     spop_obj = nullptr;
@@ -611,6 +613,8 @@ QoreProgram* AsyncIoDeferredRelease::getProgram() const {
 }
 
 void AsyncIoDeferredRelease::release(ExceptionSink* xsink) {
+    // the destructors of the work that the module cleanup handed over can enter the Programs of the modules
+    QoreModuleCleanupDelegateHelper delegate(module_cleanup_delegate);
     if (sock_obj) {
         sock_obj->deref(xsink);
         sock_obj = nullptr;
@@ -662,6 +666,8 @@ struct AsyncIoDebugHeldReleases {
     //! True while the references are held; checked without the lock first, so a release takes no lock otherwise
     std::atomic<bool> hold{false};
     QoreThreadLock lock;
+    //! signalled when references are held; see dbgDispatchHeldOffIoThreadReleases()
+    QoreCondition cond;
     std::vector<std::unique_ptr<AsyncIoDeferredRelease>> held;
 
     //! Returns the state, which is never destroyed: an I/O thread can still release references at process exit
@@ -754,6 +760,51 @@ bool AsyncIoControllerPriv::dbgHoldTimerCallback(ResolvedCallReferenceNode* code
     return true;
 }
 
+int64_t AsyncIoControllerPriv::dbgDispatchHeldOffIoThreadReleases(size_t count, int64_t timeout_ms,
+        ExceptionSink* xsink) {
+    assert(!on_async_io_thread);
+    AsyncIoDebugHeldReleases& state = AsyncIoDebugHeldReleases::get();
+    std::vector<std::unique_ptr<AsyncIoDeferredRelease>> held;
+    {
+        int64_t deadline = q_clock_getmillis() + timeout_ms;
+        AutoLocker al(state.lock);
+        while (state.held.size() < count) {
+            int64_t remaining = deadline - q_clock_getmillis();
+            if (remaining <= 0) {
+                return -1;
+            }
+            state.cond.wait(state.lock, static_cast<int>(remaining));
+        }
+        state.hold.store(false, std::memory_order_release);
+        held.swap(state.held);
+    }
+    AsyncIoControllerPriv* ctrl;
+    {
+        AutoLocker al(aio_singleton_lock);
+        ctrl = aio_singleton;
+        if (ctrl) {
+            ctrl->ref();
+        }
+    }
+    if (!ctrl) {
+        // no controller to dispatch them to: they are released here
+        for (auto& refs : held) {
+            refs->release(xsink);
+        }
+        return held.size();
+    }
+    int64_t rv = held.size();
+    ctrl->ensureCallDispatcher();
+    QoreCallDispatcher* cd = ctrl->call_dispatcher.load(std::memory_order_acquire);
+    for (auto& refs : held) {
+        cd->dispatchReleaseAsync(refs.release());
+    }
+    // the releases have run when this returns
+    ctrl->flushCallbacks();
+    ctrl->deref(xsink);
+    return rv;
+}
+
 void AsyncIoControllerPriv::dbgHoldOffIoThreadReleases(bool hold, ExceptionSink* xsink) {
     assert(!on_async_io_thread);
     AsyncIoDebugHeldReleases& state = AsyncIoDebugHeldReleases::get();
@@ -789,6 +840,7 @@ void AsyncIoControllerPriv::releaseOffIoThread(AsyncIoDeferredRelease& refs, Exc
             AutoLocker al(state.lock);
             if (state.hold.load(std::memory_order_relaxed)) {
                 state.held.push_back(std::move(deferred));
+                state.cond.broadcast();
                 return;
             }
         }
@@ -1172,6 +1224,7 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
                 refs.state_queue = cmd.submit_state_queue;
                 refs.state_queue_obj = cmd.submit_state_queue_obj;
                 refs.spop_base = cmd.submit_spop_base;
+                refs.module_cleanup_delegate = async_io_module_cleanup_delegate(cmd.submit_sandbox_ctx);
                 cmd.submit_sock_obj = nullptr;
                 cmd.submit_sock = nullptr;
                 cmd.submit_spop_obj = nullptr;
@@ -1916,9 +1969,10 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // must outlive the helper; exceptions left in it then are handled when it goes out of scope.
         //
         // Work that the module cleanup handed over (see qore_close_module_programs()) is part of the cleanup: its
-        // callbacks and the release of its references below can enter the Programs of the modules, as the thread that
-        // handed it over can; so the delegation is declared before the item's Program is entered and outlives the
-        // release
+        // callbacks and the release of the item's own references below can enter the Programs of the modules, as the
+        // thread that handed it over can; so the delegation is declared before the item's Program is entered and
+        // outlives that release.  The controller's own references to the work are released later by a DT_RELEASE
+        // item (or a synchronous caller), which carries the flag itself (AsyncIoDeferredRelease::module_cleanup_delegate)
         QoreModuleCleanupDelegateHelper cleanup_delegate(async_item.sandbox_ctx
             && async_item.sandbox_ctx->module_cleanup_delegate);
         ExceptionSink pgm_guard_xsink;
@@ -6237,6 +6291,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     poll_xsink.clear();
                     AsyncIoDeferredRelease refs;
                     refs.poll_info = new_info;
+                    refs.module_cleanup_delegate = async_io_module_cleanup_delegate(node->second.sandbox_ctx);
                     releaseOffIoThread(refs, xsink);
                 } else {
                     result.new_poll_info = new_info;
@@ -6878,6 +6933,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         for (auto& dd : deferred_deliveries) {
             ASYNC_IO_TRACE("deliverResult key='%s' onComplete=%d\n",
                 dd.key.c_str(), (int)dd.has_on_complete);
+            // taken before the context is moved
+            const bool dd_delegate = async_io_module_cleanup_delegate(dd.sandbox_ctx);
             deliverResult(dd.queue, dd.queue_obj, dd.spop_obj, dd.has_on_complete, dd.result, xsink, dd.owner,
                 std::move(dd.sandbox_ctx), dd.sync_release.get());
             dd.spop_obj = nullptr;
@@ -6890,6 +6947,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 // the last reference to the Queue's object can be this one; see releaseOffIoThread()
                 AsyncIoDeferredRelease refs;
                 refs.queue_obj = dd.queue_obj;
+                refs.module_cleanup_delegate = dd_delegate;
                 dd.queue_obj = nullptr;
                 releaseOffIoThread(refs, xsink, dd.sync_release.get());
             }
@@ -7144,6 +7202,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             }
         }
         for (auto& te : timer_events) {
+            // taken before the context is moved to the dispatched callback
+            const bool te_delegate = async_io_module_cleanup_delegate(te.sandbox_ctx);
             if (te.udata.getType() == NT_RUNTIME_CLOSURE || te.udata.getType() == NT_FUNCREF) {
                 // udata is a code reference — dispatch it asynchronously, tagged with
                 // the timer's owner (if any) so a teardown path can drain a
@@ -7179,6 +7239,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             // last references to arbitrary objects
             AsyncIoDeferredRelease refs;
             refs.udata = te.udata;
+            refs.module_cleanup_delegate = te_delegate;
             te.udata = QoreValue();
             releaseOffIoThread(refs, xsink);
         }
@@ -7298,6 +7359,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             t.loop->cancelTimer(id);
             AsyncIoDeferredRelease refs;
             refs.udata = tinfo.udata;
+            refs.module_cleanup_delegate = async_io_module_cleanup_delegate(tinfo.sandbox_ctx);
             tinfo.udata = QoreValue();
             exit_timer_refs.push_back(refs);
         }
@@ -8409,6 +8471,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
 
                     // Deliver result outside lock
                     if (finished && deliver_finished) {
+                        // taken before the context is moved
+                        const bool dd_delegate = async_io_module_cleanup_delegate(dd.sandbox_ctx);
                         deliverResult(dd.queue, dd.queue_obj, dd.spop_obj, dd.has_on_complete,
                             dd.result, xsink, dd.owner, std::move(dd.sandbox_ctx), dd.sync_release.get());
                         dd.spop_obj = nullptr;
@@ -8420,6 +8484,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             // the last reference to the Queue's object can be this one; see releaseOffIoThread()
                             AsyncIoDeferredRelease refs;
                             refs.queue_obj = dd.queue_obj;
+                            refs.module_cleanup_delegate = dd_delegate;
                             dd.queue_obj = nullptr;
                             releaseOffIoThread(refs, xsink, dd.sync_release.get());
                         }
@@ -9649,11 +9714,14 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* queue_obj, Q
         (int)has_on_complete, (void*)spop_obj, (void*)queue,
         spop_obj ? spop_obj->getClassName() : "null");
     bool dispatch_on_complete = has_on_complete && spop_obj;
+    // taken before the context is moved to a dispatched onComplete()
+    const bool delegate = async_io_module_cleanup_delegate(sandbox_ctx);
     // the references dropped here can be the last ones; see releaseOffIoThread()
     auto release_refs = [&](QoreObject* obj, QoreHashNode* hash) {
         AsyncIoDeferredRelease refs;
         refs.spop_obj = obj;
         refs.other = hash;
+        refs.module_cleanup_delegate = delegate;
         releaseOffIoThread(refs, xsink);
     };
     if (dispatch_on_complete && !result) {
@@ -9676,6 +9744,7 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* queue_obj, Q
         if (!dispatch_on_complete && sync_release && spop_obj) {
             AsyncIoDeferredRelease refs;
             refs.spop_obj = spop_obj;
+            refs.module_cleanup_delegate = delegate;
             releaseOffIoThread(refs, xsink, sync_release);
             spop_obj = nullptr;
         }
