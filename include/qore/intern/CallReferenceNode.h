@@ -37,6 +37,7 @@
 
 class LocalFunctionCallReferenceNode;
 class FunctionCallReferenceNode;
+class FunctionEntry;
 class RuntimeConfig;
 
 struct CallReferenceNodeLocation {
@@ -275,8 +276,22 @@ public:
         return const_cast<QoreFunction*>(uf);
     }
 
+    //! sets the function entry that the parser resolved the reference to
+    /** The entry says which namespace the function is in, which the function does not (an AOT image names a function
+        of the root namespace so that it is not taken for the builtin of the same name)
+    */
+    DLLLOCAL void setFunctionEntry(const FunctionEntry* n_fe) {
+        fe = n_fe;
+    }
+
+    //! returns the function entry that the parser resolved the reference to, or nullptr
+    DLLLOCAL const FunctionEntry* getFunctionEntry() const {
+        return fe;
+    }
+
 protected:
     const QoreFunction* uf;
+    const FunctionEntry* fe = nullptr;
 
     // constructor for subclasses
     DLLLOCAL LocalFunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf,

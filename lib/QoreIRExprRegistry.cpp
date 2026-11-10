@@ -163,6 +163,10 @@ static bool claimBuiltinTypeConversion(const QoreValue& expr) {
             && strcmp(func_name, "boolean"))) {
         return false;
     }
+    // only the builtin conversions: a function of the same name of the root or another namespace is a function call
+    if (!qore_ir_call_targets_builtin(call)) {
+        return false;
+    }
     const QoreListNode* args = call->getArgs();
     const QoreParseListNode* parse_args = call->getParseArgs();
     size_t nargs = args ? args->size() : (parse_args ? parse_args->size() : 0);

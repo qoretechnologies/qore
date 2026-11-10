@@ -283,7 +283,7 @@ static bool qore_ir_is_global_string_length_call(const QoreValue& expr,
         return false;
     }
     const char* name = call->getName();
-    return name && (intrinsic == QoreIRIntrinsic::StringStrlen
+    return name && qore_ir_call_targets_builtin(call) && (intrinsic == QoreIRIntrinsic::StringStrlen
         ? !strcmp(name, "strlen") : !strcmp(name, "length"));
 }
 
@@ -1043,7 +1043,7 @@ static const char* qore_llvm_get_single_arg_fast_builtin_helper(
         return nullptr;
     }
     const char* name = call->getName();
-    if (!name) {
+    if (!name || !qore_ir_call_targets_builtin(call)) {
         return nullptr;
     }
     if (!strcmp(name, "length")) {
@@ -19071,9 +19071,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     "function metadata";
                                 return false;
                             }
+                            std::string ref_name = qore_aot_get_function_ref_name(fcr);
                             llvm::Value* function_name =
                                 qore_ir_create_global_string_ptr(builder,
-                                    func->getName(), "function_call_ref_name");
+                                    ref_name.c_str(), "function_call_ref_name");
                             auto cr_ft = llvm::FunctionType::get(i64_type,
                                     {ptr_type, ptr_type, ptr_type}, false);
                             auto helper = module.getOrInsertFunction(
@@ -28650,9 +28651,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 "function metadata";
                             return false;
                         }
+                        std::string ref_name = qore_aot_get_function_ref_name(fcr);
                         llvm::Value* function_name =
                             qore_ir_create_global_string_ptr(builder,
-                                func->getName(), "function_call_ref_name");
+                                ref_name.c_str(), "function_call_ref_name");
                         auto cr_ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, ptr_type, ptr_type}, false);
                         auto helper = module.getOrInsertFunction(

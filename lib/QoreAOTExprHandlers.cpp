@@ -161,12 +161,8 @@ static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
         if (deferred_source_function) {
             ctx.writer.writeStringRef(deferred_source_function);
         } else if (fe && fe->getNamespace()) {
-            std::string qualified;
-            fe->getNamespace()->getPath(qualified);  // unanchored, e.g. "Util"
-            if (!qualified.empty()) {
-                qualified += "::";
-            }
-            qualified += fe->getName();
+            // "Util::name"; "::name" in the root namespace
+            std::string qualified = qore_aot_get_function_identity_name(fe);
             ctx.writer.writeStringRef(qualified.c_str());
         } else {
             // No resolved FE (rare — e.g. unresolved parse node) —
@@ -1655,8 +1651,8 @@ static bool write_expr_call_ref(AOTExprWriteCtx& ctx) {
     }
     if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL_REF));
-        QoreFunction* f = fcr->getFunction();
-        ctx.writer.writeStringRef(f ? f->getName() : "");
+        std::string ref_name = qore_aot_get_function_ref_name(fcr);
+        ctx.writer.writeStringRef(ref_name.c_str());
         return true;
     }
     return false;
@@ -1847,8 +1843,8 @@ static bool write_expr_func_call_ref(AOTExprWriteCtx& ctx) {
         return false;
     }
     ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL_REF));
-    QoreFunction* f = fcr->getFunction();
-    ctx.writer.writeStringRef(f ? f->getName() : "");
+    std::string ref_name = qore_aot_get_function_ref_name(fcr);
+    ctx.writer.writeStringRef(ref_name.c_str());
     return true;
 }
 

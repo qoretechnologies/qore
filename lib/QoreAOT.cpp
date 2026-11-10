@@ -33980,12 +33980,7 @@ class ExprTreeSerializer {
             // infinite-recursing).
             const FunctionEntry* fe = fc->getFunctionEntry();
             if (fe && fe->getNamespace()) {
-                std::string qualified;
-                fe->getNamespace()->getPath(qualified);
-                if (!qualified.empty()) {
-                    qualified += "::";
-                }
-                qualified += fe->getName();
+                std::string qualified = qore_aot_get_function_identity_name(fe);
                 writeStr(qualified.c_str());
             } else {
                 writeStr(fc->getName());
@@ -34710,8 +34705,8 @@ class ExprTreeSerializer {
         }
         if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_FUNC_REF));
-            QoreFunction* f = fcr->getFunction();
-            writeStr(f ? f->getName() : "");
+            std::string ref_name = qore_aot_get_function_ref_name(fcr);
+            writeStr(ref_name.c_str());
             writeU16(0);
             return true;
         }
@@ -34909,13 +34904,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // wrapper hijack the lookup.
         const FunctionEntry* fe = call->getFunctionEntry();
         if (fe && fe->getNamespace()) {
-            std::string qualified;
-            fe->getNamespace()->getPath(qualified);
-            if (!qualified.empty()) {
-                qualified += "::";
-            }
-            qualified += fe->getName();
-            id.ref1 = std::move(qualified);
+            id.ref1 = qore_aot_get_function_identity_name(fe);
         } else {
             id.ref1 = call->getName();
         }
@@ -35864,8 +35853,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
         id.kind = AOTExprKind::FUNC_CALL_REF;
-        QoreFunction* f = fcr->getFunction();
-        id.ref1 = f ? f->getName() : "";
+        id.ref1 = qore_aot_get_function_ref_name(fcr);
         return id;
     }
     if (auto* smr = dynamic_cast<const ParseSelfMethodReferenceNode*>(node)) {

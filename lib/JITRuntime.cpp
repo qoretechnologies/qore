@@ -4080,8 +4080,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_function_call_ref_aot(QoreAOTContex
         return toBits(QoreValue());
     }
 
-    qore_program_private* pp = qore_program_private::get(*pgm);
-    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*pp->RootNS, function_name);
+    // a name with a leading "::" is the function of the root namespace itself (see qore_aot_get_function_ref_name())
+    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, function_name);
     QoreFunction* func = fe ? fe->getFunction(true) : nullptr;
     if (!func) {
         xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve function call reference '%s()'",
@@ -10381,7 +10381,10 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
     // Skip QoreListNode allocation for builtins with fast-call variants
     if (auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
         const char* fname = call->getName();
-        if (fname) {
+        // the fast calls are for the builtin functions of these names: a function of the same name in the root or
+        // another namespace (::strlen, for example) is a different function
+        const FunctionEntry* fast_fe = fname ? call->getFunctionEntry() : nullptr;
+        if (fast_fe && fast_fe->hasBuiltin()) {
             // Zero-argument fast-call functions (highest priority - no arg unpacking needed)
             if (nargs == 0) {
                 if (!strcmp(fname, "now_us")) {

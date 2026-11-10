@@ -91,6 +91,14 @@ constexpr const char* QORE_IR_LOWERING_STACK_ERROR = "the code is nested too dee
 */
 DLLLOCAL bool qore_ir_walk_stack_reserve_reached();
 
+class FunctionCallNode;
+
+//! Returns true if the call resolved to the builtin function of the Qore namespace of its name
+/** A rewrite of a call that is chosen by the name of the function (substr, string, ...) is valid only for the builtin:
+    a function of the same name in the root or in another namespace (::substr, for example) is a different function
+*/
+DLLLOCAL bool qore_ir_call_targets_builtin(const FunctionCallNode* call);
+
 //! Per-callback state passed to plugin IR lowering hooks.
 /** Plugin lowering callbacks use this object to publish their lowered IR result
  *  and, on failure, the diagnostic that should be propagated to the caller.

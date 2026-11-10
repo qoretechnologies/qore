@@ -14001,6 +14001,16 @@ QoreIRValue QoreIRLowering::lowerCast(const QoreValue& expr, std::string& error)
     return result;
 }
 
+bool qore_ir_call_targets_builtin(const FunctionCallNode* call) {
+    const FunctionEntry* fe = call->getFunctionEntry();
+    if (!fe || !fe->hasBuiltin() || !fe->getNamespace()) {
+        return false;
+    }
+    std::string namespace_path;
+    fe->getNamespace()->getPath(namespace_path);
+    return namespace_path == "Qore";
+}
+
 QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* call = dynamic_cast<const FunctionCallNode*>(node);
@@ -14008,7 +14018,7 @@ QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, st
         return QoreIRValue();
     }
     const char* func_name = call->getName();
-    if (!func_name) {
+    if (!func_name || !qore_ir_call_targets_builtin(call)) {
         return QoreIRValue();
     }
     QoreIROpcode opcode;
@@ -14624,7 +14634,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
         }
     }
     if (func_name && (!strcmp(func_name, "length") || !strcmp(func_name, "strlen"))
-            && !call->hasExplicitTypeArgs()) {
+            && !call->hasExplicitTypeArgs() && qore_ir_call_targets_builtin(call)) {
         const QoreParseListNode* parse_args = call->getParseArgs();
         const QoreListNode* args = call->getArgs();
         QoreValue arg_expr;
@@ -14655,7 +14665,8 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             }
         }
     }
-    if (func_name && !strcmp(func_name, "substr") && !call->hasExplicitTypeArgs()) {
+    if (func_name && !strcmp(func_name, "substr") && !call->hasExplicitTypeArgs()
+            && qore_ir_call_targets_builtin(call)) {
         const QoreParseListNode* parse_args = call->getParseArgs();
         const QoreListNode* args = call->getArgs();
         size_t nargs = qore_ir_get_call_arg_count(parse_args, args);
@@ -14731,7 +14742,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
         }
     }
     const char* string_find_method_name = nullptr;
-    if (func_name && !call->hasExplicitTypeArgs()) {
+    if (func_name && !call->hasExplicitTypeArgs() && qore_ir_call_targets_builtin(call)) {
         if (!strcmp(func_name, "index")) {
             string_find_method_name = "find";
         } else if (!strcmp(func_name, "rindex")) {
@@ -14814,7 +14825,8 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             }
         }
     }
-    if (func_name && !strcmp(func_name, "number") && !call->hasExplicitTypeArgs()) {
+    if (func_name && !strcmp(func_name, "number") && !call->hasExplicitTypeArgs()
+            && qore_ir_call_targets_builtin(call)) {
         const QoreParseListNode* parse_args = call->getParseArgs();
         const QoreListNode* args = call->getArgs();
         QoreValue arg_expr;
@@ -15202,7 +15214,8 @@ static QoreIROpcode analyzeFoldPatternIntern(const QoreValue& fold_expr, const Q
     // Check for min/max function calls: min($1, $2) or max($1, $2)
     if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
         const char* func_name = call->getName();
-        if (func_name && (strcmp(func_name, "min") == 0 || strcmp(func_name, "max") == 0)) {
+        if (func_name && (strcmp(func_name, "min") == 0 || strcmp(func_name, "max") == 0)
+                && qore_ir_call_targets_builtin(call)) {
             bool is_min = strcmp(func_name, "min") == 0;
             const QoreListNode* args = call->getArgs();
             if (args && args->size() == 2) {
