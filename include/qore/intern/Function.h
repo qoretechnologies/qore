@@ -480,7 +480,7 @@ public:
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* explicit_receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            bool n_defer_domain_po = false);
+            bool n_defer_domain_po = false, unsigned n_variant_filter = 0);
 
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
@@ -502,7 +502,7 @@ public:
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* explicit_receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            bool n_defer_domain_po = false);
+            bool n_defer_domain_po = false, unsigned n_variant_filter = 0);
 
     DLLLOCAL ~CodeEvaluationHelper();
 
@@ -621,6 +621,8 @@ protected:
     const qore_class_private* qc;
     const QoreProgramLocation* loc;
     QoreListNodeEvalOptionalRefHolder tmp;
+    //! the QRFV_* filter of the variants that a call can select (see QoreFunction::runtimeFindVariant())
+    unsigned variant_filter = 0;
     const QoreTypeInfo* returnTypeInfo; // saved return type info
     const QoreTypeInfo* receiver_type_info = nullptr;
     QoreProgram* pgm = nullptr; // program used when evaluated (to find stacks for references)
@@ -1825,10 +1827,12 @@ public:
     }
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
+    //! \a variant_filter: see QRFV_EXPORTED_ONLY; applies when the variant is selected for the arguments, also when
+    //! the given variant does not accept them
     DLLLOCAL virtual QoreValue evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
             QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            bool defer_domain_po = false) const;
+            bool defer_domain_po = false, unsigned variant_filter = 0) const;
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     // this function will use destructive evaluation of "args"

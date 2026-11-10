@@ -115,6 +115,23 @@ Function lookups by path and pattern need the namespace of the function: `QorePr
 The function check on a handle is in `QoreExternalFunction::evalFunction()` with a caller, which every reflection
 function call uses.
 
+A given variant can also be left by the fallback of CodeEvaluationHelper::init(): when its arguments do not match,
+the call selects another variant for them; that search takes the call's variant filter (`QoreFunction::evalFunction(...,
+variant_filter)`, `QRFV_EXPORTED_ONLY` from reflection when the boundary applies), and it keeps the arguments (it
+discarded them, so the other variant ran without arguments, on develop too).
+
+A call reference to a builtin method (`\\f.call()`) used to run with the object's Program as its Program context
+(RunTimeResolvedMethodReferenceNode passed `obj->getProgram()`), so a reflection handle, which belongs to the Program
+it describes, saw that Program as its caller and checked nothing, and any restricted Program could use a privileged
+Program's builtin object (a parent's `File`) past the checks of a direct call.  The reference now records the Program
+that created it (a weak reference) and runs as a direct call there; references to user methods are unchanged.
+
+Typed hash initializers and member defaults (`TypedHash::doCast()`, `AbstractMember::getDefaultValue()`, also through
+`Type::getType(value).getTypedHash()`) are decided on visibility, not on the handle's Program: allowed if the caller
+could name the typed hash in the language (system, or declared in, imported into or inherited by the caller's Program;
+`reflection_can_see_typed_hash()` looks it up in the caller's Program), and then run under the caller's restrictions
+(QoreReflectionCallCheckHelper) and sandbox, as a cast by the caller does; refused otherwise.
+
 Variants are exported one by one: a module function can have `public` and private variants, and an importer receives
 only the public ones (the `QoreFunction` copy constructor). A check of the function (`hasPublic()`) is not enough, and
 neither is a check of the variant after resolution: resolving among all variants can select a private variant where an

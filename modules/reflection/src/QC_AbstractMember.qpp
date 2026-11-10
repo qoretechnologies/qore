@@ -121,7 +121,10 @@ auto v = m.getDefaultValue();
 auto AbstractMember::getDefaultValue() {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (caller.checkProgramAccess(m->pgm, "evaluate member defaults in",
+    // the default of a typed hash member is evaluated if the caller could name the typed hash itself (checked below);
+    // otherwise the caller must have access to the Program of the handle
+    const QoreReflectionHashDeclMember* hdm = dynamic_cast<const QoreReflectionHashDeclMember*>(m);
+    if (!hdm && caller.checkProgramAccess(m->pgm, "evaluate member defaults in",
             QoreReflectionCaller::Access::MemberDefault, xsink)) {
         return QoreValue();
     }
@@ -138,7 +141,7 @@ auto AbstractMember::getDefaultValue() {
         }
     } else if (const QoreReflectionHashDeclMember* hm = dynamic_cast<const QoreReflectionHashDeclMember*>(m)) {
         // nor can those of a typed hash that a user module does not export
-        if (reflection_check_typed_hash_export(caller, m->pgm, hm->th, hm->th->getNamespace(), xsink)) {
+        if (reflection_check_typed_hash_init(caller, m->pgm, hm->th, xsink)) {
             return QoreValue();
         }
     }
@@ -147,6 +150,8 @@ auto AbstractMember::getDefaultValue() {
     if (*xsink) {
         return QoreValue();
     }
+    // the default runs under the calling code's restrictions, as when the caller creates the value itself
+    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
 
     // the class ptr must be valid
     return m->mem->getDefaultValue(xsink);

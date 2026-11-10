@@ -144,12 +144,30 @@ class ReflectionModuleExportsTest inherits QUnit::Test {
         ("mixed-handle-variant", "-1", "REFLECTION-ACCESS-ERROR"),
         # an importer of the module, also of the module compiled with qcc, calls only the public variant
         ("mixed-direct", "7", "7"),
+        # a given public variant whose arguments only a private variant accepts: the variant is selected for the
+        # arguments among the variants that the caller sees, with the arguments (they were lost before)
+        ("opt-variant-fallback", "-8", "RUNTIME-OVERLOAD-ERROR"),
+        ("opt-get-variant-fallback", "-8", "RUNTIME-OVERLOAD-ERROR"),
+        ("mixed-variant-fallback", "-2", "RUNTIME-OVERLOAD-ERROR"),
+        # the number of variants agrees with getVariants()
+        ("mixed-num-variants", "3", "1"),
+        # a variant handle of a public function in a namespace that the module does not export, and its function
+        ("handle-variant-hidden-ns", "4", "REFLECTION-ACCESS-ERROR"),
+        ("handle-variant-function-hidden-ns", "4", "REFLECTION-ACCESS-ERROR"),
+        # a call reference to a method of a reflection handle is checked as a direct call of the method
+        ("ref-mixed-call", "-1", "7"),
+        ("ref-handle-func-hidden", "555", "REFLECTION-ACCESS-ERROR"),
+        ("ref-type-hash-cast", "555", "REFLECTION-ACCESS-ERROR"),
+        ("ref-get-variants", "3", "1"),
         # a value of a typed hash that the module does not export: its type gives a handle in the caller's Program
         ("type-hash-cast", "555", "REFLECTION-ACCESS-ERROR"),
         ("type-hash-cast-values", "555", "REFLECTION-ACCESS-ERROR"),
         ("type-hash-member-default", "555", "REFLECTION-ACCESS-ERROR"),
         ("handle-hash-member-default", "555", "REFLECTION-ACCESS-ERROR"),
         ("handle-pub-hash-member-default", "1", "1"),
+        # an exported typed hash with an initializer that runs module code: the caller could name it
+        ("type-pub-init-hash-cast", "556", "556"),
+        ("type-pub-init-hash-member-default", "556", "556"),
         # a handle of a public function in a namespace that the module does not export
         ("handle-func-hidden-ns", "4", "REFLECTION-ACCESS-ERROR"),
         # hidden_var is 555 for the other callers only through the call reference
@@ -259,6 +277,9 @@ namespace HiddenNs {
 public int sub mixed(softint i) { return i; }
 int sub mixed(string s) { return -1; }
 int sub mixed(hash<auto> h) { return -2; }
+# a public variant and a private one that accepts what the public one does not
+public int sub opt(softint i) { return i; }
+int sub opt(*hash<auto> h) { return -8; }
 hashdecl HiddenHash {
     int a = hidden_func();
 }
@@ -286,6 +307,10 @@ public namespace PubNs {
 }
 public hashdecl PubHash {
     int a = 1;
+}
+# an exported typed hash whose initializer runs the module's code
+public hashdecl PubInitHash {
+    int a = pub_func();
 }
 public enum PubEnum {
     PA = 2,
@@ -315,6 +340,7 @@ public class Factory {
     static TypedHash hiddenTypedHash() { return TypedHash::forName(\"HiddenHash\"); }
     static TypedHash pubTypedHash() { return TypedHash::forName(\"PubHash\"); }
     static Function hiddenNsFunction() { return Function::forName(\"HiddenNs::pub_in_hidden\"); }
+    static FunctionVariant hiddenNsVariant() { return Function::forName(\"HiddenNs::pub_in_hidden\").getVariants()[0]; }
     static FunctionVariant mixedHiddenVariant() {
         foreach FunctionVariant v in (Function::forName(\"mixed\").getVariants()) {
             if (v.getParamString() =~ /string/) {
@@ -325,6 +351,7 @@ public class Factory {
     }
     #! a value of the typed hash that the module does not export; no initializer runs
     static hash<auto> hiddenHashValue() { return <HiddenHash>{\"a\": 0}; }
+    static hash<auto> pubInitHashValue() { return <PubInitHash>{\"a\": 0}; }
     #! the state that the operations change
     static string state() { return sprintf(\"%d:%d:%d:%d\", hidden_var, HiddenClass::s, pub_var, PubClass::s); }
 }
@@ -446,6 +473,27 @@ auto sub run(string op) {
         case 'mixed-get-variant-hash': return root.getFunction('mixed').getVariant(HashType).call({});
         case 'mixed-handle-variant': return Factory::mixedHiddenVariant().call('7');
         case 'mixed-direct': return mixed('7');
+        case 'opt-variant-fallback': return root.getFunction('opt').getVariants()[0].call({});
+        case 'opt-get-variant-fallback': return root.getFunction('opt').getVariant(SoftIntType).call({});
+        case 'mixed-variant-fallback': {
+            foreach FunctionVariant v in (root.getFunction('mixed').getVariants()) {
+                if (v.getParamString() =~ /softint/) {
+                    return v.call({});
+                }
+            }
+            return 'no-variant';
+        }
+        case 'mixed-num-variants': return root.getFunction('mixed').numVariants();
+        case 'handle-variant-hidden-ns': return Factory::hiddenNsVariant().call();
+        case 'handle-variant-function-hidden-ns': return Factory::hiddenNsVariant().getFunction().call();
+        case 'ref-mixed-call': { Function f = root.getFunction('mixed'); code c = \\\\f.call(); return c('7'); }
+        case 'ref-handle-func-hidden': { Function f = Factory::hiddenFunction(); code c = \\\\f.call(); return c(); }
+        case 'ref-type-hash-cast': {
+            TypedHash th = Type::getType(Factory::hiddenHashValue()).getTypedHash();
+            code c = \\\\th.doCast();
+            return c({}).a;
+        }
+        case 'ref-get-variants': { Function f = root.getFunction('mixed'); code c = \\\\f.getVariants(); return c().size(); }
         case 'type-hash-cast': return Type::getType(Factory::hiddenHashValue()).getTypedHash().doCast({}).a;
         case 'type-hash-cast-values':
             return Type::getType(Factory::hiddenHashValue()).getTypedHash().doCastValues({'x': {}}).x.a;
@@ -453,6 +501,9 @@ auto sub run(string op) {
             return Type::getType(Factory::hiddenHashValue()).getTypedHash().getMember('a').getDefaultValue();
         case 'handle-hash-member-default': return Factory::hiddenTypedHash().getMember('a').getDefaultValue();
         case 'handle-pub-hash-member-default': return Factory::pubTypedHash().getMember('a').getDefaultValue();
+        case 'type-pub-init-hash-cast': return Type::getType(Factory::pubInitHashValue()).getTypedHash().doCast({}).a;
+        case 'type-pub-init-hash-member-default':
+            return Type::getType(Factory::pubInitHashValue()).getTypedHash().getMember('a').getDefaultValue();
         case 'handle-func-hidden-ns': return Factory::hiddenNsFunction().call();
         case 'state': return Factory::state();
     }

@@ -507,8 +507,10 @@ QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant,
     if (caller.checkProgramAccess(pgm, "execute code in", xsink)) {
         return QoreValue();
     }
+    // a caller that the boundary applies to can be given a public variant whose arguments only another variant
+    // accepts: the variant is then selected among the public variants as well
     return f->evalFunction(reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), args, pgm, rc, xsink,
-        nullptr, true);
+        nullptr, true, limited ? QRFV_EXPORTED_ONLY : 0);
 }
 
 const QoreExternalVariant* QoreExternalFunction::getFirstVariant() const {

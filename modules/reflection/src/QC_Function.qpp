@@ -149,7 +149,7 @@ list<FunctionVariant> Function::getVariants() [flags=RET_VALUE_ONLY] {
 
     // the function ptr must be valid
     ReferenceHolder<QoreListNode> rv(new QoreListNode(QC_FUNCTIONVARIANT->getTypeInfo()), xsink);
-    append_variant_objects(**rv, f->pgm, f->f, MT_None, xsink, &caller);
+    append_variant_objects(**rv, f->pgm, f->f, MT_None, xsink, &caller, f->ns);
     return rv.release();
 }
 
@@ -185,7 +185,7 @@ FunctionVariant Function::getVariant(...) [flags=RET_VALUE_ONLY] {
     }
 
     // the function ptr must be valid
-    return find_function_variant(f->pgm, f->f, args, 0, MT_None, xsink, &caller);
+    return find_function_variant(f->pgm, f->f, args, 0, MT_None, xsink, &caller, f->ns);
 }
 
 //! Returns the given direct child function variant declared in this function or throws an exception if the function variant is not defined
@@ -220,7 +220,7 @@ FunctionVariant Function::getVariantArgs(softlist<Type> argv) [flags=RET_VALUE_O
     }
 
     // the function ptr must be valid
-    return find_function_variant(f->pgm, f->f, argv, 0, MT_None, xsink, &caller);
+    return find_function_variant(f->pgm, f->f, argv, 0, MT_None, xsink, &caller, f->ns);
 }
 
 //! calls the function with the given arguments

@@ -961,7 +961,8 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
-        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po)
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po,
+        unsigned n_variant_filter)
     : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(get_runtime_location()),
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
@@ -983,6 +984,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
     }
 
     defer_domain_po = n_defer_domain_po;
+    variant_filter = n_variant_filter;
     init(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
@@ -990,7 +992,8 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
-        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po)
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po,
+        unsigned n_variant_filter)
     : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(get_runtime_location()),
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
@@ -1010,6 +1013,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
     }
 
     defer_domain_po = n_defer_domain_po;
+    variant_filter = n_variant_filter;
     init(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
@@ -1212,7 +1216,9 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
                 return;
             }
             xsink2.clear();
-            tmp.discard();
+            // the other variant was selected for the arguments, which are prepared for it; they are kept (a call
+            // through a fixed variant, as a reflection FunctionVariant::call(), with arguments that only another
+            // variant accepts got no arguments at all)
             sig = variant->getSignature();
             if (setup_type_param_instantiation()) {
                 return;
@@ -1318,7 +1324,7 @@ int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQo
         class_ctx = nullptr;
     }
 
-    variant = func->runtimeFindVariant(xsink, getArgs(), false, class_ctx, receiver_type_info,
+    variant = func->runtimeFindVariant(xsink, getArgs(), variant_filter, class_ctx, receiver_type_info,
         &type_param_instantiation, explicit_type_param_instantiation, &variant_content_dependent);
     if (!variant) {
         assert(*xsink);
@@ -4769,7 +4775,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
 // identified at run time
 QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool defer_domain_po) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool defer_domain_po,
+        unsigned variant_filter) const {
     const char* fname = getName();
 
     // issue #3027: catch recursive references during parse initialization
@@ -4793,7 +4800,7 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
-        pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
+        pgm, nullptr, explicit_type_param_instantiation, defer_domain_po, variant_filter);
     if (*xsink) {
         return QoreValue();
     }

@@ -1,0 +1,84 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
+%requires QUnit
+%requires FsUtil
+%requires reflection
+%exec-class ReflectionTypedHashVisibilityTest
+
+#! A typed hash's initializers run through reflection for a caller that could name the typed hash (qore#5692)
+/** Type::getType(value).getTypedHash(), TypedHash::doCast() and the default values of its members are allowed for
+    a sandboxed or restricted caller if the caller could name the typed hash in the language: a system typed hash, or
+    one that its Program declares, imports or inherits; the initializers then run under the caller's sandbox and
+    restrictions, as in a cast by the caller itself.  A parent's typed hash that a child Program does not inherit is
+    refused (REFLECTION-ACCESS-ERROR).  Trusted callers see every typed hash.  The probe runs in every execution mode
+    and as a qcc-compiled executable.
+*/
+class ReflectionTypedHashVisibilityTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+        const Expected = "trusted-inherit cast_it: 1
+trusted-inherit default_it: 2
+trusted-inherit system_it: \"SourceLocationInfo:0\"
+trusted-inherit read_it: 100
+trusted-inherit direct_read_it: 100
+trusted-no-inherit cast_it: 3
+trusted-no-inherit default_it: 4
+trusted-no-inherit system_it: \"SourceLocationInfo:0\"
+sandbox-inherit cast_it: 5
+sandbox-inherit default_it: 6
+sandbox-inherit system_it: \"SourceLocationInfo:0\"
+sandbox-inherit read_it: 200
+sandbox-inherit direct_read_it: 200
+sandbox-no-inherit cast_it: REFLECTION-ACCESS-ERROR
+sandbox-no-inherit default_it: REFLECTION-ACCESS-ERROR
+sandbox-no-inherit system_it: \"SourceLocationInfo:0\"
+restricted-inherit cast_it: 7
+restricted-inherit default_it: 8
+restricted-inherit system_it: \"SourceLocationInfo:0\"
+restricted-inherit read_it: 100
+restricted-inherit direct_read_it: 100
+restricted-no-inherit cast_it: REFLECTION-ACCESS-ERROR
+restricted-no-inherit default_it: REFLECTION-ACCESS-ERROR
+restricted-no-inherit system_it: \"SourceLocationInfo:0\"
+initializer calls: 8
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string module_path;
+        string probe = get_script_dir() + "/reflection-typed-hash-visibility/probe.q";
+    }
+
+    constructor() : QUnit::Test("reflection typed hash visibility test", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        # the child processes load the reflection module that this test loaded
+        module_path = dirname(get_module_hash().reflection.filename);
+        addTestCase("visibility decides in every execution mode and in AOT", \testVisibility());
+        set_return_value(main());
+    }
+
+    testVisibility() {
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s%s QORE_JIT_SYNC_COMPILE=1",
+            libqore_dir, libqore_dir, module_path, ENV.QORE_MODULE_DIR.val() ? ":" + ENV.QORE_MODULE_DIR : "");
+        foreach string mode in (ExecModes) {
+            assertEq(Expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, probe)), mode);
+        }
+        TmpDir tmp("qore-reflection-typed-hash-visibility-");
+        string exe = tmp.path + DirSep + "probe";
+        string out = backquote(sprintf("%s QORE_LIBDIR=%s %s -o %s %s 2>&1", env, libqore_dir, qcc_bin, exe, probe));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        assertEq(Expected, backquote(sprintf("%s %s 2>&1", env, exe)), "executable");
+    }
+}

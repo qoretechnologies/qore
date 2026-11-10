@@ -391,11 +391,25 @@ public:
         return obj;
     }
 
+protected:
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
+
 private:
     QoreObject* obj;
     const QoreMethod* method;
     const qore_class_private* qc;
-    QoreProgram* pgm = getProgram();
+    //! for a user method, or a builtin method of an object of the Program that creates the reference: the Program of
+    //! the object when the reference was created, else nullptr
+    /** The method runs in the Program that defines its class; this one is used only when that Program has released
+        the class; see execValue()
+    */
+    QoreProgram* obj_pgm = nullptr;
+    //! for a builtin method: the Program of the code that created the reference (weak reference), else nullptr
+    /** A call runs the method as a direct call in this Program would, not in the Program of the object, which for a
+        builtin object is the Program it was created for (a reflection handle is created in the Program that it
+        describes); see execValue()
+    */
+    QoreProgram* pgm = nullptr;
 
     DLLLOCAL virtual ~RunTimeResolvedMethodReferenceNode();
 };

@@ -613,19 +613,17 @@ list<TypedHashMember> TypedHash::getMembers() [flags=RET_VALUE_ONLY] {
 */
 hash<auto> TypedHash::doCast(hash<auto> h) {
     QoreReflectionCaller caller;
-    if (caller.checkProgramAccess(thd->pgm, "evaluate typed hash initializers in",
-            QoreReflectionCaller::Access::MemberDefault, xsink)) {
-        return QoreValue();
-    }
-    // the initializers of a typed hash that a user module does not export cannot be evaluated by a caller its export
-    // boundary applies to
-    if (reflection_check_typed_hash_export(caller, thd->pgm, thd->th, thd->ns, xsink)) {
+    // the initializers of a typed hash are evaluated if the caller could name the typed hash itself and so cast to it
+    // in the language: visibility decides, not the Program of the handle (see reflection_can_see_typed_hash())
+    if (reflection_check_typed_hash_init(caller, thd->pgm, thd->th, xsink)) {
         return QoreValue();
     }
     QoreExternalProgramContextHelper tch(xsink, thd->pgm);
     if (*xsink) {
         return QoreValue();
     }
+    // the initializers run under the calling code's restrictions, as in a cast by the caller itself
+    QoreReflectionCallCheckHelper call_check(caller, thd->pgm);
     return thd->th->doRuntimeCast(h, xsink);
 }
 
@@ -653,19 +651,17 @@ hash<auto> info = th.doCastWithOverrides(serialized_info, {
 */
 hash<auto> TypedHash::doCastWithOverrides(hash<auto> h, hash<auto> overrides) {
     QoreReflectionCaller caller;
-    if (caller.checkProgramAccess(thd->pgm, "evaluate typed hash initializers in",
-            QoreReflectionCaller::Access::MemberDefault, xsink)) {
-        return QoreValue();
-    }
-    // the initializers of a typed hash that a user module does not export cannot be evaluated by a caller its export
-    // boundary applies to
-    if (reflection_check_typed_hash_export(caller, thd->pgm, thd->th, thd->ns, xsink)) {
+    // the initializers of a typed hash are evaluated if the caller could name the typed hash itself and so cast to it
+    // in the language: visibility decides, not the Program of the handle (see reflection_can_see_typed_hash())
+    if (reflection_check_typed_hash_init(caller, thd->pgm, thd->th, xsink)) {
         return QoreValue();
     }
     QoreExternalProgramContextHelper tch(xsink, thd->pgm);
     if (*xsink) {
         return QoreValue();
     }
+    // the initializers run under the calling code's restrictions, as in a cast by the caller itself
+    QoreReflectionCallCheckHelper call_check(caller, thd->pgm);
     return thd->th->doRuntimeCastWithOverrides(h, overrides, xsink);
 }
 
@@ -691,19 +687,17 @@ hash<auto> typed_values = th.doCastValues({
 */
 hash<auto> TypedHash::doCastValues(hash<auto> values) {
     QoreReflectionCaller caller;
-    if (caller.checkProgramAccess(thd->pgm, "evaluate typed hash initializers in",
-            QoreReflectionCaller::Access::MemberDefault, xsink)) {
-        return QoreValue();
-    }
-    // the initializers of a typed hash that a user module does not export cannot be evaluated by a caller its export
-    // boundary applies to
-    if (reflection_check_typed_hash_export(caller, thd->pgm, thd->th, thd->ns, xsink)) {
+    // the initializers of a typed hash are evaluated if the caller could name the typed hash itself and so cast to it
+    // in the language: visibility decides, not the Program of the handle (see reflection_can_see_typed_hash())
+    if (reflection_check_typed_hash_init(caller, thd->pgm, thd->th, xsink)) {
         return QoreValue();
     }
     QoreExternalProgramContextHelper tch(xsink, thd->pgm);
     if (*xsink) {
         return QoreValue();
     }
+    // the initializers run under the calling code's restrictions, as in a cast by the caller itself
+    QoreReflectionCallCheckHelper call_check(caller, thd->pgm);
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     ConstHashIterator i(values);
     size_t count = 0;
@@ -758,19 +752,17 @@ hash<auto> typed_values = th.doCastValuesWithOverrides({
 */
 hash<auto> TypedHash::doCastValuesWithOverrides(hash<auto> values, hash<auto> overrides) {
     QoreReflectionCaller caller;
-    if (caller.checkProgramAccess(thd->pgm, "evaluate typed hash initializers in",
-            QoreReflectionCaller::Access::MemberDefault, xsink)) {
-        return QoreValue();
-    }
-    // the initializers of a typed hash that a user module does not export cannot be evaluated by a caller its export
-    // boundary applies to
-    if (reflection_check_typed_hash_export(caller, thd->pgm, thd->th, thd->ns, xsink)) {
+    // the initializers of a typed hash are evaluated if the caller could name the typed hash itself and so cast to it
+    // in the language: visibility decides, not the Program of the handle (see reflection_can_see_typed_hash())
+    if (reflection_check_typed_hash_init(caller, thd->pgm, thd->th, xsink)) {
         return QoreValue();
     }
     QoreExternalProgramContextHelper tch(xsink, thd->pgm);
     if (*xsink) {
         return QoreValue();
     }
+    // the initializers run under the calling code's restrictions, as in a cast by the caller itself
+    QoreReflectionCallCheckHelper call_check(caller, thd->pgm);
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     ConstHashIterator i(values);
     size_t count = 0;
