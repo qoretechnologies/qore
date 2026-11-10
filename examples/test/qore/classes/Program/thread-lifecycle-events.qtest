@@ -5,6 +5,7 @@
 
 %modern
 %no-child-restrictions
+%allow-debugger
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
@@ -74,6 +75,8 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
         addTestCase("event mask", \eventMask());
         addTestCase("activity", \activity());
         addTestCase("activity with concurrent snapshots", \activitySnapshots());
+        addTestCase("activity of an evaluation Program's copy", \activityEvalCopy());
+        addTestCase("activity of the use of a reference to a lvalue", \activityReference());
 %ifdef QoreDebug
         addTestCase("activity publication (C++)", \activityPublication());
         addTestCase("cancellation published after the thread ended", \lateCancelPublication());
@@ -677,6 +680,57 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
         assertTrue(l.last().idle);
         # no thread events are delivered
         assertEq((), (map $1, l, $1.event != "ACTIVITY") ?? ());
+    }
+
+    #! ProgramControl::createEvalProgram() takes the copied Program's thread count: active, then idle
+    activityEvalCopy() {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+        pgm.parse("int sub twice(int i) { return i * 2; }", "debugged");
+        Queue q();
+        hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(q,
+            <ProgramThreadEventOptions>{"events": PTE_ACTIVITY});
+        assertTrue(s.idle);
+        Program epgm = pgm.getProgram().createEvalProgram(PO_NEW_STYLE);
+        epgm.parse("int sub e() { return twice(2); }", "eval");
+        assertEq(4, epgm.callFunction("e"));
+        checkActivityAlternates(q);
+    }
+
+    #! the use of a reference to a lvalue of another Program enters that Program: active, then idle
+    activityReference() {
+        Program pgm(PO_NEW_STYLE);
+        pgm.parse("our int x = 1; our list<int> l = (1, 2, 3); auto sub get_x() { return \\x; } "
+            "auto sub get_l() { return \\l; }", "referenced");
+        pgm.run();
+        Queue q();
+        hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(q,
+            <ProgramThreadEventOptions>{"events": PTE_ACTIVITY});
+        assertTrue(s.idle);
+        auto rx = pgm.callFunction("get_x");
+        auto rl = pgm.callFunction("get_l");
+        # a read, an assignment and a removal through references held by local variables
+        assertEq(1, rx);
+        rx = 2;
+        assertEq(2, pgm.getGlobalVariable("x"));
+        assertEq(3, remove rl[2]);
+        # the removed element is left as NOTHING
+        assertEq(NOTHING, pgm.getGlobalVariable("l")[2]);
+        assertEq(2, pgm.getGlobalVariable("l")[1]);
+        checkActivityAlternates(q);
+    }
+
+    #! checks that the ACTIVITY events in the queue alternate, starting with active and ending with idle
+    private checkActivityAlternates(Queue q) {
+        list<hash<ProgramThreadEvent>> l;
+        while (q.size()) {
+            l += q.get();
+        }
+        assertGt(1, l.size());
+        assertFalse(l[0].idle);
+        for (int i = 1; i < l.size(); ++i) {
+            assertNeq(l[i - 1].idle, l[i].idle, sprintf("event %d", i));
+        }
+        assertTrue(l.last().idle);
     }
 
     activitySnapshots() {
