@@ -598,9 +598,12 @@ public class WebSocketCloseHandshakeTest inherits QUnit::Test {
 
         wsc.send("BLOCK");
         handler.blocked.waitForZero(HangGuard);
-        date start = now_us();
+        # the wait is measured with the monotonic clock, as disconnect() waits for its close timeout: a change of the
+        # system clock while it waits (a VM's time synchronization) must not change the elapsed time
+        int start = clock_get_monotonic_us();
         wsc.disconnect(WSCC_NormalClosure);
-        assertGe(500ms, now_us() - start, "disconnect() waits for the server's close frame for the close timeout");
+        assertGe(500ms, microseconds(clock_get_monotonic_us() - start),
+            "disconnect() waits for the server's close frame for the close timeout");
         assertTrue(op.goalReached(), "the close has ended when disconnect() returns");
         assertEq(1006, op.getCloseCode(), "no close frame was received from the server");
         assertEq("close handshake timed out", op.getCloseReason(), "the close handshake timed out");

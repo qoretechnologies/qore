@@ -194,6 +194,8 @@ void HttpClientConnectionBase::onClosedHook() {
     // can use this lock as a lifetime handshake without recreating the old
     // manager-pool/connection lock inversion.
     AutoLocker al(onclose_lock);
+    // a pool key set after this cannot be seen by the notification: it is refused (see setPoolKey())
+    close_notified_ = true;
     if (manager_) {
         manager_->onConnectionClosed(this);
     }
@@ -257,8 +259,13 @@ bool HttpClientConnectionBase::cancelRequest(int64_t stream_id, ExceptionSink* x
     return false;
 }
 
-void HttpClientConnectionBase::setPoolKey(const std::string& key) {
+bool HttpClientConnectionBase::setPoolKey(const std::string& key) {
+    AutoLocker al(onclose_lock);
+    if (close_notified_) {
+        return false;
+    }
     pool_key_ = key;
+    return true;
 }
 
 const std::string& HttpClientConnectionBase::getPoolKey() const {

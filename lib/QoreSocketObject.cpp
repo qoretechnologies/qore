@@ -34,6 +34,7 @@
 #include <qore/QoreSocketObject.h>
 #include <qore/InputStream.h>
 #include <qore/SocketPollOperation.h>
+#include "qore/intern/WeakReferenceNode.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QC_Socket.h"
@@ -77,6 +78,23 @@ static bool qore_socket_object_exec_exception_is(const QoreHashNode& ex, const c
     return QoreStringDataHelper(ex_err) == err;
 }
 
+//! Raises SOCKET-CLOSED and returns -1 if the operation of a synchronous call was canceled before it reached its goal
+/** A close of the socket by another thread cancels the operation that waits on the I/O thread, whose result has no
+    exception; the call must not return as if it had sent, received or connected
+*/
+static int qore_socket_object_exec_check_canceled(const QoreHashNode* result, const SocketPollOperationBase* poller,
+        const char* mname, ExceptionSink* xsink) {
+    if (!result || !result->getKeyValue("canceled").getAsBool() || poller->goalReached()) {
+        return 0;
+    }
+    qore_socket_raise_canceled(mname, xsink);
+    return -1;
+}
+
+// The operation object of a synchronous call holds its socket's object with a weak reference: every read of the
+// member (SocketPollOperationBase::getReferencedSocketObject(), in a step of the operation) is made while the
+// controller holds the socket's object for the operation, and the call holds it as well, and an ordinary reference
+// would cost a scan for recursive references when the member is set and again when the operation's object is deleted
 static QoreHashNode* qore_socket_object_exec_poll_operation(QoreSocketObject* s, QoreObject* sock_obj,
         QoreObject* op_obj, int timeout_ms, const char* owner_name, ExceptionSink* xsink,
         QoreHashNode** ex_out = nullptr) {
@@ -255,44 +273,6 @@ private:
     bool set_non_block = false;
     bool initialized = false;
     int controller_deferred_tid = -1;
-};
-
-class QoreSocketObjectHttp1AllowedPollOperation : public SocketPollOperationBase {
-public:
-    DLLLOCAL QoreSocketObjectHttp1AllowedPollOperation(QoreSocketObject* sock, const char* mname)
-            : sock(sock), mname(mname) {
-    }
-
-    DLLLOCAL virtual bool goalReached() const override {
-        return done;
-    }
-
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
-        done = true;
-    }
-
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
-        if (done) {
-            return nullptr;
-        }
-
-        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
-        if (priv->hasH2SessionForAsyncPoll()) {
-            xsink->raiseException("HTTP2-ERROR",
-                "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname.c_str());
-        }
-        done = true;
-        return nullptr;
-    }
-
-    DLLLOCAL virtual const char* getStateImpl() const override {
-        return done ? "http1-checked" : "checking-http1";
-    }
-
-private:
-    QoreSocketObject* sock;
-    std::string mname;
-    bool done = false;
 };
 
 class QoreSocketObjectIdleDataPollOperation : public SocketPollOperationBase {
@@ -1051,7 +1031,7 @@ public:
             session->getLocalAddrCopy(local_addr, local_addrlen);
 
             my_socket_priv* priv = my_socket_priv::getPriv(*sock);
-            int fd = priv->socket->getSocket();
+            int fd = priv->socket->getDescriptor();
             int sent = sendQuicPacketsBatch(fd, pkt_batch,
                 reinterpret_cast<const struct sockaddr*>(&peer_addr), peer_addrlen,
                 reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen);
@@ -2625,14 +2605,19 @@ static QoreObject* qore_socket_object_make_poll_op(QoreObject* sock_obj, SocketP
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", sock_obj->objectRefSelf(), xsink);
+        op_obj->setValue("sock", new WeakReferenceNode(sock_obj), xsink);
         op_obj->setValue("goal", new QoreStringNode(goal), xsink);
     }
     return *xsink ? nullptr : op_obj.release();
 }
 
+//! Runs a synchronous call's operation that has no output
+/** @param closed_if_canceled true if a canceled operation that has not reached its goal raises SOCKET-CLOSED (see
+    qore_socket_object_exec_check_canceled()), as for a connect, a TLS upgrade or a TLS shutdown
+*/
 static int qore_socket_object_exec_poll_no_output(QoreSocketObject* s, SocketPollOperationBase* poller,
-        int timeout_ms, const char* owner_name, const char* goal, ExceptionSink* xsink) {
+        int timeout_ms, const char* owner_name, const char* goal, ExceptionSink* xsink,
+        bool closed_if_canceled = false) {
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
         qore_socket_object_make_poll_op(*sock_obj, poller, goal, xsink), xsink);
@@ -2642,7 +2627,12 @@ static int qore_socket_object_exec_poll_no_output(QoreSocketObject* s, SocketPol
 
     ReferenceHolder<QoreHashNode> result(
         qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, timeout_ms, owner_name, xsink), xsink);
-    return *xsink ? -1 : 0;
+    // the operation is held by its object until the end of the function
+    if (*xsink || (closed_if_canceled && qore_socket_object_exec_check_canceled(*result, poller, owner_name,
+            xsink))) {
+        return -1;
+    }
+    return 0;
 }
 
 static QoreValue qore_socket_object_exec_poll_output(QoreSocketObject* s, SocketPollOperationBase* poller,
@@ -2662,11 +2652,16 @@ static QoreValue qore_socket_object_exec_poll_output(QoreSocketObject* s, Socket
     return poller->getOutput();
 }
 
-static int qore_socket_object_exec_check_http1_allowed(QoreSocketObject* s, const char* mname,
-        ExceptionSink* xsink) {
-    ValueHolder rv(qore_socket_object_exec_poll_output(s,
-        new QoreSocketObjectHttp1AllowedPollOperation(s, mname), -1, mname, "http1-checked", xsink), xsink);
-    return *xsink ? -1 : 0;
+//! Raises an exception and returns -1 if the socket has an HTTP/2 session, on which no HTTP/1 message may be sent
+/** The session is read through its holder (H2SessionHolder), which any thread may read, so the check needs no
+    controller round trip
+*/
+static int qore_socket_object_check_http1_allowed(QoreSocketObject* s, const char* mname, ExceptionSink* xsink) {
+    if (my_socket_priv::getPriv(*s)->hasH2SessionForAsyncPoll()) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname);
+        return -1;
+    }
+    return 0;
 }
 
 static QoreValue qore_socket_object_exec_http2_enqueue(QoreSocketObject* s,
@@ -2944,7 +2939,7 @@ static int qore_socket_object_exec_connect(QoreSocketObject* s, const char* targ
     }
 
     const char* goal = ssl ? "connect-ssl" : "connect";
-    return qore_socket_object_exec_poll_no_output(s, poller.release(), timeout_ms, goal, goal, xsink);
+    return qore_socket_object_exec_poll_no_output(s, poller.release(), timeout_ms, goal, goal, xsink, true);
 }
 
 static int qore_socket_object_exec_connect_inet(QoreSocketObject* s, const char* host, const char* service,
@@ -2963,7 +2958,7 @@ static int qore_socket_object_exec_connect_inet(QoreSocketObject* s, const char*
     }
 
     const char* goal = ssl ? "connect-ssl" : "connect";
-    return qore_socket_object_exec_poll_no_output(s, poller.release(), timeout_ms, goal, goal, xsink);
+    return qore_socket_object_exec_poll_no_output(s, poller.release(), timeout_ms, goal, goal, xsink, true);
 }
 
 static int qore_socket_object_exec_connect_unix(QoreSocketObject* s, const char* path, int socktype, int protocol,
@@ -2982,7 +2977,7 @@ static int qore_socket_object_exec_connect_unix(QoreSocketObject* s, const char*
     }
 
     const char* goal = ssl ? "connect-ssl" : "connect";
-    return qore_socket_object_exec_poll_no_output(s, poller.release(), timeout_ms, goal, goal, xsink);
+    return qore_socket_object_exec_poll_no_output(s, poller.release(), timeout_ms, goal, goal, xsink, true);
 }
 
 static int qore_socket_object_exec_upgrade_ssl(QoreSocketObject* s, int timeout_ms, bool server,
@@ -3004,7 +2999,7 @@ static int qore_socket_object_exec_upgrade_ssl(QoreSocketObject* s, int timeout_
     }
 
     const char* goal = server ? "upgrade-server-ssl" : "upgrade-client-ssl";
-    return qore_socket_object_exec_poll_no_output(s, poller.release(), timeout_ms, goal, goal, xsink);
+    return qore_socket_object_exec_poll_no_output(s, poller.release(), timeout_ms, goal, goal, xsink, true);
 }
 
 static int qore_socket_object_exec_shutdown_ssl(QoreSocketObject* s, ExceptionSink* xsink) {
@@ -3020,7 +3015,8 @@ static int qore_socket_object_exec_shutdown_ssl(QoreSocketObject* s, ExceptionSi
         return -1;
     }
 
-    return qore_socket_object_exec_poll_no_output(s, poller.release(), -1, "shutdownSSL", "shutdown-ssl", xsink);
+    return qore_socket_object_exec_poll_no_output(s, poller.release(), -1, "shutdownSSL", "shutdown-ssl", xsink,
+        true);
 }
 
 static int qore_socket_object_exec_http2_flush(QoreSocketObject* s, const char* owner_name, ExceptionSink* xsink,
@@ -3377,7 +3373,10 @@ static int qore_socket_object_exec_send_poll(QoreSocketObject* s, SocketPollOper
 
     ReferenceHolder<QoreHashNode> result(
         qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, timeout_ms, "send", xsink), xsink);
-    return *xsink ? -1 : 0;
+    if (*xsink || qore_socket_object_exec_check_canceled(*result, poller, "send", xsink)) {
+        return -1;
+    }
+    return 0;
 }
 
 static int qore_socket_object_exec_send_binary(QoreSocketObject* s, BinaryNode* data,
@@ -3551,6 +3550,8 @@ static int qore_socket_object_exec_recv_output_stream_poll(QoreSocketObject* s, 
         return -1;
     }
 
+    // the operation is held by its object until the end of the function
+    SocketPollOperationBase* stream_poller = *poller;
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
         qore_socket_object_make_poll_op(*sock_obj, poller.release(), "received", xsink), xsink);
@@ -3565,6 +3566,9 @@ static int qore_socket_object_exec_recv_output_stream_poll(QoreSocketObject* s, 
 
     ReferenceHolder<QoreHashNode> result(
         qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, -1, "recvToOutputStream", xsink), xsink);
+    if (!*xsink) {
+        qore_socket_object_exec_check_canceled(*result, stream_poller, "recvToOutputStream", xsink);
+    }
     if (reassign_after) {
         if (!*xsink) {
             os->reassignThread(xsink);
@@ -3602,6 +3606,8 @@ static int qore_socket_object_exec_write_output_stream_poll(QoreSocketObject* s,
         return -1;
     }
 
+    // the operation is held by its object until the end of the function
+    SocketPollOperationBase* stream_poller = *poller;
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
         qore_socket_object_make_poll_op(*sock_obj, poller.release(), "written", xsink), xsink);
@@ -3616,6 +3622,9 @@ static int qore_socket_object_exec_write_output_stream_poll(QoreSocketObject* s,
 
     ReferenceHolder<QoreHashNode> result(
         qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, -1, "writeOutputStream", xsink), xsink);
+    if (!*xsink) {
+        qore_socket_object_exec_check_canceled(*result, stream_poller, "writeOutputStream", xsink);
+    }
     if (reassign_after) {
         if (!*xsink) {
             os->reassignThread(xsink);
@@ -3672,7 +3681,7 @@ static QoreValue qore_socket_object_exec_recv_poll(QoreSocketObject* s, SocketRe
 
     ReferenceHolder<QoreHashNode> result(
         qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, timeout_ms, owner_name, xsink), xsink);
-    if (*xsink) {
+    if (*xsink || qore_socket_object_exec_check_canceled(*result, recv_poller, owner_name, xsink)) {
         return QoreValue();
     }
     return recv_poller->getOutput();
@@ -3791,7 +3800,7 @@ static QoreHashNode* qore_socket_object_exec_read_http_header(QoreSocketObject* 
 
     ReferenceHolder<QoreHashNode> result(
         qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, timeout_ms, "readHTTPHeader", xsink), xsink);
-    if (*xsink) {
+    if (*xsink || qore_socket_object_exec_check_canceled(*result, header_poller, "readHTTPHeader", xsink)) {
         return nullptr;
     }
 
@@ -4147,7 +4156,7 @@ static int qore_socket_object_exec_send_http_message(QoreSocketObject* s, QoreHa
         return -1;
     }
 
-    if (qore_socket_object_exec_check_http1_allowed(s, "sendHTTPMessage", xsink)) {
+    if (qore_socket_object_check_http1_allowed(s, "sendHTTPMessage", xsink)) {
         return -1;
     }
 
@@ -4183,7 +4192,7 @@ static int qore_socket_object_exec_send_http_response(QoreSocketObject* s, QoreH
         return -1;
     }
 
-    if (qore_socket_object_exec_check_http1_allowed(s, "sendHTTPResponse", xsink)) {
+    if (qore_socket_object_check_http1_allowed(s, "sendHTTPResponse", xsink)) {
         return -1;
     }
 
@@ -4439,7 +4448,7 @@ static int qore_socket_object_exec_send_http_message_callback(QoreSocketObject* 
         return -1;
     }
 
-    if (qore_socket_object_exec_check_http1_allowed(s, "sendHTTPMessageWithCallback", xsink)) {
+    if (qore_socket_object_check_http1_allowed(s, "sendHTTPMessageWithCallback", xsink)) {
         return -1;
     }
 
@@ -4465,7 +4474,7 @@ static int qore_socket_object_exec_send_http_response_callback(QoreSocketObject*
         return -1;
     }
 
-    if (qore_socket_object_exec_check_http1_allowed(s, "sendHTTPResponseWithCallback", xsink)) {
+    if (qore_socket_object_check_http1_allowed(s, "sendHTTPResponseWithCallback", xsink)) {
         return -1;
     }
 
@@ -4496,7 +4505,7 @@ static int qore_socket_object_exec_send_http_response_input_stream(QoreSocketObj
         return -1;
     }
 
-    if (qore_socket_object_exec_check_http1_allowed(s, "sendHTTPResponse", xsink)) {
+    if (qore_socket_object_check_http1_allowed(s, "sendHTTPResponse", xsink)) {
         return -1;
     }
 
@@ -6170,7 +6179,7 @@ long QoreSocketObject::verifyPeerCertificate(ExceptionSink* xsink) {
 }
 
 int QoreSocketObject::getPollableDescriptor() const {
-    return priv->socket->getSocket();
+    return priv->socket->getDescriptor();
 }
 
 int QoreSocketObject::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const {
@@ -6184,10 +6193,6 @@ int QoreSocketObject::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold
     }
     hold = std::move(h);
     return 0;
-}
-
-int QoreSocketObject::getSocket() {
-    return priv->socket->getSocket();
 }
 
 #ifdef DEBUG
