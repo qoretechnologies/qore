@@ -151,6 +151,13 @@ sub ap_sel_list(Log log) { try { list r = select holders(log, 3), fail_on($1, "h
 sub ap_count_it(Log log) { try { int c = (count fail_on($1, "it2"), new It(log, 3)); log.add("c " + c); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
 sub ap_fused(Log log) { try { int c = (count fail_on($1, "p2"), (map new Holder(log, "p" + $1.n[2]), new It(log, 3))); log.add("c " + c); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
 sub ap_msel_normal(Log log) { list r = map $1.n, new It(log, 3), fail_on($1, "zz"); log.add("r " + r.size()); log.add("after"); }
+# next() that raises in an operator that builds no list, with and without a handler, and in a fused pipeline
+sub next_raises_count_nh_inner(Log log) { int r = (count True, new It(log, 4, "n", 3)); log.add("r " + r); }
+sub next_raises_count_nh(Log log) { try { next_raises_count_nh_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
+sub next_raises_any(Log log) { try { bool b = (any $1.n == "zz", new It(log, 4, "n", 3)); log.add("b " + b); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
+sub next_raises_fused_count(Log log) { try { int r = (count True, (map new Holder(log, "p" + $1.n[1]), new It(log, 4, "n", 3))); log.add("r " + r); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
+sub next_raises_fused_count_nh_inner(Log log) { int r = (count True, (map new Holder(log, "p" + $1.n[1]), new It(log, 4, "n", 3))); log.add("r " + r); }
+sub next_raises_fused_count_nh(Log log) { try { next_raises_fused_count_nh_inner(log); } catch (hash<ExceptionInfo> ex) { log.add("catch " + exstr(ex)); } log.add("after"); }
 
 const Cases = (
     "temp_pred_select", "temp_pred_takewhile", "temp_pred_count", "temp_pred_mapsel", "temp_pred_first",
@@ -161,7 +168,8 @@ const Cases = (
     "dtor_raises_normal_take", "dtor_raises_nh", "nested_nohandler", "on_exit_case", "take_neg", "drop_neg_nh",
     "fpm_count", "fpm_any", "fpm_all", "fpm_first", "fpm_select", "fpm_two_maps", "fpm_list", "fpm_raises",
     "nh_rethrow", "nh_throw", "nh_div_select", "nh_div_takewhile", "ap_msel_list", "ap_msel_it", "ap_sel_it",
-    "ap_sel_list", "ap_count_it", "ap_fused", "ap_msel_normal",
+    "ap_sel_list", "ap_count_it", "ap_fused", "ap_msel_normal", "next_raises_count_nh", "next_raises_any",
+    "next_raises_fused_count", "next_raises_fused_count_nh",
 );
 
 #! runs a case and returns its line: the log, and every object that was not released exactly once when it returned
