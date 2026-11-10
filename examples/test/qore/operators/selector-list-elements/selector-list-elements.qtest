@@ -12,15 +12,21 @@
 
 %exec-class SelectorListElementsTest
 
-#! a list of selectors applied to a list whose elements are lists
+#! lists of selectors and indexes of any type applied to lists, lists of lists, strings and binaries
 /** QoreSquareBracketsOperatorNode::doSquareBrackets() asserted that an element that a list of selectors selects
     from a list is not a list, so ll[0..1, 2] and ll[0, 2] with ll = ((1, 2), (3, 4), (5, 6)) aborted a debug build
-    in every execution mode; a release build returned the right value.  Native code also converted a constant list
-    of indexes to the index 0 (QoreIRToLLVM::tryEmitListIndexAccess()), so il[0, 2] returned il[0] once a function
-    was compiled.
+    in every execution mode; a release build returned the right value.
 
-    list-elements.q runs in every execution mode, on the IR tier and as an AOT executable, and its output must be
-    the expected values with their types.
+    Native code (jit and tiered execution once a function was compiled, and AOT executables) also converted every
+    boxed index of the [] operator to an integer (QoreIRToLLVM::tryEmitListIndexAccess()), so any index that holds a
+    list of indexes selected the element at index 0 instead of a slice: constant and non-constant lists of selectors
+    (il[0, 2], m[f(1), 4], m[i, 4]), lists of indexes in variables and parameters, typed index lists (list<int>,
+    softlist<int>, negative indexes), typed lists of lists (tl[2, 0]), and string and binary selector lists
+    (str[0, 2], bin[0, 2]).  A boxed index that is not known to be an integer (*int, auto) must still take the native
+    element access when it holds an integer; the scalar cases cover those indexes, and their values.
+
+    list-elements.q runs in every execution mode, on the IR tier and as AOT executables (qcc -O0 and -O3), and its
+    output must be the expected values with their types, which are the values that the AST interpreter gives.
 */
 class SelectorListElementsTest inherits QUnit::Test {
     public {
@@ -36,6 +42,22 @@ class SelectorListElementsTest inherits QUnit::Test {
             "int indexes: [1, 3] (list<int>)",
             "variable indexes: [1, 3] (list<int>)",
             "variable index: 2 (integer)",
+            "call selectors: [20, 50] (list<int>)",
+            "variable selectors: [20, 50] (list<int>)",
+            "typed index list: [10, 30] (list<int>)",
+            "soft index list: [40, 20] (list<int>)",
+            "param index list: [20, 40] (list<int>)",
+            "param negative index list: [50, 10] (list<int>)",
+            "param index: 30 (integer)",
+            "string indexes: \"ac\" (string)",
+            "string variable indexes: \"eb\" (string)",
+            "binary indexes: !!binary YWM= (binary)",
+            "binary variable indexes: !!binary ZWI= (binary)",
+            "nullable index: 30 (integer)",
+            "nullable nothing index: 10 (integer)",
+            "auto indexes: [20, [10, 30], 10, 40, 20, 50, null] (list<auto>)",
+            "nullable loop: 300 (integer)",
+            "auto loop: 300 (integer)",
         );
 
         const Iterations = 3;
@@ -55,7 +77,7 @@ class SelectorListElementsTest inherits QUnit::Test {
         env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
 
         addTestCase("execution modes", \modesTest());
-        addTestCase("AOT executable", \aotTest());
+        addTestCase("AOT executables", \aotTest());
         set_return_value(main());
     }
 
@@ -70,16 +92,19 @@ class SelectorListElementsTest inherits QUnit::Test {
             ExecModeHarness::IRTierName);
     }
 
-    #! compiles the script with qcc and checks the output of the executable
+    #! compiles the script with qcc at every optimization level and checks the output of each executable
     private aotTest() {
         if (!is_file(qcc_bin)) {
             testSkip("qcc is not available at " + qcc_bin);
         }
         TmpDir dir("selector-list-elements-aot-");
-        string exe = dir.path + "/list-elements";
-        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, scriptPath()));
-        assertTrue(is_file(exe), "qcc compiles the script: " + out);
-        assertEq(expected(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = dir.path + "/list-elements" + opt;
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe,
+                scriptPath()));
+            assertTrue(is_file(exe), sprintf("qcc %s compiles the script: %s", opt, out));
+            assertEq(expected(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
     }
 
     private string scriptPath() {

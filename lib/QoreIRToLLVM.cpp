@@ -33561,8 +33561,9 @@ bool QoreIRToLLVM::tryEmitHashKeyAccess(const QoreIRInstruction* inst, llvm::Mod
 }
 
 // Phase 5b: Try to emit specialized list index access.
-// Inspects the AST expr at JIT compile time; if it's a QoreSquareBracketsOperatorNode
-// with a known integer index operand, emits qore_rt_list_index_access.
+// Inspects the AST expr at JIT compile time; if it's a QoreSquareBracketsOperatorNode with a single index operand,
+// emits qore_rt_list_index_access_compat() for an integer index, and for a boxed index that is not known to be an
+// integer, a runtime int48 check that calls qore_rt_list_index_dynamic() for any other value (ex: a list of indexes).
 bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::Module& module,
         llvm::Function* llvm_func) {
     const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
@@ -33594,37 +33595,64 @@ bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::M
         return false;
     }
 
-    // a boxed index can hold a list, which selects a slice of the list (QoreSquareBracketsOperatorNode::
-    // doSquareBrackets()) instead of an element: ll[0, 2] with a constant list of indexes converted the list to the
-    // index 0; only a boxed index that is known to be an integer is converted to one here
-    if (nanboxed_values.count(inst->operands[1].id)) {
-        const QoreIRValueFacts* facts = current_ir_func
-            ? current_ir_func->getValueFacts(inst->operands[1]) : nullptr;
-        if (!facts || !QoreTypeInfo::isType(facts->type_info, NT_INT)) {
-            return false;
-        }
-    }
-
-    // Box the list operand and unbox the index
-    llvm::Value* list_boxed = boxValue(list_val, inst->operands[0].id);
-
-    // The index needs to be an i64 (native int)
-    llvm::Value* idx_int;
-    if (idx_val->getType() == i64_type) {
-        idx_int = ensureIntTypeInline(idx_val, inst->operands[1].id);
-    } else {
+    // The index needs to be an i64 (a native int or a boxed value)
+    if (idx_val->getType() != i64_type) {
         return false;  // Can't determine index type
     }
+
+    // Box the list operand
+    llvm::Value* list_boxed = boxValue(list_val, inst->operands[0].id);
+    llvm::Value* string_index_char = llvm::ConstantInt::get(i32_type, sq_brackets->hasStringIndexChar() ? 1 : 0);
 
     auto helper = module.getOrInsertFunction(
         "qore_rt_list_index_access_compat",
         llvm::FunctionType::get(i64_type,
             {i64_type, i64_type, i32_type, ptr_type}, false));
-    values[inst->result.id] = builder->CreateCall(
-        helper, {list_boxed, idx_int,
-         llvm::ConstantInt::get(i32_type,
-             sq_brackets->hasStringIndexChar() ? 1 : 0),
-         xsink_arg});
+
+    // a boxed index can hold any value: a list of indexes selects a slice of the list, string or binary
+    // (QoreSquareBracketsOperatorNode::doSquareBrackets()) instead of an element, and any other value is converted
+    // to an integer offset as the AST interpreter converts it; converting every boxed index to an integer gave the
+    // element at index 0 for a list of indexes.  An index that is known to be an integer is converted directly;
+    // any other boxed index takes the element access only when it holds an int48 at runtime, and otherwise calls
+    // qore_rt_list_index_dynamic(), which applies the index as the AST interpreter does.  Neither helper runs user
+    // code, so no local is reloaded, and an int48 index costs the same as a known integer index.
+    bool boxed_idx = nanboxed_values.count(inst->operands[1].id);
+    if (boxed_idx) {
+        const QoreIRValueFacts* facts = current_ir_func
+            ? current_ir_func->getValueFacts(inst->operands[1]) : nullptr;
+        boxed_idx = !facts || !QoreTypeInfo::isType(facts->type_info, NT_INT);
+    }
+    if (!boxed_idx) {
+        llvm::Value* idx_int = ensureIntTypeInline(idx_val, inst->operands[1].id);
+        values[inst->result.id] = builder->CreateCall(
+            helper, {list_boxed, idx_int, string_index_char, xsink_arg});
+        return true;
+    }
+
+    auto* fast_bb = llvm::BasicBlock::Create(ctx, "list_index_int48", llvm_func);
+    auto* slow_bb = llvm::BasicBlock::Create(ctx, "list_index_any", llvm_func);
+    auto* merge_bb = llvm::BasicBlock::Create(ctx, "list_index_merge", llvm_func);
+    builder->CreateCondBr(emitIsBoxedInt48(idx_val), fast_bb, slow_bb);
+
+    builder->SetInsertPoint(fast_bb);
+    llvm::Value* fast_result = builder->CreateCall(
+        helper, {list_boxed, unboxInt(idx_val), string_index_char, xsink_arg});
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* fast_end = builder->GetInsertBlock();
+
+    builder->SetInsertPoint(slow_bb);
+    auto dynamic_helper = module.getOrInsertFunction("qore_rt_list_index_dynamic",
+        llvm::FunctionType::get(i64_type, {i64_type, i64_type, i32_type, ptr_type}, false));
+    llvm::Value* slow_result = builder->CreateCall(
+        dynamic_helper, {list_boxed, idx_val, string_index_char, xsink_arg});
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* slow_end = builder->GetInsertBlock();
+
+    builder->SetInsertPoint(merge_bb);
+    llvm::PHINode* phi = builder->CreatePHI(i64_type, 2);
+    phi->addIncoming(fast_result, fast_end);
+    phi->addIncoming(slow_result, slow_end);
+    values[inst->result.id] = phi;
     return true;
 }
 
