@@ -36,11 +36,6 @@
 
 struct ParseWarnOptions {
     QoreParseOptions parse_options;
-    //! compatibility options that were set but are suspended while %modern is in effect (issue #5682)
-    /** They take effect again when %modern is turned off (ex: %old-style); see
-        qore_program_private_base::applyParseOptionImplications()
-    */
-    QoreParseOptions suspended_options;
     int warn_mask = 0;
 
     DLLLOCAL ParseWarnOptions() {
@@ -52,13 +47,11 @@ struct ParseWarnOptions {
 
     DLLLOCAL void operator=(const ParseWarnOptions& pwo) {
         parse_options = pwo.parse_options;
-        suspended_options = pwo.suspended_options;
         warn_mask = pwo.warn_mask;
     }
 
     DLLLOCAL bool operator==(const ParseWarnOptions& pwo) const {
-        return parse_options == pwo.parse_options && suspended_options == pwo.suspended_options
-            && warn_mask == pwo.warn_mask;
+        return parse_options == pwo.parse_options && warn_mask == pwo.warn_mask;
     }
 };
 

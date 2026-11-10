@@ -64,6 +64,7 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         addTestCase("options that stay settable", \settable());
         addTestCase("API", \api());
         addTestCase("child Programs", \children());
+        addTestCase("%push-parse-options", \pushParseOptions());
         addTestCase("command line", \commandLine());
         addTestCase("scripts in every mode", \scriptModes());
         addTestCase("scripts as AOT executables", \scriptAot());
@@ -178,6 +179,45 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         int po = legacy.callFunction("modern_child");
         assertEq(PO_MODERN, po & PO_MODERN, "the child has %modern");
         assertEq(0, po & PO_BROKEN_RANGE, "%modern suspends the inherited option");
+    }
+
+    #! the suspended options are saved and restored with the others by %push-parse-options
+    pushParseOptions() {
+        # a compatibility option suspended in a pushed scope does not take effect after the scope
+        {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parsePending("%push-parse-options\n%broken-range\n%modern\n", "a");
+            p.parsePending("list sub f() { return range(1, 2); }\n", "b");
+            p.parseCommit();
+            assertEq(0, p.getParseOptions() & PO_BROKEN_RANGE, "no option after the scope");
+            assertEq((1,), p.callFunction("f"), "the option does not apply after the scope");
+        }
+        # an option suspended before the scope is not lost when the scope turns %modern off and back on
+        {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS | PO_BROKEN_RANGE);
+            p.parsePending("%modern\n", "a");
+            p.parsePending("%push-parse-options\n%old-style\n", "b");
+            p.parsePending("%old-style\nlist sub f() { return range(1, 2); }\n", "c");
+            p.parseCommit();
+            assertEq((1, 2), p.callFunction("f"), "the suspended option applies after %old-style");
+        }
+        # disabling a suspended option in a pushed scope lasts for the scope only
+        {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS | PO_BROKEN_RANGE);
+            p.parsePending("%modern\n", "a");
+            p.parsePending("%push-parse-options\n%correct-range\n", "b");
+            p.parsePending("%old-style\nlist sub f() { return range(1, 2); }\n", "c");
+            p.parseCommit();
+            assertEq((1, 2), p.callFunction("f"), "the suspension is restored after the scope");
+        }
+        # disabling a suspended option outside of a pushed scope cancels it
+        {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS | PO_BROKEN_RANGE);
+            p.parsePending("%modern\n%correct-range\n", "a");
+            p.parsePending("%old-style\nlist sub f() { return range(1, 2); }\n", "b");
+            p.parseCommit();
+            assertEq((1,), p.callFunction("f"), "a disabled suspended option does not come back");
+        }
     }
 
     #! options given on the command line: suspended for code in %modern mode, applied to code that opts out

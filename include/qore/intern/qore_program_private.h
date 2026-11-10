@@ -401,7 +401,9 @@ typedef vector_map_t<std::string, QoreValue> dmap_t;
 //typedef std::map<std::string, QoreValue> dmap_t;
 
 // map for pushed parse options
-typedef vector_map_t<const char*, QoreParseOptions> ppo_t;
+//! the parse options saved by %push-parse-options: the options in effect and the suspended ones (see
+//! qore_program_private_base::suspended_options)
+typedef vector_map_t<const char*, std::pair<QoreParseOptions, QoreParseOptions>> ppo_t;
 //typedef std::map<const char*, QoreParseOptions, ltstr> ppo_t;
 
 class AbstractQoreZoneInfo;
@@ -1043,6 +1045,11 @@ public:
 
     // pushed parse option map
     ppo_t ppo;
+    //! compatibility options that were set but are suspended while %modern is in effect (issue #5682)
+    /** They take effect again when %modern is turned off (ex: %old-style); see applyParseOptionImplications().  The
+        state of the Program, not of a statement: it is saved and restored with the options by %push-parse-options
+    */
+    QoreParseOptions suspended_options;
 
     // thread initialization user code
     ResolvedCallReferenceNode* thr_init = nullptr;
@@ -1221,18 +1228,18 @@ public:
     /** %modern implies further options and suspends the compatibility options that change the meaning of code
         (issue #5682): when a Program takes %modern on (a %modern directive, a file parsed in %modern mode by its
         extension, -M, PO_MODERN given by the API or inherited by a child Program), they are kept aside
-        (ParseWarnOptions::suspended_options) and take effect again when %modern is turned off (ex: %old-style), so an
+        (suspended_options) and take effect again when %modern is turned off (ex: %old-style), so an
         option given for legacy code (ex: on the command line) is not lost when the code opts out of %modern; setting
         them while %modern is in effect is refused (getModernConflict())
     */
     DLLLOCAL void applyParseOptionImplications() {
         if (isModern(pwo.parse_options)) {
             pwo.parse_options |= modernImpliedOptions();
-            pwo.suspended_options |= pwo.parse_options & modernIncompatibleOptions();
+            suspended_options |= pwo.parse_options & modernIncompatibleOptions();
             pwo.parse_options &= ~modernIncompatibleOptions();
-        } else if (pwo.suspended_options) {
-            pwo.parse_options |= pwo.suspended_options;
-            pwo.suspended_options = QoreParseOptions();
+        } else if (suspended_options) {
+            pwo.parse_options |= suspended_options;
+            suspended_options = QoreParseOptions();
         }
     }
 
@@ -1339,7 +1346,7 @@ public:
 
     DLLLOCAL void replaceParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options = po;
-        pwo.suspended_options = QoreParseOptions();
+        suspended_options = QoreParseOptions();
         applyParseOptionImplications();
         syncExecModeWithParseOptions();
     }
@@ -3176,7 +3183,7 @@ public:
     DLLLOCAL void disableParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options &= ~po;
         // a suspended option that is disabled does not take effect again
-        pwo.suspended_options &= ~po;
+        suspended_options &= ~po;
         applyParseOptionImplications();
         syncExecModeWithParseOptions();
     }
@@ -3576,7 +3583,7 @@ public:
         ppo_t::iterator i = ppo.lower_bound(pf);
         if (i != ppo.end() && !strcmp(pf, i->first))
             return;
-        ppo.insert(i, ppo_t::value_type(pf, pwo.parse_options));
+        ppo.insert(i, ppo_t::value_type(pf, std::make_pair(pwo.parse_options, suspended_options)));
         //printd(5, "qore_program_private::pushParseOptions() this: %p %p '%s' saving %lld\n", this, pf, pf, pwo.parse_options);
     }
 
@@ -3584,7 +3591,8 @@ public:
         ppo_t::iterator i = ppo.find(pf);
         if (i != ppo.end()) {
             //printd(5, "qore_program_private::restoreParseOptions() this: %p %p '%s' restoring %lld\n", this, pf, pf, pwo.parse_options);
-            pwo.parse_options = i->second;
+            pwo.parse_options = i->second.first;
+            suspended_options = i->second.second;
             ppo.erase(i);
             // the options restored may not support an inherited execution mode that the ones of the file did
             syncExecModeWithParseOptions();
@@ -4523,6 +4531,8 @@ public:
     DLLLOCAL static QoreParseOptions forceReplaceParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
         QoreParseOptions rv = pgm.priv->pwo.parse_options;
         pgm.priv->pwo.parse_options = po;
+        // the options given replace all others, as with replaceParseOptionsIntern()
+        pgm.priv->suspended_options = QoreParseOptions();
         pgm.priv->applyParseOptionImplications();
         pgm.priv->syncExecModeWithParseOptions();
         return rv;
