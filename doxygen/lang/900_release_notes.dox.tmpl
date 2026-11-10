@@ -116,13 +116,10 @@
     caller's %Program, where only the module's exported names exist; see @ref user_module_runtime_context.
 
     @par Temporary Values Live Until the End of Their Statement
-    A value that an expression creates and nothing else refers to, such as the object returned by a call in a chain of
-    member accesses and method calls, lives until the end of its statement instead of until the call that used it
-    returns; code that relies on such an object being destroyed earlier must assign it to a variable.  A value read
-    through a reference, or from a global, thread-local, static class or closure-bound variable or a member of the
-    current object, also lives until the end of its statement when it is the receiver of a call or a member access
-    or the operand of an operator, even if the statement assigns the variable another value; given to a call as an
-    argument, it is released when the call returns, as every argument is.  See @ref temporary_lifetime.
+    A value that an expression creates and nothing else refers to, such as an object returned by a call in a chain of
+    member accesses and method calls, or a value read through a reference and used as a receiver or an operand, lives
+    until the end of its statement; given to a call as an argument, it is released when the call returns.  Code that
+    relies on earlier destruction must assign the value to a variable; see @ref temporary_lifetime.
 
     @par Data Provider Types Restored From Their Descriptions Can Be Cyclic and Shared
     \c DataProvider::AbstractDataProviderType::get() restores each type of a description once, so a recursive type is
@@ -1684,11 +1681,9 @@
       could be a value that the variable's type does not store (ex: <tt>any v; (v += <StatInfo>{}).fullType()</tt>
       gave \c "hash<StatInfo>" while \c v holds a plain \c hash); the result is now the value the variable holds, as
       with the AST interpreter
-    - in the IR, JIT and tiered execution modes, a closure could run the code of a closure that had been freed: the
-      closure of an @ref Qore::Expression "Expression" evaluated after another Expression with a closure had been
-      deleted, and a closure of a @ref Qore::Program "Program" created after another Program had been deleted; the call
-      gave a wrong result, a \c RUNTIME-TYPE-ERROR for a parameter of another function or an \c IR-EXEC-ERROR, or
-      crashed; a closure now runs its own code
+    - in the IR, JIT and tiered execution modes, a closure of an @ref Qore::Expression "Expression" or a
+      @ref Qore::Program "Program" created after another one had been deleted could run the freed closure's code,
+      giving wrong results, exceptions or a crash; a closure now runs its own code (see @ref closure)
     - in the IR execution mode, and where the JIT and tiered modes use the IR interpreter, a \c thread_local variable
       read after an assignment or an in-place change in the same function could give a value it does not hold, such
       as the unconverted value assigned or its value before the change; the variable's value is now given, as with
