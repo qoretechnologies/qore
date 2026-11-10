@@ -105,10 +105,9 @@ namespace ModVarForms {
         # the module's own setters
         "module-setter": ("OurVarMod::set_i(42); OurVarMod::push_l(5);", "ok"),
         "static-setter": ("OurVarMod::Obj::set_sx(42);", "ok"),
-        # a function of the module currently runs in the Program that calls it, with its restrictions, so its write to
-        # a static member is refused, while a method of the class runs in the module's Program; this flips to "ok"
-        # once module functions run in the module's Program as methods do (fix/module-function-program-context)
-        "module-func-static": ("OurVarMod::set_sx_func(42);", ErrCode),
+        # a function of the module runs in the module's Program, as a method of its class does, so its write to a
+        # static member of the module's class is the module's own (see user_module_runtime_context)
+        "module-func-static": ("OurVarMod::set_sx_func(42);", "ok"),
     };
 
     #! the state after each of CalledForms, as "<OurVarMod::i>:<OurVarMod::Obj::sx>", when it is allowed
