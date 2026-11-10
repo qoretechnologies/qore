@@ -1935,6 +1935,18 @@ public:
 private:
     QoreModuleLoadFrame frame;
 };
+
+//! returns true if the module that is being loaded on this thread is library code that no untrusted code chose
+/** The commands that the source of such a module issues (its \c %module-cmd directives, and their replay when it is
+    loaded compiled) are the library's own: the code that loads it does not issue them, and as module code is
+    everywhere in %Qore they are judged by the sandbox, not by the parse options that the loader has.  A module that
+    code which is not trusted chose by a path of its own is not library code (see isTrustedModulePath() and
+    QoreAbstractModule::isTenantChosen()): its commands are judged by the restrictions of that code (issue #5699).
+*/
+bool qore_module_load_is_library() {
+    const QoreModuleLoadFrame* f = module_load_frame;
+    return f && f->trusted && !f->tenant_chosen;
+}
 }
 
 void QoreModuleManager::addModule(QoreAbstractModule* m) {
@@ -2194,11 +2206,18 @@ private:
     @param declared_po the parse options that a compiled program is declared with, for a command that is replayed
     from it, or nullptr
 */
-static void qore_get_command_restrictions(QoreParseOptions& po, bool& sandboxed, const QoreParseOptions* declared_po) {
-    po = runtime_get_effective_program_parse_options();
+static void qore_get_command_restrictions(QoreParseOptions& po, bool& sandboxed, const QoreParseOptions* declared_po,
+        bool replay) {
     sandboxed = qore_caller_is_sandboxed();
-    if (declared_po) {
-        po |= *declared_po;
+    if (replay && qore_module_load_is_library()) {
+        // the commands of a library module that is loaded compiled are the library's own: the loader's parse options
+        // are not theirs, only what was in force at the directive (see qore_module_load_is_library())
+        po = declared_po ? *declared_po : QoreParseOptions();
+    } else {
+        po = runtime_get_effective_program_parse_options();
+        if (declared_po) {
+            po |= *declared_po;
+        }
     }
     if (const QoreModuleCommandContext* outer = qore_module_command_context) {
         po |= outer->getParseOptions();
@@ -6125,11 +6144,12 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
 
     // the code that issues the command is the Program being parsed: it has the parse options in force at the
     // directive and, as a parse can be run by restricted code, the restrictions of the code running the parse.  The
-    // source of a module that is being loaded is library code, judged as module code is everywhere in Qore: by the
-    // sandbox that governs it, not by parse options, which here are only what the module's Program inherited from the
-    // code that loads it; that code does not issue the commands that the module's source issues (issue #5699)
+    // source of a library module that is being loaded is judged as module code is everywhere in Qore: by the sandbox
+    // that governs it, not by parse options, which here are only what the module's Program inherited from the code
+    // that loads it; that code does not issue the commands that the module's source issues.  A module that code
+    // which is not trusted chose by a path of its own is not library code: that code issues them (issue #5699)
     QoreParseOptions po;
-    if (!get_module_def_context()) {
+    if (!get_module_def_context() || !qore_module_load_is_library()) {
         po = pgm->getParseOptions() | runtime_get_parse_options();
     }
     bool sandboxed = qore_caller_is_sandboxed();
@@ -6152,7 +6172,8 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
     const QoreProgram* issuer = getProgram();
     QoreParseOptions cmd_po;
     bool cmd_sandboxed;
-    qore_get_command_restrictions(cmd_po, cmd_sandboxed, declared_po);
+    qore_get_command_restrictions(cmd_po, cmd_sandboxed, declared_po,
+        origin == QoreModuleCommandContext::MC_REPLAY);
 
     // a sandboxed caller stays the caller of the load and of the command, which runs in the target Program below; a
     // module that it chose by path is checked and governed as one that it loads itself (issue #5659)

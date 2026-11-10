@@ -213,3 +213,12 @@ printf("36 module directive, no-filesystem loader: %s | %s\n",
     load_in_program("CmdCtxDirectiveB", PO_NO_FILESYSTEM, False), history("cmdctxaware"));
 printf("37 module directive, sandboxed loader:    %s | %s\n", load_in_program("CmdCtxDirectiveC", 0, True),
     history("cmdctxaware"));
+# a module from the module path is library code even for a loader that forbids uncontrolled APIs
+printf("38 library module, code directive:        %s\n", load_in_program("CmdCtxDirectiveG", PO_NO_UNCONTROLLED_APIS, False));
+
+# a module that the loader chose by a path of its own is not library code: its directive is issued by the loader's code
+# and is judged by the loader's restrictions
+string dir = ENV.CMDCTX_CHOSEN_DIR ?? (get_script_dir() + "/../module-command-chosen");
+printf("39 path-chosen module, restricted:        %s\n",
+    load_in_program(dir + "/CmdCtxDirectiveD.qm", PO_NO_UNCONTROLLED_APIS, False));
+printf("40 path-chosen module, trusted:           %s\n", load_in_program(dir + "/CmdCtxDirectiveF.qm", 0, False));

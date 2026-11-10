@@ -71,6 +71,9 @@ class ModuleCommandContextTest inherits QUnit::Test {
             + "35 module directive, trusted loader:      ok | origin=0 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
             + "36 module directive, no-filesystem loader: ok | origin=0 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
             + "37 module directive, sandboxed loader:    ok | origin=0 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "38 library module, code directive:        ok\n"
+            + "39 path-chosen module, restricted:        CMDCTX-DENIED\n"
+            + "40 path-chosen module, trusted:           ok\n"
             + "";
 
         #! the replay program: the helper that reads the history, and the output line
@@ -113,6 +116,7 @@ class ModuleCommandContextTest inherits QUnit::Test {
 
         addTestCase("the matrix prints the same in every execution mode", \testModes());
         addTestCase("the matrix prints the same as a qcc executable", \testCompiled());
+        addTestCase("a library module's own command is the same compiled and as source", \testLibraryModule());
         addTestCase("a replayed command carries the restrictions of the loader and of the program", \testReplay());
         addTestCase("a restricted program cannot record a command for a module that does not declare support",
             \testReplayRefused());
@@ -121,8 +125,9 @@ class ModuleCommandContextTest inherits QUnit::Test {
     }
 
     private string env() {
-        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s", libqore_dir,
-            libqore_dir, libqore_dir, module_path);
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s CMDCTX_CHOSEN_DIR=%s",
+            libqore_dir, libqore_dir, libqore_dir, module_path,
+            realpath(get_script_dir() + "/module-command-chosen"));
     }
 
     private bool haveModules() {
@@ -173,6 +178,32 @@ class ModuleCommandContextTest inherits QUnit::Test {
             hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env(), exe), True);
             assertEq(0, r.rc, sprintf("qcc -O%s: exit status: %s", opt, r.out));
             assertEq(Expected, r.stdout, sprintf("qcc -O%s: output", opt));
+        }
+    }
+
+    #! a library module whose source has the \c path command is loaded by a Program without the filesystem: the command
+    /** is the library's own, so it is not refused, whether the module is loaded from its source or compiled to a .qmod
+        (its recorded commands are replayed when it is loaded)
+    */
+    testLibraryModule() {
+        skipWithoutModules();
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(qmod_dir);
+        string src = realpath(get_script_dir() + "/module-command/CmdCtxDirectiveH.qm");
+        string out = backquote(sprintf("%s %s -m -o %s %s 2>&1", env(), qcc_bin,
+            qmod_dir + "/CmdCtxDirectiveH.qmod", src));
+        if (!is_file(qmod_dir + "/CmdCtxDirectiveH.qmod")) {
+            testSkip("qcc is not available or cannot compile the module: " + out);
+        }
+        string script = write("load-library.q", "%modern\nProgram p(PO_NEW_STYLE | PO_NO_FILESYSTEM);\n"
+            "p.parse(\"%requires CmdCtxDirectiveH\\n\", \"load\");\nprintf(\"loaded\\n\");\n");
+        foreach string dir in (("", qmod_dir + ":")) {
+            string label = dir ? "compiled" : "source";
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b "
+                "--enable-debug %s", replace(env(), "QORE_MODULE_DIR=", "QORE_MODULE_DIR=" + dir), qore_bin, script),
+                True);
+            assertEq(0, r.rc, sprintf("%s: exit status: %s", label, r.out));
+            assertEq("loaded\n", r.stdout, sprintf("%s: output", label));
         }
     }
 

@@ -114,11 +114,12 @@
     - the restricting parse options of the issuing code (QoreModuleCommandRestrictions::getParseOptions()), which are
       its effective run-time parse options, so also what module code inherits from a sandboxed caller and a
       \c %push-parse-options block; for a \c %module-cmd directive, the options in force at the directive (and those of
-      the code that runs the parse), except in the source of a module that is being loaded, which is library code and
-      is governed only by the sandbox, as module code is everywhere in %Qore; for a command replayed from a compiled
-      program, the options of the code that loads the program together with the options that were in force at the
-      directive when the program was compiled (the options that the program is declared with, for a program compiled
-      before they were recorded);
+      the code that runs the parse), except in the source of a library module that is being loaded (a module found in a
+      module directory, not one that the loading code chose by a path of its own), which is governed only by the
+      sandbox, as module code is everywhere in %Qore; for a command replayed from a compiled program, the options of
+      the code that loads the program together with the options that were in force at the directive when the program
+      was compiled (the options that the program is declared with, for a program compiled before they were recorded),
+      except for a library module that is loaded compiled, which has only the latter;
     - whether a sandbox governs the issuing code (QoreModuleCommandRestrictions::isSandboxed());
     - how the command arrived (QoreModuleCommandContext::getOrigin()), and the issuing and target Programs.
 

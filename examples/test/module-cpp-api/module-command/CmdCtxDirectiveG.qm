@@ -1,0 +1,14 @@
+%modern
+
+# a user module with a %module-cmd directive in its own source: library code, whose command is judged by the module's
+# own Program, not by the code that loads the module (see cmdctx-matrix.q); CmdCtxDirectiveB and CmdCtxDirectiveC are
+# the same module under other names, as a module's source is parsed (and its directives run) once per process
+
+module CmdCtxDirectiveG {
+    version = "1.0";
+    desc = "issues a module command from the source of a module";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+%module-cmd(cmdctxaware) code
