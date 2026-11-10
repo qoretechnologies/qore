@@ -193,7 +193,13 @@ list<auto> sub async_operation() {
     on_error call_function(\"dbg_async_io_hold_releases\", False);
     auto rv = submit_one_step(n, destroyed);
     AsyncIoController::flushCallbacks();
-    call_function(\"dbg_async_io_dispatch_held_releases\", 1, 60s);
+    # the controller hands over three releases for the operation: its entry (before the result is pushed), the
+    # operation object (after the push; the one that destroys the probe) and the result Queue's object; all of them
+    # are waited for, as the I/O thread can still be between the push and the second when the result is read
+    int released = call_function(\"dbg_async_io_dispatch_held_releases\", 3, 60s);
+    if (released < 3) {
+        return (rv, sprintf(\"%d releases held\", released));
+    }
     return (rv, destroyed.getCount() == 0);
 }
 # adds a timer whose callback holds a module object; the controller holds the last reference to the callback once it
