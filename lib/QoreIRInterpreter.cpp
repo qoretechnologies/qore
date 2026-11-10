@@ -45,6 +45,7 @@
 #include <qore/intern/QoreRegexNMatchOperatorNode.h>
 #include <qore/intern/QoreRegexExtractOperatorNode.h>
 #include <qore/intern/CaseNodeRegex.h>
+#include <qore/intern/SwitchStatement.h>
 #include <qore/intern/StatementBlock.h>
 #include <qore/intern/QoreException.h>
 #include <qore/intern/qore_thread_intern.h>
@@ -9543,14 +9544,29 @@ next_instruction:
                 prev_block = block;
                 // Search for matching case
                 QoreIRBasicBlock* target = sw->default_target;
+                bool raised = false;
                 if (switch_val.getType() == NT_STRING) {
                     QoreStringValueHelper str(switch_val);
+                    // compared as the AST interpreter compares them, with the value's encoding and length
+                    QoreSwitchStringValue sv(**str);
                     for (const auto& c : sw->cases) {
-                        if (str->equal(c.value.c_str())) {
+                        if (sv.equals(c.value.c_str(), xsink)) {
                             target = c.target;
                             break;
                         }
+                        if (sv.raised()) {
+                            raised = true;
+                            break;
+                        }
                     }
+                }
+                if (raised) {
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
                 }
                 block = target;
                 ip = 0;

@@ -632,6 +632,13 @@ int64_t qore_rt_string_ge_typed_soft_native(uint64_t left, uint64_t right,
     ExceptionSink* xsink);
 uint64_t qore_rt_string_cmp_typed_soft(uint64_t left, uint64_t right,
     ExceptionSink* xsink);
+//! Looks up the case of a switch on a string value whose cases are ASCII strings without null bytes
+/** @param case_strings the cases, \a num_cases null-terminated strings
+    @return the index of the first case that the value equals (qore_switch_string_case_equal()), or -1 if the value is
+    not a string, matches no case or an exception was raised
+*/
+int32_t qore_rt_switch_string_lookup_v1(uint64_t switch_val_bits, const char** case_strings, int32_t num_cases,
+    ExceptionSink* xsink);
 //! Transform an assigned string and look up an ASCII switch case without retaining the result.
 int32_t qore_rt_switch_string_case_lookup_noguard(uint64_t value,
     const char** case_strings, int32_t num_cases, int32_t upper,

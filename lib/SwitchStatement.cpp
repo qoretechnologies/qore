@@ -38,6 +38,8 @@
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreDeferredRelease.h"
+#include "qore/intern/qore_string_private.h"
+#include "qore/intern/qore_encoding_private.h"
 
 CaseNode::~CaseNode() {
     val.discard(nullptr);
@@ -74,6 +76,24 @@ bool qore_switch_case_equal(QoreValue lhs_value, QoreValue rhs_value, ExceptionS
     }
 
     return false;
+}
+
+QoreSwitchStringValue::QoreSwitchStringValue(const QoreString& value) : value(value) {
+    // the data of the value, read directly, as a lookup does for each switch
+    const qore_string_private* p = qore_string_private::get(value);
+    buf = p->effective_buf();
+    len = p->len;
+    ascii_compat = qore_encoding_private::get(*p->getEncoding())->isAsciiCompat();
+}
+
+bool QoreSwitchStringValue::equalsConverted(const char* case_str, ExceptionSink* xsink) const {
+    // another encoding (UTF-16, UTF-32, a stateful encoding): compared as the AST interpreter compares the strings
+    QoreString case_string(case_str, strlen(case_str), QCS_DEFAULT);
+    bool rv = value.equalSoft(case_string, xsink);
+    if (xsink && *xsink) {
+        exception_raised = true;
+    }
+    return rv;
 }
 
 bool CaseNode::matches(QoreValue lhs_value, ExceptionSink* xsink) const {

@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# A switch on a string value whose cases are ASCII strings, which the compiled tiers dispatch with a string lookup,
+# compares the value with the cases as the AST interpreter does: with the value's encoding and length, so a UTF-16
+# value matches the case with its characters and a value with a null byte after a case does not match the case
+# (SwitchStringEncoding.qr, in every execution mode and as qcc executables)
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class SwitchStringEncodingTest
+
+class SwitchStringEncodingTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string source = get_script_dir() + "/SwitchStringEncoding.qr";
+        string expected;
+    }
+
+    constructor() : Test("switch string encoding", "1.0", \ARGV) {
+        addTestCase("AST reference output", \astOutput());
+        addTestCase("execution modes", \executionModes());
+        addTestCase("AOT", \aot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private string getExpected() {
+        if (!expected) {
+            expected = run((qore, "--exec-mode=ast", source));
+        }
+        return expected;
+    }
+
+    astOutput() {
+        string out = getExpected();
+        # 3 rounds of 19 values
+        assertEq(57, out.split("\n").size());
+        # a value in another encoding matches the case with its characters
+        assertRegex("\n0 UTF-16LE !!binary YQBiAGMA: typed=abc lwr=abc auto=abc\n", out, "UTF-16LE abc");
+        assertRegex("\n0 UTF-16BE !!binary AGEAYgBj: typed=abc lwr=abc auto=abc\n", out, "UTF-16BE abc");
+        assertRegex("\n0 UTF-16LE !!binary QQBCAEMA: typed=default lwr=abc auto=default\n", out, "UTF-16LE ABC");
+        assertRegex("\n0 ISO-8859-1 !!binary YWJj: typed=abc lwr=abc auto=abc\n", out, "ISO-8859-1 abc");
+        # a value with a null byte after a case is not the case
+        assertRegex("\n0 UTF-8 !!binary YQA=: typed=default lwr=default auto=default\n", out, "a\\0");
+        assertRegex("\n0 UTF-8 !!binary YWJjAA==: typed=default lwr=default auto=default\n", out, "abc\\0");
+        assertRegex("\n0 UTF-8 !!binary QQA=: typed=default lwr=default auto=default\n", out, "A\\0");
+        # a prefix or an extension of a case is not the case
+        assertRegex("\n0 UTF-8 !!binary YWI=: typed=default lwr=default auto=default\n", out, "ab");
+        assertRegex("\n0 UTF-8 !!binary YWJjZA==: typed=default lwr=default auto=default\n", out, "abcd");
+        # an empty string in any encoding is the empty case
+        assertRegex("\n0 UTF-16LE !!binary : typed=empty lwr=empty auto=empty\n", out, "UTF-16LE empty");
+    }
+
+    executionModes() {
+        string exp = getExpected();
+        foreach string mode in (("ir", "jit", "tiered")) {
+            foreach string control in (("", "QORE_JIT_SYNC_COMPILE=1 ",
+                    "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ")) {
+                assertEq(exp, run((qore, "--exec-mode=" + mode, source), control), control + mode);
+            }
+        }
+    }
+
+    aot() {
+        string exp = getExpected();
+        TmpDir dir("qore-switch-string-encoding-");
+        # QORE_AOT_EH is read when the code is compiled
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                run((qcc, level, "-o", executable, source), prefix);
+                assertEq(exp, run((executable,)), prefix + level);
+            }
+        }
+    }
+}

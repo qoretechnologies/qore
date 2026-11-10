@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# A switch on constant string cases compares the value as the AST interpreter does (hard string equality, with
+# encoding conversion): the fixture of SwitchStringEncoding.qtest, whose output must be the same in every execution
+# mode and in AOT code
+
+%modern
+
+# a switch on a string value with ASCII string cases only, which the compiled tiers dispatch with a string lookup
+string sub typed_switch(string s) {
+    switch (s) {
+        case "a": return "a";
+        case "abc": return "abc";
+        case "": return "empty";
+    }
+    return "default";
+}
+
+# a switch on the lower-case transformation of a string value, which the compiled tiers dispatch with a string lookup
+string sub lwr_switch(string s) {
+    switch (s.lwr()) {
+        case "a": return "a";
+        case "abc": return "abc";
+        case "": return "empty";
+    }
+    return "default";
+}
+
+# the same cases on a value of any type, compared case by case
+string sub auto_switch(auto v) {
+    switch (v) {
+        case "a": return "a";
+        case "abc": return "abc";
+        case "": return "empty";
+    }
+    return "default";
+}
+
+list<string> sub values() {
+    return (
+        "a", "abc", "ab", "abcd", "", "x", "ABC",
+        # the same strings in other encodings
+        convert_encoding("a", "UTF-16LE"), convert_encoding("abc", "UTF-16LE"), convert_encoding("abc", "UTF-16BE"),
+        convert_encoding("ABC", "UTF-16LE"), convert_encoding("abc", "ISO-8859-1"), convert_encoding("", "UTF-16LE"),
+        convert_encoding("x", "UTF-16LE"),
+        # an embedded null byte: a string that is longer than a case that is its prefix
+        binary_to_string(<6100>), binary_to_string(<610062>), binary_to_string(<61626300>),
+        binary_to_string(<4100>), binary_to_string(<00>),
+    );
+}
+
+list<string> vl = values();
+# enough rounds for the functions to be compiled in the tiered modes
+for (int round = 0; round < 3; ++round) {
+    foreach string v in (vl) {
+        printf("%d %s %y: typed=%s lwr=%s auto=%s\n", round, v.encoding(), binary(v), typed_switch(v), lwr_switch(v),
+            auto_switch(v));
+    }
+    for (int i = 0; i < 100; ++i) {
+        typed_switch("abc");
+        lwr_switch("ABC");
+        auto_switch("abc");
+    }
+}

@@ -17382,12 +17382,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                      xsink_arg});
                 emitExceptionCheck(module, llvm_func, inst);
             } else {
+                // the comparison with a case converts the case to the encoding of a value that is not
+                // ASCII-compatible, which can raise an exception
                 auto helper = module.getOrInsertFunction(
-                    "qore_rt_switch_string_lookup",
+                    "qore_rt_switch_string_lookup_v1",
                     llvm::FunctionType::get(i32_type,
-                        {i64_type, ptr_type, i32_type}, false));
+                        {i64_type, ptr_type, i32_type, ptr_type}, false));
                 case_idx = builder->CreateCall(helper,
-                    {val_boxed, arr_ptr, case_count});
+                    {val_boxed, arr_ptr, case_count, xsink_arg});
+                emitExceptionCheck(module, llvm_func, inst);
             }
 
             consumeValueUse(sw->switch_val.id, module);

@@ -40,6 +40,53 @@ class RuntimeConfig;
 
 DLLLOCAL bool qore_switch_case_equal(QoreValue lhs_value, QoreValue rhs_value, ExceptionSink* xsink);
 
+//! The value of a switch on a string value whose cases are ASCII strings without null bytes, compared with the cases as
+//! qore_switch_case_equal() compares them
+/** The compiled tiers dispatch such a switch (QoreIRSwitchString) with this comparison: a case is the value if they
+    have the same characters, in any encoding of the value.  A value in an ASCII-compatible encoding has the length and
+    the bytes of the case then; another value is compared with the case converted to its encoding
+    (QoreString::equalSoft()).  The value's data and encoding are got once, for all the cases of a lookup.
+*/
+class QoreSwitchStringValue {
+public:
+    DLLLOCAL QoreSwitchStringValue(const QoreString& value);
+
+    //! Returns true if the value is the case
+    /** @param case_str the case: ASCII characters without a null byte
+        @param xsink for an exception raised by the conversion of the case to the encoding of the value
+    */
+    DLLLOCAL bool equals(const char* case_str, ExceptionSink* xsink) const {
+        assert(case_str);
+        if (ascii_compat) {
+            // the case is read no further than its terminator, which ends a case shorter than the value, so a value
+            // with a null byte after a prefix that is the case is not the case
+            for (size_t i = 0; i < len; ++i) {
+                if (case_str[i] != buf[i] || !case_str[i]) {
+                    return false;
+                }
+            }
+            return !case_str[len];
+        }
+        return equalsConverted(case_str, xsink);
+    }
+
+    //! Returns true if a comparison raised an exception (only the conversion of a case to the value's encoding can)
+    DLLLOCAL bool raised() const {
+        return exception_raised;
+    }
+
+private:
+    const QoreString& value;
+    const char* buf;
+    size_t len;
+    bool ascii_compat;
+    //! true if a comparison raised an exception
+    mutable bool exception_raised = false;
+
+    //! Compares a value that is not in an ASCII-compatible encoding with the case converted to its encoding
+    DLLLOCAL bool equalsConverted(const char* case_str, ExceptionSink* xsink) const;
+};
+
 class CaseNode {
 private:
     DLLLOCAL virtual bool isCaseNodeImpl() const;
