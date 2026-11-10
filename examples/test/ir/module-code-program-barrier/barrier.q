@@ -13,6 +13,21 @@
 %requires BarrierMod
 
 const CallerCode = "
+# names that the module's Program defines as well, and one that only the caller defines
+string sub shared_name() {
+    return \"caller\";
+}
+
+string sub caller_only() {
+    return \"caller\";
+}
+
+class SharedClass {
+    string who() {
+        return \"caller\";
+    }
+}
+
 auto sub r(code c) {
     try {
         return c();
@@ -57,6 +72,17 @@ hash<auto> sub probes() {
     });
     h.\"function call reference\" = r(string sub () { code c = \\BarrierMod::func_program(); return c(); });
     h.\"function call_function\" = r(string sub () { return call_function(\"BarrierMod::func_program\"); });
+    h.\"function caller-only name\" = BarrierMod::func_call_value(\"caller_only\");
+    h.\"method caller-only name\" = BarrierMod::Probe::callValue(\"caller_only\");
+    h.\"function same-named function\" = BarrierMod::func_call_value(\"shared_name\");
+    h.\"method same-named function\" = BarrierMod::Probe::callValue(\"shared_name\");
+    h.\"function same-named class\" = BarrierMod::func_create_who(\"SharedClass\");
+    h.\"method same-named class\" = BarrierMod::Probe::createWho(\"SharedClass\");
+    h.\"function closure from module code\" = r(BarrierMod::func_make_closure());
+    h.\"method closure from module code\" = r(BarrierMod::Probe::makeClosure());
+    h.\"closure from module code by name\" = r(BarrierMod::func_make_name_closure(\"shared_name\"));
+    h.\"function call reference from module code\" = r(BarrierMod::func_make_ref());
+    h.\"method call reference from module code\" = r(BarrierMod::Probe::makeRef());
     return h;
 }
 ";
@@ -172,8 +198,28 @@ hash<auto> sub run(int n) {
     printf("concurrent calls: %y\n", results);
 }
 
+# names that the module's Program defines as well, and one that only the main Program defines
+string sub shared_name() {
+    return "main";
+}
+
+string sub caller_only() {
+    return "main";
+}
+
+class SharedClass {
+    string who() {
+        return "main";
+    }
+}
+
 # the main Program calling the module directly, which compiled with AOT is a native call into the module
 printf("main: function program: %y\n", BarrierMod::func_program());
 printf("main: method program: %y\n", BarrierMod::Probe::program());
 printf("main: function private function by name: %y\n", BarrierMod::func_call_private());
 printf("main: method private function by name: %y\n", BarrierMod::Probe::callPrivate());
+printf("main: function caller-only name: %y\n", BarrierMod::func_call_value("caller_only"));
+printf("main: method same-named function: %y\n", BarrierMod::Probe::callValue("shared_name"));
+printf("main: function same-named class: %y\n", BarrierMod::func_create_who("SharedClass"));
+printf("main: closure from module code: %y\n", BarrierMod::func_make_closure()());
+printf("main: call reference from module code: %y\n", BarrierMod::func_make_ref()());

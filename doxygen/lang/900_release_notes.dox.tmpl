@@ -98,19 +98,10 @@
     both are now parse errors.
 
     @par Module Code Runs in the Module's Program
-    Code in a user module (a module function, a method of a module class and a closure created in module code alike)
-    runs in the module's own %Program when another %Program calls it, so it looks up names at run time in the
-    module's %Program, including its private names, and uses the module's thread-local data.  The same holds for
-    every user function called from another %Program: a function imported with
-    @ref Qore::Program::importFunction() "Program::importFunction()" or inherited by a child %Program runs in the
-    %Program that defined it, as a method runs in the %Program that defined its class; once that %Program has been
-    deleted, a call of the function raises \c PROGRAM-ERROR.  Module code runs with
-    its own options and is governed by the @ref Qore::SandboxManager "SandboxManager" of its caller; the restrictions
-    of a sandboxed caller also apply to the module code that it calls.  Parse options alone are not a run-time
-    boundary for module code: to keep code from reaching functionality through modules, give its %Program a
-    @ref Qore::SandboxManager "SandboxManager" or @ref Qore::PO_NO_MODULES "PO_NO_MODULES"; see
-    @ref user_module_runtime_context.  Calls into module code take no lock of the module's %Program, so many threads
-    can call a module concurrently without contending for it.
+    User code called from another %Program, such as a module function, a method of a module class or a function
+    imported with @ref Qore::Program::importFunction() "Program::importFunction()", runs in the %Program that defined
+    it with that %Program's names and options, governed by the caller's @ref Qore::SandboxManager "SandboxManager"
+    and, for module code, by a sandboxed caller's restrictions (see @ref user_module_runtime_context).
 
     @par Temporary Values Live Until the End of Their Statement
     A value that an expression creates and nothing else refers to, such as the object returned by a call in a chain of

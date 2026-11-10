@@ -129,6 +129,12 @@ Program p(opts);
       deny policy to keep it and the modules it was given off the network or the filesystem; see
       @ref sandbox_net_rules and @ref sandbox_fs_policy), or @ref Qore::PO_NO_MODULES "PO_NO_MODULES" so that it cannot
       import modules
+    - <b>Code of other Programs</b>: only module code, the code of a %Program with
+      @ref Qore::PO_IN_MODULE "PO_IN_MODULE" (the %Program of a user module), inherits the restrictions of a sandboxed
+      caller.  The code of any other %Program that a sandboxed %Program calls, such as a function imported with
+      @ref Qore::Program::importFunction() "Program::importFunction()" or a method of a class imported with
+      @ref Qore::Program::importClass() "Program::importClass()", runs with the options of the %Program that defined
+      it; only the caller's @ref Qore::SandboxManager "SandboxManager" governs it
     - <b>Threads started by module code</b>: @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and the other
       thread parse options are checked when the code of the %Program is parsed, so they do not guarantee that the
       %Program cannot cause concurrent execution; see @ref sandbox_po_threads

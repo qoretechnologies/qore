@@ -23,6 +23,17 @@ module BarrierMod {
 # each thread has its own value in the module's Program
 thread_local int tl_count;
 
+# private names of the module's Program that a caller also defines: a lookup by name in module code finds these
+string sub shared_name() {
+    return "module";
+}
+
+class SharedClass {
+    string who() {
+        return "module";
+    }
+}
+
 public namespace BarrierMod {
 namespace Priv {
     # the script path of the module's Program, which identifies the Program that code runs in
@@ -107,6 +118,31 @@ public RWLock sub func_make_lock() {
     return new RWLock();
 }
 
+#! the value of a function looked up by a name that the caller chose
+public auto sub func_call_value(string name) {
+    return Priv::run(auto sub () { return call_function(name); });
+}
+
+#! an object of a class looked up by a name that the caller chose, which tells where its class is defined
+public auto sub func_create_who(string name) {
+    return Priv::run(auto sub () { return create_object(name).who(); });
+}
+
+#! a closure created in module code: it runs in the module's Program
+public code sub func_make_closure() {
+    return string sub () { return Priv::program(); };
+}
+
+#! a closure created in module code that looks up a function by name: it finds the module's
+public code sub func_make_name_closure(string name) {
+    return auto sub () { return Priv::run(auto sub () { return call_function(name); }); };
+}
+
+#! a call reference created in module code
+public code sub func_make_ref() {
+    return \func_program();
+}
+
 public class Probe {
     static string program() {
         return Priv::program();
@@ -150,6 +186,22 @@ public class Probe {
 
     static RWLock makeLock() {
         return new RWLock();
+    }
+
+    static auto callValue(string name) {
+        return Priv::run(auto sub () { return call_function(name); });
+    }
+
+    static auto createWho(string name) {
+        return Priv::run(auto sub () { return create_object(name).who(); });
+    }
+
+    static code makeClosure() {
+        return string sub () { return Priv::program(); };
+    }
+
+    static code makeRef() {
+        return \Probe::program();
     }
 }
 }

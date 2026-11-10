@@ -2145,9 +2145,11 @@ pgm.importFunction("log");
     @throw ENCODING-CONVERSION-ERROR the function name could not be converted to the @ref default_encoding "default character encoding"
 
     @note The imported function runs in the Program that it is imported from, with that Program's options and
-    names, as a method of a class imported with importClass() does; the @ref Qore::SandboxManager "SandboxManager" of
-    a sandboxed calling Program still governs it.  A call after that Program has been deleted raises
-    \c PROGRAM-ERROR
+    names, as a method of a class imported with importClass() does.  The restrictions of the calling Program do not
+    apply to it, also if the calling Program is sandboxed, unless it is module code (the Program it is imported from
+    has @ref Qore::PO_IN_MODULE "PO_IN_MODULE"), which also runs with the restrictions of a sandboxed caller (see
+    @ref sandbox_po_limitations); the @ref Qore::SandboxManager "SandboxManager" of a sandboxed calling Program governs
+    it in any case.  A call after the Program it is imported from has been deleted raises \c PROGRAM-ERROR
 
     @since %Qore 0.8.4 the function name can include a namespace path (ex \c "Namespace::func")
  */
@@ -2187,9 +2189,11 @@ pgm.importFunction("service_log", "log");
     @ref default_encoding "default character encoding"
 
     @note The imported function runs in the Program that it is imported from, with that Program's options and
-    names, as a method of a class imported with importClass() does; the @ref Qore::SandboxManager "SandboxManager" of
-    a sandboxed calling Program still governs it.  A call after that Program has been deleted raises
-    \c PROGRAM-ERROR
+    names, as a method of a class imported with importClass() does.  The restrictions of the calling Program do not
+    apply to it, also if the calling Program is sandboxed, unless it is module code (the Program it is imported from
+    has @ref Qore::PO_IN_MODULE "PO_IN_MODULE"), which also runs with the restrictions of a sandboxed caller (see
+    @ref sandbox_po_limitations); the @ref Qore::SandboxManager "SandboxManager" of a sandboxed calling Program governs
+    it in any case.  A call after the Program it is imported from has been deleted raises \c PROGRAM-ERROR
 
     @since
     - %Qore 0.8.4 the function name can include a namespace path (ex \c "Namespace::func")
