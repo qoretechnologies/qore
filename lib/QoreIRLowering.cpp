@@ -14945,8 +14945,11 @@ static QoreIRValue qore_ir_observable_release(QoreIRValue v, const QoreTypeInfo*
 */
 class QoreIRLowering::FunctionalLoopExceptionCleanup {
 public:
-    DLLLOCAL FunctionalLoopExceptionCleanup(QoreIRLowering& lowering)
-            : lowering(lowering), outer_target(lowering.getCurrentExceptionTarget()) {
+    //! @param observable false if no value that the block releases can hold an object (a loop over a typed list of
+    //! scalars that gives scalars): their release order cannot be observed, so the operator gets no block, and its
+    //! instructions keep the handler of the enclosing code as their target
+    DLLLOCAL FunctionalLoopExceptionCleanup(QoreIRLowering& lowering, bool observable = true)
+            : lowering(lowering), outer_target(observable ? lowering.getCurrentExceptionTarget() : nullptr) {
     }
 
     DLLLOCAL ~FunctionalLoopExceptionCleanup() {
@@ -16202,7 +16205,8 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         // an exception that leaves the loop for a handler of this function releases the list built so far and then
         // the source, as the AST interpreter does (see FunctionalLoopExceptionCleanup); the loop has no iterator, and
         // the element is the list's own
-        FunctionalLoopExceptionCleanup loop_cleanup(*this);
+        FunctionalLoopExceptionCleanup loop_cleanup(*this, qore_ir_type_may_hold_object(elem_type)
+            || qore_ir_type_may_hold_object(map->getMapExpType()));
         if (!loop_cleanup.init("map.direct.exception.cleanup", error)) {
             return QoreIRValue();
         }
@@ -17675,7 +17679,8 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         // an exception that leaves the loop for a handler of this function releases the list built so far and then
         // the source, as the AST interpreter does (see FunctionalLoopExceptionCleanup); the loop has no iterator, and
         // the element is the list's own
-        FunctionalLoopExceptionCleanup loop_cleanup(*this);
+        FunctionalLoopExceptionCleanup loop_cleanup(*this, qore_ir_type_may_hold_object(elem_type)
+            || qore_ir_type_may_hold_object(map_type));
         if (!loop_cleanup.init("mapselect.direct.exception.cleanup", error)) {
             return QoreIRValue();
         }
