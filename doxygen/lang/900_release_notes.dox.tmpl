@@ -108,6 +108,12 @@
     its columns in new \c start_column and \c end_column keys, in every execution mode, so a call in a statement of
     more than one line gives the call's lines instead of the statement's; see @ref Qore::CallStackInfo "CallStackInfo".
 
+    @par Restricted Code Cannot Issue Commands to Modules That Do Not Declare Support
+    A module command (\c %module-cmd, @ref Qore::Program::issueModuleCmd() "Program::issueModuleCmd()") issued by
+    sandboxed code, or by code with a parse option that restricts a functional domain, is refused with
+    \c PARSE-COMMAND-ERROR or \c RUNTIME-COMMAND-ERROR by a module that has not set \c QoreModuleInfo::cmd_caller_aware
+    (see @ref qore_modules); unrestricted code is not affected.
+
     @par Accepted Sockets Do Not Resolve the Peer's Hostname by Default
     Socket::accept() and Socket::acceptSSL() no longer look up the peer's hostname, so the accepted Socket's
     \c source_host member is @ref nothing unless the listening socket was set with Socket::setSourceHostLookup(); the
@@ -580,6 +586,11 @@
     @ref cancel_security (<a href="https://github.com/qoretechnologies/qore/issues/5634">issue 5634</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Module Commands Know the Restrictions of the Code That Issues Them
+    A binary module's command handler gets the effective restrictions of the issuing code, not those of the target
+    %Program, from the new \c QoreModuleCommandContext (module API 2.1; see @ref qore_modules), also for
+    \c %module-cmd and for commands that a compiled program replays when it is loaded.
+
     @par Program Thread Coordination
     @ref Qore::Program::waitForThreads() "Program::waitForThreads()" and
     @ref Qore::Program::waitForThread() "waitForThread()" provide cancellable, condition-driven waits for Program

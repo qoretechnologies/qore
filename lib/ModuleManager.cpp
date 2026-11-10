@@ -89,7 +89,9 @@
 #include <dirent.h>
 #endif
 
+// newest first: a module file is looked up by its API suffix in this order
 static const qore_mod_api_compat_s qore_mod_api_list_l[] = {
+    {2, 1},
     {2, 0},
 };
 #define QORE_MOD_API_LEN (sizeof(qore_mod_api_list_l)/sizeof(struct qore_mod_api_compat_s))
@@ -2076,17 +2078,158 @@ void QoreUserModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) c
     QMM.trySetUserModuleDependency(this);
 }
 
+// the context of the module command that the handler running on this thread is handling (issue #5699)
+static thread_local const QoreModuleCommandContext* qore_module_command_context = nullptr;
+
+QoreModuleCommandRestrictions::QoreModuleCommandRestrictions() : sandboxed(false) {
+}
+
+QoreModuleCommandRestrictions::QoreModuleCommandRestrictions(const QoreParseOptions& n_po, bool n_sandboxed)
+        : po(n_po & getRestrictingOptions()), sandboxed(n_sandboxed) {
+}
+
+QoreModuleCommandRestrictions::QoreModuleCommandRestrictions(const QoreModuleCommandRestrictions& old)
+        : po(old.po), sandboxed(old.sandboxed) {
+}
+
+QoreModuleCommandRestrictions& QoreModuleCommandRestrictions::operator=(const QoreModuleCommandRestrictions& old) {
+    po = old.po;
+    sandboxed = old.sandboxed;
+    return *this;
+}
+
+QoreModuleCommandRestrictions::~QoreModuleCommandRestrictions() {
+}
+
+QoreParseOptions QoreModuleCommandRestrictions::getParseOptions() const {
+    return po;
+}
+
+bool QoreModuleCommandRestrictions::isSandboxed() const {
+    return sandboxed;
+}
+
+bool QoreModuleCommandRestrictions::isRestricted() const {
+    return sandboxed || !!po;
+}
+
+bool QoreModuleCommandRestrictions::hasAny(const QoreParseOptions& mask) const {
+    return !!(po & mask);
+}
+
+int QoreModuleCommandRestrictions::check(const QoreParseOptions& mask, bool sandboxed_denied, const char* err,
+        const char* what, ExceptionSink* xsink) const {
+    if (sandboxed_denied && sandboxed) {
+        xsink->raiseException(err, "cannot %s: the command was issued by sandboxed code", what);
+        return -1;
+    }
+    QoreParseOptions forbidden = po & mask;
+    if (!!forbidden) {
+        xsink->raiseException(err, "cannot %s: the code that issued the command has parse options that forbid it "
+            "(0x" QLLX ", 0x" QLLX ")", what, forbidden.getLo(), forbidden.getHi());
+        return -1;
+    }
+    return 0;
+}
+
+QoreParseOptions QoreModuleCommandRestrictions::getRestrictingOptions() {
+    // the options that restrict a functional domain: not the options that grant something, nor the in-module domain
+    // that only marks the Programs of modules
+    static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
+        & ~QoreParseOptions(QDOM_IN_MODULE);
+    return restricting;
+}
+
+QoreModuleCommandContext::QoreModuleCommandContext(Origin n_origin, const QoreProgram* n_issuer,
+        const QoreProgram* n_target, const QoreParseOptions& n_po, bool n_sandboxed)
+        : QoreModuleCommandRestrictions(n_po, n_sandboxed), origin(n_origin), issuer(n_issuer), target(n_target) {
+}
+
+QoreModuleCommandContext::~QoreModuleCommandContext() {
+}
+
+const QoreModuleCommandContext* QoreModuleCommandContext::get() {
+    return qore_module_command_context;
+}
+
+QoreModuleCommandContext::Origin QoreModuleCommandContext::getOrigin() const {
+    return origin;
+}
+
+const QoreProgram* QoreModuleCommandContext::getIssuerProgram() const {
+    return issuer;
+}
+
+const QoreProgram* QoreModuleCommandContext::getTargetProgram() const {
+    return target;
+}
+
+QoreModuleCommandRestrictions QoreModuleCommandContext::copy() const {
+    return QoreModuleCommandRestrictions(po, sandboxed);
+}
+
+//! makes a module command context current on the thread while a handler handles the command
+class QoreModuleCommandScope {
+public:
+    DLLLOCAL QoreModuleCommandScope(const QoreModuleCommandContext& ctx) : previous(qore_module_command_context) {
+        qore_module_command_context = &ctx;
+    }
+
+    DLLLOCAL ~QoreModuleCommandScope() {
+        qore_module_command_context = previous;
+    }
+
+    QoreModuleCommandScope(const QoreModuleCommandScope&) = delete;
+    QoreModuleCommandScope& operator=(const QoreModuleCommandScope&) = delete;
+
+private:
+    const QoreModuleCommandContext* previous;
+};
+
+//! returns the restrictions that a command issued by the code running on this thread has, for a module command
+/** The restrictions are those of the issuing code with what it inherits from its callers: the effective run-time
+    parse options of the current Program and whether a sandbox governs the thread.  They only grow within a command
+    that a handler issues itself.  Called before the thread switches to the Program that the command applies to.
+
+    @param declared_po the parse options that a compiled program is declared with, for a command that is replayed
+    from it, or nullptr
+*/
+static void qore_get_command_restrictions(QoreParseOptions& po, bool& sandboxed, const QoreParseOptions* declared_po) {
+    po = runtime_get_effective_program_parse_options();
+    sandboxed = qore_caller_is_sandboxed();
+    if (declared_po) {
+        po |= *declared_po;
+    }
+    if (const QoreModuleCommandContext* outer = qore_module_command_context) {
+        po |= outer->getParseOptions();
+        sandboxed = sandboxed || outer->isSandboxed();
+    }
+}
+
 void QoreBuiltinModule::issueModuleCmd(const QoreProgramLocation* loc, const QoreString& cmd, ExceptionSink* xsink) {
     if (!module_parse_cmd) {
         if (xsink) {
-            xsink->raiseException(*loc, "PARSE-COMMAND-ERROR", "module '%s' loaded from '%s' has not registered a "
-                "parse command handler", name.c_str(), filename.c_str());
+            xsink->raiseException(*loc, "PARSE-COMMAND-ERROR", QoreValue(), "module '%s' loaded from '%s' has not "
+                "registered a parse command handler", name.c_str(), filename.c_str());
         }
         return;
     }
 
     // if parse exceptions have been disabled, then skip issuing the command
     if (!xsink) {
+        return;
+    }
+
+    // a module that does not declare that its handler honors the restrictions of the code that issues a command is
+    // not given a command from restricted code (issue #5699)
+    const QoreModuleCommandContext* ctx = QoreModuleCommandContext::get();
+    assert(ctx);
+    if (ctx && !cmd_caller_aware && ctx->isRestricted()) {
+        xsink->raiseException(*loc, ctx->getOrigin() == QoreModuleCommandContext::MC_PARSE
+            ? "PARSE-COMMAND-ERROR" : "RUNTIME-COMMAND-ERROR", QoreValue(), "module '%s' loaded from '%s' has not "
+            "declared that its module commands honor the restrictions of the code that issues them "
+            "(QoreModuleInfo::cmd_caller_aware), and the code that issued this command is restricted", name.c_str(),
+            filename.c_str());
         return;
     }
 
@@ -5974,13 +6117,31 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
         }
     }
 
+    // the code that issues the command is the Program being parsed: it has the parse options in force at the
+    // directive and, as a parse can be run by restricted code, the restrictions of the code running the parse
+    // (issue #5699)
+    QoreParseOptions po = pgm->getParseOptions() | runtime_get_parse_options();
+    bool sandboxed = qore_caller_is_sandboxed();
+    if (const QoreModuleCommandContext* outer = QoreModuleCommandContext::get()) {
+        po |= outer->getParseOptions();
+        sandboxed = sandboxed || outer->isSandboxed();
+    }
+    QoreModuleCommandContext ctx(QoreModuleCommandContext::MC_PARSE, pgm, pgm, po, sandboxed);
+    QoreModuleCommandScope scope(ctx);
     mi->issueModuleCmd(loc, cmd, pgm->getParseExceptionSink());
     qore_program_private::get(*pgm)->addModuleParseCommand(mname, cmd);
 }
 
 #define QORE_MAX_MODULE_ERROR_DESC 200
 int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, QoreModuleCommandContext::Origin origin, const QoreParseOptions* declared_po) {
+    // the restrictions of the code that issues the command, taken before the thread switches to the Program that
+    // the command applies to: in the handler, getProgram() is that Program (issue #5699)
+    const QoreProgram* issuer = getProgram();
+    QoreParseOptions cmd_po;
+    bool cmd_sandboxed;
+    qore_get_command_restrictions(cmd_po, cmd_sandboxed, declared_po);
+
     // a sandboxed caller stays the caller of the load and of the command, which runs in the target Program below; a
     // module that it chose by path is checked and governed as one that it loads itself (issue #5659)
     QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
@@ -6047,6 +6208,10 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
 
     // ensure the program is in context
     QoreProgramContextHelper pch(pgm);
+
+    // the handler gets the restrictions of the issuing code, not those of the target Program it runs in (issue #5699)
+    QoreModuleCommandContext cmd_ctx(origin, issuer, pgm, cmd_po, cmd_sandboxed);
+    QoreModuleCommandScope cmd_scope(cmd_ctx);
 
     // issue #4254: module commands run unlocked
     mi->issueModuleCmd(&loc_builtin, cmd, xsink);

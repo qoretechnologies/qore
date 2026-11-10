@@ -7,8 +7,11 @@
     Binary modules are shared libraries (<tt>.so</tt> / <tt>.dylib</tt> / <tt>.dll</tt>) that extend the %Qore language with new classes,
     functions, constants, and namespaces.
 
-    Since %Qore 3.0, binary modules use Module API 2.0, which requires a single
-    \c extern \c "C" module description function instead of the old-style exported global variables.
+    Since %Qore 3.0, binary modules use Module API 2.x, which requires a single
+    \c extern \c "C" module description function instead of the old-style exported global variables.  Module API 2.1
+    adds QoreModuleInfo::cmd_caller_aware and QoreModuleCommandContext (see the parse command handler below); a module
+    built with module API 2.0 still loads, with the restriction on its module commands that the handler section
+    describes.
 
     @subsection module_header Module Description Function
 
@@ -47,6 +50,8 @@
     - \c ns_init — the namespace initialization callback (@ref qore_module_ns_init_t)
     - \c del — the module cleanup/destructor callback (@ref qore_module_delete_t)
     - \c parse_cmd — optional parse command handler (@ref qore_module_parse_cmd_t); set to \c nullptr if not used
+    - \c cmd_caller_aware — set to \c true if the parse command handler honors the restrictions of the code that issues
+      a command (QoreModuleCommandContext); a module that does not set it is not given commands from restricted code
     - \c license — the license type (default: @ref QL_MIT); set to @ref QL_GPL if the module links with GPL code
     - \c license_str — the license as a string (e.g. \c "MIT", \c "LGPL", \c "GPL")
     - \c dependencies — a list of other binary module names this module depends on (\c strvec_t)
@@ -95,8 +100,54 @@
     typedef void (*qore_module_parse_cmd_t)(const QoreString& cmd, ExceptionSink* xsink);
     @endcode
 
-    If set, allows the module to handle parse-time commands issued via the \c %module-cmd directive.  Set to
-    \c nullptr in the description function if not used (this is the default).
+    If set, allows the module to handle parse-time commands issued via the \c %module-cmd directive, and the commands
+    issued at run time with Program::issueModuleCmd(), QoreProgram::issueModuleCmd() and
+    ModuleManager::issueRuntimeCmd(), as well as the commands that a compiled program records and replays when it is
+    loaded.  Set to \c nullptr in the description function if not used (this is the default).
+
+    @par Module Commands and the Restrictions of the Code that Issues Them (module API 2.1)
+
+    The handler runs in the Program that the command applies to: \c getProgram() there is the target of the command,
+    and its parse options say nothing about the code that issued the command.  A handler decides what a command may do
+    from the restrictions of the issuing code, which Qore gives it in the QoreModuleCommandContext returned by
+    QoreModuleCommandContext::get(), captured from the issuing code before Qore switches to the target Program:
+    - the restricting parse options of the issuing code (QoreModuleCommandRestrictions::getParseOptions()), which are
+      its effective run-time parse options, so also what module code inherits from a sandboxed caller and a
+      \c %push-parse-options block; for a \c %module-cmd directive, the options in force at the directive (and those of
+      the code that runs the parse); for a command replayed from a compiled program, the options of the code that
+      loads the program together with the options that the program is declared with;
+    - whether a sandbox governs the issuing code (QoreModuleCommandRestrictions::isSandboxed());
+    - how the command arrived (QoreModuleCommandContext::getOrigin()), and the issuing and target Programs.
+
+    The restrictions only grow within a command: a command that a handler issues itself has at least the restrictions
+    of the command it handles.  The context is valid only while the handler runs, on its thread: pass
+    QoreModuleCommandContext::copy() to another thread.  Check every command that executes code, changes a classpath or
+    a search path, touches the filesystem or the network, or changes state that all Programs share, and refuse it
+    when the issuing code may not do that:
+
+    @code{.cpp}
+    static void mymodule_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
+        const QoreModuleCommandContext* ctx = QoreModuleCommandContext::get();
+        assert(ctx);
+        if (cmd == "exec") {
+            // not for sandboxed code, nor for code that forbids uncontrolled APIs or embedded logic
+            if (ctx->check(PO_NO_UNCONTROLLED_APIS | PO_NO_EMBEDDED_LOGIC, true, "MYMODULE-COMMAND-ERROR", "exec", xsink)) {
+                return;
+            }
+            // ...
+        }
+    }
+    @endcode
+
+    A module whose handler checks the context for every such command sets \c QoreModuleInfo::cmd_caller_aware to
+    \c true in its description function.  A module that does not set it (every module built with module API 2.0) is
+    not given a command that restricted code issues (code that is sandboxed or has a parse option that restricts a
+    functional domain): the command is refused with \c PARSE-COMMAND-ERROR or \c RUNTIME-COMMAND-ERROR before the
+    handler runs.  Code that is not restricted can issue commands to every module.
+
+    @note Through module code, restrictions travel as they do everywhere in %Qore: a sandbox that governs the caller
+    governs the module code that issues a command, but a parse option that restricts the caller does not restrict the
+    module code (see design/module-sandboxing-audit-guide.md).
 
     @subsection module_example Complete Example
 

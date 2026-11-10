@@ -396,6 +396,65 @@ When `QoreSandboxManagerHelper` evaluates to false, no sandboxing is active. Mod
 - Check for this and use fast paths when no sandbox is present
 - Never fail or behave incorrectly when sandboxing is disabled
 
+### Module Commands: Decide From the Issuer, Not the Target
+
+A binary module can handle module commands (`%module-cmd(mod) cmd`, `Program::issueModuleCmd()`,
+`QoreProgram::issueModuleCmd()`, `ModuleManager::issueRuntimeCmd()`, and the commands that a compiled program records
+and replays when it is loaded; the handler is `QoreModuleInfo::parse_cmd`). A command that executes code (Python or Java
+code, an import that runs initializers, a class defined from bytecode, a script engine), changes a class path or a search
+path, touches the filesystem or the network, or changes state that every Program shares (a JVM system property) is as
+sensitive as any API the module exposes to Qore code, and it is issued by Qore code that can be restricted.
+
+The handler runs in the Program that the command applies to: `getProgram()` is the target of the command, and its
+parse options describe the target, never the code that issued the command. A handler that checks
+`getProgram()->getParseOptions()` therefore checks the wrong Program: restricted code that issues a command to its own
+Program, or to a Program that is more permissive, gets what the target allows. Use `QoreModuleCommandContext` instead:
+
+```cpp
+static void my_module_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
+    const QoreModuleCommandContext* ctx = QoreModuleCommandContext::get();
+    assert(ctx);
+    if (cmd == "exec") {
+        // not for sandboxed code, nor for code that forbids uncontrolled APIs or embedded logic
+        if (ctx->check(PO_NO_UNCONTROLLED_APIS | PO_NO_EMBEDDED_LOGIC, true, "MY-COMMAND-ERROR", "exec", xsink)) {
+            return;
+        }
+        ...
+    }
+}
+```
+
+Qore fills the context in from the issuing code before it switches to the target Program (in `QoreModuleManager::
+issueParseCmd()` and `issueRuntimeCmd()`; the replay of a compiled program's commands goes through the latter):
+
+| What the handler gets | Where it comes from |
+|---|---|
+| `getParseOptions()` | the restricting parse options of the issuing code: its effective run-time options (so what module code inherits from a sandboxed caller, and a `%push-parse-options` block); for `%module-cmd` the options in force at the directive and those of the code that runs the parse; for a replayed command also the options the compiled program is declared with |
+| `isSandboxed()` | a sandbox governs the issuing code, or it runs in a sandboxed Program (`qore_caller_is_sandboxed()`) |
+| `getOrigin()` | `MC_PARSE`, `MC_RUNTIME`, `MC_REPLAY` |
+
+Restrictions only grow inside a command: a command that a handler issues itself has at least those of the command it is
+handling. The context is valid only while the handler runs, on its thread; hand `ctx->copy()` to another thread, and
+ask it with `hasAny()` and `isSandboxed()` there (`check()` raises an exception, so it needs a thread that Qore knows).
+Through module code the usual rule holds: a sandbox that governs the caller governs the module code that issues the
+command, a parse option that restricts the caller does not (see "Reading the calling Program's parse options").
+
+A module whose handler checks the context for every command that executes code, changes a path, touches the filesystem
+or the network, or has process-wide effect sets `mod_info.cmd_caller_aware = true`. A module that does not set it (any
+module built with module API 2.0) is refused every command from restricted code (sandboxed, or with a parse option that
+restricts a functional domain) before the handler runs, so a module that predates the API is safe by default.
+
+Audit checklist for a module with a command handler:
+- [ ] `cmd_caller_aware` is set only if every command is classified (executes code / changes a path / touches the
+  filesystem or the network / process-wide / none of these)
+- [ ] a command that executes code refuses a sandboxed issuer, and an issuer with `PO_NO_UNCONTROLLED_APIS` or, for
+  embedded logic, `PO_NO_EMBEDDED_LOGIC`
+- [ ] a command that changes a class path or search path, or reads a path, refuses `PO_NO_FILESYSTEM` and a sandboxed
+  issuer, and checks the path with the sandbox manager when one governs the issuer
+- [ ] a command with process-wide effect is refused for every restricted issuer
+- [ ] nothing in the handler reads `getProgram()->getParseOptions()` to decide whether the issuer may do something
+- [ ] the restrictions are copied (not the context pointer) when another thread continues the command
+
 ---
 
 ## Part 1: Filesystem Security

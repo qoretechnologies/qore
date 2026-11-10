@@ -67,6 +67,39 @@ endif()
 # (see fork-exit/forkexit-module.cpp): one source built twice, with an atexit() handler (forkexita, whose fork
 # handler has a leaf rank) and with a static destructor (forkexitb, whose fork handler has the reset rank)
 
+# --- the modules with a module command handler (issue #5699) ---------------------------------------------------
+# one source built twice (module-command/cmdctx-module.cpp): cmdctxaware declares that its handler honors the
+# restrictions of the code that issues a command (QoreModuleInfo::cmd_caller_aware), cmdctxlegacy does not
+
+foreach(_cmdctx_module cmdctxaware cmdctxlegacy)
+    if (_cmdctx_module STREQUAL "cmdctxaware")
+        set(_cmdctx_aware true)
+    else()
+        set(_cmdctx_aware false)
+    endif()
+    add_library(${_cmdctx_module} MODULE module-command/cmdctx-module.cpp)
+    add_dependencies(${_cmdctx_module} libqore)
+    target_include_directories(${_cmdctx_module} PRIVATE
+        ${CMAKE_BINARY_DIR}
+        ${CMAKE_BINARY_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include)
+    target_compile_definitions(${_cmdctx_module} PRIVATE
+        BUILDING_DLL=1
+        HAVE_UNIX_CONFIG_H
+        PACKAGE_VERSION="${VERSION}"
+        CMDCTX_ID=${_cmdctx_module}
+        CMDCTX_NAME="${_cmdctx_module}"
+        CMDCTX_AWARE=${_cmdctx_aware}
+        $<$<BOOL:${HAVE_GCC_VISIBILITY}>:HAVE_GCC_VISIBILITY=1>)
+    set_target_properties(${_cmdctx_module} PROPERTIES
+        PREFIX ""
+        SUFFIX "${_cppapi_test_module_suffix}"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules/${_cmdctx_module}")
+    if (CMAKE_HOST_APPLE)
+        target_link_options(${_cmdctx_module} PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
+    endif()
+endforeach()
+
 foreach(_forkexit_module forkexita forkexitb)
     add_library(${_forkexit_module} MODULE fork-exit/forkexit-module.cpp)
     add_dependencies(${_forkexit_module} libqore)
