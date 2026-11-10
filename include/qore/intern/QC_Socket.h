@@ -275,6 +275,46 @@ public:
         return 0;
     }
 
+#ifdef DEBUG
+    //! Debug-only: waits until an operation of the socket is in the cache of its I/O thread
+    /** The socket's I/O thread processes the controller's commands for the socket in order, so a command sent after
+        this returns (a close, for one) is processed after the operation has been taken, and finds it on the I/O
+        thread.
+
+        @param timeout_ms a guard against a hang of the test
+
+        @return true if the socket has one, false if the guard expired first
+    */
+    DLLLOCAL bool dbgWaitForControllerOp(int timeout_ms) {
+        AutoLocker al(dbg_controller_ops_lock);
+        int64 deadline_us = q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000;
+        while (!dbg_controller_ops) {
+            int64 remaining_us = deadline_us - q_get_monotonic_us();
+            if (remaining_us <= 0) {
+                return false;
+            }
+            dbg_controller_ops_cond.wait2(&dbg_controller_ops_lock, (remaining_us + 999) / 1000);
+        }
+        return true;
+    }
+
+    //! Debug-only: called by the socket's I/O thread when an operation of the socket enters (+1) or leaves (-1) its
+    //! cache
+    DLLLOCAL void dbgNoteControllerOp(int dt) {
+        AutoLocker al(dbg_controller_ops_lock);
+        dbg_controller_ops += dt;
+        assert(dbg_controller_ops >= 0);
+        dbg_controller_ops_cond.broadcast();
+    }
+
+    //! Debug-only: the number of operations of the socket in the cache of its I/O thread
+    int dbg_controller_ops = 0;
+    //! Debug-only: the lock of dbg_controller_ops, a leaf lock
+    QoreThreadLock dbg_controller_ops_lock;
+    //! Debug-only: signaled when dbg_controller_ops changes
+    QoreCondition dbg_controller_ops_cond;
+#endif
+
     //! Starts a multi-step async controller sequence and claims async ownership until clearAsyncSequenceIo() is called
     DLLLOCAL int startAsyncSequenceIo(ExceptionSink* xsink, unsigned direction) {
         // must be called with the lock held

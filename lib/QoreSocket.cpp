@@ -809,17 +809,6 @@ public:
             return nullptr;
         }
 
-        int32_t h2_active_stream_id = priv->getH2ActiveStreamId();
-        Http2SessionPtr h2_session = priv->h2_session.get();
-        if (h2_session && h2_session->isServer() && h2_active_stream_id > 0
-                && !priv->h2_receiving_frames) {
-            xsink->raiseException("SOCKET-H2-SYNC-ERROR",
-                "Socket::isDataAvailable() is not supported on an HTTP/2-active "
-                "server socket; use HttpServerAsyncIo + register_body_queue "
-                "for inbound DATA");
-            return nullptr;
-        }
-
         qore_socket_private::IoUseHelper io_use(*priv);
         if (SSLSocketHelper* ssl = io_use.getSsl()) {
             char c;
@@ -1628,6 +1617,8 @@ public:
         qore_socket_close_private_from_controller(priv);
         assert(priv->sock == QORE_INVALID_SOCKET);
         priv->sock = accepted_priv->sock.load();
+        priv->fd_nonblocking.store(accepted_priv->fd_nonblocking.load(std::memory_order_relaxed),
+            std::memory_order_relaxed);
         accepted_priv->sock = QORE_INVALID_SOCKET;
         accepted_socket.reset();
         priv->resetCloseInterrupt();
@@ -1885,44 +1876,6 @@ protected:
 private:
     SimpleRefHolder<BinaryNode> data;
     std::string http1_method;
-};
-
-class QoreSocketControllerHttp1AllowedPollOperation : public SocketPollOperationBase {
-public:
-    DLLLOCAL QoreSocketControllerHttp1AllowedPollOperation(QoreSocket* sock, const char* mname)
-            : sock(sock), mname(mname) {
-    }
-
-    DLLLOCAL virtual bool goalReached() const override {
-        return done;
-    }
-
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
-        done = true;
-    }
-
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
-        if (done) {
-            return nullptr;
-        }
-
-        qore_socket_private* priv = qore_socket_private::get(*sock);
-        if (priv->h2_session) {
-            xsink->raiseException("HTTP2-ERROR",
-                "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname.c_str());
-        }
-        done = true;
-        return nullptr;
-    }
-
-    DLLLOCAL virtual const char* getStateImpl() const override {
-        return done ? "http1-checked" : "checking-http1";
-    }
-
-private:
-    QoreSocket* sock;
-    std::string mname;
-    bool done = false;
 };
 
 class QoreSocketControllerRecvPollOperation : public QoreSocketControllerDeferredPollOperation {
@@ -3698,6 +3651,11 @@ static QoreHashNode* qore_socket_exec_poll_operation(QoreObject* sock_obj, Abstr
     return result.release();
 }
 
+void qore_socket_raise_canceled(const char* mname, ExceptionSink* xsink) {
+    xsink->raiseException("SOCKET-CLOSED", "the operation of Socket::%s() was canceled before it completed; a close "
+        "of the socket by another thread cancels it", mname);
+}
+
 static QoreValue qore_socket_exec_poll(QoreSocket* s, SocketPollOperationBase* poller, int timeout_ms,
         const char* owner_name, const char* goal, ExceptionSink* xsink, QoreHashNode** ex_out = nullptr) {
     ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
@@ -3725,6 +3683,16 @@ static QoreValue qore_socket_exec_poll(QoreSocket* s, SocketPollOperationBase* p
         qore_socket_exec_poll_operation(*sock_obj, pollable, *op_obj, timeout_ms, owner_name, xsink, ex_out),
         xsink);
     if (*xsink) {
+        return QoreValue();
+    }
+    // a send, a receive, a connect, a TLS upgrade or a TLS shutdown that a close canceled while it waited has a result
+    // without an exception: it must not return as if it had completed (the waits, whose callers handle a canceled
+    // result themselves, return as before)
+    if (result && result->getKeyValue("canceled").getAsBool() && !poller->goalReached()
+            && (!strcmp(goal, "send") || !strcmp(goal, "received") || !strcmp(goal, "connected")
+                || !strcmp(goal, "ssl-connected") || !strcmp(goal, "ssl-upgraded")
+                || !strcmp(goal, "ssl-shutdown"))) {
+        qore_socket_raise_canceled(owner_name, xsink);
         return QoreValue();
     }
     return poller->getOutput();
@@ -3926,6 +3894,8 @@ static QoreSocket* qore_socket_exec_accept_ssl_socket(QoreSocket* s, SocketSourc
 
 QoreSocket* QoreSocket::createAcceptedSocket(int descriptor) {
     QoreSocket* s = new QoreSocket(descriptor, priv->sfamily, priv->stype, priv->sprot, priv->enc);
+    // accepted with qore_accept_nonblock()
+    s->priv->fd_nonblocking.store(true, std::memory_order_relaxed);
     if (!priv->socketname.empty()) {
         s->priv->socketname = priv->socketname;
     }
@@ -4472,6 +4442,8 @@ static int qore_socket_exec_accept_replace(QoreSocket* s, SocketSource* source, 
         return -1;
     }
     if (result->isNothing()) {
+        // the operation was canceled: a timeout has an exception
+        qore_socket_raise_canceled("acceptAndReplace", xsink);
         return -1;
     }
     return static_cast<int>(result->getAsBigInt());
@@ -4506,10 +4478,13 @@ static int qore_socket_exec_close(QoreSocket* s) {
     return qore_socket_exec_close_private(qore_socket_private::get(*s));
 }
 
-static int qore_socket_exec_check_http1_allowed(QoreSocket* s, const char* mname, ExceptionSink* xsink) {
-    ValueHolder rv(qore_socket_exec_poll(s, new QoreSocketControllerHttp1AllowedPollOperation(s, mname),
-        -1, mname, "http1-checked", xsink), xsink);
-    if (*xsink) {
+//! Raises an exception and returns -1 if the socket has an HTTP/2 session, on which no HTTP/1 message may be sent
+/** The session is read through its holder (H2SessionHolder), which any thread may read, so the check needs no
+    controller round trip
+*/
+static int qore_socket_check_http1_allowed(QoreSocket* s, const char* mname, ExceptionSink* xsink) {
+    if (qore_socket_private::get(*s)->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname);
         return -1;
     }
     return 0;
@@ -4525,7 +4500,7 @@ static int qore_socket_exec_send_http_message(QoreSocket* s, QoreHashNode* info,
         return -1;
     }
 
-    if (qore_socket_exec_check_http1_allowed(s, "sendHTTPMessage", xsink)) {
+    if (qore_socket_check_http1_allowed(s, "sendHTTPMessage", xsink)) {
         return -1;
     }
 
@@ -4570,7 +4545,7 @@ static int qore_socket_exec_send_http_response(QoreSocket* s, QoreHashNode* info
         return -1;
     }
 
-    if (qore_socket_exec_check_http1_allowed(s, "sendHTTPResponse", xsink)) {
+    if (qore_socket_check_http1_allowed(s, "sendHTTPResponse", xsink)) {
         return -1;
     }
 
@@ -4607,7 +4582,7 @@ static int qore_socket_exec_send_http_response(QoreSocket* s, QoreHashNode* info
 static int qore_socket_exec_send_http_chunked_headers(QoreSocket* s, QoreHashNode* info,
         const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
         int source, int timeout_ms, ExceptionSink* xsink) {
-    if (qore_socket_exec_check_http1_allowed(s, "sendHTTPMessageWithCallback", xsink)) {
+    if (qore_socket_check_http1_allowed(s, "sendHTTPMessageWithCallback", xsink)) {
         return -1;
     }
 
@@ -6341,8 +6316,12 @@ void SSLSocketHelper::sendCloseNotify(int fd) {
             && SSL_is_init_finished(ssl)) {
         // one attempt that cannot block: the write side is closed right after
 #ifdef _Q_WINDOWS
+        // the blocking mode of a socket cannot be read on Windows: the sockets of the library are non-blocking from
+        // their creation (qore_socket_cloexec_nonblock()), and one that it did not create (adopted with
+        // QoreSocket(int, ...)) is blocking until it is made non-blocking (qore_socket_private::fd_nonblocking)
+        bool restore = !qs.fd_nonblocking.load(std::memory_order_relaxed);
         u_long mode = 1;
-        bool restore = !ioctlsocket(fd, FIONBIO, &mode) && !qore_on_async_io_thread();
+        ioctlsocket(fd, FIONBIO, &mode);
 #else
         int flags = fcntl(fd, F_GETFL, 0);
         bool restore = flags >= 0 && !(flags & O_NONBLOCK) && !fcntl(fd, F_SETFL, flags | O_NONBLOCK);
@@ -6355,17 +6334,14 @@ void SSLSocketHelper::sendCloseNotify(int fd) {
 #ifdef DEBUG
         qore_dbg_ssl_close_notify_count.fetch_add(1, std::memory_order_relaxed);
 #endif
-#ifdef _Q_WINDOWS
         if (restore) {
-            // a socket used from Qore threads is blocking; one on the async I/O thread stays non-blocking
+#ifdef _Q_WINDOWS
             mode = 0;
             ioctlsocket(fd, FIONBIO, &mode);
-        }
 #else
-        if (restore) {
             fcntl(fd, F_SETFL, flags);
-        }
 #endif
+        }
     }
     // a layered connection is shut down before the connection that carries it
     if (outer) {
@@ -9095,8 +9071,20 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
             }
             return rc;
         }
-        he_state = HEBS_RACING;
-        return SOCK_POLLOUT;
+        // A non-blocking TCP connect() returns EINPROGRESS also where the handshake completes within the call, as
+        // on the loopback interface (and often on a LAN), so the attempt is checked at once, by the checks below that
+        // run when the descriptor is writable: such a connection completes in this step, with no registration and no
+        // pass of the event loop.  The checks handle a failed attempt too, which they must: the check reads (and so
+        // clears) the socket's pending error, so a failure it found cannot be left to a later check.  In the first
+        // connect state, an attempt still in progress waits for the stagger before the next address is tried, as
+        // before.
+#ifdef DEBUG
+        if (qore_dbg_connect_no_immediate_check.load(std::memory_order_relaxed)) {
+            he_state = HEBS_RACING;
+            return SOCK_POLLOUT;
+        }
+#endif
+        he_state = HEBS_FIRST_CONNECT;
     }
 
     if (he_state == HEBS_CONNECTED) {
@@ -9413,7 +9401,7 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
         // Assign first racing fd to sock->sock so isOpen() returns true; the socket takes the attempt's descriptor
         // over
         if (sock->sock == QORE_INVALID_SOCKET) {
-            sock->setDescriptor(fd, active_attempts.back().owned);
+            sock->setDescriptor(fd, active_attempts.back().owned, true);
             sock->resetCloseInterrupt();
         }
 
@@ -9443,7 +9431,7 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
     if (sock->sock != winner.fd) {
         int old_primary = sock->sock;
         if (old_primary == QORE_INVALID_SOCKET) {
-            sock->setDescriptor(winner.fd, winner.owned);
+            sock->setDescriptor(winner.fd, winner.owned, true);
         } else {
             // the previous primary attempt is given up through the socket: an async I/O thread can have it
             // registered, and holds it open until it has removed it
@@ -9460,7 +9448,7 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
                 }
             } else {
                 // a concurrent close released the previous descriptor
-                sock->setDescriptor(winner.fd, winner.owned);
+                sock->setDescriptor(winner.fd, winner.owned, true);
             }
         }
     }
@@ -9490,6 +9478,8 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
 }
 
 #ifdef DEBUG
+std::atomic<bool> qore_dbg_connect_no_immediate_check{false};
+
 QoreObject* qore_socket_dbg_new_controller_pollable(QoreSocket* s) {
     return new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), new QoreSocketControllerPollable(s));
 }
@@ -9552,6 +9542,7 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
         xsink->raiseErrnoException("SOCKET-CONNECT-ERROR", errno, "error connecting to UNIX socket: '%s'", name);
         return;
     }
+    sock->fd_nonblocking.store(true, std::memory_order_relaxed);
     sock->resetCloseInterrupt();
 
     sock->do_connect_event(AF_UNIX, (sockaddr*)&addr, name);
@@ -10823,15 +10814,6 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
                 const QoreHashNode* extra_hash = extra_entry.get<const QoreHashNode>();
                 assert(extra_hash);
 
-                bool fd_found;
-                int64 fd64 = extra_hash->getKeyAsBigInt("fd", fd_found);
-                if (!fd_found || fd64 < 0 || fd64 > std::numeric_limits<int>::max()) {
-                    xsink->raiseException("SOCKET-POLL-ERROR",
-                        "element %zu/%zu (starting from 1) has an invalid extra_fds[%zu].fd value",
-                        li.index() + 1, poll_list->size(), extra_li.index());
-                    return nullptr;
-                }
-
                 bool extra_events_found;
                 int64 extra_events64 = extra_hash->getKeyAsBigInt("events", extra_events_found);
                 int extra_events = extra_events_found ? static_cast<int>(extra_events64) : 0;
@@ -10842,6 +10824,45 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
                     xsink->raiseException("SOCKET-POLL-ERROR",
                         "element %zu/%zu (starting from 1) has an invalid extra_fds[%zu].events value; "
                         "neither SOCK_POLLIN nor SOCK_POLLOUT is set",
+                        li.index() + 1, poll_list->size(), extra_li.index());
+                    return nullptr;
+                }
+
+                // an entry that gives a builtin pollable object is polled as the object itself; one implemented in
+                // Qore is polled by the descriptor that its method returns, as for the main object above
+                QoreValue extra_pollable_value = extra_hash->getKeyValue("pollable");
+                if (extra_pollable_value.getType() == NT_OBJECT) {
+                    QoreObject* extra_pollable = const_cast<QoreObject*>(extra_pollable_value.get<const QoreObject>());
+                    if (extra_pollable->getClass()->getClass(CID_ABSTRACTPOLLABLEIOOBJECTBASE)) {
+                        extra_pollable->ref();
+                        cleanup.objects.push_back(extra_pollable);
+                        extra_targets.push_back({extra_pollable, extra_events});
+                        continue;
+                    }
+                    int64 pfd = extra_pollable->evalMethod("getPollableDescriptor", nullptr, xsink).getAsBigInt();
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (pfd < 0 || pfd > std::numeric_limits<int>::max()) {
+                        // the object is not open: nothing to wait for
+                        continue;
+                    }
+                    std::unique_ptr<QoreSocketPollListPollable> pfd_pollable(
+                        new QoreSocketPollListPollable(static_cast<int>(pfd)));
+                    ReferenceHolder<QoreObject> pfd_obj(new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE,
+                        getProgram(), pfd_pollable.get()), xsink);
+                    pfd_pollable.release();
+                    QoreObject* pfd_poll_obj = pfd_obj.release();
+                    cleanup.objects.push_back(pfd_poll_obj);
+                    extra_targets.push_back({pfd_poll_obj, extra_events});
+                    continue;
+                }
+
+                bool fd_found;
+                int64 fd64 = extra_hash->getKeyAsBigInt("fd", fd_found);
+                if (!fd_found || fd64 < 0 || fd64 > std::numeric_limits<int>::max()) {
+                    xsink->raiseException("SOCKET-POLL-ERROR",
+                        "element %zu/%zu (starting from 1) has an invalid extra_fds[%zu].fd value",
                         li.index() + 1, poll_list->size(), extra_li.index());
                     return nullptr;
                 }
@@ -11770,26 +11791,12 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
     return rc;
 }
 
-DLLLOCAL OptionalNonBlockingHelper::OptionalNonBlockingHelper(qore_socket_private& s, bool n_set, ExceptionSink* xs)
-        : sock(s), xsink(xs), set(false) {
+DLLLOCAL OptionalNonBlockingHelper::OptionalNonBlockingHelper(qore_socket_private& s, bool n_set, ExceptionSink* xs) {
+    // The socket is made non-blocking, if it is not already, and stays so on every thread: the async I/O threads
+    // expect it, every operation on it handles EAGAIN, and a socket of the library is non-blocking from its creation
+    // (qore_socket_cloexec_nonblock()), so this is a check of the socket's known state, without a system call
     if (n_set) {
-        if (qore_on_async_io_thread()) {
-            // On the I/O thread: ensure the socket is non-blocking but do NOT
-            // restore blocking in the destructor — the socket must stay
-            // non-blocking for the duration of its time on the I/O thread.
-            sock.set_non_blocking(true, xs);
-            // 'set' stays false — destructor will not restore blocking
-        } else {
-            if (!sock.set_non_blocking(true, xs)) {
-                set = true;
-            }
-        }
-    }
-}
-
-DLLLOCAL OptionalNonBlockingHelper::~OptionalNonBlockingHelper() {
-    if (set) {
-        sock.set_non_blocking(false, xsink);
+        s.set_non_blocking(true, xs);
     }
 }
 
@@ -12047,7 +12054,11 @@ int QoreSocket::shutdownSSL(ExceptionSink* xsink) {
     return *xsink ? -1 : 0;
 }
 
-int QoreSocket::getSocket() const {
+int QoreSocket::getDescriptorForLibrary() const {
+    return priv->sock;
+}
+
+int QoreSocket::getDescriptor() const {
     return priv->sock;
 }
 
@@ -14232,7 +14243,8 @@ static void qore_socket_bind_reserve_port(qore_socket_private* priv, const std::
     } rejected_ports;
     std::vector<int>& rejected = rejected_ports.fds;
     for (unsigned n = 1; n < QORE_BIND_RESERVATION_MAX_PORTS; ++n) {
-        int fd = qore_socket_cloexec(bound_ai.family, bound_ai.socktype, bound_ai.protocol);
+        // it can become the socket's descriptor, which is non-blocking like every socket of the library
+        int fd = qore_socket_cloexec_nonblock(bound_ai.family, bound_ai.socktype, bound_ai.protocol);
         if (fd == QORE_INVALID_SOCKET) {
             return;
         }
@@ -14269,6 +14281,7 @@ static void qore_socket_bind_reserve_port(qore_socket_private* priv, const std::
             // the socket owns the new descriptor, and the last use of the old one closes it
             rejected.pop_back();
         }
+        priv->fd_nonblocking.store(true, std::memory_order_relaxed);
         priv->port = port;
         priv->setBindReservations(std::move(fds));
         return;
@@ -15973,6 +15986,10 @@ int SocketAcceptPollOperation::checkContinuePoll(ExceptionSink* xsink) {
             assert(dynamic_cast<SocketAcceptPollState*>(poll_state.get()));
             int descriptor = reinterpret_cast<SocketAcceptPollState*>(poll_state.get())->getDescriptor();
             accepted_socket = new QoreSocketObject(*sock, descriptor);
+            // accepted with qore_accept_nonblock(); the constructor, which other code can give any descriptor, does
+            // not assume it
+            qore_socket_private::get(*accepted_socket->priv->socket)->fd_nonblocking.store(true,
+                std::memory_order_relaxed);
         }
         // release the AbstractPollState value
         poll_state.reset();
@@ -16034,7 +16051,7 @@ void SocketUpgradeClientSslPollOperation::initLocked(ExceptionSink* xsink) {
         return;
     }
     // a layered connection is made on a socket that already has a TLS connection
-    if (mode != SslUpgradeMode::Layered && sock->priv->socket->isSecure()) {
+    if (mode != SslUpgradeMode::Layered && qore_socket_private::get(*sock->priv->socket)->hasSsl()) {
         done = true;
         return;
     }
@@ -16139,7 +16156,7 @@ void SocketUpgradeServerSslPollOperation::initLocked(ExceptionSink* xsink) {
     if (sock->priv->checkOpen(xsink)) {
         return;
     }
-    if (sock->priv->socket->isSecure()) {
+    if (qore_socket_private::get(*sock->priv->socket)->hasSsl()) {
         done = true;
         return;
     }
@@ -16236,7 +16253,7 @@ void SocketShutdownSslPollOperation::initLocked(ExceptionSink* xsink) {
     if (sock->priv->checkValid(xsink)) {
         return;
     }
-    if (!sock->priv->socket->isOpen() || !sock->priv->socket->isSecure()) {
+    if (!sock->priv->socket->isOpen() || !qore_socket_private::get(*sock->priv->socket)->hasSsl()) {
         done = true;
         return;
     }
@@ -16272,7 +16289,7 @@ QoreHashNode* SocketShutdownSslPollOperation::continuePoll(ExceptionSink* xsink)
     if (sock->priv->checkValid(xsink)) {
         return nullptr;
     }
-    if (!sock->priv->socket->isOpen() || !sock->priv->socket->isSecure()) {
+    if (!sock->priv->socket->isOpen() || !qore_socket_private::get(*sock->priv->socket)->hasSsl()) {
         if (set_non_block) {
             sock->priv->clearNonBlock();
             set_non_block = false;
@@ -16842,17 +16859,6 @@ QoreHashNode* SocketDataAvailablePollOperation::continuePoll(ExceptionSink* xsin
         return nullptr;
     }
 
-    int32_t h2_active_stream_id = sp->getH2ActiveStreamId();
-    Http2SessionPtr h2_session_ref = sp->h2_session.get();
-    if (h2_session_ref && h2_session_ref->isServer() && h2_active_stream_id > 0 && !sp->h2_receiving_frames) {
-        xsink->raiseException("SOCKET-H2-SYNC-ERROR",
-            "Socket::isDataAvailable() is not supported on an HTTP/2-active "
-            "server socket; use HttpServerAsyncIo + register_body_queue "
-            "for inbound DATA");
-        complete(false);
-        return nullptr;
-    }
-
     qore_socket_private::IoUseHelper io_use(*sp);
     if (SSLSocketHelper* ssl = io_use.getSsl()) {
         char c;
@@ -16985,7 +16991,7 @@ QoreHashNode* SocketSendPollOperation::continuePoll(ExceptionSink* xsink) {
 #ifdef DEBUG
     // tests hold the write here, with the socket's lock held, until the connection is shut down or reset
     if (qore_dbg_socket_send_hook_t hook = qore_dbg_socket_send_hook.load()) {
-        hook(sock->priv->socket->getSocket());
+        hook(sock->getPollableDescriptor());
     }
 #endif
 

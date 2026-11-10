@@ -1,0 +1,318 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the descriptors of extra pollable objects in the async I/O controller's event loop (kqueue)
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoExtraPollableTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! Waits for a notifier and an extra pollable object; counts its steps after the first
+class ExtraPollableOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+        Socket extra;
+        Counter stepped;
+        int steps = 0;
+    }
+
+    constructor(EventNotifier notifier, Socket extra, Counter stepped) {
+        self.notifier = notifier;
+        self.extra = extra;
+        self.stepped = stepped;
+    }
+
+    string getGoal() {
+        return "extra-pollable";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (++steps == 2) {
+            # the step for the first event: the notifier's event, if any, is taken, and the socket's data is left
+            notifier.acknowledge();
+            stepped.dec();
+        }
+        hash<SocketPollInfo> rv = <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+        };
+        # after the first event only the notifier is waited for: the data left on the socket keeps it readable
+        if (steps == 1) {
+            rv.extra_fds = (<ExtraPollFdInfo>{"pollable": extra, "events": SOCK_POLLIN},);
+        }
+        return rv;
+    }
+}
+
+#! A pollable object implemented in Qore: the descriptor of the read end of a pipe
+class QorePipePollable inherits AbstractPollableIoObject {
+    private {
+        ReadOnlyFile read;
+    }
+
+    constructor(ReadOnlyFile read) {
+        self.read = read;
+    }
+
+    int getPollableDescriptor() {
+        return read.getPollableDescriptor();
+    }
+}
+
+#! Waits for a notifier and returns the given extra entry once; records the exception of its step, if any
+class GivenExtraOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+        hash<ExtraPollFdInfo> extra;
+        Counter stepped;
+        int steps = 0;
+    }
+
+    constructor(EventNotifier notifier, hash<ExtraPollFdInfo> extra, Counter stepped) {
+        self.notifier = notifier;
+        self.extra = extra;
+        self.stepped = stepped;
+    }
+
+    string getGoal() {
+        return "given-extra";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (++steps == 2) {
+            notifier.acknowledge();
+            stepped.dec();
+        }
+        hash<SocketPollInfo> rv = <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+        };
+        if (steps == 1) {
+            rv.extra_fds = (extra,);
+        }
+        return rv;
+    }
+}
+
+#! Tests the extra pollable objects of a poll info (ExtraPollFdInfo::pollable)
+/** A poll operation can wait for a pollable object besides its main one without its descriptor: the object is given
+    instead of its descriptor number, and the controller (or Socket::poll()) reads and holds its descriptor.
+*/
+class AsyncIoExtraPollableTest inherits QUnit::Test {
+    private {
+        int serial = 0;
+    }
+
+    constructor() : Test("AsyncIoExtraPollableTest", "1.0") {
+        addTestCase("an operation runs for the events of an extra pollable object", \testController());
+        addTestCase("a closed extra pollable object is not waited for", \testClosed());
+        addTestCase("Socket::poll() polls an extra pollable object", \testSocketPoll());
+        addTestCase("an extra pollable object implemented in Qore", \testQorePollable());
+        addTestCase("an extra pollable object implemented in Qore from a step on the I/O thread",
+            \testQorePollableIoThread());
+        addTestCase("an extra entry with neither a descriptor nor an object is ignored", \testEmptyEntry());
+        set_return_value(main());
+    }
+
+    private string getName(string test) {
+        return sprintf("%s-%d-%d", test, getpid(), ++serial);
+    }
+
+    #! Returns the sums of the registration counts of the I/O threads
+    private hash<auto> getRegistrations() {
+        hash<auto> rv = {"extra_fds": 0, "orphan_registrations": 0};
+        foreach hash<auto> t in (AsyncIoController::getInfo().threads) {
+            rv.extra_fds += t.extra_fds;
+            rv.orphan_registrations += t.orphan_registrations;
+        }
+        return rv;
+    }
+
+    #! Returns a connected pair of sockets: (client, server)
+    private list<Socket> getPair() {
+        Socket l();
+        l.bindINET("127.0.0.1", 0);
+        l.listen();
+        on_exit l.close();
+        Socket c();
+        c.connect("127.0.0.1:" + l.getPort(), HangGuard);
+        Socket a = l.accept(HangGuard);
+        return (c, a);
+    }
+
+    private Queue submit(string owner, EventNotifier notifier, Socket extra, Counter stepped) {
+        return AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": new ExtraPollableOperation(notifier, extra, stepped),
+            "owner": owner,
+            "key": owner + "-key",
+            "to": -1s,
+        });
+    }
+
+    testController() {
+        (Socket c, Socket a) = getPair();
+        on_exit {
+            c.close();
+            a.close();
+        }
+        string owner = getName("extra-pollable");
+        EventNotifier notifier();
+        Counter stepped(1);
+        hash<auto> before = getRegistrations();
+        Queue rq = submit(owner, notifier, a, stepped);
+        # data on the extra object wakes the operation: the notifier is never notified, so the operation runs only
+        # if the extra object's descriptor is registered
+        c.send("x");
+        assertEq(0, stepped.waitForZero(HangGuard), "the operation runs for the data of its extra pollable object");
+        assertEq(1, AsyncIoController::cancelByOwner(owner), "the operation is canceled");
+        assertTrue(rq.get(HangGuard).canceled);
+        hash<auto> after = getRegistrations();
+        assertEq(before.extra_fds, after.extra_fds, "the extra object's registration is removed");
+        assertEq(before.orphan_registrations, after.orphan_registrations, "no registration is left as an orphan");
+        # the data was left on the socket
+        assertEq("x", a.recv(1, HangGuard));
+    }
+
+    testClosed() {
+        (Socket c, Socket a) = getPair();
+        on_exit c.close();
+        a.close();
+        string owner = getName("extra-pollable-closed");
+        EventNotifier notifier();
+        Counter stepped(1);
+        hash<auto> before = getRegistrations();
+        Queue rq = submit(owner, notifier, a, stepped);
+        # the operation runs again for the closed object, as for a closed main object, without an event of its
+        # notifier
+        assertEq(0, stepped.waitForZero(HangGuard), "the operation runs again for the closed extra object");
+        assertEq(1, AsyncIoController::cancelByOwner(owner), "the operation is canceled");
+        assertTrue(rq.get(HangGuard).canceled);
+        hash<auto> after = getRegistrations();
+        assertEq(before.extra_fds, after.extra_fds, "nothing stays registered for the closed object");
+        assertEq(before.orphan_registrations, after.orphan_registrations, "no registration is left as an orphan");
+    }
+
+    testSocketPoll() {
+        (Socket c, Socket a) = getPair();
+        on_exit {
+            c.close();
+            a.close();
+        }
+        EventNotifier notifier();
+        c.send("y");
+        list<hash<SocketPollInfo>> ready = Socket::poll((
+            <SocketPollInfo>{
+                "events": SOCK_POLLIN,
+                "socket": notifier,
+                "extra_fds": (<ExtraPollFdInfo>{"pollable": a, "events": SOCK_POLLIN},),
+            },
+        ), HangGuard);
+        assertEq(1, ready.size(), "the element is ready for the data of its extra pollable object");
+        assertEq(notifier, ready[0].socket);
+        assertEq("y", a.recv(1, HangGuard));
+    }
+
+    #! An object implemented in Qore: Socket::poll() polls the descriptor that it returns; the controller refuses it,
+    #! as its I/O threads do not run Qore code
+    testQorePollable() {
+%ifdef Windows
+        testSkip("skipping because File::getPipe() is not available on Windows");
+%endif
+        hash<PipeInfo> pipe = File::getPipe();
+        QorePipePollable qp(pipe.read);
+        EventNotifier notifier();
+        pipe.write.write("z");
+        list<hash<SocketPollInfo>> ready = Socket::poll((
+            <SocketPollInfo>{
+                "events": SOCK_POLLIN,
+                "socket": notifier,
+                "extra_fds": (<ExtraPollFdInfo>{"pollable": qp, "events": SOCK_POLLIN},),
+            },
+        ), HangGuard);
+        assertEq(1, ready.size(), "Socket::poll() polls the descriptor of the object implemented in Qore");
+
+        string owner = getName("extra-pollable-qore");
+        Counter stepped(1);
+        Queue rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": new GivenExtraOperation(notifier, <ExtraPollFdInfo>{"pollable": qp, "events": SOCK_POLLIN},
+                stepped),
+            "owner": owner,
+            "key": owner + "-key",
+            "to": -1s,
+        });
+        hash<auto> h = rq.get(HangGuard);
+        assertEq("SOCKET-POLL-ERROR", h.ex.err, "the controller refuses an extra object implemented in Qore");
+    }
+
+    #! The step of a C++ operation runs on the I/O thread; an extra object implemented in Qore that it returns is refused
+    #! there, as after a step on a callback worker: the I/O thread cannot read its descriptor, and the operation would
+    #! otherwise wait without it
+    testQorePollableIoThread() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_wait_again_poll_operation() is only registered in a library-debug build");
+        }
+%ifdef Windows
+        testSkip("skipping because File::getPipe() is not available on Windows");
+%endif
+        hash<PipeInfo> pipe = File::getPipe();
+        QorePipePollable qp(pipe.read);
+        EventNotifier notifier();
+        SocketPollOperation op = call_function("dbg_wait_again_poll_operation", notifier, SOCK_POLLIN, 3,
+            <ExtraPollFdInfo>{"pollable": qp, "events": SOCK_POLLIN});
+        string owner = getName("extra-pollable-qore-io-thread");
+        Queue rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": op,
+            "owner": owner,
+            "key": owner + "-key",
+            "to": -1s,
+        });
+        hash<auto> h = rq.get(HangGuard);
+        assertEq("SOCKET-POLL-ERROR", h.ex.err, "the I/O thread refuses an extra object implemented in Qore");
+    }
+
+    testEmptyEntry() {
+        string owner = getName("extra-empty");
+        EventNotifier notifier();
+        Counter stepped(1);
+        hash<auto> before = getRegistrations();
+        Queue rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": new GivenExtraOperation(notifier, <ExtraPollFdInfo>{"events": SOCK_POLLIN}, stepped),
+            "owner": owner,
+            "key": owner + "-key",
+            "to": -1s,
+        });
+        notifier.notify();
+        assertEq(0, stepped.waitForZero(HangGuard), "the operation runs for its notifier");
+        assertEq(1, AsyncIoController::cancelByOwner(owner), "the operation is canceled");
+        assertTrue(rq.get(HangGuard).canceled);
+        hash<auto> after = getRegistrations();
+        assertEq(before.extra_fds, after.extra_fds, "nothing is registered for the empty entry");
+        assertEq(before.orphan_registrations, after.orphan_registrations, "no registration is left as an orphan");
+    }
+}
