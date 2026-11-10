@@ -15,7 +15,11 @@
 
 #! a soft return type converts a returned parameter of another type in every mode and in AOT (#5724)
 /** The AOT float-expression summary of <tt>softfloat sub fb(bool b) { return b; }</tt> was the bool parameter
-    itself, so a caller that inlined the summary got the bool (\c True) instead of \c 1.0.
+    itself, so a caller that inlined the summary got the bool (\c True) instead of \c 1.0.  A bool parameter as an
+    operand or a Select value of a float summary (<tt>h.x + b</tt>), or a comparison as one of an integer summary
+    (<tt>(h.x.size() == b) + 1</tt>), made the summary emitter fail after it had created the hash projection
+    blocks: qcc failed with "LLVM lowering failed" for a function that called it, and wrote an executable that
+    printed nothing for top-level code that did.
 */
 class AOTSoftReturnParamTest inherits QUnit::Test {
     private {
@@ -37,7 +41,10 @@ class AOTSoftReturnParamTest inherits QUnit::Test {
         string out = getAst();
         foreach string line in ("fb(True): 1.0 (float)", "fb(False): 0.0 (float)", "fb(x > 1): 1.0 (float)",
                 "fwrap(True): 1.0 (float)", "fsum(True): 2.0 (float)", "fb(True) + fb(False): 1.0 (float)",
-                "loop sum: 2.0 (float)", "sf_b(True): 1.0 (float)", "ib(True): 1 (integer)") {
+                "loop sum: 2.0 (float)", "sf_b(True): 1.0 (float)", "ib(True): 1 (integer)",
+                "fh_add(True): 2.5 (float)", "w_fh_add(True): 2.5 (float)", "w_fh_sub(True): 0.5 (float)",
+                "w_fh_selv(True, True): 1.0 (float)", "w_fp_add(True): 2.5 (float)", "w_fp_div(True): 1.5 (float)",
+                "division by False: DIVISION-BY-ZERO", "w_ih_sadd(1): 2 (integer)", "w_ih_sel(1, 2): 0 (integer)") {
             assertTrue(out.find(line + "\n") >= 0, line);
         }
     }
