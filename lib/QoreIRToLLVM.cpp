@@ -10943,7 +10943,26 @@ bool QoreIRToLLVM::checkNoAotExecutableExprFallback(llvm::Function* llvm_func, s
     return true;
 }
 
+//! Test hook: the IR functions whose lowering to LLVM fails, by a substring of the IR function's name
+/** Set with \c QORE_AOT_TEST_FAIL_LOWERING; the regression test of the failure of the lowering of a function or of the
+    top-level code of a program uses it to check that qcc fails the build instead of writing an executable without
+    them (qore#5738)
+*/
+static const char* aotTestFailLowering() {
+    static constinit QoreLazyValue<QoreEnvironmentValue> name_setting([]() -> QoreEnvironmentValue {
+        return QoreEnvironmentValue("QORE_AOT_TEST_FAIL_LOWERING");
+    });
+    const char* name = name_setting.get().c_str();
+    return name && *name ? name : nullptr;
+}
+
 bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& module, std::string& error) {
+    if (const char* fail_name = aotTestFailLowering()) {
+        if (strstr(func.name.c_str(), fail_name)) {
+            error = "lowering of IR function '" + func.name + "' failed by request of QORE_AOT_TEST_FAIL_LOWERING";
+            return false;
+        }
+    }
     native_handler_cache_cancelled = false;
     native_call_frame_storage = nullptr;
     native_call_thread_data = nullptr;

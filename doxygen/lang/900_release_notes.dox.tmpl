@@ -1510,6 +1510,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - qcc (and <tt>qore --compile</tt>) now fails the build when the top-level code of a program cannot be lowered to
+      native code, as it does for a function; it wrote an executable that did nothing and exited with status 0
     - the value of a @ref thread_local "thread_local" variable could be read by the code of a
       @ref Qore::Program "Program" created after the Program declaring the variable was deleted, with its type, in
       another thread that ran both Programs' code (the threads of a pool, across sandboxes); the values of the
