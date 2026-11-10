@@ -216,6 +216,35 @@ sub main() {
         caught(auto sub () { return remove gd.l[thr("first"), 1]; });
         return exists gd;
     });
+    t("raise later member notification", auto sub () {
+        gn.l = (1, 2, 3, 4);
+        # what the first selector selected is removed from the resolved lvalue, which is reported
+        caught(auto sub () { return remove gn.l[f("a", 0), thr("second")]; });
+        return gn.l;
+    });
+    t("raise later deleted object", auto sub () {
+        # the lvalue is resolved for the removal of what the first selector selected
+        caught(auto sub () { return remove gd.l[f("a", 0), thr("second")]; });
+        return exists gd;
+    });
+    t("raise static member", auto sub () {
+        Holder::sl = (1, 2, 3, 4);
+        caught(auto sub () { return remove Holder::sl[thr("single")]; });
+        caught(auto sub () { return remove Holder::sl[thr("range")..2]; });
+        caught(auto sub () { return remove Holder::sl[thr("first"), 1]; });
+        return Holder::sl;
+    });
+    t("raise behind path key", auto sub () {
+        gh = {"a": (1, 2, 3, 4)};
+        caught(auto sub () { return remove gh.(k("a"))[thr("single")]; });
+        caught(auto sub () { return remove gh.(k("a"))[thr("range")..2]; });
+        return gh;
+    });
+    t("raise path key", auto sub () {
+        gh = {"a": (1, 2, 3, 4)};
+        caught(auto sub () { return remove gh.(thr("key").toString())[f("never", 0)]; });
+        return gh;
+    });
     t("raise self member", auto sub () {
         gn.l = (1, 2, 3, 4);
         caught(\gn.removeSelf());

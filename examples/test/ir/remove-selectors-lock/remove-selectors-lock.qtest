@@ -52,7 +52,7 @@ class RemoveSelectorsLockTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(26, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "every case ran");
+        assertEq(31, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "every case ran");
         # a selector reads the global after its earlier selectors, before anything is removed
         assertTrue(out =~ /^global list read:\n  read g \[1, 2, 3, 4\]\n  = \[\[1, 4\], \[2, 3\]\]\n/, "read");
         # a selector that writes the global changes the list that is removed from
@@ -69,13 +69,21 @@ class RemoveSelectorsLockTest inherits QUnit::Test {
         list<string> lines = out.split("\n");
         for (int i = 1; i < lines.size(); ++i) {
             if (lines[i] =~ /^  notify /) {
-                assertFalse(lines[i - 1] =~ /^  (sel throw|caught) /, "no member notification after a failed removal: "
+                assertFalse(lines[i - 1] =~ /^  (sel throw (single|range|first|delete|self)|caught) /, "no member notification after a failed removal: "
                     + lines[i - 1]);
             }
         }
-        assertEq(5, (select lines, $1 =~ /^  notify /).size(), "member notifications");
-        assertEq((), (select out.split("\n"), $1 =~ /OBJECT-ALREADY-DELETED/), "a deleted object is not resolved");
-        assertEq((), (select out.split("\n"), $1 =~ / then /), "only the selector's exception is raised");
+        assertEq(7, (select lines, $1 =~ /^  notify /).size(), "member notifications");
+        # a later selector that raises: the resolved lvalue is changed and reported, then the selector's exception
+        assertTrue(out =~ /\nraise later member notification:\n  notify l\n  sel a\n  sel throw second\n  notify l\n  caught SEL-ERROR: second\n  = \[2, 3, 4\]\n/,
+            "later selector raises on a reported member");
+        assertTrue(out =~ /\nraise later deleted object:\n  sel a\n  sel throw second\n  caught SEL-ERROR: second then OBJECT-ALREADY-DELETED\n/,
+            "later selector raises on a deleted object");
+        assertTrue(out =~ /\nraise path key:\n  sel throw key\n  caught SEL-ERROR: key\n/, "a raising key stops the removal");
+        assertEq(1, (select out.split("\n"), $1 =~ /OBJECT-ALREADY-DELETED/).size(), "a deleted object is resolved "
+            "only for the removal of what an earlier selector selected");
+        assertEq(1, (select out.split("\n"), $1 =~ / then /).size(), "only the selector's exception is raised, except "
+            "for the deleted object that a later selector's removal resolves");
         assertTrue(out =~ /\nraise single member notification:\n  notify l\n  sel throw single\n  caught SEL-ERROR: single\n  = \[1, 2, 3, 4\]\n/,
             "single");
         assertTrue(out =~ /\nraise reference:\n  sel throw single\n  caught SEL-ERROR: single\n  sel a\n  sel throw second\n  caught SEL-ERROR: second\n  = \[2, 3, 4\]\n/,
