@@ -13081,7 +13081,11 @@ QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, st
     // a variant resolved at parse time does not prove it: for an argument of a union type, the parser resolves the
     // variant if one of the types matches, and the AST interpreter resolves it again with the value at runtime
     bool checked = false;
-    if (opcode != QoreIROpcode::ToBool) {
+    // named arguments (a mapped argument list) have no positional view here: the checked conversion is used
+    const qore_list_private* args_priv = args ? qore_list_private::get(args) : nullptr;
+    if (opcode != QoreIROpcode::ToBool && !parse_args && args_priv && args_priv->hasCallArgEvalMap()) {
+        checked = true;
+    } else if (opcode != QoreIROpcode::ToBool) {
         QoreValue arg = qore_ir_get_call_arg(parse_args, args, 0);
         // the type of a local variable as the parse analysis guarantees it, otherwise the parse-time type of the
         // expression (e.g. "-i" for an int i)

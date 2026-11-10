@@ -5032,6 +5032,53 @@ __attribute__((noinline, cold)) bool qore_rt_builtin_conversion_call(int kind, Q
 // an int or float value is converted inline, and any other value is converted first and its type is checked only when
 // the result is 0, as every value that the builtin does not accept converts to 0
 
+//! Returns true if the builtin conversion of the given kind accepts the value, decided by its type
+/** The immediate values that every conversion accepts are recognized by their tag and a node by its type, without
+    the out-of-line QoreValue::getType(); the type decides, not the result of a conversion, so a value of a type that
+    the builtin does not accept is refused whatever its conversion would give (a node class of a module, for example)
+*/
+static inline __attribute__((always_inline)) bool qore_rt_conversion_value_accepted_intern(int kind, QoreValue val) {
+    // the 16-bit tag of the NaN-boxed representation (see the tag allocation in QoreValue.h): one comparison chain
+    // instead of the out-of-line QoreValue::getType()
+    uint64_t bits = toBits(val);
+    uint16_t tag = static_cast<uint16_t>(bits >> 48);
+    // doubles (below 0xFFC0 and 0xFFE0-0xFFF8), short strings (0xFFC0-0xFFC6), 48-bit ints (0xFFF9), chars (0xFFFC)
+    if (tag <= 0xFFC6 || (tag >= 0xFFE0 && tag <= 0xFFF9) || tag == 0xFFFC) {
+        return true;
+    }
+    // a node pointer
+    if (tag == 0xFFFA) {
+        const AbstractQoreNode* n = val.get<const AbstractQoreNode>();
+        return qore_rt_builtin_conversion_accepts(kind, n ? n->getType() : NT_NOTHING);
+    }
+    // the special values: NOTHING (0), NULL (1), False (2), True (3); int() also accepts NULL
+    if (tag == 0xFFFB) {
+        return (bits & 0xFFFFFFFFFFFFULL) != 1 || kind == QORE_RT_BUILTIN_CONVERSION_INT;
+    }
+    // an enum member, an opaque reference, a reserved tag
+    return qore_rt_builtin_conversion_accepts(kind, val.getType());
+}
+
+static inline __attribute__((always_inline)) bool qore_rt_conversion_value_accepted(int kind, QoreValue val) {
+    bool rv = qore_rt_conversion_value_accepted_intern(kind, val);
+    // the tag decoding must give the result of the type
+    assert(rv == qore_rt_builtin_conversion_accepts(kind, val.getType()));
+    return rv;
+}
+
+//! the checked int() conversion of a value that the builtin does not accept: the builtin's result or its error
+/** Out of line, so that the conversion of an accepted value has no locals in memory (no stack protector)
+*/
+static __attribute__((noinline, cold)) int64_t qore_rt_to_int_checked_slow(QoreValue val, ExceptionSink* xsink) {
+    QoreValue result;
+    if (!qore_rt_builtin_conversion_call(QORE_RT_BUILTIN_CONVERSION_INT, val, result, xsink)) {
+        return 0;
+    }
+    int64_t rv = result.getAsBigInt();
+    result.discard(xsink);
+    return rv;
+}
+
 //! the checked int() conversion; returns false if the value is not accepted, with the error raised
 static inline __attribute__((always_inline)) bool qore_rt_to_int_checked_intern(QoreValue val, int64_t& rv,
         ExceptionSink* xsink) {
@@ -5039,16 +5086,23 @@ static inline __attribute__((always_inline)) bool qore_rt_to_int_checked_intern(
         rv = val.getAsBigInt();
         return true;
     }
-    rv = val.getAsBigInt();
-    if (!rv && !qore_rt_builtin_conversion_accepts(QORE_RT_BUILTIN_CONVERSION_INT, val.getType())) {
-        QoreValue result;
-        if (!qore_rt_builtin_conversion_call(QORE_RT_BUILTIN_CONVERSION_INT, val, result, xsink)) {
-            return false;
-        }
-        rv = result.getAsBigInt();
-        result.discard(xsink);
+    if (!qore_rt_conversion_value_accepted(QORE_RT_BUILTIN_CONVERSION_INT, val)) {
+        rv = qore_rt_to_int_checked_slow(val, xsink);
+        return !*xsink;
     }
+    rv = val.getAsBigInt();
     return true;
+}
+
+//! the checked float() conversion of a value that the builtin does not accept (see qore_rt_to_int_checked_slow())
+static __attribute__((noinline, cold)) double qore_rt_to_float_checked_slow(QoreValue val, ExceptionSink* xsink) {
+    QoreValue result;
+    if (!qore_rt_builtin_conversion_call(QORE_RT_BUILTIN_CONVERSION_FLOAT, val, result, xsink)) {
+        return 0.0;
+    }
+    double rv = result.getAsFloat();
+    result.discard(xsink);
+    return rv;
 }
 
 //! the checked float() conversion; returns false if the value is not accepted, with the error raised
@@ -5058,15 +5112,11 @@ static inline __attribute__((always_inline)) bool qore_rt_to_float_checked_inter
         rv = val.getAsFloat();
         return true;
     }
-    rv = val.getAsFloat();
-    if (rv == 0.0 && !qore_rt_builtin_conversion_accepts(QORE_RT_BUILTIN_CONVERSION_FLOAT, val.getType())) {
-        QoreValue result;
-        if (!qore_rt_builtin_conversion_call(QORE_RT_BUILTIN_CONVERSION_FLOAT, val, result, xsink)) {
-            return false;
-        }
-        rv = result.getAsFloat();
-        result.discard(xsink);
+    if (!qore_rt_conversion_value_accepted(QORE_RT_BUILTIN_CONVERSION_FLOAT, val)) {
+        rv = qore_rt_to_float_checked_slow(val, xsink);
+        return !*xsink;
     }
+    rv = val.getAsFloat();
     return true;
 }
 
@@ -5136,14 +5186,54 @@ extern "C" DLLEXPORT uint64_t qore_rt_to_string_checked(uint64_t val_bits, Excep
     return str ? toBits(QoreValue(str)) : toBits(QoreValue());
 }
 
-extern "C" DLLEXPORT int64_t qore_rt_to_int_checked(uint64_t val_bits, ExceptionSink* xsink) {
+//! Returns true if the value is accepted by the builtin conversion, false if it is not, -1 to check its type
+/** Decided by the tag of the NaN-boxed representation (see qore_rt_conversion_value_accepted_intern()) with no
+    memory access except a node's type, so that the extern helpers below keep no locals in memory and convert an
+    accepted value with a tail call of the unchecked conversion
+*/
+static inline __attribute__((always_inline)) int qore_rt_conversion_bits_accepted(int kind, uint64_t bits) {
+    uint16_t tag = static_cast<uint16_t>(bits >> 48);
+    if (tag <= 0xFFC6 || (tag >= 0xFFE0 && tag <= 0xFFF9) || tag == 0xFFFC) {
+        return 1;
+    }
+    if (tag == 0xFFFA) {
+        const AbstractQoreNode* n = reinterpret_cast<const AbstractQoreNode*>(bits & 0xFFFFFFFFFFFFULL);
+        return qore_rt_builtin_conversion_accepts(kind, n ? n->getType() : NT_NOTHING) ? 1 : 0;
+    }
+    if (tag == 0xFFFB) {
+        return ((bits & 0xFFFFFFFFFFFFULL) != 1 || kind == QORE_RT_BUILTIN_CONVERSION_INT) ? 1 : 0;
+    }
+    return -1;
+}
+
+//! The checked int() conversion of a value that the tag does not decide or that is not accepted
+static __attribute__((noinline, cold)) int64_t qore_rt_to_int_checked_other(uint64_t val_bits,
+        ExceptionSink* xsink) {
     int64_t rv;
     return qore_rt_to_int_checked_intern(fromBits(val_bits), rv, xsink) ? rv : 0;
 }
 
-extern "C" DLLEXPORT double qore_rt_to_float_checked(uint64_t val_bits, ExceptionSink* xsink) {
+//! The checked float() conversion of a value that the tag does not decide or that is not accepted
+static __attribute__((noinline, cold)) double qore_rt_to_float_checked_other(uint64_t val_bits,
+        ExceptionSink* xsink) {
     double rv;
     return qore_rt_to_float_checked_intern(fromBits(val_bits), rv, xsink) ? rv : 0.0;
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_to_int_checked(uint64_t val_bits, ExceptionSink* xsink) {
+    if (__builtin_expect(qore_rt_conversion_bits_accepted(QORE_RT_BUILTIN_CONVERSION_INT, val_bits) == 1, 1)) {
+        assert(qore_rt_builtin_conversion_accepts(QORE_RT_BUILTIN_CONVERSION_INT, fromBits(val_bits).getType()));
+        return qore_rt_to_int(val_bits);
+    }
+    return qore_rt_to_int_checked_other(val_bits, xsink);
+}
+
+extern "C" DLLEXPORT double qore_rt_to_float_checked(uint64_t val_bits, ExceptionSink* xsink) {
+    if (__builtin_expect(qore_rt_conversion_bits_accepted(QORE_RT_BUILTIN_CONVERSION_FLOAT, val_bits) == 1, 1)) {
+        assert(qore_rt_builtin_conversion_accepts(QORE_RT_BUILTIN_CONVERSION_FLOAT, fromBits(val_bits).getType()));
+        return qore_rt_to_float(val_bits);
+    }
+    return qore_rt_to_float_checked_other(val_bits, xsink);
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_to_string_checked_throwing(uint64_t val_bits,
@@ -11088,17 +11178,52 @@ static bool qore_rt_preserve_unevaluated_arg(QoreValue val) {
 */
 static constexpr int QORE_FAST_CALL_PARAM_MISMATCH = -2;
 
+static uint64_t qore_rt_call_method_direct_impl(const QoreMethod* method, uint64_t* args, uint64_t** arg_cleanups,
+    int nargs, ExceptionSink* xsink);
+static QoreListNode* buildArgListFromNanBoxed(uint64_t* args, int nargs, ExceptionSink* xsink);
+
+// The calls of a fast path whose argument does not match its parameter (QORE_FAST_CALL_PARAM_MISMATCH): the call is
+// made through the generic call path, which resolves the variant again as the AST interpreter does (issue #5686).  They are out of line and cold, so that the fast paths keep their code.
+
+//! Calls a function through the generic call path
+static __attribute__((noinline, cold)) uint64_t qore_rt_fast_call_mismatch_function(const QoreFunction* func,
+        const AbstractQoreFunctionVariant* variant, QoreProgram* pgm, uint64_t* args, uint64_t** arg_cleanups,
+        int nargs, ExceptionSink* xsink) {
+    return qore_rt_call_function_direct_impl(func, variant, pgm, args, arg_cleanups, nargs, xsink);
+}
+
+//! Calls a method through the generic call path
+static __attribute__((noinline, cold)) uint64_t qore_rt_fast_call_mismatch_method(const QoreMethod* method,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    return qore_rt_call_method_direct_impl(method, args, arg_cleanups, nargs, xsink);
+}
+
+//! Calls a static method through the generic call path with the variant resolved at parse time, as the AST
+//! interpreter does
+static __attribute__((noinline, cold)) uint64_t qore_rt_fast_call_mismatch_static_method(const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+        ExceptionSink* xsink, const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation) {
+    // evalTmpArgs() preserves the references in the evaluated arguments
+    ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
+    if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
+        return toBits(QoreValue());
+    }
+    return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc_get_current_ref(), nullptr, *arg_list, nullptr,
+        variant, receiver_type_info, explicit_type_param_instantiation));
+}
+
 //! Returns true if a call of the function can resolve to its single variant only (no overloads, no inherited
 //! variants)
 /** Only then can a fast call path bind the arguments where it cannot make the call through the generic call path:
     the direct parameters of an IR function are bound in the callee
 */
-static bool qore_rt_callee_single_variant(const QoreFunction* func) {
+static inline __attribute__((always_inline)) bool qore_rt_callee_single_variant(const QoreFunction* func) {
     return func && func->hasSingleCallVariant();
 }
 
 //! Returns the function of a method
-static const QoreFunction* qore_rt_method_function(const QoreMethod* method) {
+static inline __attribute__((always_inline)) const QoreFunction* qore_rt_method_function(const QoreMethod* method) {
     return method ? qore_method_private::get(*method)->getFunction() : nullptr;
 }
 
@@ -11106,8 +11231,9 @@ static const QoreFunction* qore_rt_method_function(const QoreMethod* method) {
 /** \return 0 on success, -1 on error (already-instantiated params are cleaned up on error,
     but caller must handle selfid cleanup and return value)
 
-    \return QORE_FAST_CALL_PARAM_MISMATCH for an argument that does not match its parameter, with the parameter type
-    error raised
+    \return QORE_FAST_CALL_PARAM_MISMATCH for an argument that does not match its parameter, with no exception raised
+    (the generic call path raises the error of the AST interpreter); if releasing the arguments already bound raises
+    an exception (a destructor), -1 is returned with the parameter type error and that exception chained to it
 */
 static int instantiateFastCallParams(const UserSignature* sig, unsigned num_params, int nargs,
         const uint64_t* args, ExceptionSink* xsink, const QoreTypeInfo* receiver_type_info = nullptr) {
@@ -11143,11 +11269,21 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
                     || QoreTypeInfo::mayRequireFilter(paramTypeInfo, val))) {
                 QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), val, xsink);
                 if (*xsink) {
+                    // the type error is set aside while the arguments are released, so that an exception raised by
+                    // a destructor then is kept
+                    ExceptionSink type_error;
+                    type_error.assimilate(*xsink);
                     val.discard(xsink);
                     // Uninstantiate already-instantiated params in reverse
                     for (int j = (int)i - 1; j >= 0; --j) {
                         sig->lv[j]->uninstantiate(xsink);
                     }
+                    if (*xsink) {
+                        type_error.assimilate(*xsink);
+                        xsink->assimilate(type_error);
+                        return -1;
+                    }
+                    type_error.clear();
                     return QORE_FAST_CALL_PARAM_MISMATCH;
                 }
             }
@@ -11238,7 +11374,8 @@ static bool qore_rt_user_fast_call_eligible(const AbstractQoreFunctionVariant* v
 }
 
 static bool qore_rt_method_fast_call_eligible(const AbstractQoreFunctionVariant* variant) {
-    const auto* mvb = dynamic_cast<const MethodVariantBase*>(variant);
+    // a virtual call, not a dynamic_cast, which compares type names on every fast call
+    const MethodVariantBase* mvb = variant ? variant->getMethodVariantBase() : nullptr;
     return mvb
         ? mvb->isStaticallyFastMethodCallEligible()
         : qore_rt_user_fast_call_eligible(variant);
@@ -11317,13 +11454,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     if (!use_direct_params) {
         // Standard path: push params to TLS
         int bind_rc = instantiateFastCallParams(sig, num_params, nargs, args, xsink, nullptr);
-        if (bind_rc == QORE_FAST_CALL_PARAM_MISMATCH) {
-            // the generic call path gives the outcome of the AST interpreter (issue #5686)
-            xsink->clear();
-            return qore_rt_call_function_direct(func, variant, pgm, args, nargs, xsink);
-        }
         if (bind_rc < 0) {
-            return toBits(QoreValue());
+            // one exit, as without the mismatch case, so that the fast path keeps its code
+            return bind_rc == QORE_FAST_CALL_PARAM_MISMATCH
+                ? qore_rt_fast_call_mismatch_function(func, variant, pgm, args, nullptr, nargs, xsink)
+                : toBits(QoreValue());
         }
     }
     // else: direct_params path — params pre-populated in IR slot cache
@@ -11763,13 +11898,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
 
     // Instantiate parameter locals directly from NaN-boxed args
     int bind_rc = instantiateFastCallParams(sig, num_params, nargs, args, xsink, nullptr);
-    if (bind_rc == QORE_FAST_CALL_PARAM_MISMATCH) {
-        // the generic call path gives the outcome of the AST interpreter (issue #5686)
-        xsink->clear();
-        return qore_rt_call_function_direct(uvb->getSourceFunction(), variant, exec_pgm, args, nargs, xsink);
-    }
     if (bind_rc < 0) {
-        return toBits(QoreValue());
+        // one exit, as without the mismatch case, so that the fast path keeps its code
+        return bind_rc == QORE_FAST_CALL_PARAM_MISMATCH
+            ? qore_rt_fast_call_mismatch_function(uvb->getSourceFunction(), variant, exec_pgm, args, nullptr, nargs,
+                xsink)
+            : toBits(QoreValue());
     }
 
     // Build argv for excess arguments (varargs)
@@ -11901,13 +12035,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
 
     // Instantiate parameter locals directly from NaN-boxed args
     int bind_rc = instantiateFastCallParams(sig, num_params, nargs, args, xsink, nullptr);
-    if (bind_rc == QORE_FAST_CALL_PARAM_MISMATCH) {
-        // the generic call path gives the outcome of the AST interpreter (issue #5686)
-        xsink->clear();
-        return qore_rt_call_function_direct(uvb->getSourceFunction(), variant, nullptr, args, nargs, xsink);
-    }
     if (bind_rc < 0) {
-        return toBits(QoreValue());
+        // one exit, as without the mismatch case, so that the fast path keeps its code
+        return bind_rc == QORE_FAST_CALL_PARAM_MISMATCH
+            ? qore_rt_fast_call_mismatch_function(uvb->getSourceFunction(), variant, nullptr, args, nullptr, nargs,
+                xsink)
+            : toBits(QoreValue());
     }
 
     // Build and instantiate argv for excess arguments (varargs)
@@ -12193,19 +12326,14 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
     if (!use_direct_params) {
         // Standard path: push params to TLS
         int bind_rc = instantiateFastCallParams(sig, num_params, nargs, args, xsink, nullptr);
-        if (bind_rc == QORE_FAST_CALL_PARAM_MISMATCH) {
-            // the generic call path gives the outcome of the AST interpreter (issue #5686)
-            xsink->clear();
-            if (selfid_instantiated) {
-                selfid->uninstantiateSelf();
-            }
-            return qore_rt_call_method_direct_impl(method, args, arg_cleanups, nargs, xsink);
-        }
         if (bind_rc < 0) {
             if (selfid_instantiated) {
                 selfid->uninstantiateSelf();
             }
-            return toBits(QoreValue());
+            // one exit, as without the mismatch case, so that the fast path keeps its code
+            return bind_rc == QORE_FAST_CALL_PARAM_MISMATCH
+                ? qore_rt_fast_call_mismatch_method(method, args, arg_cleanups, nargs, xsink)
+                : toBits(QoreValue());
         }
     }
     // else: direct_params path — params are pre-populated in the IR slot cache.
@@ -16073,14 +16201,12 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
 
         // Instantiate parameter locals directly from NaN-boxed args
         int bind_rc = instantiateFastCallParams(sig, num_params, nargs, args, xsink, nullptr);
-        if (bind_rc == QORE_FAST_CALL_PARAM_MISMATCH) {
-            // the generic call path gives the outcome of the AST interpreter (issue #5686)
-            xsink->clear();
-            return qore_rt_call_function_direct_impl(target.func, target.variant, target.pgm, args, arg_cleanups,
-                nargs, xsink);
-        }
         if (bind_rc < 0) {
-            return toBits(QoreValue());
+            // one exit, as without the mismatch case, so that the fast path keeps its code
+            return bind_rc == QORE_FAST_CALL_PARAM_MISMATCH
+                ? qore_rt_fast_call_mismatch_function(target.func, target.variant, target.pgm, args, arg_cleanups,
+                    nargs, xsink)
+                : toBits(QoreValue());
         }
 
         // Build argv for excess arguments (varargs)
@@ -16634,14 +16760,12 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
 
     // Instantiate params on thread-local stack
     int bind_rc = instantiateFastCallParams(sig, num_params, nargs, args, xsink, nullptr);
-    if (bind_rc == QORE_FAST_CALL_PARAM_MISMATCH) {
-        // the generic call path gives the outcome of the AST interpreter (issue #5686)
-        xsink->clear();
-        return qore_rt_call_function_direct_impl(target.func, target.variant, target.pgm, args, arg_cleanups,
-            nargs, xsink);
-    }
     if (bind_rc < 0) {
-        return toBits(QoreValue());
+        // one exit, as without the mismatch case, so that the fast path keeps its code
+        return bind_rc == QORE_FAST_CALL_PARAM_MISMATCH
+            ? qore_rt_fast_call_mismatch_function(target.func, target.variant, target.pgm, args, arg_cleanups, nargs,
+                xsink)
+            : toBits(QoreValue());
     }
 
     // Argv for excess args (rare for self-recursive)
@@ -17783,20 +17907,15 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     if (!use_direct_params) {
         // Standard path: push params to TLS
         int bind_rc = instantiateFastCallParams(sig, num_params, nargs, args, xsink, receiver_type_info);
-        if (bind_rc == QORE_FAST_CALL_PARAM_MISMATCH) {
-            // the generic call path gives the outcome of the AST interpreter (issue #5686)
-            xsink->clear();
-            if (selfid_instantiated) {
-                selfid->uninstantiateSelf();
-            }
-            return false;
-        }
         if (bind_rc < 0) {
             if (selfid_instantiated) {
                 selfid->uninstantiateSelf();
             }
+            // one exit, as without the mismatch case, so that the fast path keeps its code: an argument that does
+            // not match leaves the call to the generic call path, which gives the outcome of the AST interpreter
+            // (issue #5686)
             result = toBits(QoreValue());
-            return true;
+            return bind_rc != QORE_FAST_CALL_PARAM_MISMATCH;
         }
     }
     // else: direct_params path — params are pre-populated in the IR slot cache.
@@ -19250,14 +19369,12 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
 
     // Instantiate parameter locals directly from NaN-boxed args
     int bind_rc = instantiateFastCallParams(sig, num_params, nargs, args, xsink, receiver_type_info);
-    if (bind_rc == QORE_FAST_CALL_PARAM_MISMATCH) {
-        // the generic call path gives the outcome of the AST interpreter (issue #5686)
-        xsink->clear();
-        return qore_rt_call_static_method_direct_impl(method, nullptr, args, arg_cleanups, nargs, xsink,
-            receiver_type_info, explicit_type_param_instantiation);
-    }
     if (bind_rc < 0) {
-        return toBits(QoreValue());
+        // one exit, as without the mismatch case, so that the fast path keeps its code
+        return bind_rc == QORE_FAST_CALL_PARAM_MISMATCH
+            ? qore_rt_fast_call_mismatch_static_method(method, variant, args, arg_cleanups, nargs, xsink,
+                receiver_type_info, explicit_type_param_instantiation)
+            : toBits(QoreValue());
     }
 
     // Build argv for excess arguments (varargs)

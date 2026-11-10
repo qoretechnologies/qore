@@ -58,6 +58,7 @@ using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
 
 // these data structures are all private to the library
 
+class MethodVariantBase;
 class LocalVar;
 class VarRefNode;
 class BCAList;
@@ -762,6 +763,13 @@ public:
     DLLLOCAL void parseResolveUserSignature();
 
     DLLLOCAL virtual UserVariantBase* getUserVariantBase() {
+        return nullptr;
+    }
+
+    //! Returns the method variant (MethodVariantBase) of a method, nullptr for any other variant
+    /** A virtual call instead of a dynamic_cast, for the fast call paths
+    */
+    DLLLOCAL virtual const MethodVariantBase* getMethodVariantBase() const {
         return nullptr;
     }
 

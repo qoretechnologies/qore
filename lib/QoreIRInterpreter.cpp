@@ -2992,7 +2992,8 @@ static bool qore_ir_callee_single_variant(const QoreFunction* func) {
 
 //! Instantiates the parameters of an inlined call
 /** @return QORE_IR_FAST_CALL_PARAM_MISMATCH for an argument that does not match its parameter, with the parameter
-    type error raised
+    type error raised; if releasing the arguments already bound raises an exception (a destructor), -1 is returned
+    with the parameter type error and that exception chained to it
 */
 static int instantiateInterpreterFastCallParams(const UserSignature* sig, unsigned num_params,
         const uint64_t* args, ExceptionSink* xsink, const QoreTypeInfo* receiver_type_info = nullptr) {
@@ -3021,11 +3022,18 @@ static int instantiateInterpreterFastCallParams(const UserSignature* sig, unsign
                 || QoreTypeInfo::mayRequireFilter(param_type_info, val))) {
             QoreTypeInfo::acceptInputParam(param_type_info, i, sig->getName(i), val, xsink);
             if (xsink && *xsink) {
+                // the type error is set aside while the arguments are released, so that an exception raised by a
+                // destructor then is kept
+                ExceptionSink type_error;
+                type_error.assimilate(*xsink);
                 val.discard(xsink);
                 for (int j = static_cast<int>(i) - 1; j >= 0; --j) {
                     sig->lv[j]->uninstantiate(xsink);
                 }
-                return QORE_IR_FAST_CALL_PARAM_MISMATCH;
+                bool released_ok = !*xsink;
+                type_error.assimilate(*xsink);
+                xsink->assimilate(type_error);
+                return released_ok ? QORE_IR_FAST_CALL_PARAM_MISMATCH : -1;
             }
         }
 

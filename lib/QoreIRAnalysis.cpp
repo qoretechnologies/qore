@@ -14078,8 +14078,11 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
                 && (inst->opcode == QoreIROpcode::ToStringChecked || inst->opcode == QoreIROpcode::ToIntChecked
                     || inst->opcode == QoreIROpcode::ToFloatChecked)) {
             const QoreIRValueFacts* facts = func.getValueFacts(inst->operands[0]);
-            if (facts && qore_ir_analysis_conversion_accepts_type(inst->opcode == QoreIROpcode::ToIntChecked,
-                    facts->type_info)) {
+            if (facts && (facts->representation == QoreIRValueRepresentation::NativeInt
+                    || facts->representation == QoreIRValueRepresentation::NativeFloat
+                    || facts->representation == QoreIRValueRepresentation::NativeBool
+                    || qore_ir_analysis_conversion_accepts_type(inst->opcode == QoreIROpcode::ToIntChecked,
+                        facts->type_info))) {
                 inst->opcode = inst->opcode == QoreIROpcode::ToStringChecked ? QoreIROpcode::ToString
                     : (inst->opcode == QoreIROpcode::ToIntChecked ? QoreIROpcode::ToInt : QoreIROpcode::ToFloat);
             }
