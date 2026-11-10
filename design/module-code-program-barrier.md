@@ -24,6 +24,7 @@ Relevant code:
 - `lib/QoreSignal.cpp` — `QoreSignalManager::removeProgramHandlers()`; `lib/ModuleManager.cpp` —
   `QoreModuleManager::delUser()`
 - `lib/QoreSandboxManager.cpp` — `qore_program_set_module_lifetime()`, `qore_release_module_program_pins()`
+- `include/qore/intern/ThreadPool.h` — `ThreadTask`; `lib/QC_ThreadPool.qpp` — `ThreadPoolThread::worker()`
 - `examples/test/ir/module-code-program-barrier.qtest`, `examples/test/ir/module-code-cleanup.qtest` and the tests
   named in them
 
@@ -181,3 +182,22 @@ another thread (`ProgramThreadCountContextHelper::set()`) raises `PROGRAM-ERROR`
 The threads that entered before are waited for by `waitForTermination()` in Phase 1, as on develop.  That wait is not
 bounded: a thread blocked in module code for good keeps the cleanup waiting, as clearing the data under it would
 destroy what it uses; the close ensures that only entries made before it can do so.
+
+The work that the cleanup hands to other threads is part of the cleanup, and the module Programs stay open to it
+(`qore_module_cleanup_delegation()`, `QoreModuleCleanupDelegateHelper`, `ThreadData::module_cleanup_delegate`):
+
+- a ThreadPool task that the cleanup thread submits (`ThreadTask` records it when it is created, in the submitting
+  thread), while it runs, is cancelled or released, until the worker has cleared the thread-local data the task
+  created
+- a background thread that the cleanup thread starts (`BGThreadParams`), for its whole life up to the deletion of its
+  data
+- in turn, such work of a thread that runs such work
+
+The destructors that the cleanup runs (of the objects in the module Programs' data in Phase 1, and of the objects in
+the Programs that a native binary module deletes in Phase 2) are module code that can hand work to a ThreadPool and
+wait for its result, as the destructor of an object that makes a REST call does: refusing that work would make the
+destructor wait forever, which is a hang, not a refusal
+(`examples/test/module-cpp-api/program-owner/program-owner-teardown.qtest`).  Such work runs while the cleanup thread
+waits for it, as the cleanup thread would run it itself.  Work handed over by any other thread (a ThreadPool task or
+a background thread of a foreign thread, a task that was submitted before the close) is refused, as is a foreign thread
+itself, which the cleanup cannot have started (`examples/test/ir/module-code-cleanup.qtest`).

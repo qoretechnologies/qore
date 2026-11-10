@@ -1221,9 +1221,44 @@ DLLLOCAL void qore_stop_module_uncounted_entries();
     otherwise run module code on data being destroyed.  Such an entry then fails with a \c PROGRAM-ERROR exception.
     The threads that entered a module's Program before are waited for by the cleanup, as before: a thread blocked in
     module code for good keeps the cleanup waiting, which cannot be bounded without destroying data that the thread
-    uses; no thread can enter module code anew to prolong the wait
+    uses; no thread can enter module code anew to prolong the wait.
+
+    The work that the cleanup itself hands to other threads is part of the cleanup, so the Programs stay open to the
+    threads that run it: a ThreadPool task that the cleanup thread submits (a destructor that the cleanup runs can
+    submit a task and wait for its result, which would otherwise wait forever) and a background thread that it starts,
+    and in turn such work of such work (see qore_module_cleanup_delegation() and QoreModuleCleanupDelegateHelper).
+    Work handed over by any other thread is refused
 */
 DLLLOCAL void qore_close_module_programs();
+
+//! Returns true if the Programs of the modules are closed (see qore_close_module_programs()) and the calling thread
+//! can still enter them: it runs the module cleanup, or work that the cleanup handed over
+/** Called by the code that hands work to another thread, in the handing thread (ThreadTask, the background operator):
+    the work then enters the Programs of the modules as the handing thread can (see QoreModuleCleanupDelegateHelper)
+*/
+DLLLOCAL bool qore_module_cleanup_delegation();
+
+//! Keeps the Programs of the modules open to the calling thread while it runs work that the module cleanup handed
+//! over, if \a delegate (the result of qore_module_cleanup_delegation() in the handing thread) is true
+/** See qore_close_module_programs(); the helpers of a thread nest
+*/
+class QoreModuleCleanupDelegateHelper {
+public:
+    DLLLOCAL QoreModuleCleanupDelegateHelper(bool delegate);
+
+    DLLLOCAL ~QoreModuleCleanupDelegateHelper() {
+        reset();
+    }
+
+    //! Ends the delegation before the helper is destroyed; to be called before the thread's data is deleted
+    DLLLOCAL void reset();
+
+    QoreModuleCleanupDelegateHelper(const QoreModuleCleanupDelegateHelper&) = delete;
+    QoreModuleCleanupDelegateHelper& operator=(const QoreModuleCleanupDelegateHelper&) = delete;
+
+private:
+    ThreadData* td = nullptr;
+};
 
 
 //! Waits on a condition variable until it is signalled, the timeout expires, or the thread is cancelled or interrupted
