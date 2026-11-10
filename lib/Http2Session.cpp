@@ -77,6 +77,12 @@ static void http2_raise_poll_result_exception(const QoreHashNode* ex, ExceptionS
     QoreValue err = ex->getKeyValue("err");
     QoreValue desc = ex->getKeyValue("desc");
     QoreValue arg = ex->getKeyValue("arg");
+    // an operation ended by a close of its socket while the thread is cancelled reports the cancellation (see
+    // qore_socket_raise_pending_cancel())
+    if (err.getType() == NT_STRING && QoreStringDataHelper(err) == "SOCKET-CLOSED"
+            && qore_socket_raise_pending_cancel("HTTP/2 socket operation", xsink)) {
+        return;
+    }
     // note: these values can be held in inline short string storage, which has no QoreStringNode;
     // the node value helper materializes such values so that a reference can be taken
     QoreStringNodeValueHelper err_str(err);

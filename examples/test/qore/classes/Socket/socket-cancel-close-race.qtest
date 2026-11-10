@@ -1,0 +1,141 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - socket closes and receives on the async I/O controller's thread, and thread cancellation
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SocketCancelCloseRaceTest
+
+#! A cancellation of the thread that waits in a synchronous Socket call is reported as the cancellation, also when a
+#! close of the socket ended the call's operation first
+/** The code that a cancellation ends can close the socket (an HTTP client closes its transport), and the close
+    cancels the operation that the call waits for; the wait can then return the canceled operation before it sees the
+    thread's cancellation, and the call raised SOCKET-CLOSED instead of THREAD-CANCELLED
+    (HttpClientBufferedDuplex.qtest, "cancelling during the upload closes the transport", failed with SOCKET-CLOSED
+    once).  The debug-build hook dbg_hold_socket_cancel_conversion() holds the waiting thread where it converts the
+    end of its operation into an error, after the close has ended the operation, so that the test cancels it in that
+    window; skipped without library debugging.
+*/
+class SocketCancelCloseRaceTest inherits QUnit::Test {
+    private {
+        #! Upper bound for any wait that a regression turns into a hang
+        const HangTimeout = 30s;
+
+        #! the same, in milliseconds, for the debug hooks
+        const HangTimeoutMs = 30000;
+    }
+
+    constructor() : Test("SocketCancelCloseRaceTest", "1.0") {
+        addTestCase("a receive ended by a close while the thread is cancelled raises THREAD-CANCELLED",
+            \cancelAfterCloseTest());
+        addTestCase("a receive ended by a close without a cancellation still raises SOCKET-CLOSED",
+            \closeWithoutCancelTest());
+        set_return_value(main());
+    }
+
+    #! Connects a socket to a listener; returns the client socket and keeps the accepted one in \a peer
+    private Socket connectPair(reference<*Socket> peer) {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        Socket client();
+        client.connect(sprintf("127.0.0.1:%d", port), HangTimeout);
+        peer = listener.accept(HangTimeout);
+        listener.close();
+        return client;
+    }
+
+    #! Starts a thread that receives on the socket and reports the error of its call; returns its TID
+    private int startReceiver(Socket client, Queue result) {
+        return background sub () {
+            try {
+                client.recv(1, HangTimeout);
+                result.push({"err": "NO-ERROR"});
+            } catch (hash<ExceptionInfo> ex) {
+                # the cancellation is sticky: clear it, so that this thread can report the error
+                clear_thread_cancel();
+                result.push({"err": ex.err, "desc": ex.desc});
+            }
+        }();
+    }
+
+    #! Waits until the receive waits on the async I/O controller, so that the close ends its operation
+    /** A close before the receive starts would make the receive fail at once, without an operation to end
+    */
+    private waitForReceive(Socket client) {
+        assertTrue(call_function("dbg_socket_wait_controller_op", client, HangTimeout),
+            "the receive waits on the controller");
+    }
+
+    #! Closes the socket in another thread with the hold armed for the receiving thread, and waits until it is held
+    /** The close waits until the receiving call has ended, so it runs in a thread of its own; the returned Counter is
+        decremented when it has returned.  The caller resets the hold when it ends (resetHold()), also when it fails,
+        so that the receiving thread and the close are never left waiting
+    */
+    private Counter closeAndHold(Socket client, Queue result, int tid) {
+        call_function("dbg_hold_socket_cancel_conversion", tid);
+        Counter closed(1);
+        background sub () {
+            on_exit closed.dec();
+            client.close();
+        }();
+        assertTrue(call_function("dbg_wait_socket_cancel_conversion_held", HangTimeoutMs),
+            "the receiving thread converts the end of its operation, which the close ended");
+        # the result is reported only after the hold
+        assertEq(0, result.size(), "the receiving thread has not reported its error yet");
+        return closed;
+    }
+
+    #! Disarms the hold and lets a held thread continue
+    private resetHold() {
+        assertTrue(call_function("dbg_reset_socket_cancel_conversion", HangTimeoutMs), "no thread stays held");
+    }
+
+    cancelAfterCloseTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_hold_socket_cancel_conversion() requires a debug build");
+        }
+        *Socket peer;
+        Socket client = connectPair(\peer);
+        on_exit peer.close();
+        Queue result();
+        int tid = startReceiver(client, result);
+        # the receive waits for data that never comes, until the close below ends it
+        waitForReceive(client);
+        on_exit resetHold();
+        Counter closed = closeAndHold(client, result, tid);
+        # the thread is cancelled after the close ended its operation, before it raises its error
+        assertTrue(cancel_thread(tid, "test cancellation"), "the receiving thread is cancelled");
+        assertTrue(call_function("dbg_continue_socket_cancel_conversion", HangTimeoutMs),
+            "the receiving thread leaves the hold");
+        hash<auto> row = result.get(HangTimeout);
+        assertEq("THREAD-CANCELLED", row.err, "the cancellation reaches the caller, not the close that ended the "
+            "operation first; " + row.desc);
+        assertRegex("test cancellation", row.desc, "the cancellation's reason");
+        assertEq(0, closed.waitForZero(HangTimeout), "the close returned");
+    }
+
+    closeWithoutCancelTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_hold_socket_cancel_conversion() requires a debug build");
+        }
+        *Socket peer;
+        Socket client = connectPair(\peer);
+        on_exit peer.close();
+        Queue result();
+        int tid = startReceiver(client, result);
+        waitForReceive(client);
+        on_exit resetHold();
+        Counter closed = closeAndHold(client, result, tid);
+        assertTrue(call_function("dbg_continue_socket_cancel_conversion", HangTimeoutMs),
+            "the receiving thread leaves the hold");
+        hash<auto> row = result.get(HangTimeout);
+        assertEq("SOCKET-CLOSED", row.err, "a close by another thread is reported as such; " + row.desc);
+        assertEq(0, closed.waitForZero(HangTimeout), "the close returned");
+    }
+}
