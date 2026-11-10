@@ -18858,7 +18858,7 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
                 ufv->setFlag(QCF_USES_EXTRA_ARGS);
             }
 
-            // since v24 the variant flags record whether each variant is exported (a function can have public and
+            // since v25 the variant flags record whether each variant is exported (a function can have public and
             // private variants); an older record has only the function's public flag, which applies to all of its
             // variants
             if (reader.getHeader().version >= QORE_AOT_VARIANT_PUBLIC_VERSION

@@ -168,6 +168,24 @@ private:
    int waiting;
    // Includes callback and thread-resource cleanup; protected by mutex.
    bool handler_running = false;
+   //! the number of threads waiting for handler_running to be reset; see removeProgramHandlers()
+   int idle_waiting = 0;
+
+   //! resets handler_running and wakes the threads waiting for it; the mutex must be held
+   DLLLOCAL void setHandlerIdleUnlocked() {
+      handler_running = false;
+      if (idle_waiting) {
+         cond.broadcast();
+      }
+   }
+
+   //! removes the handler of the signal; the mutex must be held
+   /** @param sig the signal
+       @param old receives the handler removed, which the caller releases outside the lock
+
+       @return true if the handler's callback is running: it is then removed by the signal thread once it returns
+   */
+   DLLLOCAL bool removeHandlerUnlocked(int sig, CodePgm& old);
 
    DLLLOCAL void reload();
    //! waits while another thread's fork() blocks changes; the mutex must be held
@@ -217,6 +235,14 @@ public:
    DLLLOCAL bool stopForExit();
    DLLLOCAL int setHandler(int sig, const ResolvedCallReferenceNode* fr, ExceptionSink* xsink);
    DLLLOCAL int removeHandler(int sig, ExceptionSink* xsink);
+   //! returns true if a handler is set for the signal (for tests)
+   DLLLOCAL bool hasHandler(int sig);
+   //! removes the handlers of the given Programs; waits for a callback of one of them that runs in the signal thread
+   /** Called by the module cleanup for the Programs of the modules before it clears their data
+       (QoreModuleManager::delUser()): the signal thread, which can run until the end of the cleanup, then runs none
+       of their code while it does
+   */
+   DLLLOCAL void removeProgramHandlers(const std::vector<QoreProgram*>& pgms, ExceptionSink* xsink);
    DLLLOCAL const char* getSignalName(int sig);
    DLLLOCAL void signal_handler_thread();
    DLLLOCAL void lock_idle();

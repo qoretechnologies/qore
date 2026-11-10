@@ -63,7 +63,7 @@ public namespace SandboxThreadFixture {
         }
     }
 
-    #! Runs the caller's code in a new thread; a module function runs in the Program of its caller
+    #! Runs the caller's code in a new thread; a module function runs in the module's Program
     /** @return the TID of the new thread
     */
     public int sub start_thread(code c) {

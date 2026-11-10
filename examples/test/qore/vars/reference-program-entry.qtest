@@ -70,6 +70,11 @@ class ReferenceProgramEntryTest inherits QUnit::Test {
                 }, True);
                 assertEq(NOTHING, r.err, sprintf("%s held by a %s: no exception", kind, holder));
                 assertEq(r.value, r.read, sprintf("%s held by a %s: the value assigned is read back", kind, holder));
+                # the thread checks itself once it has used the lvalue: the end of the thread, which follows,
+                # enters the Program again to release the thread's value of its thread_local variable
+                assertEq(False, r.in_program, sprintf("%s held by a %s: the thread has left the Program once it has "
+                    "used the lvalue", kind, holder));
+                # runHeld() has joined the thread, so the release of its thread_local value has ended as well
                 assertEq((), p.getThreadList(), sprintf("%s held by a %s: the thread has left the Program", kind,
                     holder));
             }
@@ -123,9 +128,15 @@ class ReferenceProgramEntryTest inherits QUnit::Test {
         @param holder how the thread holds the reference: in a local variable, in a closure-bound variable or in a
         parameter
         @param check called with the thread's TID while the thread is held
-        @param read_back true to read the lvalue back after the assignment
+        @param read_back true to read the lvalue back after the assignment, and to check whether the thread is in the
+        Program once it has used the lvalue; false where the Program is deleted meanwhile
 
-        @return a hash: \c value: the value assigned, \c read: the value read back, \c err: the exception raised
+        @return a hash: \c value: the value assigned, \c read: the value read back, \c in_program: whether the
+        thread was in the Program once it had used the lvalue, \c err: the exception raised
+
+        The thread has terminated when this method returns: its end enters the Program to release the thread's
+        value of a thread_local variable of the Program after the thread has pushed its result, so a check of the
+        Program's threads after the result only would race with that release
     */
     private hash<auto> runHeld(Program p, string getter, string holder, code check, bool read_back) {
         Queue tidq();
@@ -137,12 +148,16 @@ class ReferenceProgramEntryTest inherits QUnit::Test {
                 call_function("dbg_continue_reference_lvalue", StepTimeout);
             }
         }
-        background ReferenceProgramEntryTest::assignThroughReference(p, getter, holder, read_back, tidq, result);
+        int bg_tid = background ReferenceProgramEntryTest::assignThroughReference(p, getter, holder, read_back, tidq,
+            result);
         int tid = tidq.get(StepTimeout);
+        assertEq(bg_tid, tid, "the thread's TID");
         assertEq(True, call_function("dbg_wait_reference_lvalue_held", StepTimeout), "the thread is held");
         check(tid);
         assertEq(True, call_function("dbg_continue_reference_lvalue", StepTimeout), "the thread continued");
-        return result.get(StepTimeout);
+        hash<auto> rv = result.get(StepTimeout);
+        assertEq(True, thread_join(tid, StepTimeout), "the thread terminated");
+        return rv;
     }
 
     #! takes a reference from the Program and assigns its lvalue as \a holder says; see runHeld()
@@ -169,6 +184,7 @@ class ReferenceProgramEntryTest inherits QUnit::Test {
             }
             if (read_back) {
                 rv.read = r;
+                rv.in_program = inlist(gettid(), p.getThreadList());
             }
         } catch (hash<ExceptionInfo> ex) {
             rv.err = ex.err + ": " + ex.desc;

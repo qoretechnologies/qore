@@ -339,13 +339,13 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      read from serialized IR marks its other parent slots pre-instantiated, as its lowering does.  A v9-v22 IR
 //!      function has no such list; its handler-own locals are derived from its IR (an approximation: see
 //!      QoreIRFunction::deriveHandlerOwnClosureLocalsFromIR()).
-//! v24: the variant flags byte of a FUNCTIONS record has QORE_AOT_VARIANT_FLAG_PUBLIC for a variant that its user
-//!      module exports (a function can have public and private variants); a v9-v23 function record has only the
-//!      function's public flag, which applies to all of its variants.
+//! v25: the variant flags byte of a FUNCTIONS record has QORE_AOT_VARIANT_FLAG_PUBLIC for a variant that its user
+//!      module exports (a function can have public and private variants); an older function record has only the
+//!      function's public flag, which applies to all of its variants.  (v24 is taken by the #5670 branch.)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 24;
-//! First format version whose function variant flags record each variant's public flag (see v24 above).
-constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 24;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 25;
+//! First format version whose function variant flags record each variant's public flag (see v25 above).
+constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
 //! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
 constexpr uint8_t QORE_AOT_VARIANT_FLAG_SYNCHRONIZED = 0x01;
 //! Variant-flags bit of FUNCTIONS records (QORE_AOT_VARIANT_PUBLIC_VERSION): the variant is module-public

@@ -51,19 +51,6 @@ class ModulePublicVarReadOnlyTest inherits QUnit::Test {
         "lockdown",
     );
 
-    #! whether a Program that sandboxed code creates is sandboxed, which qore#5659 adds
-    /** Without it, such a Program is restricted only when it inherits PO_NO_PROCESS_CONTROL from its creator; set to
-        True when the branch carries qore#5659
-    */
-    const SandboxedChildIsSandboxed = False;
-
-    #! the results of the probe that need SandboxedChildIsSandboxed
-    const SandboxedChildResults = {
-        "sandbox-child": ModVarForms::ErrCode,
-        "sandbox-child-static": ModVarForms::ErrCode,
-        "sandbox-child-state": ModVarForms::InitialState,
-    };
-
     #! the exception code of a reflection access refusal
     const ReflAccessErr = "REFLECTION-ACCESS-ERROR";
 
@@ -81,7 +68,6 @@ class ModulePublicVarReadOnlyTest inherits QUnit::Test {
         addTestCase("restricted code cannot change a module's state in any execution mode", \sourceTest());
         addTestCase("restricted code cannot change the state of a module compiled with qcc", \aotModuleTest());
         addTestCase("qcc-compiled restricted code cannot change a module's state", \aotWriterTest());
-        addTestCase("a Program that sandboxed code creates cannot change a module's state", \sandboxedChildTest());
         set_return_value(main());
     }
 
@@ -104,18 +90,6 @@ class ModulePublicVarReadOnlyTest inherits QUnit::Test {
         unlink(tmp.path + DirSep + "OurVarMod.qm");
         foreach string mode in (ExecModes) {
             checkProbe(runProbe(tmp.path, mode), getExpected(), "AOT module " + mode);
-        }
-    }
-
-    sandboxedChildTest() {
-        if (!SandboxedChildIsSandboxed) {
-            testSkip("needs qore#5659: a Program that sandboxed code creates is not sandboxed without it");
-        }
-        foreach string mode in (ExecModes) {
-            TmpDir tmp("qore-module-public-var-ro-child-" + mode + "-");
-            copyFixtures(tmp.path);
-            hash<string, string> results = getResults(runProbe(tmp.path, mode));
-            assertEq(SandboxedChildResults, results{keys SandboxedChildResults}, mode);
         }
     }
 
@@ -220,6 +194,10 @@ class ModulePublicVarReadOnlyTest inherits QUnit::Test {
             "no-pc-child": ModVarForms::ErrCode,
             "no-pc-child-static": ModVarForms::ErrCode,
             "no-pc-child-state": ModVarForms::InitialState,
+            # a Program that sandboxed code creates is sandboxed (qore#5659)
+            "sandbox-child": ModVarForms::ErrCode,
+            "sandbox-child-static": ModVarForms::ErrCode,
+            "sandbox-child-state": ModVarForms::InitialState,
             # a Program that the trusted host gives the module variable it imported
             "import-chain": ModVarForms::ErrCode,
             "import-chain-ro": "ACCESS-ERROR",
@@ -231,9 +209,6 @@ class ModulePublicVarReadOnlyTest inherits QUnit::Test {
             # the host's own variable imported into a sandboxed Program by the host
             "host-var": "ok",
         };
-        if (SandboxedChildIsSandboxed) {
-            rv += SandboxedChildResults;
-        }
         return rv;
     }
 
@@ -265,10 +240,6 @@ class ModulePublicVarReadOnlyTest inherits QUnit::Test {
 
     private checkProbe(string out, hash<auto> expected, string mode) {
         hash<string, string> results = getResults(out);
-        # the results that need qore#5659 are checked by sandboxedChildTest()
-        if (!SandboxedChildIsSandboxed) {
-            results -= keys SandboxedChildResults;
-        }
         # one comparison reports every scenario that differs, not only the first one
         assertEq(expected, results, sprintf("%s probe output:\n%s", mode, out));
     }

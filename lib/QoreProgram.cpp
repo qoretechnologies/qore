@@ -5000,6 +5000,11 @@ void QoreProgram::setSandboxManager(QoreSandboxManager* sm) {
             priv->sandboxed.store(true, std::memory_order_release);
         }
         old = priv->sandbox_manager.exchange(sm, std::memory_order_acq_rel);
+        // after the manager is published: a thread that finds the new generation finds the manager (see
+        // ProgramThreadCountContextHelper::sandboxChainClear())
+        if (sm) {
+            qore_sandbox_manager_generation.fetch_add(1, std::memory_order_seq_cst);
+        }
     }
     if (old) {
         old->deref(nullptr);

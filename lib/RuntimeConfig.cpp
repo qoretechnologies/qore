@@ -246,15 +246,23 @@ RuntimeConfig rc_get_parse_time() {
 
 // Get a reference to the TLS RuntimeConfig for direct updates
 // Ensures loc is initialized to &loc_builtin if not yet set
+// the data of the thread-local RuntimeConfig (see rc_get_tls_ref()); constant-initialized
+static thread_local RuntimeConfig::Impl tl_runtime_config_impl;
+
 RuntimeConfig& rc_get_tls_ref() {
     // Thread-local RuntimeConfig - the authoritative source for runtime context
     // Updated by RuntimeConfigLocationHelper and other helpers
-    static thread_local RuntimeConfig::Impl tl_runtime_config_impl;
     static thread_local RuntimeConfig tl_runtime_config(&tl_runtime_config_impl, false);
     if (!tl_runtime_config.getLocation()) {
         tl_runtime_config.setLocation(&loc_builtin);
     }
     return tl_runtime_config;
+}
+
+RuntimeConfig::Impl* rc_get_tls_impl() {
+    // the thread's RuntimeConfig is set up first
+    rc_get_tls_ref();
+    return &tl_runtime_config_impl;
 }
 
 RuntimeConfig& rc_get_current_ref() {
