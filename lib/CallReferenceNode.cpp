@@ -724,6 +724,12 @@ int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr,
         QoreSourceProgramHolder holder(xsink);
         holder.setVariant(uvb);
         if (QoreProgram* pgm = holder.get()) {
+            // a Program that another thread has deleted, or is deleting, stays registered while any thread holds a
+            // reference to it (such as the thread that runs a call of the function scheduled earlier, while the call
+            // leaves the Program), but its code cannot run anymore: it is deleted whatever other threads hold
+            if (qore_program_private::get(*pgm)->deletedByOtherThread()) {
+                return -1;
+            }
             po = pgm->getParseOptions();
             return 1;
         }

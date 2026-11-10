@@ -1799,6 +1799,19 @@ public:
         return !ptid || ptid == tid || (ptid > 0 && tidmap.find(tid) != tidmap.end());
     }
 
+    //! Returns true if another thread has deleted the Program or is deleting it, so that no new thread can enter it
+    /** A deleted Program stays allocated and registered while any thread holds a reference to it: a thread that
+        calls one of its functions from another Program holds one until the call has left it (see
+        QoreSourceProgramHolder), also when the call fails because the Program is deleted.  Whether the Program can
+        still be referenced therefore depends on the timing of other threads; this does not.  Code scheduled to run
+        in a new thread cannot run in a Program for which this returns true.
+    */
+    DLLLOCAL bool deletedByOtherThread() const {
+        int tid = q_gettid();
+        AutoLocker al(plock);
+        return ptid && ptid != tid;
+    }
+
     //! Takes the parse lock without waiting for another thread that holds it
     /** @return 0 if the lock was taken (also if this thread holds it already), 1 if another thread holds it, -1 if
         the Program is deleted or being deleted by another thread (\c PROGRAM-ERROR is raised then)

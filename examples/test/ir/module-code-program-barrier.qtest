@@ -159,6 +159,13 @@ main: function same-named class: \"module\"
 main: closure from module code: \"module\"
 main: call reference from module code: \"module\"
 ";
+
+        #! the output of held-delete.q: the held call fails as a call into a deleted Program does
+        const HeldDeleteOutput = "before: \"defined\"
+held: True referenced: True
+after: \"INVALID-FUNCTION-ACCESS\"
+continued: True rv: null err: \"PROGRAM-ERROR\"
+";
     }
 
     constructor() : QUnit::Test("ModuleCodeProgramBarrierTest", "1.0", \ARGV) {
@@ -170,6 +177,8 @@ main: call reference from module code: \"module\"
 
         addTestCase("module functions and methods run in the module's Program, and only the sandbox governs module "
             "code, in every mode", \testBarrier());
+        addTestCase("module code refuses a reference to a function of a Program that another thread keeps while it is "
+            "deleted, in every mode", \testHeldDelete());
 
         set_return_value(main());
     }
@@ -215,5 +224,23 @@ main: call reference from module code: \"module\"
         hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s QORE_MODULE_DIR=%s %s", env(),
             qmod_dir, bin));
         assertEq(ExpectedOutput, r.out, "AOT script and module");
+    }
+
+    #! module code refuses a reference to a function of a Program that another thread keeps while it is deleted
+    /** A thread that calls a function from another Program holds a reference to the function's Program until the
+        call has left it, as the thread that runs the reference scheduled for the first call of the barrier script
+        does; the Program, deleted meanwhile, stays allocated and registered, so the check of the second call accepted
+        the reference ("scheduled") whenever that thread had not released it yet.  The debug build holds such a call
+        at that point while the Program is deleted (see held-delete.q).
+    */
+    testHeldDelete() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the source Program hold requires a debug build");
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s QORE_MODULE_DIR=%s %s -b "
+                "--enable-debug --exec-mode=%s %s", env(), src_dir, qore_bin, mode, src_dir + "/held-delete.q"));
+            assertEq(HeldDeleteOutput, r.out, mode);
+        }
     }
 }

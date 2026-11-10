@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -410,7 +410,8 @@ DLLLOCAL const QoreProgram* qore_call_reference_code_program(const ResolvedCallR
 
 //! Gets the parse options of the Program whose code a call reference runs (see qore_call_reference_code_program())
 /** The Program of a user function is the Program that defined it, which can have been deleted while a Program that
-    imported the function still holds it: it is taken with a reference while its options are read.
+    imported the function still holds it: it is taken with a reference while its options are read.  Such a Program
+    is deleted once another thread has deleted it or is deleting it, also while threads still hold references to it.
 
     @return 1 if the code has a Program (\a po is set to its options), 0 if it has none (builtin code), -1 if the
     Program of its code has been deleted
