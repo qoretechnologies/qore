@@ -68,6 +68,11 @@ public hashdecl DataProviderFactoryInfo {
 public class AbstractDataProviderFactory {
     public {}
 
+    private:internal {
+        #! The factory's name, read once for checkSandboxCreate()
+        *string sandbox_factory_name;
+    }
+
     #! Creates an object from the given constructor options
     /** @param options the constructor options for the data provider
 
@@ -79,6 +84,7 @@ public class AbstractDataProviderFactory {
         @ref Qore::Program "Program" holding the class has been deleted) is rethrown unchanged
     */
     AbstractDataProvider create(*hash<auto> options) {
+        checkSandboxCreate();
         *ConstructorMethodVariant con = findConstructorVariant(AutoHashOrNothingType);
         if (!con) {
             error("DATA-PROVIDER-ERROR", "data provider does not support a constructor from an option hash");
@@ -102,6 +108,7 @@ public class AbstractDataProviderFactory {
         @ref Qore::Program "Program" holding the class has been deleted) is rethrown unchanged
     */
     AbstractDataProvider createWithTemplate(*hash<auto> template_options, *hash<auto> options) {
+        checkSandboxCreate();
         *ConstructorMethodVariant con = findConstructorVariant(AutoHashType, AutoHashOrNothingType);
         if (con) {
             return con.call(template_options, options);
@@ -112,6 +119,21 @@ public class AbstractDataProviderFactory {
                 "hash and an option hash nor a constructor from an option hash");
         }
         return con.call(options);
+    }
+
+    #! Refuses a sandboxed caller a provider of a factory of a module that registers an app with uncontrolled I/O
+    /** Every method that creates a provider calls this first, whether the factory was found with
+        DataProvider::getFactory(), DataProvider::getFactoryEx() or a factory getter, or created directly; reading
+        the factory's info is not refused.  The common path is one hash lookup, with no lock.
+
+        @throw APP-SANDBOX-ACCESS-DENIED see DataProviderActionCatalog::checkFactorySandboxAccess()
+    */
+    private:internal checkSandboxCreate() {
+        string name = sandbox_factory_name ?? (sandbox_factory_name = getName());
+        if (DataProviderSandboxState::refused_factories{name} && SandboxManager::isSandboxed()) {
+            DataProviderActionCatalog::checkFactorySandboxAccess(name,
+                DataProviderSandboxState::refused_factories{name}, True);
+        }
     }
 
     #! Returns the name of the data provider factory
@@ -168,6 +190,7 @@ public class AbstractDataProviderFactory {
         @since DataProvider 2.1
     */
     AbstractDataProvider getProviderFromExample(data example, *hash<auto> constructor_options) {
+        checkSandboxCreate();
         return example.typeCode() == NT_STRING
             ? getProviderFromExampleImpl(new StringInputStream(example), constructor_options)
             : getProviderFromExampleImpl(new BinaryInputStream(example), constructor_options);
@@ -188,6 +211,7 @@ public class AbstractDataProviderFactory {
         @since DataProvider 2.1
     */
     AbstractDataProvider getProviderFromExample(InputStream example, *hash<auto> constructor_options) {
+        checkSandboxCreate();
         return getProviderFromExampleImpl(example, constructor_options);
     }
 
@@ -203,6 +227,7 @@ public class AbstractDataProviderFactory {
         @since DataProvider 2.1
     */
     list<hash<auto>> getExampleProviderRecordOutput(data example, *hash<auto> constructor_options) {
+        checkSandboxCreate();
         return example.typeCode() == NT_STRING
             ? getExampleProviderRecordOutputImpl(new StringInputStream(example), constructor_options)
             : getExampleProviderRecordOutputImpl(new BinaryInputStream(example), constructor_options);
@@ -220,6 +245,7 @@ public class AbstractDataProviderFactory {
         @since DataProvider 2.1
     */
     list<hash<auto>> getExampleProviderRecordOutput(InputStream example, *hash<auto> constructor_options) {
+        checkSandboxCreate();
         return getExampleProviderRecordOutputImpl(example, constructor_options);
     }
 

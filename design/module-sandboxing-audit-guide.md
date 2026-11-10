@@ -715,8 +715,10 @@ and without `sandbox_aware` (`APP-SANDBOX-ACCESS-DENIED`); trusted callers are n
 
 The catalog enforces this itself, for code that a sandbox governs:
 `DataProviderActionCatalog::getDataProviderForAction()` refuses the provider of such an app's action (and of an app
-that is not registered), and `DataProvider::getFactoryObject()` and the other factory getters that create a provider
-refuse a factory whose class belongs to a module that registers such an app. The flag is per app: a factory of a
+that is not registered), and every factory method that creates a provider (`AbstractDataProviderFactory::create()`,
+`createWithTemplate()`, `getProviderFromExample()`, `getExampleProviderRecordOutput()`) refuses a factory whose class
+belongs to a module that registers such an app, however the factory was obtained (`DataProvider::getFactoryObject()`,
+`getFactory()`, `getFactoryEx()`, or creating it); reading its info is not refused. The flag is per app: a factory of a
 module without such an app is not refused, and an action that a module contributes to another module's app is decided
 by that app. The checks are one hash lookup on the common path, with no lock.
 

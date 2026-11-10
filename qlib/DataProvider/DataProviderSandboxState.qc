@@ -29,8 +29,8 @@ public namespace DataProvider {
     @ref DataProvider::DataProviderAppInfo::external_io "external_io" and without
     @ref DataProvider::DataProviderAppInfo::sandbox_aware "sandbox_aware" (see
     @ref dataprovider_external_io).  The factory registry reports the factories and their modules, and the catalog
-    reports the modules that register such an app; the factory getters read @ref refused_factories, one lookup with
-    no lock.
+    reports the modules that register such an app; the factory methods that create a provider
+    (AbstractDataProviderFactory::create() and the others) read @ref refused_factories, one lookup with no lock.
 
     This class is not exported: code that imports the module cannot change what it refuses.
 */

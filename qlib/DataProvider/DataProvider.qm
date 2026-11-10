@@ -746,8 +746,12 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     - @ref DataProvider::DataProviderActionCatalog::getDataProviderForAction()
       "DataProviderActionCatalog::getDataProviderForAction()" refuses the provider of an action of such an app, and of
       an app that is not registered
-    - @ref DataProvider::DataProvider::getFactoryObject() "DataProvider::getFactoryObject()" and the other factory
-      getters that create a provider refuse a factory whose class belongs to a module that registers such an app
+    - every factory method that creates a provider (@ref DataProvider::AbstractDataProviderFactory::create()
+      "AbstractDataProviderFactory::create()", \c createWithTemplate(), \c getProviderFromExample() and
+      \c getExampleProviderRecordOutput()) refuses a factory whose class belongs to a module that registers such an
+      app, however the factory was obtained (@ref DataProvider::DataProvider::getFactoryObject()
+      "DataProvider::getFactoryObject()", @ref DataProvider::DataProvider::getFactoryEx() "DataProvider::getFactoryEx()"
+      or creating it); reading its info is not refused
 
     The declarations are made per app.  A factory reached by name is refused as described above, by the module that
     defines its class: a factory of a module that registers no app, or only apps without uncontrolled external I/O,
@@ -1725,8 +1729,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       "DataProviderActionCatalog::isSandboxAllowed()", which apply the rule for sandboxed callers, also by app name
       from the registered info (see @ref dataprovider_external_io)
     - @ref DataProvider::DataProviderActionCatalog::getDataProviderForAction()
-      "DataProviderActionCatalog::getDataProviderForAction()" and the factory getters that create a provider
-      (@ref DataProvider::DataProvider::getFactoryObject() "DataProvider::getFactoryObject()" and the others) refuse
+      "DataProviderActionCatalog::getDataProviderForAction()" and every factory method that creates a provider
+      (@ref DataProvider::AbstractDataProviderFactory::create() "AbstractDataProviderFactory::create()" and the
+      others, also through @ref DataProvider::DataProvider::getFactoryObject() "DataProvider::getFactoryObject()" or
+      a factory returned by @ref DataProvider::DataProvider::getFactoryEx() "DataProvider::getFactoryEx()") refuse
       sandboxed code an app with external I/O that is not sandbox-aware, and the factories of the module that
       registers it (\c APP-SANDBOX-ACCESS-DENIED)
 

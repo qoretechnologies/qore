@@ -4126,7 +4126,7 @@ foreach string app in (DataProviderActionCatalog::getAppNamesNoInit()) {
         see @ref dataprovider_external_io.
 
         The catalog applies it itself (with no \a sandboxed argument) where an app's I/O can be reached:
-        getDataProviderForAction() and DataProvider::getFactoryObject() and the other factory getters, for the
+        getDataProviderForAction(), and every AbstractDataProviderFactory method that creates a provider, for the
         factories of a module that registers such an app.  Data provider consumers apply it, with
         checkSandboxAccess(string, *bool), before they use an app on behalf of a caller on a thread that the caller's
         sandbox does not govern.

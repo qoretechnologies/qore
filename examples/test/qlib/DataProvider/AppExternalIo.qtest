@@ -373,6 +373,57 @@ public class AppExternalIoTest inherits QUnit::Test {
             # trusted code is not refused
             assertEq("ExternalIoFixtureProvider", get("qoretestexternalio").getName(), g.key + ": trusted");
         }
+
+        # a factory returned by getFactory() or getFactoryEx(), or created directly, creates no provider for sandboxed
+        # code; its info can still be read
+        hash<string, code> factories = {
+            "getFactory": AbstractDataProviderFactory sub () { return DataProvider::getFactory("qoretestexternalio"); },
+            "getFactoryEx": AbstractDataProviderFactory sub () {
+                return DataProvider::getFactoryEx("qoretestexternalio");
+            },
+            "created directly": AbstractDataProviderFactory sub () {
+                return Class::forName("ExternalIoFixtureFactory").newObject();
+            },
+        };
+        hash<string, code> creators = {
+            "create": auto sub (AbstractDataProviderFactory f) { return f.create(); },
+            "createWithTemplate": auto sub (AbstractDataProviderFactory f) { return f.createWithTemplate({}, {}); },
+            "getProviderFromExample(data)": auto sub (AbstractDataProviderFactory f) {
+                return f.getProviderFromExample("example");
+            },
+            "getProviderFromExample(InputStream)": auto sub (AbstractDataProviderFactory f) {
+                return f.getProviderFromExample(new StringInputStream("example"));
+            },
+            "getExampleProviderRecordOutput(data)": auto sub (AbstractDataProviderFactory f) {
+                return f.getExampleProviderRecordOutput("example");
+            },
+            "getExampleProviderRecordOutput(InputStream)": auto sub (AbstractDataProviderFactory f) {
+                return f.getExampleProviderRecordOutput(new StringInputStream("example"));
+            },
+        };
+        foreach hash<auto> fi in (factories.pairIterator()) {
+            code get_factory = fi.value;
+            assertEq("qoretestexternalio", p.callFunction("through", auto sub () {
+                return get_factory().getInfo().name;
+            }), fi.key + ": the info can be read");
+            foreach hash<auto> ci in (creators.pairIterator()) {
+                code create = ci.value;
+                string label = fi.key + ": " + ci.key;
+                try {
+                    p.callFunction("through", sub () { create(get_factory()); });
+                    fail(label + ": not refused");
+                } catch (hash<ExceptionInfo> ex) {
+                    assertEq("APP-SANDBOX-ACCESS-DENIED", ex.err, label);
+                    assertRegex(app, ex.desc, label + ": the error names the app");
+                }
+            }
+            # trusted code creates the provider
+            assertEq("ExternalIoFixtureProvider", get_factory().create().getName(), fi.key + ": trusted");
+        }
+        # a sandbox-aware module's factory creates providers for sandboxed code
+        assertEq("SandboxAwareFixtureProvider", p.callFunction("through", auto sub () {
+            return DataProvider::getFactoryEx("qoretestsandboxaware").create().getName();
+        }));
     }
 
     indexRoundTripTest() {
