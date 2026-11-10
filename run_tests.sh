@@ -25,7 +25,12 @@ print_usage () {
   echo "                           that exceeds it is first sent SIGUSR1 if it handles it (QUnit tests print the"
   echo "                           call stacks of their threads), then aborted (SIGABRT), so that it dumps core;"
   echo "                           a test that does not handle SIGUSR1, or one run with signal handling disabled"
-  echo "                           (-b in QORE_TEST_OPTS), is aborted at once."
+  echo "                           (-b in QORE_TEST_OPTS), is aborted at once.  On Linux, the state, CPU time and"
+  echo "                           kernel wait channel of each of its threads are printed when it exceeds it and"
+  echo "                           again before it is aborted, with /proc/pressure and the cgroup's cpu.stat and"
+  echo "                           memory.events."
+  echo "  QORE_TEST_CGROUP         The cgroup directory whose cpu.stat and memory.events are printed then (default:"
+  echo "                           the test's cgroup v2 directory under /sys/fs/cgroup)."
   echo "  QORE_TEST_STACK_DUMP_WAIT"
   echo "                           Seconds to wait for those stacks before the test is ended (default: 30)."
   echo "  QORE_TEST_INTERRUPT_WAIT Seconds a test may take to end after a signal ends the run (default: 10); it is"
@@ -1438,18 +1443,76 @@ event $1
             if [ $usr1 -gt 64 ]; then
                 return 1
             fi
-            # the masks are in hexadecimal, signal 1 in the lowest bit
+            # the masks are in hexadecimal, signal 1 in the lowest bit.  The bit's value in its digit (1, 2, 4 or 8) is
+            # looked up, not computed with "^": a BusyBox awk built without math support (as Ubuntu's busybox package)
+            # rejects the whole program for it, so the check failed and a test that handles SIGUSR1 was aborted at once,
+            # without its call stacks
             cat "$proc/$test_pid"/task/*/status 2>/dev/null | awk -v sig=$usr1 '
                 function has_signal(mask,   digit) {
                     digit = substr(mask, length(mask) - int((sig - 1) / 4), 1)
                     if (digit == "") {
                         return 0
                     }
-                    return int((index("0123456789abcdef", tolower(digit)) - 1) / 2 ^ ((sig - 1) % 4)) % 2
+                    return int((index("0123456789abcdef", tolower(digit)) - 1) / substr("1248", (sig - 1) % 4 + 1, 1)) % 2
                 }
                 $1 == "SigBlk:" { ++threads; if (has_signal($2)) ++blocked }
                 $1 == "SigCgt:" && has_signal($2) { caught = 1 }
                 END { exit !(threads > 0 && (caught || blocked == threads)) }'
+        }
+
+        # On Linux, prints the state of each thread of the test (its stat and wchan in /proc/<pid>/task/<tid>), the
+        # pressure stall information of the machine (/proc/pressure) and the CPU and memory events of the test's cgroup
+        # (QORE_TEST_CGROUP, by default its cgroup v2 directory), whatever of them can be read; the argument says when.  It
+        # tells a thread that is runnable but not scheduled (R) from one that waits in the kernel (D, a page fault or
+        # I/O) or sleeps (S), and the CPU time each one has used: a core shows only where each thread was (qore#5744:
+        # a background compile thread that got no CPU for 445 s, at a user-mode address in LLVM).  It cannot fail the
+        # watchdog: a file that ends or goes away while it is read is skipped.
+        print_test_threads() {
+            proc=${QORE_TEST_PROC:-/proc}
+            if [ ! -d "$proc/$test_pid/task" ]; then
+                return 0
+            fi
+            ticks=`getconf CLK_TCK 2>/dev/null`
+            echo "*** threads of process $test_pid $1 (state, CPU time in 1/${ticks:-100} s, kernel wait channel) ***"
+            for task in "$proc/$test_pid"/task/*; do
+                stat=`cat "$task/stat" 2>/dev/null` || continue
+                wchan=`cat "$task/wchan" 2>/dev/null`
+                # the command name is between the first "(" and the last ")", and may contain either
+                printf '%s\n' "$stat" | awk -v wchan="${wchan:-?}" '{
+                    s = $0
+                    first = index(s, "(")
+                    last = 0
+                    while ((i = index(substr(s, last + 1), ")")) > 0) {
+                        last += i
+                    }
+                    if (!first || last <= first) {
+                        next
+                    }
+                    n = split(substr(s, last + 2), f, " ")
+                    if (n < 13) {
+                        next
+                    }
+                    printf "    thread %s (%s): state %s, user %s, system %s, wchan %s\n", substr(s, 1, first - 2),
+                        substr(s, first + 1, last - first - 1), f[1], f[12], f[13], wchan
+                }' 2>/dev/null
+            done
+            for resource in cpu memory io; do
+                if [ -r "$proc/pressure/$resource" ]; then
+                    echo "    pressure $resource: `tr '\n' ' ' < "$proc/pressure/$resource" 2>/dev/null`"
+                fi
+            done
+            # the test's own cgroup (v2: the "0::<path>" line), which is /sys/fs/cgroup itself in a container's cgroup
+            # namespace
+            cgroup=$QORE_TEST_CGROUP
+            if [ -z "$cgroup" ]; then
+                cgroup=/sys/fs/cgroup`awk -F: '$1 == "0" { print $3; exit }' "$proc/$test_pid/cgroup" 2>/dev/null`
+            fi
+            for file in cpu.stat memory.events; do
+                if [ -r "$cgroup/$file" ]; then
+                    echo "    cgroup $file: `tr '\n' ' ' < "$cgroup/$file" 2>/dev/null`"
+                fi
+            done
+            return 0
         }
 
         watchdog_wait $limit exit
@@ -1459,6 +1522,7 @@ event $1
             exit $status
         fi
         status=$((status | 1))
+        print_test_threads "at its time limit"
         if [ $TEST_SIGNALS_ENABLED -eq 0 ]; then
             echo "*** the test exceeded its ${limit}s limit: SIG$TEST_TIMEOUT_SIGNAL sent (signal handling is" \
                 "disabled) ***"
@@ -1468,6 +1532,8 @@ event $1
             if watchdog_wait $TEST_STACK_DUMP_WAIT dumped exit && watchdog_got exit; then
                 exit $status
             fi
+            # again after the wait for the call stacks, so that the CPU time each thread used meanwhile shows
+            print_test_threads "before SIG$TEST_TIMEOUT_SIGNAL"
         else
             echo "*** the test exceeded its ${limit}s limit: SIG$TEST_TIMEOUT_SIGNAL sent at once, as it does not" \
                 "handle SIGUSR1, which would end it without its call stacks or a core dump ***"

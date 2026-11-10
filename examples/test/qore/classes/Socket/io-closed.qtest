@@ -1,0 +1,235 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - a close of a socket by another thread while its operation waits on the async I/O controller
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class IoClosedTest
+
+#! Tests that a send or a receive on a socket that another thread closes ends with the close
+/** The operation of a synchronous call is made by the async I/O controller; a close by another thread cancels an
+    operation that waits on the I/O thread, and the canceled result has no exception: the call returned as if it had
+    completed (a send as if it had sent the data, a receive with the data received until then), and now raises
+    SOCKET-CLOSED (qore_socket_raise_canceled()).
+
+    Each case closes the socket as soon as the thread that uses it has started, so the close lands at every stage of
+    the call: before it starts (SOCKET-NOT-OPEN), or while its operation is on the controller (SOCKET-CLOSED); every
+    iteration must end with one of these exceptions.
+*/
+class IoClosedTest inherits QUnit::Test {
+    public {
+        #! the number of times each case closes the socket
+        const Iterations = 300;
+
+        #! the data of a send: more than the buffers of a loopback connection hold, so a send whose peer does not
+        #! read waits on the I/O thread
+        const Chunk = strmul("x", 32 * 1024 * 1024);
+    }
+
+    constructor() : QUnit::Test("IoClosedTest", "1.0", \ARGV) {
+        addTestCase("send() on a socket closed by another thread", \testSend());
+        addTestCase("recv(1) on a socket closed by another thread", \testRecvSize());
+        addTestCase("recv(0) on a socket closed by another thread", \testRecvAvailable());
+        addTestCase("recv(-1) on a socket closed by another thread", \testRecvUntilClose());
+        addTestCase("connect() on a socket closed by another thread", \testConnect());
+        addTestCase("positive control: the peer's close ends recv(-1) with the data", \testPeerClose());
+        set_return_value(main());
+    }
+
+    #! One send that waits: a send canceled by the close must not return as if it had sent the data
+    testSend() {
+        # in every other iteration the close comes once the send waits on the controller (the data is more than the
+        # buffers hold), and cancels it; without the debug hook, once the peer has data
+        hash<string, int> results = checkClosed(sub (Socket s) {
+            s.send(Chunk);
+        }, sub (int i, Socket server, Socket client) {
+            if (i & 1) {
+                if (Option::HAVE_LIBRARY_DEBUGGING) {
+                    waitOnController(client);
+                } else {
+                    assertTrue(server.isDataAvailable(10s), "the send writes data");
+                }
+            }
+        });
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            assertGt(0, results."SOCKET-CLOSED" ?? 0, "a close cancels a send that waits");
+        }
+    }
+
+    #! A connect that waits: one canceled by the close must not return as if it had connected
+    /** The listener's queue of connections that are not accepted is full, so a further connection request is
+        dropped (on Linux; other systems may refuse it) and the connect waits for an answer.  A close that comes
+        before the connect has opened its descriptor closes nothing, and the connect then waits for its timeout
+        (SOCKET-TIMEOUT), which is short for this reason.
+    */
+    testConnect() {
+        Socket l();
+        l.bindINET("127.0.0.1", "0", True);
+        l.listen(0);
+        on_exit l.close();
+        int port = l.getSocketInfo().port;
+        # fill the queue until a connection request fails: the number of connections that a queue holds depends on the
+        # system (about one for a backlog of 0 on Linux, more on macOS); a connect that the queue takes completes, and
+        # it returns, as it should, when the close comes after it
+        list<Socket> fillers;
+        on_exit map $1.close(), fillers;
+        bool full = False;
+        for (int i = 0; i < 256; ++i) {
+            Socket f();
+            try {
+                f.connectINET("127.0.0.1", port, 200ms);
+            } catch (hash<ExceptionInfo> ex) {
+                # the queue is full
+                full = True;
+                break;
+            }
+            push fillers, f;
+        }
+        if (!full) {
+            testSkip(sprintf("the listener's queue took %d connections without refusing or dropping one",
+                fillers.size()));
+        }
+        hash<string, int> results;
+        for (int i = 0; i < 30; ++i) {
+            Socket client();
+            Counter started(1);
+            Counter done(1);
+            string result;
+            background sub () {
+                on_exit done.dec();
+                started.dec();
+                try {
+                    client.connectINET("127.0.0.1", port, 1s);
+                    result = "returned";
+                } catch (hash<ExceptionInfo> ex) {
+                    result = ex.err;
+                }
+            }();
+            started.waitForZero();
+            # in every other iteration the close comes once the connect is on the I/O thread, which makes its first
+            # step (that opens the descriptor and starts the connection) before it processes the close
+            if ((i & 1) && Option::HAVE_LIBRARY_DEBUGGING) {
+                waitOnController(client);
+            }
+            client.close();
+            done.waitForZero();
+            ++results{result};
+        }
+        foreach string result in (keys results) {
+            # a refused connection request (a system that does not drop it) fails as a refused connect
+            assertTrue(result == "SOCKET-NOT-OPEN" || result == "SOCKET-CLOSED" || result == "SOCKET-TIMEOUT"
+                || (Platform.OS != "Linux" && result == "SOCKET-CONNECT-ERROR"),
+                sprintf("%s in %d of 30 iterations", result, results{result}));
+        }
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            assertGt(0, results."SOCKET-CLOSED" ?? 0, "a close cancels a connect that waits");
+        }
+    }
+
+    testRecvSize() {
+        checkRecvClosed(sub (Socket s) {
+            s.recv(1);
+        });
+    }
+
+    testRecvAvailable() {
+        checkRecvClosed(sub (Socket s) {
+            s.recv(0);
+        });
+    }
+
+    testRecvUntilClose() {
+        checkRecvClosed(sub (Socket s) {
+            s.recv(-1);
+        });
+    }
+
+    #! A receive that waits (the peer sends nothing): in every other iteration the close comes once the receive is on
+    #! the I/O thread, and cancels it
+    private checkRecvClosed(code use) {
+        hash<string, int> results = checkClosed(use, sub (int i, Socket server, Socket client) {
+            if ((i & 1) && Option::HAVE_LIBRARY_DEBUGGING) {
+                waitOnController(client);
+            }
+        });
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            assertGt(0, results."SOCKET-CLOSED" ?? 0, "a close cancels a receive that waits");
+        }
+    }
+
+    #! Waits until the operation of the call made with @p client is on its I/O thread (debug builds only): a close
+    #! made after that is processed after the operation has been taken
+    private waitOnController(Socket client) {
+        assertTrue(call_function("dbg_socket_wait_controller_op", client, 10s),
+            "the call's operation is on the controller");
+    }
+
+    #! The end of the connection by the peer is not taken for a close by another thread
+    testPeerClose() {
+        list<Socket> pair = getPair();
+        Socket client = pair[0];
+        Socket server = pair[1];
+        on_exit {
+            client.close();
+            server.close();
+        }
+        client.send("data");
+        client.close();
+        assertEq("data", server.recv(-1, 10s));
+    }
+
+    #! Returns a connected pair: (client, server)
+    private list<Socket> getPair() {
+        Socket l();
+        l.bindINET("127.0.0.1", "0", True);
+        l.listen();
+        on_exit l.close();
+        Socket c();
+        c.connectINET("127.0.0.1", l.getSocketInfo().port, 10s);
+        Socket s = l.accept(10s);
+        return (c, s);
+    }
+
+    #! @param use the call, made in another thread with the client socket
+    #! @param ready if given, called with the iteration's number and the server and client sockets before the close
+    private hash<string, int> checkClosed(code use, *code ready) {
+        hash<string, int> results;
+        for (int i = 0; i < Iterations; ++i) {
+            list<Socket> pair = getPair();
+            Socket client = pair[0];
+            Socket server = pair[1];
+            on_exit {
+                server.close();
+            }
+            Counter started(1);
+            Counter done(1);
+            string result;
+            background sub () {
+                on_exit done.dec();
+                started.dec();
+                try {
+                    use(client);
+                    result = "returned";
+                } catch (hash<ExceptionInfo> ex) {
+                    result = ex.err;
+                }
+            }();
+            started.waitForZero();
+            if (ready) {
+                ready(i, server, client);
+            }
+            client.close();
+            done.waitForZero();
+            ++results{result};
+        }
+        foreach string result in (keys results) {
+            assertTrue(result == "SOCKET-NOT-OPEN" || result == "SOCKET-CLOSED",
+                sprintf("%s in %d of %d iterations", result, results{result}, Iterations));
+        }
+        return results;
+    }
+}
