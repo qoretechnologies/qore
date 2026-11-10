@@ -6256,19 +6256,23 @@ public:
         is started in the operation's first step, and its result is read in the second); the descriptor must still be
         open when the I/O thread removes it.
 
-        The attempt is checked right after connect() returns EINPROGRESS, which on the loopback interface finds the
-        refusal in the first step, before any registration: with @p immediate_check false, the check is skipped
+        The attempt is checked right after connect() returns EINPROGRESS, which can find the refusal in the first step,
+        before any registration: with @p immediate_check false, the check is skipped
         (qore_dbg_connect_no_immediate_check), so that the refusal is found after the registration; with it true, the
-        refused connection fails as before, and its descriptor is never registered.  The flag is process-wide: the C++
-        unit tests run one after the other, so no other connect sees it.
+        check finds the refusal, and the descriptor is never registered.  On Linux a loopback connection is refused
+        within connect(), but on macOS only after connect() has returned, so the check would find it in progress
+        there: the attempt is checked once it is writable (qore_dbg_connect_complete_before_immediate_check).  The
+        flags are process-wide: the C++ unit tests run one after the other, so no other connect sees them.
     */
     static void runConnectFailure(UnitTestCounters& c, bool immediate_check) {
         struct ImmediateCheckHelper {
             explicit ImmediateCheckHelper(bool skip) {
                 qore_dbg_connect_no_immediate_check.store(skip, std::memory_order_relaxed);
+                qore_dbg_connect_complete_before_immediate_check.store(!skip, std::memory_order_relaxed);
             }
             ~ImmediateCheckHelper() {
                 qore_dbg_connect_no_immediate_check.store(false, std::memory_order_relaxed);
+                qore_dbg_connect_complete_before_immediate_check.store(false, std::memory_order_relaxed);
             }
         } ich(!immediate_check);
         ExceptionSink xsink;
