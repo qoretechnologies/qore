@@ -1028,7 +1028,8 @@ static bool qore_llvm_is_aot_deferred_source_function_call(const QoreValue& expr
 static bool qore_llvm_is_type_name_builtin_call(const QoreValue& expr) {
     const auto* call = expr.hasNode()
         ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
-    if (!call) {
+    // only the Qore builtins, never a user or module function with the same name
+    if (!call || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         return false;
     }
     const char* name = call->getName();

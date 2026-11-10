@@ -131,3 +131,4 @@ trim(string)="ÄbC"
 tolower(string)="äbc"
 toupper(string)="ÄBC"
 user length/strlen loop: 3060 calls: 20
+user functions with builtin names: ["Foo::substr", "Foo::index", "Foo::rindex", "Foo::number", "Foo::type", "Foo::typename", "Foo::boolean", "Foo::string", "Foo::int", "Foo::float", ["Foo::min", "Foo::min"], ["Foo::max", "Foo::max"]]

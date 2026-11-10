@@ -18,6 +18,27 @@ namespace Foo {
     int sub length(string s) { ++user_calls; return 100 + s.size(); }
     int sub strlen(string s) { ++user_calls; return 200 + s.size(); }
 }
+# user functions with the names of other builtins that the compiled modes rewrite: they are called normally
+namespace Foo {
+    string sub substr(string s, int i) { return "Foo::substr"; }
+    string sub index(string s, string t) { return "Foo::index"; }
+    string sub rindex(string s, string t) { return "Foo::rindex"; }
+    string sub number(string s) { return "Foo::number"; }
+    string sub type(auto a) { return "Foo::type"; }
+    string sub typename(auto a) { return "Foo::typename"; }
+    string sub boolean(auto a) { return "Foo::boolean"; }
+    string sub string(auto a) { return "Foo::string"; }
+    string sub int(auto a) { return "Foo::int"; }
+    string sub float(auto a) { return "Foo::float"; }
+    string sub min(auto a, auto b) { return "Foo::min"; }
+    string sub max(auto a, auto b) { return "Foo::max"; }
+}
+list<auto> sub user_builtin_names(string s, auto a) {
+    return (Foo::substr(s, 1), Foo::index(s, "b"), Foo::rindex(s, "b"), Foo::number(s), Foo::type(a),
+        Foo::typename(a), Foo::boolean(a), Foo::string(1), Foo::int(1), Foo::float(1),
+        (map Foo::min($1, 2), (1, 3)), (map Foo::max($1, 2), (1, 3)));
+}
+
 int sub user_length_loop(string s) {
     int t = 0;
     for (int i = 0; i < 10; ++i) {
@@ -108,3 +129,4 @@ printf("trim(string)=%y\n", trim_string(" ÄbC "));
 printf("tolower(string)=%y\n", tolower_string("ÄbC"));
 printf("toupper(string)=%y\n", toupper_string("ÄbC"));
 printf("user length/strlen loop: %d calls: %d\n", user_length_loop("abc"), user_calls);
+printf("user functions with builtin names: %y\n", user_builtin_names("abc", 1));

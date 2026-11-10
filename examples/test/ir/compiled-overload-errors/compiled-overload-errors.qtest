@@ -85,6 +85,14 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
                 "string sub t(auto x) { return vb(a: 1, b: x); }", "named-varargs"));
         }
         {
+            # the same call with an argument that has a value of the type of the parameter is bound to it
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse("string sub vb(int a, string b) { return \"vb(int a, string b)\"; } "
+                "string sub vb(int a, ...) { return \"vb(int a, ...)\"; } "
+                "string sub t(string x) { return vb(a: 1, b: x); }", "named-varargs-valid");
+            assertEq("vb(int a, string b)", p.callFunction("t", "s"));
+        }
+        {
             # an argument that always has a value is bound at parse time
             Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
             p.parse(decl + "string sub t() { return nf5(a: 1, b: \"s\"); }\n", "named-literal");

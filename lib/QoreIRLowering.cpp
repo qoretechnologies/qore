@@ -14576,6 +14576,9 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
         return hoisted;
     }
     const char* func_name = call->getName();
+    // the rewrites below that are keyed on the name of a builtin apply only to a call of the Qore builtin, never to a
+    // user or module function with the same name
+    bool qore_builtin_call = qore_rt_is_qore_builtin_function(call->getFunctionEntry());
     if (func_name && !strcmp(func_name, "join") && !call->hasExplicitTypeArgs()) {
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         const FunctionEntry* fe = call->getFunctionEntry();
@@ -14727,7 +14730,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             }
         }
     }
-    if (func_name && !strcmp(func_name, "substr") && !call->hasExplicitTypeArgs()) {
+    if (func_name && qore_builtin_call && !strcmp(func_name, "substr") && !call->hasExplicitTypeArgs()) {
         const QoreParseListNode* parse_args = call->getParseArgs();
         const QoreListNode* args = call->getArgs();
         size_t nargs = qore_ir_get_call_arg_count(parse_args, args);
@@ -14803,7 +14806,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
         }
     }
     const char* string_find_method_name = nullptr;
-    if (func_name && !call->hasExplicitTypeArgs()) {
+    if (func_name && qore_builtin_call && !call->hasExplicitTypeArgs()) {
         if (!strcmp(func_name, "index")) {
             string_find_method_name = "find";
         } else if (!strcmp(func_name, "rindex")) {
@@ -14886,7 +14889,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             }
         }
     }
-    if (func_name && !strcmp(func_name, "number") && !call->hasExplicitTypeArgs()) {
+    if (func_name && qore_builtin_call && !strcmp(func_name, "number") && !call->hasExplicitTypeArgs()) {
         const QoreParseListNode* parse_args = call->getParseArgs();
         const QoreListNode* args = call->getArgs();
         QoreValue arg_expr;
@@ -15274,7 +15277,9 @@ static QoreIROpcode analyzeFoldPatternIntern(const QoreValue& fold_expr, const Q
     // Check for min/max function calls: min($1, $2) or max($1, $2)
     if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
         const char* func_name = call->getName();
-        if (func_name && (strcmp(func_name, "min") == 0 || strcmp(func_name, "max") == 0)) {
+        // only the Qore builtins, never a user or module function with the same name
+        if (func_name && (strcmp(func_name, "min") == 0 || strcmp(func_name, "max") == 0)
+                && qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
             bool is_min = strcmp(func_name, "min") == 0;
             const QoreListNode* args = call->getArgs();
             if (args && args->size() == 2) {

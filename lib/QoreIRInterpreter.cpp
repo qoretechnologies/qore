@@ -136,7 +136,8 @@ static inline const StaticMethodCallNode* qore_ir_static_method_call_node(const 
 
 static bool qore_ir_interpreter_is_type_name_builtin_call(const QoreValue& expr) {
     const auto* call = expr.hasNode() ? qore_ir_function_call_node(expr.getInternalNode()) : nullptr;
-    if (!call) {
+    // only the Qore builtins, never a user or module function with the same name
+    if (!call || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         return false;
     }
     const char* name = call->getName();
@@ -5647,7 +5648,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     : QORE_RT_BUILTIN_CONVERSION_FLOAT);
             QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
             QoreValue res;
-            qore_rt_builtin_conversion_checked(kind, val, res, xsink);
+            qore_ir_checked_conversion(kind, val, res, xsink);
             return res;
         }
         case QoreIROpcode::ToString: {

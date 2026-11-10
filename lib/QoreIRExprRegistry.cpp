@@ -121,6 +121,7 @@
 #include <qore/intern/QoreValueCoalescingOperatorNode.h>
 #include <qore/intern/QoreXorEqualsOperatorNode.h>
 #include <qore/intern/VarRefNode.h>
+#include <qore/intern/JITRuntime.h>
 
 #include <cstdlib>
 #include <cstring>
@@ -161,6 +162,10 @@ static bool claimBuiltinTypeConversion(const QoreValue& expr) {
     const char* func_name = call->getName();
     if (!func_name || (strcmp(func_name, "string") && strcmp(func_name, "int") && strcmp(func_name, "float")
             && strcmp(func_name, "boolean"))) {
+        return false;
+    }
+    // only the Qore builtins, never a user or module function with the same name
+    if (!qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         return false;
     }
     const QoreListNode* args = call->getArgs();
