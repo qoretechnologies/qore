@@ -125,6 +125,14 @@ A call reference to a builtin method (`\\f.call()`) used to run with the object'
 it describes, saw that Program as its caller and checked nothing, and any restricted Program could use a privileged
 Program's builtin object (a parent's `File`) past the checks of a direct call.  The reference now records the Program
 that created it (a weak reference) and runs as a direct call there; references to user methods are unchanged.
+A reference to a method that the object's class inherits (`\\o.m()` with `m()` inherited, `\\m()` in a base class's
+code for an object of a subclass) is resolved when it is called (RunTimeObjectMethodReferenceNode); it ran in the
+Program that called it, so a restricted Program's reference to a privileged Program's object (a parent's `File`
+subclass) ran with the caller's privileges, and a reference that a privileged Program handed out lost them.  It now
+also records the Program that created it (a weak reference unless that is the object's Program, which the object
+holds) and, called from another Program, runs there (`qore_class_private::evalMethod(..., pgm_ctx)`), as the direct
+call `o.m()` at the creation site would; user methods run in the Program that defines their class either way, and a
+sandbox still restricts every call that a sandboxed Program makes (sandbox provenance).
 
 Typed hash initializers and member defaults (`TypedHash::doCast()`, `AbstractMember::getDefaultValue()`, also through
 `Type::getType(value).getTypedHash()`) are decided on visibility, not on the handle's Program: allowed if the caller

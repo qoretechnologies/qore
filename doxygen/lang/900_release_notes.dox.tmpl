@@ -1516,9 +1516,9 @@
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
     - a @ref call_reference "call reference" to a method of a builtin object (<tt>\\o.write()</tt>) ran with the
-      parse options of the object's @ref Qore::Program "Program", so restricted or sandboxed code could use a
-      privileged Program's object past the checks that a direct call makes; it now runs as a direct call in the
-      Program that created the reference
+      parse options of the object's @ref Qore::Program "Program", and one to an inherited method with those of the
+      Program calling it, so restricted code could use a privileged Program's object past the checks that a direct
+      call makes; it now runs as a direct call in the Program that created the reference
     - a call through a fixed function variant (ex: <tt>FunctionVariant::call()</tt>) with arguments that only another
       variant accepts called that variant without its arguments
     - the value of a @ref thread_local "thread_local" variable could be read by the code of a

@@ -364,6 +364,12 @@ private:
     QoreObject* obj;
     std::string method;
     const qore_class_private* qc;
+    //! the Program of the code that created the reference, or nullptr if there was none
+    /** A call runs the method as a direct call in this Program would: called from another Program, the method runs
+        in this one with its parse options; see execValue().  Held with a weak reference unless it is the object's
+        Program, which the object holds while the reference holds the object
+    */
+    QoreProgram* pgm;
 
     DLLLOCAL virtual ~RunTimeObjectMethodReferenceNode();
 };
@@ -372,8 +378,12 @@ private:
 // is known when the method reference node object is created
 class RunTimeResolvedMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
+    //! creates the reference with the class context of the creating code
     DLLLOCAL RunTimeResolvedMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
-            const QoreMethod* n_method, const qore_class_private* ctx = runtime_get_class());
+            const QoreMethod* n_method);
+
+    DLLLOCAL RunTimeResolvedMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
+            const QoreMethod* n_method, const qore_class_private* ctx);
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
 
@@ -397,9 +407,6 @@ public:
         return obj;
     }
 
-protected:
-    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
-
 private:
     QoreObject* obj;
     const QoreMethod* method;
@@ -416,6 +423,9 @@ private:
         describes); see execValue()
     */
     QoreProgram* pgm = nullptr;
+
+    //! sets up the Program of the reference; \a creator is the Program of the code that creates it
+    DLLLOCAL void init(QoreProgram* creator);
 
     DLLLOCAL virtual ~RunTimeResolvedMethodReferenceNode();
 };

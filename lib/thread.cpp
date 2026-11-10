@@ -3983,6 +3983,13 @@ void runtime_get_object_and_class(QoreObject*& obj, const qore_class_private*& q
     qc = td->current_class;
 }
 
+void runtime_get_program_and_class(QoreProgram*& pgm, const qore_class_private*& qc) {
+    ThreadData* td = thread_data.get();
+    assert(td);
+    pgm = td->current_pgm;
+    qc = td->current_class;
+}
+
 const QoreTypeInfo* runtime_get_receiver_type_info() {
     return thread_data.get()->current_receiver_type_info;
 }
