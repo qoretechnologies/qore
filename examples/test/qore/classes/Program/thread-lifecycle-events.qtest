@@ -699,7 +699,7 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
     #! the use of a reference to a lvalue of another Program enters that Program: active, then idle
     activityReference() {
         Program pgm(PO_NEW_STYLE);
-        pgm.parse("our int x = 1; our list<int> l = (1, 2, 3); auto sub get_x() { return \\x; } "
+        pgm.parse("our *int x = 1; our list<int> l = (1, 2, 3); auto sub get_x() { return \\x; } "
             "auto sub get_l() { return \\l; }", "referenced");
         pgm.run();
         Queue q();
@@ -708,10 +708,18 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
         assertTrue(s.idle);
         auto rx = pgm.callFunction("get_x");
         auto rl = pgm.callFunction("get_l");
-        # a read, an assignment and a removal through references held by local variables
+        # a read, an assignment and removals through references held by local variables
         assertEq(1, rx);
         rx = 2;
         assertEq(2, pgm.getGlobalVariable("x"));
+        # removing a local that holds the reference removes the referenced variable: the AST interpreter enters the
+        # Program without its context then (qore_program_private::enterWithoutContext()), so the removal runs in a
+        # Program with the AST execution mode, whatever the test's mode
+        Program caller(PO_NEW_STYLE);
+        caller.setExecMode(EM_AST);
+        caller.parse("auto sub rm(code get) { auto r = get(); return remove r; }", "caller");
+        assertEq(2, caller.callFunction("rm", pgm.getCallReference("get_x")));
+        assertEq(NOTHING, pgm.getGlobalVariable("x"));
         assertEq(3, remove rl[2]);
         # the removed element is left as NOTHING
         assertEq(NOTHING, pgm.getGlobalVariable("l")[2]);
@@ -740,20 +748,26 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
         Queue q();
         pgm.subscribeThreadEvents(q, <ProgramThreadEventOptions>{"events": PTE_ACTIVITY});
         Counter done(1);
+        # the calls start once the first snapshot has been taken, so that snapshots are taken however the threads are
+        # scheduled (under valgrind, the calls could otherwise all be made before the first snapshot)
+        Counter first_snapshot(1);
         background sub () {
             on_exit done.dec();
+            first_snapshot.waitForZero();
             for (int i = 0; i < 5000; ++i) {
                 pgm.callFunction("f");
             }
         }();
         int snapshots = 0;
-        while (done.getCount()) {
+        do {
             Queue sq();
             hash<ProgramThreadSubscription> s = pgm.subscribeThreadEvents(sq,
                 <ProgramThreadEventOptions>{"events": PTE_ACTIVITY});
             pgm.unsubscribeThreadEvents(s.id);
-            ++snapshots;
-        }
+            if (!snapshots++) {
+                first_snapshot.dec();
+            }
+        } while (done.getCount());
         assertGt(0, snapshots);
         pgm.waitForThreads();
         # the events received so far, then the ones still being published, until the Program's final state: a
