@@ -2223,8 +2223,14 @@ void QoreBuiltinModule::issueModuleCmd(const QoreProgramLocation* loc, const Qor
     // a module that does not declare that its handler honors the restrictions of the code that issues a command is
     // not given a command from restricted code (issue #5699)
     const QoreModuleCommandContext* ctx = QoreModuleCommandContext::get();
+    // every entry point sets the context; a command that reaches a handler without one is refused (fails closed)
     assert(ctx);
-    if (ctx && !cmd_caller_aware && ctx->isRestricted()) {
+    if (!ctx) {
+        xsink->raiseException(*loc, "RUNTIME-COMMAND-ERROR", QoreValue(), "module '%s' loaded from '%s': the module "
+            "command has no context that says which code issued it", name.c_str(), filename.c_str());
+        return;
+    }
+    if (!cmd_caller_aware && ctx->isRestricted()) {
         xsink->raiseException(*loc, ctx->getOrigin() == QoreModuleCommandContext::MC_PARSE
             ? "PARSE-COMMAND-ERROR" : "RUNTIME-COMMAND-ERROR", QoreValue(), "module '%s' loaded from '%s' has not "
             "declared that its module commands honor the restrictions of the code that issues them "
