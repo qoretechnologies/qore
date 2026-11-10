@@ -1302,18 +1302,17 @@ client closed), because a client cannot distinguish the two closes deterministic
 
 ## Platform-Specific Fixes
 
-### macOS accept() O_NONBLOCK Inheritance
+### Accepted sockets are non-blocking
 
 File: `include/qore/intern/qore_socket_private.h`
 
-On macOS/Darwin, `accept()` inherits `O_NONBLOCK` from the listening socket. In async I/O
-mode, listener sockets are set non-blocking for `poll()` / `kqueue()`. Without clearing the
-flag, accepted sockets perform non-blocking reads during SSL handshake, causing partial TLS
-record reads that manifest as `SSL_R_PACKET_LENGTH_TOO_LONG`.
-
-The fix clears `O_NONBLOCK` via `fcntl(F_SETFL)` on every accepted fd immediately after
-`accept()` returns. The second `fcntl` return value is unchecked — failure is essentially
-impossible on a just-accepted fd and non-critical.
+On macOS/Darwin, `accept()` makes the accepted socket non-blocking when the listening socket is.  When TLS
+handshakes still ran on the calling thread with blocking reads, that made a handshake read part of a TLS record and
+fail with `SSL_R_PACKET_LENGTH_TOO_LONG`, so `O_NONBLOCK` was cleared on every accepted descriptor, and the first
+operation on the I/O thread set it again.  Every handshake is now a non-blocking poll operation step that handles
+`SSL_ERROR_WANT_READ` / `SSL_ERROR_WANT_WRITE`, so an accepted socket is non-blocking from the start, as every socket
+of the library is: `qore_accept_nonblock()` uses `accept4(SOCK_CLOEXEC | SOCK_NONBLOCK)` on Linux and sets the flag
+where the platform does not; see "Sync I/O on Born-Non-Blocking Sockets".
 
 ### Closing a Socket While It Is Polled
 
@@ -1516,9 +1515,15 @@ on such a socket — `::recv`, `::send`, `::accept`, `SSL_read`, `SSL_write`, `S
   `doSSLUpgradeNonBlockingIO()` for handshake paths) and retry.
 
 Both `isDataAvailable()` and `isSocketDataAvailable()` accept `timeout_ms < 0` as "wait forever",
-which preserves the historical "no explicit timeout" semantics.  `OptionalNonBlockingHelper` is a
-no-op when the socket is already non-blocking, so RAII flipping is harmless on the new-style
-controller-owned sockets but still correct on legacy blocking sockets.
+which preserves the historical "no explicit timeout" semantics.
+
+A socket of the library is non-blocking from its creation (`qore_socket_cloexec_nonblock()`,
+`qore_accept_nonblock()`: `SOCK_NONBLOCK` where the platform has it) and stays so on every thread;
+`qore_socket_private::fd_nonblocking` records it, so `OptionalNonBlockingHelper` and
+`set_non_blocking(true)` make no system call for it.  A descriptor that came from elsewhere is made
+non-blocking once, at its first operation.  No path makes a socket blocking again: it used to be
+restored on threads other than the I/O threads, which cost two `fcntl()` calls per operation and left
+the I/O thread a blocking descriptor until its next operation.
 
 `SSL_MODE_AUTO_RETRY` does **not** make a non-blocking socket behave like a blocking one — it only
 covers internal TLS bookkeeping (NewSessionTicket, post-handshake renegotiation).  Sync SSL code
