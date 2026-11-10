@@ -81,7 +81,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 420,
+static_assert(QORE_IR_MAX_OPCODE == 426,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -8104,6 +8104,23 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             || (result.id < return_protected_slots.size() && return_protected_slots[result.id]);
     };
 
+    // Verbose IR lowering diagnostics: enable with QORE_IR_DEBUG env var; read once per call, not per instruction
+    static constinit QoreEnvFlag ir_verbose_enabled_env("QORE_IR_DEBUG");
+    const bool ir_verbose_enabled = ir_verbose_enabled_env.get();
+
+    // defined outside the dispatch loop, so that the dispatch of each instruction does not set up its captures
+    auto raiseMissingAOTExpr = [&func, xsink](const QoreIRInstruction* inst, const QoreIRBasicBlock* block, size_t ip,
+            const char* what, const QoreValue& expr) {
+        const QoreProgramLocation* loc = inst->loc;
+        int line = loc ? loc->start_line + loc->offset : -1;
+        xsink->raiseException("IR-EXEC-ERROR",
+            "%s expression not resolved in AOT IR: function='%s' block='%s' ip=%zu opcode=%s(%d) "
+            "result_slot=%d expr_type=%s source=%s:%d",
+            what, func.name.c_str(), block->name.c_str(), ip,
+            getOpcodeName(static_cast<int>(inst->opcode)), static_cast<int>(inst->opcode),
+            inst->result.id, expr.getTypeName(), loc ? loc->getFileValue() : "", line);
+    };
+
     while (block) {
         if (ip >= block->instructions.size()) {
             if (xsink) {
@@ -8201,11 +8218,6 @@ next_instruction:
             *rl_cache.loc_ptr = inst->loc;
             last_ephemeral_line = inst->cached_start_line;
         }
-        // Verbose IR lowering diagnostics: enable with QORE_IR_DEBUG env var
-        // Zero-cost when disabled: single static bool check only initialized once
-        static constinit QoreEnvFlag ir_verbose_enabled_env("QORE_IR_DEBUG");
-        const bool ir_verbose_enabled = ir_verbose_enabled_env.get();
-
         // Log instruction execution for diagnostics (zero-cost path when disabled)
         if (ir_verbose_enabled && func.name.find("monitor") != std::string::npos) {
             fprintf(stderr, "[IR-INSTR-PRE-%zu] func='%s' op=%d(%s) ", ip, func.name.c_str(),
@@ -8213,17 +8225,6 @@ next_instruction:
             fprintf(stderr, "result_slot=%d\n", inst->result.id);
             fflush(stderr);
         }
-
-        auto raiseMissingAOTExpr = [&](const char* what, const QoreValue& expr) {
-            const QoreProgramLocation* loc = inst->loc;
-            int line = loc ? loc->start_line + loc->offset : -1;
-            xsink->raiseException("IR-EXEC-ERROR",
-                "%s expression not resolved in AOT IR: function='%s' block='%s' ip=%zu opcode=%s(%d) "
-                "result_slot=%d expr_type=%s source=%s:%d",
-                what, func.name.c_str(), block->name.c_str(), ip,
-                getOpcodeName(static_cast<int>(inst->opcode)), static_cast<int>(inst->opcode),
-                inst->result.id, expr.getTypeName(), loc ? loc->getFileValue() : "", line);
-        };
 
         switch (inst->opcode) {
             case QoreIROpcode::ConstInt: {
@@ -8807,6 +8808,47 @@ next_instruction:
             case QoreIROpcode::CheckRangeBound: {
                 if (qore_rt_check_range_bound(toBits(getIRValue(values, inst->operands[0])),
                         getIRValue(values, inst->operands[1]).getAsBigInt(), xsink)) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ExceptionSuspend: {
+                setValueSlotDirect(values, inst->result.id,
+                    QoreValue(reinterpret_cast<int64_t>(qore_rt_exception_suspend(xsink))));
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ExceptionResume: {
+                // no exception check: the code that follows routes the exceptions
+                qore_rt_exception_resume(reinterpret_cast<void*>(getIRValue(values, inst->operands[0]).getAsBigInt()),
+                    xsink);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::SelectorIteratorPending: {
+                // operands: the iterator handle
+                void* iter = reinterpret_cast<void*>(getIRValue(values, inst->operands[0]).getAsBigInt());
+                setValueSlotDirect(values, inst->result.id, QoreValue(qore_rt_selector_iterator_pending(iter)));
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::SelectorIteratorFeed: {
+                // operands: the iterator handle, the flags, and the index or the bounds of a range
+                void* iter = reinterpret_cast<void*>(getIRValue(values, inst->operands[0]).getAsBigInt());
+                uint64_t second_bits = inst->operands.size() > 3
+                    ? toBits(getIRValue(values, inst->operands[3])) : toBits(QoreValue());
+                if (qore_rt_selector_iterator_feed(iter, getIRValue(values, inst->operands[1]).getAsBigInt(),
+                        toBits(getIRValue(values, inst->operands[2])), second_bits, xsink)) {
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
@@ -11512,7 +11554,7 @@ load_local_done:
                     : nhd_inst->expr.getInternalNode();
                 const NewHashDeclNode* nhd = dynamic_cast<const NewHashDeclNode*>(node);
                 if (!nhd) {
-                    raiseMissingAOTExpr("new hashdecl", nhd_inst->expr);
+                    raiseMissingAOTExpr(inst, block, ip, "new hashdecl", nhd_inst->expr);
                     unwindForException();
                     cleanupLocalCaches();
                     return false;
@@ -11541,7 +11583,7 @@ load_local_done:
                     : nch_inst->expr.getInternalNode();
                 const NewComplexHashNode* nch = dynamic_cast<const NewComplexHashNode*>(node);
                 if (!nch) {
-                    raiseMissingAOTExpr("new complex hash", nch_inst->expr);
+                    raiseMissingAOTExpr(inst, block, ip, "new complex hash", nch_inst->expr);
                     unwindForException();
                     cleanupLocalCaches();
                     return false;
@@ -11570,7 +11612,7 @@ load_local_done:
                     : ncl_inst->expr.getInternalNode();
                 const NewComplexListNode* ncl = dynamic_cast<const NewComplexListNode*>(node);
                 if (!ncl) {
-                    raiseMissingAOTExpr("new complex list", ncl_inst->expr);
+                    raiseMissingAOTExpr(inst, block, ip, "new complex list", ncl_inst->expr);
                     unwindForException();
                     cleanupLocalCaches();
                     return false;
@@ -11598,7 +11640,7 @@ load_local_done:
                     : ncb_inst->expr.getInternalNode();
                 const NewComplexBufferNode* ncb = dynamic_cast<const NewComplexBufferNode*>(node);
                 if (!ncb) {
-                    raiseMissingAOTExpr("new complex buffer", ncb_inst->expr);
+                    raiseMissingAOTExpr(inst, block, ip, "new complex buffer", ncb_inst->expr);
                     unwindForException();
                     cleanupLocalCaches();
                     return false;
@@ -13164,12 +13206,18 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::IteratorCreate:
-            case QoreIROpcode::IteratorCreateIterate: {
+            case QoreIROpcode::IteratorCreateIterate:
+            case QoreIROpcode::IteratorCreateSelectors: {
                 auto* iter_inst = static_cast<QoreIRIteratorCreateInstruction*>(inst);
                 QoreValue iterable = getIRValue(values, iter_inst->iterable);
                 FunctionalOperator::FunctionalValueType value_type;
                 FunctionalOperatorInterface* iter = nullptr;
-                if (iter_inst->iterator_func) {
+                if (inst->opcode == QoreIROpcode::IteratorCreateSelectors) {
+                    // operands[0] = the flags; operands[1] = the number of selectors
+                    iter = reinterpret_cast<FunctionalOperatorInterface*>(qore_rt_iterator_create_selectors(
+                        toBits(iterable), getIRValue(values, inst->operands[0]).getAsBigInt(),
+                        getIRValue(values, inst->operands[1]).getAsBigInt(), xsink));
+                } else if (iter_inst->iterator_func) {
                     iter = iter_inst->iterator_func->getFunctionalIterator(value_type, xsink);
                 } else if (inst->opcode == QoreIROpcode::IteratorCreateIterate) {
                     iter = QoreIterateOperatorNode::getFunctionalIterator(value_type, iterable, nullptr,
@@ -13256,8 +13304,12 @@ load_local_done:
                 ip = 0;
                 break;
             }
-            case QoreIROpcode::IteratorNext: {
+            case QoreIROpcode::IteratorNext:
+            case QoreIROpcode::IteratorNextSelectors: {
                 auto* iter_inst = static_cast<QoreIRIteratorNextInstruction*>(inst);
+                // the iterator of a list of selectors is not released when it has no value: it then needs its next
+                // selector, or the lowering releases it
+                const bool keep_iterator = inst->opcode == QoreIROpcode::IteratorNextSelectors;
                 QoreValue iter_val = getIRValue(values, iter_inst->iterator);
                 FunctionalOperatorInterface* iter = reinterpret_cast<FunctionalOperatorInterface*>(
                     iter_val.getAsBigInt());
@@ -13271,12 +13323,17 @@ load_local_done:
                 ValueOptionalRefHolder val(xsink);
                 bool done = iter->getNext(val, xsink);
                 if (xsink && *xsink) {
-                    active_iterators.erase(iter);
-                    delete iter;
+                    if (!keep_iterator) {
+                        active_iterators.erase(iter);
+                        delete iter;
+                    }
                     if (inst->exception_target) {
                         // the loop is left for the in-frame landing pad; the iterator is gone, so clear its slot
-                        // in case the handler runs the loop again
-                        setValueSlotDirect(values, iter_inst->iterator.id, QoreValue(static_cast<int64_t>(0)));
+                        // in case the handler runs the loop again; an iterator that is kept is released by the
+                        // handler's cleanup
+                        if (!keep_iterator) {
+                            setValueSlotDirect(values, iter_inst->iterator.id, QoreValue(static_cast<int64_t>(0)));
+                        }
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
@@ -13289,10 +13346,12 @@ load_local_done:
                 }
                 if (done) {
                     // Iterator exhausted - clean up and branch to done
-                    active_iterators.erase(iter);
-                    delete iter;
-                    // Clear the iterator value so we don't double-delete
-                    setValueSlot(values, iter_inst->iterator.id, QoreValue(static_cast<int64_t>(0)), xsink);
+                    if (!keep_iterator) {
+                        active_iterators.erase(iter);
+                        delete iter;
+                        // Clear the iterator value so we don't double-delete
+                        setValueSlot(values, iter_inst->iterator.id, QoreValue(static_cast<int64_t>(0)), xsink);
+                    }
                     // the last element is released when the loop ends, as the AST interpreter releases each element
                     // when its iteration ends and native code releases the element's slot here (the next call of
                     // qore_rt_iterator_next() releases the previous element and stores NOTHING when it is done)

@@ -381,6 +381,12 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_check_cancel_every", reinterpret_cast<void*>(&qore_rt_check_cancel_every) },
     { "qore_rt_check_range_bound", reinterpret_cast<void*>(&qore_rt_check_range_bound) },
     { "qore_rt_list_selector_step", reinterpret_cast<void*>(&qore_rt_list_selector_step) },
+    { "qore_rt_iterator_create_selectors", reinterpret_cast<void*>(&qore_rt_iterator_create_selectors) },
+    { "qore_rt_selector_iterator_pending", reinterpret_cast<void*>(&qore_rt_selector_iterator_pending) },
+    { "qore_rt_selector_iterator_feed", reinterpret_cast<void*>(&qore_rt_selector_iterator_feed) },
+    { "qore_rt_selector_iterator_next", reinterpret_cast<void*>(&qore_rt_selector_iterator_next) },
+    { "qore_rt_exception_suspend", reinterpret_cast<void*>(&qore_rt_exception_suspend) },
+    { "qore_rt_exception_resume", reinterpret_cast<void*>(&qore_rt_exception_resume) },
     { "qore_rt_list_append_element_throwing",
         reinterpret_cast<void*>(&qore_rt_list_append_element_throwing) },
     { "qore_rt_list_set_scanned_type_by_type_path",
@@ -2486,6 +2492,46 @@ extern "C" DLLEXPORT int64_t qore_rt_check_range_bound(uint64_t bound_val, int64
     return 1;
 }
 
+//! Computes the indices that the range \a first..\a second of a list of selectors selects from \a seq
+/** As qore_rt_build_selector_range() does, without building a list: a bound that is NOTHING raises RANGE-ERROR, the
+    start first; with negative offsets a range with a negative bound gives its effective range in \a seq, which can be
+    empty; otherwise the indices from the start to the end, both included.
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+static int qore_rt_selector_range_bounds(const QoreValue& seq, const QoreValue& first, const QoreValue& second,
+        bool negative_offsets, int64& start, int64& stop, bool& empty, ExceptionSink* xsink) {
+    if (first.isNothing()) {
+        xsink->raiseException("RANGE-ERROR", QORE_RT_RANGE_START_NOTHING);
+        return -1;
+    }
+    if (second.isNothing()) {
+        xsink->raiseException("RANGE-ERROR", QORE_RT_RANGE_END_NOTHING);
+        return -1;
+    }
+    start = first.getAsBigInt();
+    stop = second.getAsBigInt();
+    empty = false;
+    if (negative_offsets && (start < 0 || stop < 0)) {
+        int64 effective_start;
+        int64 effective_stop;
+        int64 seq_size;
+        bool has_range = QoreSquareBracketsRangeOperatorNode::getEffectiveRange(seq, effective_start,
+            effective_stop, seq_size, first, second,
+            static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE), negative_offsets, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if (!has_range) {
+            empty = true;
+            return 0;
+        }
+        start = effective_start;
+        stop = effective_stop;
+    }
+    return 0;
+}
+
 namespace {
 //! Folds the types of the values that a list of selectors selects from a list into their common type
 /** As QoreSquareBracketsOperatorNode::doSquareBracketsListRange() does; the result list gets the list type of the
@@ -2533,9 +2579,13 @@ static QoreValue qore_rt_new_list_selector_result(const QoreValue& seq) {
     @param fold the type fold of the values added to a list result, or nullptr if they are folded later
 
     @return 0 for OK, -1 if an exception was raised
+
+    Inlined into its callers: qore_rt_list_selector_step() runs it, through qore_rt_apply_list_selector(), for each
+    value that a list of selectors built eagerly selects, which costs no call of its own (qore#5675)
 */
-static int qore_rt_add_selected_value(const QoreValue& result, const QoreValue& seq, const QoreValue& index,
-        bool string_index_char, bool negative_offsets, QoreRtSelectorTypeFold* fold, ExceptionSink* xsink) {
+static QORE_ALWAYS_INLINE int qore_rt_add_selected_value(const QoreValue& result, const QoreValue& seq,
+        const QoreValue& index, bool string_index_char, bool negative_offsets, QoreRtSelectorTypeFold* fold,
+        ExceptionSink* xsink) {
     ValueHolder entry(QoreSquareBracketsOperatorNode::doSquareBrackets(seq, index, false, string_index_char,
         negative_offsets, xsink), xsink);
     if (*xsink) {
@@ -2855,6 +2905,239 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_selector_step(uint64_t result_val, ui
         qore_list_private::get(*ret)->complexTypeInfo = qore_get_complex_list_type(vtype);
     }
     return toBits(created.release());
+}
+
+namespace {
+//! The iterator of a list of selectors with ranges (seq[a..b, c]) that a foreach statement or a functional or
+//! streaming operator uses as its source (QoreIROpcode::IteratorCreateSelectors)
+/** It iterates the sequence as the AST interpreter does (QoreSquareBracketsOperatorNode::getFunctionalIteratorImpl()):
+    a list lazily, as QoreFunctionalSquareBracketsComplexOperator does, a string or a binary object as the single value
+    that the selectors select, and any other value as no value, without evaluating any selector.  The compiled code
+    evaluates the selectors: it asks the iterator with qore_rt_selector_iterator_pending() which selector it needs
+    before each qore_rt_iterator_next(), evaluates it, and gives its value to qore_rt_selector_iterator_feed(), so
+    that each selector is evaluated only when the values of the previous ones have been used (qore#5675).
+*/
+class QoreRtSelectorIterator : public FunctionalOperatorInterface {
+public:
+    QoreRtSelectorIterator(QoreValue n_seq, int64_t flags, int64_t n_count, ExceptionSink* xs)
+            : seq(n_seq.refSelf(), xs), count(n_count),
+            string_index_char(flags & static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar)),
+            negative_offsets(flags & static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets)), xsink(xs) {
+        switch (seq->getType()) {
+            case NT_LIST:
+                mode = Lazy;
+                break;
+            case NT_STRING:
+            case NT_BINARY:
+                mode = Eager;
+                result = qore_rt_new_list_selector_result(*seq);
+                break;
+            default:
+                mode = None;
+                break;
+        }
+    }
+
+    virtual ~QoreRtSelectorIterator() {
+        pending_index.discard(xsink);
+        result.discard(xsink);
+    }
+
+    //! Returns the index of the selector needed next, or -1 if none is needed: the iterator has the next value, or
+    //! it has given every value
+    int64_t pending() const {
+        switch (mode) {
+            case Lazy:
+                if (has_pending || in_range) {
+                    return -1;
+                }
+                break;
+            case Eager:
+                break;
+            case None:
+                return -1;
+        }
+        return next_selector < count ? next_selector : -1;
+    }
+
+    //! Applies the value of the next selector; returns -1 if an exception was raised
+    int feed(bool is_range, const QoreValue& first, const QoreValue& second, ExceptionSink* xs) {
+        assert(mode != None);
+        assert(pending() == next_selector);
+        ++next_selector;
+        if (mode == Eager) {
+            return qore_rt_apply_list_selector(result, *seq, is_range, first, second, string_index_char,
+                negative_offsets, nullptr, xs);
+        }
+
+        if (!is_range) {
+            // the element is read from the sequence, which the iterator holds, when it is given
+            pending_index = first.refSelf();
+            has_pending = true;
+            return 0;
+        }
+
+        // the indices of a range are those that the list of selectors selects as a value: a bound that is NOTHING
+        // raises RANGE-ERROR, the start first, and with negative offsets a range with a negative bound gives the
+        // indices of its effective range in the sequence (QoreFunctionalSquareBracketsComplexOperator; qore#5688);
+        // they are computed as they are used
+        int64 start;
+        int64 stop;
+        bool empty;
+        if (qore_rt_selector_range_bounds(*seq, first, second, negative_offsets, start, stop, empty, xs)) {
+            return -1;
+        }
+        if (!empty) {
+            in_range = true;
+            range_index = start;
+            range_stop = stop;
+            range_step = start <= stop ? 1 : -1;
+        }
+        return 0;
+    }
+
+    //! Gives the next value if the iterator has one; returns true if it has none now: it needs the next selector
+    //! (pending()) or it has given every value.  The iterator is not deleted (see qore_rt_selector_iterator_next()).
+    virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xs) override {
+        switch (mode) {
+            case None:
+                return true;
+            case Eager:
+                if (result_given || next_selector < count) {
+                    return true;
+                }
+                result_given = true;
+                val.setValue(result, true);
+                result = QoreValue();
+                return false;
+            case Lazy:
+                break;
+        }
+        if (has_pending) {
+            ValueHolder index(pending_index, xs);
+            pending_index = QoreValue();
+            has_pending = false;
+            val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*seq, *index, false, string_index_char,
+                negative_offsets, xs), true);
+            return false;
+        }
+        if (!in_range) {
+            return true;
+        }
+        QoreValue index(range_index);
+        if (range_index == range_stop) {
+            in_range = false;
+        } else {
+            range_index += range_step;
+        }
+        val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*seq, index, false, string_index_char,
+            negative_offsets, xs), true);
+        return false;
+    }
+
+    virtual const QoreTypeInfo* getValueTypeImpl() const override {
+        switch (seq->getType()) {
+            case NT_LIST: return seq->get<const QoreListNode>()->getValueTypeInfo();
+            case NT_STRING: return string_index_char ? charTypeInfo : stringTypeInfo;
+            case NT_BINARY: return binaryTypeInfo;
+        }
+        return nothingTypeInfo;
+    }
+
+private:
+    enum Mode {
+        //! a list: each selector is evaluated when the values of the previous ones have been used
+        Lazy,
+        //! a string or a binary object: every selector is evaluated, and the result is the single value given
+        Eager,
+        //! any other value: no selector is evaluated, and no value is given
+        None,
+    };
+
+    //! the sequence
+    ValueHolder seq;
+    //! the result of a string or binary sequence
+    QoreValue result;
+    //! the index of a single selector of a lazy sequence, while its value has not been given
+    QoreValue pending_index;
+    //! the number of selectors
+    int64_t count;
+    //! the next index, the last index and the step of the current range of a lazy sequence
+    int64 range_index = 0;
+    int64 range_stop = 0;
+    int64 range_step = 1;
+    Mode mode;
+    int64_t next_selector = 0;
+    bool string_index_char;
+    bool negative_offsets;
+    bool has_pending = false;
+    bool in_range = false;
+    bool result_given = false;
+    ExceptionSink* xsink;
+};
+}
+
+extern "C" DLLEXPORT void* qore_rt_iterator_create_selectors(uint64_t seq_bits, int64_t flags, int64_t count,
+        ExceptionSink* xsink) {
+    // a sequence that is not a list, a string or a binary object gives no value and no selector is evaluated: no
+    // iterator, as for NOTHING, so that a functional operator's value is NOTHING, as in the AST interpreter
+    switch (fromBits(seq_bits).getType()) {
+        case NT_LIST:
+        case NT_STRING:
+        case NT_BINARY:
+            break;
+        default:
+            return nullptr;
+    }
+    return new QoreRtSelectorIterator(fromBits(seq_bits), flags, count, xsink);
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_selector_iterator_pending(void* iter_ptr) {
+    if (!iter_ptr) {
+        return -1;
+    }
+    return static_cast<QoreRtSelectorIterator*>(reinterpret_cast<FunctionalOperatorInterface*>(iter_ptr))
+        ->pending();
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_selector_iterator_feed(void* iter_ptr, int64_t flags, uint64_t first_bits,
+        uint64_t second_bits, ExceptionSink* xsink) {
+    assert(iter_ptr);
+    return static_cast<QoreRtSelectorIterator*>(reinterpret_cast<FunctionalOperatorInterface*>(iter_ptr))
+        ->feed(flags & static_cast<int64_t>(QoreIRListSelectorFlag::Range), fromBits(first_bits),
+            fromBits(second_bits), xsink) ? 1 : 0;
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_selector_iterator_next(void* iter_ptr, uint64_t* out_value,
+        ExceptionSink* xsink) {
+    *out_value = 0;  // VAL_NOTHING
+    if (!iter_ptr) {
+        return 1;
+    }
+    ValueOptionalRefHolder val(xsink);
+    if (reinterpret_cast<FunctionalOperatorInterface*>(iter_ptr)->getNext(val, xsink) || (xsink && *xsink)) {
+        return 1;
+    }
+    *out_value = toBits(val.takeReferencedValue());
+    return 0;
+}
+
+extern "C" DLLEXPORT void* qore_rt_exception_suspend(ExceptionSink* xsink) {
+    std::unique_ptr<ExceptionSink> saved(new ExceptionSink);
+    saved->assimilate(*xsink);
+    return saved.release();
+}
+
+extern "C" DLLEXPORT void qore_rt_exception_resume(void* handle, ExceptionSink* xsink) {
+    std::unique_ptr<ExceptionSink> saved(reinterpret_cast<ExceptionSink*>(handle));
+    if (!saved) {
+        return;
+    }
+    // the exceptions set aside come first, then those raised since, as they are raised in the AST interpreter
+    ExceptionSink since;
+    since.assimilate(*xsink);
+    xsink->assimilate(*saved);
+    xsink->assimilate(since);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_unary_op(int opcode, uint64_t operand, ExceptionSink* xsink) {
@@ -14595,6 +14878,15 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         const LVPathStep& last_step, LVUnaryOp unary_op,
         ExceptionSink* xsink) {
     const bool is_delete = (unary_op == LVUnaryOp::Delete);
+    // a negative index counts from the end with negative offsets, as in the AST interpreter (do_list_value(),
+    // do_string_value() and do_binary_value() in Variable.cpp); the option is read for the first negative index only
+    int negative_offsets_state = -1;
+    auto negative_offsets = [&negative_offsets_state]() -> bool {
+        if (negative_offsets_state < 0) {
+            negative_offsets_state = runtime_check_parse_option(PO_NEGATIVE_OFFSETS) ? 1 : 0;
+        }
+        return negative_offsets_state != 0;
+    };
 
     // Helper: push an int operand OR iterate a list operand (range-produced)
     // pushing its entries onto the caller-provided ind-collector.  Matches
@@ -14629,6 +14921,9 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
             if (each_index(operand, [&](int64_t ind, bool is_range) -> bool {
                 QoreValue p{};
                 bool push;
+                if (ind < 0 && negative_offsets()) {
+                    ind += static_cast<int64_t>(l->size());
+                }
                 if (ind >= 0 && ind < (int64_t)l->size()) {
                     iset.insert(ind);
                     p = l->getReferencedEntry(ind);
@@ -14699,6 +14994,9 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
             bool had_error = false;
             if (each_index(operand, [&](int64_t ind, bool /*is_range*/) -> bool {
                 if (had_error) return true;
+                if (ind < 0 && negative_offsets()) {
+                    ind += static_cast<int64_t>(len);
+                }
                 if (ind >= 0 && ind < (int64_t)len) {
                     iset.insert(ind);
                     int cp = str->getUnicodePoint(ind, xsink);
@@ -14747,6 +15045,9 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         std::set<int64_t, std::greater<int64_t>> iset;
         for (const QoreValue& operand : last_step.slice_values) {
             if (each_index(operand, [&](int64_t ind, bool /*is_range*/) -> bool {
+                if (ind < 0 && negative_offsets()) {
+                    ind += static_cast<int64_t>(bin->size());
+                }
                 if (ind >= 0 && ind < (int64_t)bin->size()) {
                     iset.insert(ind);
                     bin->substr(**v, ind, 1);

@@ -192,6 +192,7 @@ static std::vector<const QoreIRBasicBlock*> qore_ir_get_normal_successors(
             break;
         }
         case QoreIROpcode::IteratorNext:
+        case QoreIROpcode::IteratorNextSelectors:
         case QoreIROpcode::TypedForeachNextInt:
         case QoreIROpcode::TypedForeachNextFloat:
         case QoreIROpcode::TypedForeachNextBool:

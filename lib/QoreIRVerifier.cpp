@@ -412,13 +412,15 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     }
                 }
             } else if (inst->opcode == QoreIROpcode::IteratorCreate
-                    || inst->opcode == QoreIROpcode::IteratorCreateIterate) {
+                    || inst->opcode == QoreIROpcode::IteratorCreateIterate
+                    || inst->opcode == QoreIROpcode::IteratorCreateSelectors) {
                 auto* iter = dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst.get());
                 if (!iter || !iter->iterable.isValid()) {
                     error = "iterator.create missing iterable";
                     return false;
                 }
             } else if (inst->opcode == QoreIROpcode::IteratorNext
+                    || inst->opcode == QoreIROpcode::IteratorNextSelectors
                     || inst->opcode == QoreIROpcode::TypedForeachNextInt
                     || inst->opcode == QoreIROpcode::TypedForeachNextFloat
                     || inst->opcode == QoreIROpcode::TypedForeachNextBool
@@ -428,7 +430,7 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     error = "iterator.next missing iterator";
                     return false;
                 }
-                if (inst->opcode != QoreIROpcode::IteratorNext
+                if (inst->opcode != QoreIROpcode::IteratorNext && inst->opcode != QoreIROpcode::IteratorNextSelectors
                         && (!iter->index.isValid() || !iter->limit.isValid()
                             || inst->operands.size() != 3
                             || inst->operands[0].id != iter->iterator.id
@@ -2838,6 +2840,7 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                 pending_iterator = nullptr;
             }
             if (inst->opcode == QoreIROpcode::IteratorCreate || inst->opcode == QoreIROpcode::IteratorCreateIterate
+                    || inst->opcode == QoreIROpcode::IteratorCreateSelectors
                     || inst->opcode == QoreIROpcode::IteratorCreateReverse) {
                 interpreter_iterator_slot_boundary[inst.get()] = seen_slots;
                 pending_iterator = inst.get();

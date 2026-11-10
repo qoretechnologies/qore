@@ -1532,6 +1532,18 @@
       @ref Qore::Thread::Mutex "Mutex", @ref Qore::Thread::RWLock "RWLock" or @ref Qore::Thread::Gate "Gate" woken
       without what it waited for (another waiter took it first, or another %Program's interrupt woke it) waited for
       its whole timeout again; it now waits only for the rest of it
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, a list of selectors with ranges
+      (ex: <tt>l[f(), 1..g()]</tt>) iterated by \c foreach or by the @ref map "map", @ref select "select", @ref foldl
+      "foldl" or a streaming operator was evaluated as a whole before the first value was used; each selector is now
+      evaluated when the values of the previous ones have been used, as with the AST interpreter
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, @ref remove "remove" and @ref delete "delete"
+      with a list of selectors whose later selector raised an exception removed nothing; they now remove what the
+      earlier selectors selected, as with the AST interpreter
+    - iterating a list of selectors with a range (ex: <tt>foreach x in (l[0, 1..-1])</tt>) with negative offsets gave
+      other elements than the same expression as a value; it now gives the same elements
+    - with the AST interpreter, @ref remove "remove" and @ref delete "delete" with a list of selectors whose later
+      selector raised an exception leaked the removed values, and a list of selectors with ranges iterated by
+      \c foreach or a functional operator could read a list that the loop had released, which could crash
     - a @ref cast "cast" as the lvalue of @ref remove "remove" or @ref delete "delete" (ex: <tt>remove cast<int>(x)</tt>)
       or in the lvalue of a @ref lvalue_references "reference" aborted debug builds or gave wrong results; it is now a
       parse error, as a cast is not storage that can be removed or referred to

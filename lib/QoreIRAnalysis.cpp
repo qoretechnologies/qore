@@ -2110,8 +2110,10 @@ bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRVal
             return visit(static_cast<const QoreIRSwitchStringInstruction&>(inst).switch_val);
         case QoreIROpcode::IteratorCreate:
         case QoreIROpcode::IteratorCreateIterate:
+        case QoreIROpcode::IteratorCreateSelectors:
             return visit(static_cast<const QoreIRIteratorCreateInstruction&>(inst).iterable);
         case QoreIROpcode::IteratorNext:
+        case QoreIROpcode::IteratorNextSelectors:
             return visit(static_cast<const QoreIRIteratorNextInstruction&>(inst).iterator);
         case QoreIROpcode::TypedForeachNextInt:
         case QoreIROpcode::TypedForeachNextFloat:
@@ -2178,6 +2180,7 @@ void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVi
             break;
         }
         case QoreIROpcode::IteratorNext:
+        case QoreIROpcode::IteratorNextSelectors:
         case QoreIROpcode::TypedForeachNextInt:
         case QoreIROpcode::TypedForeachNextFloat:
         case QoreIROpcode::TypedForeachNextBool:
@@ -2929,9 +2932,11 @@ static bool qore_ir_rewrite_value_operands(QoreIRInstruction& inst,
             break;
         case QoreIROpcode::IteratorCreate:
         case QoreIROpcode::IteratorCreateIterate:
+        case QoreIROpcode::IteratorCreateSelectors:
             qore_ir_rewrite_value(static_cast<QoreIRIteratorCreateInstruction&>(inst).iterable, replacements);
             break;
         case QoreIROpcode::IteratorNext:
+        case QoreIROpcode::IteratorNextSelectors:
             qore_ir_rewrite_value(static_cast<QoreIRIteratorNextInstruction&>(inst).iterator, replacements);
             break;
         case QoreIROpcode::TypedForeachNextInt:
