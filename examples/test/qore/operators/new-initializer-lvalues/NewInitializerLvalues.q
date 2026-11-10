@@ -130,6 +130,47 @@ string sub conversions() {
     return sprintf("non-hash initializer: %s; n=%d; softint hash: %y", rv, n, sh);
 }
 
+#! an initializer that is the only use of a value read without a reference of its own (a local, a list element, a hash
+#! member, an object member) is copied, not taken over: the source keeps its value
+string sub borrowed_initializers() {
+    hash<auto> src = {"a": 1, "b": 2};
+    list<auto> srcl = (1, 2);
+    list<auto> nested = ({"a": 3}, (4, 5));
+    hash<auto> outer = {"h": {"a": 6}, "l": (7, 8)};
+    NewInitC o({"a": 9});
+    hash<string, int> h1 = new hash<string, int>(src);
+    list<auto> l1 = new list<auto>(srcl);
+    hash<string, int> h2 = new hash<string, int>(nested[0]);
+    list<auto> l2 = new list<auto>(nested[1]);
+    hash<string, int> h3 = new hash<string, int>(outer.h);
+    list<auto> l3 = new list<auto>(outer.l);
+    hash<string, int> h4 = new hash<string, int>(o.v);
+    h1.c = 3;
+    push l1[0], 3;
+    h2.b = 4;
+    push l2[0], 6;
+    h3.b = 7;
+    push l3[0], 9;
+    h4.b = 10;
+    # the value of a modification of a local is the local's own value
+    hash<auto> msrc = {"a": 1};
+    list<auto> mlist = (1,);
+    hash<string, int> h5 = new hash<string, int>(msrc += {"b": 2});
+    list<auto> l5 = new list<auto>((push mlist, 2));
+    h5.c = 3;
+    push l5[0], 3;
+    # the values of a list iterated
+    list<hash<auto>> each = ({"a": 1}, {"a": 2});
+    list<hash<string, int>> hl = ();
+    foreach hash<auto> e in (each) {
+        hash<string, int> he = new hash<string, int>(e);
+        he.b = 0;
+        push hl, he;
+    }
+    return sprintf("built: %y %y %y %y %y %y %y %y %y %y; sources: %y %y %y %y %y %y %y %y", h1, l1, h2, l2, h3, l3,
+        h4, h5, l5, hl, src, srcl, nested, outer, o.v, msrc, mlist, each);
+}
+
 # each function is called several times, so that tiered execution compiles it before the calls checked
 for (int i = 0; i < 3; ++i) {
     foreach string form in (("hash", "list", "hashdecl", "class")) {
@@ -138,6 +179,7 @@ for (int i = 0; i < 3; ++i) {
     modify_in_try("hash");
     modify_in_try("list");
     conversions();
+    borrowed_initializers();
 }
 foreach string form in (("hash", "list", "hashdecl", "class")) {
     printf("%s\n", modify(form, False));
@@ -145,3 +187,4 @@ foreach string form in (("hash", "list", "hashdecl", "class")) {
 printf("%s\n", modify_in_try("hash"));
 printf("%s\n", modify_in_try("list"));
 printf("%s\n", conversions());
+printf("%s\n", borrowed_initializers());

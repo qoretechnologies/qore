@@ -5,3 +5,4 @@ class: c=7 d=8 x=6 y=2 l=[2, 3] l2=[1, 2, 3, 4] l3=[2, 3] s="zbc" built=[[7, 8],
 hash (in try): x=6 l=[2, 3] s="zbc" built={a: 6, b: [1], c: "zbc"}
 list (in try): x=6 l=[2, 3] s="zbc" built=[[6, [1], "zbc"]]
 non-hash initializer: HASH-INIT-ERROR: typed hash initializer value must be a hash; got type 'integer' instead; n=2; softint hash: {a: 23, b: 4}
+built: {a: 1, b: 2, c: 3} [[1, 2, 3]] {a: 3, b: 4} [[4, 5, 6]] {a: 6, b: 7} [[7, 8, 9]] {a: 9, b: 10} {a: 1, b: 2, c: 3} [[1, 2, 3]] [{a: 1, b: 0}, {a: 2, b: 0}]; sources: {a: 1, b: 2} [1, 2] [{a: 3}, [4, 5]] {h: {a: 6}, l: [7, 8]} {a: 9} {a: 1, b: 2} [1, 2] [{a: 1}, {a: 2}]

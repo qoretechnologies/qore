@@ -16285,7 +16285,8 @@ load_local_done:
                             return returnAfterUnhandledException();
                         }
                         consumeLastUseCallArgSlots(values, cleanup,
-                            static_inst->operands, 0, value_use_counts, &weak_load_temp_slots, borrowed_temp_remaining, xsink);
+                            static_inst->operands, 0, value_use_counts, &weak_load_temp_slots,
+                            borrowed_temp_remaining, xsink);
                         if (xsink && *xsink) {
                             if (arg_list) {
                                 arg_list->deref(xsink);
