@@ -14980,7 +14980,14 @@ public:
     }
 
     //! makes the block for an exception that the iterator's next() raises the exception target of \a next_inst
-    DLLLOCAL bool routeNext(QoreIRInstruction* next_inst, std::string& error) {
+    /** @param partial_result false if the operator builds no list: its next() exception then releases the iterator and
+        the source in the same order on the operator's usual path (the block of init(), or the function's exit), and the
+        instruction keeps that path, whose target costs a native loop less than an edge of its own
+    */
+    DLLLOCAL bool routeNext(QoreIRInstruction* next_inst, std::string& error, bool partial_result = true) {
+        if (!partial_result) {
+            return true;
+        }
         if (!next_block) {
             next_block = lowering.createBlock("iterator.next.exception.cleanup");
             if (!next_block) {
@@ -16501,7 +16508,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, loop_exit_block, body_block, map->loc));
     QoreIRValue element_val = next_inst->result;
     // an exception that next() raises releases the iterator and the source before the list
-    if (!loop_cleanup.routeNext(next_inst, error)) {
+    if (!loop_cleanup.routeNext(next_inst, error, result_list.isValid())) {
         return QoreIRValue();
     }
 
@@ -18011,7 +18018,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, loop_exit_block, body_block, ms->loc));
     QoreIRValue element_val = next_inst->result;
     // an exception that next() raises releases the iterator and the source before the list
-    if (!loop_cleanup.routeNext(next_inst, error)) {
+    if (!loop_cleanup.routeNext(next_inst, error, result_list.isValid())) {
         return QoreIRValue();
     }
 
@@ -19519,7 +19526,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     QoreIRValue element_val = next_inst->result;
     // the element that the iterator gave: a map stage changes element_val to its value
     // an exception that next() raises releases the iterator and the source before the list
-    if (!pipeline_cleanup.routeNext(next_inst, error)) {
+    if (!pipeline_cleanup.routeNext(next_inst, error, result_list.isValid())) {
         return QoreIRValue();
     }
     iter_element = next_inst->result;
@@ -21001,7 +21008,7 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
                 loc));
             auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, loc));
             QoreIRValue element_val = next_inst->result;
-            if (!stream_cleanup.routeNext(next_inst, error)) {
+            if (!stream_cleanup.routeNext(next_inst, error, false)) {
                 return QoreIRValue();
             }
 
@@ -21099,7 +21106,7 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
             withExceptionTarget(builder.createCheckCancelEvery(index_val, QoreIRCancelPoint::Count, loc));
             auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, loc));
             QoreIRValue element_val = next_inst->result;
-            if (!stream_cleanup.routeNext(next_inst, error)) {
+            if (!stream_cleanup.routeNext(next_inst, error, false)) {
                 return QoreIRValue();
             }
 
