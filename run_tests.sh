@@ -1443,14 +1443,17 @@ event $1
             if [ $usr1 -gt 64 ]; then
                 return 1
             fi
-            # the masks are in hexadecimal, signal 1 in the lowest bit
+            # the masks are in hexadecimal, signal 1 in the lowest bit.  The bit's value in its digit (1, 2, 4 or 8) is
+            # looked up, not computed with "^": a BusyBox awk built without math support (as Ubuntu's busybox package)
+            # rejects the whole program for it, so the check failed and a test that handles SIGUSR1 was aborted at once,
+            # without its call stacks
             cat "$proc/$test_pid"/task/*/status 2>/dev/null | awk -v sig=$usr1 '
                 function has_signal(mask,   digit) {
                     digit = substr(mask, length(mask) - int((sig - 1) / 4), 1)
                     if (digit == "") {
                         return 0
                     }
-                    return int((index("0123456789abcdef", tolower(digit)) - 1) / 2 ^ ((sig - 1) % 4)) % 2
+                    return int((index("0123456789abcdef", tolower(digit)) - 1) / substr("1248", (sig - 1) % 4 + 1, 1)) % 2
                 }
                 $1 == "SigBlk:" { ++threads; if (has_signal($2)) ++blocked }
                 $1 == "SigCgt:" && has_signal($2) { caught = 1 }

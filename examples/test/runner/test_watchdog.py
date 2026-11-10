@@ -684,10 +684,30 @@ class SignalTest(unittest.TestCase):
     installed its handler.
     """
 
-    def run_tests(self, tests, proc=None, **variables):
-        """Runs the given tests ({file: (report, handle, masks)}); returns the output of each test and the result"""
+    def run_tests(self, tests, proc=None, awk_without_math=False, **variables):
+        """Runs the given tests ({file: (report, handle, masks)}); returns the output of each test and the result
+
+        With awk_without_math, the runner's awk is a stand-in for a BusyBox awk built without math support (as Ubuntu's
+        busybox package): it rejects a program that uses the "^" operator, with BusyBox's error, and runs the system's
+        awk otherwise.
+        """
         with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
             tree = RunnerTree(directory)
+            if awk_without_math:
+                real = shutil.which("awk")
+                self.assertIsNotNone(real, "no awk in PATH")
+                tree.write_script("awk", f"""\
+                    #!/bin/sh
+                    for arg in "$@"; do
+                        case "$arg" in
+                            *" ^ "*)
+                                echo "awk: cmd. line:1: Math support is not compiled in" >&2
+                                exit 1
+                                ;;
+                        esac
+                    done
+                    exec '{real}' "$@"
+                    """)
             for name, (report, handle, masks) in tests.items():
                 tree.add_test(name, HANGING_TEST.format(report=report, handle=handle, masks=masks))
             if proc is not None:
@@ -748,7 +768,7 @@ class SignalTest(unittest.TestCase):
             with self.subTest(test=name):
                 self.assert_aborted_at_once(sections[name])
 
-    def test_on_linux_a_test_that_catches_or_blocks_the_signal_in_every_thread_is_sent_it(self):
+    def check_masks(self, awk_without_math=False):
         # the masks in the /proc tree that each test makes for itself, which run_tests.sh reads wherever the test's
         # task directory exists in it; a test that ignores SIGUSR1 survives it, and is aborted after
         # QORE_TEST_STACK_DUMP_WAIT
@@ -757,13 +777,22 @@ class SignalTest(unittest.TestCase):
             "caught.qtest": ("", "ignore", [(NONE, USR1), (NONE, USR1)]),
             "one-blocks.qtest": ("", "ignore", [(USR1, NONE), (NONE, NONE)]),
             "no-threads.qtest": ("", "ignore", []),
-        }, proc="empty", QORE_TEST_STACK_DUMP_WAIT="1")
+        }, proc="empty", awk_without_math=awk_without_math, QORE_TEST_STACK_DUMP_WAIT="1")
         for name in ("all-block.qtest", "caught.qtest"):
             with self.subTest(test=name):
                 self.assert_usr1(sections[name], stacks=False)
         for name in ("one-blocks.qtest", "no-threads.qtest"):
             with self.subTest(test=name):
                 self.assert_aborted_at_once(sections[name])
+
+    def test_on_linux_a_test_that_catches_or_blocks_the_signal_in_every_thread_is_sent_it(self):
+        self.check_masks()
+
+    def test_the_masks_are_read_with_an_awk_without_math_support(self):
+        # the runner's awk programs use no math functions or "^": a BusyBox awk built without math support rejected the
+        # mask check's whole program, so a test that caught or blocked SIGUSR1 was aborted at once, without its call
+        # stacks
+        self.check_masks(awk_without_math=True)
 
     def test_signal_handling_disabled(self):
         sections, result = self.run_tests({"handler.qtest": ("self", "handler", [(USR1, USR1)])}, proc="empty",
