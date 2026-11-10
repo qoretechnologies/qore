@@ -13395,8 +13395,12 @@ bool QoreIRLowering::callArgumentMayBeRuntimeNothing(const QoreValue& arg) const
         // Guard insertion treats unassigned locals as valid NOTHING values, but
         // overload dispatch must fall back when a selected non-NOTHING variant
         // could reject that runtime value.
+        // a local that is the target of a reference or captured by a closure, or of a reference type (whose read
+        // gives the referenced value), can have no value whatever its declared type (see getAnalysis())
         const QoreTypeInfo* local_type = local->parseGetTypeInfo();
         return !parse_context
+            || local->closureUse()
+            || QoreTypeInfo::getReferenceTarget(local->getTypeInfo())
             || !parse_context->isLocalDefinitelyAssigned(local)
             || !local_type
             || QoreTypeInfo::parseReturns(

@@ -52,3 +52,16 @@ removed variable auto: null
 try deleted member auto: "null"
 try removed variable auto: "null"
 assigned auto: 5
+string unassigned: RUNTIME-TYPE-ERROR
+string assigned: "abc"
+softint unassigned: RUNTIME-TYPE-ERROR
+softint assigned: 12
+timeout unassigned: RUNTIME-TYPE-ERROR
+timeout relative date: 2000
+big int: 9223372036854775807
+big negative int: -140737488355329
+overload unassigned: "ov(*string) null"
+overload assigned: "ov(int)"
+method unassigned: RUNTIME-TYPE-ERROR
+static method unassigned: RUNTIME-TYPE-ERROR
+loop: "0:4 1:RUNTIME-TYPE-ERROR "

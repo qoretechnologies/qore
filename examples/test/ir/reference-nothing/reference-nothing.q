@@ -615,3 +615,68 @@ string sub try_removed_variable_auto(reference<int> p) {
         printf("%s auto: %s\n", "assigned", ex.err);
     }
 }
+
+# other target types and locals, methods, an overloaded call, and a loop in which a later iteration loses the target
+string sub use_string(reference<string> p) { string x = p; return x; }
+int sub use_softint(reference<*string> p) { softint x = p; return x; }
+int sub use_timeout(reference<*date> p) { timeout x = p; return x; }
+int sub use_bigint(reference<int> p) { int x = p; return x; }
+string sub ov(int i) { return "ov(int)"; }
+string sub ov(*string s) { return sprintf("ov(*string) %y", s); }
+string sub use_overload(reference<int> p) { return ov(p); }
+class RefUser {
+    int meth(reference<int> p) { int x = p; return x; }
+    static int smeth(reference<int> p) { int x = p; return x; }
+}
+string sub use_loop(reference<hash<string, int>> h) {
+    string rv;
+    for (int i = 0; i < 2; ++i) {
+        reference<int> r = \h.k;
+        try {
+            int x = r;
+            rv += sprintf("%d:%d ", i, x);
+        } catch (hash<ExceptionInfo> ex) {
+            rv += sprintf("%d:%s ", i, ex.err);
+        }
+        remove h.k;
+    }
+    return rv;
+}
+
+sub show(string label, code c) {
+    try {
+        printf("%s: %y\n", label, c());
+    } catch (hash<ExceptionInfo> ex) {
+        printf("%s: %s\n", label, ex.err);
+    }
+}
+
+{
+    string rs;
+    show("string unassigned", auto sub () { return use_string(\rs); });
+    string rs2 = "abc";
+    show("string assigned", auto sub () { return use_string(\rs2); });
+    *string ss;
+    show("softint unassigned", auto sub () { return use_softint(\ss); });
+    *string ss2 = "12";
+    show("softint assigned", auto sub () { return use_softint(\ss2); });
+    *date dd;
+    show("timeout unassigned", auto sub () { return use_timeout(\dd); });
+    *date dd2 = 2s;
+    show("timeout relative date", auto sub () { return use_timeout(\dd2); });
+    int big = 9223372036854775807;
+    show("big int", auto sub () { return use_bigint(\big); });
+    int neg = -140737488355329;
+    show("big negative int", auto sub () { return use_bigint(\neg); });
+    int ou;
+    show("overload unassigned", auto sub () { return use_overload(\ou); });
+    int oa = 1;
+    show("overload assigned", auto sub () { return use_overload(\oa); });
+    RefUser u();
+    int mu;
+    show("method unassigned", auto sub () { return u.meth(\mu); });
+    int smu;
+    show("static method unassigned", auto sub () { return RefUser::smeth(\smu); });
+    hash<string, int> lh = {"k": 4};
+    show("loop", auto sub () { return use_loop(\lh); });
+}
