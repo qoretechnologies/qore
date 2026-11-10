@@ -2387,14 +2387,15 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
     std::vector<uint8_t> def_by_variable_read(counts.size(), 0);
     // the instruction defining each value, and the block and position of the call that uses a value as an argument
     std::vector<const QoreIRInstruction*> def_inst(counts.size(), nullptr);
+    std::vector<uint32_t> def_pos(counts.size(), 0);
     std::vector<const QoreIRBasicBlock*> call_block(counts.size(), nullptr);
     std::vector<uint32_t> call_pos(counts.size(), 0);
     // a function that creates a reference can write a variable through it with any call or store
     bool creates_reference = false;
     std::vector<const QoreIRPhiInstruction*> phis;
     for (const auto& block : func.blocks) {
-        for (const auto& inst_uptr : block->instructions) {
-            const QoreIRInstruction* inst = inst_uptr.get();
+        for (size_t inst_pos = 0; inst_pos < block->instructions.size(); ++inst_pos) {
+            const QoreIRInstruction* inst = block->instructions[inst_pos].get();
             qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
                 countIRValueUse(counts, operand);
             });
@@ -2427,6 +2428,7 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 def_by_call[inst->result.id] = arg_start >= 0;
                 def_by_variable_read[inst->result.id] = qore_ir_reads_variable_for_call_arg(inst->opcode);
                 def_inst[inst->result.id] = inst;
+                def_pos[inst->result.id] = static_cast<uint32_t>(inst_pos);
             }
             if (inst->opcode == QoreIROpcode::CreateParseRef
                     || (inst->opcode == QoreIROpcode::Invoke
@@ -2503,11 +2505,12 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
     }
     // A read of an IR-only local (no reference to it exists, no closure binds it) holds a reference that only the
     // statement's DiscardTemps would otherwise release; releasing it when the call returns, instead, is observable
-    // only if the statement writes the variable after the call (f(o) + (o = NOTHING) + mark(): the write must destroy
-    // the object, as in the AST interpreter), since the variable holds the value until then.  Without such a write the
-    // read is left to the end of the statement, which costs the call path nothing at run time.  A write in another
-    // block, or a function that creates a reference (through which a call or a store can write any variable), keeps
-    // the release at call return.
+    // only if the statement writes the variable after the read: after the call (f(o) + (o = NOTHING) + mark()) or
+    // before it, in a later argument (c.m(o, o = NOTHING) + mark()), the write or the call's return must destroy the
+    // object, as in the AST interpreter, whose argument list then holds the only reference.  Without a write from the
+    // read to the end of the statement, the variable holds the value until then, and the read is left to the end of
+    // the statement, which costs the call path nothing at run time.  A write in another block, or a function that
+    // creates a reference (through which a call or a store can write any variable), keeps the release at call return.
     auto read_needs_release_at_return = [&](uint32_t id) -> bool {
         const QoreIRInstruction* def = def_inst[id];
         if (creates_reference || !def || def->opcode != QoreIROpcode::LoadLocal || !call_block[id]
@@ -2524,12 +2527,15 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
         if (!scope) {
             return true;
         }
-        for (size_t j = call_pos[id] + 1; j < insts.size(); ++j) {
+        // from the read (the call is after it in the same block) to the end of the call's statement
+        assert(def_pos[id] < call_pos[id]);
+        for (size_t j = def_pos[id] + 1; j < insts.size(); ++j) {
             const QoreIRInstruction* next = insts[j].get();
             if (qore_ir_get_written_local(next) == load->local) {
                 return true;
             }
-            if ((next->opcode == QoreIROpcode::DiscardTemps || next->opcode == QoreIROpcode::DiscardTempsKeep)
+            if (j > call_pos[id]
+                    && (next->opcode == QoreIROpcode::DiscardTemps || next->opcode == QoreIROpcode::DiscardTempsKeep)
                     && next->temp_scope_id == scope) {
                 return false;
             }

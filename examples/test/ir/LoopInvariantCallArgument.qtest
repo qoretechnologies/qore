@@ -29,8 +29,13 @@
     in a \c try block in a loop, a loop that a \c catch block continues, loops in closures, a map and foldl
     expression, a method of \c self, the elements of a fixed list and a fixed hash given to calls, stored and pushed
     in a loop, a variable assigned in an outer loop and read in the inner one, and the destruction of an object held
-    by a hash that the loop reads, which must happen when the hash is removed after the loop.  Every mode, the IR tier and qcc executables built at -O0 and -O3 must give
-    the AST interpreter's output, which must give the expected result of every case.
+    by a hash that the loop reads, which must happen when the hash is removed after the loop.  Further cases give a
+    plain local to a call and write the local in the same statement: after the call (in the block of the call and in
+    another block), not at all, and between the read and the call, in a later argument of a method, a closure, a call
+    reference and a closure with a typed parameter (the IR interpreter left the read to the end of the statement in
+    this last case at 0fd9506310, as it looked for a write only after the call).  Every mode, the IR tier and qcc
+    executables built at -O0 and -O3 must give the AST interpreter's output, which must give the expected result of
+    every case and destroy each object where the AST interpreter does.
 
     Before the fix, the IR interpreter, native code and the IR tier failed the cases that give a parameter or a local
     to a read-only string pseudo-method (\c find(), \c startsWith(), \c contains()) or to \c index() in a
@@ -94,6 +99,10 @@ class LoopInvariantCallArgumentTest inherits ExecModeOutputTest {
             "plain_write_later": "pwok",
             "plain_write_branch": "pbok",
             "plain_no_write": "pnok",
+            "write_arg_method": "ok",
+            "write_arg_closure": "ok",
+            "write_arg_callref": "ok",
+            "write_arg_typed_closure": "ok",
         };
 
         #! lines of the output that must come in this order in each run: the destruction of an object held by a hash
@@ -104,6 +113,12 @@ class LoopInvariantCallArgumentTest inherits ExecModeOutputTest {
             ("dtor pw", "mark pw"),
             ("dtor pb", "mark pb"),
             ("mark pn", "dtor pn", "mark pn-removed"),
+            ("dtor wm", "mark wm"),
+            ("dtor wc", "mark wc"),
+            ("dtor wmf", "mark wmf"),
+            ("dtor wcf", "mark wcf"),
+            ("dtor wr", "mark wr"),
+            ("dtor wt", "mark wt"),
         );
     }
 
@@ -327,6 +342,39 @@ string sub plain_write_branch(bool c) {
     string s = argName(o) + (c ? ((o = NOTHING) ? "" : "") : "") + mark("pb");
     return s + "ok";
 }
+# the statement writes the local between the read and the call, in a later argument: the call (a method, a
+# closure, a call reference, a closure with a typed parameter) releases the read when it returns
+class WC { string m(auto e, auto x) { return ""; } }
+string sub f1(auto x) { return ""; }
+string sub fref(auto e, auto x) { return ""; }
+string sub write_arg_method() {
+    WC c();
+    auto o = new E("wm");
+    string s = c.m(o, o = NOTHING) + mark("wm");
+    o = new E("wmf");
+    s += c.m(o, f1(o = NOTHING)) + mark("wmf");
+    return s + "ok";
+}
+string sub write_arg_closure() {
+    code cl = string sub (auto e, auto x) { return ""; };
+    auto o = new E("wc");
+    string s = cl(o, o = NOTHING) + mark("wc");
+    o = new E("wcf");
+    s += cl(o, f1(o = NOTHING)) + mark("wcf");
+    return s + "ok";
+}
+string sub write_arg_callref() {
+    code r = \fref();
+    auto o = new E("wr");
+    string s = r(o, o = NOTHING) + mark("wr");
+    return s + "ok";
+}
+string sub write_arg_typed_closure() {
+    code cl = string sub (*E e, auto x) { return ""; };
+    auto o = new E("wt");
+    string s = cl(o, o = NOTHING) + mark("wt");
+    return s + "ok";
+}
 string sub plain_no_write() {
     auto o = new E("pn");
     string s = argName(o) + mark("pn");
@@ -364,6 +412,10 @@ for (int pass = 0; pass < 2; ++pass) {
     check("plain_write_later", auto sub () { return plain_write_later(); });
     check("plain_write_branch", auto sub () { return plain_write_branch(True); });
     check("plain_no_write", auto sub () { return plain_no_write(); });
+    check("write_arg_method", auto sub () { return write_arg_method(); });
+    check("write_arg_closure", auto sub () { return write_arg_closure(); });
+    check("write_arg_callref", auto sub () { return write_arg_callref(); });
+    check("write_arg_typed_closure", auto sub () { return write_arg_typed_closure(); });
 }
 ';
     }
