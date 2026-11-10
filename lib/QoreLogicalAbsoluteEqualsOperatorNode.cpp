@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreLogicalAbsoluteEqualsOperatorNode::logical_absolute_equals_str("logical absolute equals (===) " \
     "operator expression");
@@ -69,11 +70,11 @@ static void warn_absolute_null_nothing_comparison(const QoreProgramLocation* loc
 }
 
 QoreValue QoreLogicalAbsoluteEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder l(left, xsink);
+    QoreOperandEvalHolder l(left, xsink);
     if (*xsink)
         return QoreValue();
 
-    ValueEvalOptimizedRefHolder r(right, xsink);
+    QoreOperandEvalHolder r(right, xsink);
     if (*xsink)
         return QoreValue();
 

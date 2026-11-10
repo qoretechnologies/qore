@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include <qore/intern/QorePluginRegistry.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreLogicalLessThanOperatorNode::op_str("< operator expression");
 
@@ -68,10 +69,10 @@ QoreValue QoreLogicalLessThanOperatorNode::evalImpl(bool& needs_deref, Exception
         return (this->*pfunc)(xsink);
     }
 
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink)
         return QoreValue();
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();
 

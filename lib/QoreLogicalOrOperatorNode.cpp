@@ -29,11 +29,12 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreLogicalOrOperatorNode::logical_or_str("logical or (&&) operator expression");
 
 QoreValue QoreLogicalOrOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink)
         return false;
     // if left side is true, then do not evaluate right side (logical short circuiting)
@@ -41,7 +42,7 @@ QoreValue QoreLogicalOrOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* 
         return true;
     }
 
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink)
         return false;
     return rh->getAsBool();

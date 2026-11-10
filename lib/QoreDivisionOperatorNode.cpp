@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreDivisionOperatorNode::op_str("/ operator expression");
 
@@ -53,10 +54,10 @@ QoreValue QoreDivisionOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* x
    if (pfunc)
       return (this->*pfunc)(xsink);
 
-   ValueEvalOptimizedRefHolder lh(left, xsink);
+   QoreOperandEvalHolder lh(left, xsink);
    if (*xsink)
       return QoreValue();
-   ValueEvalOptimizedRefHolder rh(right, xsink);
+   QoreOperandEvalHolder rh(right, xsink);
    if (*xsink)
       return QoreValue();
 

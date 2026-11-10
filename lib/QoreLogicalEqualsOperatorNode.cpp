@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include <qore/intern/QorePluginRegistry.h>
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreLogicalEqualsOperatorNode::logical_equals_str("logical equals operator expression");
 QoreString QoreLogicalNotEqualsOperatorNode::logical_not_equals_str("logical not equals operator expression");
@@ -85,11 +86,11 @@ static int try_plugin_binary_parse_eq(QoreParseContext& parse_context, const Qor
 }
 
 QoreValue QoreLogicalEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder l(left, xsink);
+    QoreOperandEvalHolder l(left, xsink);
     if (*xsink)
         return QoreValue();
 
-    ValueEvalOptimizedRefHolder r(right, xsink);
+    QoreOperandEvalHolder r(right, xsink);
     if (*xsink)
         return QoreValue();
 

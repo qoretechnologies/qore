@@ -108,6 +108,14 @@ sub main() {
     });
     t("pop argument", auto sub () { list<auto> l = (new E("pa"),); string s = f1(pop l) + mark("pa"); });
     t("new in literal", auto sub () { string s = f1((new E("nl"), 1)) + mark("nl"); });
+    # the operand of an operator is a temporary of the statement: it lives until the end of the statement
+    t("operand of plus", auto sub () {
+        auto o = new E("op");
+        hash<auto> h = {};
+        string s = f1(h + {"a": o}) + (o = NOTHING) + mark("op");
+    });
+    t("operand of equals", auto sub () { bool b = (new E("eq") == NOTHING); mark("eq"); });
+    t("operand of and", auto sub () { bool b = (new E("and") && True); mark("and"); });
     # an exception after the release
     t("exception", auto sub () {
         auto o = new E("ex");

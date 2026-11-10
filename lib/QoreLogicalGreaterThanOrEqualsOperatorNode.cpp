@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include <qore/intern/QorePluginRegistry.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreLogicalGreaterThanOrEqualsOperatorNode::op_str(">= operator expression");
 
@@ -67,10 +68,10 @@ QoreValue QoreLogicalGreaterThanOrEqualsOperatorNode::evalImpl(bool& needs_deref
    if (pfunc)
       return (this->*pfunc)(xsink);
 
-   ValueEvalOptimizedRefHolder lh(left, xsink);
+   QoreOperandEvalHolder lh(left, xsink);
    if (*xsink)
       return QoreValue();
-   ValueEvalOptimizedRefHolder rh(right, xsink);
+   QoreOperandEvalHolder rh(right, xsink);
    if (*xsink)
       return QoreValue();
 

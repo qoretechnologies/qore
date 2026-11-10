@@ -29,11 +29,12 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreRegexNMatchOperatorNode::op_str("regex negative match (!~) operator expression");
 
 QoreValue QoreRegexNMatchOperatorNode::evalImpl(bool& needs_deref, ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder lh(exp, xsink);
+    QoreOperandEvalHolder lh(exp, xsink);
     if (*xsink)
         return QoreValue();
 

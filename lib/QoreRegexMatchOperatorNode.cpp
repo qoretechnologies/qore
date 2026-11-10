@@ -30,11 +30,12 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreRegexMatchOperatorNode::op_str("regex match (=~) operator expression");
 
 QoreValue QoreRegexMatchOperatorNode::evalImpl(bool& needs_deref, ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder lh(exp, xsink);
+    QoreOperandEvalHolder lh(exp, xsink);
     if (*xsink)
         return QoreValue();
 

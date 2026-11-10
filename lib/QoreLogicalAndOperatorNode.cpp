@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreLogicalAndOperatorNode::logical_and_str("logical and (&&) operator expression");
 
@@ -48,14 +49,14 @@ static void set_binary_analysis_and(QoreParseContext& parse_context,
 
 QoreValue QoreLogicalAndOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     // if left side is 0, then do not evaluate right side (logical short circuiting)
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink)
         return QoreValue();
     if (!lh->getAsBool()) {
         return false;
     }
 
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();
     return rh->getAsBool();

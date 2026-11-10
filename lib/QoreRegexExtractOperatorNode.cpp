@@ -29,11 +29,12 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreRegexExtractOperatorNode::op_str("regex extract (=~ x//) operator expression");
 
 QoreValue QoreRegexExtractOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(exp, xsink);
+    QoreOperandEvalHolder lh(exp, xsink);
     if (*xsink)
         return QoreValue();
 

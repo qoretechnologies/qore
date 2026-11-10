@@ -1548,6 +1548,9 @@
     - with the AST interpreter, @ref remove "remove" and @ref delete "delete" with a list of selectors whose later
       selector raised an exception leaked the removed values, and a list of selectors with ranges iterated by
       \c foreach or a functional operator could read a list that the loop had released, which could crash
+    - with the AST interpreter, a temporary value that is the operand of an operator (ex: the hash in
+      <tt>f(h + {"a": o})</tt>) was released when the operator returned; it now lives until the end of the
+      statement, as every temporary does in every execution mode
     - a @ref cast "cast" as the lvalue of @ref remove "remove" or @ref delete "delete" (ex: <tt>remove cast<int>(x)</tt>)
       or in the lvalue of a @ref lvalue_references "reference" aborted debug builds or gave wrong results; it is now a
       parse error, as a cast is not storage that can be removed or referred to

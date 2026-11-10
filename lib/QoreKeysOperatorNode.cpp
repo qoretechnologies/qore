@@ -32,6 +32,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreKeysOperatorNode::keys_str("keys operator expression");
 
@@ -154,7 +155,7 @@ QoreValue QoreKeysOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
 
 FunctionalOperatorInterface* QoreKeysOperatorNode::getFunctionalIteratorImpl(FunctionalValueType& value_type,
         ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder marg(exp, xsink);
+    QoreOperandEvalHolder marg(exp, xsink);
     if (xsink && *xsink)
         return nullptr;
 

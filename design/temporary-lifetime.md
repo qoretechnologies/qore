@@ -82,6 +82,13 @@ temporaries of the innermost scope of the thread.  The chain nodes hand their re
   `QoreComplexListCastOperatorNode`; a class cast gives its operand itself)
 - `ParseObjectMethodReferenceNode` (`\obj.method()`)
 
+The operators hand the operands that they evaluated to it in the same way when they are done with them
+(`QoreOperandEvalHolder`): the arithmetic, bitwise, shift, comparison, logical, regex, `keys`, `elements`, `exists`,
+`instanceof` and unary operators.  So in `f(h + {"a": o}) + (o = NOTHING) + mark()` the hash literal, an operand of
+`+`, lives until the end of the statement, and the object is destroyed after `mark()`, as in the other execution
+modes (David, 2026-11-10, qore#5712: "all chains, whole statement").  An operand that the operator takes into its
+result is not held, and the operands of a functional operator's expression are held by the scope of each element.
+
 A value borrowed from a variable is not held by these nodes, and a value that a read of a variable gives a
 reference of its own to is held by the variable reference itself (see [Values read from
 variables](#values-read-from-variables)).  Nor are strings, numbers, binaries and dates, which hold no other values,

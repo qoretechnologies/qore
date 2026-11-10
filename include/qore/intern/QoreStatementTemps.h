@@ -170,6 +170,36 @@ private:
     DLLLOCAL QoreStatementTempScope& operator=(const QoreStatementTempScope&) = delete;
 };
 
+//! evaluates an operand of an operator and hands the value to the innermost scope of the thread when the operator is
+//! done with it
+/** A temporary - a value that an expression creates and that nothing else refers to - lives until the end of the
+    statement in every execution mode (design/temporary-lifetime.md, David: "all chains, whole statement"); the
+    operand of an operator is held by the scope as the receiver of a chain is (QoreStatementTempScope::holdReceiver())
+    instead of being released when the operator returns (qore#5712).  Only a value that the holder owns and that is a
+    node can be held, which is decided when the operand is evaluated, so an int costs no more than a test; a value
+    that the operator takes from the holder, a value borrowed from a variable and a value that cannot be observed
+    after the statement (a string, a number, a binary or a date) are not held.
+*/
+class QoreOperandEvalHolder : public ValueEvalOptimizedRefHolder {
+public:
+    DLLLOCAL QoreOperandEvalHolder(const QoreValue& exp, ExceptionSink* xs) : ValueEvalOptimizedRefHolder(exp, xs),
+            site(needs_deref && v.needsRef() ? &exp : nullptr) {
+    }
+
+    DLLLOCAL ~QoreOperandEvalHolder() {
+        if (site && needs_deref) {
+            QoreStatementTempScope::holdReceiver(*site, *this, xsink);
+        }
+    }
+
+    QoreOperandEvalHolder(const QoreOperandEvalHolder&) = delete;
+    QoreOperandEvalHolder& operator=(const QoreOperandEvalHolder&) = delete;
+
+private:
+    //! the operand, if its value can be held
+    const QoreValue* site;
+};
+
 //! returns true if the operand of a change to an lvalue is evaluated as a statement of its own
 /** The temporaries created by such an operand are released before the change, so that they cannot keep a
     container that the change makes shared and copy it; an assignment to a variable changes no container, nor does

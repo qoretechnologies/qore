@@ -50,11 +50,12 @@ class TempReleasePointsTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(23, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
+        assertEq(26, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
         assertTrue(out =~ /^list literal:\n  dtor lit\n  mark lit\n/, "list literal");
         assertTrue(out =~ /\nmember:\n  dtor mem\n  mark mem\n/, "member");
         assertTrue(out =~ /\nno write:\n  mark nw\n  dtor nw\n/, "no write");
         assertTrue(out =~ /\nremove receiver:\n  mark rr\n  dtor rr\n/, "receiver of a chain");
+        assertTrue(out =~ /\noperand of plus:\n  mark op\n  dtor op\n/, "operand of an operator");
     }
 
     #! runs the script in every execution mode and on the IR tier

@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include <qore/intern/QorePluginRegistry.h>
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreBinaryOrOperatorNode::op_str("| (binary or) operator expression");
 
@@ -50,9 +51,9 @@ static void set_binary_or_analysis_bitwise(QoreParseContext& parse_context,
 }
 
 QoreValue QoreBinaryOrOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink) return QoreValue();
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return QoreValue();
 
     if (qore_plugin_value_may_have_operation(*lh) || qore_plugin_value_may_have_operation(*rh)) {

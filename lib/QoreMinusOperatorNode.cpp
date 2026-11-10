@@ -30,6 +30,7 @@
 
 #include "qore/Qore.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreMinusOperatorNode::minus_str("- operator expression");
 
@@ -73,11 +74,11 @@ static bool qore_minus_parse_type_is_unknown(const QoreTypeInfo* ti) {
 }
 
 QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink) {
         return QoreValue();
     }
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) {
         return QoreValue();
     }
