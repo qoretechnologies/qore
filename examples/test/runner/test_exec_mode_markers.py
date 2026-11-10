@@ -13,9 +13,13 @@ in its own process, its own options or mode given to a child process) declares
 
     # test-exec-mode: parent - <why>
 
-and runs in every job.  These tests fail when a harness test declares neither, when a test that declares "children"
-does what only a "parent" test may do, when the CI jobs set QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN in a job whose tests
-get no execution mode, and they check that run_tests.sh leaves out exactly the "children" tests.
+and runs in every job.  A test that does not use the harness may also declare "children" when it makes its checks in
+child processes of its own binary (QORE_ARGV[0]) that it starts without an execution mode: they run in the default
+mode in every job, so the default-mode jobs make the same checks.  These tests fail when a harness test declares
+neither, when a test that does not use the harness declares "parent" or declares "children" without starting such
+child processes, when a test that declares "children" does what only a "parent" test may do, when the CI jobs set
+QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN in a job whose tests get no execution mode, and they check that run_tests.sh
+leaves out exactly the "children" tests.
 
 Copyright (C) 2026 Qore Technologies, s.r.o.
 """
@@ -94,6 +98,19 @@ def sources(test):
     return seen
 
 
+# a child process of the test's own binary: QORE_ARGV[0] given to a command it runs (strings and comments do not count)
+CHILD_BINARY = re.compile(r"\bQORE_ARGV\[0\]")
+
+
+def starts_children(test):
+    """Returns True if the code of a test or of the files it includes runs its own binary in a child process"""
+    for path in sources(test):
+        code = strip_code(path.read_text(errors="replace"))
+        if CHILD_BINARY.search(code) and re.search(r"\b(backquote|system|exec)\s*\(|\bProcess\b", code):
+            return True
+    return False
+
+
 def uses_harness(test):
     return any(HARNESS.search(path.read_text(errors="replace")) for path in sources(test))
 
@@ -119,6 +136,7 @@ class ExecModeMarkerTest(unittest.TestCase):
     def test_harness_tests_declare_marker(self):
         harness_tests = 0
         kinds = {"children": 0, "parent": 0}
+        non_harness_children = []
         for test in all_tests():
             text = test.read_text(errors="replace")
             name = test.relative_to(ROOT)
@@ -126,8 +144,13 @@ class ExecModeMarkerTest(unittest.TestCase):
             self.assertEqual(len(ANY_MARKER.findall(text)), len(markers),
                              "%s: a test-exec-mode declaration has the form '# test-exec-mode: <kind> - <why>'" % name)
             if not uses_harness(test):
-                self.assertEqual([], markers, "%s does not use ExecModeHarness.qm: it declares no test-exec-mode"
-                                 % name)
+                if markers:
+                    self.assertEqual([("children", markers[0][1])], markers, "%s does not use ExecModeHarness.qm: "
+                                     "it declares no test-exec-mode, or 'children' once" % name)
+                    self.assertTrue(starts_children(test), "%s does not use ExecModeHarness.qm: it declares "
+                                    "'children' only if it runs its own binary (QORE_ARGV[0]) in child processes"
+                                    % name)
+                    non_harness_children.append(str(name))
                 continue
             harness_tests += 1
             self.assertEqual(1, len(markers), "%s uses ExecModeHarness.qm: it declares '# test-exec-mode: children "
@@ -139,6 +162,9 @@ class ExecModeMarkerTest(unittest.TestCase):
         self.assertGreater(harness_tests, 200)
         self.assertGreater(kinds["children"], kinds["parent"])
         self.assertGreater(kinds["parent"], 0)
+        # the tests that run their checks in default-mode child processes without the harness
+        self.assertEqual(["examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes.qtest"],
+                         non_harness_children)
 
     def test_children_tests_check_nothing_in_their_own_process(self):
         for test in all_tests():
@@ -175,6 +201,23 @@ class ExecModeMarkerTest(unittest.TestCase):
                     test = root / "case.qtest"
                     test.write_text("%modern\n" + code + "\n")
                     self.assertEqual(expected, parent_only_code(test))
+
+    def test_scan_finds_child_processes(self):
+        # a test that runs its own binary in a child process is found, and not the same text in a string or comment
+        with tempfile.TemporaryDirectory(prefix="qore-exec-mode-children-") as directory:
+            root = Path(directory)
+            cases = {
+                "string out = backquote(QORE_ARGV[0] + \" child.q\");": True,
+                "int rc = system(sprintf(\"%s child.q\", QORE_ARGV[0]));": True,
+                "string qore = QORE_ARGV[0];": False,
+                "string out = backquote(\"ls\");": False,
+                "# backquote(QORE_ARGV[0])\nstring s = \"system(QORE_ARGV[0])\";": False,
+            }
+            for code, expected in cases.items():
+                with self.subTest(code=code):
+                    test = root / "case.qtest"
+                    test.write_text("%modern\n" + code + "\n")
+                    self.assertEqual(expected, starts_children(test))
 
     def test_ci_excludes_only_in_explicit_mode_jobs(self):
         text = (ROOT / ".gitlab-ci.yml").read_text()
