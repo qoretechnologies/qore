@@ -63,23 +63,25 @@ QoreReferenceProgramHelper::QoreReferenceProgramHelper(const lvalue_ref& r, Exce
     // the current Program, which the thread is in, and a Program that the current thread deletes (whose destructors
     // can use references to its lvalues while it deletes the Program's data) keep their data while the thread uses
     // them
-    if (!p || p == ::getProgram() || qore_program_torn_down_by_current_thread(p)) {
+    int tid;
+    if (!p || !qore_reference_program_needs_entry(p, tid)) {
         return;
     }
     // the Program is allocated while the reference exists (see lvalue_ref::pgm); its teardown waits until the lvalue
     // has been used
-    if (!qore_program_private::get(*p)->enterWithoutContext()) {
+    if (!qore_program_private::get(*p)->enterWithoutContext(tid)) {
         xsink->raiseException("PROGRAM-ERROR", "the Program of the lvalue that the reference refers to has "
             "already been deleted and therefore cannot be accessed at runtime");
         valid = false;
         return;
     }
-    pgm = p;
+    entry.pgm = p;
+    entry.tid = tid;
 }
 
 QoreReferenceProgramHelper::~QoreReferenceProgramHelper() {
-    if (pgm) {
-        qore_program_private::decThreadCount(*pgm, q_gettid(), xsink);
+    if (entry.pgm) {
+        qore_program_private::decThreadCount(*entry.pgm, entry.tid, xsink);
     }
 }
 

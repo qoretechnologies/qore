@@ -512,48 +512,71 @@ DLLLOCAL int64 q_get_lvalue_scan_count();
 // this class grabs global variable or object locks for the duration of the scope of the object
 // no evaluations can be done while this object is in scope or a deadlock may result
 //! The Programs of the references that an lvalue was reached through, entered until the lvalue has been used
-/** Each Program was entered with a thread count, which release() leaves (qore_program_private::decThreadCount()); the
-    destructor leaves the Programs that release() has not, so that an exception thrown while an LValueHelper is built
-    does not keep them entered.  An entry that add() cannot store is left before the exception is passed on.
+/** Each Program was entered with a thread count, which release() leaves (qore_program_private::decThreadCount()):
+    the LValueHelper's destructor, and its constructors when they throw, call it; the class has no destructor of its
+    own, so that an lvalue reached through no reference to another Program costs only the test in release().  An entry
+    that add() cannot store is left before the exception is passed on.
 */
 class QoreLValueReferencePrograms {
 public:
     DLLLOCAL QoreLValueReferencePrograms() = default;
 
-    DLLLOCAL QoreLValueReferencePrograms(QoreLValueReferencePrograms&& o) : first(o.first), more(o.more) {
-        o.first = nullptr;
-        o.more = nullptr;
+    DLLLOCAL QoreLValueReferencePrograms(QoreLValueReferencePrograms&& o) {
+        if (o.first) {
+            first = o.first;
+            more = o.more;
+            tid = o.tid;
+            o.first = nullptr;
+        }
     }
 
     DLLLOCAL ~QoreLValueReferencePrograms() {
-        release(nullptr);
+        // the owner has left the Programs
+        assert(!first);
     }
 
     QoreLValueReferencePrograms(const QoreLValueReferencePrograms&) = delete;
     QoreLValueReferencePrograms& operator=(const QoreLValueReferencePrograms&) = delete;
 
     //! Adds a Program entered, which is left if it cannot be stored (std::bad_alloc)
-    DLLLOCAL void add(QoreProgram* p) {
+    /** @param e the entry; all entries are the current thread's
+    */
+    DLLLOCAL void add(const QoreReferenceProgramEntry& e) {
+        assert(e.pgm);
         if (!first) {
-            first = p;
+            first = e.pgm;
+            more = nullptr;
+            tid = e.tid;
             return;
         }
-        addMore(p);
+        assert(tid == e.tid);
+        addMore(e.pgm);
     }
 
     //! Leaves the Programs
     /** @param xsink for the exceptions of clearing a Program deleted while the thread was in it, or nullptr to handle
         them here
     */
-    DLLLOCAL void release(ExceptionSink* xsink);
+    DLLLOCAL void release(ExceptionSink* xsink) {
+        // a lvalue reached through no reference to another Program, the usual case, costs only this test
+        if (first) {
+            releaseIntern(xsink);
+        }
+    }
 
 private:
     //! the first Program; a chain of references through other Programs adds the others to \a more
     QoreProgram* first = nullptr;
-    std::vector<QoreProgram*>* more = nullptr;
+    //! set, and read, only if \a first is set
+    std::vector<QoreProgram*>* more;
+    //! the TID of the thread that entered the Programs; set, and read, only if \a first is set
+    int tid;
 
     //! adds a Program after the first one; see add()
     DLLLOCAL void addMore(QoreProgram* p);
+
+    //! leaves the Programs; \a first is set
+    DLLLOCAL void releaseIntern(ExceptionSink* xsink);
 };
 
 class LValueHelper {
@@ -578,6 +601,8 @@ protected:
     }
 
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
+    //! checks the stack and records the lvalue ID of a reference that is resolved; nullptr if the stack is exhausted
+    DLLLOCAL const lvalue_ref* startReferenceLValue(const ReferenceNode* ref);
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove);
     DLLLOCAL int setBufferElementLValue(QoreBufferNode* b, size_t index);
 public:
@@ -887,12 +912,12 @@ public:
         keepReferenceProgram()).  The Program is entered once: entering it again before the RuntimeReferenceHelper was
         created made 4 threads using references held by local variables 66 to 88% slower.
 
-        @param p the Program entered, or nullptr if the RuntimeReferenceHelper did not enter one (the reference's
-        Program was the current Program)
+        @param e the entry, with no Program if the RuntimeReferenceHelper did not enter one (the reference's Program
+        was the current Program)
     */
-    DLLLOCAL void adoptReferenceProgram(QoreProgram* p) {
-        if (p) {
-            ref_pgms.add(p);
+    DLLLOCAL void adoptReferenceProgram(const QoreReferenceProgramEntry& e) {
+        if (e.pgm) {
+            ref_pgms.add(e);
         }
     }
 
@@ -926,17 +951,17 @@ public:
     DLLLOCAL int navigatePath(const struct LVPathStep* steps, uint32_t num_steps, bool for_remove,
             bool remove_root = false);
 
-    //! Resolves the lvalue of a reference held by a variable
-    /** @param ref the reference
-        @param for_remove true if the lvalue is resolved to remove its value
-        @param keep_program false if the caller resolves the reference with a RuntimeReferenceHelper, whose entry into
-        the reference's Program it hands over (see adoptReferenceProgram()); true to enter the Program here and keep
-        it until the lvalue has been used (see keepReferenceProgram())
+    //! Resolves the lvalue of a reference held by a variable, and keeps its Program entered until the lvalue has been
+    //! used (see keepReferenceProgram())
+    DLLLOCAL int doLValue(const ReferenceNode* ref, bool for_remove);
+
+    //! Resolves the lvalue of a reference that the caller resolves with a RuntimeReferenceHelper
+    /** The helper entered the reference's Program, and the caller hands its entry over (see adoptReferenceProgram())
     */
-    DLLLOCAL int doLValue(const ReferenceNode* ref, bool for_remove, bool keep_program = true);
+    DLLLOCAL int doEnteredReferenceLValue(const ReferenceNode* ref, bool for_remove);
     DLLLOCAL int doLValue(const QoreValue& exp, RuntimeConfig& rc, bool for_remove);
-    //! see doLValue(const ReferenceNode*, bool, bool)
-    DLLLOCAL int doLValue(const ReferenceNode* ref, RuntimeConfig& rc, bool for_remove, bool keep_program = true);
+    //! see doLValue(const ReferenceNode*, bool)
+    DLLLOCAL int doLValue(const ReferenceNode* ref, RuntimeConfig& rc, bool for_remove);
 
     DLLLOCAL void setAndLock(QoreVarRWLock& rwl);
     DLLLOCAL void set(QoreVarRWLock& rwl);

@@ -541,6 +541,8 @@ public:
     //! the ID of the application Program that the code of runtime_po_module_pgm runs for
     qore_program_id_t runtime_po_app_pgm_id = 0;
     int tid;
+    //! the number of Programs whose data the thread deletes; see qore_reference_program_needs_entry()
+    unsigned pgm_teardown_depth = 0;
 
     VLock vlock;     // for deadlock detection
 
@@ -4082,10 +4084,21 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         // call within the entered Program, the usual case, costs only this comparison
         if (td->entry_pgm != pgm) {
             this->xsink = xsink;
-            entry_frame.enter(td, pgm, xsink);
+            if (entry_frame.enter(td, pgm, xsink)) {
+                failed = true;
+            }
         }
         return;
     }
+    setOtherProgram(td, xsink, pgm, runtime);
+    // the entry, the entry handler or the thread initialization code raised an exception
+    if (*xsink) {
+        failed = true;
+    }
+}
+
+void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm,
+        bool runtime) {
     old_pgm = td->current_pgm;
     old_tlpd = td->tlpd;
     old_frameCount = old_tlpd ? old_tlpd->lvstack.getFrameCount() : -1;
@@ -4105,12 +4118,13 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     const bool skip_thread_count = pp->parsingLocked();
     if (!skip_thread_count) {
         // try to increment thread count
-        if (pp->incThreadCount(xsink)) {
+        if (pp->incThreadCount(td->tid, xsink)) {
             printd(5, "ProgramThreadCountContextHelper::set() failed\n");
             return;
         }
         thread_count_incremented = true;
         count_pgm = pgm;
+        count_tid = td->tid;
     }
 
     // set up thread stacks
@@ -5138,6 +5152,34 @@ ProgramRuntimeParseAccessHelper::~ProgramRuntimeParseAccessHelper() {
     td->current_pgm = old_pgm;
     sync_runtime_config_program(td);
     qore_program_private::decThreadCount(*pgm, td->tid, xsink);
+}
+
+bool qore_reference_program_needs_entry(const QoreProgram* p, int& tid) {
+    ThreadData* td = thread_data.get();
+    assert(td);
+    if (p == td->current_pgm) {
+        return false;
+    }
+    // the list of the Programs that the thread deletes is searched only while it deletes one
+    if (td->pgm_teardown_depth && qore_program_torn_down_by_current_thread(p)) {
+        return false;
+    }
+    tid = td->tid;
+    return true;
+}
+
+bool qore_thread_program_teardown_enter() {
+    if (ThreadData* td = thread_data.get()) {
+        ++td->pgm_teardown_depth;
+        return true;
+    }
+    return false;
+}
+
+void qore_thread_program_teardown_leave() {
+    ThreadData* td = thread_data.get();
+    assert(td && td->pgm_teardown_depth > 0);
+    --td->pgm_teardown_depth;
 }
 
 QoreProgram* getProgram() {

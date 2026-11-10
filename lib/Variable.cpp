@@ -618,20 +618,31 @@ int ObjCountRec::getDifference() {
 LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
-    RuntimeReferenceHelper rh(ref, xsink);
-    if (!*xsink && !doLValue(lvalue_ref::get(&ref)->vexp, for_remove)) {
-        // the reference's Program is kept until the lvalue has been used, not only while it is resolved
-        adoptReferenceProgram(rh.takeProgramEntry());
+    try {
+        RuntimeReferenceHelper rh(ref, xsink);
+        if (!*xsink && !doLValue(lvalue_ref::get(&ref)->vexp, for_remove)) {
+            // the reference's Program is kept until the lvalue has been used, not only while it is resolved
+            adoptReferenceProgram(rh.takeProgramEntry());
+        }
+    } catch (...) {
+        // the destructor, which leaves the Programs entered, does not run
+        ref_pgms.release(nullptr);
+        throw;
     }
 }
 
 LValueHelper::LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
-    RuntimeReferenceHelper rh(ref, xsink);
-    if (!*xsink && !doLValue(lvalue_ref::get(&ref)->vexp, rc, for_remove)) {
-        // see LValueHelper(const ReferenceNode&, ExceptionSink*, bool, bool)
-        adoptReferenceProgram(rh.takeProgramEntry());
+    try {
+        RuntimeReferenceHelper rh(ref, xsink);
+        if (!*xsink && !doLValue(lvalue_ref::get(&ref)->vexp, rc, for_remove)) {
+            // see LValueHelper(const ReferenceNode&, ExceptionSink*, bool, bool)
+            adoptReferenceProgram(rh.takeProgramEntry());
+        }
+    } catch (...) {
+        ref_pgms.release(nullptr);
+        throw;
     }
 }
 
@@ -641,7 +652,13 @@ LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_
     // exp can be 0 when called from LValueRefHelper if the attach to the Program fails, for example
     //printd(5, "LValueHelper::LValueHelper() exp: %p (%s %d)\n", exp, get_type_name(exp), get_node_type(exp));
     if (!exp.isNothing() && exp.hasNode()) {
-        doLValue(exp, for_remove);
+        try {
+            doLValue(exp, for_remove);
+        } catch (...) {
+            // the lvalue can be reached through references, whose Programs the destructor leaves; it does not run
+            ref_pgms.release(nullptr);
+            throw;
+        }
     }
 }
 
@@ -650,7 +667,12 @@ LValueHelper::LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSin
         : vl(xsink), assignment_only(for_assignment) {
     // exp can be 0 when called from LValueRefHelper if the attach to the Program fails, for example
     if (!exp.isNothing() && exp.hasNode()) {
-        doLValue(exp, rc, for_remove);
+        try {
+            doLValue(exp, rc, for_remove);
+        } catch (...) {
+            ref_pgms.release(nullptr);
+            throw;
+        }
     }
 }
 
@@ -971,16 +993,13 @@ void QoreLValueReferencePrograms::addMore(QoreProgram* p) {
         more->push_back(p);
     } catch (...) {
         // the entry is left, so that the Program's teardown does not wait for it
-        qore_program_private::decThreadCount(*p, q_gettid(), nullptr);
+        qore_program_private::decThreadCount(*p, tid, nullptr);
         throw;
     }
 }
 
-void QoreLValueReferencePrograms::release(ExceptionSink* xsink) {
-    if (!first) {
-        return;
-    }
-    int tid = q_gettid();
+void QoreLValueReferencePrograms::releaseIntern(ExceptionSink* xsink) {
+    assert(first);
     QoreProgram* p = first;
     first = nullptr;
     qore_program_private::decThreadCount(*p, tid, xsink);
@@ -1595,12 +1614,12 @@ void LValueHelper::setObjectContext(qore_object_private* obj) {
     ocvec.push_back(ObjCountRec(obj->obj));
 }
 
-int LValueHelper::doLValue(const ReferenceNode* ref, bool for_remove, bool keep_program) {
+const lvalue_ref* LValueHelper::startReferenceLValue(const ReferenceNode* ref) {
     // each reference in a chain of references is resolved by a recursion here, so the stack is checked for each one:
     // a recursion that passes on a reference makes the chain as long as the recursion is deep, and resolving it at
     // the deepest call overflowed the stack instead of raising STACK-LIMIT-EXCEEDED where the frames are large
     if (check_stack(vl.xsink)) {
-        return -1;
+        return nullptr;
     }
     const lvalue_ref* r = lvalue_ref::get(ref);
     if (!lvid_set) {
@@ -1612,31 +1631,33 @@ int LValueHelper::doLValue(const ReferenceNode* ref, bool for_remove, bool keep_
     lvid_set->insert(r->lvalue_id);
     //printd(5, "LValueHelper::doLValue() this: %p ReferenceNode: %p r->vexp: %s ti: %s\n", this, ref,
     //    r->vexp.getFullTypeName(), QoreTypeInfo::getName(r->typeInfo));
+    return r;
+}
+
+int LValueHelper::doLValue(const ReferenceNode* ref, bool for_remove) {
+    const lvalue_ref* r = startReferenceLValue(ref);
     // the lvalue of a reference of a deleted Program is freed with it: the Program is kept until the lvalue has been
-    // used, by this helper or by the caller's RuntimeReferenceHelper, whose entry is handed over
-    if (keep_program && keepReferenceProgram(*r)) {
+    // used
+    if (!r || keepReferenceProgram(*r)) {
         return -1;
     }
     return doLValue(r->vexp, for_remove);
 }
 
-int LValueHelper::doLValue(const ReferenceNode* ref, RuntimeConfig& rc, bool for_remove, bool keep_program) {
-    // each reference in a chain of references is resolved by a recursion here, so the stack is checked for each one:
-    // a recursion that passes on a reference makes the chain as long as the recursion is deep, and resolving it at
-    // the deepest call overflowed the stack instead of raising STACK-LIMIT-EXCEEDED where the frames are large
-    if (check_stack(vl.xsink)) {
+int LValueHelper::doEnteredReferenceLValue(const ReferenceNode* ref, bool for_remove) {
+    const lvalue_ref* r = startReferenceLValue(ref);
+    // the caller's RuntimeReferenceHelper entered the reference's Program, which the caller keeps until the lvalue
+    // has been used (see adoptReferenceProgram())
+    if (!r) {
         return -1;
     }
-    const lvalue_ref* r = lvalue_ref::get(ref);
-    if (!lvid_set) {
-        lvid_set = new lvid_set_t;
-    }
-    // issue 1617: the lvalue_id might already be present in the set in case there is
-    // a reference to a reference, however it's safe to insert it multiple times;
-    // the reference count for the lvalue_id object is handled elsewhere
-    lvid_set->insert(r->lvalue_id);
-    // see doLValue(const ReferenceNode*, bool, bool)
-    if (keep_program && keepReferenceProgram(*r)) {
+    return doLValue(r->vexp, for_remove);
+}
+
+int LValueHelper::doLValue(const ReferenceNode* ref, RuntimeConfig& rc, bool for_remove) {
+    const lvalue_ref* r = startReferenceLValue(ref);
+    // see doLValue(const ReferenceNode*, bool)
+    if (!r || keepReferenceProgram(*r)) {
         return -1;
     }
     return doLValue(r->vexp, rc, for_remove);
@@ -4024,7 +4045,7 @@ int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeI
     if (val.getType() == NT_REFERENCE) {
         ReferenceNode* ref = reinterpret_cast<ReferenceNode*>(val.v.n);
         LocalRefHelper<LocalVarValue> helper(this, *ref, lvh.vl.xsink);
-        if (!helper || lvh.doLValue(ref, for_remove, false)) {
+        if (!helper || lvh.doEnteredReferenceLValue(ref, for_remove)) {
             return -1;
         }
         // the helper's entry into the reference's Program is kept until the lvalue has been used: the helper leaves
@@ -4102,7 +4123,7 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
             ? refTypeInfo : nullptr;
         sl.release();
         LocalRefHelper<ClosureVarValue> helper(this, **ref, lvh.vl.xsink);
-        if (!helper || lvh.doLValue(*ref, for_remove, false)) {
+        if (!helper || lvh.doEnteredReferenceLValue(*ref, for_remove)) {
             return -1;
         }
         // see LocalVarValue::getLValue()

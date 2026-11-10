@@ -1578,6 +1578,15 @@ private:
 */
 DLLLOCAL bool thread_entry_pending(QoreProgram* pgm);
 
+//! A thread's entry into a Program, counted with its thread count, which is left with
+//! qore_program_private::decThreadCount(*pgm, tid, xsink)
+struct QoreReferenceProgramEntry {
+    //! the Program entered, or nullptr if none was
+    QoreProgram* pgm = nullptr;
+    //! the thread's TID; set if \a pgm is
+    int tid;
+};
+
 class ProgramThreadCountContextHelper {
 public:
     DLLLOCAL ProgramThreadCountContextHelper() = default;
@@ -1605,21 +1614,31 @@ public:
         when the helper is destroyed, without leaving the Program.  Used to keep the Program of a reference entered
         until its lvalue has been used (see LValueHelper::adoptReferenceProgram()).
 
-        @return the Program entered, or nullptr if set() did not count the thread in it (it was already in it, or
-        the entry failed)
+        @return the Program entered, with no Program if set() did not count the thread in it (it was already in it,
+        or the entry failed)
     */
-    DLLLOCAL QoreProgram* takeThreadCount() {
-        if (!thread_count_incremented) {
-            return nullptr;
+    DLLLOCAL QoreReferenceProgramEntry takeThreadCount() {
+        QoreReferenceProgramEntry rv;
+        if (thread_count_incremented) {
+            thread_count_incremented = false;
+            rv.pgm = count_pgm;
+            rv.tid = count_tid;
         }
-        thread_count_incremented = false;
-        return count_pgm;
+        return rv;
+    }
+
+    //! Returns true if set() raised an exception: the thread did not enter the Program, or its entry or thread
+    //! initialization code failed
+    DLLLOCAL bool enterFailed() const {
+        return failed;
     }
 
 protected:
     QoreProgram* old_pgm = nullptr;
-    //! the Program that set() counted the thread in, if thread_count_incremented
-    QoreProgram* count_pgm = nullptr;
+    //! the Program that set() counted the thread in; set, and read, only if thread_count_incremented
+    QoreProgram* count_pgm;
+    //! the TID of the thread counted in \a count_pgm; set, and read, only if thread_count_incremented
+    int count_tid;
     ThreadLocalProgramData* old_tlpd = nullptr;
     ProgramThreadCountContextHelper* old_ctx = nullptr;
     // frame count of tlpd when context is started
@@ -1632,10 +1651,15 @@ protected:
     bool restore = false;
     bool init_tlpd = false;
     bool thread_count_incremented = false;
+    //! set() raised an exception; see enterFailed()
+    bool failed = false;
 
 private:
     //! restores the thread's context as it was before set() switched it
     DLLLOCAL void restoreContext();
+
+    //! switches the thread's context to a Program that is not its current one; see set()
+    DLLLOCAL void setOtherProgram(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
 };
 
 class ProgramRuntimeParseContextHelper {
@@ -1711,27 +1735,45 @@ public:
         return valid;
     }
 
-    //! Returns the Program entered, which the caller leaves with qore_program_private::decThreadCount(), or nullptr
-    DLLLOCAL QoreProgram* release() {
-        QoreProgram* rv = pgm;
-        pgm = nullptr;
+    //! Returns the entry into the Program, which the caller leaves with qore_program_private::decThreadCount()
+    DLLLOCAL QoreReferenceProgramEntry release() {
+        QoreReferenceProgramEntry rv = entry;
+        entry.pgm = nullptr;
         return rv;
     }
 
 private:
-    //! the Program entered, if any
-    QoreProgram* pgm = nullptr;
+    //! the entry into the Program, if any
+    QoreReferenceProgramEntry entry;
     ExceptionSink* xsink;
     bool valid = true;
 };
+
+//! Returns true if the current thread must enter a reference's Program to use the reference's lvalue
+/** It need not if the Program is its current Program, which it is in, or one that it deletes (see
+    qore_program_torn_down_by_current_thread()); one lookup of the thread's data
+
+    @param p the reference's Program
+    @param tid set to the thread's TID if the return value is true
+*/
+DLLLOCAL bool qore_reference_program_needs_entry(const QoreProgram* p, int& tid);
+
+//! records in the thread's data that it deletes a Program's data, which qore_reference_program_needs_entry() reads
+/** @return false if the thread has no data (it is not recorded then)
+*/
+DLLLOCAL bool qore_thread_program_teardown_enter();
+//! records in the thread's data that it has deleted a Program's data; only after qore_thread_program_teardown_enter()
+//! returned true
+DLLLOCAL void qore_thread_program_teardown_leave();
 
 class RuntimeReferenceHelperBase {
 public:
     DLLLOCAL RuntimeReferenceHelperBase(const lvalue_ref& r, ExceptionSink* n_xsink)
             : ref(&r), pch(n_xsink, r.pgm, true), osh(r.self, r.cls) {
         // the reference's Program is allocated while the reference exists (see lvalue_ref::pgm); a Program that is
-        // being deleted refuses the entry with PROGRAM-ERROR
-        if (*n_xsink) {
+        // being deleted refuses the entry with PROGRAM-ERROR.  Read from the helper, which is cheaper than the
+        // exception sink: a reference to a lvalue of the current Program costs only this test
+        if (pch.enterFailed()) {
             ref = nullptr;
             valid = false;
             return;
@@ -1764,10 +1806,10 @@ public:
     }
 
     //! Hands the entry into the reference's Program over to the caller, which leaves it with decThreadCount()
-    /** see ProgramThreadCountContextHelper::takeThreadCount(); nullptr if the thread was not counted in it (it was
+    /** see ProgramThreadCountContextHelper::takeThreadCount(); no Program if the thread was not counted in it (it was
         already in the Program, as the current Program)
     */
-    DLLLOCAL QoreProgram* takeProgramEntry() {
+    DLLLOCAL QoreReferenceProgramEntry takeProgramEntry() {
         return pch.takeThreadCount();
     }
 

@@ -209,9 +209,9 @@ a reference to one of its variables, which outlives the Program.  Using the refe
 (`ProgramThreadCountContextHelper::set()` crashed) or, for a reference held by a variable, resolved the freed variable.
 The reference now holds a dependency reference to its Program (`QoreProgram::depRef()`), which keeps the Program
 allocated, and its address from being given to another Program, while the reference exists, without a global lock on its
-use; a Program refuses an entry once its teardown has marked it (`qore_program_private::canEnterIntern()`).  The
-thread stays in the Program until the lvalue has been used: the teardown released a variable while another thread
-assigned it through a reference (a data race that TSan reported).  The `LValueHelper` keeps the entries
+use; a Program refuses an entry once its teardown has marked it (`qore_program_private::canEnterIntern()`).  The thread
+stays in the Program until the lvalue has been used: the teardown released a variable while another thread assigned it
+through a reference (a data race that TSan reported).  The `LValueHelper` keeps the entries
 (`QoreLValueReferencePrograms`, which leaves them if the helper's construction throws) and leaves them in its destructor
 right after the lvalue's locks are released and the write-back of a static variable, before member write gates and
 accessors, the recursive-reference scan and the release of the values that the write replaced, which run code of other
@@ -224,7 +224,14 @@ destroyed, before the caller uses the lvalue, so it hands its thread count over 
 time instead made 4 threads using references held by local variables 66 to 88% slower.  A reference held by a global
 variable or an object member is resolved without a helper: the `LValueHelper` enters the Program without switching to it
 (`LValueHelper::keepReferenceProgram()`, `QoreReferenceProgramHelper`, `qore_program_private::enterWithoutContext()`,
-which a parse in progress does not refuse, as no code of the Program runs).
+which a parse in progress does not refuse, as no code of the Program runs).  A reference to a lvalue of the current
+Program, the usual case, enters nothing: it costs the comparison of the Programs
+(`ProgramThreadCountContextHelper::set()`, whose failure `RuntimeReferenceHelperBase` reads from the helper instead of
+the exception sink, or `qore_reference_program_needs_entry()`) and the test in `QoreLValueReferencePrograms::release()`,
+which has no destructor of its own (the `LValueHelper` constructors that can enter a Program leave it when they throw);
+a release build executes no more instructions per use than before the fix.  Across Programs, the thread's data is looked
+up once per use: `qore_reference_program_needs_entry()` compares the current Program, searches the Programs that the
+thread deletes only while it deletes one (`ThreadData::pgm_teardown_depth`), and the entry records the TID for its exit.
 `examples/test/qore/vars/reference-program-entry.qtest` holds a thread after an assignment through a reference held by a
 local variable, a closure-bound variable and a parameter, and checks that it is still in the Program; the debug build's
 `dbg_hold_reference_lvalue()` holds it.  The removal through a reference held by a local or closure-bound variable

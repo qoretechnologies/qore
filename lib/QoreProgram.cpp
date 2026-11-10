@@ -565,14 +565,22 @@ class QoreProgramTeardownScope {
 public:
     QoreProgramTeardownScope(const QoreProgram* pgm) {
         qore_programs_torn_down.push_back(pgm);
+        counted = qore_thread_program_teardown_enter();
     }
 
     ~QoreProgramTeardownScope() {
+        if (counted) {
+            qore_thread_program_teardown_leave();
+        }
         qore_programs_torn_down.pop_back();
     }
 
     QoreProgramTeardownScope(const QoreProgramTeardownScope&) = delete;
     QoreProgramTeardownScope& operator=(const QoreProgramTeardownScope&) = delete;
+
+private:
+    //! the thread's data records the teardown (see qore_reference_program_needs_entry())
+    bool counted;
 };
 }
 

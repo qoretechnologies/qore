@@ -1593,7 +1593,11 @@ public:
         or has ended
     */
     DLLLOCAL bool enterWithoutContext() {
-        int tid = q_gettid();
+        return enterWithoutContext(q_gettid());
+    }
+
+    //! see enterWithoutContext(); \a tid is the current thread's TID
+    DLLLOCAL bool enterWithoutContext(int tid) {
         AutoLocker al(plock);
         if (!canEnterIntern(tid)) {
             return false;
@@ -1615,8 +1619,11 @@ public:
 
     // returns 0 for OK, -1 for error
     DLLLOCAL int incThreadCount(ExceptionSink* xsink) {
-        int tid = q_gettid();
+        return incThreadCount(q_gettid(), xsink);
+    }
 
+    //! see incThreadCount(ExceptionSink*); \a tid is the current thread's TID
+    DLLLOCAL int incThreadCount(int tid, ExceptionSink* xsink) {
         // grab program-level lock
         AutoLocker al(plock);
 
