@@ -3796,14 +3796,18 @@ int qore_program_private_base::parseCheckModernConflict(const QoreProgramLocatio
         return 0;
     }
     QoreStringNode* desc = new QoreStringNode;
-    describeParseOptions(conflict, *desc);
-    desc->concat(set
-        ? " cannot be used while %modern is in effect: the option changes the meaning of code, and %modern guarantees "
-            "a consistent set of parse options; remove the directive, or parse the code without %modern (as a .q file, "
-            "or after %old-style)"
-        : " cannot be disabled while %modern is in effect, which implies the option and guarantees a consistent set of "
-            "parse options; remove the directive, or parse the code without %modern (as a .q file, or after "
-            "%old-style)");
+    if (set) {
+        describeParseOptions(conflict, *desc);
+        desc->concat(" cannot be used while %modern is in effect: the option changes the meaning of code, and %modern "
+            "guarantees a consistent set of parse options; remove the directive, or parse the code without %modern (as "
+            "a .q file, or after %old-style)");
+    } else {
+        // %no-negative-offsets is the only directive that disables an option that %modern implies
+        desc->concat("%no-negative-offsets cannot be used while %modern is in effect, which implies ");
+        describeParseOptions(conflict, *desc);
+        desc->concat(" and guarantees a consistent set of parse options; remove the directive, or parse the code "
+            "without %modern (as a .q file, or after %old-style)");
+    }
     qore_program_private::makeParseException(pgm, *loc, "PARSE-OPTION-ERROR", desc);
     return -1;
 }
@@ -3818,7 +3822,13 @@ int qore_program_private_base::checkNewProgramModernOptions(const QoreProgram* p
     if (!isModern(effective)) {
         return 0;
     }
-    return checkModernConflict(effective, po, true, "Program::constructor()", xsink);
+    if (isModern(po)) {
+        return checkModernConflict(effective, po, true, "Program::constructor()", xsink);
+    }
+    // %modern comes from the parent
+    return checkModernConflict(effective, po, true, "Program::constructor() (the new Program has %modern from its "
+        "parent, which can allow other options for its child Programs with %no-child-restrictions, or create an "
+        "independent Program)", xsink);
 }
 
 void QoreProgram::setParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {

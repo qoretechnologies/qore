@@ -113,7 +113,7 @@ t();
             hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s",
                 ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0], mode, script.path));
             assertNeq(0, r.rc, "refused: " + mode);
-            assertRegex("PARSE-OPTION-ERROR: %negative-offsets cannot be disabled while %modern is in effect",
+            assertRegex("PARSE-OPTION-ERROR: %no-negative-offsets cannot be used while %modern is in effect",
                 r.stderr + r.out, "refused: " + mode);
         }
     }

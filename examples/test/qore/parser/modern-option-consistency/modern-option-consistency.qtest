@@ -64,6 +64,7 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         addTestCase("options that stay settable", \settable());
         addTestCase("API", \api());
         addTestCase("child Programs", \children());
+        addTestCase("command line", \commandLine());
         addTestCase("scripts in every mode", \scriptModes());
         addTestCase("scripts as AOT executables", \scriptAot());
         set_return_value(main());
@@ -76,8 +77,8 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
                 ("%" + d + "\n", "refused-" + d), d);
         }
         Program p(PO_MODERN);
-        assertThrows("PARSE-OPTION-ERROR", "%negative-offsets cannot be disabled while %modern is in effect",
-            \p.parse(), ("%no-negative-offsets\n", "no-negative-offsets"));
+        assertThrows("PARSE-OPTION-ERROR", "%no-negative-offsets cannot be used while %modern is in effect, which "
+            "implies %negative-offsets", \p.parse(), ("%no-negative-offsets\n", "no-negative-offsets"));
         # the %modern directive in the code is the same
         Program p2(PO_NEW_STYLE);
         assertThrows("PARSE-OPTION-ERROR", "%broken-range cannot be used", \p2.parse(),
@@ -90,9 +91,9 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
                 continue;
             }
             Program p(PO_NEW_STYLE);
-            p.parse("%" + i.key + "\n%modern\nint sub opts() { return get_parse_options(); }\n", "reset-" + i.key);
+            p.parse("%" + i.key + "\n%modern\nint sub opts() { return get_parse_options(); }\n", "suspend-" + i.key);
             int po = p.callFunction("opts");
-            assertEq(0, po & i.value, i.key + " is turned off by %modern");
+            assertEq(0, po & i.value, i.key + " is suspended by %modern");
             assertEq(PO_MODERN, po & PO_MODERN, i.key + ": %modern is in effect");
         }
     }
@@ -130,7 +131,25 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         {
             Program p(PO_NEW_STYLE | PO_BROKEN_RANGE);
             p.setParseOptions(PO_MODERN);
-            assertEq(0, p.getParseOptions() & PO_BROKEN_RANGE, "PO_MODERN turns the option off");
+            assertEq(0, p.getParseOptions() & PO_BROKEN_RANGE, "PO_MODERN suspends the option");
+            # turning %modern off gives it back
+            p.disableParseOptions(PO_STRICT_ARGS);
+            assertEq(PO_BROKEN_RANGE, p.getParseOptions() & PO_BROKEN_RANGE, "the option takes effect again");
+        }
+        {
+            # %modern and the option given together are refused
+            Program p(PO_NEW_STYLE);
+            assertThrows("OPTION-ERROR", "Program::setParseOptions\\(\\): %broken-range cannot be set",
+                \p.setParseOptions(), PO_MODERN | PO_BROKEN_RANGE);
+            assertEq(0, p.getParseOptions() & PO_BROKEN_RANGE);
+        }
+        {
+            # %modern from the file name suspends the option; %old-style in the code gives it back
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_BROKEN_RANGE);
+            assertTrue(p.applySourceDefaults("x.qr"));
+            assertEq(0, p.getParseOptions() & PO_BROKEN_RANGE, "applySourceDefaults() suspends the option");
+            p.parse("%old-style\nlist sub r() { return range(1, 2); }\n", "source-defaults");
+            assertEq((1, 2), p.callFunction("r"), "the option applies after %old-style");
         }
         {
             Program p(PO_NEW_STYLE);
@@ -151,13 +170,26 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         parent.parse("sub child_with(int po) { Program p(po); }\n"
             "int sub modern_child_of_legacy() { Program p(PO_NEW_STYLE | PO_BROKEN_RANGE); "
             "return p.getParseOptions(); }\n", "parent");
-        assertThrows("OPTION-ERROR", "Program::constructor\\(\\): %broken-range cannot be set",
-            \parent.callFunction(), ("child_with", PO_BROKEN_RANGE));
+        assertThrows("OPTION-ERROR", "Program::constructor\\(\\) \\(the new Program has %modern from its parent.*"
+            "%no-child-restrictions.*%broken-range cannot be set", \parent.callFunction(), ("child_with",
+            PO_BROKEN_RANGE));
         Program legacy(PO_NEW_STYLE | PO_BROKEN_RANGE);
         legacy.parse("int sub modern_child() { Program p(PO_MODERN); return p.getParseOptions(); }\n", "legacy");
         int po = legacy.callFunction("modern_child");
         assertEq(PO_MODERN, po & PO_MODERN, "the child has %modern");
-        assertEq(0, po & PO_BROKEN_RANGE, "%modern turns the inherited option off");
+        assertEq(0, po & PO_BROKEN_RANGE, "%modern suspends the inherited option");
+    }
+
+    #! options given on the command line: suspended for code in %modern mode, applied to code that opts out
+    commandLine() {
+        assertEq(ReadOnlyFile::readTextFile(dir + "/modern-cli.expected"), ExecModeHarness::run_any(sprintf("%s %s "
+            "-pbroken-range %s/modern-cli.qr", env, qore_bin, dir)), "a file in %modern mode by its extension");
+        assertEq(ReadOnlyFile::readTextFile(dir + "/modern-cli.expected"), ExecModeHarness::run_any(sprintf("%s %s -M "
+            "-pbroken-range %s/modern-cli.qr", env, qore_bin, dir)), "-M: the option is suspended");
+        assertEq(ReadOnlyFile::readTextFile(dir + "/legacy-script.expected"), ExecModeHarness::run_any(sprintf("%s %s -M "
+            "-pbroken-range %s/legacy-script", env, qore_bin, dir)), "-M: the option applies after %old-style");
+        assertEq(ReadOnlyFile::readTextFile(dir + "/legacy-script.expected"), ExecModeHarness::run_any(sprintf("%s %s "
+            "-pbroken-range %s/legacy-script", env, qore_bin, dir)), "a legacy script that opts out with %old-style");
     }
 
     scriptModes() {
@@ -167,7 +199,7 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         foreach string mode in (ExecModeHarness::ExecModes) {
             string out = ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s/refused.qr", env, qore_bin, mode, dir),
                 ExecModeHarness::NativeCheck::None);
-            assertRegex("PARSE-OPTION-ERROR: %negative-offsets cannot be disabled while %modern is in effect", out,
+            assertRegex("PARSE-OPTION-ERROR: %no-negative-offsets cannot be used while %modern is in effect", out,
                 "refused: " + mode);
         }
     }
@@ -180,7 +212,7 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         string refused = tmp.path + "/refused";
         string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s/refused.qr", env, qcc_bin, refused, dir));
         assertFalse(is_file(refused), "qcc refuses the script");
-        assertRegex("PARSE-OPTION-ERROR: %negative-offsets cannot be disabled while %modern is in effect", out,
+        assertRegex("PARSE-OPTION-ERROR: %no-negative-offsets cannot be used while %modern is in effect", out,
             "refused: AOT");
     }
 }

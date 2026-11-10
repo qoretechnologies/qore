@@ -1165,7 +1165,7 @@ public:
     }
 
     //! The compatibility options that change the meaning of code; they cannot be set while %modern is in effect
-    /** %modern turns them off when it takes effect (applyParseOptionImplications()); see issue #5682
+    /** %modern suspends them when it takes effect (applyParseOptionImplications()); see issue #5682
     */
     DLLLOCAL static QoreParseOptions modernIncompatibleOptions() {
         return QoreParseOptions(PO_BROKEN_NARROWED_TYPES | PO_STRICT_BOOLEAN_EVAL | PO_BROKEN_LIST_PARSING
@@ -1187,11 +1187,12 @@ public:
     */
     DLLLOCAL static QoreParseOptions getModernConflict(const QoreParseOptions& current, const QoreParseOptions& po,
             bool set) {
+        if (set) {
+            // also when the options set make up %modern themselves (ex: PO_MODERN | PO_BROKEN_RANGE)
+            return isModern(current | po) ? po & modernIncompatibleOptions() : QoreParseOptions();
+        }
         if (!isModern(current)) {
             return QoreParseOptions();
-        }
-        if (set) {
-            return po & modernIncompatibleOptions();
         }
         if (po & PO_MODERN) {
             return QoreParseOptions();
@@ -1217,15 +1218,21 @@ public:
             ExceptionSink* xsink);
 
     // apply parse-option bit implications that cannot be encoded in the int64 PO_* macros
-    /** %modern implies further options and turns off the compatibility options that change the meaning of code
-        (issue #5682): a Program that takes %modern on (a %modern directive, a file parsed in %modern mode by its
-        extension, PO_MODERN given by the API or inherited by a child Program) drops them; setting them while %modern
-        is in effect is refused (getModernConflict())
+    /** %modern implies further options and suspends the compatibility options that change the meaning of code
+        (issue #5682): when a Program takes %modern on (a %modern directive, a file parsed in %modern mode by its
+        extension, -M, PO_MODERN given by the API or inherited by a child Program), they are kept aside
+        (ParseWarnOptions::suspended_options) and take effect again when %modern is turned off (ex: %old-style), so an
+        option given for legacy code (ex: on the command line) is not lost when the code opts out of %modern; setting
+        them while %modern is in effect is refused (getModernConflict())
     */
     DLLLOCAL void applyParseOptionImplications() {
         if (isModern(pwo.parse_options)) {
             pwo.parse_options |= modernImpliedOptions();
+            pwo.suspended_options |= pwo.parse_options & modernIncompatibleOptions();
             pwo.parse_options &= ~modernIncompatibleOptions();
+        } else if (pwo.suspended_options) {
+            pwo.parse_options |= pwo.suspended_options;
+            pwo.suspended_options = QoreParseOptions();
         }
     }
 
@@ -1332,6 +1339,7 @@ public:
 
     DLLLOCAL void replaceParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options = po;
+        pwo.suspended_options = QoreParseOptions();
         applyParseOptionImplications();
         syncExecModeWithParseOptions();
     }
@@ -3167,6 +3175,8 @@ public:
 
     DLLLOCAL void disableParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options &= ~po;
+        // a suspended option that is disabled does not take effect again
+        pwo.suspended_options &= ~po;
         applyParseOptionImplications();
         syncExecModeWithParseOptions();
     }
